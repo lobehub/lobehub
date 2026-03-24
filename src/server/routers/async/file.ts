@@ -10,7 +10,6 @@ import { serverDBEnv } from '@/config/db';
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
-import { DocumentModel } from '@/database/models/document';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
 import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
@@ -34,7 +33,6 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
       chunkService: new ChunkService(ctx.serverDB, ctx.userId),
-      documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
       documentService: new DocumentService(ctx.serverDB, ctx.userId),
       embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
@@ -208,12 +206,8 @@ export const fileRouter = router({
           await ctx.asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
 
           // parse file to document record first (for detailed content viewing)
-          // skip if document already exists for this file
           try {
-            const existingDoc = await ctx.documentModel.findByFileId(input.fileId);
-            if (!existingDoc) {
-              await ctx.documentService.parseFile(input.fileId);
-            }
+            await ctx.documentService.parseFile(input.fileId);
           } catch (e) {
             // document parsing failure should not block chunking
             console.warn(

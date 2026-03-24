@@ -305,6 +305,10 @@ export class DocumentService {
    *
    */
   async parseFile(fileId: string): Promise<LobeDocument> {
+    // Idempotent: return existing document if already parsed
+    const existingDoc = await this.documentModel.findByFileId(fileId);
+    if (existingDoc) return existingDoc as LobeDocument;
+
     const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(fileId);
 
     const logPrefix = `[${file.name}]`;
