@@ -97,7 +97,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       globLocalFiles: () => this.localFileCtr.handleGlobFiles(args),
       grepContent: () => this.localFileCtr.handleGrepContent(args),
       listLocalFiles: () => this.localFileCtr.listLocalFiles(args),
+      moveLocalFiles: () => this.localFileCtr.handleMoveFiles(args),
       readLocalFile: () => this.localFileCtr.readFile(args),
+      renameLocalFile: () => this.localFileCtr.handleRenameFile(args),
       searchLocalFiles: () => this.localFileCtr.handleLocalFilesSearch(args),
       writeLocalFile: () => this.localFileCtr.handleWriteFile(args),
 
@@ -108,7 +110,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     const handler = methodMap[apiName];
     if (!handler) {
-      throw new Error(`Unknown tool API: ${apiName}`);
+      return {
+        error: `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
+        success: false,
+      };
     }
 
     return handler();
