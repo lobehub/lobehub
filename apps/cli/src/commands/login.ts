@@ -39,7 +39,6 @@ interface TokenErrorResponse {
   error_description?: string;
 }
 
-// Parse HTTP JSON responses from the OIDC endpoints.
 async function parseJsonResponse<T>(res: Response, endpoint: string): Promise<T> {
   try {
     return (await res.json()) as T;
@@ -164,10 +163,11 @@ export function registerLoginCommand(program: Command) {
             '/oidc/token',
           );
 
-          // Check body for error field, some proxies may return 200 for error responses
+          // Check body for error field — some proxies may return 200 for error responses
           if (body.error) {
             switch (body.error) {
               case 'authorization_pending': {
+                // Keep polling
                 break;
               }
               case 'slow_down': {
