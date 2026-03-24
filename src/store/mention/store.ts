@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type MentionAction } from './action';
 import { createMentionSlice } from './action';
@@ -21,5 +22,7 @@ const createStore: StateCreator<MentionStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('mention');
 
 export const useMentionStore = createWithEqualityFn<MentionStore>()(devtools(createStore), shallow);
+
+expose('mention', useMentionStore);
 
 export const getMentionStoreState = () => useMentionStore.getState();

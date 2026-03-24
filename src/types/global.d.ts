@@ -18,9 +18,10 @@ declare module 'styled-components' {
 
 declare global {
   interface Window {
-    __CHAT_STORE__?: any;
     __DEBUG_PROXY__: boolean | undefined;
     __editor?: IEditor;
+    /** Dev-only: Zustand store snapshots via `getState()` keyed by store name */
+    __LOBE_STORES?: Record<string, () => unknown>;
     __SERVER_CONFIG__: SPAServerConfig | undefined;
     lobeEnv?: {
       darwinMajorVersion?: number;

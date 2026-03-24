@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type KnowledgeBaseStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -46,3 +47,5 @@ export const useKnowledgeBaseStore = createWithEqualityFn<KnowledgeBaseStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('library', useKnowledgeBaseStore);

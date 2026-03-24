@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type AssistantAction } from './slices/assistant/action';
 import { createAssistantSlice } from './slices/assistant/action';
@@ -68,5 +69,7 @@ export const useDiscoverStore = createWithEqualityFn<DiscoverStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('discover', useDiscoverStore);
 
 export const getDiscoverStoreState = () => useDiscoverStore.getState();

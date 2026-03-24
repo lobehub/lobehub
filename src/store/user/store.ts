@@ -4,6 +4,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type UserState } from './initialState';
 import { initialState } from './initialState';
@@ -54,5 +55,7 @@ export const useUserStore = createWithEqualityFn<UserStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+expose('user', useUserStore);
 
 export const getUserStoreState = () => useUserStore.getState();

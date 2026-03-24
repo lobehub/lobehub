@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ElectronAppAction } from './actions/app';
 import { createElectronAppSlice } from './actions/app';
@@ -62,5 +63,7 @@ export const useElectronStore = createWithEqualityFn<ElectronStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('electron', useElectronStore);
 
 export const getElectronStoreState = () => useElectronStore.getState();

@@ -8,6 +8,7 @@ import { createContext } from 'zustand-utils';
 import { type IFeatureFlagsState } from '@/config/featureFlags';
 import { DEFAULT_FEATURE_FLAGS, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import { createDevtools } from '@/store/middleware/createDevtools';
+import { expose } from '@/store/middleware/expose';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { merge } from '@/utils/merge';
 
@@ -73,6 +74,8 @@ export const createServerConfigStore = (initState?: Partial<ServerConfigStore>) 
     if (typeof window !== 'undefined') {
       window.global_serverConfigStore = store;
     }
+
+    expose('serverConfig', store);
   }
 
   return store;

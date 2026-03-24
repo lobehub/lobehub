@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type NotebookAction } from './action';
 import { createNotebookAction } from './action';
@@ -24,5 +25,7 @@ export const useNotebookStore = createWithEqualityFn<NotebookStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('notebook', useNotebookStore);
 
 export const getNotebookStoreState = () => useNotebookStore.getState();

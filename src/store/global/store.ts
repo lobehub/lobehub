@@ -4,6 +4,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type GlobalGeneralAction } from './actions/general';
 import { generalActionSlice } from './actions/general';
@@ -38,3 +39,5 @@ export const useGlobalStore = createWithEqualityFn<GlobalStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+expose('global', useGlobalStore);

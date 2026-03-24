@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type FilesStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -61,5 +62,7 @@ const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('file');
 
 export const useFileStore = createWithEqualityFn<FileStore>()(devtools(createStore), shallow);
+
+expose('file', useFileStore);
 
 export const getFileStoreState = () => useFileStore.getState();
