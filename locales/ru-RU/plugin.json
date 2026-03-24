@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "Всего параметров: {{count}}",
   "arguments.title": "Аргументы",
+  "builtins.lobe-activator.apiName.activateTools": "Активировать инструменты",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Получить доступные модели",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Получить доступные навыки",
   "builtins.lobe-agent-builder.apiName.getConfig": "Получить конфигурацию",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "Выполнить команду",
   "builtins.lobe-skills.apiName.searchSkill": "Поиск навыков",
   "builtins.lobe-skills.title": "Навыки",
-  "builtins.lobe-tools.apiName.activateTools": "Активировать инструменты",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "Получить контекст темы",
   "builtins.lobe-topic-reference.title": "Ссылка на тему",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Добавить контекстную память",

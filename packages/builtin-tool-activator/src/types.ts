@@ -1,6 +1,7 @@
-export const LobeToolIdentifier = 'lobe-tools';
+export const LobeActivatorIdentifier = 'lobe-activator';
 
-export const ToolsActivatorApiName = {
+export const ActivatorApiName = {
+  activateSkill: 'activateSkill',
   activateTools: 'activateTools',
 };
 
@@ -19,4 +20,15 @@ export interface ActivateToolsState {
   activatedTools: ActivatedToolInfo[];
   alreadyActive: string[];
   notFound: string[];
+}
+
+export interface ActivateSkillParams {
+  name: string;
+}
+
+export interface ActivateSkillState {
+  description?: string;
+  hasResources: boolean;
+  id: string;
+  name: string;
 }

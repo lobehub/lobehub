@@ -7,6 +7,7 @@ import {
 } from '@lobechat/agent-runtime';
 import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { isDesktop } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
@@ -171,14 +172,15 @@ export class StreamingExecutorActionImpl {
       { model: agentConfigData.model, provider: agentConfigData.provider! },
       effectivePluginIds,
     );
-    // When skillActivateMode is 'manual', skipDefaultTools gives user precise control
+    // When skillActivateMode is 'manual', exclude only discovery tools (lobe-activator, lobe-skill-store)
+    // so that externally enabled tools (sandbox, web browsing, etc.) remain available
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
 
-
     const toolsDetailed = toolsEngine.generateToolsDetailed({
+      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools || isManualMode,
+      skipDefaultTools: disableTools,
       toolIds: mergedToolIds,
     });
 
@@ -488,7 +490,7 @@ export class StreamingExecutorActionImpl {
       const currentDBMessages = this.#get().dbMessagesMap[messageKey] || [];
       // Use selectTodosFromMessages selector (shared with UI display)
       const todos = selectTodosFromMessages(currentDBMessages);
-      // Accumulate activated tool IDs from lobe-tools messages
+      // Accumulate activated tool IDs from lobe-activator messages
       const activatedToolIds = selectActivatedToolIdsFromMessages(currentDBMessages);
       // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);

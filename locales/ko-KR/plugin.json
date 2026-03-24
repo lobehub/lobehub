@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "총 {{count}}개의 매개변수가 있습니다",
   "arguments.title": "매개변수 목록",
+  "builtins.lobe-activator.apiName.activateTools": "도구 활성화",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "사용 가능한 모델 가져오기",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "사용 가능한 도구 가져오기",
   "builtins.lobe-agent-builder.apiName.getConfig": "설정 가져오기",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "명령 실행",
   "builtins.lobe-skills.apiName.searchSkill": "스킬 검색",
   "builtins.lobe-skills.title": "스킬",
-  "builtins.lobe-tools.apiName.activateTools": "도구 활성화",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "토픽 컨텍스트 가져오기",
   "builtins.lobe-topic-reference.title": "토픽 참조",
   "builtins.lobe-user-memory.apiName.addContextMemory": "상황 기억 추가",

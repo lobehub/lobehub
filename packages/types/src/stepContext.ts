@@ -126,7 +126,7 @@ export interface RuntimeStepContext {
    */
   activatedSkills?: StepActivatedSkill[];
   /**
-   * Activated tool identifiers accumulated from lobe-tools messages
+   * Activated tool identifiers accumulated from lobe-activator messages
    * Tools once activated remain active for the rest of the conversation
    */
   activatedToolIds?: string[];

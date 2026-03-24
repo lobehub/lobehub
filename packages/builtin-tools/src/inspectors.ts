@@ -1,4 +1,8 @@
 import {
+  LobeActivatorInspectors,
+  LobeActivatorManifest,
+} from '@lobechat/builtin-tool-activator/client';
+import {
   AgentBuilderInspectors,
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
@@ -35,7 +39,6 @@ import {
   SkillStoreManifest,
 } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsInspectors, SkillsManifest } from '@lobechat/builtin-tool-skills/client';
-import { LobeToolsInspectors, LobeToolsManifest } from '@lobechat/builtin-tool-tools/client';
 import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
@@ -70,7 +73,9 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
   [NotebookManifest.identifier]: NotebookInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
-  [LobeToolsManifest.identifier]: LobeToolsInspectors as Record<string, BuiltinInspector>,
+  [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
+  // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
+  ['lobe-tools']: LobeActivatorInspectors as Record<string, BuiltinInspector>,
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,

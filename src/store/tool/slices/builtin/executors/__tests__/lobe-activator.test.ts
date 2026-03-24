@@ -18,7 +18,7 @@ vi.mock('@/store/tool/selectors/tool', () => ({
 }));
 
 // Import after mocks
-const { toolsActivatorExecutor } = await import('../lobe-tools');
+const { activatorExecutor } = await import('../lobe-activator');
 
 const makeBuiltinTool = (identifier: string, discoverable?: boolean) => ({
   discoverable,
@@ -39,7 +39,7 @@ const makePlugin = (identifier: string) => ({
   },
 });
 
-describe('lobe-tools executor discovery allowlist', () => {
+describe('lobe-activator executor discovery allowlist', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -58,7 +58,7 @@ describe('lobe-tools executor discovery allowlist', () => {
       { description: 'desc', identifier: 'web-browsing', name: 'web-browsing' },
     ]);
 
-    const result = await toolsActivatorExecutor.invoke(
+    const result = await activatorExecutor.invoke(
       'activateTools',
       { identifiers: ['web-browsing', 'internal-admin'] },
       { messageId: 'msg-1', operationId: 'op-1' },
@@ -83,7 +83,7 @@ describe('lobe-tools executor discovery allowlist', () => {
 
     mockAvailableToolsForDiscovery.mockReturnValue([]);
 
-    const result = await toolsActivatorExecutor.invoke(
+    const result = await activatorExecutor.invoke(
       'activateTools',
       { identifiers: ['secret-tool'] },
       { messageId: 'msg-1', operationId: 'op-1' },
@@ -108,7 +108,7 @@ describe('lobe-tools executor discovery allowlist', () => {
       { description: 'desc', identifier: 'community-plugin', name: 'community-plugin' },
     ]);
 
-    const result = await toolsActivatorExecutor.invoke(
+    const result = await activatorExecutor.invoke(
       'activateTools',
       { identifiers: ['community-plugin'] },
       { messageId: 'msg-1', operationId: 'op-1' },

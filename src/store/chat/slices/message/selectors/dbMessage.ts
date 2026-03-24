@@ -1,6 +1,6 @@
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
-import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import {
   type StepActivatedSkill,
   type StepContextTodos,
@@ -156,7 +156,7 @@ const inboxActiveTopicDbMessages = (state: ChatStoreState) => {
 // ============= Activated Tools Selectors ========== //
 
 /**
- * Accumulate activated tool identifiers from all lobe-tools messages.
+ * Accumulate activated tool identifiers from all lobe-activator messages.
  *
  * Unlike todos (which take the latest snapshot), activated tools are
  * cumulative — once a tool is activated it stays active for the rest
@@ -173,7 +173,8 @@ export const selectActivatedToolIdsFromMessages = (
   for (const msg of messages) {
     if (
       msg.role === 'tool' &&
-      msg.plugin?.identifier === LobeToolIdentifier &&
+      (msg.plugin?.identifier === LobeActivatorIdentifier ||
+        msg.plugin?.identifier === 'lobe-tools') &&
       msg.pluginState?.activatedTools
     ) {
       const activatedTools = msg.pluginState.activatedTools as Array<{ identifier?: string }>;
@@ -209,7 +210,9 @@ export const selectActivatedSkillsFromMessages = (
   for (const msg of messages) {
     if (
       msg.role === 'tool' &&
-      msg.plugin?.identifier === SkillsIdentifier &&
+      (msg.plugin?.identifier === SkillsIdentifier ||
+        msg.plugin?.identifier === LobeActivatorIdentifier ||
+        msg.plugin?.identifier === 'lobe-tools') &&
       msg.plugin?.apiName === 'activateSkill' &&
       msg.pluginState?.id &&
       msg.pluginState?.name

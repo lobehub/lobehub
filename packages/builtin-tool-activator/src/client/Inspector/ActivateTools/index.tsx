@@ -42,7 +42,7 @@ export const ActivateToolsInspector = memo<
   if (isArgumentsStreaming || isLoading) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-tools.apiName.activateTools')}</span>
+        <span>{t('builtins.lobe-activator.apiName.activateTools')}</span>
         {identifiers && identifiers.length > 0 && (
           <span className={styles.tools}>
             {identifiers.map((id) => (
@@ -59,7 +59,7 @@ export const ActivateToolsInspector = memo<
   // Finished: show activated tool names with avatars
   return (
     <div className={inspectorTextStyles.root}>
-      <span>{t('builtins.lobe-tools.apiName.activateTools')}</span>
+      <span>{t('builtins.lobe-activator.apiName.activateTools')}</span>
       {activatedTools && activatedTools.length > 0 && (
         <span className={styles.tools}>
           {activatedTools.map((tool) => (

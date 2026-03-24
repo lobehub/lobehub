@@ -1,3 +1,4 @@
+import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
@@ -14,7 +15,6 @@ import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
-import { LobeToolsManifest } from '@lobechat/builtin-tool-tools';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 
@@ -30,12 +30,13 @@ export const builtinToolIdentifiers: string[] = [
   GTDManifest.identifier,
   KnowledgeBaseManifest.identifier,
   LocalSystemManifest.identifier,
-  LobeToolsManifest.identifier,
   MemoryManifest.identifier,
   NotebookManifest.identifier,
   PageAgentManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
   TopicReferenceManifest.identifier,
+  LobeActivatorManifest.identifier,
+  SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
 ];

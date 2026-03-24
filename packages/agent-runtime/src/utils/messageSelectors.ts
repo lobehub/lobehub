@@ -58,7 +58,7 @@ export const findInMessages = <T>(
  * ```typescript
  * // Accumulate activated tool identifiers
  * const tools = collectFromMessages(messages, (msg) => {
- *   if (msg.plugin?.identifier === LobeToolIdentifier) {
+ *   if (msg.plugin?.identifier === LobeActivatorIdentifier) {
  *     return msg.pluginState?.activatedTools;
  *   }
  * }, { role: 'tool' });

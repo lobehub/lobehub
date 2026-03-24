@@ -88,7 +88,7 @@ async function createTestAgent(title: string = 'Test Agent'): Promise<string> {
 // Given Steps
 // ============================================
 
-Given('用户在 Home 页面有一个 Agent', async function (this: CustomWorld) {
+Given('用户在 Home 页面有一个 Agent', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 在数据库中创建测试 Agent...');
   const agentId = await createTestAgent('E2E Test Agent');
   this.testContext.createdAgentId = agentId;

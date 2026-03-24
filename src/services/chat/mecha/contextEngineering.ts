@@ -1,9 +1,9 @@
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
-import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type {
   AgentBuilderContext,
@@ -461,9 +461,9 @@ export const contextEngineering = async ({
         }
       : undefined;
 
-  // Build tool discovery config if lobe-tools is enabled
+  // Build tool discovery config if lobe-activator is enabled
   const enabledToolSet = new Set(tools || []);
-  const isLobeToolsEnabled = enabledToolSet.has(LobeToolIdentifier);
+  const isLobeToolsEnabled = enabledToolSet.has(LobeActivatorIdentifier);
 
   let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
   if (isLobeToolsEnabled) {

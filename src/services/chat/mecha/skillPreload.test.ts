@@ -35,7 +35,7 @@ describe('prepareSelectedSkillPreload', () => {
             apiName: 'activateSkill',
             arguments: JSON.stringify({ name: 'Grep' }),
             id: expect.any(String),
-            identifier: 'lobe-skills',
+            identifier: 'lobe-activator',
             type: 'builtin',
           }),
         ],
@@ -47,7 +47,7 @@ describe('prepareSelectedSkillPreload', () => {
         plugin: expect.objectContaining({
           apiName: 'activateSkill',
           arguments: JSON.stringify({ name: 'Grep' }),
-          identifier: 'lobe-skills',
+          identifier: 'lobe-activator',
           type: 'builtin',
         }),
         role: 'tool',

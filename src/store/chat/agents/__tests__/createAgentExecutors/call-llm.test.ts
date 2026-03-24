@@ -234,14 +234,14 @@ describe('call_llm executor', () => {
         },
         phase: 'init',
         stepContext: {
-          activatedToolIds: ['lobe-skills', 'lobe-tools'],
+          activatedToolIds: ['lobe-skills', 'lobe-activator'],
         },
       } as any);
 
       expect(toolsEngine.generateToolsDetailed).toHaveBeenCalledWith(
         expect.objectContaining({
           skipDefaultTools: true,
-          toolIds: ['lobe-skills', 'lobe-tools'],
+          toolIds: ['lobe-skills', 'lobe-activator'],
         }),
       );
       expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(

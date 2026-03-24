@@ -10,7 +10,7 @@ export interface ComputeStepContextParams {
    */
   activatedSkills?: StepActivatedSkill[];
   /**
-   * Activated tool identifiers accumulated from lobe-tools messages
+   * Activated tool identifiers accumulated from lobe-activator messages
    */
   activatedToolIds?: string[];
   /**

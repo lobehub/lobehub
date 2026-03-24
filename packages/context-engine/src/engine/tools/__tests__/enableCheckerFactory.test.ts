@@ -163,7 +163,7 @@ describe('createEnableChecker', () => {
       // BUG: Tools NOT in rules currently default to true,
       // but should default to false to prevent unintended tool activation
       // This is the regression test for the "all 7 builtin tools enabled" bug
-      expect(checker(makeParams('lobe-tools'))).toBe(false);
+      expect(checker(makeParams('lobe-activator'))).toBe(false);
       expect(checker(makeParams('lobe-skills'))).toBe(false);
       expect(checker(makeParams('lobe-skill-store'))).toBe(false);
     });
@@ -193,7 +193,7 @@ describe('createEnableChecker', () => {
       expect(checker(makeParams('memory'))).toBe(false);
 
       // Default tools NOT in rules: should be disabled
-      expect(checker(makeParams('lobe-tools'))).toBe(false);
+      expect(checker(makeParams('lobe-activator'))).toBe(false);
       expect(checker(makeParams('lobe-skills'))).toBe(false);
       expect(checker(makeParams('lobe-skill-store'))).toBe(false);
     });

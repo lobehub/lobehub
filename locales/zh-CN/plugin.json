@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "等 {{count}} 个参数",
   "arguments.title": "参数列表",
+  "builtins.lobe-activator.apiName.activateTools": "激活工具",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "获取可用模型",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "获取可用技能",
   "builtins.lobe-agent-builder.apiName.getConfig": "获取配置",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "执行命令",
   "builtins.lobe-skills.apiName.searchSkill": "搜索技能",
   "builtins.lobe-skills.title": "技能",
-  "builtins.lobe-tools.apiName.activateTools": "激活工具",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "获取话题上下文",
   "builtins.lobe-topic-reference.title": "话题引用",
   "builtins.lobe-user-memory.apiName.addContextMemory": "添加情境记忆",

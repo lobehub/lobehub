@@ -346,7 +346,7 @@ export const createAgentExecutors = (context: {
 
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
 
-      // Expand dynamically activated tools (from lobe-tools activateTools API)
+      // Expand dynamically activated tools (from lobe-activator activateTools API)
       // and merge them into the agent config for this LLM call
       const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
       let resolvedAgentConfig = context.agentConfig;

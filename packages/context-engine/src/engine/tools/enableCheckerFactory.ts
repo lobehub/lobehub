@@ -34,7 +34,7 @@ export interface EnableCheckerConfig {
  */
 export function createEnableChecker(config: EnableCheckerConfig): PluginEnableChecker {
   return ({ pluginId, context, manifest }) => {
-    // 1. Explicit activation bypass (e.g. tools activated via lobe-tools)
+    // 1. Explicit activation bypass (e.g. tools activated via lobe-activator)
     if (config.allowExplicitActivation && context?.isExplicitActivation) return true;
 
     // 2. Platform-specific filter (return undefined = fall through)

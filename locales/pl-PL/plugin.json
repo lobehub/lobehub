@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "Łącznie {{count}} parametrów",
   "arguments.title": "Argumenty",
+  "builtins.lobe-activator.apiName.activateTools": "Aktywuj Narzędzia",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Pobierz dostępne modele",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Pobierz dostępne Umiejętności",
   "builtins.lobe-agent-builder.apiName.getConfig": "Pobierz konfigurację",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "Uruchom Polecenie",
   "builtins.lobe-skills.apiName.searchSkill": "Wyszukaj Umiejętności",
   "builtins.lobe-skills.title": "Umiejętności",
-  "builtins.lobe-tools.apiName.activateTools": "Aktywuj Narzędzia",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "Pobierz kontekst tematu",
   "builtins.lobe-topic-reference.title": "Odwołanie do tematu",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Dodaj pamięć kontekstu",

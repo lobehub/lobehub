@@ -893,7 +893,7 @@ describe('StreamingExecutor actions', () => {
 
       expect(generateToolsDetailed).toHaveBeenCalledWith(
         expect.objectContaining({
-          skipDefaultTools: false,
+          skipDefaultTools: undefined,
           toolIds: ['lobe-artifacts', 'lobe-notebook'],
         }),
       );
