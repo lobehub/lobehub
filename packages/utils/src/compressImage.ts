@@ -1,18 +1,25 @@
-const compressImage = ({ img, type = 'image/webp' }: { img: HTMLImageElement; type?: string }) => {
-  // Set maximum width and height
-  const maxWidth = 2160;
-  const maxHeight = 2160;
+const MAX_IMAGE_SIZE = 1920;
+
+const compressImage = ({
+  img,
+  type,
+  maxSize = MAX_IMAGE_SIZE,
+}: {
+  img: HTMLImageElement;
+  maxSize?: number;
+  type?: string;
+}) => {
   let width = img.width;
   let height = img.height;
 
-  if (width > height && width > maxWidth) {
-    // If image width is greater than height and exceeds maximum width limit
-    width = maxWidth;
-    height = Math.round((maxWidth / img.width) * img.height);
-  } else if (height > width && height > maxHeight) {
-    // If image height is greater than width and exceeds maximum height limit
-    height = maxHeight;
-    width = Math.round((maxHeight / img.height) * img.width);
+  if (width > maxSize || height > maxSize) {
+    if (width >= height) {
+      height = Math.round((maxSize / width) * height);
+      width = maxSize;
+    } else {
+      width = Math.round((maxSize / height) * width);
+      height = maxSize;
+    }
   }
 
   const canvas = document.createElement('canvas');

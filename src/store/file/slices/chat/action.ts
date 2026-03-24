@@ -1,4 +1,5 @@
 import { type ChatContextContent } from '@lobechat/types';
+import compressImage from '@lobechat/utils/compressImage';
 import { t } from 'i18next';
 
 import { notification } from '@/components/AntdStaticMethods';
@@ -108,8 +109,12 @@ export class FileActionImpl {
   uploadChatFiles = async (rawFiles: File[]): Promise<void> => {
     const { dispatchChatUploadFileList } = this.#get();
     // 0. skip file in blacklist
-    const files = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
-    // 1. add files with base64
+    const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
+    // 1. compress images and add files with base64
+    const files = await Promise.all(
+      filteredFiles.map((file) => (file.type.startsWith('image') ? compressImageFile(file) : file)),
+    );
+
     const uploadFiles: UploadFileItem[] = await Promise.all(
       files.map(async (file) => {
         let previewUrl: string | undefined = undefined;
@@ -172,3 +177,37 @@ export class FileActionImpl {
 }
 
 export type FileAction = Pick<FileActionImpl, keyof FileActionImpl>;
+
+const compressImageFile = (file: File): Promise<File> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.addEventListener('load', () => {
+      URL.revokeObjectURL(objectUrl);
+
+      // skip compression if image is within limits
+      if (img.width <= 1920 && img.height <= 1920) {
+        resolve(file);
+        return;
+      }
+
+      const dataUrl = compressImage({ img, type: file.type || 'image/png' });
+
+      // convert data URL back to File
+      const [header, base64] = dataUrl.split(',');
+      const mime = header.match(/:(.*?);/)?.[1] || file.type;
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      resolve(new File([bytes], file.name, { type: mime }));
+    });
+
+    img.addEventListener('error', () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    });
+
+    img.src = objectUrl;
+  });
