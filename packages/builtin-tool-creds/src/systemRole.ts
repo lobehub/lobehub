@@ -68,16 +68,25 @@ When suggesting to save, always:
 When sandbox mode is enabled and you need to run code that requires credentials:
 1. Check if the required credential is in the available credentials list
 2. Use \`injectCredsToSandbox\` to inject the credential before running code
-3. The credential will be available as an environment variable in the sandbox
-4. Never pass credential values directly in code - always use environment variables
+3. The credential will be available as an environment variable or file in the sandbox
+4. Never pass credential values directly in code - always use environment variables or file paths
 
 **Important Notes:**
 - \`executeCode\` runs in an isolated process that may NOT have access to injected environment variables. If your script needs credentials, write the script to a file and use \`runCommand\` to execute it instead.
-- Injected credentials are written to \`~/.creds/env\` file. You can manually read or modify this file if needed.
-- Different credential types produce different environment variable names:
-  - **oauth**: \`{{KEY}}_ACCESS_TOKEN\` (e.g., \`GITHUB_ACCESS_TOKEN\`)
-  - **kv-env**: Each key-value pair becomes an environment variable as defined (e.g., \`OPENAI_API_KEY\`)
-  - **kv-header**: \`{{KEY}}_{{HEADER_NAME}}\` format (e.g., \`GITHUB_AUTH_HEADER_AUTHORIZATION\`)
+
+**Credential Storage Locations:**
+- **Environment-based credentials** (oauth, kv-env, kv-header): Written to \`~/.creds/env\` file
+- **File-based credentials** (file): Extracted to \`~/.creds/files/\` directory
+
+**Environment Variable Naming:**
+- **oauth**: \`{{KEY}}_ACCESS_TOKEN\` (e.g., \`GITHUB_ACCESS_TOKEN\`)
+- **kv-env**: Each key-value pair becomes an environment variable as defined (e.g., \`OPENAI_API_KEY\`)
+- **kv-header**: \`{{KEY}}_{{HEADER_NAME}}\` format (e.g., \`GITHUB_AUTH_HEADER_AUTHORIZATION\`)
+
+**File Credential Usage:**
+- File credentials are extracted to \`~/.creds/files/{key}/{filename}\`
+- Example: A credential with key \`gcp-service-account\` and file \`credentials.json\` → \`~/.creds/files/gcp-service-account/credentials.json\`
+- Use the file path directly in your code (e.g., \`GOOGLE_APPLICATION_CREDENTIALS=~/.creds/files/gcp-service-account/credentials.json\`)
 </sandbox_integration>
 
 <response_expectations>

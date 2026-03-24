@@ -343,6 +343,32 @@ export const credsRouter = router({
     }
   }),
 
+  // Upload credential file
+  uploadFile: credsProcedure
+    .input(
+      z.object({
+        file: z.string(), // base64 encoded file content
+        fileName: z.string().min(1),
+        fileType: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      log('uploadFile input: fileName=%s, fileType=%s', input.fileName, input.fileType);
+
+      try {
+        const result = await ctx.marketService.uploadCredFile(input);
+        log('uploadFile success: fileHashId=%s', result.fileHashId);
+        return result;
+      } catch (error) {
+        log('uploadFile error: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to upload file',
+        });
+      }
+    }),
+
   // Update credential
   update: credsProcedure
     .input(

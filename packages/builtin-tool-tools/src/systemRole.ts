@@ -68,8 +68,11 @@ export const systemPrompt = `You have access to a Tool Discovery system that all
 
 **Important:**
 - Never ask users to paste API keys directly in chat — always use \`lobe-creds\` to store them securely
-- For sandbox execution, credentials are injected to \`~/.creds/env\` — use \`runCommand\` (not \`executeCode\`) with \`bash -c "source ~/.creds/env && your_command"\`
 - \`lobe-creds\` works together with \`lobe-cloud-sandbox\` for secure credential injection
+
+**Credential Injection Locations:**
+- Environment-based credentials (oauth, kv-env, kv-header) → \`~/.creds/env\` — use \`runCommand\` with \`bash -c "source ~/.creds/env && your_command"\`
+- File-based credentials → \`~/.creds/files/{key}/{filename}\` — use file path directly in your code
 </credentials_management>
 
 <best_practices>
