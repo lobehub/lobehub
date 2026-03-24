@@ -11,6 +11,7 @@ import {
   type StoredCredentials,
 } from './credentials';
 
+// Use a fixed temp path to avoid hoisting issues with vi.mock
 const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-creds');
 const credentialsDir = path.join(tmpDir, '.lobehub');
 const credentialsFile = path.join(credentialsDir, 'credentials.json');
@@ -20,7 +21,7 @@ vi.mock('node:os', async (importOriginal) => {
   return {
     ...actual,
     default: {
-      ...actual.default,
+      ...actual['default'],
       homedir: () => path.join(os.tmpdir(), 'lobehub-cli-test-creds'),
     },
   };
@@ -36,10 +37,9 @@ describe('credentials', () => {
   });
 
   const testCredentials: StoredCredentials = {
+    accessToken: 'test-access-token',
     expiresAt: Math.floor(Date.now() / 1000) + 3600,
     refreshToken: 'test-refresh-token',
-    accessToken: 'test-access-token',
-    tokenType: 'jwt',
   };
 
   describe('saveCredentials + loadCredentials', () => {
@@ -62,8 +62,22 @@ describe('credentials', () => {
 
       const raw = fs.readFileSync(credentialsFile, 'utf8');
 
+      // Should not be plain JSON
       expect(() => JSON.parse(raw)).toThrow();
+
+      // Should be base64
       expect(Buffer.from(raw, 'base64').length).toBeGreaterThan(0);
+    });
+
+    it('should handle credentials without optional fields', () => {
+      const minimal: StoredCredentials = {
+        accessToken: 'tok',
+      };
+
+      saveCredentials(minimal);
+      const loaded = loadCredentials();
+
+      expect(loaded).toEqual(minimal);
     });
   });
 
@@ -74,14 +88,16 @@ describe('credentials', () => {
       expect(result).toBeNull();
     });
 
-    it('should load and re-encrypt plaintext legacy JSON', () => {
+    it('should handle legacy plaintext JSON and re-encrypt', () => {
       fs.mkdirSync(credentialsDir, { recursive: true });
       fs.writeFileSync(credentialsFile, JSON.stringify(testCredentials));
 
       const loaded = loadCredentials();
-      const raw = fs.readFileSync(credentialsFile, 'utf8');
 
       expect(loaded).toEqual(testCredentials);
+
+      // Should have been re-encrypted
+      const raw = fs.readFileSync(credentialsFile, 'utf8');
       expect(() => JSON.parse(raw)).toThrow();
     });
 

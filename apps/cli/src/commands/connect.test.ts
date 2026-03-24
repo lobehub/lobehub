@@ -112,11 +112,6 @@ describe('connect command', () => {
     mockRunningPid = null;
     mockSpawnedPid = 0;
     mockStatus = null;
-    vi.mocked(resolveToken).mockResolvedValue({
-      token: 'test-token',
-      tokenType: 'jwt',
-      userId: 'test-user',
-    });
   });
 
   afterEach(() => {

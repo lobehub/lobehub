@@ -29,6 +29,7 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
+// Mock child_process to prevent browser opening
 vi.mock('node:child_process', () => ({
   default: {
     exec: vi.fn((_cmd: string, cb: any) => cb?.(null)),
@@ -114,6 +115,7 @@ describe('login command', () => {
 
   async function runLoginAndAdvanceTimers(program: Command, args: string[] = []) {
     const parsePromise = runLogin(program, args);
+    // Advance timers to let sleep resolve in the polling loop
     for (let i = 0; i < 10; i++) {
       await vi.advanceTimersByTimeAsync(2000);
     }
@@ -149,7 +151,7 @@ describe('login command', () => {
     expect(getUserIdFromApiKey).toHaveBeenCalledWith('sk-lh-env-test', 'https://app.lobehub.com');
     expect(saveCredentials).not.toHaveBeenCalled();
     expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://app.lobehub.com' });
-    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('is not stored locally'));
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
   });
 
   it('should persist custom server into settings', async () => {

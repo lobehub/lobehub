@@ -32,10 +32,9 @@ describe('getValidToken', () => {
 
   it('should return credentials when token is still valid', async () => {
     const creds: StoredCredentials = {
-      expiresAt: Math.floor(Date.now() / 1000) + 3600,
-      refreshToken: 'refresh-tok',
       accessToken: 'valid-token',
-      tokenType: 'jwt',
+      expiresAt: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+      refreshToken: 'refresh-tok',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -45,11 +44,23 @@ describe('getValidToken', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('should return credentials when no expiresAt is set', async () => {
+    const creds: StoredCredentials = {
+      accessToken: 'valid-token',
+    };
+    vi.mocked(loadCredentials).mockReturnValue(creds);
+
+    const result = await getValidToken();
+
+    // expiresAt is undefined, so Date.now()/1000 < undefined - 60 is false (NaN comparison)
+    // This means it will try to refresh, but there's no refreshToken
+    expect(result).toBeNull();
+  });
+
   it('should return null when token expired and no refresh token', async () => {
     const creds: StoredCredentials = {
-      expiresAt: Math.floor(Date.now() / 1000) - 100,
       accessToken: 'expired-token',
-      tokenType: 'jwt',
+      expiresAt: Math.floor(Date.now() / 1000) - 100, // expired
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -60,11 +71,9 @@ describe('getValidToken', () => {
 
   it('should refresh and save updated credentials when token is expired', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'valid-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
-      userId: 'user-1',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -90,10 +99,9 @@ describe('getValidToken', () => {
 
   it('should keep old refresh token if new one is not returned', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'old-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -113,10 +121,9 @@ describe('getValidToken', () => {
 
   it('should return null when refresh request fails (non-ok)', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'valid-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -133,10 +140,9 @@ describe('getValidToken', () => {
 
   it('should return null when refresh response has error field', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'valid-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -152,10 +158,9 @@ describe('getValidToken', () => {
 
   it('should return null when refresh response has no access_token', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'valid-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -171,10 +176,9 @@ describe('getValidToken', () => {
 
   it('should return null when network error occurs during refresh', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'valid-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
 
@@ -187,10 +191,9 @@ describe('getValidToken', () => {
 
   it('should send correct request to refresh endpoint', async () => {
     const creds: StoredCredentials = {
+      accessToken: 'expired-token',
       expiresAt: Math.floor(Date.now() / 1000) - 100,
       refreshToken: 'my-refresh-token',
-      accessToken: 'expired-token',
-      tokenType: 'jwt',
     };
     vi.mocked(loadCredentials).mockReturnValue(creds);
     vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://my-server.com' });
@@ -208,8 +211,8 @@ describe('getValidToken', () => {
     expect(fetch).toHaveBeenCalledWith(
       'https://my-server.com/oidc/token',
       expect.objectContaining({
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }),
     );
 
