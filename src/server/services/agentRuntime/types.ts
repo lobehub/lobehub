@@ -164,6 +164,8 @@ export interface OperationCreationParams {
   maxSteps?: number;
   modelRuntimeConfig?: any;
   operationId: string;
+  /** Abort startup before the first step is scheduled */
+  signal?: AbortSignal;
   /** Skill metas for <available_skills> prompt injection */
   skillMetas?: Array<{ description: string; identifier: string; name: string }>;
   /**

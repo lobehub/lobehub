@@ -21,6 +21,7 @@ import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 
+import { isAbortError, throwIfAborted } from './abort';
 import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
@@ -279,12 +280,18 @@ export class AgentRuntimeService {
       userMemory,
       deviceSystemInfo,
       skillMetas,
+      signal,
       userTimezone,
     } = params;
 
     const operationToolSet = toolSet;
+    let operationCreated = false;
+    let stepCallbacksRegistered = false;
+    let hooksRegistered = false;
 
     try {
+      throwIfAborted(signal, 'Agent execution aborted before operation startup');
+
       const memories = userMemory?.memories;
       log(
         '[%s] Creating new operation (autoStart: %s) with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d, memory=%s',
@@ -348,6 +355,7 @@ export class AgentRuntimeService {
         modelRuntimeConfig,
         userId,
       });
+      operationCreated = true;
 
       // Save initial state
       await this.coordinator.saveAgentState(operationId, initialState as any);
@@ -355,11 +363,13 @@ export class AgentRuntimeService {
       // Register step lifecycle callbacks
       if (stepCallbacks) {
         this.registerStepCallbacks(operationId, stepCallbacks);
+        stepCallbacksRegistered = true;
       }
 
       // Register external hooks
       if (hooks && hooks.length > 0) {
         hookDispatcher.register(operationId, hooks);
+        hooksRegistered = true;
 
         // Persist webhook configs to state metadata for production mode
         const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
@@ -376,6 +386,8 @@ export class AgentRuntimeService {
           }
         }
       }
+
+      throwIfAborted(signal, 'Agent execution aborted before first step scheduling');
 
       let messageId: string | undefined;
       let autoStarted = false;
@@ -402,6 +414,27 @@ export class AgentRuntimeService {
 
       return { autoStarted, messageId, operationId, success: true };
     } catch (error) {
+      if (isAbortError(error)) {
+        if (stepCallbacksRegistered) {
+          this.unregisterStepCallbacks(operationId);
+        }
+
+        if (hooksRegistered) {
+          hookDispatcher.unregister(operationId);
+        }
+
+        if (operationCreated) {
+          try {
+            await this.coordinator.deleteAgentOperation(operationId);
+          } catch (cleanupError) {
+            console.error('Failed to cleanup aborted operation %s: %O', operationId, cleanupError);
+          }
+        }
+
+        log('[%s] Operation creation aborted before scheduling', operationId);
+        throw error;
+      }
+
       console.error('Failed to create operation %s: %O', operationId, error);
       throw error;
     }
