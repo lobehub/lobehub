@@ -1,24 +1,6 @@
 import { type DynamicInterventionResolver } from '@lobechat/types';
 
-import { normalizePathForScope, resolvePathWithScope } from './utils/path';
-
-/**
- * Check if a path is within the working directory
- */
-const isPathWithinWorkingDirectory = (
-  targetPath: string,
-  workingDirectory: string,
-  resolveAgainstScope: string,
-): boolean => {
-  const resolvedTarget = resolvePathWithScope(targetPath, resolveAgainstScope) ?? targetPath;
-  const normalizedTarget = normalizePathForScope(resolvedTarget);
-  const normalizedWorkingDir = normalizePathForScope(workingDirectory);
-
-  return (
-    normalizedTarget === normalizedWorkingDir ||
-    normalizedTarget.startsWith(normalizedWorkingDir + '/')
-  );
-};
+import { isPathWithinScope, resolvePathWithScope } from './utils/path';
 
 /**
  * Extract all path values from tool arguments
@@ -72,7 +54,7 @@ export const pathScopeAudit: DynamicInterventionResolver = (
 
   // Match runtime behavior: a tool-provided scope is interpreted relative to workingDirectory.
   // If the resolved scope escapes the workingDirectory, intervention is required.
-  if (toolScope && !isPathWithinWorkingDirectory(toolScope, workingDirectory, workingDirectory)) {
+  if (toolScope && !isPathWithinScope(toolScope, workingDirectory, workingDirectory)) {
     return true;
   }
 
@@ -82,7 +64,5 @@ export const pathScopeAudit: DynamicInterventionResolver = (
   const paths = extractPaths(toolArgs);
 
   // Return true if any path is outside the working directory
-  return paths.some(
-    (path) => !isPathWithinWorkingDirectory(path, workingDirectory, effectiveScope),
-  );
+  return paths.some((path) => !isPathWithinScope(path, workingDirectory, effectiveScope));
 };

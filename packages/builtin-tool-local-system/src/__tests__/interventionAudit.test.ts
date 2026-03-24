@@ -50,8 +50,12 @@ describe('pathScopeAudit', () => {
       expect(pathScopeAudit({ path: '../other-project/file.ts' }, metadata)).toBe(true);
     });
 
+    it('should allow /tmp paths (system temp directory)', () => {
+      expect(pathScopeAudit({ file_path: '/tmp/secret.txt' }, metadata)).toBe(false);
+    });
+
     it('should return true when file_path is outside working directory', () => {
-      expect(pathScopeAudit({ file_path: '/tmp/secret.txt' }, metadata)).toBe(true);
+      expect(pathScopeAudit({ file_path: '/var/data/secret.txt' }, metadata)).toBe(true);
     });
 
     it('should return true when directory is outside working directory', () => {

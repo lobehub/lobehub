@@ -127,13 +127,15 @@ export default class GatewayConnectionService extends ServiceModule {
     }
 
     const gatewayUrl = this.getGatewayUrl();
-    logger.info(`Connecting to device gateway: ${gatewayUrl}`);
+    const userId = this.extractUserIdFromToken(token);
+    logger.info(`Connecting to device gateway: ${gatewayUrl}, userId: ${userId || 'unknown'}`);
 
     const client = new GatewayClient({
       deviceId: this.getDeviceId(),
       gatewayUrl,
       logger,
       token,
+      userId: userId || undefined,
     });
 
     this.setupClientEvents(client);
@@ -269,5 +271,24 @@ export default class GatewayConnectionService extends ServiceModule {
 
   private getGatewayUrl(): string {
     return this.app.storeManager.get('gatewayUrl') || DEFAULT_GATEWAY_URL;
+  }
+
+  // ─── Token Helpers ───
+
+  /**
+   * Extract userId (sub claim) from JWT without verification.
+   * The token will be verified server-side; we just need the userId for routing.
+   */
+  private extractUserIdFromToken(token: string): string | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+      return payload.sub || null;
+    } catch {
+      logger.warn('Failed to extract userId from JWT token');
+      return null;
+    }
   }
 }

@@ -523,6 +523,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@lobehub/editor",
       "ffmpeg-static"
     ],
     "overrides": {
