@@ -211,8 +211,9 @@ export default {
   'payment.success.actions.viewBill': 'View Billing History',
   'payment.success.desc': 'Your subscription plan has been activated successfully',
   'payment.success.title': 'Subscription Successful',
-  'payment.switchSuccess.desc': 'Your subscription plan will automatically switch on {{switchAt}}',
-  'payment.switchSuccess.title': 'Switch Successful',
+  'payment.switchSuccess.desc':
+    'Your subscription will automatically downgrade from <bold>{{from}}</bold> to <bold>{{to}}</bold> on {{switchAt}}',
+  'payment.switchSuccess.title': 'Downgrade Scheduled',
   'payment.upgradeFailed.alert.reason.bank3DS':
     'Your bank requires 3DS verification, please confirm again',
   'payment.upgradeFailed.alert.reason.inefficient': 'Insufficient card balance',
@@ -426,7 +427,7 @@ export default {
   'summary.title': 'Billing Summary',
   'summary.usageThisMonth': 'View your usage this month.',
   'summary.viewBillingHistory': 'View Payment History',
-  'switchPlan': 'Switch Plan',
+  'switchPlan': 'Downgrade',
   'switchToMonthly.desc':
     'After switching, monthly billing will take effect after the current yearly plan expires.',
   'switchToMonthly.title': 'Switch to Monthly Billing',
