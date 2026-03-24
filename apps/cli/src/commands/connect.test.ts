@@ -215,16 +215,20 @@ describe('connect command', () => {
   });
 
   it('should handle auth_expired', async () => {
-    vi.mocked(resolveToken).mockResolvedValueOnce({ token: 'new-tok', userId: 'user' });
+    vi.mocked(resolveToken).mockResolvedValueOnce({
+      token: 'test-api-key',
+      tokenType: 'apiKey',
+      userId: 'user',
+    });
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);
 
     await clientEventHandlers['auth_expired']?.();
 
-    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expired'));
-    expect(cleanupAllProcesses).toHaveBeenCalled();
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(log.error).not.toHaveBeenCalled();
+    expect(cleanupAllProcesses).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should handle error event', async () => {

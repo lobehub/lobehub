@@ -295,12 +295,6 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Handle auth expired
   client.on('auth_expired', async () => {
     if (auth.tokenType !== 'jwt') {
-      error('Authentication expired.');
-      error(
-        "Set LOBEHUB_CLI_API_KEY and run 'lh login --server <url>', or run 'lh login' to re-authenticate.",
-      );
-      cleanup();
-      process.exit(1);
       return;
     }
 
