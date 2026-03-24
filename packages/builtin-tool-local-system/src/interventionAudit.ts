@@ -1,6 +1,49 @@
 import { type DynamicInterventionResolver } from '@lobechat/types';
 
-import { isPathWithinScope, resolvePathWithScope } from './utils/path';
+import { normalizePathForScope, resolvePathWithScope } from './utils/path';
+
+/**
+ * Safe path prefixes that never require user intervention.
+ * Operations targeting these directories are considered low-risk
+ * because they are ephemeral / world-writable system locations.
+ */
+const SAFE_PATH_PREFIXES = ['/tmp/', '/tmp', '/var/tmp/', '/var/tmp'];
+
+/**
+ * Check if every path in the list targets a known safe location.
+ * Returns `true` only when **all** paths fall under a safe prefix.
+ */
+const areAllPathsSafe = (paths: string[], resolveAgainstScope: string): boolean => {
+  if (paths.length === 0) return false;
+
+  return paths.every((p) => {
+    const resolved = resolvePathWithScope(p, resolveAgainstScope) ?? p;
+    const normalized = normalizePathForScope(resolved);
+    return SAFE_PATH_PREFIXES.some(
+      (prefix) =>
+        normalized === prefix ||
+        normalized.startsWith(prefix.endsWith('/') ? prefix : prefix + '/'),
+    );
+  });
+};
+
+/**
+ * Check if a path is within the working directory
+ */
+const isPathWithinWorkingDirectory = (
+  targetPath: string,
+  workingDirectory: string,
+  resolveAgainstScope: string,
+): boolean => {
+  const resolvedTarget = resolvePathWithScope(targetPath, resolveAgainstScope) ?? targetPath;
+  const normalizedTarget = normalizePathForScope(resolvedTarget);
+  const normalizedWorkingDir = normalizePathForScope(workingDirectory);
+
+  return (
+    normalizedTarget === normalizedWorkingDir ||
+    normalizedTarget.startsWith(normalizedWorkingDir + '/')
+  );
+};
 
 /**
  * Extract all path values from tool arguments
@@ -54,7 +97,7 @@ export const pathScopeAudit: DynamicInterventionResolver = (
 
   // Match runtime behavior: a tool-provided scope is interpreted relative to workingDirectory.
   // If the resolved scope escapes the workingDirectory, intervention is required.
-  if (toolScope && !isPathWithinScope(toolScope, workingDirectory, workingDirectory)) {
+  if (toolScope && !isPathWithinWorkingDirectory(toolScope, workingDirectory, workingDirectory)) {
     return true;
   }
 
@@ -63,6 +106,13 @@ export const pathScopeAudit: DynamicInterventionResolver = (
 
   const paths = extractPaths(toolArgs);
 
+  // Skip intervention when all resolved paths target safe locations (e.g. /tmp)
+  if (areAllPathsSafe(paths, effectiveScope)) {
+    return false;
+  }
+
   // Return true if any path is outside the working directory
-  return paths.some((path) => !isPathWithinScope(path, workingDirectory, effectiveScope));
+  return paths.some(
+    (path) => !isPathWithinWorkingDirectory(path, workingDirectory, effectiveScope),
+  );
 };
