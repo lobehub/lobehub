@@ -35,6 +35,7 @@ function parseJwtSub(token: string): string | undefined {
  * Exits the process if no token can be resolved.
  */
 export async function resolveToken(options: ResolveTokenOptions): Promise<ResolvedAuth> {
+  // LOBEHUB_JWT env var takes highest priority (used by server-side sandbox execution)
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
     const userId = parseJwtSub(envJwt);
@@ -46,6 +47,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     return { token: envJwt, tokenType: 'jwt', userId };
   }
 
+  // Explicit token takes priority
   if (options.token) {
     const userId = parseJwtSub(options.token);
     if (!userId) {
@@ -77,6 +79,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     }
   }
 
+  // Try stored credentials
   const result = await getValidToken();
   if (result) {
     log.debug('Using stored credentials');
