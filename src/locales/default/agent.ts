@@ -49,6 +49,10 @@ export default {
   'channel.wechatQrWait': 'Open WeChat and scan the QR code to connect.',
   'channel.wechatScanTitle': 'Connect WeChat Bot',
   'channel.wechatScanToConnect': 'Scan QR Code to Connect',
+  'channel.wechatTip1':
+    'Please update WeChat to the latest version, and it is recommended to restart WeChat.',
+  'channel.wechatTip2':
+    'This feature is currently in gradual rollout. You can check Settings => Plugins to confirm whether you have access.',
   'channel.removeChannel': 'Remove Channel',
   'channel.removed': 'Channel removed',
   'channel.removeFailed': 'Failed to remove channel',

@@ -1,5 +1,6 @@
 'use client';
 
+import { InfoCircleOutlined } from '@ant-design/icons';
 import { Alert, Button, Modal, QRCode, Spin, Typography } from 'antd';
 import { QrCode, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -106,9 +107,19 @@ const QrCodeAuth = memo<QrCodeAuthProps>(({ onAuthenticated }) => {
 
   return (
     <>
-      <Button icon={<QrCode size={16} />} type="primary" onClick={handleOpen}>
-        {t('channel.wechatScanToConnect')}
-      </Button>
+      <div style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Button icon={<QrCode size={16} />} type="primary" onClick={handleOpen}>
+          {t('channel.wechatScanToConnect')}
+        </Button>
+        <Typography.Text style={{ maxWidth: 360, textAlign: 'center' }} type="secondary">
+          <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
+          {t('channel.wechatTip1')}
+        </Typography.Text>
+        <Typography.Text style={{ maxWidth: 360, textAlign: 'center' }} type="secondary">
+          <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
+          {t('channel.wechatTip2')}
+        </Typography.Text>
+      </div>
 
       <Modal
         centered

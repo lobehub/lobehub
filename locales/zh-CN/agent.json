@@ -86,5 +86,7 @@
   "channel.wechatQrScaned": "已扫码，请在微信中确认登录。",
   "channel.wechatQrWait": "打开微信扫描二维码以连接。",
   "channel.wechatScanTitle": "连接微信机器人",
-  "channel.wechatScanToConnect": "扫码连接"
+  "channel.wechatScanToConnect": "扫码连接",
+  "channel.wechatTip1": "请将微信更新到最新版本，建议更新后重启微信。",
+  "channel.wechatTip2": "当前该功能处于灰度中，可以在「设置 => 插件」中确认是否已被灰度到。"
 }
