@@ -183,6 +183,15 @@ export type FileAction = Pick<FileActionImpl, keyof FileActionImpl>;
 // Only compress raster formats safe for canvas; skip GIF (loses animation) and SVG (loses vector data)
 const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB Anthropic limit
+
+const dataUrlToFile = (dataUrl: string, name: string): File => {
+  const binary = atob(dataUrl.split(',')[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], name, { type: 'image/png' });
+};
+
 const compressImageFile = (file: File): Promise<File> =>
   new Promise((resolve) => {
     const img = new Image();
@@ -191,21 +200,22 @@ const compressImageFile = (file: File): Promise<File> =>
     img.addEventListener('load', () => {
       URL.revokeObjectURL(objectUrl);
 
-      // skip compression if image is within limits
-      if (img.width <= 1920 && img.height <= 1920) {
+      // skip if image is small enough in both dimensions and file size
+      if (img.width <= 1920 && img.height <= 1920 && file.size <= MAX_IMAGE_BYTES) {
         resolve(file);
         return;
       }
 
-      // always output PNG to avoid MIME type mismatch issues
-      const dataUrl = compressImage({ img });
+      // progressively shrink until under 5MB
+      let maxSize = 1920;
+      let result: File;
+      do {
+        const dataUrl = compressImage({ img, maxSize });
+        result = dataUrlToFile(dataUrl, file.name);
+        maxSize = Math.round(maxSize * 0.8);
+      } while (result.size > MAX_IMAGE_BYTES && maxSize > 100);
 
-      // convert data URL back to File
-      const binary = atob(dataUrl.split(',')[1]);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-      resolve(new File([bytes], file.name, { type: 'image/png' }));
+      resolve(result);
     });
 
     img.addEventListener('error', () => {
