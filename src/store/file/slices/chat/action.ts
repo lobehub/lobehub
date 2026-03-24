@@ -197,16 +197,15 @@ const compressImageFile = (file: File): Promise<File> =>
         return;
       }
 
-      const dataUrl = compressImage({ img, type: file.type || 'image/png' });
+      // always output PNG to avoid MIME type mismatch issues
+      const dataUrl = compressImage({ img });
 
       // convert data URL back to File
-      const [header, base64] = dataUrl.split(',');
-      const mime = header.match(/:(.*?);/)?.[1] || file.type;
-      const binary = atob(base64);
+      const binary = atob(dataUrl.split(',')[1]);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      resolve(new File([bytes], file.name, { type: mime }));
+      resolve(new File([bytes], file.name, { type: 'image/png' }));
     });
 
     img.addEventListener('error', () => {
