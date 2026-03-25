@@ -882,13 +882,14 @@ describe('AiInfraRepos', () => {
 
       const mockAllModels = [
         {
+          abilities: {},
           enabled: true,
           id: 'gpt-4',
           providerId: 'openai',
           sort: 0,
           type: 'chat' as const,
         },
-      ];
+      ] as EnabledAiModel[];
 
       vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
       vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue(mockAllModels);
