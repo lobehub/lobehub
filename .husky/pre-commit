@@ -2,4 +2,4 @@ BRANCH=$(git branch --show-current)
 if [ "$BRANCH" = "dev" ] || [ "$BRANCH" = "main" ]; then
   npm run type-check
 fi
-npx --no-install lint-staged
+bunx lint-staged
