@@ -37,6 +37,10 @@ description: 'Code review checklist for LobeHub. Use when reviewing PRs, diffs, 
 - Keys added to `src/locales/default/{namespace}.ts` with `{feature}.{context}.{action|status}` naming
 - For PRs: `locales/` translations for all languages updated (`pnpm i18n`)
 
+### SPA / routing
+
+- **`desktopRouter` pair:** If the diff touches `src/spa/router/desktopRouter.config.tsx`, does it also update `src/spa/router/desktopRouter.config.desktop.tsx` with the same route paths and nesting? Single-file edits often cause drift and blank screens.
+
 ### Reuse
 
 - Newly written code duplicates existing utilities in `packages/utils` or shared modules?

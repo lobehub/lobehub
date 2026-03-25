@@ -11,9 +11,11 @@ import APIKey from '../apikey';
 import Appearance from '../appearance';
 import Hotkey from '../hotkey';
 import Memory from '../memory';
+import Creds from '../creds';
 import Profile from '../profile';
 import Provider from '../provider';
 import Proxy from '../proxy';
+import Stats from '../stats';
 import Security from '../security';
 import ServiceModel from '../service-model';
 import Skill from '../skill';
@@ -33,8 +35,10 @@ export const componentMap = {
   [SettingsTabs.Storage]: Storage,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,
+  [SettingsTabs.Stats]: Stats,
   [SettingsTabs.Usage]: Usage,
   [SettingsTabs.APIKey]: APIKey,
+  [SettingsTabs.Creds]: Creds,
   [SettingsTabs.Security]: Security,
   [SettingsTabs.Skill]: Skill,
 
