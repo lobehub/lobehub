@@ -4,7 +4,7 @@ import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { TokenTag } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';
 import numeral from 'numeral';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
@@ -14,7 +14,7 @@ import { useTokenCount } from '@/hooks/useTokenCount';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
 import { useUserStore } from '@/store/user';
@@ -48,14 +48,6 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
       chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
     ];
   });
-
-  const [historyCount, enableHistoryCount] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
-    chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
-    // need to re-render by search mode
-    chatConfigByIdSelectors.isEnableSearchById(agentId)(s),
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-  ]);
 
   const maxTokens = useModelContextWindowTokens(model, provider);
 
@@ -97,12 +89,9 @@ const Token = memo<TokenTagProps>(({ total: messageString }) => {
   // Chat usage token
   const inputTokenCount = useTokenCount(input);
 
-  const chatsString = useMemo(() => {
-    const chats = dbMessageSelectors.activeDbMessages(useChatStore.getState());
-    return chats.map((chat) => chat.content).join('');
-  }, [messageString, historyCount, enableHistoryCount]);
-
-  const chatsToken = useTokenCount(chatsString) + inputTokenCount;
+  // Use messageString directly (from displayMessageSelectors.mainAIChatsMessageString)
+  // which correctly handles group chats via currentDisplayChatKey (includes groupId)
+  const chatsToken = useTokenCount(messageString) + inputTokenCount;
 
   // SystemRole token
   const systemRoleToken = useTokenCount(systemRole);
