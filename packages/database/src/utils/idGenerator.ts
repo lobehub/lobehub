@@ -24,6 +24,8 @@ const prefixes = {
   memory: 'mem',
   messageGroups: 'mg',
   messages: 'msg',
+  notificationDeliveries: 'ndlv',
+  notifications: 'ntf',
   plugins: 'plg',
   sessionGroups: 'sg',
   sessions: 'ssn',
