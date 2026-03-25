@@ -158,9 +158,11 @@ export default {
   'agentSkillModal.contentPlaceholder': 'Enter skill content in Markdown format...',
   'agentSkillModal.description': 'Description',
   'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
-  'agentSkillModal.github.desc': 'Import skills directly from a public GitHub repository.',
+  'agentSkillModal.github.desc':
+    'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
   'agentSkillModal.github.title': 'Import from GitHub',
-  'agentSkillModal.github.urlPlaceholder': 'https://github.com/username/repo',
+  'agentSkillModal.github.urlPlaceholder':
+    'https://github.com/username/repo/tree/main/skills/my-skill',
   'agentSkillModal.importError': 'Import failed: {{error}}',
   'agentSkillModal.importSuccess': 'Agent Skill imported successfully',
   'agentSkillModal.upload.desc': 'Upload a local .zip or .skill file to install.',

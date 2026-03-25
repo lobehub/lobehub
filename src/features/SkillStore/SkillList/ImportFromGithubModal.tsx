@@ -62,7 +62,9 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
           <Typography.Title level={4} style={{ margin: 0 }}>
             {t('agentSkillModal.github.title')}
           </Typography.Title>
-          <Typography.Text type="secondary">{t('agentSkillModal.github.desc')}</Typography.Text>
+          <Typography.Text style={{ textAlign: 'center' }} type="secondary">
+            {t('agentSkillModal.github.desc')}
+          </Typography.Text>
         </Flexbox>
       </Flexbox>
 
