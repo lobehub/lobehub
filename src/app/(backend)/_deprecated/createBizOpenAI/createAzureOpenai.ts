@@ -27,6 +27,8 @@ export const createAzureOpenai = (params: {
   const config: ClientOptions = {
     apiKey,
     baseURL,
+    timeout: 60000,
+    maxRetries: 3,
     defaultHeaders: { 'api-key': apiKey },
     defaultQuery: { 'api-version': apiVersion },
   };

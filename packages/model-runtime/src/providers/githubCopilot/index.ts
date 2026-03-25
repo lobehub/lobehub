@@ -157,6 +157,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       const client = new OpenAI({
         apiKey: bearerToken,
         baseURL: COPILOT_BASE_URL,
+        timeout: 60000,
+        maxRetries: 3,
         defaultHeaders: {
           'Copilot-Integration-Id': 'vscode-chat',
           'Editor-Plugin-Version': 'LobeChat/1.0',
