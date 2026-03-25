@@ -70,11 +70,25 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   @IpcMethod()
   async getDeviceInfo(): Promise<{
+    description: string;
     deviceId: string;
     hostname: string;
+    name: string;
     platform: string;
   }> {
     return this.service.getDeviceInfo();
+  }
+
+  @IpcMethod()
+  async setDeviceName(params: { name: string }): Promise<{ success: boolean }> {
+    this.service.setDeviceName(params.name);
+    return { success: true };
+  }
+
+  @IpcMethod()
+  async setDeviceDescription(params: { description: string }): Promise<{ success: boolean }> {
+    this.service.setDeviceDescription(params.description);
+    return { success: true };
   }
 
   // ─── Auto Connect ───

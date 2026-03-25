@@ -84,10 +84,30 @@ export default class GatewayConnectionService extends ServiceModule {
 
   getDeviceInfo() {
     return {
+      description: this.getDeviceDescription(),
       deviceId: this.getDeviceId(),
       hostname: os.hostname(),
+      name: this.getDeviceName(),
       platform: process.platform,
     };
+  }
+
+  // ─── Device Name & Description ───
+
+  getDeviceName(): string {
+    return (this.app.storeManager.get('gatewayDeviceName') as string) || os.hostname();
+  }
+
+  setDeviceName(name: string) {
+    this.app.storeManager.set('gatewayDeviceName', name);
+  }
+
+  getDeviceDescription(): string {
+    return (this.app.storeManager.get('gatewayDeviceDescription') as string) || '';
+  }
+
+  setDeviceDescription(description: string) {
+    this.app.storeManager.set('gatewayDeviceDescription', description);
   }
 
   // ─── Connection Logic ───

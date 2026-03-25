@@ -7,6 +7,8 @@ import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ElectronAppAction } from './actions/app';
 import { createElectronAppSlice } from './actions/app';
+import { type ElectronGatewayAction } from './actions/gateway';
+import { gatewaySlice } from './actions/gateway';
 import { type NavigationHistoryAction } from './actions/navigationHistory';
 import { createNavigationHistorySlice } from './actions/navigationHistory';
 import { type RecentPagesAction } from './actions/recentPages';
@@ -27,6 +29,7 @@ export interface ElectronStore
     ElectronState,
     ElectronRemoteServerAction,
     ElectronAppAction,
+    ElectronGatewayAction,
     ElectronSettingsAction,
     NavigationHistoryAction,
     RecentPagesAction,
@@ -36,6 +39,7 @@ export interface ElectronStore
 
 type ElectronStoreAction = ElectronRemoteServerAction &
   ElectronAppAction &
+  ElectronGatewayAction &
   ElectronSettingsAction &
   NavigationHistoryAction &
   RecentPagesAction &
@@ -48,6 +52,7 @@ const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = 
   ...flattenActions<ElectronStoreAction>([
     remoteSyncSlice(...parameters),
     createElectronAppSlice(...parameters),
+    gatewaySlice(...parameters),
     settingsSlice(...parameters),
     createNavigationHistorySlice(...parameters),
     createRecentPagesSlice(...parameters),

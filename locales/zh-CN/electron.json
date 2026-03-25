@@ -1,4 +1,13 @@
 {
+  "gateway.description": "描述",
+  "gateway.descriptionPlaceholder": "输入设备描述",
+  "gateway.deviceName": "设备名称",
+  "gateway.deviceNamePlaceholder": "输入设备名称",
+  "gateway.enableConnection": "设备连接",
+  "gateway.statusConnected": "设备已连接到云端",
+  "gateway.statusConnecting": "正在连接到云端...",
+  "gateway.statusDisconnected": "设备未连接",
+  "gateway.title": "设备网关",
   "navigation.chat": "对话",
   "navigation.discover": "发现",
   "navigation.discoverAssistants": "发现助理",

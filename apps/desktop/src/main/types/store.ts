@@ -12,7 +12,9 @@ export interface ElectronMainStore {
     lastRefreshAt?: number;
     refreshToken?: string;
   };
+  gatewayDeviceDescription: string;
   gatewayDeviceId: string;
+  gatewayDeviceName: string;
   gatewayUrl: string;
   locale: string;
   networkProxy: NetworkProxySettings;

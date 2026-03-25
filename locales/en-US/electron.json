@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Description",
+  "gateway.descriptionPlaceholder": "Enter device description",
+  "gateway.deviceName": "Device Name",
+  "gateway.deviceNamePlaceholder": "Enter device name",
+  "gateway.enableConnection": "Device Connection",
+  "gateway.statusConnected": "Device is connected to the cloud",
+  "gateway.statusConnecting": "Connecting to the cloud...",
+  "gateway.statusDisconnected": "Device is not connected",
+  "gateway.title": "Device Gateway",
   "navigation.chat": "Chat",
   "navigation.discover": "Discover",
   "navigation.discoverAssistants": "Discover Assistants",
