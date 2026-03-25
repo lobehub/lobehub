@@ -231,6 +231,8 @@
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "适用于 Gemini 3 图像生成模型；控制生成图像的分辨率。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "适用于 Gemini 3.1 Flash Image 模型；控制生成图像的分辨率（支持 512px）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "适用于 Claude、Qwen3 等模型；控制用于推理的 Token 预算。",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "适用于GLM-5和GLM-4.7；控制推理的令牌预算（最大32k）。",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "适用于Qwen3系列；控制推理的令牌预算（最大80k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "适用于 OpenAI 及其他具备推理能力的模型；控制推理力度。",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "适用于 GPT-5+ 系列；控制输出内容的详尽程度。",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "适用于部分豆包模型；允许模型自行决定是否进行深度思考。",

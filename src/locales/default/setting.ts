@@ -670,7 +670,7 @@ export default {
   'settingImage.defaultCount.desc':
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
-  'settingImage.defaultCount.title': 'AI Art',
+  'settingImage.defaultCount.title': 'AI Image',
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
@@ -869,8 +869,9 @@ When I am ___, I need ___
   'systemAgent.customPrompt.placeholder': 'Please enter custom prompt',
   'systemAgent.customPrompt.title': 'Custom Prompt',
   'systemAgent.generationTopic.label': 'Model',
-  'systemAgent.generationTopic.modelDesc': 'Model designated for automatic naming of AI art topics',
-  'systemAgent.generationTopic.title': 'AI Art Topic Naming Agent',
+  'systemAgent.generationTopic.modelDesc':
+    'Model designated for automatic naming of AI image topics',
+  'systemAgent.generationTopic.title': 'AI Image Topic Naming Agent',
   'systemAgent.helpInfo':
     'When creating a new agent, the default agent settings will be used as preset values.',
   'systemAgent.historyCompress.label': 'Model',

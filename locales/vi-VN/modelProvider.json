@@ -231,6 +231,8 @@
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Dành cho các mô hình tạo ảnh Gemini 3; điều chỉnh độ phân giải của ảnh được tạo.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Dành cho các mô hình hình ảnh Gemini 3.1 Flash; điều chỉnh độ phân giải của hình ảnh được tạo (hỗ trợ 512px).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Dành cho Claude, Qwen3 và các mô hình tương tự; điều chỉnh ngân sách token cho suy luận.",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Dành cho GLM-5 và GLM-4.7; kiểm soát ngân sách token cho suy luận (tối đa 32k).",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Dành cho dòng Qwen3; kiểm soát ngân sách token cho suy luận (tối đa 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "Dành cho OpenAI và các mô hình có khả năng suy luận khác; điều chỉnh mức độ suy luận.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "Dành cho dòng GPT-5+; điều chỉnh độ dài và chi tiết của đầu ra.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "Dành cho một số mô hình Doubao; cho phép mô hình quyết định có nên suy nghĩ sâu hay không.",
