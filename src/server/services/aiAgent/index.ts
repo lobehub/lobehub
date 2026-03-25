@@ -679,20 +679,31 @@ export class AiAgentService {
     }
 
     // 11. Get existing messages if provided
+    // Use postProcessUrl to resolve S3 keys in imageList to publicly accessible URLs,
+    // matching the frontend flow in aiChatService.getMessagesAndTopics.
+    const fileService = new FileService(this.db, this.userId);
+    const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
+
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
-      historyMessages = await this.messageModel.query({
-        sessionId: appContext?.sessionId,
-        topicId: appContext?.topicId ?? undefined,
-      });
+      historyMessages = await this.messageModel.query(
+        {
+          sessionId: appContext?.sessionId,
+          topicId: appContext?.topicId ?? undefined,
+        },
+        { postProcessUrl },
+      );
       const idSet = new Set(existingMessageIds);
       historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
     } else if (appContext?.topicId) {
       // Follow-up message in existing topic: load all history for context
-      historyMessages = await this.messageModel.query({
-        sessionId: appContext?.sessionId,
-        topicId: appContext.topicId,
-      });
+      historyMessages = await this.messageModel.query(
+        {
+          sessionId: appContext?.sessionId,
+          topicId: appContext.topicId,
+        },
+        { postProcessUrl },
+      );
     }
 
     await throwIfExecutionAborted('message history loading');
@@ -702,7 +713,6 @@ export class AiAgentService {
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
 
     if (files && files.length > 0) {
-      const fileService = new FileService(this.db, this.userId);
       fileIds = [];
       imageList = [];
 
@@ -716,10 +726,13 @@ export class AiAgentService {
           const result = await fileService.uploadFromUrl(file.url, pathname);
           fileIds.push(result.fileId);
 
-          // Build imageList for vision-capable models
+          // Build imageList for vision-capable models.
+          // Use getFullFileUrl to resolve S3 key to a publicly accessible URL
+          // (presigned or public domain), matching the frontend postProcessUrl pattern.
           const mimeType = file.mimeType || '';
           if (mimeType.startsWith('image/')) {
-            imageList.push({ alt: file.name || 'image', id: result.fileId, url: result.url });
+            const resolvedUrl = await fileService.getFullFileUrl(result.key);
+            imageList.push({ alt: file.name || 'image', id: result.fileId, url: resolvedUrl });
           }
         } catch (error) {
           log('execAgent: failed to upload file %s: %O', file.url, error);

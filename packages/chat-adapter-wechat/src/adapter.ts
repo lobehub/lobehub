@@ -60,58 +60,27 @@ function parseOptionalNumber(value: number | string | undefined): number | undef
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function extractAttachments(msg: WechatRawMessage): Attachment[] {
-  const attachments: Attachment[] = [];
-
-  for (const item of msg.item_list) {
-    switch (item.type) {
-      case MessageItemType.IMAGE: {
-        if (!item.image_item?.url) break;
-
-        attachments.push({
-          mimeType: 'image/*',
-          type: 'image',
-          url: item.image_item.url,
-        });
-        break;
-      }
-      case MessageItemType.FILE: {
-        const url = (item.file_item as { url?: string } | undefined)?.url;
-        if (!url) break;
-
-        attachments.push({
-          name: item.file_item?.file_name,
-          size: parseOptionalNumber(item.file_item?.len),
-          type: 'file',
-          url,
-        });
-        break;
-      }
-      case MessageItemType.VOICE: {
-        const url = (item.voice_item as { url?: string } | undefined)?.url;
-        if (!url) break;
-
-        attachments.push({
-          type: 'audio',
-          url,
-        });
-        break;
-      }
-      case MessageItemType.VIDEO: {
-        const url = (item.video_item as { url?: string } | undefined)?.url;
-        if (!url) break;
-
-        attachments.push({
-          size: parseOptionalNumber(item.video_item?.video_size),
-          type: 'video',
-          url,
-        });
-        break;
-      }
+/**
+ * Check whether a message item carries CDN media that can be downloaded.
+ */
+function hasCdnMedia(item: WechatRawMessage['item_list'][number]): boolean {
+  switch (item.type) {
+    case MessageItemType.IMAGE: {
+      return !!item.image_item?.media?.encrypt_query_param;
+    }
+    case MessageItemType.FILE: {
+      return !!item.file_item?.media?.encrypt_query_param;
+    }
+    case MessageItemType.VOICE: {
+      return !!item.voice_item?.media?.encrypt_query_param;
+    }
+    case MessageItemType.VIDEO: {
+      return !!item.video_item?.media?.encrypt_query_param;
+    }
+    default: {
+      return false;
     }
   }
-
-  return attachments;
 }
 
 /**
@@ -264,10 +233,10 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     const text = extractText(raw);
     const formatted = parseMarkdown(text);
     const threadId = this.encodeThreadId({ id: raw.from_user_id, type: 'single' });
-    const attachments = extractAttachments(raw);
 
+    // parseMessage is synchronous — CDN download happens in parseRawEvent instead.
     return new Message({
-      attachments,
+      attachments: [],
       author: {
         fullName: raw.from_user_id,
         isBot: raw.message_type === MessageType.BOT,
@@ -293,7 +262,9 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     text: string,
   ): Promise<Message<WechatRawMessage>> {
     const formatted = parseMarkdown(text);
-    const attachments = extractAttachments(msg);
+
+    // Download and decrypt media from WeChat CDN (protocol-spec §8.3).
+    const attachments = await this.downloadMediaAttachments(msg);
 
     const author: Author = {
       fullName: msg.from_user_id,
@@ -316,6 +287,75 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
       text,
       threadId,
     });
+  }
+
+  /**
+   * Download CDN media items and return attachments with data URLs.
+   * Per protocol-spec §8.3: GET CDN /download → AES-128-ECB decrypt.
+   */
+  private async downloadMediaAttachments(msg: WechatRawMessage): Promise<Attachment[]> {
+    const attachments: Attachment[] = [];
+
+    for (const item of msg.item_list) {
+      if (!hasCdnMedia(item)) continue;
+
+      try {
+        switch (item.type) {
+          case MessageItemType.IMAGE: {
+            const media = item.image_item!.media;
+            const buffer = await this.api.downloadCdnMedia(media, item.image_item!.aeskey);
+            attachments.push({
+              mimeType: 'image/jpeg',
+              name: 'image.jpg',
+              type: 'image',
+              url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+            });
+            break;
+          }
+          case MessageItemType.VOICE: {
+            const media = item.voice_item!.media;
+            const buffer = await this.api.downloadCdnMedia(media);
+            attachments.push({
+              mimeType: 'audio/silk',
+              type: 'audio',
+              url: `data:audio/silk;base64,${buffer.toString('base64')}`,
+            });
+            break;
+          }
+          case MessageItemType.FILE: {
+            const media = item.file_item!.media;
+            const buffer = await this.api.downloadCdnMedia(media);
+            attachments.push({
+              mimeType: 'application/octet-stream',
+              name: item.file_item?.file_name,
+              size: parseOptionalNumber(item.file_item?.len),
+              type: 'file',
+              url: `data:application/octet-stream;base64,${buffer.toString('base64')}`,
+            });
+            break;
+          }
+          case MessageItemType.VIDEO: {
+            const media = item.video_item!.media;
+            const buffer = await this.api.downloadCdnMedia(media);
+            attachments.push({
+              mimeType: 'video/mp4',
+              size: parseOptionalNumber(item.video_item?.video_size),
+              type: 'video',
+              url: `data:video/mp4;base64,${buffer.toString('base64')}`,
+            });
+            break;
+          }
+        }
+      } catch (error) {
+        this.logger.warn(
+          'Failed to download %s media from CDN: %s',
+          MessageItemType[item.type],
+          error,
+        );
+      }
+    }
+
+    return attachments;
   }
 
   // ------------------------------------------------------------------
