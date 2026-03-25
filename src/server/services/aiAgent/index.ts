@@ -736,6 +736,14 @@ export class AiAgentService {
           }
         } catch (error) {
           log('execAgent: failed to upload file %s: %O', file.url, error);
+
+          // Fallback: if S3 upload failed but the file is an inline data URL image,
+          // pass it directly to the LLM (vision models support data: URLs).
+          const mimeType = file.mimeType || '';
+          if (mimeType.startsWith('image/') && file.url.startsWith('data:')) {
+            imageList.push({ alt: file.name || 'image', id: `inline_${nanoid()}`, url: file.url });
+            log('execAgent: using inline data URL fallback for image');
+          }
         }
       }
 
