@@ -28,8 +28,8 @@ export const tasks = pgTable(
     assigneeUserId: text('assignee_user_id'),
     assigneeAgentId: text('assignee_agent_id'),
 
-    // Tree structure (self-referencing, no depth limit)
-    parentTaskId: text('parent_task_id'),
+    // Tree structure (self-referencing, parent deleted → children become root)
+    parentTaskId: text('parent_task_id').references(() => tasks.id, { onDelete: 'set null' }),
 
     // Task definition
     name: text('name'),
