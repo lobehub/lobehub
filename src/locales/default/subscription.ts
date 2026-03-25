@@ -427,6 +427,7 @@ export default {
   'summary.title': 'Billing Summary',
   'summary.usageThisMonth': 'View your usage this month.',
   'summary.viewBillingHistory': 'View Payment History',
+  'switchDowngradeTarget': 'Switch Downgrade Target',
   'switchPlan': 'Downgrade',
   'switchToMonthly.desc':
     'After switching, monthly billing will take effect after the current yearly plan expires.',

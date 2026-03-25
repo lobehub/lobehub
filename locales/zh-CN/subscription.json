@@ -370,6 +370,7 @@
   "summary.title": "账单摘要",
   "summary.usageThisMonth": "查看本月使用情况。",
   "summary.viewBillingHistory": "查看付款记录",
+  "switchDowngradeTarget": "切换降级目标",
   "switchPlan": "降级",
   "switchToMonthly.desc": "切换后，当前年付计划到期后将生效月付计费。",
   "switchToMonthly.title": "切换为月付",
