@@ -167,7 +167,6 @@ describe('connect command', () => {
       serverUrl: 'https://self-hosted.example.com',
     });
   });
-
   it('should pass the resolved serverUrl to GatewayClient', async () => {
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);

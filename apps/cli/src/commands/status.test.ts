@@ -121,7 +121,6 @@ describe('status command', () => {
       serverUrl: 'https://self-hosted.example.com',
     });
   });
-
   it('should pass the resolved serverUrl to GatewayClient', async () => {
     const program = createProgram();
     const parsePromise = program.parseAsync(['node', 'test', 'status']);

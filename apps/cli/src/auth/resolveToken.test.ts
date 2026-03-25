@@ -27,6 +27,7 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
+// Helper to create a valid JWT with sub claim
 function makeJwt(sub: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ sub })).toString('base64url');
