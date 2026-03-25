@@ -6,13 +6,13 @@ import type { Command } from 'commander';
 
 import { getUserIdFromApiKey } from '../auth/apiKey';
 import { saveCredentials } from '../auth/credentials';
+import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { log } from '../utils/logger';
 
 const CLIENT_ID = 'lobehub-cli';
 const SCOPES = 'openid profile email offline_access';
-const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 interface LoginOptions {
   server: string;
@@ -56,7 +56,7 @@ export function registerLoginCommand(program: Command) {
     .description('Log in to LobeHub via browser (Device Code Flow) or configure API key server')
     .option('--server <url>', 'LobeHub server URL', OFFICIAL_SERVER_URL)
     .action(async (options: LoginOptions) => {
-      const serverUrl = options.server.replace(/\/$/, '');
+      const serverUrl = normalizeUrl(options.server) || OFFICIAL_SERVER_URL;
 
       log.info('Starting login...');
 

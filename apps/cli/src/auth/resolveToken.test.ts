@@ -12,6 +12,11 @@ vi.mock('./refresh', () => ({
 }));
 vi.mock('../settings', () => ({
   loadSettings: vi.fn().mockReturnValue({ serverUrl: 'https://app.lobehub.com' }),
+  resolveServerUrl: vi.fn(({ preferEnv = false }: { preferEnv?: boolean } = {}) => {
+    if (preferEnv && process.env.LOBEHUB_SERVER)
+      return process.env.LOBEHUB_SERVER.replace(/\/$/, '');
+    return 'https://app.lobehub.com';
+  }),
 }));
 vi.mock('../utils/logger', () => ({
   log: {
@@ -22,7 +27,6 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-// Helper to create a valid JWT with sub claim
 function makeJwt(sub: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ sub })).toString('base64url');
@@ -33,6 +37,7 @@ describe('resolveToken', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   const originalApiKey = process.env.LOBEHUB_CLI_API_KEY;
   const originalJwt = process.env.LOBEHUB_JWT;
+  const originalServer = process.env.LOBEHUB_SERVER;
 
   beforeEach(() => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
@@ -40,11 +45,13 @@ describe('resolveToken', () => {
     });
     delete process.env.LOBEHUB_CLI_API_KEY;
     delete process.env.LOBEHUB_JWT;
+    delete process.env.LOBEHUB_SERVER;
   });
 
   afterEach(() => {
     process.env.LOBEHUB_CLI_API_KEY = originalApiKey;
     process.env.LOBEHUB_JWT = originalJwt;
+    process.env.LOBEHUB_SERVER = originalServer;
     exitSpy.mockRestore();
   });
 
@@ -54,7 +61,12 @@ describe('resolveToken', () => {
 
       const result = await resolveToken({ token });
 
-      expect(result).toEqual({ token, tokenType: 'jwt', userId: 'user-123' });
+      expect(result).toEqual({
+        serverUrl: 'https://app.lobehub.com',
+        token,
+        tokenType: 'jwt',
+        userId: 'user-123',
+      });
     });
 
     it('should exit if JWT has no sub claim', async () => {
@@ -79,7 +91,12 @@ describe('resolveToken', () => {
         userId: 'user-456',
       });
 
-      expect(result).toEqual({ token: 'svc-token', tokenType: 'serviceToken', userId: 'user-456' });
+      expect(result).toEqual({
+        serverUrl: 'https://app.lobehub.com',
+        token: 'svc-token',
+        tokenType: 'serviceToken',
+        userId: 'user-456',
+      });
     });
 
     it('should exit if --user-id is not provided', async () => {
@@ -96,7 +113,26 @@ describe('resolveToken', () => {
       const result = await resolveToken({});
 
       expect(getUserIdFromApiKey).toHaveBeenCalledWith('sk-lh-test', 'https://app.lobehub.com');
-      expect(result).toEqual({ token: 'sk-lh-test', tokenType: 'apiKey', userId: 'user-789' });
+      expect(result).toEqual({
+        serverUrl: 'https://app.lobehub.com',
+        token: 'sk-lh-test',
+        tokenType: 'apiKey',
+        userId: 'user-789',
+      });
+    });
+
+    it('should prefer LOBEHUB_SERVER when validating the API key', async () => {
+      process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-test';
+      process.env.LOBEHUB_SERVER = 'https://self-hosted.example.com/';
+      vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-789');
+
+      const result = await resolveToken({});
+
+      expect(getUserIdFromApiKey).toHaveBeenCalledWith(
+        'sk-lh-test',
+        'https://self-hosted.example.com',
+      );
+      expect(result.serverUrl).toBe('https://self-hosted.example.com');
     });
   });
 
@@ -111,7 +147,12 @@ describe('resolveToken', () => {
 
       const result = await resolveToken({});
 
-      expect(result).toEqual({ token, tokenType: 'jwt', userId: 'stored-user' });
+      expect(result).toEqual({
+        serverUrl: 'https://app.lobehub.com',
+        token,
+        tokenType: 'jwt',
+        userId: 'stored-user',
+      });
     });
 
     it('should exit if stored token has no sub', async () => {

@@ -1,67 +1,38 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { normalizeUrl, resolveServerUrl } from './index';
 
-import { log } from '../utils/logger';
-import { loadSettings, saveSettings } from './index';
-
-const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-settings');
-const settingsDir = path.join(tmpDir, '.lobehub');
-const settingsFile = path.join(settingsDir, 'settings.json');
-
-vi.mock('node:os', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, any>>();
-  return {
-    ...actual,
-    default: {
-      ...actual['default'],
-      homedir: () => path.join(os.tmpdir(), 'lobehub-cli-test-settings'),
-    },
-  };
-});
-
-vi.mock('../utils/logger', () => ({
-  log: {
-    warn: vi.fn(),
-  },
-}));
-
-describe('settings', () => {
-  beforeEach(() => {
-    fs.mkdirSync(tmpDir, { recursive: true });
-  });
+describe('settings helpers', () => {
+  const originalServer = process.env.LOBEHUB_SERVER;
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { force: true, recursive: true });
-    vi.clearAllMocks();
+    process.env.LOBEHUB_SERVER = originalServer;
   });
 
-  it('should save and load custom server and gateway settings', () => {
-    saveSettings({
-      gatewayUrl: 'https://gateway.example.com/',
-      serverUrl: 'https://self-hosted.example.com/',
-    });
-
-    expect(loadSettings()).toEqual({
-      gatewayUrl: 'https://gateway.example.com',
-      serverUrl: 'https://self-hosted.example.com',
-    });
+  it('normalizes trailing slashes', () => {
+    expect(normalizeUrl('https://self-hosted.example.com/')).toBe(
+      'https://self-hosted.example.com',
+    );
+    expect(normalizeUrl(undefined)).toBeUndefined();
   });
 
-  it('should clear official server settings instead of persisting them', () => {
-    saveSettings({ serverUrl: 'https://app.lobehub.com/' });
+  it('prefers LOBEHUB_SERVER when requested', () => {
+    process.env.LOBEHUB_SERVER = 'https://env.example.com/';
 
-    expect(fs.existsSync(settingsFile)).toBe(false);
-    expect(loadSettings()).toBeNull();
+    expect(
+      resolveServerUrl({
+        preferEnv: true,
+        settings: { serverUrl: 'https://settings.example.com' },
+      }),
+    ).toBe('https://env.example.com');
   });
 
-  it('should warn when settings file exists but cannot be parsed', () => {
-    fs.mkdirSync(settingsDir, { recursive: true });
-    fs.writeFileSync(settingsFile, '{invalid json');
+  it('falls back to settings then official server', () => {
+    delete process.env.LOBEHUB_SERVER;
 
-    expect(loadSettings()).toBeNull();
-    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Please delete this file'));
+    expect(resolveServerUrl({ settings: { serverUrl: 'https://settings.example.com/' } })).toBe(
+      'https://settings.example.com',
+    );
+    expect(resolveServerUrl({ settings: null })).toBe('https://app.lobehub.com');
   });
 });

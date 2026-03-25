@@ -5,11 +5,9 @@ import type { LambdaRouter } from '@/server/routers/lambda';
 import type { ToolsRouter } from '@/server/routers/tools';
 
 import { getValidToken } from '../auth/refresh';
-import { OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings } from '../settings';
+import { CLI_API_KEY_ENV } from '../constants/auth';
+import { loadSettings, resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
-
-const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 export type TrpcClient = ReturnType<typeof createTRPCClient<LambdaRouter>>;
 export type ToolsTrpcClient = ReturnType<typeof createTRPCClient<ToolsRouter>>;
@@ -20,21 +18,21 @@ let _toolsClient: ToolsTrpcClient | undefined;
 async function getAuthAndServer() {
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
-    const serverUrl = process.env.LOBEHUB_SERVER || OFFICIAL_SERVER_URL;
+    const serverUrl = resolveServerUrl({ preferEnv: true });
 
     return {
       headers: { 'Oidc-Auth': envJwt },
-      serverUrl: serverUrl.replace(/\/$/, ''),
+      serverUrl,
     };
   }
 
   const envApiKey = process.env[CLI_API_KEY_ENV];
   if (envApiKey) {
-    const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
+    const serverUrl = resolveServerUrl({ preferEnv: true });
 
     return {
       headers: { 'X-API-Key': envApiKey },
-      serverUrl: serverUrl.replace(/\/$/, ''),
+      serverUrl,
     };
   }
 
@@ -44,11 +42,11 @@ async function getAuthAndServer() {
     process.exit(1);
   }
 
-  const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
+  const serverUrl = resolveServerUrl({ settings: loadSettings() });
 
   return {
     headers: { 'Oidc-Auth': result.credentials.accessToken },
-    serverUrl: serverUrl.replace(/\/$/, ''),
+    serverUrl,
   };
 }
 

@@ -2,8 +2,8 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
-import { OFFICIAL_GATEWAY_URL, OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings, saveSettings } from '../settings';
+import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
+import { loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { log, setVerbose } from '../utils/logger';
 
 interface StatusOptions {
@@ -30,7 +30,7 @@ export function registerStatusCommand(program: Command) {
 
       const auth = await resolveToken(options);
       const settings = loadSettings();
-      const gatewayUrl = options.gateway?.replace(/\/$/, '') || settings?.gatewayUrl;
+      const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
 
       if (!gatewayUrl && settings?.serverUrl) {
         log.error(
@@ -45,13 +45,12 @@ export function registerStatusCommand(program: Command) {
       }
 
       const timeout = Number.parseInt(options.timeout || '10000', 10);
-      const serverUrl = (settings?.serverUrl || OFFICIAL_SERVER_URL).replace(/\/$/, '');
 
       const client = new GatewayClient({
         autoReconnect: false,
         gatewayUrl: gatewayUrl || OFFICIAL_GATEWAY_URL,
         logger: log,
-        serverUrl,
+        serverUrl: auth.serverUrl,
         token: auth.token,
         tokenType: auth.tokenType,
         userId: auth.userId,

@@ -69,7 +69,7 @@ export class DeviceGatewayDO extends DurableObject<Env> {
           if (!serverUrl) throw new Error('Missing serverUrl');
           const result = await verifyApiKeyToken(serverUrl, token);
           verifiedUserId = result.userId;
-        } else if (token === this.env.SERVICE_TOKEN || tokenType === 'serviceToken') {
+        } else if (token === this.env.SERVICE_TOKEN) {
           // Service token auth (for CLI debugging)
           const storedUserId = await this.ctx.storage.get<string>('_userId');
           if (!storedUserId) throw new Error('Missing userId');

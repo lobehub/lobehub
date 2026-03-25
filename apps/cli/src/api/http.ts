@@ -1,9 +1,7 @@
 import { getValidToken } from '../auth/refresh';
-import { OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings } from '../settings';
+import { CLI_API_KEY_ENV } from '../constants/auth';
+import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
-
-const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 // Must match the server's SECRET_XOR_KEY (src/envs/auth.ts)
 const SECRET_XOR_KEY = 'LobeHub · LobeHub';
@@ -47,7 +45,7 @@ export async function getAuthInfo(): Promise<AuthInfo> {
   }
 
   const accessToken = result!.credentials.accessToken;
-  const serverUrl = loadSettings()?.serverUrl || OFFICIAL_SERVER_URL;
+  const serverUrl = resolveServerUrl();
 
   return {
     accessToken,
@@ -56,6 +54,6 @@ export async function getAuthInfo(): Promise<AuthInfo> {
       'Oidc-Auth': accessToken,
       'X-lobe-chat-auth': obfuscatePayloadWithXOR({}),
     },
-    serverUrl: serverUrl.replace(/\/$/, ''),
+    serverUrl,
   };
 }

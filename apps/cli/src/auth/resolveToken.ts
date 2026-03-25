@@ -1,10 +1,8 @@
-import { OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings } from '../settings';
+import { CLI_API_KEY_ENV } from '../constants/auth';
+import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { getUserIdFromApiKey } from './apiKey';
 import { getValidToken } from './refresh';
-
-const CLI_API_KEY_ENV = 'LOBEHUB_CLI_API_KEY';
 
 interface ResolveTokenOptions {
   serviceToken?: string;
@@ -13,6 +11,7 @@ interface ResolveTokenOptions {
 }
 
 interface ResolvedAuth {
+  serverUrl: string;
   token: string;
   tokenType: 'apiKey' | 'jwt' | 'serviceToken';
   userId: string;
@@ -38,13 +37,14 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
   // LOBEHUB_JWT env var takes highest priority (used by server-side sandbox execution)
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
+    const serverUrl = resolveServerUrl({ preferEnv: true });
     const userId = parseJwtSub(envJwt);
     if (!userId) {
       log.error('Could not extract userId from LOBEHUB_JWT.');
       process.exit(1);
     }
     log.debug('Using LOBEHUB_JWT from environment');
-    return { token: envJwt, tokenType: 'jwt', userId };
+    return { serverUrl, token: envJwt, tokenType: 'jwt', userId };
   }
 
   // Explicit token takes priority
@@ -54,7 +54,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
       log.error('Could not extract userId from token. Provide --user-id explicitly.');
       process.exit(1);
     }
-    return { token: options.token, tokenType: 'jwt', userId };
+    return { serverUrl: resolveServerUrl(), token: options.token, tokenType: 'jwt', userId };
   }
 
   if (options.serviceToken) {
@@ -62,16 +62,21 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
       log.error('--user-id is required when using --service-token');
       process.exit(1);
     }
-    return { token: options.serviceToken, tokenType: 'serviceToken', userId: options.userId };
+    return {
+      serverUrl: resolveServerUrl(),
+      token: options.serviceToken,
+      tokenType: 'serviceToken',
+      userId: options.userId,
+    };
   }
 
   const envApiKey = process.env[CLI_API_KEY_ENV];
   if (envApiKey) {
     try {
-      const serverUrl = (loadSettings()?.serverUrl || OFFICIAL_SERVER_URL).replace(/\/$/, '');
+      const serverUrl = resolveServerUrl({ preferEnv: true });
       const userId = await getUserIdFromApiKey(envApiKey, serverUrl);
       log.debug(`Using ${CLI_API_KEY_ENV} from environment`);
-      return { token: envApiKey, tokenType: 'apiKey', userId };
+      return { serverUrl, token: envApiKey, tokenType: 'apiKey', userId };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log.error(`Failed to validate ${CLI_API_KEY_ENV}: ${message}`);
@@ -84,6 +89,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
   if (result) {
     log.debug('Using stored credentials');
     const { credentials } = result;
+    const serverUrl = resolveServerUrl();
 
     const userId = parseJwtSub(credentials.accessToken);
     if (!userId) {
@@ -91,7 +97,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
       process.exit(1);
     }
 
-    return { token: credentials.accessToken, tokenType: 'jwt', userId };
+    return { serverUrl, token: credentials.accessToken, tokenType: 'jwt', userId };
   }
 
   log.error(

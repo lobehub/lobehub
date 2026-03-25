@@ -1,5 +1,4 @@
-import { OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings } from '../settings';
+import { normalizeUrl, resolveServerUrl } from '../settings';
 
 interface CurrentUserResponse {
   data?: {
@@ -12,11 +11,7 @@ interface CurrentUserResponse {
 }
 
 export async function getUserIdFromApiKey(apiKey: string, serverUrl?: string): Promise<string> {
-  const normalizedServerUrl = (
-    serverUrl ||
-    loadSettings()?.serverUrl ||
-    OFFICIAL_SERVER_URL
-  ).replace(/\/$/, '');
+  const normalizedServerUrl = normalizeUrl(serverUrl) || resolveServerUrl({ preferEnv: true });
 
   const response = await fetch(`${normalizedServerUrl}/api/v1/users/me`, {
     headers: {
