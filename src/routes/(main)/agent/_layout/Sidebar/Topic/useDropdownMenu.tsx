@@ -69,7 +69,12 @@ export const useTopicActionsDropdownMenu = (
   ]);
 
   return useMemo(() => {
-    const displayModeItems = Object.values(TopicDisplayMode).map((mode) => ({
+    const displayModeOrder = [
+      TopicDisplayMode.ByUpdatedTime,
+      TopicDisplayMode.ByCreatedTime,
+      TopicDisplayMode.Flat,
+    ];
+    const displayModeItems = displayModeOrder.map((mode) => ({
       icon: topicDisplayMode === mode ? <Icon icon={LucideCheck} /> : <div />,
       key: mode,
       label: t(`groupMode.${mode}`),
