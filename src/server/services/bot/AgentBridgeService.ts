@@ -588,7 +588,7 @@ export class AgentBridgeService {
       log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
     }
 
-    const progressMessageId: string | undefined; = progressMessage?.id;
+    const progressMessageId: string | undefined = progressMessage?.id;
     if (canEdit) {
       if (!progressMessageId) {
         throw new Error('Failed to post initial progress message');
