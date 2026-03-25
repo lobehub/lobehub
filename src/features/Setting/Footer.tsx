@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
 import { GITHUB, GITHUB_ISSUES } from '@/const/url';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { isOnServerSide } from '@/utils/env';
 
 const styles = createStaticStyles(
@@ -28,9 +28,11 @@ const Footer = memo<PropsWithChildren>(() => {
   const [openStar, setOpenStar] = useState(false);
   const [openFeedback, setOpenFeedback] = useState(false);
 
-  const { hideGitHub } = useServerConfigStore(featureFlagsSelectors);
+  const hideGitHubEngagementFooter = useServerConfigStore((s) =>
+    Boolean(s.featureFlags.hideGitHub || s.serverConfig.enableBusinessFeatures),
+  );
 
-  return hideGitHub ? null : (
+  return hideGitHubEngagementFooter ? null : (
     <>
       <Flexbox className={LayoutSettingsFooterClassName} justify={'flex-end'}>
         <Center
