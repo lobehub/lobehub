@@ -2,6 +2,7 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
+import { isPhoneAuthEnabled, smsEnv } from '@/envs/sms';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 
@@ -19,7 +20,9 @@ export const getServerAuthConfig = (): GlobalServerConfig => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
+    enablePhoneAuth: isPhoneAuthEnabled,
     oAuthSSOProviders: getBetterAuthSSOProviders(),
+    phoneAuthResendInterval: smsEnv.SMS_PHONE_RESEND_INTERVAL,
     telemetry: {},
   };
 };

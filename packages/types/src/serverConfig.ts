@@ -60,10 +60,12 @@ export interface GlobalServerConfig {
   enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
+  enablePhoneAuth?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;
   oAuthSSOProviders?: string[];
+  phoneAuthResendInterval?: number;
   systemAgent?: PartialDeep<UserSystemAgentConfig>;
   telemetry: {
     langfuse?: boolean;

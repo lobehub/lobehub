@@ -8,7 +8,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
 import { type BetterAuthOptions } from 'better-auth/minimal';
 import { betterAuth } from 'better-auth/minimal';
-import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
+import { admin, emailOTP, genericOAuth, magicLink, phoneNumber } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
 import { emailHarmony } from 'better-auth-harmony';
 import { validateEmail } from 'better-auth-harmony/email';
@@ -17,6 +17,8 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { businessEmailValidator } from '@/business/server/better-auth';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
+import { isPhoneAuthEnabled, smsEnv } from '@/envs/sms';
+import { buildPhoneTempEmail, isValidCnPhoneNumber } from '@/libs/auth/phone';
 import {
   getChangeEmailVerificationTemplate,
   getMagicLinkEmailTemplate,
@@ -29,6 +31,7 @@ import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { EmailService } from '@/server/services/email';
+import { JiguangSMSService } from '@/server/services/sms/jiguang';
 import { UserService } from '@/server/services/user';
 
 // Configure HTTP proxy for OAuth provider requests in development (e.g., Google token exchange)
@@ -79,8 +82,19 @@ const getPasskeyOrigins = (): string[] | undefined => {
 const MAGIC_LINK_EXPIRES_IN = 900;
 // OTP expiration time (in seconds) - 5 minutes for mobile OTP verification
 const OTP_EXPIRES_IN = 300;
+const phoneOTPExpiresIn = smsEnv.SMS_CODE_TTL;
 const enableMagicLink = authEnv.AUTH_ENABLE_MAGIC_LINK;
 const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
+const jiguangSMSService =
+  isPhoneAuthEnabled && smsEnv.SMS_TEMPLATE_ID
+    ? new JiguangSMSService({
+        appKey: smsEnv.SMS_APP_KEY!,
+        codeParamName: smsEnv.SMS_TEMPLATE_CODE_PARAM,
+        masterSecret: smsEnv.SMS_MASTER_SECRET!,
+        signId: smsEnv.SMS_SIGN_ID,
+        templateId: smsEnv.SMS_TEMPLATE_ID,
+      })
+    : null;
 
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
 
@@ -208,9 +222,14 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
             await userService.initUser({
               email: user.email,
               id: user.id,
+              phone:
+                (user as typeof user & { phone?: string | null; phoneNumber?: string | null })
+                  .phone ??
+                (user as typeof user & { phone?: string | null; phoneNumber?: string | null })
+                  .phoneNumber ??
+                null,
               username: user.username as string | null,
               createdAt: user.createdAt,
-              // TODO: if add phone plugin, we should fill phone here
             });
           },
         },
@@ -255,6 +274,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     },
     rateLimit: {
       customRules: {
+        '/phone-number/send-otp': { max: 1, window: smsEnv.SMS_PHONE_RESEND_INTERVAL },
         '/request-password-reset': { max: 3, window: 60 },
         '/send-verification-email': { max: 3, window: 60 },
       },
@@ -322,6 +342,33 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
                   ...template,
                 });
               },
+            }),
+          ]
+        : []),
+      ...(jiguangSMSService
+        ? [
+            phoneNumber({
+              allowedAttempts: 3,
+              expiresIn: phoneOTPExpiresIn,
+              phoneNumberValidator: isValidCnPhoneNumber,
+              schema: {
+                user: {
+                  fields: {
+                    phoneNumber: 'phone',
+                    phoneNumberVerified: 'phoneNumberVerified',
+                  },
+                  modelName: 'users',
+                },
+              },
+              sendOTP: async ({ code, phoneNumber }) => {
+                await jiguangSMSService.sendVerificationCode({ code, phoneNumber });
+              },
+              signUpOnVerification: smsEnv.AUTO_REGISTER_ON_PHONE_LOGIN
+                ? {
+                    getTempEmail: buildPhoneTempEmail,
+                    getTempName: (phoneNumber) => phoneNumber,
+                  }
+                : undefined,
             }),
           ]
         : []),

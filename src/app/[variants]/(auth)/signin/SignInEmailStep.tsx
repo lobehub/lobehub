@@ -3,7 +3,7 @@ import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui
 import { type FormInstance, type InputRef } from 'antd';
 import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { ChevronRight, Mail } from 'lucide-react';
+import { ChevronRight, Mail, Smartphone } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -25,30 +25,36 @@ export const USERNAME_REGEX = /^\w+$/;
 
 export interface SignInEmailStepProps {
   disableEmailPassword?: boolean;
+  enablePhoneAuth?: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
   lastAuthProvider?: string | null;
   loading: boolean;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
+  onSendPhoneCode: (values: { phone: string }) => Promise<void>;
   onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
+  phoneForm: FormInstance<{ phone: string }>;
   serverConfigInit: boolean;
   socialLoading: string | null;
 }
 
 export const SignInEmailStep = ({
   disableEmailPassword,
+  enablePhoneAuth,
   form,
   isSocialOnly,
   lastAuthProvider,
   loading,
   oAuthSSOProviders,
+  onSendPhoneCode,
   serverConfigInit,
   socialLoading,
   onCheckUser,
   onSetPassword,
   onSocialSignIn,
+  phoneForm,
 }: SignInEmailStepProps) => {
   const { t } = useTranslation('auth');
   const emailInputRef = useRef<InputRef>(null);
@@ -158,59 +164,104 @@ export const SignInEmailStep = ({
           {!disableEmailPassword && divider}
         </Flexbox>
       )}
-      {serverConfigInit && disableEmailPassword && oAuthSSOProviders.length === 0 && (
-        <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
-      )}
-      {!disableEmailPassword && (
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={(values) => onCheckUser(values as { email: string })}
-        >
-          <Form.Item
-            name="email"
-            style={{ marginBottom: 0 }}
-            rules={[
-              { message: t('betterAuth.errors.emailRequired'), required: true },
-              {
-                validator: (_, value) => {
-                  if (!value) return Promise.resolve();
-                  const trimmedValue = (value as string).trim();
-                  if (EMAIL_REGEX.test(trimmedValue) || USERNAME_REGEX.test(trimmedValue)) {
-                    return Promise.resolve();
+      {serverConfigInit &&
+        disableEmailPassword &&
+        oAuthSSOProviders.length === 0 &&
+        !enablePhoneAuth && (
+          <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
+        )}
+      {(!disableEmailPassword || enablePhoneAuth) && (
+        <Flexbox gap={12}>
+          {!disableEmailPassword && (
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={(values) => onCheckUser(values as { email: string })}
+            >
+              <Form.Item
+                name="email"
+                style={{ marginBottom: 0 }}
+                rules={[
+                  { message: t('betterAuth.errors.emailRequired'), required: true },
+                  {
+                    validator: (_, value) => {
+                      if (!value) return Promise.resolve();
+                      const trimmedValue = (value as string).trim();
+                      if (EMAIL_REGEX.test(trimmedValue) || USERNAME_REGEX.test(trimmedValue)) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error(t('betterAuth.errors.emailInvalid')));
+                    },
+                  },
+                ]}
+              >
+                <Input
+                  placeholder={t('betterAuth.signin.emailPlaceholder')}
+                  ref={emailInputRef}
+                  size="large"
+                  prefix={
+                    <Icon
+                      icon={Mail}
+                      style={{
+                        marginInline: 6,
+                      }}
+                    />
                   }
-                  return Promise.reject(new Error(t('betterAuth.errors.emailInvalid')));
-                },
-              },
-            ]}
-          >
-            <Input
-              placeholder={t('betterAuth.signin.emailPlaceholder')}
-              ref={emailInputRef}
-              size="large"
-              prefix={
-                <Icon
-                  icon={Mail}
                   style={{
-                    marginInline: 6,
+                    padding: 6,
                   }}
+                  suffix={
+                    <Button
+                      icon={ChevronRight}
+                      loading={loading}
+                      title={t('betterAuth.signin.nextStep')}
+                      variant={'filled'}
+                      onClick={() => form.submit()}
+                    />
+                  }
                 />
-              }
-              style={{
-                padding: 6,
-              }}
-              suffix={
-                <Button
-                  icon={ChevronRight}
-                  loading={loading}
-                  title={t('betterAuth.signin.nextStep')}
-                  variant={'filled'}
-                  onClick={() => form.submit()}
+              </Form.Item>
+            </Form>
+          )}
+          {enablePhoneAuth && (
+            <Form
+              form={phoneForm}
+              layout="vertical"
+              onFinish={(values) => onSendPhoneCode(values as { phone: string })}
+            >
+              <Form.Item
+                name="phone"
+                rules={[{ message: t('betterAuth.errors.phoneRequired'), required: true }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input
+                  placeholder={t('betterAuth.signin.phonePlaceholder')}
+                  size="large"
+                  prefix={
+                    <Icon
+                      icon={Smartphone}
+                      style={{
+                        marginInline: 6,
+                      }}
+                    />
+                  }
+                  style={{
+                    padding: 6,
+                  }}
+                  suffix={
+                    <Button
+                      icon={ChevronRight}
+                      loading={loading}
+                      title={t('betterAuth.signin.sendCode')}
+                      variant={'filled'}
+                      onClick={() => phoneForm.submit()}
+                    />
+                  }
                 />
-              }
-            />
-          </Form.Item>
-        </Form>
+              </Form.Item>
+            </Form>
+          )}
+        </Flexbox>
       )}
       {isSocialOnly && (
         <Alert

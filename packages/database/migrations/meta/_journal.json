@@ -679,6 +679,13 @@
       "when": 1773906390289,
       "tag": "0096_add_usage_quota_fields_and_department_quotas",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1774442099083,
+      "tag": "0097_create_shared_agents",
+      "breakpoints": true
     }
   ],
   "version": "6"

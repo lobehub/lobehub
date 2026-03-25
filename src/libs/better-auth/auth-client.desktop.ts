@@ -3,6 +3,7 @@ import {
   genericOAuthClient,
   inferAdditionalFields,
   magicLinkClient,
+  phoneNumberClient,
 } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
@@ -23,6 +24,7 @@ function getClient() {
         inferAdditionalFields<typeof auth>(),
         genericOAuthClient(),
         magicLinkClient(),
+        phoneNumberClient(),
       ],
     });
   }

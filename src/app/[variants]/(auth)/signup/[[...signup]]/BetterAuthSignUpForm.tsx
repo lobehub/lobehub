@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AuthCard } from '../../../../../features/AuthCard';
+import { useAuthServerConfigStore } from '../../_layout/AuthServerConfigProvider';
 import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
@@ -18,6 +19,7 @@ const BetterAuthSignUpForm = () => {
 
   const { t } = useTranslation('auth');
   const searchParams = useSearchParams();
+  const enablePhoneAuth = useAuthServerConfigStore((s) => s.serverConfig.enablePhoneAuth || false);
 
   useEffect(() => {
     const email = searchParams.get('email');
@@ -31,12 +33,23 @@ const BetterAuthSignUpForm = () => {
     </Text>
   );
 
+  const phoneSignInParams = new URLSearchParams(searchParams.toString());
+  phoneSignInParams.set('mode', 'phone');
+
   return (
     <AuthCard
       footer={footer}
       subtitle={t('betterAuth.signup.subtitle')}
       title={t('betterAuth.signup.title')}
     >
+      {enablePhoneAuth && (
+        <Text style={{ display: 'block', marginBottom: 16 }}>
+          <Link href={`/signin?${phoneSignInParams.toString()}`}>
+            {t('betterAuth.signin.usePhone')}
+          </Link>
+        </Text>
+      )}
+
       <Form form={form} layout="vertical" onFinish={onSubmit}>
         <Form.Item
           name="username"

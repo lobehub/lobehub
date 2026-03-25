@@ -8,6 +8,7 @@ import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/
 import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
+import { normalizeCnPhoneNumber } from '@/libs/auth/phone';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 
@@ -27,11 +28,22 @@ const normalizeCallbackUrl = (callbackUrl: string): string => {
   return callbackUrl;
 };
 
-type Step = 'email' | 'password';
+type Step = 'email' | 'password' | 'phone';
+
+interface PhoneAuthResult {
+  data?: any;
+  errorMessage?: string;
+  success: boolean;
+}
 
 interface SignInFormValues {
   email: string;
   password: string;
+}
+
+interface PhoneSignInFormValues {
+  code: string;
+  phone: string;
 }
 
 interface ResolvedEmailResult {
@@ -51,14 +63,22 @@ export const useSignIn = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
+  const enablePhoneAuth = useAuthServerConfigStore((s) => s.serverConfig.enablePhoneAuth || false);
+  const phoneAuthResendInterval = useAuthServerConfigStore(
+    (s) => s.serverConfig.phoneAuthResendInterval || 60,
+  );
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
   );
   const [form] = Form.useForm<SignInFormValues>();
+  const [phoneForm] = Form.useForm<PhoneSignInFormValues>();
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [phoneMode, setPhoneMode] = useState<'input' | 'verify'>('input');
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
   const [lastAuthProvider] = useState(() => {
     try {
@@ -75,6 +95,77 @@ export const useSignIn = () => {
     const emailParam = searchParams.get('email');
     if (emailParam) form.setFieldValue('email', emailParam);
   }, [searchParams, form]);
+
+  useEffect(() => {
+    if (searchParams.get('mode') !== 'phone' || !enablePhoneAuth) return;
+
+    setStep('email');
+  }, [enablePhoneAuth, searchParams]);
+
+  useEffect(() => {
+    if (phoneCooldown <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setPhoneCooldown((current) => Math.max(current - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [phoneCooldown]);
+
+  const getPhoneAuthErrorMessage = (error: string) => {
+    switch (error) {
+      case 'Invalid OTP': {
+        return t('betterAuth.errors.otpInvalid');
+      }
+      case 'Invalid phone number': {
+        return t('betterAuth.errors.phoneInvalid');
+      }
+      case 'OTP expired':
+      case 'OTP not found': {
+        return t('betterAuth.errors.otpExpired');
+      }
+      case 'Too many attempts': {
+        return t('betterAuth.errors.otpTooManyAttempts');
+      }
+      default: {
+        return error;
+      }
+    }
+  };
+
+  const postPhoneAuth = async (
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<PhoneAuthResult> => {
+    try {
+      const response = await fetch(`/api/auth${path}`, {
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMessage =
+          data?.message || data?.error?.message || data?.code || t('betterAuth.signin.error');
+
+        return {
+          errorMessage: getPhoneAuthErrorMessage(errorMessage),
+          success: false,
+        };
+      }
+
+      return { data, success: true };
+    } catch (error) {
+      console.error(`[phone-auth:${path}]`, error);
+
+      return {
+        errorMessage: t('betterAuth.signin.error'),
+        success: false,
+      };
+    }
+  };
 
   const handleSendMagicLink = async (targetEmail?: string) => {
     try {
@@ -211,6 +302,62 @@ export const useSignIn = () => {
     }
   };
 
+  const handleSendPhoneCode = async (values: Pick<PhoneSignInFormValues, 'phone'>) => {
+    const normalizedPhone = normalizeCnPhoneNumber(values.phone);
+
+    if (!normalizedPhone) {
+      message.error(t('betterAuth.errors.phoneInvalid'));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await postPhoneAuth('/phone-number/send-otp', {
+        phoneNumber: normalizedPhone,
+      });
+
+      if (!result.success) {
+        message.error(result.errorMessage || t('betterAuth.signin.phoneCodeError'));
+        return;
+      }
+
+      setPhone(normalizedPhone);
+      setPhoneMode('verify');
+      setStep('phone');
+      setPhoneCooldown(phoneAuthResendInterval);
+      phoneForm.setFieldValue('phone', normalizedPhone);
+      phoneForm.setFieldValue('code', '');
+      message.success(t('betterAuth.signin.phoneCodeSent'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneCode = async (values: Pick<PhoneSignInFormValues, 'code'>) => {
+    if (!phone) {
+      message.error(t('betterAuth.errors.phoneRequired'));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await postPhoneAuth('/phone-number/verify', {
+        code: values.code,
+        phoneNumber: phone,
+      });
+
+      if (!result.success) {
+        message.error(result.errorMessage || t('betterAuth.signin.phoneVerifyError'));
+        return;
+      }
+
+      const callbackUrl = normalizeCallbackUrl(searchParams.get('callbackUrl') || '/');
+      router.push(callbackUrl);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSocialSignIn = async (provider: string) => {
     setSocialLoading(provider);
     const normalizedProvider = normalizeProviderId(provider);
@@ -252,6 +399,9 @@ export const useSignIn = () => {
     setStep('email');
     setEmail('');
     setIsSocialOnly(false);
+    setPhone('');
+    setPhoneCooldown(0);
+    setPhoneMode('input');
   };
 
   const handleGoToSignup = () => {
@@ -286,18 +436,25 @@ export const useSignIn = () => {
 
   return {
     disableEmailPassword,
+    enablePhoneAuth,
     email,
     form,
     handleBackToEmail,
     handleCheckUser,
     handleForgotPassword,
     handleGoToSignup,
+    handleSendPhoneCode,
     handleSignIn,
     handleSocialSignIn,
+    handleVerifyPhoneCode,
     isSocialOnly,
     lastAuthProvider,
     loading,
     oAuthSSOProviders: sortedProviders,
+    phone,
+    phoneCooldown,
+    phoneForm,
+    phoneMode,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
     socialLoading,
     step,

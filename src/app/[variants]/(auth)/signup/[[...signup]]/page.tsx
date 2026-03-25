@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { authEnv } from '@/envs/auth';
+import { isPhoneAuthEnabled } from '@/envs/sms';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
@@ -21,7 +22,7 @@ export const generateMetadata = async (props: DynamicLayoutProps) => {
 
 const Page = () => {
   if (authEnv.AUTH_DISABLE_EMAIL_PASSWORD) {
-    redirect('/signin');
+    redirect(isPhoneAuthEnabled ? '/signin?mode=phone' : '/signin');
   }
 
   return <BetterAuthSignUpForm />;
