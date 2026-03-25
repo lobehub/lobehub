@@ -37,7 +37,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
   // LOBEHUB_JWT env var takes highest priority (used by server-side sandbox execution)
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
-    const serverUrl = resolveServerUrl({ preferEnv: true });
+    const serverUrl = resolveServerUrl();
     const userId = parseJwtSub(envJwt);
     if (!userId) {
       log.error('Could not extract userId from LOBEHUB_JWT.');
@@ -73,7 +73,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
   const envApiKey = process.env[CLI_API_KEY_ENV];
   if (envApiKey) {
     try {
-      const serverUrl = resolveServerUrl({ preferEnv: true });
+      const serverUrl = resolveServerUrl();
       const userId = await getUserIdFromApiKey(envApiKey, serverUrl);
       log.debug(`Using ${CLI_API_KEY_ENV} from environment`);
       return { serverUrl, token: envApiKey, tokenType: 'apiKey', userId };

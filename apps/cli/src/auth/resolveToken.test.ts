@@ -12,11 +12,9 @@ vi.mock('./refresh', () => ({
 }));
 vi.mock('../settings', () => ({
   loadSettings: vi.fn().mockReturnValue({ serverUrl: 'https://app.lobehub.com' }),
-  resolveServerUrl: vi.fn(({ preferEnv = false }: { preferEnv?: boolean } = {}) => {
-    if (preferEnv && process.env.LOBEHUB_SERVER)
-      return process.env.LOBEHUB_SERVER.replace(/\/$/, '');
-    return 'https://app.lobehub.com';
-  }),
+  resolveServerUrl: vi.fn(() =>
+    (process.env.LOBEHUB_SERVER || 'https://app.lobehub.com').replace(/\/$/, ''),
+  ),
 }));
 vi.mock('../utils/logger', () => ({
   log: {

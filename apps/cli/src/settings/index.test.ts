@@ -75,21 +75,20 @@ describe('settings', () => {
     expect(normalizeUrl(undefined)).toBeUndefined();
   });
 
-  it('should prefer LOBEHUB_SERVER when requested', () => {
+  it('should prefer LOBEHUB_SERVER over settings', () => {
+    saveSettings({ serverUrl: 'https://settings.example.com/' });
     process.env.LOBEHUB_SERVER = 'https://env.example.com/';
 
-    expect(
-      resolveServerUrl({
-        preferEnv: true,
-        settings: { serverUrl: 'https://settings.example.com' },
-      }),
-    ).toBe('https://env.example.com');
+    expect(resolveServerUrl()).toBe('https://env.example.com');
   });
 
   it('should fall back to settings then official server', () => {
-    expect(resolveServerUrl({ settings: { serverUrl: 'https://settings.example.com/' } })).toBe(
-      'https://settings.example.com',
-    );
-    expect(resolveServerUrl({ settings: null })).toBe('https://app.lobehub.com');
+    saveSettings({ serverUrl: 'https://settings.example.com/' });
+
+    expect(resolveServerUrl()).toBe('https://settings.example.com');
+
+    fs.unlinkSync(settingsFile);
+
+    expect(resolveServerUrl()).toBe('https://app.lobehub.com');
   });
 });

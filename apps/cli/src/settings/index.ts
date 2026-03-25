@@ -10,11 +10,6 @@ export interface StoredSettings {
   serverUrl?: string;
 }
 
-interface ResolveServerUrlOptions {
-  preferEnv?: boolean;
-  settings?: StoredSettings | null;
-}
-
 const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
 const SETTINGS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
@@ -23,10 +18,9 @@ export function normalizeUrl(url: string | undefined): string | undefined {
   return url ? url.replace(/\/$/, '') : undefined;
 }
 
-export function resolveServerUrl(options: ResolveServerUrlOptions = {}): string {
-  const { preferEnv = false, settings = loadSettings() } = options;
-  const envServerUrl = preferEnv ? normalizeUrl(process.env.LOBEHUB_SERVER) : undefined;
-  const settingsServerUrl = normalizeUrl(settings?.serverUrl);
+export function resolveServerUrl(): string {
+  const envServerUrl = normalizeUrl(process.env.LOBEHUB_SERVER);
+  const settingsServerUrl = normalizeUrl(loadSettings()?.serverUrl);
 
   return envServerUrl || settingsServerUrl || OFFICIAL_SERVER_URL;
 }

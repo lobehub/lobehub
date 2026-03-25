@@ -11,7 +11,7 @@ interface CurrentUserResponse {
 }
 
 export async function getUserIdFromApiKey(apiKey: string, serverUrl?: string): Promise<string> {
-  const normalizedServerUrl = normalizeUrl(serverUrl) || resolveServerUrl({ preferEnv: true });
+  const normalizedServerUrl = normalizeUrl(serverUrl) || resolveServerUrl();
 
   const response = await fetch(`${normalizedServerUrl}/api/v1/users/me`, {
     headers: {
