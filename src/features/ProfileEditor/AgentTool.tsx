@@ -3,13 +3,13 @@
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type ItemType } from '@lobehub/ui';
 import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PlusIcon, ToyBrick } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
 import KlavisSkillIcon, {
@@ -320,12 +320,10 @@ const AgentTool = memo<AgentToolProps>(
     const builtinAgentSkillItems = useMemo(
       () =>
         installedBuiltinSkills.map((skill) => ({
-          icon: (
-            <Avatar
-              avatar={skill.avatar || '🧩'}
-              size={SKILL_ICON_SIZE}
-              style={{ marginInlineEnd: 0 }}
-            />
+          icon: skill.avatar ? (
+            <Avatar avatar={skill.avatar} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />
+          ) : (
+            <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
           ),
           key: skill.identifier,
           label: (
@@ -348,7 +346,7 @@ const AgentTool = memo<AgentToolProps>(
     const marketAgentSkillItems = useMemo(
       () =>
         marketAgentSkills.map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -370,7 +368,7 @@ const AgentTool = memo<AgentToolProps>(
     const userAgentSkillItems = useMemo(
       () =>
         userAgentSkills.map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -438,15 +436,12 @@ const AgentTool = memo<AgentToolProps>(
     // Function to generate plugin list items
     const mapPluginToItem = useCallback(
       (item: (typeof installedPluginList)[0]) => ({
-        icon: item?.avatar ? (
-          <PluginAvatar
-            avatar={item.avatar}
-            size={SKILL_ICON_SIZE}
-            style={{ marginInlineEnd: 0 }}
-          />
-        ) : (
-          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-        ),
+        icon:
+          item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+          ) : (
+            <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+          ),
         key: item.identifier,
         label: (
           <ToolItem
@@ -572,12 +567,10 @@ const AgentTool = memo<AgentToolProps>(
       const enabledBuiltinAgentSkillItems = installedBuiltinSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: (
-            <Avatar
-              avatar={skill.avatar || '🧩'}
-              size={SKILL_ICON_SIZE}
-              style={{ marginInlineEnd: 0 }}
-            />
+          icon: skill.avatar ? (
+            <Avatar avatar={skill.avatar} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />
+          ) : (
+            <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
           ),
           key: skill.identifier,
           label: (
@@ -615,11 +608,12 @@ const AgentTool = memo<AgentToolProps>(
       const enabledCommunityPlugins = communityPlugins
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
-          icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-          ) : (
-            <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-          ),
+          icon:
+            item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+              <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+            ) : (
+              <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+            ),
           key: item.identifier,
           label: (
             <ToolItem
@@ -639,7 +633,7 @@ const AgentTool = memo<AgentToolProps>(
       const enabledMarketAgentSkillItems = marketAgentSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -670,11 +664,12 @@ const AgentTool = memo<AgentToolProps>(
       const enabledCustomPlugins = customPlugins
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
-          icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-          ) : (
-            <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-          ),
+          icon:
+            item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+              <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+            ) : (
+              <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+            ),
           key: item.identifier,
           label: (
             <ToolItem
@@ -694,7 +689,7 @@ const AgentTool = memo<AgentToolProps>(
       const enabledUserAgentSkillItems = userAgentSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem

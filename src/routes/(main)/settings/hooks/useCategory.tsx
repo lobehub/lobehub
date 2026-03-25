@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import {
-  Blocks,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -138,7 +138,7 @@ export const useCategory = () => {
         label: t('tab.serviceModel'),
       },
       {
-        icon: Blocks,
+        icon: SkillsIcon,
         key: SettingsTabs.Skill,
         label: t('tab.skill'),
       },

@@ -1,12 +1,14 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { DownloadIcon, MoreVerticalIcon, PackageSearch, PuzzleIcon, Trash2 } from 'lucide-react';
+import { DownloadIcon, MoreVerticalIcon, PackageSearch, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SkillAvatar from '@/components/SkillAvatar';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { type SkillListItem } from '@/types/index';
@@ -85,13 +87,13 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           paddingInline={12}
           variant={'outlined'}
         >
-          <Avatar avatar={'🧩'} shape={'square'} size={40} />
+          <SkillAvatar size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
             <Flexbox horizontal align="center" gap={8}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
                 {skill.name}
               </span>
-              <Tag icon={<Icon icon={PuzzleIcon} />} size={'small'} />
+              <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />
             </Flexbox>
             {skill.description && (
               <span className={itemStyles.description}>{skill.description}</span>
