@@ -151,7 +151,7 @@ export default class GatewayConnectionService extends ServiceModule {
     });
 
     client.on('tool_call_request', (request) => {
-      this.handleToolCallRequest(request);
+      this.handleToolCallRequest(request, client);
     });
 
     client.on('system_info_request', (request) => {
@@ -221,7 +221,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── Tool Call Routing ───
 
-  private handleToolCallRequest = async (request: ToolCallRequestMessage) => {
+  private handleToolCallRequest = async (
+    request: ToolCallRequestMessage,
+    client: GatewayClient,
+  ) => {
     const { requestId, toolCall } = request;
     const { apiName, arguments: argsStr } = toolCall;
 
@@ -235,7 +238,7 @@ export default class GatewayConnectionService extends ServiceModule {
       const args = JSON.parse(argsStr);
       const result = await this.toolCallHandler(apiName, args);
 
-      this.client?.sendToolCallResponse({
+      client.sendToolCallResponse({
         requestId,
         result: {
           content: typeof result === 'string' ? result : JSON.stringify(result),
@@ -246,7 +249,7 @@ export default class GatewayConnectionService extends ServiceModule {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Tool call failed: apiName=${apiName}, error=${errorMsg}`);
 
-      this.client?.sendToolCallResponse({
+      client.sendToolCallResponse({
         requestId,
         result: {
           content: errorMsg,
