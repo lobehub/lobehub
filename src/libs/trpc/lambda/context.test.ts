@@ -179,12 +179,21 @@ describe('createLambdaContext', () => {
   });
 
   it('should authenticate with API key and skip session fallback', async () => {
-    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue({
+    const apiKeyRecord = {
+      accessedAt: new Date(),
+      createdAt: new Date(),
       enabled: true,
       expiresAt: null,
       id: 'key-1',
+      key: 'encrypted-key',
+      keyHash: 'hashed-key',
+      lastUsedAt: null,
+      name: 'Test API Key',
+      updatedAt: new Date(),
       userId: 'api-user',
-    });
+    } satisfies NonNullable<Awaited<ReturnType<typeof ApiKeyModel.findByKey>>>;
+
+    vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(apiKeyRecord);
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
