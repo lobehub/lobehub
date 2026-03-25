@@ -1,6 +1,6 @@
 {
   "gateway.description": "描述",
-  "gateway.descriptionPlaceholder": "输入设备描述",
+  "gateway.descriptionPlaceholder": "可选",
   "gateway.deviceName": "设备名称",
   "gateway.deviceNamePlaceholder": "输入设备名称",
   "gateway.enableConnection": "设备连接",

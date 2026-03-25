@@ -69,7 +69,7 @@ export default {
   'proxy.validation.typeRequired': 'Proxy type is required when proxy is enabled',
   'proxy.validation.usernameRequired': 'Username is required when authentication is enabled',
   'gateway.description': 'Description',
-  'gateway.descriptionPlaceholder': 'Enter device description',
+  'gateway.descriptionPlaceholder': 'Optional',
   'gateway.deviceName': 'Device Name',
   'gateway.deviceNamePlaceholder': 'Enter device name',
   'gateway.enableConnection': 'Device Connection',

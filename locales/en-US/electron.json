@@ -1,6 +1,6 @@
 {
   "gateway.description": "Description",
-  "gateway.descriptionPlaceholder": "Enter device description",
+  "gateway.descriptionPlaceholder": "Optional",
   "gateway.deviceName": "Device Name",
   "gateway.deviceNamePlaceholder": "Enter device name",
   "gateway.enableConnection": "Device Connection",
