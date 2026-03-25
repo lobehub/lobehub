@@ -193,8 +193,9 @@ export class SkillImporter {
     log('importFromGitHub: identifier=%s', identifier);
 
     // 5. Check for existing skill with same zipHash (deduplication)
+    // Also re-import if content is missing (e.g. from a previous buggy import)
     const existing = await this.skillModel.findByIdentifier(identifier);
-    if (existing && existing.zipFileHash === zipHash) {
+    if (existing && existing.zipFileHash === zipHash && existing.content) {
       log(
         'importFromGitHub: skill unchanged (same zipHash=%s), skipping update id=%s',
         zipHash,

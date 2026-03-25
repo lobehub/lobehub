@@ -184,16 +184,22 @@ export class FileService {
     url: string;
   }): Promise<{ fileHash: string }> {
     // Check if hash already exists
-    const { isExist } = await this.fileModel.checkHash(params.fileHash);
+    const existing = await this.fileModel.checkHash(params.fileHash);
 
-    // Only create if not exists
-    if (!isExist) {
+    if (!existing.isExist) {
+      // Create new record
       await this.fileModel.createGlobalFile({
         creator: this.userId,
         fileType: params.fileType,
         hashId: params.fileHash,
         metadata: params.metadata,
         size: params.size,
+        url: params.url,
+      });
+    } else if (existing.url !== params.url) {
+      // Hash exists but URL changed (file re-uploaded to different S3 path) — update URL
+      await this.fileModel.updateGlobalFile(params.fileHash, {
+        metadata: params.metadata,
         url: params.url,
       });
     }
