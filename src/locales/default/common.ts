@@ -476,7 +476,7 @@ export default {
   'sync.title': 'Sync Status',
   'sync.unconnected.tip':
     'Signaling server connection failed, and peer-to-peer communication channel cannot be established. Please check the network and try again.',
-  'tab.aiImage': 'Artwork',
+  'tab.image': 'Image',
   'tab.audio': 'Audio',
   'tab.chat': 'Chat',
   'tab.community': 'Community',

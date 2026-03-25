@@ -412,7 +412,7 @@ const SearchResults = memo<SearchResultsProps>(
                   variant="detailed"
                   title={
                     <>
-                      <span style={{ opacity: 0.5 }}>{t('tab.aiImage')}</span>
+                      <span style={{ opacity: 0.5 }}>{t('tab.image')}</span>
                       <ChevronRight
                         size={14}
                         style={{
