@@ -228,7 +228,7 @@ export class AiInfraRepos {
               settings: isEmpty(user.settings)
                 ? item.settings
                 : merge(item.settings || {}, user.settings || {}),
-              sort: user.sort || undefined,
+              sort: user.sort ?? undefined,
               type: user.type || item.type,
             };
             return injectSearchSettings(provider.id, mergedModel); // User modified local model, check search settings
@@ -238,18 +238,22 @@ export class AiInfraRepos {
       { concurrency: 10 },
     );
 
+    const builtinModels = builtinModelList.flat();
+    const builtinModelKeys = new Set(builtinModels.map((item) => `${item.providerId}:${item.id}`));
+
     const enabledProviderIds = new Set(enabledProviders.map((item) => item.id));
     // User database models, check search settings
-    // Exclude DB residual models for branding provider since they are already handled in builtinModelList
+    // Exclude models already handled in builtinModelList to avoid duplicates
     const appendedUserModels = allModels
       .filter((item) => {
         if (item.providerId === BRANDING_PROVIDER) return false;
+        if (builtinModelKeys.has(`${item.providerId}:${item.id}`)) return false;
         return filterEnabled ? enabledProviderIds.has(item.providerId) && item.enabled : true;
       })
       .map((item) => injectSearchSettings(item.providerId, item));
 
-    return [...builtinModelList.flat(), ...appendedUserModels].sort(
-      (a, b) => (a?.sort || -1) - (b?.sort || -1),
+    return [...builtinModels, ...appendedUserModels].sort(
+      (a, b) => (a?.sort ?? Infinity) - (b?.sort ?? Infinity),
     ) as EnabledAiModel[];
   };
 
