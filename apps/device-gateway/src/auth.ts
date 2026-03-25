@@ -4,6 +4,26 @@ import type { Env } from './types';
 
 let cachedKey: CryptoKey | null = null;
 
+interface CurrentUserResponse {
+  data?: {
+    id?: string;
+    userId?: string;
+  };
+  error?: string;
+  message?: string;
+  success?: boolean;
+}
+
+export interface ResolveSocketAuthOptions {
+  serverUrl?: string;
+  serviceToken: string;
+  storedUserId?: string;
+  token?: string;
+  tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  verifyApiKey: (serverUrl: string, token: string) => Promise<{ userId: string }>;
+  verifyJwt: (token: string) => Promise<{ userId: string }>;
+}
+
 async function getPublicKey(env: Env): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;
 
@@ -33,16 +53,6 @@ export async function verifyDesktopToken(
     clientId: payload.client_id as string,
     userId: payload.sub,
   };
-}
-
-interface CurrentUserResponse {
-  data?: {
-    id?: string;
-    userId?: string;
-  };
-  error?: string;
-  message?: string;
-  success?: boolean;
 }
 
 export async function verifyApiKeyToken(
@@ -76,4 +86,25 @@ export async function verifyApiKeyToken(
   }
 
   return { userId };
+}
+
+export async function resolveSocketAuth(options: ResolveSocketAuthOptions): Promise<string> {
+  const { serverUrl, serviceToken, storedUserId, token, tokenType, verifyApiKey, verifyJwt } =
+    options;
+
+  if (!token) throw new Error('Missing token');
+
+  if (tokenType === 'apiKey') {
+    if (!serverUrl) throw new Error('Missing serverUrl');
+    const result = await verifyApiKey(serverUrl, token);
+    return result.userId;
+  }
+
+  if (token === serviceToken) {
+    if (!storedUserId) throw new Error('Missing userId');
+    return storedUserId;
+  }
+
+  const result = await verifyJwt(token);
+  return result.userId;
 }
