@@ -191,7 +191,7 @@ describe('WechatApiClient', () => {
       const plaintext = Buffer.from('hello image data');
       const ciphertext = encryptAesEcb(plaintext, aesKey);
 
-      mockFetch.mockResolvedValueOnce(new Response(ciphertext, { status: 200 }));
+      mockFetch.mockResolvedValueOnce(new Response(new Uint8Array(ciphertext), { status: 200 }));
 
       const result = await client.downloadCdnMedia(
         { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
