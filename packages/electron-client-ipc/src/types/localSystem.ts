@@ -102,6 +102,15 @@ export interface WriteLocalFileParams {
   path: string;
 }
 
+export interface AuditSafePathsParams {
+  paths: string[];
+  resolveAgainstScope: string;
+}
+
+export interface AuditSafePathsResult {
+  allSafe: boolean;
+}
+
 export interface LocalReadFileResult {
   /**
    * Character count of the content within the specified `loc` range.

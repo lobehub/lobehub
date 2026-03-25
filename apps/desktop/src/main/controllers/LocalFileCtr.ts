@@ -1,8 +1,10 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
+  type AuditSafePathsParams,
+  type AuditSafePathsResult,
   type EditLocalFileParams,
   type EditLocalFileResult,
   type GlobFilesParams,
@@ -51,6 +53,72 @@ import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
 const logger = createLogger('controllers:LocalFileCtr');
+
+const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
+
+const normalizeAbsolutePath = (inputPath: string): string =>
+  path.normalize(path.isAbsolute(inputPath) ? inputPath : `/${inputPath}`);
+
+const resolvePathWithScope = (inputPath: string, scope: string): string =>
+  path.isAbsolute(inputPath) ? inputPath : path.join(scope, inputPath);
+
+const isWithinSafePathPrefixes = (targetPath: string, prefixes: readonly string[]): boolean =>
+  prefixes.some((prefix) => targetPath === prefix || targetPath.startsWith(`${prefix}${path.sep}`));
+
+const resolveNearestExistingRealPath = async (targetPath: string): Promise<string | undefined> => {
+  let currentPath = targetPath;
+
+  while (true) {
+    try {
+      await access(currentPath, constants.F_OK);
+      return normalizeAbsolutePath(await realpath(currentPath));
+    } catch {
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) return undefined;
+      currentPath = parentPath;
+    }
+  }
+};
+
+const resolveSafePathRealPrefixes = async (): Promise<string[]> => {
+  const prefixes = new Set<string>(SAFE_PATH_PREFIXES);
+
+  for (const safePrefix of SAFE_PATH_PREFIXES) {
+    try {
+      prefixes.add(normalizeAbsolutePath(await realpath(safePrefix)));
+    } catch {
+      // Keep the lexical prefix if the platform does not expose this directory.
+    }
+  }
+
+  return [...prefixes];
+};
+
+const areAllPathsSafeOnDisk = async (
+  paths: string[],
+  resolveAgainstScope: string,
+): Promise<boolean> => {
+  if (paths.length === 0) return false;
+
+  const safeRealPrefixes = await resolveSafePathRealPrefixes();
+
+  for (const currentPath of paths) {
+    const normalizedPath = normalizeAbsolutePath(
+      resolvePathWithScope(currentPath, resolveAgainstScope),
+    );
+
+    if (!isWithinSafePathPrefixes(normalizedPath, SAFE_PATH_PREFIXES)) {
+      return false;
+    }
+
+    const realPath = await resolveNearestExistingRealPath(normalizedPath);
+    if (!realPath || !isWithinSafePathPrefixes(realPath, safeRealPrefixes)) {
+      return false;
+    }
+  }
+
+  return true;
+};
 
 export default class LocalFileCtr extends ControllerModule {
   static override readonly groupName = 'localSystem';
@@ -238,6 +306,18 @@ export default class LocalFileCtr extends ControllerModule {
   async handleWriteFile({ path: filePath, content }: WriteLocalFileParams) {
     logger.debug(`Writing file ${filePath}`, { contentLength: content?.length });
     return writeLocalFile({ content, path: filePath });
+  }
+
+  @IpcMethod()
+  async auditSafePaths({
+    paths,
+    resolveAgainstScope,
+  }: AuditSafePathsParams): Promise<AuditSafePathsResult> {
+    logger.debug('Auditing safe paths', { count: paths.length, resolveAgainstScope });
+
+    return {
+      allSafe: await areAllPathsSafeOnDisk(paths, resolveAgainstScope),
+    };
   }
 
   @IpcMethod()

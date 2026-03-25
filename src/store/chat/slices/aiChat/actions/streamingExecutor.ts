@@ -6,9 +6,9 @@ import {
   type Usage,
 } from '@lobechat/agent-runtime';
 import { AgentRuntime, computeStepContext, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { isDesktop } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import {
@@ -22,6 +22,7 @@ import { t } from 'i18next';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { resolveAgentConfig } from '@/services/chat/mecha';
+import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -43,6 +44,17 @@ import {
 } from '../../message/selectors/dbMessage';
 
 const log = debug('lobe-store:streaming-executor');
+
+const dynamicInterventionAudits = {
+  pathScopeAudit: createPathScopeAudit({
+    areAllPathsSafe: async ({ paths, resolveAgainstScope }) => {
+      if (!isDesktop) return false;
+
+      const result = await localFileService.auditSafePaths({ paths, resolveAgainstScope });
+      return result.allSafe;
+    },
+  }),
+};
 
 const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): boolean => {
   if (!editorData) return false;

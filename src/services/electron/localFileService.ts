@@ -1,4 +1,6 @@
 import {
+  type AuditSafePathsParams,
+  type AuditSafePathsResult,
   type EditLocalFileParams,
   type EditLocalFileResult,
   type GetCommandOutputParams,
@@ -70,6 +72,10 @@ class LocalFileService {
 
   async writeFile(params: WriteLocalFileParams) {
     return ensureElectronIpc().localSystem.handleWriteFile(params);
+  }
+
+  async auditSafePaths(params: AuditSafePathsParams): Promise<AuditSafePathsResult> {
+    return ensureElectronIpc().localSystem.auditSafePaths(params);
   }
 
   async prepareSkillDirectory(

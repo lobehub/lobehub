@@ -61,7 +61,7 @@ export const RenderDisplayControlSchema = z.enum(['collapsed', 'expand', 'always
 export type DynamicInterventionResolver = (
   toolArgs: Record<string, any>,
   metadata?: Record<string, any>,
-) => boolean;
+) => Promise<boolean>;
 
 /**
  * Global intervention audit configuration
