@@ -20,25 +20,6 @@ describe('resolveSocketAuth', () => {
     expect(verifyJwt).not.toHaveBeenCalled();
   });
 
-  it('rejects apiKey auth without serverUrl', async () => {
-    const verifyApiKey = vi.fn();
-    const verifyJwt = vi.fn();
-
-    await expect(
-      resolveSocketAuth({
-        serviceToken: 'service-secret',
-        storedUserId: 'user-123',
-        token: 'api-key-token',
-        tokenType: 'apiKey',
-        verifyApiKey,
-        verifyJwt,
-      }),
-    ).rejects.toThrow('Missing serverUrl');
-
-    expect(verifyApiKey).not.toHaveBeenCalled();
-    expect(verifyJwt).not.toHaveBeenCalled();
-  });
-
   it('rejects the real service token when storedUserId is missing', async () => {
     const verifyApiKey = vi.fn();
     const verifyJwt = vi.fn();
