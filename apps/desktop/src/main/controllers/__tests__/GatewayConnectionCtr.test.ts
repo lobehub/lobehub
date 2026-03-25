@@ -553,8 +553,10 @@ describe('GatewayConnectionCtr', () => {
 
       const info = await ctr.getDeviceInfo();
       expect(info).toEqual({
+        description: '',
         deviceId: 'my-device',
         hostname: 'mock-hostname',
+        name: 'mock-hostname',
         platform: process.platform,
       });
     });
