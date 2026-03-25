@@ -16,42 +16,13 @@ const Nav = memo(() => {
   const navigate = useNavigate();
   const { t } = useTranslation('common');
   const { topNavItems } = useNavLayout();
+
   const items = useMemo(
     () =>
       topNavItems.map((item) =>
         item.key === 'search' || item.key === 'community' ? { ...item, hidden: true } : item,
       ),
     [topNavItems],
-  );
-  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
-
-  const items: Item[] = useMemo(
-    () => [
-      {
-        hidden: true,
-        icon: SearchIcon,
-        key: 'search',
-        onClick: () => {
-          toggleCommandMenu(true);
-        },
-        title: t('tab.search'),
-      },
-      {
-        icon: HomeIcon,
-        key: SidebarTabKey.Home,
-        title: t('tab.home'),
-        url: '/',
-      },
-      {
-        hidden: true,
-        icon: getRouteById('community')!.icon,
-        key: SidebarTabKey.Community,
-        title: t('tab.marketplace'),
-        url: '/community',
-      },
-    ],
-    [t, showMarket],
   );
 
   const newBadge = (

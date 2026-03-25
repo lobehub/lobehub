@@ -3,7 +3,6 @@ import { isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { BrainCircuit, Cloudy, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
-import { BrainCircuit, Cloudy, LogOut, Settings2 } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +54,6 @@ export const useMenu = () => {
   ]);
   const { userPanel } = useNavLayout();
   const businessMenuItems = useBusinessMenuItems(isLogin);
-  const businessMenuItems = getBusinessMenuItems(isLogin);
   const settings: MenuProps['items'] = [
     {
       extra: isDesktop ? (

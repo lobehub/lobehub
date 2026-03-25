@@ -4,7 +4,6 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-<<<<<<< HEAD
 import { and, asc, desc, eq, inArray, not, sql } from 'drizzle-orm';
 
 import {

@@ -100,10 +100,7 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Powerful multilingual programming capabilities, comprehensively upgraded programming experience.',
     displayName: 'MiniMax M2.1',
-<<<<<<< HEAD
-=======
     enabled: false,
->>>>>>> c0613fd859 (✨ feat: add shared agents and Loctek workspace customizations)
     id: 'MiniMax-M2.1',
     maxOutput: 131_072,
     pricing: {
