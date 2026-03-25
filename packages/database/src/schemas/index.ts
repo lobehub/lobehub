@@ -13,6 +13,7 @@ export * from './file';
 export * from './generation';
 export * from './message';
 export * from './nextauth';
+export * from './notification';
 export * from './oidc';
 export * from './rag';
 export * from './ragEvals';
