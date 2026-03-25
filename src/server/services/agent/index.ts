@@ -9,6 +9,7 @@ import { type PartialDeep } from 'type-fest';
 
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
+import { SharedAgentModel } from '@/database/models/sharedAgent';
 import { UserModel } from '@/database/models/user';
 import { getRedisConfig } from '@/envs/redis';
 import {
@@ -44,12 +45,14 @@ export class AgentService {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
   private readonly agentModel: AgentModel;
+  private readonly sharedAgentModel: SharedAgentModel;
   private readonly userModel: UserModel;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
     this.agentModel = new AgentModel(db, userId);
+    this.sharedAgentModel = new SharedAgentModel(db);
     this.userModel = new UserModel(db, userId);
   }
 
@@ -120,14 +123,22 @@ export class AgentService {
    * 5. AI-generated welcome data from Redis (if available)
    */
   async getAgentConfigById(agentId: string) {
-    const [agent, defaultAgentConfig, welcomeData] = await Promise.all([
+    const [agent, defaultAgentConfig] = await Promise.all([
       this.agentModel.getAgentConfigById(agentId),
       this.userModel.getUserSettingsDefaultAgentConfig(),
-      this.getAgentWelcomeFromRedis(agentId),
     ]);
 
-    const config = this.mergeDefaultConfig(agent, defaultAgentConfig);
+    // Shared agents are stored in `shared_agents` and don't exist in user-owned `agents`.
+    // Fall back to shared agent lookup so they can be opened/used like normal assistants.
+    const sourceAgent = agent ?? (await this.sharedAgentModel.findById(agentId));
+
+    const config = this.mergeDefaultConfig(sourceAgent, defaultAgentConfig);
     if (!config) return null;
+
+    // Shared agents don't use Redis-generated welcome content.
+    if (!agent) return config;
+
+    const welcomeData = await this.getAgentWelcomeFromRedis(agentId);
 
     // Merge AI-generated welcome data if available
     if (welcomeData) {

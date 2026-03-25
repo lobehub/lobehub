@@ -249,6 +249,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
+    enabled: true,
     id: 'gpt-5.2',
     maxOutput: 128_000,
     pricing: {

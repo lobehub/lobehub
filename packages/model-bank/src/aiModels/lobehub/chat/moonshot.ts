@@ -14,7 +14,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
     displayName: 'Kimi K2.5',
-    enabled: true,
+    enabled: false,
     id: 'kimi-k2.5',
     maxOutput: 32_768,
     pricing: {
@@ -40,7 +40,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active). Based on kimi-k2-0711-preview, with enhanced agentic coding abilities and better context understanding.',
     displayName: 'Kimi K2',
-    enabled: true,
+    enabled: false,
     id: 'kimi-k2-0905-preview',
     pricing: {
       units: [
@@ -64,7 +64,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'High-speed version of kimi-k2, always aligned with the latest kimi-k2. Same model parameters, output speed up to 60–100 tokens/sec.',
     displayName: 'Kimi K2 Turbo',
-    enabled: true,
+    enabled: false,
     id: 'kimi-k2-turbo-preview',
     pricing: {
       units: [
@@ -89,7 +89,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'K2 thinking model with general agentic and reasoning capabilities, specializing in deep reasoning tasks via multi-step tool use.',
     displayName: 'Kimi K2 Thinking',
-    enabled: true,
+    enabled: false,
     id: 'kimi-k2-thinking',
     pricing: {
       units: [
@@ -114,7 +114,7 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'High-speed version of kimi-k2-thinking, suitable for scenarios requiring both deep reasoning and extremely fast responses.',
     displayName: 'Kimi K2 Thinking Turbo',
-    enabled: true,
+    enabled: false,
     id: 'kimi-k2-thinking-turbo',
     pricing: {
       units: [

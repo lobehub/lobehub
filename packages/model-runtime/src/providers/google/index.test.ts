@@ -242,6 +242,27 @@ describe('LobeGoogleAI', () => {
     });
 
     describe('Error', () => {
+      it('should throw ProviderBizError when contents are empty after conversion', async () => {
+        const generateContentStreamSpy = vi.spyOn(
+          instance['client'].models,
+          'generateContentStream',
+        );
+
+        await expect(
+          instance.chat({
+            messages: [{ content: [], role: 'user' } as any],
+            model: 'gemini-2.0-flash',
+            temperature: 0,
+          }),
+        ).rejects.toEqual({
+          error: { message: 'No valid message content. contents are required.' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider,
+        });
+
+        expect(generateContentStreamSpy).not.toHaveBeenCalled();
+      });
+
       it('should throw InvalidGoogleAPIKey error on API_KEY_INVALID error', async () => {
         // Mock Google AI SDK throwing an exception
         const message = `[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1/models/gemini-pro:streamGenerateContent?alt=sse: [400 Bad Request] API key not valid. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}}]`;
@@ -440,30 +461,24 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read first value then cancel to trigger error chunk
-        chunks.push((await reader.read()).value);
+        const firstChunk = await reader.read();
         abortController.abort();
 
-        // Read all remaining chunks
-        let result;
-        while (!(result = await reader.read()).done) {
-          chunks.push(result.value);
-        }
+        const errorChunk = await reader.read();
+        const endChunk = await reader.read();
 
-        // Batch-assert the entire chunks array
-        expect(chunks).toEqual([
-          { text: 'Hello' },
-          {
-            [LOBE_ERROR_KEY]: {
-              body: { name: 'Stream cancelled', provider, reason: 'aborted' },
-              message: 'Stream cancelled',
-              name: 'Stream cancelled',
-              type: AgentRuntimeErrorType.StreamChunkError,
-            },
+        expect(firstChunk.value).toEqual({ text: 'Hello' });
+        expect(errorChunk.value).toEqual({
+          [LOBE_ERROR_KEY]: {
+            body: { name: 'Stream cancelled', provider, reason: 'aborted' },
+            message: 'Stream cancelled',
+            name: 'Stream cancelled',
+            type: AgentRuntimeErrorType.StreamChunkError,
           },
-        ]);
+        });
+        expect(endChunk.done).toBe(true);
       });
 
       it('should handle stream cancellation without data', async () => {
@@ -494,49 +509,46 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read first value then collect remaining chunks (error included)
-        chunks.push((await reader.read()).value);
-        let result;
-        while (!(result = await reader.read()).done) {
-          chunks.push(result.value);
-        }
+        const firstChunk = await reader.read();
+        const errorChunk = await reader.read();
+        const endChunk = await reader.read();
 
-        // Assert both data and error chunk together
-        expect(chunks).toEqual([
-          { text: 'Hello' },
-          {
-            [LOBE_ERROR_KEY]: {
-              body: { name: 'Stream cancelled', provider, reason: 'aborted' },
-              message: 'Stream cancelled',
-              name: 'Stream cancelled',
-              type: AgentRuntimeErrorType.StreamChunkError,
-            },
+        expect(firstChunk.value).toEqual({ text: 'Hello' });
+        expect(errorChunk.value).toEqual({
+          [LOBE_ERROR_KEY]: {
+            body: { name: 'Stream cancelled', provider, reason: 'aborted' },
+            message: 'Stream cancelled',
+            name: 'Stream cancelled',
+            type: AgentRuntimeErrorType.StreamChunkError,
           },
-        ]);
+        });
+        expect(endChunk.done).toBe(true);
       });
 
       it('should handle AbortError without data', async () => {
-        const mockStream = (async function* () {
-          throw new Error('aborted');
-        })();
+        const mockStream: AsyncIterable<any> = {
+          [Symbol.asyncIterator]: () => ({
+            next: async () => {
+              throw new Error('aborted');
+            },
+          }),
+        };
 
         const abortController = new AbortController();
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read error chunk
         const chunk1 = await reader.read();
-        chunks.push(chunk1.value);
 
         // Stream should be closed
         const chunk2 = await reader.read();
         expect(chunk2.done).toBe(true);
 
-        expect(chunks[0][LOBE_ERROR_KEY]).toEqual({
+        expect(chunk1.value[LOBE_ERROR_KEY]).toEqual({
           body: {
             message: 'aborted',
             name: 'AbortError',
@@ -559,26 +571,22 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read first value then collect remaining chunks (parsing error)
-        chunks.push((await reader.read()).value);
-        let result;
-        while (!(result = await reader.read()).done) {
-          chunks.push(result.value);
-        }
+        const firstChunk = await reader.read();
+        const errorChunk = await reader.read();
+        const endChunk = await reader.read();
 
-        expect(chunks).toEqual([
-          { text: 'Hello' },
-          {
-            [LOBE_ERROR_KEY]: {
-              body: { message: 'Network error', provider },
-              message: 'Network error',
-              name: 'Stream parsing error',
-              type: AgentRuntimeErrorType.ProviderBizError,
-            },
+        expect(firstChunk.value).toEqual({ text: 'Hello' });
+        expect(errorChunk.value).toEqual({
+          [LOBE_ERROR_KEY]: {
+            body: { message: 'Network error', provider },
+            message: 'Network error',
+            name: 'Stream parsing error',
+            type: AgentRuntimeErrorType.ProviderBizError,
           },
-        ]);
+        });
+        expect(endChunk.done).toBe(true);
       });
     });
   });

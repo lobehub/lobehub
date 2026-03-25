@@ -5,6 +5,7 @@ const Moonshot: ModelProviderCard = {
   checkModel: 'kimi-k2.5',
   description:
     'Moonshot, from Moonshot AI (Beijing Moonshot Technology), offers multiple NLP models for use cases like content creation, research, recommendations, and medical analysis, with strong long-context and complex generation support.',
+  enabled: true,
   id: 'moonshot',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://platform.moonshot.ai/docs/pricing/chat',

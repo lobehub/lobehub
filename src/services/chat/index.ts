@@ -42,6 +42,7 @@ import {
 } from '@/store/user/selectors';
 import { type ChatStreamPayload, type OpenAIChatMessage } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
+import { resolveAutoModel } from '@/utils/modelAccess';
 import { createTraceHeader, getTraceId } from '@/utils/trace';
 
 import { createHeaderWithAuth } from '../_auth';
@@ -314,11 +315,15 @@ class ChatService {
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
     const { agentId, signal, responseAnimation, topicId } = options ?? {};
 
-    const { provider = ModelProvider.OpenAI, ...res } = params;
+    const { provider: inputProvider = ModelProvider.OpenAI, ...res } = params;
+    let provider = inputProvider;
 
     // =================== process model =================== //
     // ===================================================== //
     let model = res.model || DEFAULT_AGENT_CONFIG.model;
+    const resolvedModel = resolveAutoModel(model, provider);
+    model = resolvedModel.model;
+    provider = (resolvedModel.provider || provider) as ModelProvider;
 
     // if the provider is Azure, get the deployment name as the request model
     const providersWithDeploymentName = [

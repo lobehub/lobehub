@@ -244,6 +244,8 @@ export class AgentSliceActionImpl {
       },
       {
         onSuccess: (data) => {
+          if (!data) return;
+
           this.#get().internal_dispatchAgentMap(agentId, data);
 
           this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');

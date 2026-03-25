@@ -34,6 +34,10 @@ export interface SidebarAgentItem {
   groupAvatar?: string | null;
   id: string;
   pinned: boolean;
+  /**
+   * Whether this item is read-only (e.g. shared agents managed by admin)
+   */
+  readonly?: boolean;
   sessionId?: string | null;
   title: string | null;
   type: SidebarItemType;

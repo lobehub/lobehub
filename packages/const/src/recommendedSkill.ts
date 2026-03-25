@@ -22,4 +22,7 @@ export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'google-drive', type: RecommendedSkillType.Klavis },
   { id: 'google-calendar', type: RecommendedSkillType.Klavis },
   { id: 'slack', type: RecommendedSkillType.Klavis },
+  // Lobehub skills
+  { id: 'skill-creator', type: RecommendedSkillType.Lobehub },
+  { id: 'find-skills', type: RecommendedSkillType.Lobehub },
 ];

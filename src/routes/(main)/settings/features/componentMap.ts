@@ -59,6 +59,9 @@ export const componentMap = {
   [SettingsTabs.Skill]: dynamic(() => import('../skill'), {
     loading: loading('Settings > Skill'),
   }),
+  [SettingsTabs.SharedAgents]: dynamic(() => import('../shared-agents'), {
+    loading: loading('Settings > SharedAgents'),
+  }),
 
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {
     loading: loading('Settings > Plans'),

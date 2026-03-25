@@ -33,14 +33,14 @@ export const useSignUp = () => {
       }
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
-      const username = values.email.split('@')[0];
 
       const { error } = await signUp.email({
         callbackURL: callbackUrl,
         email: values.email,
         fetchOptions: await getFetchOptions(),
-        name: username,
+        name: values.username,
         password: values.password,
+        username: values.username,
       });
 
       if (error) {

@@ -64,6 +64,7 @@ export enum SettingsTabs {
   Referral = 'referral',
   Security = 'security',
   ServiceModel = 'service-model',
+  SharedAgents = 'shared-agents',
   Skill = 'skill',
 
   Stats = 'stats',

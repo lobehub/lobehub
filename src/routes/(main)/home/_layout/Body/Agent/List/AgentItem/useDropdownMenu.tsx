@@ -29,6 +29,7 @@ interface UseAgentDropdownMenuParams {
   id: string;
   openCreateGroupModal: () => void;
   pinned: boolean;
+  readonly?: boolean;
   title: string;
 }
 
@@ -39,6 +40,7 @@ export const useAgentDropdownMenu = ({
   id,
   openCreateGroupModal,
   pinned,
+  readonly = false,
   title,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation('chat');
@@ -64,7 +66,7 @@ export const useAgentDropdownMenu = ({
           label: t(pinned ? 'pinOff' : 'pin'),
           onClick: () => pinAgent(id, !pinned),
         },
-        {
+        !readonly && {
           icon: <Icon icon={Pen} />,
           key: 'rename',
           label: t('rename', { ns: 'common' }),
@@ -75,7 +77,7 @@ export const useAgentDropdownMenu = ({
             }
           },
         },
-        {
+        !readonly && {
           icon: <Icon icon={LucideCopy} />,
           key: 'duplicate',
           label: t('duplicate', { ns: 'common' }),
@@ -93,8 +95,8 @@ export const useAgentDropdownMenu = ({
             openAgentInNewWindow(id);
           },
         },
-        { type: 'divider' },
-        {
+        !readonly && { type: 'divider' },
+        !readonly && {
           children: [
             ...sessionCustomGroups.map(({ id: groupId, name }) => ({
               icon: group === groupId ? <Icon icon={Check} /> : <div />,
@@ -123,8 +125,8 @@ export const useAgentDropdownMenu = ({
           key: 'moveGroup',
           label: t('sessionGroup.moveGroup'),
         },
-        { type: 'divider' },
-        {
+        !readonly && { type: 'divider' },
+        !readonly && {
           danger: true,
           icon: <Icon icon={Trash} />,
           key: 'delete',
@@ -142,7 +144,7 @@ export const useAgentDropdownMenu = ({
             });
           },
         },
-      ] as MenuProps['items'],
+      ].filter(Boolean) as MenuProps['items'],
     [
       anchor,
       pinned,

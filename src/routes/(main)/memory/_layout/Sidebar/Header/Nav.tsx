@@ -7,7 +7,6 @@ import {
   CalendarClockIcon,
   HeartPulseIcon,
   LightbulbIcon,
-  SearchIcon,
   SignatureIcon,
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -17,7 +16,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePathname } from '@/libs/router/navigation';
-import { useGlobalStore } from '@/store/global';
 import { isModifierClick } from '@/utils/navigation';
 
 interface Item {
@@ -47,18 +45,9 @@ const Nav = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useNavigate();
   const { t } = useTranslation('memory');
-  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
 
   const items: Item[] = useMemo(
     () => [
-      {
-        icon: SearchIcon,
-        key: 'search',
-        onClick: () => {
-          toggleCommandMenu(true);
-        },
-        title: t('tab.search'),
-      },
       {
         icon: BrainCircuitIcon,
         key: MemoryTabKey.Home,

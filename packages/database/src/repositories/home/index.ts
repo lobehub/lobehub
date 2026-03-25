@@ -4,7 +4,8 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, desc, eq, inArray, not, sql } from 'drizzle-orm';
+<<<<<<< HEAD
+import { and, asc, desc, eq, inArray, not, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -13,6 +14,7 @@ import {
   chatGroupsAgents,
   sessionGroups,
   sessions,
+  sharedAgents,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
@@ -42,58 +44,69 @@ export class HomeRepository {
    */
   async getSidebarAgentList(): Promise<SidebarAgentListResponse> {
     // 1. Query all agents (non-virtual) with their session info (if exists)
-    const agentList = await this.db
-      .select({
-        agentSessionGroupId: agents.sessionGroupId,
-        avatar: agents.avatar,
-        backgroundColor: agents.backgroundColor,
-        description: agents.description,
-        id: agents.id,
-        pinned: agents.pinned,
-        sessionGroupId: sessions.groupId,
-        sessionId: sessions.id,
-        sessionPinned: sessions.pinned,
-        title: agents.title,
-        updatedAt: agents.updatedAt,
-      })
-      .from(agents)
-      .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
-      .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
-      .where(and(eq(agents.userId, this.userId), not(eq(agents.virtual, true))))
-      .orderBy(desc(agents.updatedAt));
+    const [agentList, chatGroupList, groupList, sharedAgentList] = await Promise.all([
+      this.db
+        .select({
+          agentSessionGroupId: agents.sessionGroupId,
+          avatar: agents.avatar,
+          backgroundColor: agents.backgroundColor,
+          description: agents.description,
+          id: agents.id,
+          pinned: agents.pinned,
+          sessionGroupId: sessions.groupId,
+          sessionId: sessions.id,
+          sessionPinned: sessions.pinned,
+          title: agents.title,
+          updatedAt: agents.updatedAt,
+        })
+        .from(agents)
+        .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
+        .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
+        .where(and(eq(agents.userId, this.userId), not(eq(agents.virtual, true))))
+        .orderBy(desc(agents.updatedAt)),
 
-    // 2. Query all chatGroups (group chats)
-    const chatGroupList = await this.db
-      .select({
-        avatar: chatGroups.avatar,
-        backgroundColor: chatGroups.backgroundColor,
-        description: chatGroups.description,
-        groupId: chatGroups.groupId,
-        id: chatGroups.id,
-        pinned: chatGroups.pinned,
-        title: chatGroups.title,
-        updatedAt: chatGroups.updatedAt,
-      })
-      .from(chatGroups)
-      .where(eq(chatGroups.userId, this.userId))
-      .orderBy(desc(chatGroups.updatedAt));
+      this.db
+        .select({
+          avatar: chatGroups.avatar,
+          backgroundColor: chatGroups.backgroundColor,
+          description: chatGroups.description,
+          groupId: chatGroups.groupId,
+          id: chatGroups.id,
+          pinned: chatGroups.pinned,
+          title: chatGroups.title,
+          updatedAt: chatGroups.updatedAt,
+        })
+        .from(chatGroups)
+        .where(eq(chatGroups.userId, this.userId))
+        .orderBy(desc(chatGroups.updatedAt)),
+
+      this.db
+        .select({
+          id: sessionGroups.id,
+          name: sessionGroups.name,
+          sort: sessionGroups.sort,
+        })
+        .from(sessionGroups)
+        .where(eq(sessionGroups.userId, this.userId))
+        .orderBy(sessionGroups.sort),
+
+      this.db.query.sharedAgents.findMany({
+        orderBy: [asc(sharedAgents.sort), asc(sharedAgents.createdAt)],
+        where: eq(sharedAgents.enabled, true),
+      }),
+    ]);
 
     // 2.1 Query member avatars for each chat group
     const memberAvatarsMap = await this.getChatGroupMemberAvatars(chatGroupList.map((g) => g.id));
 
-    // 3. Query all sessionGroups (user-defined folders)
-    const groupList = await this.db
-      .select({
-        id: sessionGroups.id,
-        name: sessionGroups.name,
-        sort: sessionGroups.sort,
-      })
-      .from(sessionGroups)
-      .where(eq(sessionGroups.userId, this.userId))
-      .orderBy(sessionGroups.sort);
-
     // 4. Process and categorize
-    return this.processAgentList(agentList, chatGroupList, groupList, memberAvatarsMap);
+    return this.processAgentList(
+      agentList,
+      chatGroupList,
+      groupList,
+      memberAvatarsMap,
+      sharedAgentList,
+    );
   }
 
   private processAgentList(
@@ -126,6 +139,15 @@ export class HomeRepository {
       sort: number | null;
     }>,
     memberAvatarsMap: Map<string, Array<{ avatar: string; background?: string }>>,
+    sharedAgentItems: Array<{
+      avatar: string | null;
+      backgroundColor: string | null;
+      createdAt: Date;
+      description: string | null;
+      id: string;
+      title: string | null;
+      updatedAt: Date;
+    }> = [],
   ): SidebarAgentListResponse {
     // Convert to unified format
     // For pinned status: agents.pinned takes priority, fallback to sessions.pinned for backward compatibility
@@ -190,7 +212,23 @@ export class HomeRepository {
       sort: g.sort,
     }));
 
-    return { groups, pinned, ungrouped };
+    // Append shared agents (read-only) to ungrouped list
+    const sharedItems: SidebarAgentItem[] = sharedAgentItems.map(
+      (a) =>
+        cleanObject({
+          avatar: a.avatar,
+          backgroundColor: a.backgroundColor,
+          description: a.description,
+          id: a.id,
+          pinned: false,
+          readonly: true,
+          title: a.title,
+          type: 'agent' as const,
+          updatedAt: a.updatedAt,
+        }) as SidebarAgentItem,
+    );
+
+    return { groups, pinned, ungrouped: [...ungrouped, ...sharedItems] };
   }
 
   /**

@@ -29,7 +29,7 @@ export const resolveContext = async (
   db: LobeChatDatabase,
   userId: string,
 ): Promise<ResolvedContext> => {
-  let resolvedSessionId: string | null = input.sessionId ?? null;
+  let resolvedSessionId: string | null = input.sessionId || null;
 
   // If agentId is provided, prioritize looking up the corresponding sessionId from agentsToSessions table
   if (input.agentId) {

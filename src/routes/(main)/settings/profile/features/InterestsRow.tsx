@@ -37,9 +37,8 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
 
   const toggleInterest = useCallback(
     async (label: string) => {
-      const updated = interests.includes(label)
-        ? interests.filter((i) => i !== label)
-        : [...interests, label];
+      // Single-select: if already selected, deselect; otherwise select only this one
+      const updated = interests.includes(label) ? [] : [label];
 
       try {
         setSaving(true);
@@ -174,7 +173,9 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
   return (
     <Flexbox horizontal gap={24} style={rowStyle}>
       <Text style={labelStyle}>{t('profile.interests')}</Text>
-      <Flexbox align="flex-end" style={{ flex: 1 }}>{content}</Flexbox>
+      <Flexbox align="flex-end" style={{ flex: 1 }}>
+        {content}
+      </Flexbox>
     </Flexbox>
   );
 };

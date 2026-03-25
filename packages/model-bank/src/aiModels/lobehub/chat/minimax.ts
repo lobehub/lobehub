@@ -55,7 +55,7 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Optimized for code generation and refactoring, delivering peak performance with ultimate value to master complex tasks.',
     displayName: 'MiniMax M2.5',
-    enabled: true,
+    enabled: false,
     id: 'MiniMax-M2.5',
     maxOutput: 131_072,
     pricing: {
@@ -77,7 +77,7 @@ export const minimaxChatModels: AIChatModelCard[] = [
     contextWindowTokens: 204_800,
     description: 'Same performance as M2.5 with significantly faster inference.',
     displayName: 'MiniMax M2.5 Highspeed',
-    enabled: true,
+    enabled: false,
     id: 'MiniMax-M2.5-highspeed',
     maxOutput: 131_072,
     pricing: {
@@ -100,6 +100,10 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Powerful multilingual programming capabilities, comprehensively upgraded programming experience.',
     displayName: 'MiniMax M2.1',
+<<<<<<< HEAD
+=======
+    enabled: false,
+>>>>>>> c0613fd859 (✨ feat: add shared agents and Loctek workspace customizations)
     id: 'MiniMax-M2.1',
     maxOutput: 131_072,
     pricing: {
@@ -122,6 +126,7 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Powerful multilingual programming capabilities with faster and more efficient inference.',
     displayName: 'MiniMax M2.1 Highspeed',
+    enabled: false,
     id: 'MiniMax-M2.1-highspeed',
     maxOutput: 131_072,
     pricing: {

@@ -109,7 +109,7 @@ export const xaiChatModels: AIChatModelCard[] = [
     description:
       'Our newest and strongest flagship model, excelling in NLP, math, and reasoning—an ideal all-rounder.',
     displayName: 'Grok 4',
-    enabled: true,
+    enabled: false,
     id: 'grok-4',
     pricing: {
       units: [

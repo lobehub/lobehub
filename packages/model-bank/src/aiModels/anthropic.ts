@@ -13,7 +13,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     description:
       'Claude Opus 4.6 is Anthropic’s most intelligent model for building agents and coding.',
     displayName: 'Claude Opus 4.6',
-    enabled: true,
+    enabled: false,
     id: 'claude-opus-4-6',
     maxOutput: 128_000,
     pricing: {
@@ -47,7 +47,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_000_000,
     description: 'Claude Sonnet 4.6 is Anthropic’s best combination of speed and intelligence.',
     displayName: 'Claude Sonnet 4.6',
-    enabled: true,
+    enabled: false,
     id: 'claude-sonnet-4-6',
     maxOutput: 64_000,
     pricing: {
@@ -150,7 +150,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     description:
       'Claude Haiku 4.5 is Anthropic’s fastest and smartest Haiku model, with lightning speed and extended reasoning.',
     displayName: 'Claude Haiku 4.5',
-    enabled: true,
+    enabled: false,
     id: 'claude-haiku-4-5-20251001',
     maxOutput: 64_000,
     pricing: {

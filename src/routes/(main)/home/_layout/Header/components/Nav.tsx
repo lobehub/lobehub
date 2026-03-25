@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Tag } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -15,7 +15,44 @@ const Nav = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useNavigate();
   const { t } = useTranslation('common');
-  const { topNavItems: items } = useNavLayout();
+  const { topNavItems } = useNavLayout();
+  const items = useMemo(
+    () =>
+      topNavItems.map((item) =>
+        item.key === 'search' || item.key === 'community' ? { ...item, hidden: true } : item,
+      ),
+    [topNavItems],
+  );
+  const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+  const { showMarket } = useServerConfigStore(featureFlagsSelectors);
+
+  const items: Item[] = useMemo(
+    () => [
+      {
+        hidden: true,
+        icon: SearchIcon,
+        key: 'search',
+        onClick: () => {
+          toggleCommandMenu(true);
+        },
+        title: t('tab.search'),
+      },
+      {
+        icon: HomeIcon,
+        key: SidebarTabKey.Home,
+        title: t('tab.home'),
+        url: '/',
+      },
+      {
+        hidden: true,
+        icon: getRouteById('community')!.icon,
+        key: SidebarTabKey.Community,
+        title: t('tab.marketplace'),
+        url: '/community',
+      },
+    ],
+    [t, showMarket],
+  );
 
   const newBadge = (
     <Tag color="blue" size="small">

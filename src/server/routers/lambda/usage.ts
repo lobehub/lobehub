@@ -59,6 +59,7 @@ export const usageRouter = router({
   adminGetAllUserQuotas: adminUsageProcedure.query(async ({ ctx }) => {
     return await ctx.serverDB.query.users.findMany({
       columns: {
+        advancedModelAccess: true,
         dailyCostLimit: true,
         dailyTokenLimit: true,
         email: true,
@@ -70,6 +71,28 @@ export const usageRouter = router({
       },
     });
   }),
+  adminGetUserAdvancedModelAccess: adminUsageProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const user = await ctx.serverDB.query.users.findFirst({
+        columns: { advancedModelAccess: true },
+        where: eq(users.id, input.userId),
+      });
+
+      return user?.advancedModelAccess || [];
+    }),
+
+  adminGetUsageByUser: adminUsageProcedure
+    .input(z.object({ mo: z.string().optional(), userId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.usageRecordService.findByUserAndMonth(input.userId, input.mo);
+    }),
+
+  adminGetUsageByDepartmentDetail: adminUsageProcedure
+    .input(z.object({ department: z.string(), mo: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.usageRecordService.findByDepartmentAndMonth(input.department, input.mo);
+    }),
 
   adminGetUsageByDepartment: adminUsageProcedure
     .input(z.object({ mo: z.string().optional() }))
@@ -109,6 +132,19 @@ export const usageRouter = router({
       const { userId, ...limits } = input;
       await ctx.serverDB.update(users).set(limits).where(eq(users.id, userId));
     }),
+  adminSetUserAdvancedModelAccess: adminUsageProcedure
+    .input(
+      z.object({
+        access: z.array(z.object({ model: z.string(), provider: z.string() })),
+        userId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.serverDB
+        .update(users)
+        .set({ advancedModelAccess: input.access })
+        .where(eq(users.id, input.userId));
+    }),
 
   isAdmin: authedProcedure.use(serverDatabase).query(async ({ ctx }) => {
     const user = await ctx.serverDB.query.users.findFirst({
@@ -120,6 +156,14 @@ export const usageRouter = router({
 
   checkQuota: usageProcedure.query(async ({ ctx }) => {
     return await ctx.usageRecordService.checkQuota();
+  }),
+  getMyAdvancedModelAccess: usageProcedure.query(async ({ ctx }) => {
+    const user = await ctx.serverDB.query.users.findFirst({
+      columns: { advancedModelAccess: true },
+      where: eq(users.id, ctx.userId),
+    });
+
+    return user?.advancedModelAccess || [];
   }),
 
   findAndGroupByDateRange: usageProcedure

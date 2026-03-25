@@ -1,7 +1,7 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { LOADING_FLAT } from '@lobechat/const';
+import { DEFAULT_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { DEFAULT_MODEL, LOADING_FLAT } from '@lobechat/const';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatImageItem,
@@ -34,6 +34,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { type StoreSetter } from '@/store/types';
 import { useUserMemoryStore } from '@/store/userMemory';
+import { resolveAutoModel } from '@/utils/modelAccess';
 
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
@@ -310,7 +311,10 @@ export class ConversationLifecycleActionImpl {
 
     let data: SendMessageServerResponse | undefined;
     try {
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const model = agentConfig?.model || DEFAULT_MODEL;
+      const provider = agentConfig?.provider || DEFAULT_PROVIDER;
+      const resolved = resolveAutoModel(model, provider);
 
       const topicId = operationContext.topicId;
       data = await aiChatService.sendMessageInServer(
@@ -345,8 +349,8 @@ export class ConversationLifecycleActionImpl {
           newAssistantMessage: {
             // Pass isSupervisor metadata for group orchestration
             metadata: operationContext.isSupervisor ? { isSupervisor: true } : undefined,
-            model,
-            provider: provider!,
+            model: resolved.model,
+            provider: resolved.provider || provider!,
           },
         },
         abortController,
@@ -646,7 +650,9 @@ export class ConversationLifecycleActionImpl {
       this.#get().associateMessageWithOperation(messageGroupId, operationId);
 
       // 2. Generate summary via LLM
-      const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      const model = agentConfig?.model || DEFAULT_MODEL;
+      const provider = agentConfig?.provider || DEFAULT_PROVIDER;
       const compressionPayload = chainCompressContext(messagesToSummarize);
       let summaryContent = '';
 

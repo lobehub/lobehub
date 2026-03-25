@@ -3,6 +3,8 @@ import { GroupManagementIdentifier } from '@lobechat/builtin-tool-group-manageme
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { NotebookIdentifier } from '@lobechat/builtin-tool-notebook';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MODEL } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as agentStore from '@/store/agent';
@@ -16,6 +18,7 @@ describe('resolveAgentConfig', () => {
   const mockAgentStoreState = { someState: true };
   const mockAgentConfig = {
     model: 'gpt-4',
+    provider: 'openai',
     plugins: ['plugin-a', 'plugin-b'],
     systemRole: 'You are a helpful assistant',
   };
@@ -107,6 +110,22 @@ describe('resolveAgentConfig', () => {
 
       expect(result.agentConfig).toEqual(mockAgentConfig);
       expect(result.chatConfig).toEqual(mockChatConfig);
+    });
+
+    it('should fallback to default model/provider when agent config has null values', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            model: null,
+            provider: null,
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({ agentId: 'shared-agent' });
+
+      expect(result.agentConfig.model).toBe(DEFAULT_MODEL);
+      expect(result.agentConfig.provider).toBe(DEFAULT_PROVIDER);
     });
 
     describe('params adjustment based on chatConfig', () => {

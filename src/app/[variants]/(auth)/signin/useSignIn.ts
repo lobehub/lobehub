@@ -39,6 +39,13 @@ interface ResolvedEmailResult {
   identifierType: 'email' | 'username';
 }
 
+const getErrorStatus = (error: unknown): number | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+
+  const maybeStatus = (error as any).status ?? (error as any).statusCode;
+  return typeof maybeStatus === 'number' ? maybeStatus : undefined;
+};
+
 export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const router = useRouter();
@@ -181,20 +188,19 @@ export const useSignIn = () => {
       const callbackUrl = normalizeCallbackUrl(searchParams.get('callbackUrl') || '/');
       const result = await signIn.email(
         { callbackURL: callbackUrl, email, password: values.password },
-        {
-          onError: (ctx) => {
-            console.error('Sign in error:', ctx.error);
-            if (ctx.error.status === 403) {
-              router.push(
-                `/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
-              );
-            }
-          },
-          onSuccess: () => router.push(callbackUrl),
-        },
+        { onSuccess: () => router.push(callbackUrl) },
       );
 
-      if (result.error && result.error.status !== 403) {
+      if (result.error) {
+        const status = getErrorStatus(result.error);
+
+        if (status === 403) {
+          router.push(
+            `/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          );
+          return;
+        }
+
         message.error(result.error.message || t('betterAuth.signin.error'));
       }
     } catch (error) {

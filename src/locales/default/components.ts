@@ -121,6 +121,10 @@ export default {
     'The model is not in the list. It will be automatically removed if deselected.',
   'ModelSwitchPanel.byModel': 'By Model',
   'ModelSwitchPanel.byProvider': 'By Provider',
+  'ModelSwitchPanel.advancedModelApply.content':
+    'This is an advanced model. Please apply in Feishu and contact your administrator for approval.',
+  'ModelSwitchPanel.advancedModelApply.ok': 'I understand',
+  'ModelSwitchPanel.advancedModelApply.title': 'Advanced Model',
   'ModelSwitchPanel.detail.abilities': 'Abilities',
   'ModelSwitchPanel.detail.abilities.files': 'Files',
   'ModelSwitchPanel.detail.abilities.functionCall': 'Tool Calling',

@@ -6,7 +6,7 @@ const CometAPI: ModelProviderCard = {
   checkModel: 'gpt-5-mini',
   description:
     'CometAPI provides access to frontier models from OpenAI, Anthropic, Google, and more, letting users choose the best model and pricing for diverse use cases.',
-  enabled: true,
+  enabled: false,
   id: 'cometapi',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://api.cometapi.com/v1/models',

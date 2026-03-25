@@ -7,6 +7,7 @@ import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
 
 export interface LobeUser {
+  advancedModelAccess?: Array<{ model: string; provider: string }>;
   avatar?: string;
   email?: string | null;
   firstName?: string | null;
@@ -14,6 +15,7 @@ export interface LobeUser {
   id: string;
   interests?: string[];
   latestName?: string | null;
+  role?: string | null;
   username?: string | null;
 }
 

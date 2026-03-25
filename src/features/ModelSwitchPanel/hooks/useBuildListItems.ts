@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
+import { AUTO_MODEL_ID } from '@/utils/modelAccess';
 
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
 
@@ -20,8 +21,13 @@ export const useBuildListItems = (
       return text.toLowerCase().includes(keyword);
     };
 
-    // lobehub first, then others
+    // auto provider first, then lobehub, then others
     const sortedProviders = [...enabledList].sort((a, b) => {
+      const aHasAuto = a.children.some((m) => m.id === AUTO_MODEL_ID);
+      const bHasAuto = b.children.some((m) => m.id === AUTO_MODEL_ID);
+      if (aHasAuto && !bHasAuto) return -1;
+      if (!aHasAuto && bHasAuto) return 1;
+
       const aIsLobehub = a.id === 'lobehub';
       const bIsLobehub = b.id === 'lobehub';
       if (aIsLobehub && !bIsLobehub) return -1;
@@ -69,6 +75,14 @@ export const useBuildListItems = (
           return 0;
         });
       }
+
+      modelArray.sort((a, b) => {
+        const aIsAuto = a.model.id === AUTO_MODEL_ID;
+        const bIsAuto = b.model.id === AUTO_MODEL_ID;
+        if (aIsAuto && !bIsAuto) return -1;
+        if (!aIsAuto && bIsAuto) return 1;
+        return 0;
+      });
 
       return modelArray.map((data) => ({
         data,

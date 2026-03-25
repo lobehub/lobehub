@@ -48,6 +48,11 @@ export interface ChatTopicMetadata {
   cronJobId?: string;
   model?: string;
   provider?: string;
+  /**
+   * Shared agent ID (for topics created with shared agents)
+   * Stored here because shared agents are in shared_agents table, not agents table
+   */
+  sharedAgentId?: string;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**

@@ -120,6 +120,9 @@ export class TopicModel {
         .limit(1);
 
       const associatedSessionId = agentSession[0]?.sessionId;
+      const sharedAgentCondition = agentId.startsWith('shared_')
+        ? sql`(${topics.metadata}->>'sharedAgentId') = ${agentId}`
+        : undefined;
 
       // Build condition to match both new (agentId) and legacy (sessionId) data
       let agentCondition;
@@ -132,15 +135,26 @@ export class TopicModel {
           eq(topics.agentId, agentId),
           and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
         ];
+        if (sharedAgentCondition) {
+          conditions.push(sharedAgentCondition);
+        }
         // Also include topics linked via legacy session relation
         if (associatedSessionId) {
           conditions.push(eq(topics.sessionId, associatedSessionId));
         }
         agentCondition = or(...conditions);
       } else if (associatedSessionId) {
-        agentCondition = or(eq(topics.agentId, agentId), eq(topics.sessionId, associatedSessionId));
+        agentCondition = sharedAgentCondition
+          ? or(
+              eq(topics.agentId, agentId),
+              eq(topics.sessionId, associatedSessionId),
+              sharedAgentCondition,
+            )
+          : or(eq(topics.agentId, agentId), eq(topics.sessionId, associatedSessionId));
       } else {
-        agentCondition = eq(topics.agentId, agentId);
+        agentCondition = sharedAgentCondition
+          ? or(eq(topics.agentId, agentId), sharedAgentCondition)
+          : eq(topics.agentId, agentId);
       }
 
       // Fetch items and total count in parallel
@@ -205,7 +219,7 @@ export class TopicModel {
 
     // Remove internal fields before returning
 
-    const cleanItems = items.map(({ agentId, sessionId, ...rest }) => rest);
+    const cleanItems = items.map(({ agentId: _agentId, sessionId: _sessionId, ...rest }) => rest);
 
     return { items: cleanItems, total: totalResult[0].count };
   };
@@ -311,11 +325,24 @@ export class TopicModel {
         .limit(1);
 
       const associatedSessionId = agentSession[0]?.sessionId;
+      const sharedAgentCondition = params.agentId.startsWith('shared_')
+        ? sql`(${topics.metadata}->>'sharedAgentId') = ${params.agentId}`
+        : undefined;
 
       // Build condition to match both new (agentId) and legacy (sessionId) data
-      agentCondition = associatedSessionId
-        ? or(eq(topics.agentId, params.agentId), eq(topics.sessionId, associatedSessionId))
-        : eq(topics.agentId, params.agentId);
+      if (associatedSessionId) {
+        agentCondition = sharedAgentCondition
+          ? or(
+              eq(topics.agentId, params.agentId),
+              eq(topics.sessionId, associatedSessionId),
+              sharedAgentCondition,
+            )
+          : or(eq(topics.agentId, params.agentId), eq(topics.sessionId, associatedSessionId));
+      } else {
+        agentCondition = sharedAgentCondition
+          ? or(eq(topics.agentId, params.agentId), sharedAgentCondition)
+          : eq(topics.agentId, params.agentId);
+      }
     }
 
     const result = await this.db
@@ -408,11 +435,23 @@ export class TopicModel {
     id: string = this.genId(),
   ): Promise<TopicItem> => {
     return this.db.transaction(async (tx) => {
+      // Handle shared agents: if agentId starts with 'shared_', set it to null
+      // to avoid foreign key constraint violation (shared agents are in shared_agents table)
+      const isSharedAgent = params.agentId?.startsWith('shared_');
+      const actualAgentId = isSharedAgent ? null : params.agentId || null;
+
+      // Store the original shared agent ID in metadata if needed
+      const metadata = params.metadata || {};
+      if (isSharedAgent && params.agentId) {
+        metadata.sharedAgentId = params.agentId;
+      }
+
       const insertData = {
         ...params,
-        agentId: params.agentId || null,
+        agentId: actualAgentId,
         groupId: params.groupId || null,
         id,
+        metadata: Object.keys(metadata).length > 0 ? metadata : params.metadata,
         sessionId: params.sessionId || null,
         userId: this.userId,
       };
@@ -439,16 +478,29 @@ export class TopicModel {
       const createdTopics = await tx
         .insert(topics)
         .values(
-          topicParams.map((params) => ({
-            agentId: params.agentId || null,
-            favorite: params.favorite,
-            groupId: params.sessionId ? null : params.groupId,
-            id: params.id || this.genId(),
-            sessionId: params.groupId ? null : params.sessionId,
-            title: params.title,
-            trigger: params.trigger,
-            userId: this.userId,
-          })),
+          topicParams.map((params) => {
+            // Handle shared agents: if agentId starts with 'shared_', set it to null
+            const isSharedAgent = params.agentId?.startsWith('shared_');
+            const actualAgentId = isSharedAgent ? null : params.agentId || null;
+
+            // Store the original shared agent ID in metadata if needed
+            const metadata = params.metadata || {};
+            if (isSharedAgent && params.agentId) {
+              metadata.sharedAgentId = params.agentId;
+            }
+
+            return {
+              agentId: actualAgentId,
+              favorite: params.favorite,
+              groupId: params.sessionId ? null : params.groupId,
+              id: params.id || this.genId(),
+              metadata: Object.keys(metadata).length > 0 ? metadata : params.metadata,
+              sessionId: params.groupId ? null : params.sessionId,
+              title: params.title,
+              trigger: params.trigger,
+              userId: this.userId,
+            };
+          }),
         )
         .returning();
 

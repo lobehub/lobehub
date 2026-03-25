@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import debug from 'debug';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 
 import { departmentQuotas, messages, users } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
@@ -260,6 +260,127 @@ export class UsageRecordService {
   findAllAndGroupByDateRange = async (startAt: string, endAt: string): Promise<UsageLog[]> => {
     const spends = await this.findAllByDateRange(startAt, endAt);
     return this.groupByDay(spends, startAt, endAt, false);
+  };
+
+  /**
+   * @description Find usage records for a specific user by month (admin only).
+   */
+  findByUserAndMonth = async (targetUserId: string, mo?: string): Promise<UsageRecordItem[]> => {
+    let startAt: string;
+    let endAt: string;
+    if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
+      startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
+      endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
+    } else {
+      startAt = dayjs().startOf('month').format('YYYY-MM-DD');
+      endAt = dayjs().endOf('month').format('YYYY-MM-DD');
+    }
+    const spends = await this.db
+      .select({
+        createdAt: messages.createdAt,
+        id: messages.id,
+        metadata: messages.metadata,
+        model: messages.model,
+        provider: messages.provider,
+        role: messages.role,
+        updatedAt: messages.createdAt,
+        userId: messages.userId,
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          eq(messages.userId, targetUserId),
+          eq(messages.role, 'assistant'),
+          genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
+        ]),
+      )
+      .orderBy(desc(messages.createdAt));
+    return spends.map((spend) => {
+      const metadata = spend.metadata as MessageMetadata;
+      return {
+        createdAt: spend.createdAt,
+        id: spend.id,
+        metadata: spend.metadata,
+        model: spend.model,
+        provider: spend.provider,
+        spend: metadata?.cost || 0,
+        totalInputTokens: metadata?.totalInputTokens || 0,
+        totalOutputTokens: metadata?.totalOutputTokens || 0,
+        totalTokens: (metadata?.totalInputTokens || 0) + (metadata?.totalOutputTokens || 0),
+        tps: metadata?.tps || 0,
+        ttft: metadata?.ttft || 0,
+        type: 'chat',
+        updatedAt: spend.createdAt,
+        userId: spend.userId,
+      } as UsageRecordItem;
+    });
+  };
+
+  /**
+   * @description Find usage records for all users in a department by month (admin only).
+   */
+  findByDepartmentAndMonth = async (
+    department: string,
+    mo?: string,
+  ): Promise<UsageRecordItem[]> => {
+    const deptUsers = await this.db.query.users.findMany({
+      columns: { id: true, interests: true },
+    });
+    const userIds = deptUsers
+      .filter((u) => (u.interests?.[0] ?? '其他') === department)
+      .map((u) => u.id);
+
+    if (userIds.length === 0) return [];
+
+    let startAt: string;
+    let endAt: string;
+    if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
+      startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
+      endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
+    } else {
+      startAt = dayjs().startOf('month').format('YYYY-MM-DD');
+      endAt = dayjs().endOf('month').format('YYYY-MM-DD');
+    }
+
+    const spends = await this.db
+      .select({
+        createdAt: messages.createdAt,
+        id: messages.id,
+        metadata: messages.metadata,
+        model: messages.model,
+        provider: messages.provider,
+        role: messages.role,
+        updatedAt: messages.createdAt,
+        userId: messages.userId,
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          inArray(messages.userId, userIds),
+          eq(messages.role, 'assistant'),
+          genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
+        ]),
+      )
+      .orderBy(desc(messages.createdAt));
+    return spends.map((spend) => {
+      const metadata = spend.metadata as MessageMetadata;
+      return {
+        createdAt: spend.createdAt,
+        id: spend.id,
+        metadata: spend.metadata,
+        model: spend.model,
+        provider: spend.provider,
+        spend: metadata?.cost || 0,
+        totalInputTokens: metadata?.totalInputTokens || 0,
+        totalOutputTokens: metadata?.totalOutputTokens || 0,
+        totalTokens: (metadata?.totalInputTokens || 0) + (metadata?.totalOutputTokens || 0),
+        tps: metadata?.tps || 0,
+        ttft: metadata?.ttft || 0,
+        type: 'chat',
+        updatedAt: spend.createdAt,
+        userId: spend.userId,
+      } as UsageRecordItem;
+    });
   };
 
   findAllByDepartment = async (

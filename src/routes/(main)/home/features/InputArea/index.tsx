@@ -11,7 +11,6 @@ import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import CommunityRecommend from '../CommunityRecommend';
 import SuggestQuestions from '../SuggestQuestions';
 import ModeTag from './ModeTag';
 import SkillInstallBanner from './SkillInstallBanner';
@@ -139,7 +138,6 @@ const InputArea = () => {
           >
             <Flexbox gap={24}>
               <SuggestQuestions mode={inputActiveMode} />
-              <CommunityRecommend mode={inputActiveMode} />
             </Flexbox>
           </motion.div>
         )}

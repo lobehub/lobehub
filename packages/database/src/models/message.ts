@@ -964,10 +964,23 @@ export class MessageModel {
       .limit(1);
 
     const associatedSessionId = agentSession[0]?.sessionId;
+    const sharedAgentCondition = agentId.startsWith('shared_')
+      ? sql`(${messages.metadata}->>'sharedAgentId') = ${agentId}`
+      : undefined;
 
     // Build condition to match both new (agentId) and legacy (sessionId) data
-    return associatedSessionId
-      ? or(eq(messages.agentId, agentId), eq(messages.sessionId, associatedSessionId))
+    if (associatedSessionId) {
+      return sharedAgentCondition
+        ? or(
+            eq(messages.agentId, agentId),
+            eq(messages.sessionId, associatedSessionId),
+            sharedAgentCondition,
+          )
+        : or(eq(messages.agentId, agentId), eq(messages.sessionId, associatedSessionId));
+    }
+
+    return sharedAgentCondition
+      ? or(eq(messages.agentId, agentId), sharedAgentCondition)
       : eq(messages.agentId, agentId);
   };
 
@@ -1260,7 +1273,21 @@ export class MessageModel {
   ): Promise<DBMessageItem> => {
     return this.db.transaction(async (trx) => {
       // Ensure group message does not populate sessionId
-      const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
+      let normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
+
+      // Handle shared agents: if agentId starts with 'shared_', set it to null
+      // to avoid foreign key constraint violation (shared agents are in shared_agents table)
+      const isSharedAgent = normalizedMessage.agentId?.startsWith('shared_');
+      if (isSharedAgent && normalizedMessage.agentId) {
+        // Store the original shared agent ID in metadata
+        const metadata = normalizedMessage.metadata || {};
+        metadata.sharedAgentId = normalizedMessage.agentId;
+        normalizedMessage = {
+          ...normalizedMessage,
+          agentId: null,
+          metadata,
+        };
+      }
 
       const [item] = (await trx
         .insert(messages)
@@ -1320,6 +1347,20 @@ export class MessageModel {
 
   batchCreate = async (newMessages: DBMessageItem[]) => {
     const messagesToInsert = newMessages.map((m) => {
+      // Handle shared agents: if agentId starts with 'shared_', set it to null
+      const isSharedAgent = m.agentId?.startsWith('shared_');
+      if (isSharedAgent && m.agentId) {
+        // Store the original shared agent ID in metadata
+        const metadata = m.metadata || {};
+        metadata.sharedAgentId = m.agentId;
+        return {
+          ...m,
+          agentId: null,
+          metadata,
+          role: m.role as any,
+          userId: this.userId,
+        };
+      }
       // TODO: need a better way to handle this
       return { ...m, role: m.role as any, userId: this.userId };
     });

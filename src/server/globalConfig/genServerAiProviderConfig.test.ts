@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { genServerAiProvidersConfig } from './genServerAiProviderConfig';
 
+const defaultLLMConfig = {
+  ENABLED_AI21: false,
+  ENABLED_ANTHROPIC: false,
+  ENABLED_OPENAI: true,
+  GOOGLE_API_KEY: 'google-test-key',
+  OPENAI_API_KEY: 'openai-test-key',
+};
+
 // Mock dependencies using importOriginal to preserve real provider data
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();
@@ -13,11 +21,7 @@ vi.mock('model-bank', async (importOriginal) => {
 });
 
 vi.mock('@/envs/llm', () => ({
-  getLLMConfig: vi.fn(() => ({
-    ENABLED_OPENAI: true,
-    ENABLED_ANTHROPIC: false,
-    ENABLED_AI21: false,
-  })),
+  getLLMConfig: vi.fn(() => defaultLLMConfig),
 }));
 
 vi.mock('@/utils/server/parseModels', () => ({
@@ -30,15 +34,24 @@ vi.mock('@/utils/server/parseModels', () => ({
   }),
 }));
 
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeWithUserPayload: vi.fn(() => ({
+    models: vi.fn(async () => []),
+  })),
+}));
+
 describe('genServerAiProvidersConfig', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     // Clear environment variables
     Object.keys(process.env).forEach((key) => {
-      if (key.includes('MODEL_LIST')) {
+      if (key.includes('MODEL_LIST') || key.endsWith('_PROXY_URL')) {
         delete process.env[key];
       }
     });
+
+    const { getLLMConfig } = vi.mocked(await import('@/envs/llm'));
+    getLLMConfig.mockReturnValue({ ...defaultLLMConfig } as any);
   });
 
   it('should generate basic provider config with default settings', async () => {
@@ -181,6 +194,90 @@ describe('genServerAiProvidersConfig', () => {
       expect(['boolean', 'undefined']).toContain(typeof result[provider].enabled);
       expect(Array.isArray(result[provider].serverModelLists)).toBe(true);
     });
+  });
+
+  it('should auto fetch provider models by proxy url when autoFetchModelLists is enabled', async () => {
+    process.env.OPENAI_PROXY_URL = 'https://api.example.com/v1';
+
+    const { initModelRuntimeWithUserPayload } = vi.mocked(
+      await import('@/server/modules/ModelRuntime'),
+    );
+
+    vi.mocked(initModelRuntimeWithUserPayload).mockImplementation((provider: string) => {
+      if (provider !== 'openai') {
+        return {
+          models: vi.fn(async () => []),
+        } as any;
+      }
+
+      return {
+        models: vi.fn(async () => [{ displayName: 'GPT-4o', id: 'gpt-4o', type: 'chat' }]),
+      } as any;
+    });
+
+    const result = await genServerAiProvidersConfig({
+      openai: { autoFetchModelLists: true },
+    });
+
+    expect(initModelRuntimeWithUserPayload).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({
+        apiKey: 'openai-test-key',
+        baseURL: 'https://api.example.com/v1',
+      }),
+      expect.any(Object),
+    );
+    expect(result.openai.serverModelLists.map((model) => model.id)).toEqual(['gpt-4o']);
+  });
+
+  it('should skip auto fetch when model list is explicitly configured by env', async () => {
+    process.env.OPENAI_PROXY_URL = 'https://api.example.com/v1';
+    process.env.OPENAI_MODEL_LIST = '+gpt-4o';
+
+    const { initModelRuntimeWithUserPayload } = vi.mocked(
+      await import('@/server/modules/ModelRuntime'),
+    );
+
+    await genServerAiProvidersConfig({
+      openai: { autoFetchModelLists: true },
+    });
+
+    expect(initModelRuntimeWithUserPayload).not.toHaveBeenCalled();
+  });
+
+  it('should fallback to openai-style model list for google provider', async () => {
+    process.env.GOOGLE_PROXY_URL = 'https://api.example.com';
+
+    const { initModelRuntimeWithUserPayload } = vi.mocked(
+      await import('@/server/modules/ModelRuntime'),
+    );
+
+    vi.mocked(initModelRuntimeWithUserPayload).mockImplementation((provider: string) => {
+      if (provider === 'google') {
+        return {
+          models: vi.fn(async () => []),
+        } as any;
+      }
+
+      if (provider === 'openai') {
+        return {
+          models: vi.fn(async () => [
+            { id: 'gemini-2.5-flash', type: 'chat' },
+            { id: 'gpt-5.2', type: 'chat' },
+          ]),
+        } as any;
+      }
+
+      return {
+        models: vi.fn(async () => []),
+      } as any;
+    });
+
+    const result = await genServerAiProvidersConfig({
+      google: { autoFetchModelLists: true },
+    });
+
+    expect(result.google.serverModelLists.map((model) => model.id)).toEqual(['gemini-2.5-flash']);
   });
 });
 

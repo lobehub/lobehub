@@ -17,6 +17,7 @@ import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { SharedAgentModel } from './sharedAgent';
 
 export class SessionModel {
   private userId: string;
@@ -72,19 +73,39 @@ export class SessionModel {
   };
 
   queryWithGroups = async (): Promise<ChatSessionList> => {
-    // Query all sessions
-    const result = await this.query();
-
-    const groups = await this.db.query.sessionGroups.findMany({
-      orderBy: [asc(sessionGroups.sort), desc(sessionGroups.createdAt)],
-      where: eq(sessions.userId, this.userId),
-    });
+    // Query all sessions and shared agents in parallel
+    const [result, groups, sharedAgentList] = await Promise.all([
+      this.query(),
+      this.db.query.sessionGroups.findMany({
+        orderBy: [asc(sessionGroups.sort), desc(sessionGroups.createdAt)],
+        where: eq(sessions.userId, this.userId),
+      }),
+      new SharedAgentModel(this.db).list(),
+    ]);
 
     const mappedSessions = result.map((item) => this.mapSessionItem(item as any));
 
+    // Map shared agents to session format (read-only, prefixed with 'shared_')
+    const sharedSessions: LobeAgentSession[] = sharedAgentList.map((agent) => ({
+      config: agent as any,
+      createdAt: agent.createdAt.getTime(),
+      id: agent.id,
+      meta: {
+        avatar: agent.avatar ?? undefined,
+        backgroundColor: agent.backgroundColor ?? undefined,
+        description: agent.description ?? undefined,
+        tags: agent.tags ?? undefined,
+        title: agent.title ?? undefined,
+      },
+      model: agent.model || '',
+      pinned: false,
+      type: 'agent' as const,
+      updatedAt: agent.updatedAt.getTime(),
+    }));
+
     return {
       sessionGroups: groups as unknown as ChatSessionList['sessionGroups'],
-      sessions: mappedSessions,
+      sessions: [...mappedSessions, ...sharedSessions],
     };
   };
 

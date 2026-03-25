@@ -790,6 +790,64 @@ describe('aiChatRouter', () => {
       // Verify touchUpdatedAt was NOT called since no new topic was created
       expect(mockTouchUpdatedAt).not.toHaveBeenCalled();
     });
+
+    it('should clear virtual shared sessionId and skip touchUpdatedAt for shared agent', async () => {
+      const mockCreateTopic = vi.fn().mockResolvedValue({ id: 't-shared' });
+      const mockCreateMessage = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'm-user' })
+        .mockResolvedValueOnce({ id: 'm-assistant' });
+      const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: [{}] });
+      const mockTouchUpdatedAt = vi.fn().mockResolvedValue(undefined);
+
+      vi.mocked(TopicModel).mockImplementation(() => ({ create: mockCreateTopic }) as any);
+      vi.mocked(MessageModel).mockImplementation(() => ({ create: mockCreateMessage }) as any);
+      vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+      vi.mocked(AgentModel).mockImplementation(
+        () => ({ touchUpdatedAt: mockTouchUpdatedAt }) as any,
+      );
+
+      const mockServerDB = {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [],
+            }),
+          }),
+        }),
+      };
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: mockServerDB } as any);
+
+      await caller.sendMessageInServer({
+        agentId: 'shared_abc',
+        newAssistantMessage: { model: 'gpt-5.2', provider: 'openai' },
+        newTopic: { title: 'Shared Topic' },
+        newUserMessage: { content: 'hi' },
+        sessionId: 'shared_abc',
+      } as any);
+
+      // sessionId should be cleared for shared agents (virtual session IDs)
+      expect(mockCreateTopic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'shared_abc',
+          sessionId: undefined,
+          title: 'Shared Topic',
+        }),
+      );
+
+      expect(mockCreateMessage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentId: 'shared_abc',
+          role: 'user',
+          sessionId: undefined,
+          topicId: 't-shared',
+        }),
+      );
+
+      // shared agents are not user-owned agents table rows, skip touchUpdatedAt
+      expect(mockTouchUpdatedAt).not.toHaveBeenCalled();
+    });
   });
 
   describe('outputJSON', () => {

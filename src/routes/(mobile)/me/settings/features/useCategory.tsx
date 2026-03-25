@@ -1,4 +1,4 @@
-import { Brain, BrainCircuit, Info, Settings2, Sparkles } from 'lucide-react';
+import { BrainCircuit, Info, Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,11 +14,6 @@ export const useCategory = () => {
       icon: Settings2,
       key: SettingsTabs.Appearance,
       label: t('tab.appearance'),
-    },
-    {
-      icon: Brain,
-      key: SettingsTabs.Provider,
-      label: t('tab.provider'),
     },
     {
       icon: Sparkles,

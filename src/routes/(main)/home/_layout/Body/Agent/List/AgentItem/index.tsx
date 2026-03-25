@@ -98,6 +98,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
+    readonly: item.readonly ?? false,
     title: displayTitle,
   });
 

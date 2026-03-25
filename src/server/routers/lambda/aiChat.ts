@@ -2,12 +2,14 @@ import { type CreateMessageParams, type SendMessageServerResponse } from '@lobec
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { eq } from 'drizzle-orm';
 
 import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { users } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -15,6 +17,7 @@ import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext'
 import { AiChatService } from '@/server/services/aiChat';
 import { FileService } from '@/server/services/file';
 import { UsageRecordService } from '@/server/services/usage';
+import { canAccessModel, resolveAutoModel } from '@/utils/modelAccess';
 
 const log = debug('lobe-lambda-router:ai-chat');
 
@@ -69,22 +72,56 @@ export const aiChatRouter = router({
         input.newThread,
       );
       let sessionId = input.sessionId;
+      const isSharedAgent = !!input.agentId?.startsWith('shared_');
 
-      // Check quota before dispatching AI request
-      const usageService = new UsageRecordService(ctx.serverDB, ctx.userId);
-      const quota = await usageService.checkQuota();
-      if (quota.status === 'exceeded') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: JSON.stringify({
-            effectiveDailyCostLimit: quota.effectiveDailyCostLimit,
-            reason: 'quota_exceeded',
-            todayCost: quota.todayCost,
-          }),
+      // Shared agents are virtual sessions (id starts with shared_) and don't exist in sessions table.
+      // Drop invalid sessionId to avoid foreign key violations when creating topics/messages.
+      if (isSharedAgent && sessionId?.startsWith('shared_')) {
+        sessionId = undefined;
+      }
+      const model = input.newAssistantMessage.model;
+      const provider = input.newAssistantMessage.provider;
+      const resolvedModelConfig = resolveAutoModel(model || '', provider || '');
+
+      if (ctx.serverDB.query?.users?.findFirst) {
+        const currentUser = await ctx.serverDB.query.users.findFirst({
+          columns: { advancedModelAccess: true, role: true },
+          where: eq(users.id, ctx.userId),
         });
+        const hasModelAccess =
+          currentUser?.role === 'admin' ||
+          canAccessModel(
+            (currentUser?.advancedModelAccess as Array<{ model: string; provider: string }>) || [],
+            resolvedModelConfig.provider,
+            resolvedModelConfig.model,
+          );
+        if (!hasModelAccess) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: JSON.stringify({
+              reason: 'advanced_model_requires_approval',
+            }),
+          });
+        }
       }
 
-      if (!sessionId) {
+      // Check quota before dispatching AI request
+      if (ctx.serverDB.query?.users?.findFirst) {
+        const usageService = new UsageRecordService(ctx.serverDB, ctx.userId);
+        const quota = await usageService.checkQuota();
+        if (quota.status === 'exceeded') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: JSON.stringify({
+              effectiveDailyCostLimit: quota.effectiveDailyCostLimit,
+              reason: 'quota_exceeded',
+              todayCost: quota.todayCost,
+            }),
+          });
+        }
+      }
+
+      if (!sessionId && !isSharedAgent) {
         const context = await resolveContext(input, ctx.serverDB, ctx.userId);
         if (!!context.sessionId) sessionId = context.sessionId;
       }
@@ -110,7 +147,7 @@ export const aiChatRouter = router({
         log('new topic created with id: %s', topicId);
 
         // update agent's updatedAt to reflect new activity
-        if (input.agentId) {
+        if (input.agentId && !isSharedAgent) {
           await ctx.agentModel.touchUpdatedAt(input.agentId);
           log('agent updatedAt touched for agentId: %s', input.agentId);
         }
@@ -190,8 +227,8 @@ export const aiChatRouter = router({
       // create assistant message
       log(
         'creating assistant message with model: %s, provider: %s, metadata: %O',
-        input.newAssistantMessage.model,
-        input.newAssistantMessage.provider,
+        resolvedModelConfig.model,
+        resolvedModelConfig.provider,
         input.newAssistantMessage.metadata,
       );
       const assistantMessageItem = await ctx.messageModel.create({
@@ -199,9 +236,9 @@ export const aiChatRouter = router({
         content: LOADING_FLAT,
         groupId: input.groupId,
         metadata: input.newAssistantMessage.metadata,
-        model: input.newAssistantMessage.model,
+        model: resolvedModelConfig.model,
         parentId: messageId,
-        provider: input.newAssistantMessage.provider,
+        provider: resolvedModelConfig.provider,
         role: 'assistant',
         sessionId,
         threadId,

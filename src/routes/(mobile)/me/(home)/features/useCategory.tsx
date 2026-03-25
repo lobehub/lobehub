@@ -1,21 +1,11 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { DOWNLOAD_URL, OFFICIAL_URL } from '@lobechat/const';
-import {
-  Book,
-  CircleUserRound,
-  Cloudy,
-  Download,
-  Feather,
-  FileClockIcon,
-  Settings2,
-} from 'lucide-react';
-import { useMemo } from 'react';
+import { OFFICIAL_URL } from '@lobechat/const';
+import { Book, CircleUserRound, Cloudy, Feather, FileClockIcon, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { type CellProps } from '@/components/Cell';
 import { DOCUMENTS, FEEDBACK } from '@/const/index';
-import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -25,13 +15,6 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
   const { t } = useTranslation(['common', 'setting', 'auth']);
   const { showCloudPromotion, hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [isLoginWithAuth] = useUserStore((s) => [authSelectors.isLoginWithAuth(s)]);
-  const { isIOS, isAndroid } = usePlatform();
-
-  const downloadUrl = useMemo(() => {
-    if (isIOS) return DOWNLOAD_URL.ios;
-    if (isAndroid) return DOWNLOAD_URL.android;
-    return DOWNLOAD_URL.default;
-  }, [isIOS, isAndroid]);
 
   const profile: CellProps[] = [
     {
@@ -48,18 +31,6 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
       key: 'setting',
       label: t('userPanel.setting'),
       onClick: () => navigate('/me/settings'),
-    },
-    {
-      type: 'divider',
-    },
-  ];
-
-  const getDesktopApp: CellProps[] = [
-    {
-      icon: Download,
-      key: 'get-desktop-app',
-      label: t('getDesktopApp'),
-      onClick: () => window.open(downloadUrl, '__blank'),
     },
     {
       type: 'divider',
@@ -103,7 +74,6 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     /* ↓ cloud slot ↓ */
 
     /* ↑ cloud slot ↑ */
-    ...getDesktopApp,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as CellProps[];
 

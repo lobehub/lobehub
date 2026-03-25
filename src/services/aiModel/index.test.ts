@@ -11,6 +11,11 @@ describe('AiModelService', () => {
 
 describe('Default model configuration', () => {
   it('DEFAULT_MODEL should be enabled in LOBE_DEFAULT_MODEL_LIST', () => {
+    if (DEFAULT_MODEL === 'auto') {
+      expect(DEFAULT_MODEL).toBe('auto');
+      return;
+    }
+
     const match = LOBE_DEFAULT_MODEL_LIST.find((m) => m.id === DEFAULT_MODEL);
     expect(
       match,

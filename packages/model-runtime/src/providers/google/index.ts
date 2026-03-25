@@ -100,8 +100,8 @@ interface LobeGoogleAIParams {
   isVertexAi?: boolean;
 }
 
-const isAbortError = (error: Error): boolean => {
-  const message = error.message.toLowerCase();
+const isAbortError = (error: Partial<Error>): boolean => {
+  const message = error.message?.toLowerCase?.() || '';
   return (
     message.includes('aborted') ||
     message.includes('cancelled') ||
@@ -152,6 +152,13 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }) as ThinkingConfig;
 
       const contents = await buildGoogleMessages(payload.messages);
+      if (!contents.length) {
+        throw AgentRuntimeError.chat({
+          error: { message: 'No valid message content. contents are required.' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: this.provider,
+        });
+      }
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -244,7 +251,18 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       // Respond with the stream
       return StreamingResponse(stream, { headers: options?.headers });
     } catch (e) {
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        'errorType' in e &&
+        'provider' in e &&
+        'error' in e
+      ) {
+        throw e;
+      }
+
       const err = e as Error;
+      const message = typeof err?.message === 'string' ? err.message : String(err);
 
       // Remove previous silent handling, throw error uniformly
       if (isAbortError(err)) {
@@ -257,7 +275,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }
 
       log('Error: %O', err);
-      const { errorType, error } = parseGoogleErrorMessage(err.message);
+      const { errorType, error } = parseGoogleErrorMessage(message);
 
       throw AgentRuntimeError.chat({ error, errorType, provider: this.provider });
     }

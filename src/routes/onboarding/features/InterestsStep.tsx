@@ -1,8 +1,8 @@
 'use client';
 
-import { Block, Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { BriefcaseIcon, Undo2Icon } from 'lucide-react';
+import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,9 +22,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
   const existingInterests = useUserStore(userProfileSelectors.interests);
   const updateInterests = useUserStore((s) => s.updateInterests);
 
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(existingInterests);
-  const [customInput, setCustomInput] = useState('');
-  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [selected, setSelected] = useState<string>(existingInterests?.[0] ?? '');
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
 
@@ -37,38 +35,13 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
     [t],
   );
 
-  const toggleInterest = useCallback((label: string) => {
-    setSelectedInterests((prev) =>
-      prev.includes(label) ? prev.filter((i) => i !== label) : [...prev, label],
-    );
-  }, []);
-
-  const handleAddCustom = useCallback(() => {
-    const trimmed = customInput.trim();
-    if (trimmed && !selectedInterests.includes(trimmed)) {
-      setSelectedInterests((prev) => [...prev, trimmed]);
-      setCustomInput('');
-    }
-  }, [customInput, selectedInterests]);
-
   const handleNext = useCallback(() => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
     setIsNavigating(true);
-
-    // Include custom input value if "other" is active and has content
-    const finalInterests = [...selectedInterests];
-    const trimmedCustom = customInput.trim();
-    if (showCustomInput && trimmedCustom) {
-      finalInterests.push(trimmedCustom);
-    }
-
-    // Deduplicate
-    const uniqueInterests = [...new Set(finalInterests)];
-
-    updateInterests(uniqueInterests);
+    updateInterests(selected ? [selected] : []);
     onNext();
-  }, [selectedInterests, customInput, showCustomInput, updateInterests, onNext]);
+  }, [selected, updateInterests, onNext]);
 
   const handleBack = useCallback(() => {
     if (isNavigatingRef.current) return;
@@ -84,7 +57,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       />
       <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
         {areas.map((item) => {
-          const isSelected = selectedInterests.includes(item.label);
+          const isSelected = selected === item.label;
           return (
             <Block
               clickable
@@ -97,11 +70,11 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
                 isSelected
                   ? {
                       background: cssVar.colorFillSecondary,
-                      borderColor: cssVar.colorFillSecondary,
+                      borderColor: cssVar.colorPrimary,
                     }
                   : {}
               }
-              onClick={() => toggleInterest(item.label)}
+              onClick={() => setSelected(isSelected ? '' : item.label)}
             >
               <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={16} />
               <Text fontSize={15} weight={500}>
@@ -110,43 +83,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
             </Block>
           );
         })}
-        <Block
-          clickable
-          horizontal
-          gap={8}
-          padding={12}
-          variant={'outlined'}
-          style={
-            showCustomInput
-              ? { background: cssVar.colorFillSecondary, borderColor: cssVar.colorFillSecondary }
-              : {}
-          }
-          onClick={() => setShowCustomInput(!showCustomInput)}
-        >
-          <Icon color={cssVar.colorTextSecondary} icon={BriefcaseIcon} size={16} />
-          <Text fontSize={15} weight={500}>
-            {t('interests.area.other')}
-          </Text>
-        </Block>
       </Flexbox>
-      {showCustomInput && (
-        <Input
-          autoFocus
-          placeholder={t('interests.placeholder')}
-          size="large"
-          title={t('interests.hint')}
-          value={customInput}
-          prefix={
-            <Icon
-              color={cssVar.colorTextDescription}
-              icon={BriefcaseIcon}
-              style={{ marginInline: 8 }}
-            />
-          }
-          onChange={(e) => setCustomInput(e.target.value)}
-          onPressEnter={handleAddCustom}
-        />
-      )}
       <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
         <Button
           disabled={isNavigating}

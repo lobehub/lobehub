@@ -122,7 +122,7 @@ export class TopicService {
   };
 
   private toDbSessionId = (sessionId?: string | null) =>
-    sessionId === INBOX_SESSION_ID ? null : sessionId;
+    !sessionId || sessionId === INBOX_SESSION_ID ? null : sessionId;
 }
 
 export const topicService = new TopicService();

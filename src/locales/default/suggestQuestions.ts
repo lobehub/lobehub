@@ -1,124 +1,124 @@
 export default {
   'chat.01.prompt':
-    'Explain quantum computing in simple terms. What makes it different from classical computing, and what are some real-world applications that could benefit from it?',
-  'chat.01.title': 'Explain quantum computing simply',
+    'Help me write a professional business email to a client explaining a project delay and proposing a remediation plan. The tone should be sincere and responsible while maintaining a good working relationship.',
+  'chat.01.title': 'Write a business apology email',
   'chat.02.prompt':
-    'What are the most effective strategies for learning a new skill quickly? I want practical, science-backed techniques I can start using today.',
-  'chat.02.title': 'Best strategies for learning fast',
+    'Help me design an efficient daily work plan template with priority ranking, time block allocation, and task tracking — suitable for professionals managing multiple parallel projects.',
+  'chat.02.title': 'Design a daily work plan template',
   'chat.03.prompt':
-    'Help me write a professional email to my manager requesting time off for a vacation. I want it to be polite, clear, and include all the necessary details.',
-  'chat.03.title': 'Draft a time-off request email',
+    'I need to prepare a 15-minute project status PPT. Help me structure the presentation, including best practices for the opening, core content, data visualization, and closing action items.',
+  'chat.03.title': 'Project status presentation structure',
   'chat.04.prompt':
-    'I want to start a morning routine that boosts productivity. What habits do successful people commonly practice, and how should I structure my mornings?',
-  'chat.04.title': 'Design a productive morning routine',
+    'Help me create a meeting minutes template that covers basic meeting info, discussion points, decisions made, and action item tracking so team members can quickly grasp the outcomes.',
+  'chat.04.title': 'Meeting minutes template',
   'chat.05.prompt':
-    'Compare the pros and cons of different popular programming languages (Python, JavaScript, Rust, Go) for someone starting a new backend project in 2025.',
-  'chat.05.title': 'Compare programming languages',
+    "My team's communication efficiency is low — too many meetings with little output. Help me analyze the root causes and provide concrete solutions to improve collaboration and reduce unproductive meetings.",
+  'chat.05.title': 'Improve team communication efficiency',
   'chat.06.prompt':
-    'Summarize the key ideas from the book "Thinking, Fast and Slow" by Daniel Kahneman. What are the most important takeaways I can apply to daily decision-making?',
-  'chat.06.title': 'Summarize a famous book for me',
+    'Help me write a quarterly work summary including key achievements, challenges faced, lessons learned, and plans for next quarter — professional and persuasive in tone.',
+  'chat.06.title': 'Write a quarterly work summary',
   'chat.07.prompt':
-    'Help me brainstorm creative gift ideas for a friend who loves cooking, traveling, and reading. I want something thoughtful and unique.',
-  'chat.07.title': 'Brainstorm creative gift ideas',
+    'I need to request additional budget from my manager. Help me write a business case document including background, ROI analysis, and risk assessment.',
+  'chat.07.title': 'Write a budget request report',
   'chat.08.prompt':
-    'What are the biggest trends in AI and technology right now? Give me a brief overview of what is happening and why it matters.',
-  'chat.08.title': 'Latest trends in AI and tech',
+    'Help me create a new employee onboarding plan covering learning objectives, key tasks, and evaluation criteria for the first week, first month, and first three months.',
+  'chat.08.title': 'New employee onboarding plan',
   'chat.09.prompt':
-    'Help me plan a healthy meal prep for the week. I want balanced meals that are easy to prepare, store well, and taste great reheated.',
-  'chat.09.title': 'Plan a weekly meal prep',
+    'I need to conduct a performance feedback conversation with a team member. Help me prepare a framework for balancing recognition of strengths with constructive improvement suggestions.',
+  'chat.09.title': 'Performance feedback conversation prep',
   'chat.10.prompt':
-    'Explain the basics of personal investing for a beginner. What should I know about stocks, bonds, index funds, and retirement accounts?',
-  'chat.10.title': 'Investing basics for beginners',
+    'Help me understand how to use the OKR framework to set team goals, including principles for writing Objectives and Key Results, common pitfalls, and key steps for execution.',
+  'chat.10.title': 'OKR goal-setting guide',
   'chat.11.prompt':
-    'Write a short bedtime story about a brave little fox who goes on an adventure in a magical forest. Make it enchanting and suitable for a 5-year-old.',
-  'chat.11.title': 'Write a bedtime story',
+    'I need to compile a competitive analysis report. Help me design an analysis framework covering product features, pricing strategy, market positioning, and differentiation comparison.',
+  'chat.11.title': 'Competitive analysis report framework',
   'chat.12.prompt':
-    'Help me debug my thinking about a difficult decision I need to make. Walk me through a structured decision-making framework I can use.',
-  'chat.12.title': 'Help me make a tough decision',
+    'Help me write a work handover document template to ensure that whoever takes over can quickly understand the work content, processes, and key considerations.',
+  'chat.12.title': 'Work handover document template',
   'chat.13.prompt':
-    'What are some fun and educational science experiments I can do at home with common household items? I want activities suitable for kids aged 8-12.',
-  'chat.13.title': 'Fun science experiments at home',
+    'I want to improve my Excel/spreadsheet skills. Recommend the 10 most useful functions and data analysis techniques for the workplace, with practical use case examples.',
+  'chat.13.title': 'Essential workplace spreadsheet skills',
   'chat.14.prompt':
-    'Help me write a compelling LinkedIn summary that showcases my professional experience and attracts recruiters. I want it to stand out.',
-  'chat.14.title': 'Write a standout LinkedIn bio',
+    'Help me design a project risk management matrix including risk identification, probability and impact assessment, mitigation strategies, and owner assignment.',
+  'chat.14.title': 'Project risk management matrix',
   'chat.15.prompt':
-    'Explain how the global economy works in simple terms. Cover topics like GDP, inflation, interest rates, and trade in a way anyone can understand.',
-  'chat.15.title': 'Explain the global economy simply',
+    'I need to write a Product Requirements Document (PRD). Help me outline the standard structure including background, user stories, feature descriptions, acceptance criteria, and priority ranking.',
+  'chat.15.title': 'Product requirements document structure',
   'chat.16.prompt':
-    'Give me a list of thought-provoking questions I can use to have deeper, more meaningful conversations with friends and family.',
-  'chat.16.title': 'Deep conversation starters',
+    'Help me prepare for a cross-department coordination meeting, including agenda design, how to handle conflicting interests, and communication techniques for reaching consensus.',
+  'chat.16.title': 'Cross-department meeting preparation',
   'chat.17.prompt':
-    'Help me create a 30-day fitness challenge that I can do at home with no equipment. Include a mix of cardio, strength, and flexibility exercises.',
-  'chat.17.title': 'Create a 30-day fitness challenge',
+    'I want to improve my business writing skills. Analyze the core principles of professional writing — how to make text more concise, logical, and persuasive.',
+  'chat.17.title': 'Business writing core techniques',
   'chat.18.prompt':
-    'What are some effective techniques for managing stress and anxiety? Give me practical strategies I can use in the moment and long-term habits to build.',
-  'chat.18.title': 'Techniques for managing stress',
+    'Help me create a personal career development plan including skills assessment, short- and long-term goal setting, learning roadmap, and milestone checkpoints.',
+  'chat.18.title': 'Personal career development plan',
   'chat.19.prompt':
-    'Help me understand how climate change works. What causes it, what are its effects, and what can individuals realistically do to help?',
-  'chat.19.title': 'Understand climate change',
+    'I need to manage a remote team. Give me best practices for improving remote collaboration efficiency, including tool selection, communication norms, and team culture building.',
+  'chat.19.title': 'Remote team management best practices',
   'chat.20.prompt':
-    'Recommend 5 must-watch movies from different genres that are considered masterpieces. Explain briefly why each one is worth watching.',
-  'chat.20.title': 'Recommend must-watch movies',
+    'Help me write the core sections of a business plan, including executive summary, market analysis, business model, financial projections, and funding requirements.',
+  'chat.20.title': 'Business plan writing guide',
   'chat.21.prompt':
-    'Help me improve my writing skills. What are the most common mistakes people make, and what techniques can I practice to write more clearly and persuasively?',
-  'chat.21.title': 'Improve my writing skills',
+    'I need to deliver an important client proposal. Help me design the presentation structure to clearly communicate the value proposition and drive client decision-making within 30 minutes.',
+  'chat.21.title': 'Client proposal structure design',
   'chat.22.prompt':
-    'Explain blockchain technology and cryptocurrency in plain language. What problems do they solve, and what should I be cautious about?',
-  'chat.22.title': 'Explain blockchain simply',
+    'Help me analyze common time management mistakes and how to use methods like Pomodoro and time blocking to improve deep work efficiency.',
+  'chat.22.title': 'Time management methodology',
   'chat.23.prompt':
-    'Help me create a study plan for learning data science from scratch. What topics should I cover, in what order, and what resources would you recommend?',
-  'chat.23.title': 'Create a data science study plan',
+    'I need to build a team knowledge management system. Help me design the document structure, classification standards, and workflow for capturing and sharing knowledge.',
+  'chat.23.title': 'Team knowledge management system',
   'chat.24.prompt':
-    'What are some creative ways to make extra income on the side? I want realistic ideas that I can start with minimal upfront investment.',
-  'chat.24.title': 'Creative side income ideas',
+    'Help me prepare for an annual performance review presentation — how to use data and case studies to showcase full-year results and make a case for more resources or a promotion.',
+  'chat.24.title': 'Annual performance review preparation',
   'chat.25.prompt':
-    'Help me write a thank you note to a mentor who has significantly influenced my career. I want it to be genuine, specific, and memorable.',
-  'chat.25.title': 'Write a heartfelt thank you note',
+    'I want to learn data-driven decision making. Introduce common analytical thinking frameworks used in the workplace and how to use data to support business judgments.',
+  'chat.25.title': 'Data-driven decision thinking',
   'chat.26.prompt':
-    'Explain the theory of relativity in a way that a high school student could understand. Use analogies and everyday examples.',
-  'chat.26.title': 'Explain relativity simply',
+    "Help me design a monthly team retrospective meeting process, including data review, problem analysis, lessons learned, and a discussion framework for next month's planning.",
+  'chat.26.title': 'Monthly retrospective meeting process',
   'chat.27.prompt':
-    'Help me organize and declutter my digital life — emails, files, photos, subscriptions, and passwords. Give me a step-by-step plan.',
-  'chat.27.title': 'Organize my digital life',
+    'I need to write an email reporting to senior management. Help me master upward communication techniques — how to concisely convey key information and request support.',
+  'chat.27.title': 'Upward communication email techniques',
   'chat.28.prompt':
-    'What are the most important soft skills for career success? How can I develop skills like communication, leadership, and emotional intelligence?',
-  'chat.28.title': 'Develop essential soft skills',
+    'Help me analyze how to build personal influence in the workplace, including demonstrating expertise, building professional networks, and increasing visibility within the organization.',
+  'chat.28.title': 'Building workplace personal influence',
   'chat.29.prompt':
-    'Create a fun trivia quiz with 10 questions across different categories like science, history, pop culture, and geography. Include the answers at the end.',
-  'chat.29.title': 'Create a fun trivia quiz',
+    'I need to handle a difficult workplace conflict. Help me analyze the root causes and provide a nonviolent communication framework with suggested talking points.',
+  'chat.29.title': 'Workplace conflict resolution techniques',
   'chat.30.prompt':
-    'Help me plan a weekend trip to a nearby city. What should I consider when planning, and can you create a sample itinerary template I can customize?',
-  'chat.30.title': 'Plan a weekend getaway',
+    'Help me create a department hiring plan including job requirements analysis, interview process design, evaluation criteria, and offer negotiation strategy.',
+  'chat.30.title': 'Department hiring plan',
   'chat.31.prompt':
-    'What are the best practices for giving and receiving feedback at work? Help me learn to give constructive criticism that people actually appreciate.',
-  'chat.31.title': 'Master giving feedback at work',
+    'I want to improve my public speaking and presentation skills. Give me practical tips and exercises for overcoming nervousness, organizing logic, and increasing impact.',
+  'chat.31.title': 'Workplace presentation skills',
   'chat.32.prompt':
-    'Explain how machine learning works at a high level. What are the different types, and what kinds of problems can it solve?',
-  'chat.32.title': 'Explain machine learning basics',
+    'Help me design a project management board including task status tracking, priority management, progress visualization, and team collaboration best practices.',
+  'chat.32.title': 'Project management board design',
   'chat.33.prompt':
-    'Help me create a personal budget. Walk me through categorizing my expenses, setting savings goals, and tracking my spending effectively.',
-  'chat.33.title': 'Create a personal budget',
+    'I need to write a market research report. Help me design the research framework including survey design, data collection methods, analysis dimensions, and report structure.',
+  'chat.33.title': 'Market research report framework',
   'chat.34.prompt':
-    'What are some proven techniques for better sleep? I want to improve my sleep quality and feel more rested in the morning.',
-  'chat.34.title': 'Tips for better sleep',
+    'Help me analyze how to handle information overload at work, including email management, information filtering, and practical methods for protecting focus time.',
+  'chat.34.title': 'Dealing with workplace information overload',
   'chat.35.prompt':
-    'Help me write a compelling short bio for my personal website. It should be professional yet personable, around 150 words.',
-  'chat.35.title': 'Write a personal website bio',
+    'I need to share work methodology with new team members. Help me compile core principles of efficient work and tool recommendations.',
+  'chat.35.title': 'Efficient work methodology sharing',
   'chat.36.prompt':
-    'Explain the basics of photography composition. What rules and techniques can I use to take more visually appealing photos with my phone?',
-  'chat.36.title': 'Photography tips for beginners',
+    'Help me write a partnership proposal introducing the collaboration background, value proposition, partnership model, and expected benefits to a potential partner.',
+  'chat.36.title': 'Partnership proposal writing',
   'chat.37.prompt':
-    'Help me prepare for a job interview. What are the most common questions, how should I structure my answers, and what mistakes should I avoid?',
-  'chat.37.title': 'Prepare for a job interview',
+    'I want to build a personal work knowledge base. Recommend note-taking systems and knowledge management tools for professionals, and how to develop a consistent recording habit.',
+  'chat.37.title': 'Personal work knowledge base',
   'chat.38.prompt':
-    'What are some interesting philosophical thought experiments? Explain a few classic ones and what they teach us about ethics, reality, and consciousness.',
-  'chat.38.title': 'Explore philosophical puzzles',
+    'Help me analyze how to drive change and innovation within a large organization, including how to gain buy-in, manage resistance, and implement changes in phases.',
+  'chat.38.title': 'Driving internal organizational change',
   'chat.39.prompt':
-    'Help me set meaningful goals for the next year. Walk me through a goal-setting framework that balances ambition with practicality.',
-  'chat.39.title': 'Set meaningful yearly goals',
+    'I need to create team work standards and SOPs. Help me design the document structure to ensure processes are clear, easy to follow, and maintainable over time.',
+  'chat.39.title': 'Team SOP creation guide',
   'chat.40.prompt':
-    'Teach me the basics of cooking. What fundamental techniques, tools, and recipes should every home cook know to feel confident in the kitchen?',
-  'chat.40.title': 'Learn cooking fundamentals',
+    'Help me analyze common cognitive biases in the workplace — such as confirmation bias and sunk cost fallacy — and how to make more rational work decisions.',
+  'chat.40.title': 'Workplace decision-making biases',
   'agent.01.prompt':
     "You are a Creative Writing Mentor who helps writers develop their craft. What You Do: Provide constructive feedback on writing (praise strengths, suggest improvements); Teach storytelling techniques: plot structure, character development, pacing, dialogue; Suggest exercises to overcome writer's block; Guide through different genres and styles; Help writers find their unique voice. Tool Usage: Artifacts: Create character cards, plot diagrams (Mermaid), writing prompt generators (React), and story templates; Notebook: Save user's drafts, feedback reports, and writing plans (ask before saving). Be supportive, honest, and passionate about stories. Meet writers where they are.",
   'agent.01.title': 'Help me become a better writer',

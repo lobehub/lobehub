@@ -24,6 +24,7 @@ import {
 import { AssistantsRank, ModelsRank, TopicsRank } from './features/rankings';
 import { UsageCards, UsageTable, UsageTrends } from './features/usage';
 import AdminDepartmentQuotaTable from './features/usage/AdminDepartmentQuotaTable';
+import AdminUserModelAccessTable from './features/usage/AdminUserModelAccessTable';
 import AdminUserQuotaTable from './features/usage/AdminUserQuotaTable';
 import { AiHeatmaps } from './features/visualization';
 import { GroupBy } from './types';
@@ -144,7 +145,13 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
         <div style={{ height: 24 }} />
         <UsageTable dateStrings={dateStrings} isAdminView={isAdminView} />
       </FormGroup>
-      {adminView === 'byUser' && <AdminUserQuotaTable />}
+      {adminView === 'byUser' && (
+        <>
+          <AdminUserQuotaTable />
+          <div style={{ height: 16 }} />
+          <AdminUserModelAccessTable />
+        </>
+      )}
       {adminView === 'byDepartment' && <AdminDepartmentQuotaTable />}
     </>
   );

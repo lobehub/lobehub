@@ -31,6 +31,7 @@ export const userProfileSelectors = {
 export const authSelectors = {
   authProviders: (s: UserStore): SSOProvider[] => s.authProviders || [],
   hasPasswordAccount: (s: UserStore) => s.hasPasswordAccount ?? false,
+  isAdmin: (s: UserStore) => s.user?.role === 'admin',
   isFreePlan: (s: UserStore) => s.isFreePlan,
   isLoaded: (s: UserStore) => s.isLoaded,
   isLoadedAuthProviders: (s: UserStore) => s.isLoadedAuthProviders ?? false,

@@ -12,7 +12,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       "GPT-5.4 is OpenAI's latest model for complex professional work and a drop-in replacement for GPT-5.2 and GPT-5.3 Codex.",
     displayName: 'GPT-5.4',
-    enabled: true,
+    enabled: false,
     id: 'gpt-5.4',
     maxOutput: 128_000,
     pricing: {
@@ -66,7 +66,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 Pro uses more compute to think harder and provide the best answers for the hardest problems.',
     displayName: 'GPT-5.4 Pro',
-    enabled: true,
+    enabled: false,
     id: 'gpt-5.4-pro',
     maxOutput: 128_000,
     pricing: {
@@ -193,7 +193,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 — a flagship model optimized for coding and agent tasks with configurable reasoning effort and longer context.',
     displayName: 'GPT-5.1',
-    enabled: true,
+    enabled: false,
     id: 'gpt-5.1',
     maxOutput: 128_000,
     pricing: {
@@ -246,7 +246,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'A faster, more cost-efficient GPT-5 variant for well-defined tasks, delivering quicker responses while maintaining quality.',
     displayName: 'GPT-5 mini',
-    enabled: true,
+    enabled: false,
     id: 'gpt-5-mini',
     maxOutput: 128_000,
     pricing: {
@@ -293,7 +293,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'The GPT-5 model used in ChatGPT, combining strong understanding and generation for conversational applications.',
     displayName: 'GPT-5 Chat',
-    enabled: true,
+    enabled: false,
     id: 'gpt-5-chat-latest',
     maxOutput: 128_000,
     pricing: {
@@ -476,6 +476,18 @@ export const openaiChatModels: AIChatModelCard[] = [
     settings: {
       extendParams: ['reasoningEffort'],
     },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 128_000,
+    displayName: 'Nano Banana Pro',
+    enabled: true,
+    id: 'nano-banana-pro',
+    maxOutput: 16_384,
     type: 'chat',
   },
 ];

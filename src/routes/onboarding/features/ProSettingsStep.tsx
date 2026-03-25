@@ -7,11 +7,9 @@ import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import ModelSelect from '@/features/ModelSelect';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
 
 import KlavisServerList from '../components/KlavisServerList';
 
@@ -24,15 +22,7 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
   const navigate = useNavigate();
 
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
-
-  const [updateDefaultModel, finishOnboarding] = useUserStore((s) => [
-    s.updateDefaultModel,
-    s.finishOnboarding,
-  ]);
-
-  const defaultAgentConfig = useUserStore(
-    (s) => settingsSelectors.currentSettings(s).defaultAgent?.config,
-  );
+  const finishOnboarding = useUserStore((s) => s.finishOnboarding);
 
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
@@ -52,13 +42,6 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
     onBack();
   }, [onBack]);
 
-  const handleModelChange = useCallback(
-    ({ model, provider }: { model: string; provider: string }) => {
-      updateDefaultModel(model, provider);
-    },
-    [updateDefaultModel],
-  );
-
   return (
     <Flexbox gap={16}>
       <LobeMessage
@@ -67,13 +50,9 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
       {/* Default Model Section */}
       <Flexbox gap={16}>
         <Text color={cssVar.colorTextSecondary}>{t('proSettings.model.title')}</Text>
-        <ModelSelect
-          showAbility={false}
-          size="large"
-          style={{ width: '100%' }}
-          value={defaultAgentConfig}
-          onChange={handleModelChange}
-        />
+        <Text fontSize={16} weight={'bold'}>
+          GPT-5.2
+        </Text>
       </Flexbox>
 
       {/* Connectors Section (only show if Klavis is enabled) */}

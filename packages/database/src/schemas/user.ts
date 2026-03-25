@@ -15,6 +15,11 @@ import {
 
 import { amountNumeric, timestamps, timestamptz, varchar255 } from './_helpers';
 
+type AdvancedModelAccessItem = {
+  model: string;
+  provider: string;
+};
+
 export const users = pgTable(
   'users',
   {
@@ -49,6 +54,7 @@ export const users = pgTable(
 
     // better-auth admin
     role: text('role'),
+    advancedModelAccess: jsonb('advanced_model_access').$type<AdvancedModelAccessItem[]>(),
     banned: boolean('banned').default(false),
     banReason: text('ban_reason'),
     banExpires: timestamptz('ban_expires'),

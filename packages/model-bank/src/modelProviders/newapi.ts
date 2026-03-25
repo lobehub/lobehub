@@ -4,7 +4,7 @@ const NewAPI: ModelProviderCard = {
   chatModels: [],
   checkModel: 'gpt-4o-mini',
   description: 'An open-source aggregation and routing platform for multiple AI services.',
-  enabled: true,
+  enabled: false,
   id: 'newapi',
   name: 'New API',
   settings: {

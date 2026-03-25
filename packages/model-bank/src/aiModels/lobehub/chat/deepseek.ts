@@ -9,7 +9,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3.2 balances reasoning and output length for daily QA and agent tasks. Public benchmarks reach GPT-5 levels, and it is the first to integrate thinking into tool use, leading open-source agent evaluations.',
     displayName: 'DeepSeek V3.2',
-    enabled: true,
+    enabled: false,
     id: 'deepseek-chat',
     pricing: {
       units: [
@@ -30,7 +30,7 @@ export const deepseekChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3.2 Thinking is a deep reasoning model that generates chain-of-thought before outputs for higher accuracy, with top competition results and reasoning comparable to Gemini-3.0-Pro.',
     displayName: 'DeepSeek V3.2 Thinking',
-    enabled: true,
+    enabled: false,
     id: 'deepseek-reasoner',
     pricing: {
       units: [

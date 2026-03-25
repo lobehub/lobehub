@@ -6,7 +6,7 @@ import type { ModelProviderCard } from '@/types/llm';
 const Bfl: ModelProviderCard = {
   chatModels: [],
   description: 'A leading frontier AI research lab building the visual infrastructure of tomorrow.',
-  enabled: true,
+  enabled: false,
   id: 'bfl',
   name: 'Black Forest Labs',
   settings: {

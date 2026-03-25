@@ -357,5 +357,23 @@ describe('AgentSlice Actions', () => {
       expect(useAgentStore.getState().activeAgentId).toBe('agent-1');
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
     });
+
+    it('should handle null agent config response safely', async () => {
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'shared_1' });
+      });
+
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(null as any);
+
+      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'shared_1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(agentService.getAgentConfigById).toHaveBeenCalledWith('shared_1'));
+
+      expect(result.current.error).toBeUndefined();
+      expect(useAgentStore.getState().activeAgentId).toBe('shared_1');
+      expect(useAgentStore.getState().agentMap['shared_1']).toBeUndefined();
+    });
   });
 });

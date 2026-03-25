@@ -42,6 +42,12 @@ export const getServerGlobalConfig = async () => {
         enabledKey: 'ENABLED_AZURE_OPENAI',
         withDeploymentName: true,
       },
+      anthropic: {
+        enabled: false,
+      },
+      google: {
+        autoFetchModelLists: true,
+      },
       bedrock: {
         enabledKey: 'ENABLED_AWS_BEDROCK',
         modelListKey: 'AWS_BEDROCK_MODEL_LIST',
@@ -59,6 +65,13 @@ export const getServerGlobalConfig = async () => {
       },
       ollamacloud: {
         enabledKey: 'ENABLED_OLLAMA_CLOUD',
+      },
+      moonshot: {
+        autoFetchModelLists: true,
+        enabled: true,
+      },
+      openai: {
+        autoFetchModelLists: true,
       },
       qwen: {
         withDeploymentName: true,

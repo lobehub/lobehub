@@ -2,7 +2,6 @@ import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import {
   Blocks,
-  Brain,
   BrainCircuit,
   ChartColumnBigIcon,
   Coins,
@@ -19,6 +18,7 @@ import {
   PaletteIcon,
   Sparkles,
   TerminalSquare,
+  Users,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +32,7 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
@@ -66,6 +66,7 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const isAdmin = useUserStore(authSelectors.isAdmin);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -100,6 +101,11 @@ export const useCategory = () => {
         key: SettingsTabs.Hotkey,
         label: t('tab.hotkey'),
       },
+      {
+        icon: ChartColumnBigIcon,
+        key: SettingsTabs.Usage,
+        label: t('tab.usage'),
+      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -127,11 +133,6 @@ export const useCategory = () => {
 
     // Agent group
     const agentItems: CategoryItem[] = [
-      {
-        icon: Brain,
-        key: SettingsTabs.Provider,
-        label: t('tab.provider'),
-      },
       {
         icon: Sparkles,
         key: SettingsTabs.ServiceModel,
@@ -205,6 +206,21 @@ export const useCategory = () => {
       title: t('group.system'),
     });
 
+    // Admin group
+    if (isAdmin) {
+      groups.push({
+        items: [
+          {
+            icon: Users,
+            key: SettingsTabs.SharedAgents,
+            label: t('tab.sharedAgents'),
+          },
+        ],
+        key: SettingsGroupKey.System,
+        title: t('group.admin'),
+      });
+    }
+
     return groups;
   }, [
     t,
@@ -215,6 +231,7 @@ export const useCategory = () => {
     mobile,
     showApiKeyManage,
     isDevMode,
+    isAdmin,
     avatarUrl,
     username,
   ]);

@@ -1,19 +1,72 @@
 'use client';
 
 import { Button } from '@lobehub/ui';
-import { Form, InputNumber, Modal } from 'antd';
+import { DatePicker, Divider, Form, InputNumber, Modal } from 'antd';
+import dayjs from 'dayjs';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
 import { useClientDataSWR } from '@/libs/swr';
 import { usageService } from '@/services/usage';
+import { type UsageLog, type UsageRecordItem } from '@/types/usage/usageRecord';
+
+import { GroupBy } from '../../types';
+import UsageCards from './UsageCards';
+import UsageTrends from './UsageTrends';
+
+const groupRecordsByDay = (records: UsageRecordItem[]): UsageLog[] => {
+  const map = new Map<string, UsageLog>();
+  for (const r of records) {
+    const day = dayjs(r.createdAt).format('YYYY-MM-DD');
+    if (!map.has(day)) {
+      map.set(day, {
+        date: new Date(r.createdAt).getTime(),
+        day,
+        records: [],
+        totalRequests: 0,
+        totalSpend: 0,
+        totalTokens: 0,
+      });
+    }
+    const entry = map.get(day)!;
+    entry.records.push(r);
+    entry.totalSpend += r.spend;
+    entry.totalTokens += r.totalTokens || 0;
+    entry.totalRequests += 1;
+  }
+  return Array.from(map.values()).sort((a, b) => a.date - b.date);
+};
+
+interface DeptDetailPanelProps {
+  dateStrings?: string;
+  department: string;
+}
+
+const DeptDetailPanel = memo<DeptDetailPanelProps>(({ department, dateStrings }) => {
+  const { data, isLoading } = useClientDataSWR(
+    `admin-dept-usage-${department}-${dateStrings}`,
+    () => usageService.adminGetUsageByDepartmentDetail(department, dateStrings),
+  );
+  const logs = data ? groupRecordsByDay(data) : undefined;
+  return (
+    <>
+      <UsageCards data={logs} groupBy={GroupBy.Model} isLoading={isLoading} />
+      <UsageTrends data={logs} groupBy={GroupBy.Model} isLoading={isLoading} />
+    </>
+  );
+});
+
+DeptDetailPanel.displayName = 'DeptDetailPanel';
 
 const AdminDepartmentQuotaTable = memo(() => {
   const { t } = useTranslation('auth');
   const [editingDept, setEditingDept] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const [selectedDept, setSelectedDept] = useState<string | null>(null);
+  const [detailMonth, setDetailMonth] = useState<dayjs.Dayjs>(dayjs());
+  const [detailMonthStr, setDetailMonthStr] = useState<string | undefined>();
 
   const { data, isLoading, mutate } = useClientDataSWR('admin-dept-quotas', () =>
     usageService.adminGetAllDepartmentQuotas(),
@@ -65,20 +118,31 @@ const AdminDepartmentQuotaTable = memo(() => {
     {
       key: 'action',
       render: (_: any, record: any) => (
-        <Button
-          size="small"
-          onClick={() => {
-            setEditingDept(record);
-            form.setFieldsValue({
-              dailyCostLimit: record.dailyCostLimit,
-              dailyTokenLimit: record.dailyTokenLimit,
-              monthlyCostLimit: record.monthlyCostLimit,
-              monthlyTokenLimit: record.monthlyTokenLimit,
-            });
-          }}
-        >
-          {t('usage.quota.setLimit')}
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button
+            size="small"
+            onClick={() => {
+              setEditingDept(record);
+              form.setFieldsValue({
+                dailyCostLimit: record.dailyCostLimit,
+                dailyTokenLimit: record.dailyTokenLimit,
+                monthlyCostLimit: record.monthlyCostLimit,
+                monthlyTokenLimit: record.monthlyTokenLimit,
+              });
+            }}
+          >
+            {t('usage.quota.setLimit')}
+          </Button>
+          <Button
+            size="small"
+            type={selectedDept === record.department ? 'primary' : 'default'}
+            onClick={() =>
+              setSelectedDept(selectedDept === record.department ? null : record.department)
+            }
+          >
+            {t('usage.quota.viewUsage')}
+          </Button>
+        </div>
       ),
       title: '',
     },
@@ -93,6 +157,24 @@ const AdminDepartmentQuotaTable = memo(() => {
         rowKey="department"
         size="small"
       />
+      {selectedDept && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontWeight: 500 }}>{selectedDept}</span>
+            <DatePicker
+              picker="month"
+              size="small"
+              value={detailMonth}
+              onChange={(d, s) => {
+                if (d) setDetailMonth(d);
+                if (typeof s === 'string') setDetailMonthStr(s);
+              }}
+            />
+          </div>
+          <DeptDetailPanel dateStrings={detailMonthStr} department={selectedDept} />
+        </>
+      )}
       <Modal
         confirmLoading={saving}
         open={!!editingDept}

@@ -14,7 +14,7 @@ export const googleChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3.1 Pro Preview improves on Gemini 3 Pro with enhanced reasoning capabilities (ARC-AGI-2 77.1%) and adds medium thinking level support.',
     displayName: 'Gemini 3.1 Pro Preview',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3.1-pro-preview',
     maxOutput: 65_536,
     pricing: {
@@ -74,7 +74,7 @@ export const googleChatModels: AIChatModelCard[] = [
     description:
       "Gemini 3 Flash Preview is Google's latest best-value model, improving on Gemini 2.5 Flash.",
     displayName: 'Gemini 3 Flash Preview',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3-flash-preview',
     maxOutput: 65_536,
     pricing: {
@@ -115,7 +115,7 @@ export const googleChatModels: AIChatModelCard[] = [
     description:
       "Gemini 3.1 Flash-Lite Preview is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
     displayName: 'Gemini 3.1 Flash-Lite Preview',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3.1-flash-lite-preview',
     maxOutput: 65_536,
     pricing: {
@@ -234,7 +234,7 @@ export const googleChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3.1 Flash Image (Nano Banana 2) delivers Pro-level image quality at Flash speed with multimodal chat support.',
     displayName: 'Nano Banana 2',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3.1-flash-image-preview',
     maxOutput: 32_768,
     pricing: {
@@ -263,7 +263,7 @@ export const googleChatModels: AIChatModelCard[] = [
     description:
       "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model and also supports multimodal chat.",
     displayName: 'Nano Banana Pro',
-    enabled: true,
+    enabled: false,
     id: 'gemini-3-pro-image-preview',
     maxOutput: 32_768,
     pricing: {

@@ -9,6 +9,7 @@ import {
   LucideEye,
   LucideImage,
   LucidePaperclip,
+  LucideSparkles,
   Video,
   Wrench,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import { type AiProviderSourceType } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
+import { AUTO_MODEL_ID } from '@/utils/modelAccess';
 
 import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewModelBadge';
 
@@ -281,7 +283,11 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
           gap={8}
           style={{ flexShrink: 1, minWidth: 0, overflow: 'hidden' }}
         >
-          <ModelIcon model={id} size={20} />
+          {id === AUTO_MODEL_ID ? (
+            <Icon icon={LucideSparkles} size={16} />
+          ) : (
+            <ModelIcon model={id} size={20} />
+          )}
           <Text
             style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
             ellipsis={{

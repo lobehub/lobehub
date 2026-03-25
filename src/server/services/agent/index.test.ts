@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
+import { SharedAgentModel } from '@/database/models/sharedAgent';
 import { UserModel } from '@/database/models/user';
 import type * as RedisModule from '@/libs/redis';
 import { initializeRedisWithPrefix, isRedisEnabled, RedisKeys } from '@/libs/redis';
@@ -30,6 +31,10 @@ vi.mock('@/database/models/session', () => ({
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/sharedAgent', () => ({
+  SharedAgentModel: vi.fn(),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -64,6 +69,9 @@ describe('AgentService', () => {
     vi.clearAllMocks();
     // Setup default UserModel mock
     (UserModel as any).mockImplementation(() => mockUserModel);
+    (SharedAgentModel as any).mockImplementation(() => ({
+      findById: vi.fn().mockResolvedValue(null),
+    }));
     service = new AgentService(mockDb, mockUserId);
   });
 
@@ -192,7 +200,7 @@ describe('AgentService', () => {
       const result = await newService.getBuiltinAgent('inbox');
 
       // Avatar should be merged from BUILTIN_AGENTS definition
-      expect((result as any)?.avatar).toBe('/avatars/lobe-ai.png');
+      expect((result as any)?.avatar).toBe('/avatars/loctek-ai.png');
     });
 
     it('should not include avatar for non-builtin agents', async () => {
@@ -375,6 +383,37 @@ describe('AgentService', () => {
   });
 
   describe('getAgentConfigById', () => {
+    it('should fallback to shared agent config when user agent does not exist', async () => {
+      const sharedAgent = {
+        id: 'shared_1',
+        provider: 'openai',
+        systemRole: 'Shared role',
+        title: 'Shared Employee',
+      };
+
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(null),
+      };
+      const mockSharedAgentModel = {
+        findById: vi.fn().mockResolvedValue(sharedAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (SharedAgentModel as any).mockImplementation(() => mockSharedAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfigById('shared_1');
+
+      expect(mockSharedAgentModel.findById).toHaveBeenCalledWith('shared_1');
+      expect(result).toMatchObject({
+        id: 'shared_1',
+        provider: 'openai',
+        systemRole: 'Shared role',
+        title: 'Shared Employee',
+      });
+    });
+
     it('should return null if agent does not exist', async () => {
       const mockAgentModel = {
         getAgentConfigById: vi.fn().mockResolvedValue(null),

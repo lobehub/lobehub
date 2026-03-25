@@ -2,7 +2,7 @@
 
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input } from 'antd';
-import { Lock, Mail } from 'lucide-react';
+import { Lock, Mail, User } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
@@ -38,6 +38,23 @@ const BetterAuthSignUpForm = () => {
       title={t('betterAuth.signup.title')}
     >
       <Form form={form} layout="vertical" onFinish={onSubmit}>
+        <Form.Item
+          name="username"
+          rules={[{ message: t('betterAuth.errors.usernameRequired'), required: true }]}
+        >
+          <Input
+            placeholder={t('betterAuth.signup.usernamePlaceholder')}
+            size="large"
+            prefix={
+              <Icon
+                icon={User}
+                style={{
+                  marginInline: 6,
+                }}
+              />
+            }
+          />
+        </Form.Item>
         <Form.Item
           name="email"
           rules={[
