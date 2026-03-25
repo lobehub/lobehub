@@ -8,6 +8,8 @@ import { AgentRuntime } from '../src';
 async function* openaiRuntime(payload: any) {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || '',
+    timeout: 60000,
+    maxRetries: 3,
   });
 
   const { messages, tools } = payload;

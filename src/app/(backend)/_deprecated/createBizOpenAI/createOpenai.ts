@@ -14,5 +14,5 @@ export const createOpenai = (userApiKey: string | null, endpoint?: string | null
 
   if (!apiKey) throw new Error('OPENAI_API_KEY is empty', { cause: ChatErrorType.NoOpenAIAPIKey });
 
-  return new OpenAI({ apiKey, baseURL });
+  return new OpenAI({ apiKey, baseURL, timeout: 60000, maxRetries: 3 });
 };
