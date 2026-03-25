@@ -69,6 +69,7 @@ const VideoLoadingItem = memo<VideoLoadingItemProps>(
         variant={'filled'}
         style={{
           aspectRatio: aspectRatio?.includes(':') ? aspectRatio.replace(':', '/') : '16/9',
+          maxHeight: '50vh',
         }}
       >
         <Center gap={8}>

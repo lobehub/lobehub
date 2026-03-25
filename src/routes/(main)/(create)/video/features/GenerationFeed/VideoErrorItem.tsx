@@ -64,6 +64,7 @@ const VideoErrorItem = memo<VideoErrorItemProps>(
         style={{
           aspectRatio: aspectRatio?.includes(':') ? aspectRatio.replace(':', '/') : '16/9',
           cursor: 'pointer',
+          maxHeight: '50vh',
           width: '100%',
         }}
         onClick={onCopyError}
