@@ -294,6 +294,12 @@ export class SkillImporter {
       throw new SkillImportError('Invalid URL format', 'INVALID_URL');
     }
 
+    // 1.5. Detect GitHub URLs and delegate to importFromGitHub for full directory support
+    if (url.hostname === 'github.com') {
+      log('importFromUrl: detected GitHub URL, delegating to importFromGitHub');
+      return this.importFromGitHub({ gitUrl: input.url });
+    }
+
     // 2. Fetch content (auto-detect SKILL.md or ZIP)
     let manifest: SkillManifest;
     let skillContent: string;
