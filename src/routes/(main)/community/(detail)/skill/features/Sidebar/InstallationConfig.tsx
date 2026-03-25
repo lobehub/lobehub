@@ -27,7 +27,7 @@ const InstallationConfig = memo(() => {
       <Title more={t('mcp.details.sidebar.moreServerConfig')} moreLink={installLink}>
         {t('skills.details.sidebar.installationConfig')}
       </Title>
-      <Platform downloadUrl={downloadUrl} expandCodeByDefault identifier={identifier} lite />
+      <Platform expandCodeByDefault lite downloadUrl={downloadUrl} identifier={identifier} />
     </Flexbox>
   );
 });

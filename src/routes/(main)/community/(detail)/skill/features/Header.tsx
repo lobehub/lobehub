@@ -80,8 +80,8 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
   const resourcesCount = (Object.values(resources || {})?.length || 0) + 1;
 
   const scores = (
-    <Flexbox align={'center'} className={styles.extraTag} gap={16} horizontal>
-      <Flexbox align={'center'} className={styles.extraTagActive} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} className={styles.extraTag} gap={16}>
+      <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
         <Icon icon={FileTextIcon} size={14} />
         {resourcesCount}
       </Flexbox>
@@ -103,7 +103,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   return (
     <Flexbox gap={12}>
-      <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
+      <Flexbox horizontal align={'flex-start'} gap={16} width={'100%'}>
         <Avatar avatar={icon || name} size={mobile ? 48 : 64} />
         <Flexbox
           flex={1}
@@ -113,9 +113,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
           }}
         >
           <Flexbox
+            horizontal
             align={'center'}
             gap={8}
-            horizontal
             justify={'space-between'}
             style={{
               overflow: 'hidden',
@@ -123,18 +123,18 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
             }}
           >
             <Flexbox
+              horizontal
               align={'center'}
               flex={1}
               gap={12}
-              horizontal
               style={{
                 overflow: 'hidden',
                 position: 'relative',
               }}
             >
               <Text
-                as={'h1'}
                 ellipsis
+                as={'h1'}
                 style={{ fontSize: mobile ? 18 : 24, margin: 0 }}
                 title={identifier}
               >
@@ -142,22 +142,22 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
               </Text>
               {!mobile && scores}
             </Flexbox>
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               {homepage && (
                 <a
                   href={homepage}
-                  onClick={stopPropagation}
                   rel="noopener noreferrer"
                   target={'_blank'}
+                  onClick={stopPropagation}
                 >
                   <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
                 </a>
               )}
             </Flexbox>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             {Boolean(ratingAverage) ? (
-              <Flexbox align={'center'} gap={8} horizontal>
+              <Flexbox horizontal align={'center'} gap={8}>
                 <Icon fill={cssVar.colorWarning} icon={StarIcon} size={14} />
                 <Text weight={500}>{ratingAverage?.toFixed(1)}</Text>
               </Flexbox>
@@ -182,37 +182,37 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
         </Flexbox>
       </Flexbox>
       <Flexbox
+        horizontal
         align={'center'}
         gap={mobile ? 12 : 24}
-        horizontal
+        wrap={'wrap'}
         style={{
           color: cssVar.colorTextSecondary,
         }}
-        wrap={'wrap'}
       >
         {mobile && scores}
         {!mobile && cateButton}
-        <Flexbox align={'center'} gap={mobile ? 12 : 24} horizontal wrap={'wrap'}>
+        <Flexbox horizontal align={'center'} gap={mobile ? 12 : 24} wrap={'wrap'}>
           {Boolean(license?.name) && (
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={ScaleIcon} size={14} />
               {license?.name}
             </Flexbox>
           )}
           {Boolean(installCount) && (
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={DownloadIcon} size={14} />
               {formatCompactNumber(installCount)}
             </Flexbox>
           )}
           {Boolean(github?.stars) && (
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={StarIcon} size={14} />
               {formatCompactNumber(github?.stars)}
             </Flexbox>
           )}
           {Boolean(comments?.totalCount) && (
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={MessageSquare} size={14} />
               {formatCompactNumber(comments?.totalCount)}
             </Flexbox>

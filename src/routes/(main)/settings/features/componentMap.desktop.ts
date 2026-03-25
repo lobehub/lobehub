@@ -9,16 +9,16 @@ import About from '../about';
 import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
+import Creds from '../creds';
 import Hotkey from '../hotkey';
 import Memory from '../memory';
-import Creds from '../creds';
 import Profile from '../profile';
 import Provider from '../provider';
 import Proxy from '../proxy';
-import Stats from '../stats';
 import Security from '../security';
 import ServiceModel from '../service-model';
 import Skill from '../skill';
+import Stats from '../stats';
 import Storage from '../storage';
 import SystemTools from '../system-tools';
 

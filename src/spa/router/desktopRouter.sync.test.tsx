@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import type { RouteObject } from 'react-router-dom';
+import { describe, expect, it } from 'vitest';
 
-import { desktopRoutes as desktopSyncRoutes } from './desktopRouter.config.desktop';
 import { desktopRoutes as desktopAsyncRoutes } from './desktopRouter.config';
+import { desktopRoutes as desktopSyncRoutes } from './desktopRouter.config.desktop';
 
 /**
  * Extract all route paths from a route tree for structural comparison.
@@ -31,9 +31,7 @@ const KNOWN_DIVERGENCES: Record<string, string> = {
 
 function normalizePaths(paths: string[]): string[] {
   const webToDesktop = KNOWN_DIVERGENCES;
-  const desktopToWeb = Object.fromEntries(
-    Object.entries(webToDesktop).map(([w, d]) => [d, w]),
-  );
+  const desktopToWeb = Object.fromEntries(Object.entries(webToDesktop).map(([w, d]) => [d, w]));
   return paths.map((p) => desktopToWeb[p] ?? p);
 }
 

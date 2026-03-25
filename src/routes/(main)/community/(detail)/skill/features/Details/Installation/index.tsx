@@ -10,8 +10,8 @@ const Installation = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   return (
     <Platform
-      downloadUrl={downloadUrl}
       expandCodeByDefault
+      downloadUrl={downloadUrl}
       identifier={identifier}
       mobile={mobile}
     />
