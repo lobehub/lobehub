@@ -111,16 +111,10 @@ const DeviceGateway = memo(() => {
     setLocalDescription(undefined);
   }, [localDescription, gatewayDeviceInfo?.description, updateDeviceDescription]);
 
-  const statusText = isConnected
-    ? t('gateway.statusConnected')
-    : isConnecting
-      ? t('gateway.statusConnecting')
-      : t('gateway.statusDisconnected');
-
   const popoverContent = (
     <Flexbox className={styles.popoverContent} gap={16}>
       <Flexbox horizontal align="center" justify="space-between">
-        <span className={styles.statusTitle}>{statusText}</span>
+        <span className={styles.statusTitle}>{t('gateway.enableConnection')}</span>
         <Switch
           checked={isConnected || isConnecting}
           loading={isConnecting}

@@ -72,7 +72,7 @@ export default {
   'gateway.descriptionPlaceholder': 'Optional',
   'gateway.deviceName': 'Device Name',
   'gateway.deviceNamePlaceholder': 'Enter device name',
-  'gateway.enableConnection': 'Device Connection',
+  'gateway.enableConnection': 'Connect to Gateway',
   'gateway.statusConnected': 'Connected to Gateway',
   'gateway.statusConnecting': 'Connecting to Gateway...',
   'gateway.statusDisconnected': 'Not connected to Gateway',
