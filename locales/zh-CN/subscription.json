@@ -258,6 +258,7 @@
   "plans.payonce.tooltip": "一次性付款仅支持升级到更高档位或更长时长",
   "plans.payonce.upgradeOk": "确认升级",
   "plans.payonce.upgradePopconfirm": "当前计划的剩余价值将作为折扣应用于新计划。",
+  "plans.payonce.upgradePopconfirmNoProration": "将按新计划全价收费，当前计划将立即替换。",
   "plans.pendingDowngrade": "已预约降级",
   "plans.plan.enterprise.contactSales": "联系销售",
   "plans.plan.enterprise.title": "企业版",

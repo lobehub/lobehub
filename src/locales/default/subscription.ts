@@ -296,6 +296,8 @@ export default {
   'plans.payonce.upgradeOk': 'Confirm Upgrade',
   'plans.payonce.upgradePopconfirm':
     'Remaining value from your current plan will be applied as a discount to the new plan.',
+  'plans.payonce.upgradePopconfirmNoProration':
+    'You will be charged the full price of the new plan. Your current plan will be replaced immediately.',
   'plans.plan.enterprise.contactSales': 'Contact Sales',
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',

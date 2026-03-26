@@ -258,6 +258,7 @@
   "plans.payonce.tooltip": "One-time payment only supports upgrading to a higher tier or longer duration",
   "plans.payonce.upgradeOk": "Confirm Upgrade",
   "plans.payonce.upgradePopconfirm": "Remaining value from your current plan will be applied as a discount to the new plan.",
+  "plans.payonce.upgradePopconfirmNoProration": "You will be charged the full price of the new plan. Your current plan will be replaced immediately.",
   "plans.pendingDowngrade": "Pending Downgrade",
   "plans.plan.enterprise.contactSales": "Contact Sales",
   "plans.plan.enterprise.title": "Enterprise",
