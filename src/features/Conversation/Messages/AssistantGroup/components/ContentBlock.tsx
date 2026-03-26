@@ -15,9 +15,20 @@ import MessageContent from './MessageContent';
 interface ContentBlockProps extends AssistantContentBlock {
   assistantId: string;
   disableEditing?: boolean;
+  isFirstBlock?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({ id, tools, content, imageList, reasoning, error, assistantId, disableEditing }) => {
+  ({
+    id,
+    tools,
+    content,
+    imageList,
+    reasoning,
+    error,
+    assistantId,
+    disableEditing,
+    isFirstBlock,
+  }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -65,7 +76,7 @@ const ContentBlock = memo<ContentBlockProps>(
         {showReasoning && <Reasoning {...reasoning} id={id} />}
 
         {/* Content - markdown text */}
-        <MessageContent content={content} hasTools={hasTools} id={id} />
+        <MessageContent content={content} hasTools={hasTools} id={id} isFirstBlock={isFirstBlock} />
 
         {/* Image files */}
         {showImageItems && <ImageFileListViewer items={imageList} />}

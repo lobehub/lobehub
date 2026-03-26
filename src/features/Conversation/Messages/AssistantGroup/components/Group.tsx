@@ -46,13 +46,14 @@ const Group = memo<GroupChildrenProps>(
     return (
       <MessageAggregationContext value={contextValue}>
         <Flexbox className={styles.container} gap={8}>
-          {blocks.map((item) => {
+          {blocks.map((item, index) => {
             return (
               <GroupItem
                 {...item}
                 assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}
+                isFirstBlock={index === 0}
                 key={id + '.' + item.id}
                 messageIndex={messageIndex}
               />
