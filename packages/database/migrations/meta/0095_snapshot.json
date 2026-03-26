@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "cb8e1041-b04c-419b-a35d-921f68874082",
+  "id": "50ab462c-d0ac-4e45-bfc0-92e66fcae734",
   "policies": {},
   "prevId": "2dc5d5f6-130c-405d-8a38-bab68368d838",
   "roles": {},
@@ -11008,7 +11008,7 @@
           "tableTo": "topics",
           "columnsFrom": ["topic_id"],
           "columnsTo": ["id"],
-          "onDelete": "set null",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "task_topics_user_id_users_id_fk": {

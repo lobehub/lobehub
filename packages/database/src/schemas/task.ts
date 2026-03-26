@@ -184,7 +184,7 @@ export const taskTopics = pgTable(
     taskId: text('task_id')
       .references(() => tasks.id, { onDelete: 'cascade' })
       .notNull(),
-    topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
+    topicId: text('topic_id').references(() => topics.id, { onDelete: 'cascade' }),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
