@@ -14,6 +14,7 @@ import { OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
+import { debugResponse, debugStream } from '../../utils/debugStream';
 import { StreamingResponse } from '../../utils/response';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
@@ -21,6 +22,11 @@ const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
 
 const MAX_TOTAL_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_RETRIES = 3;
+
+const debugParams = {
+  chatCompletion: () => process.env.DEBUG_GITHUBCOPILOT_CHAT_COMPLETION === '1',
+  responses: () => process.env.DEBUG_GITHUBCOPILOT_RESPONSES === '1',
+};
 
 interface CachedToken {
   expiresAt: number;
@@ -194,30 +200,48 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         });
 
         const responseTools = tools?.map(this.convertChatCompletionToolToResponseTool);
-        const response = await client.responses.create(
-          {
-            ...responseRest,
-            ...(reasoning || reasoning_effort
-              ? {
-                  reasoning: {
-                    ...reasoning,
-                    ...(reasoning_effort && { effort: reasoning_effort }),
-                  },
-                }
-              : {}),
-            ...(max_tokens && { max_output_tokens: max_tokens }),
-            text: verbosity ? { verbosity } : undefined,
-            input,
-            model,
-            stream: shouldStream,
-            ...(responseTools ? { tools: responseTools } : {}),
-          },
-          { signal: options?.signal },
-        );
+        const responsePayload = {
+          ...responseRest,
+          ...(reasoning || reasoning_effort
+            ? {
+                reasoning: {
+                  ...reasoning,
+                  ...(reasoning_effort && { effort: reasoning_effort }),
+                },
+              }
+            : {}),
+          ...(max_tokens && { max_output_tokens: max_tokens }),
+          text: verbosity ? { verbosity } : undefined,
+          input,
+          model,
+          stream: shouldStream,
+          ...(responseTools ? { tools: responseTools } : {}),
+        };
+
+        if (debugParams.responses()) {
+          // eslint-disable-next-line no-console
+          console.log('[requestPayload]');
+          // eslint-disable-next-line no-console
+          console.log(JSON.stringify(responsePayload), '\n');
+        }
+
+        const response = await client.responses.create(responsePayload, {
+          signal: options?.signal,
+        });
 
         if (shouldStream) {
+          const stream = response as any;
+          const [prod, useForDebug] = stream.tee();
+
+          if (debugParams.responses()) {
+            const useForDebugStream =
+              useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
+
+            debugStream(useForDebugStream).catch(console.error);
+          }
+
           return StreamingResponse(
-            OpenAIResponsesStream(response as any, {
+            OpenAIResponsesStream(prod, {
               callbacks: options?.callback,
               payload: { model, provider: ModelProvider.GithubCopilot },
             }),
@@ -226,6 +250,10 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         }
 
         const responseStream = transformResponseAPIToStream(response as OpenAI.Responses.Response);
+
+        if (debugParams.responses()) {
+          debugResponse(response);
+        }
 
         return StreamingResponse(
           OpenAIResponsesStream(responseStream, {
@@ -242,15 +270,36 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         forceImageBase64: true,
       });
 
-      const response = await client.chat.completions.create(
-        {
-          ...cleanedRest,
-          messages,
-          model,
-          stream: shouldStream,
-        } as OpenAI.ChatCompletionCreateParamsStreaming,
-        { signal: options?.signal },
-      );
+      const chatCompletionPayload = {
+        ...cleanedRest,
+        messages,
+        model,
+        stream: shouldStream,
+      } as OpenAI.ChatCompletionCreateParamsStreaming;
+
+      if (debugParams.chatCompletion()) {
+        // eslint-disable-next-line no-console
+        console.log('[requestPayload]');
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(chatCompletionPayload), '\n');
+      }
+
+      let response = await client.chat.completions.create(chatCompletionPayload, {
+        signal: options?.signal,
+      });
+
+      if (shouldStream && debugParams.chatCompletion()) {
+        const [prod, useForDebug] = (response as any).tee();
+        const useForDebugStream =
+          useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
+
+        debugStream(useForDebugStream).catch(console.error);
+        response = prod;
+      }
+
+      if (!shouldStream && debugParams.chatCompletion()) {
+        debugResponse(response);
+      }
 
       return StreamingResponse(
         OpenAIStream(response, {

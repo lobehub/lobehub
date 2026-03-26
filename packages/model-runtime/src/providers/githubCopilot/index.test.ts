@@ -321,4 +321,100 @@ describe('LobeGithubCopilotAI', () => {
       vi.doUnmock('openai');
     });
   });
+
+  describe('debug env flags', () => {
+    it('should enable chat completion request debug with DEBUG_GITHUBCOPILOT_CHAT_COMPLETION', async () => {
+      vi.resetModules();
+
+      const chatCompletionCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+
+      vi.doMock('openai', () => {
+        return {
+          default: class MockOpenAI {
+            chat = {
+              completions: {
+                create: chatCompletionCreateMock,
+              },
+            };
+
+            responses = {
+              create: vi.fn(),
+            };
+          },
+        };
+      });
+
+      process.env.DEBUG_GITHUBCOPILOT_CHAT_COMPLETION = '1';
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'gpt-4o',
+        } as any),
+      ).rejects.toBeDefined();
+
+      expect(chatCompletionCreateMock).toHaveBeenCalledTimes(1);
+      expect(logSpy).toHaveBeenCalledWith('[requestPayload]');
+
+      delete process.env.DEBUG_GITHUBCOPILOT_CHAT_COMPLETION;
+      vi.doUnmock('openai');
+    });
+
+    it('should enable responses request debug with DEBUG_GITHUBCOPILOT_RESPONSES', async () => {
+      vi.resetModules();
+
+      const responsesCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+
+      vi.doMock('openai', () => {
+        return {
+          default: class MockOpenAI {
+            chat = {
+              completions: {
+                create: vi.fn(),
+              },
+            };
+
+            responses = {
+              create: responsesCreateMock,
+            };
+          },
+        };
+      });
+
+      process.env.DEBUG_GITHUBCOPILOT_RESPONSES = '1';
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'gpt-5.1-codex-mini',
+        } as any),
+      ).rejects.toBeDefined();
+
+      expect(responsesCreateMock).toHaveBeenCalledTimes(1);
+      expect(logSpy).toHaveBeenCalledWith('[requestPayload]');
+
+      delete process.env.DEBUG_GITHUBCOPILOT_RESPONSES;
+      vi.doUnmock('openai');
+    });
+  });
 });
