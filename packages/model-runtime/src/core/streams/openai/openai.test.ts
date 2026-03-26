@@ -1373,6 +1373,68 @@ describe('OpenAIStream', () => {
   });
 
   describe('Reasoning', () => {
+    it('should handle GitHub Copilot reasoning_text in delta chunks', async () => {
+      const data = [
+        {
+          id: 'reasoning-text-1',
+          object: 'chat.completion.chunk',
+          created: 1774512975,
+          model: 'gemini-3.1-pro-preview',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                content: null,
+                role: 'assistant',
+                reasoning_text: '这是 reasoning_text 内容',
+              },
+              finish_reason: null,
+            },
+          ],
+        },
+        {
+          id: 'reasoning-text-1',
+          object: 'chat.completion.chunk',
+          created: 1774512976,
+          model: 'gemini-3.1-pro-preview',
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ];
+
+      const mockOpenAIStream = new ReadableStream({
+        start(controller) {
+          data.forEach((chunk) => controller.enqueue(chunk));
+          controller.close();
+        },
+      });
+
+      const protocolStream = OpenAIStream(mockOpenAIStream);
+      const decoder = new TextDecoder();
+      const chunks: string[] = [];
+
+      // @ts-ignore
+      for await (const chunk of protocolStream) {
+        chunks.push(decoder.decode(chunk, { stream: true }));
+      }
+
+      expect(chunks).toEqual(
+        [
+          'id: reasoning-text-1',
+          'event: reasoning',
+          `data: "这是 reasoning_text 内容"\n`,
+          'id: reasoning-text-1',
+          'event: stop',
+          `data: "stop"\n`,
+        ].map((i) => `${i}\n`),
+      );
+    });
+
     it('should handle <think></think> tags in streaming content', async () => {
       const data = [
         {
