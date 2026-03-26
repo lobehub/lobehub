@@ -8,7 +8,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 const briefProcedure = authedProcedure.use(serverDatabase);
 
-const idInput = z.object({ id: z.string().uuid() });
+const idInput = z.object({ id: z.string() });
 
 const createSchema = z.object({
   actions: z.array(z.record(z.unknown())).optional(),

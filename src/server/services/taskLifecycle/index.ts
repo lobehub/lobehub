@@ -77,14 +77,13 @@ export class TaskLifecycleService {
 
       // 3. Auto-review (if configured)
       if (currentTask && topicId && lastAssistantContent) {
-        const shouldSkipPause = await this.runAutoReview(
+        await this.runAutoReview(
           taskId,
           taskIdentifier,
           topicId,
           lastAssistantContent,
           currentTask,
         );
-        if (shouldSkipPause) return; // auto-retry in progress, don't pause
       }
 
       // 4. Check if agent delivered a result brief → auto-complete
@@ -185,9 +184,9 @@ export class TaskLifecycleService {
     topicId: string,
     content: string,
     currentTask: any,
-  ): Promise<boolean> {
+  ): Promise<void> {
     const reviewConfig = this.taskModel.getReviewConfig(currentTask);
-    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return false;
+    if (!reviewConfig?.enabled || !reviewConfig.rubrics?.length) return;
 
     try {
       const topicLinks = await this.taskTopicModel.findByTaskId(taskId);
@@ -228,7 +227,7 @@ export class TaskLifecycleService {
           title: `${taskIdentifier} review passed`,
           type: 'result',
         });
-        return false; // proceed to checkpoint
+        return;
       }
 
       if (reviewConfig.autoRetry && iteration < reviewConfig.maxIterations) {
@@ -239,7 +238,10 @@ export class TaskLifecycleService {
           title: `${taskIdentifier} review failed, retrying`,
           type: 'insight',
         });
-        return true; // skip pause — scheduler will run next topic
+
+        // Pause so the webhook / polling loop can pick up and re-run
+        await this.taskModel.updateStatus(taskId, 'paused', { error: null });
+        return;
       }
 
       // Max iterations reached
@@ -255,10 +257,8 @@ export class TaskLifecycleService {
         title: `${taskIdentifier} review failed — needs attention`,
         type: 'decision',
       });
-      return false; // proceed to checkpoint (will pause)
     } catch (e) {
       console.warn('[TaskLifecycle] auto-review failed:', e);
-      return false;
     }
   }
 }

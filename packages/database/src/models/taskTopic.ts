@@ -44,6 +44,19 @@ export class TaskTopicModel {
       );
   }
 
+  async updateOperationId(taskId: string, topicId: string, operationId?: string): Promise<void> {
+    await this.db
+      .update(taskTopics)
+      .set({ operationId })
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.userId, this.userId),
+        ),
+      );
+  }
+
   async updateHandoff(taskId: string, topicId: string, handoff: TaskTopicHandoff): Promise<void> {
     await this.db
       .update(taskTopics)

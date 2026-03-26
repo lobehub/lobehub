@@ -822,8 +822,13 @@ export const taskRouter = router({
         // Update task topic count, current topic, and association
         if (result.topicId) {
           if (continueTopicId) {
-            // Continuing existing topic — update status back to running
+            // Continuing existing topic — update status and operationId
             await ctx.taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
+            await ctx.taskTopicModel.updateOperationId(
+              task.id,
+              continueTopicId,
+              result.operationId,
+            );
             await model.updateCurrentTopic(task.id, continueTopicId);
           } else {
             // New topic
