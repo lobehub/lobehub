@@ -56,7 +56,7 @@ describe('Task Router Integration', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
-    testAgentId = await createTestAgent(serverDB, userId, 'test-agent');
+    testAgentId = await createTestAgent(serverDB, userId, 'agt_test');
     caller = taskRouter.createCaller(createTestContext(userId));
   });
 
@@ -71,17 +71,17 @@ describe('Task Router Integration', () => {
         name: 'Write Book',
       });
 
-      expect(result.data.identifier).toBe('TASK-1');
+      expect(result.data.identifier).toBe('T-1');
       expect(result.data.name).toBe('Write Book');
       expect(result.data.status).toBe('backlog');
 
       // find
-      const found = await caller.find({ id: 'TASK-1' });
+      const found = await caller.find({ id: 'T-1' });
       expect(found.data.id).toBe(result.data.id);
 
       // detail
-      const detail = await caller.detail({ id: 'TASK-1' });
-      expect(detail.data.identifier).toBe('TASK-1');
+      const detail = await caller.detail({ id: 'T-1' });
+      expect(detail.data.identifier).toBe('T-1');
       expect(detail.data.subtasks).toHaveLength(0);
       expect(detail.data.activities).toBeUndefined();
     });
@@ -206,7 +206,7 @@ describe('Task Router Integration', () => {
   describe('run idempotency', () => {
     it('should reject run when a topic is already running', async () => {
       const task = await caller.create({
-        assigneeAgentId: 'test-agent',
+        assigneeAgentId: testAgentId,
         instruction: 'Test',
       });
 
@@ -219,7 +219,7 @@ describe('Task Router Integration', () => {
 
     it('should reject continue on already running topic', async () => {
       const task = await caller.create({
-        assigneeAgentId: 'test-agent',
+        assigneeAgentId: testAgentId,
         instruction: 'Test',
       });
 
@@ -236,7 +236,7 @@ describe('Task Router Integration', () => {
       mockExecAgent.mockRejectedValueOnce(new Error('LLM failed'));
 
       const task = await caller.create({
-        assigneeAgentId: 'test-agent',
+        assigneeAgentId: testAgentId,
         instruction: 'Test',
       });
 
@@ -266,7 +266,7 @@ describe('Task Router Integration', () => {
   describe('cancelTopic', () => {
     it('should cancel a running topic and pause task', async () => {
       const task = await caller.create({
-        assigneeAgentId: 'test-agent',
+        assigneeAgentId: testAgentId,
         instruction: 'Test',
       });
 
@@ -282,7 +282,7 @@ describe('Task Router Integration', () => {
 
     it('should reject cancel on non-running topic', async () => {
       const task = await caller.create({
-        assigneeAgentId: 'test-agent',
+        assigneeAgentId: testAgentId,
         instruction: 'Test',
       });
 
@@ -345,7 +345,7 @@ describe('Task Router Integration', () => {
   describe('heartbeat timeout detection', () => {
     it('should auto-detect timeout on detail and pause task', async () => {
       const task = await caller.create({
-        assigneeAgentId: 'test-agent',
+        assigneeAgentId: testAgentId,
         instruction: 'Test',
       });
 
