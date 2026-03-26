@@ -256,6 +256,8 @@
   "plans.payonce.ok": "确认选择",
   "plans.payonce.popconfirm": "一次性付款后，需等订阅到期才能切换计划或更改计费周期。请确认您的选择。",
   "plans.payonce.tooltip": "一次性付款需等订阅到期后才能切换计划或更改计费周期",
+  "plans.payonce.upgradeOk": "确认升级",
+  "plans.payonce.upgradePopconfirm": "当前计划的剩余价值将作为折扣应用于新计划。",
   "plans.pendingDowngrade": "已预约降级",
   "plans.plan.enterprise.contactSales": "联系销售",
   "plans.plan.enterprise.title": "企业版",

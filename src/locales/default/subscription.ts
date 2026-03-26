@@ -293,6 +293,9 @@ export default {
     'After one-time payment, you must wait until subscription expires to switch plans or change billing cycle. Please confirm your selection.',
   'plans.payonce.tooltip':
     'One-time payment requires waiting until subscription expires to switch plans or change billing cycle',
+  'plans.payonce.upgradeOk': 'Confirm Upgrade',
+  'plans.payonce.upgradePopconfirm':
+    'Remaining value from your current plan will be applied as a discount to the new plan.',
   'plans.plan.enterprise.contactSales': 'Contact Sales',
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
