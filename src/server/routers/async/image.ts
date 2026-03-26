@@ -155,6 +155,22 @@ const categorizeError = (
     };
   }
 
+  // Content moderation / policy violation — return a clean, generic message
+  const errorMsg: string = error.message || error.error?.message || '';
+  const errorCode: string = error.code || error.error?.code || '';
+  if (
+    errorCode === 'InputTextSensitiveContentDetected' ||
+    errorCode === 'content_policy_violation' ||
+    errorMsg.toLowerCase().includes('content policy') ||
+    errorMsg.toLowerCase().includes('sensitive information')
+  ) {
+    return {
+      errorMessage:
+        'The request content may violate content policy. Please modify your prompt and try again.',
+      errorType: AsyncTaskErrorType.ServerError,
+    };
+  }
+
   if (error instanceof AsyncTaskError) {
     return {
       errorMessage: typeof error.body === 'string' ? error.body : error.body.detail,

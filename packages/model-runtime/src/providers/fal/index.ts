@@ -103,6 +103,22 @@ export class LobeFalAI implements LobeRuntimeAI {
         });
       }
 
+      // 422 ValidationError with content_policy_violation — show a clean message
+      if (error instanceof Error && 'status' in error && error.status === 422) {
+        const body = 'body' in error ? (error as any).body : undefined;
+        const hasContentPolicyViolation =
+          Array.isArray(body?.detail) &&
+          body.detail.some((d: any) => d.type === 'content_policy_violation');
+
+        if (hasContentPolicyViolation) {
+          throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+            error,
+            message:
+              'The request content violates content policy. Please modify your prompt and try again.',
+          });
+        }
+      }
+
       throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, { error });
     }
   }
