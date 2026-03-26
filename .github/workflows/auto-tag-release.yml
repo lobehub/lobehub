@@ -26,8 +26,9 @@ jobs:
 
       - name: Detect release PR (version from title)
         id: release
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $PR_TITLE"
 
           # Match "🚀 release: v{x.x.x}" format (strict semver: x.y.z with optional -prerelease or +build)
@@ -44,9 +45,10 @@ jobs:
       - name: Detect patch PR (branch first, title fallback)
         id: patch
         if: steps.release.outputs.should_tag != 'true'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          HEAD_REF="${{ github.event.pull_request.head.ref }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
           echo "Head ref: $HEAD_REF"
           echo "PR Title: $PR_TITLE"
 
