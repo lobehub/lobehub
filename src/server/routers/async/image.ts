@@ -8,7 +8,8 @@ import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
-import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
+// TODO: temporarily disabled until notification UI is polished
+// import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
@@ -359,14 +360,15 @@ export const imageRouter = router({
             status: AsyncTaskStatus.Success,
           });
 
-          notifyImageCompleted({
-            duration,
-            generationBatchId,
-            model,
-            prompt: params.prompt,
-            topicId: generationTopicId,
-            userId: ctx.userId,
-          }).catch((err) => console.error('[image-async] notification failed:', err));
+          // TODO: temporarily disabled until notification UI is polished
+          // notifyImageCompleted({
+          //   duration,
+          //   generationBatchId,
+          //   model,
+          //   prompt: params.prompt,
+          //   topicId: generationTopicId,
+          //   userId: ctx.userId,
+          // }).catch((err) => console.error('[image-async] notification failed:', err));
 
           if (ENABLE_BUSINESS_FEATURES) {
             await chargeAfterGenerate({
