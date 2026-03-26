@@ -4,7 +4,7 @@ exports[`buildTaskRunPrompt > should build prompt with only task instruction 1`]
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 帮我写一本 AI Agent 技术书籍
 
 Review: (not configured)
@@ -15,7 +15,7 @@ exports[`buildTaskRunPrompt > should build prompt with task description + instru
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 帮我写一本 AI Agent 技术书籍，目标 8 章
 Description: 面向开发者的技术书籍
 
@@ -27,7 +27,7 @@ exports[`buildTaskRunPrompt > should handle empty activities gracefully 1`] = `
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 
 Review: (not configured)
@@ -46,7 +46,7 @@ exports[`buildTaskRunPrompt > should handle full scenario with all sections 1`] 
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写一本 AI Agent 书，目标 8 章
 Description: 面向开发者的 AI Agent 技术书籍
 Topics: 1
@@ -65,7 +65,7 @@ exports[`buildTaskRunPrompt > should include activity history with topics and br
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 Topics: 2
 
@@ -87,7 +87,7 @@ exports[`buildTaskRunPrompt > should include agent comments with author label an
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 
 Review: (not configured)
@@ -157,7 +157,7 @@ exports[`buildTaskRunPrompt > should only include user comments in user_feedback
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 
 Review: (not configured)
@@ -180,7 +180,7 @@ exports[`buildTaskRunPrompt > should place high_priority_instruction first, then
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 
 Review: (not configured)
@@ -199,7 +199,7 @@ exports[`buildTaskRunPrompt > should prioritize user feedback at the top 1`] = `
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 
 Review: (not configured)
@@ -214,7 +214,7 @@ exports[`buildTaskRunPrompt > should show resolved action and comment on briefs 
 "<task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-2 第2章
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写第2章
 
 Review: (not configured)
@@ -232,7 +232,7 @@ exports[`buildTaskRunPrompt > should truncate comments to 80 chars in activities
 <task>
 <hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
 TASK-1 写一本书
-Status: ? undefined     Priority: -
+Status: ● running     Priority: -
 Instruction: 写书
 
 Review: (not configured)

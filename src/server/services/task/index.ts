@@ -89,7 +89,7 @@ export class TaskService {
 
     const activities: TaskDetailActivity[] = [
       ...topics.map((t) => ({
-        id: t.topicId,
+        id: t.topicId ?? undefined,
         seq: t.seq,
         status: t.status,
         time: toISO(t.createdAt),

@@ -5,11 +5,14 @@ import { buildTaskRunPrompt } from './index';
 // Fixed reference time for stable timeAgo output
 const NOW = new Date('2026-03-22T12:00:00Z');
 
+const baseTask = { id: 'task_test', status: 'running' };
+
 describe('buildTaskRunPrompt', () => {
   it('should build prompt with only task instruction', () => {
     const result = buildTaskRunPrompt(
       {
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '帮我写一本 AI Agent 技术书籍',
           name: '写一本书',
@@ -25,6 +28,7 @@ describe('buildTaskRunPrompt', () => {
     const result = buildTaskRunPrompt(
       {
         task: {
+          ...baseTask,
           description: '面向开发者的技术书籍',
           identifier: 'TASK-1',
           instruction: '帮我写一本 AI Agent 技术书籍，目标 8 章',
@@ -47,6 +51,7 @@ describe('buildTaskRunPrompt', () => {
           ],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',
@@ -76,6 +81,7 @@ describe('buildTaskRunPrompt', () => {
           ],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',
@@ -99,6 +105,7 @@ describe('buildTaskRunPrompt', () => {
         },
         extraPrompt: '这次重点关注第3章',
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',
@@ -143,16 +150,16 @@ describe('buildTaskRunPrompt', () => {
           topics: [
             {
               createdAt: '2026-03-21T17:00:00Z',
+              handoff: { summary: '完成了大纲制定' },
               id: 'tpc_aaa',
-              metadata: { handoff: { summary: '完成了大纲制定' } },
               seq: 1,
               status: 'completed',
               title: '制定大纲',
             },
             {
               createdAt: '2026-03-21T17:31:00Z',
+              handoff: { summary: '修订了大纲并拆分子任务' },
               id: 'tpc_bbb',
-              metadata: { handoff: { summary: '修订了大纲并拆分子任务' } },
               seq: 2,
               status: 'completed',
               title: '修订大纲',
@@ -160,6 +167,7 @@ describe('buildTaskRunPrompt', () => {
           ],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',
@@ -198,6 +206,7 @@ describe('buildTaskRunPrompt', () => {
           ],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-2',
           instruction: '写第2章',
           name: '第2章',
@@ -232,8 +241,8 @@ describe('buildTaskRunPrompt', () => {
           topics: [
             {
               createdAt: '2026-03-21T17:00:00Z',
+              handoff: { summary: '完成大纲' },
               id: 'tpc_001',
-              metadata: { handoff: { summary: '完成大纲' } },
               seq: 1,
               status: 'completed',
               title: '制定大纲',
@@ -242,6 +251,7 @@ describe('buildTaskRunPrompt', () => {
         },
         extraPrompt: '这次直接开始写第1章',
         task: {
+          ...baseTask,
           description: '面向开发者的 AI Agent 技术书籍',
           identifier: 'TASK-1',
           instruction: '写一本 AI Agent 书，目标 8 章',
@@ -272,6 +282,7 @@ describe('buildTaskRunPrompt', () => {
           topics: [],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',
@@ -323,6 +334,7 @@ describe('buildTaskRunPrompt', () => {
           comments: [{ content: longContent, createdAt: '2026-03-22T11:00:00Z' }],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',
@@ -432,6 +444,7 @@ describe('buildTaskRunPrompt', () => {
           ],
         },
         task: {
+          ...baseTask,
           identifier: 'TASK-1',
           instruction: '写书',
           name: '写一本书',

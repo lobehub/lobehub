@@ -53,5 +53,5 @@ export const TASK_TOPIC_HANDOFF_SCHEMA = {
     title: { type: 'string' },
   },
   required: ['title', 'summary'],
-  type: 'object',
+  type: 'object' as const,
 };
