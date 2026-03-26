@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { responsesAPIModels } from '../../const/models';
+import * as openAIContextBuilders from '../../core/contextBuilders/openai';
 import { LobeGithubCopilotAI } from './index';
 
 // Mock console.error to avoid polluting test output
@@ -13,7 +15,59 @@ global.fetch = mockFetch;
 describe('LobeGithubCopilotAI', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     mockFetch.mockReset();
+  });
+
+  describe('image payload conversion', () => {
+    it('should force image base64 conversion in responses mode', async () => {
+      const convertResponseInputsSpy = vi
+        .spyOn(openAIContextBuilders, 'convertOpenAIResponseInputs')
+        .mockRejectedValue({ status: 400 });
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new LobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'gpt-5.1-codex-mini',
+        } as any),
+      ).rejects.toBeDefined();
+
+      expect(convertResponseInputsSpy).toHaveBeenCalledWith(expect.any(Array), {
+        forceImageBase64: true,
+        strictToolPairing: true,
+      });
+    });
+
+    it('should force image base64 conversion in chat completions mode', async () => {
+      const convertMessagesSpy = vi
+        .spyOn(openAIContextBuilders, 'convertOpenAIMessages')
+        .mockRejectedValue({ status: 400 });
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new LobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'gpt-4o',
+        } as any),
+      ).rejects.toBeDefined();
+
+      expect(convertMessagesSpy).toHaveBeenCalledWith(expect.any(Array), {
+        forceImageBase64: true,
+      });
+    });
   });
 
   describe('constructor', () => {
@@ -187,31 +241,12 @@ describe('LobeGithubCopilotAI', () => {
   });
 
   describe('responses api routing helpers', () => {
-    it('should use responses API for responses-only model', () => {
-      const instance = new LobeGithubCopilotAI({ apiKey: 'ghp_test' });
-
-      const shouldUse = (instance as any).shouldUseResponsesAPI('gpt-5.1-codex-mini');
-
-      expect(shouldUse).toBe(true);
+    it('should contain codex mini model in responses api model list', () => {
+      expect(responsesAPIModels.has('gpt-5.1-codex-mini')).toBe(true);
     });
 
-    it('should respect apiMode override to chatCompletion', () => {
-      const instance = new LobeGithubCopilotAI({ apiKey: 'ghp_test' });
-
-      const shouldUse = (instance as any).shouldUseResponsesAPI(
-        'gpt-5.1-codex-mini',
-        'chatCompletion',
-      );
-
-      expect(shouldUse).toBe(false);
-    });
-
-    it('should respect apiMode override to responses', () => {
-      const instance = new LobeGithubCopilotAI({ apiKey: 'ghp_test' });
-
-      const shouldUse = (instance as any).shouldUseResponsesAPI('gpt-4o', 'responses');
-
-      expect(shouldUse).toBe(true);
+    it('should not treat gpt-4o as responses-only model', () => {
+      expect(responsesAPIModels.has('gpt-4o')).toBe(false);
     });
 
     it('should convert chat completion tool to responses tool', () => {
@@ -243,6 +278,47 @@ describe('LobeGithubCopilotAI', () => {
         },
         type: 'function',
       });
+    });
+
+    it('should map verbosity to responses text.verbosity', async () => {
+      vi.resetModules();
+
+      const responsesCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+
+      vi.doMock('openai', () => {
+        return {
+          default: class MockOpenAI {
+            responses = {
+              create: responsesCreateMock,
+            };
+          },
+        };
+      });
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'gpt-5.1-codex-mini',
+          verbosity: 'high',
+        } as any),
+      ).rejects.toBeDefined();
+
+      expect(responsesCreateMock).toHaveBeenCalledTimes(1);
+
+      const payload = responsesCreateMock.mock.calls[0][0];
+      expect(payload.text).toEqual({ verbosity: 'high' });
+      expect(payload.verbosity).toBeUndefined();
+
+      vi.doUnmock('openai');
     });
   });
 });

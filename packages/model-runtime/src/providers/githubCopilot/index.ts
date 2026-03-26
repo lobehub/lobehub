@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import { responsesAPIModels } from '../../const/models';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
+  convertOpenAIMessages,
   convertOpenAIResponseInputs,
   pruneReasoningPayload,
 } from '../../core/contextBuilders/openai';
@@ -172,14 +173,40 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       const { model, ...rest } = this.handlePayload(payload);
       const shouldStream = rest.stream !== false;
 
-      if (this.shouldUseResponsesAPI(model, (payload as any).apiMode)) {
-        const input = await convertOpenAIResponseInputs(rest.messages as any, {
+      if (responsesAPIModels.has(model) || (payload as any).apiMode === 'responses') {
+        const {
+          messages,
+          reasoning_effort,
+          tools,
+          reasoning,
+          max_tokens,
+          verbosity,
+          ...responseRest
+        } = rest as any;
+
+        delete responseRest.apiMode;
+        delete responseRest.frequency_penalty;
+        delete responseRest.presence_penalty;
+
+        const input = await convertOpenAIResponseInputs(messages as any, {
+          forceImageBase64: true,
           strictToolPairing: true,
         });
 
-        const responseTools = rest.tools?.map(this.convertChatCompletionToolToResponseTool);
+        const responseTools = tools?.map(this.convertChatCompletionToolToResponseTool);
         const response = await client.responses.create(
           {
+            ...responseRest,
+            ...(reasoning || reasoning_effort
+              ? {
+                  reasoning: {
+                    ...reasoning,
+                    ...(reasoning_effort && { effort: reasoning_effort }),
+                  },
+                }
+              : {}),
+            ...(max_tokens && { max_output_tokens: max_tokens }),
+            text: verbosity ? { verbosity } : undefined,
             input,
             model,
             stream: shouldStream,
@@ -211,10 +238,14 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       }
 
       const { apiMode: _, ...cleanedRest } = rest as any;
+      const messages = await convertOpenAIMessages(cleanedRest.messages as any, {
+        forceImageBase64: true,
+      });
 
       const response = await client.chat.completions.create(
         {
           ...cleanedRest,
+          messages,
           model,
           stream: shouldStream,
         } as OpenAI.ChatCompletionCreateParamsStreaming,
@@ -271,12 +302,6 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
     }
 
     return { ...payload, stream: true };
-  }
-
-  private shouldUseResponsesAPI(model: string, apiMode?: string): boolean {
-    if (apiMode === 'chatCompletion') return false;
-    if (apiMode === 'responses') return true;
-    return responsesAPIModels.has(model);
   }
 
   private convertChatCompletionToolToResponseTool = (tool: any): OpenAI.Responses.Tool => {
