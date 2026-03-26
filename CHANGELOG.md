@@ -2,6 +2,64 @@
 
 # Changelog
 
+### [Version 2.1.45](https://github.com/lobehub/lobe-chat/compare/v2.1.44...v2.1.45)
+
+<sup>Released on **2026-03-26**</sup>
+
+#### 👷 Build System
+
+- **misc**: add agent task system database schema.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **misc**: add agent task system database schema, closes [#13280](https://github.com/lobehub/lobe-chat/issues/13280) ([b005a9c](https://github.com/lobehub/lobe-chat/commit/b005a9c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.44](https://github.com/lobehub/lobe-chat/compare/v2.2.0-nightly.202603200623...v2.1.44)
+
+<sup>Released on **2026-03-20**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: misc UI/UX improvements and bug fixes.
+
+#### 💄 Styles
+
+- **misc**: add image/video switch.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: misc UI/UX improvements and bug fixes, closes [#13153](https://github.com/lobehub/lobe-chat/issues/13153) ([abd152b](https://github.com/lobehub/lobe-chat/commit/abd152b))
+
+#### Styles
+
+- **misc**: add image/video switch, closes [#13152](https://github.com/lobehub/lobe-chat/issues/13152) ([2067cb2](https://github.com/lobehub/lobe-chat/commit/2067cb2))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.43](https://github.com/lobehub/lobe-chat/compare/v2.1.42...v2.1.43)
 
 <sup>Released on **2026-03-16**</sup>
