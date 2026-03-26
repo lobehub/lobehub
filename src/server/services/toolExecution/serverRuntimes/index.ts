@@ -19,7 +19,6 @@ import { remoteDeviceRuntime } from './remoteDevice';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { taskRuntime } from './task';
-import { toolsActivatorRuntime } from './tools';
 import { topicReferenceRuntime } from './topicReference';
 import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
 import { webBrowsingRuntime } from './webBrowsing';
