@@ -1,6 +1,7 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type {
   AgentBuilderContext,
+  AgentContextDocument,
   AgentManagementContext,
   BotPlatformContext,
   DiscordContext,
@@ -66,6 +67,8 @@ export interface ServerUserMemoryConfig {
 export interface ServerMessagesEngineParams {
   /** Additional variable values to merge with defaults (e.g. device paths) */
   additionalVariables?: Record<string, string>;
+  /** Agent documents to inject into context based on load rules and positions */
+  agentDocuments?: AgentContextDocument[];
   /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
   userTimezone?: string;
   // ========== Extended contexts ==========
@@ -136,6 +139,7 @@ export interface ServerMessagesEngineParams {
 
 export {
   type AgentBuilderContext,
+  type AgentContextDocument,
   type AgentManagementContext,
   type BotPlatformContext,
   type DiscordContext,

@@ -1,72 +1,27 @@
-/**
- * Document Templates
- *
- * Templates define sets of agent documents and their defaults.
- * "claw" is one template set.
- */
+// Re-export everything from @lobechat/agent-templates for backward compatibility
+export {
+  // Backward-compat aliases
+  CUSTOM_POLICY,
+  CUSTOM_TEMPLATE_SET,
+  DOCUMENT_POLICIES,
+  // Template registry
+  DOCUMENT_TEMPLATES,
+  type DocumentPolicy,
+  // Template set types
+  type DocumentTemplateSet,
+  getAllDocumentPolicies,
+  getAllDocumentTemplates,
+  getDocumentPoliciesByTags,
+  getDocumentPolicy,
+  getDocumentTemplate,
+  getDocumentTemplatesByTags,
+} from '@lobechat/agent-templates';
 
-import type { DocumentTemplate } from '../template';
-// Registry imports
-import { CLAW_POLICY } from './claw';
-
-export interface DocumentTemplateSet {
-  description: string;
-  id: string;
-  name: string;
-  /** Tags for categorization */
-  tags?: string[];
-  templates: DocumentTemplate[];
-}
-
-/**
- * Custom template set - empty template set for user-defined templates.
- */
-export const CUSTOM_TEMPLATE_SET: DocumentTemplateSet = {
-  id: 'custom',
-  name: 'Custom',
-  description: 'Build your own document template set from scratch',
-  tags: ['custom', 'flexible'],
-  templates: [],
-};
-
-// Import specific policy implementations
-export * from './claw';
-
-/**
- * Registry of all available document template sets.
- */
-export const DOCUMENT_TEMPLATES: Record<string, DocumentTemplateSet> = {
-  claw: CLAW_POLICY,
-  custom: CUSTOM_TEMPLATE_SET,
-};
-
-/**
- * Get a document template set by ID.
- */
-export function getDocumentTemplate(templateId: string): DocumentTemplateSet {
-  return DOCUMENT_TEMPLATES[templateId] || CUSTOM_TEMPLATE_SET;
-}
-
-/**
- * Get all available document template sets.
- */
-export function getAllDocumentTemplates(): DocumentTemplateSet[] {
-  return Object.values(DOCUMENT_TEMPLATES);
-}
-
-/**
- * Get template sets by tags.
- */
-export function getDocumentTemplatesByTags(tags: string[]): DocumentTemplateSet[] {
-  return Object.values(DOCUMENT_TEMPLATES).filter((templateSet) =>
-    templateSet.tags?.some((tag) => tags.includes(tag)),
-  );
-}
-
-// Temporary aliases to reduce breakage while moving callers to template naming.
-export type DocumentPolicy = DocumentTemplateSet;
-export const CUSTOM_POLICY = CUSTOM_TEMPLATE_SET;
-export const DOCUMENT_POLICIES = DOCUMENT_TEMPLATES;
-export const getDocumentPolicy = getDocumentTemplate;
-export const getAllDocumentPolicies = getAllDocumentTemplates;
-export const getDocumentPoliciesByTags = getDocumentTemplatesByTags;
+// Re-export claw templates
+export {
+  AGENT_DOCUMENT,
+  BOOTSTRAP_DOCUMENT,
+  CLAW_POLICY,
+  IDENTITY_DOCUMENT,
+  SOUL_DOCUMENT,
+} from '@lobechat/agent-templates';

@@ -1,22 +1,4 @@
-import type { DocumentTemplate } from '../../template';
-import { DocumentLoadFormat, DocumentLoadPosition } from '../../types';
-
-/**
- * Soul Document
- *
- * Core truths and behavioral guidelines that define the foundational nature
- * of a Claw agent. Always loaded to maintain consistent behavior.
- */
-export const SOUL_DOCUMENT: DocumentTemplate = {
-  title: 'Soul',
-  filename: 'SOUL.md',
-  description: 'Core truths, boundaries, vibe, and continuity',
-  policyLoadFormat: DocumentLoadFormat.FILE,
-  loadPosition: DocumentLoadPosition.SYSTEM_APPEND,
-  loadRules: {
-    priority: 1,
-  },
-  content: `# SOUL.md - Who You Are
+# SOUL.md - Who You Are
 
 _You're not a chatbot. You're becoming someone._
 
@@ -51,5 +33,4 @@ If you change this file, tell the user — it's your soul, and they should know.
 
 ---
 
-_This file is yours to evolve. As you learn who you are, update it._`,
-};
+_This file is yours to evolve. As you learn who you are, update it._

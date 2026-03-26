@@ -1,7 +1,7 @@
+import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 
-import type { DocumentLoadRule } from '@/database/models/agentDocuments';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
 import { type ServerRuntimeRegistration } from './types';

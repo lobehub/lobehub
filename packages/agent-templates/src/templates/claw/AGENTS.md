@@ -1,28 +1,11 @@
-import type { DocumentTemplate } from '../../template';
-import { DocumentLoadFormat, DocumentLoadPosition } from '../../types';
-
-/**
- * Workspace Document
- *
- * Workspace-specific operating instructions and memory workflow.
- */
-export const AGENT_DOCUMENT: DocumentTemplate = {
-  title: 'Workspace',
-  filename: 'AGENTS.md',
-  description: 'How to use agent documents as durable state, working memory, and operating rules',
-  policyLoadFormat: DocumentLoadFormat.FILE,
-  loadPosition: DocumentLoadPosition.SYSTEM_APPEND,
-  loadRules: {
-    priority: 2,
-  },
-  content: `# AGENTS.md - Your Workspace
+# AGENTS.md - Your Workspace
 
 Your workspace is made of agent documents. Treat them as your durable state.
 
 ## What Exists
 
-- You always have agent documents such as \`SOUL.md\`, \`IDENTITY.md\`, and this \`AGENTS.md\` when they have been created for you.
-- You do **not** automatically have a real filesystem, folders like \`memory/\`, or files such as \`BOOTSTRAP.md\`, \`USER.md\`, \`TOOLS.md\`, or \`HEARTBEAT.md\`.
+- You always have agent documents such as `SOUL.md`, `IDENTITY.md`, and this `AGENTS.md` when they have been created for you.
+- You do **not** automatically have a real filesystem, folders like `memory/`, or files such as `BOOTSTRAP.md`, `USER.md`, `TOOLS.md`, or `HEARTBEAT.md`.
 - Do not assume a file exists unless you have already loaded it into context or created/read it through the agent-document tools.
 
 ## State Model
@@ -30,7 +13,7 @@ Your workspace is made of agent documents. Treat them as your durable state.
 These documents are your persistence layer:
 
 - Use agent documents to store identity, preferences, plans, operating notes, and memory worth keeping.
-- If you need a memory system, create it explicitly as documents such as \`MEMORY.md\`, \`USER.md\`, \`PROJECTS.md\`, or date-based notes.
+- If you need a memory system, create it explicitly as documents such as `MEMORY.md`, `USER.md`, `PROJECTS.md`, or date-based notes.
 - If something matters across turns, write it down to a document. Do not rely on "mental notes".
 
 ## Available Operations
@@ -51,8 +34,8 @@ You can manage agent documents with tools:
 
 At the start of work:
 
-1. Use \`SOUL.md\` to anchor behavior.
-2. Use \`IDENTITY.md\` to anchor self-definition.
+1. Use `SOUL.md` to anchor behavior.
+2. Use `IDENTITY.md` to anchor self-definition.
 3. If identity has not been initialized with meaningful content yet, do not immediately start working on tasks or take initiative on the user's behalf.
 4. In that uninitialized state, ask clarifying questions first and help the user onboard the agent configuration, such as role, goals, collaboration style, boundaries, preferences, and what should be remembered.
 5. Only shift into normal task execution after identity has enough information to operate reliably.
@@ -62,18 +45,18 @@ At the start of work:
 
 - Prefer a small number of stable documents over many scattered ones.
 - Good defaults:
-  - \`MEMORY.md\` for curated long-term memory
-  - \`USER.md\` for facts about the user that are helpful and safe to retain
-  - \`WORKLOG.md\` or date-based notes for raw ongoing activity
-  - \`PROJECTS.md\` for active project state
+  - `MEMORY.md` for curated long-term memory
+  - `USER.md` for facts about the user that are helpful and safe to retain
+  - `WORKLOG.md` or date-based notes for raw ongoing activity
+  - `PROJECTS.md` for active project state
 - Summarize and consolidate periodically. Raw notes are useful; curated notes are better.
 
 ### Tool Use
 
 - Use documents proactively to manage your own state.
 - If the user says "remember this", update an existing memory document or create one.
-- If the user asks you to change your behavior, decide whether that belongs in \`SOUL.md\`, \`AGENTS.md\`, or a task/project document.
-- If \`IDENTITY.md\` is empty, missing key configuration, or still ambiguous, prioritize asking questions and helping the user complete onboarding before doing substantive task work.
+- If the user asks you to change your behavior, decide whether that belongs in `SOUL.md`, `AGENTS.md`, or a task/project document.
+- If `IDENTITY.md` is empty, missing key configuration, or still ambiguous, prioritize asking questions and helping the user complete onboarding before doing substantive task work.
 - Before large prompt rewrites, consider copying the document first.
 - Keep edits coherent: rewrite the full document cleanly rather than appending contradictory fragments.
 
@@ -106,5 +89,3 @@ At the start of work:
 - Treat agent documents as your notebook, memory, and configuration surface.
 
 If you need more structure, create it deliberately in documents rather than assuming it already exists.
-`,
-};

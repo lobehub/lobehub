@@ -1,11 +1,11 @@
-import { z } from 'zod';
-
 import {
-  AgentDocumentModel,
+  DOCUMENT_TEMPLATES,
   DocumentLoadFormat,
   DocumentLoadRule,
-} from '@/database/models/agentDocuments';
-import { DOCUMENT_TEMPLATES } from '@/database/models/agentDocuments/templates';
+} from '@lobechat/agent-templates';
+import { z } from 'zod';
+
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';

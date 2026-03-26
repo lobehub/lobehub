@@ -1,7 +1,7 @@
+import type { DocumentLoadFormat, DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 import { AgentDocumentsExecutor } from '@lobechat/builtin-tool-agent-documents/executor';
 
-import type { DocumentLoadFormat, DocumentLoadRule } from '@/database/models/agentDocuments';
 import { agentDocumentService } from '@/services/agentDocument';
 
 const runtime = new AgentDocumentsExecutionRuntime({
