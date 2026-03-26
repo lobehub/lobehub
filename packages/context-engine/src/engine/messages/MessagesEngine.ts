@@ -360,8 +360,8 @@ export class MessagesEngine {
         : []),
 
       // =============================================
-      // Phase 6: Content Processing & Cleanup
-      // Final transformations: multimodal encoding, tool calls, cleanup
+      // Phase 6: Content Processing
+      // Multimodal encoding, tool calls, reaction feedback
       // =============================================
 
       // Reaction feedback
@@ -381,6 +381,12 @@ export class MessagesEngine {
         model,
         provider,
       }),
+
+      // =============================================
+      // Phase 7: Cleanup
+      // Final reordering, force finish, and message cleanup
+      // =============================================
+
       // Tool message reordering
       new ToolMessageReorder(),
       // Force finish summary (when maxSteps exceeded)
