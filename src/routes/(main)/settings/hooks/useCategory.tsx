@@ -2,7 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
-  BellIcon,
+  // BellIcon,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
