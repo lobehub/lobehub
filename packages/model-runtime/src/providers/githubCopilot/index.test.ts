@@ -417,4 +417,125 @@ describe('LobeGithubCopilotAI', () => {
       vi.doUnmock('openai');
     });
   });
+
+  describe('anthropic mode for claude models', () => {
+    it('should route claude models to anthropic messages API', async () => {
+      vi.resetModules();
+
+      const openAIChatCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+      const openAIResponsesCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+      const anthropicMessagesCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+      const anthropicCtorSpy = vi.fn();
+
+      vi.doMock('openai', () => {
+        return {
+          default: class MockOpenAI {
+            chat = {
+              completions: {
+                create: openAIChatCreateMock,
+              },
+            };
+
+            responses = {
+              create: openAIResponsesCreateMock,
+            };
+          },
+        };
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => {
+        return {
+          default: class MockAnthropic {
+            messages = {
+              create: anthropicMessagesCreateMock,
+            };
+
+            constructor(options: any) {
+              anthropicCtorSpy(options);
+            }
+          },
+        };
+      });
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'claude-3.7-sonnet',
+        } as any),
+      ).rejects.toBeDefined();
+
+      expect(anthropicMessagesCreateMock).toHaveBeenCalledTimes(1);
+      expect(openAIChatCreateMock).not.toHaveBeenCalled();
+      expect(openAIResponsesCreateMock).not.toHaveBeenCalled();
+
+      expect(anthropicCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseURL: 'https://api.githubcopilot.com',
+          defaultHeaders: expect.objectContaining({
+            'Authorization': 'Bearer cached-bearer-token',
+            'Copilot-Integration-Id': 'vscode-chat',
+            'anthropic-version': '2023-06-01',
+          }),
+        }),
+      );
+
+      vi.doUnmock('openai');
+      vi.doUnmock('@anthropic-ai/sdk');
+    });
+
+    it('should preserve explicit thinking and effort for claude models', async () => {
+      vi.resetModules();
+
+      const anthropicMessagesCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+
+      vi.doMock('@anthropic-ai/sdk', () => {
+        return {
+          default: class MockAnthropic {
+            messages = {
+              create: anthropicMessagesCreateMock,
+            };
+          },
+        };
+      });
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          effort: 'high',
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'claude-3.7-sonnet',
+          thinking: { budget_tokens: 2048, type: 'enabled' },
+        } as any),
+      ).rejects.toBeDefined();
+
+      const payload = anthropicMessagesCreateMock.mock.calls[0][0];
+
+      expect(payload.output_config).toEqual({ effort: 'high' });
+      expect(payload.thinking).toEqual(
+        expect.objectContaining({
+          budget_tokens: 2048,
+          type: 'enabled',
+        }),
+      );
+
+      vi.doUnmock('@anthropic-ai/sdk');
+    });
+  });
 });

@@ -221,6 +221,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-opus-4.6',
     maxOutput: 128_000,
     releasedAt: '2026-02-05',
+    settings: {
+      extendParams: ['enableAdaptiveThinking', 'effort'],
+    },
     type: 'chat',
   },
   {
@@ -237,6 +240,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-opus-4.6-fast',
     maxOutput: 128_000,
     releasedAt: '2026-02-05',
+    settings: {
+      extendParams: ['enableAdaptiveThinking', 'effort'],
+    },
     type: 'chat',
   },
   {
@@ -253,6 +259,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-sonnet-4.6',
     maxOutput: 64_000,
     releasedAt: '2026-02-17',
+    settings: {
+      extendParams: ['enableAdaptiveThinking', 'enableReasoning', 'reasoningBudgetToken', 'effort'],
+    },
     type: 'chat',
   },
   {
@@ -269,6 +278,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-opus-4.5',
     maxOutput: 64_000,
     releasedAt: '2025-11-24',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
     type: 'chat',
   },
   {
@@ -284,6 +296,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-sonnet-4.5',
     maxOutput: 64_000,
     releasedAt: '2025-09-29',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
     type: 'chat',
   },
   {
@@ -301,6 +316,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-haiku-4.5',
     maxOutput: 64_000,
     releasedAt: '2025-10-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
     type: 'chat',
   },
   {
@@ -316,6 +334,9 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     id: 'claude-sonnet-4',
     maxOutput: 64_000,
     releasedAt: '2025-05-23',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
     type: 'chat',
   },
 

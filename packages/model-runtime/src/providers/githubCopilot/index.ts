@@ -1,8 +1,10 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
 import { responsesAPIModels } from '../../const/models';
+import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
   convertOpenAIMessages,
@@ -10,11 +12,12 @@ import {
   pruneReasoningPayload,
 } from '../../core/contextBuilders/openai';
 import { transformResponseAPIToStream } from '../../core/openaiCompatibleFactory';
-import { OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
+import { AnthropicStream, OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
+import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
@@ -163,8 +166,77 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     return this.executeWithRetry(async () => {
+      const inputStartAt = Date.now();
+
       // Use cached bearer token if available, otherwise exchange
       const bearerToken = this.cachedBearerToken || (await tokenManager.getToken(this.githubToken));
+
+      const { model, ...rest } = this.handlePayload(payload);
+      const shouldStream = rest.stream !== false;
+
+      if (model.toLowerCase().includes('claude')) {
+        const anthropicClient = new Anthropic({
+          apiKey: bearerToken,
+          baseURL: this.baseURL,
+          defaultHeaders: {
+            'Authorization': `Bearer ${bearerToken}`,
+            'Copilot-Integration-Id': 'vscode-chat',
+            'Editor-Plugin-Version': 'LobeChat/1.0',
+            'Editor-Version': 'LobeChat/1.0',
+            'anthropic-version': '2023-06-01',
+          },
+        });
+
+        const anthropicPayload = await buildDefaultAnthropicPayload({
+          ...(rest as ChatStreamPayload),
+          model,
+        });
+
+        const finalPayload = { ...anthropicPayload, stream: shouldStream };
+
+        if (debugParams.chatCompletion()) {
+          // eslint-disable-next-line no-console
+          console.log('[requestPayload]');
+          // eslint-disable-next-line no-console
+          console.log(JSON.stringify(finalPayload), '\n');
+        }
+
+        const response = await anthropicClient.messages.create(
+          {
+            ...finalPayload,
+            metadata: options?.user ? { user_id: options.user } : undefined,
+          },
+          {
+            headers: options?.requestHeaders,
+            signal: options?.signal,
+          },
+        );
+
+        const pricing = await getModelPricing(model, ModelProvider.GithubCopilot);
+
+        const streamResponse = response as any;
+        const [prod, useForDebug] = streamResponse.tee();
+
+        if (debugParams.chatCompletion()) {
+          const useForDebugStream =
+            useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
+
+          debugStream(useForDebugStream).catch(console.error);
+        }
+
+        return StreamingResponse(
+          AnthropicStream(prod, {
+            callbacks: options?.callback,
+            inputStartAt,
+            payload: {
+              model,
+              pricing,
+              provider: ModelProvider.GithubCopilot,
+            },
+          }),
+          { headers: options?.headers },
+        );
+      }
 
       const client = new OpenAI({
         apiKey: bearerToken,
@@ -175,9 +247,6 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           'Editor-Version': 'LobeChat/1.0',
         },
       });
-
-      const { model, ...rest } = this.handlePayload(payload);
-      const shouldStream = rest.stream !== false;
 
       if (responsesAPIModels.has(model) || (payload as any).apiMode === 'responses') {
         const {
@@ -207,6 +276,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
                 reasoning: {
                   ...reasoning,
                   ...(reasoning_effort && { effort: reasoning_effort }),
+                  summary: 'auto',
                 },
               }
             : {}),
