@@ -217,7 +217,7 @@ const Body = memo<BodyProps>(
                     components={{ bold: <strong /> }}
                     i18nKey="channel.endpointUrlHint"
                     ns="agent"
-                    values={{ fieldName: provider.fieldTags.webhook, name: provider.name }}
+                    values={{ fieldName: provider.fieldTags.webhook ?? '', name: provider.name }}
                   />
                 }
               />

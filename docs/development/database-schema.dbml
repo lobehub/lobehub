@@ -1340,6 +1340,166 @@ table sessions {
   }
 }
 
+table briefs {
+  id text [pk, not null]
+  user_id text [not null]
+  task_id text
+  cron_job_id text
+  topic_id text
+  agent_id text
+  type text [not null]
+  priority text [default: 'info']
+  title text [not null]
+  summary text [not null]
+  artifacts jsonb
+  actions jsonb
+  resolved_action text
+  resolved_comment text
+  read_at "timestamp with time zone"
+  resolved_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'briefs_user_id_idx']
+    task_id [name: 'briefs_task_id_idx']
+    cron_job_id [name: 'briefs_cron_job_id_idx']
+    agent_id [name: 'briefs_agent_id_idx']
+    type [name: 'briefs_type_idx']
+    priority [name: 'briefs_priority_idx']
+    (user_id, resolved_at) [name: 'briefs_unresolved_idx']
+  }
+}
+
+table task_comments {
+  id text [pk, not null]
+  task_id text [not null]
+  user_id text [not null]
+  author_user_id text
+  author_agent_id text
+  content text [not null]
+  editor_data jsonb
+  brief_id text
+  topic_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'task_comments_task_id_idx']
+    user_id [name: 'task_comments_user_id_idx']
+    author_user_id [name: 'task_comments_author_user_id_idx']
+    author_agent_id [name: 'task_comments_agent_id_idx']
+    brief_id [name: 'task_comments_brief_id_idx']
+    topic_id [name: 'task_comments_topic_id_idx']
+  }
+}
+
+table task_dependencies {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  depends_on_id text [not null]
+  user_id text [not null]
+  type text [not null, default: 'blocks']
+  condition jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (task_id, depends_on_id) [name: 'task_deps_unique_idx', unique]
+    task_id [name: 'task_deps_task_id_idx']
+    depends_on_id [name: 'task_deps_depends_on_id_idx']
+    user_id [name: 'task_deps_user_id_idx']
+  }
+}
+
+table task_documents {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  document_id text [not null]
+  user_id text [not null]
+  pinned_by text [not null, default: 'agent']
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (task_id, document_id) [name: 'task_docs_unique_idx', unique]
+    task_id [name: 'task_docs_task_id_idx']
+    document_id [name: 'task_docs_document_id_idx']
+    user_id [name: 'task_docs_user_id_idx']
+  }
+}
+
+table task_topics {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  topic_id text
+  user_id text [not null]
+  seq integer [not null]
+  operation_id text
+  status text [not null, default: 'running']
+  handoff jsonb
+  review_passed integer
+  review_score integer
+  review_scores jsonb
+  review_iteration integer
+  reviewed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (task_id, topic_id) [name: 'task_topics_unique_idx', unique]
+    task_id [name: 'task_topics_task_id_idx']
+    topic_id [name: 'task_topics_topic_id_idx']
+    user_id [name: 'task_topics_user_id_idx']
+    (task_id, status) [name: 'task_topics_status_idx']
+  }
+}
+
+table tasks {
+  id text [pk, not null]
+  identifier text [not null]
+  seq integer [not null]
+  created_by_user_id text [not null]
+  created_by_agent_id text
+  assignee_user_id text
+  assignee_agent_id text
+  parent_task_id text
+  name text
+  description varchar(255)
+  instruction text [not null]
+  status text [not null, default: 'backlog']
+  priority integer [default: 0]
+  sort_order integer [default: 0]
+  heartbeat_interval integer [default: 300]
+  heartbeat_timeout integer
+  last_heartbeat_at "timestamp with time zone"
+  schedule_pattern text
+  schedule_timezone text [default: 'UTC']
+  total_topics integer [default: 0]
+  max_topics integer
+  current_topic_id text
+  context jsonb [default: `{}`]
+  config jsonb [default: `{}`]
+  error text
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    
+    (identifier, created_by_user_id) [name: 'tasks_identifier_idx', unique]
+    created_by_user_id [name: 'tasks_created_by_user_id_idx']
+    created_by_agent_id [name: 'tasks_created_by_agent_id_idx']
+    assignee_user_id [name: 'tasks_assignee_user_id_idx']
+    assignee_agent_id [name: 'tasks_assignee_agent_id_idx']
+    parent_task_id [name: 'tasks_parent_task_id_idx']
+    status [name: 'tasks_status_idx']
+    priority [name: 'tasks_priority_idx']
+    (status, last_heartbeat_at) [name: 'tasks_heartbeat_idx']
+  }
+}
+
 table threads {
   id text [pk, not null]
   title text

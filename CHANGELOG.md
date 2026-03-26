@@ -2,6 +2,31 @@
 
 # Changelog
 
+### [Version 2.1.45](https://github.com/lobehub/lobe-chat/compare/v2.1.44...v2.1.45)
+
+<sup>Released on **2026-03-26**</sup>
+
+#### 👷 Build System
+
+- **misc**: add agent task system database schema.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **misc**: add agent task system database schema, closes [#13280](https://github.com/lobehub/lobe-chat/issues/13280) ([b005a9c](https://github.com/lobehub/lobe-chat/commit/b005a9c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.44](https://github.com/lobehub/lobe-chat/compare/v2.2.0-nightly.202603200623...v2.1.44)
 
 <sup>Released on **2026-03-20**</sup>
