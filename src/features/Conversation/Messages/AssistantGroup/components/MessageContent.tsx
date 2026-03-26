@@ -39,7 +39,7 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id, isFirst
     content && (
       <MarkdownMessage
         {...markdownProps}
-        animated={isFirstBlock || isToolSingleLine ? false : markdownProps.animated}
+        animated={isFirstBlock ? false : markdownProps.animated}
         className={cx(isToolSingleLine && styles.pWithTool)}
       >
         {message}
