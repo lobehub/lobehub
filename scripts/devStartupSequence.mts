@@ -8,9 +8,13 @@ const NEXT_HOST = 'localhost';
 
 /**
  * Resolve the Next.js dev port.
- * Respects the PORT environment variable, falls back to 3010.
+ * Priority: -p CLI flag > PORT env var > 3010.
  */
 const resolveNextPort = (): number => {
+  const pIndex = process.argv.indexOf('-p');
+  if (pIndex !== -1 && process.argv[pIndex + 1]) {
+    return Number(process.argv[pIndex + 1]);
+  }
   if (process.env.PORT) return Number(process.env.PORT);
   return 3010;
 };
