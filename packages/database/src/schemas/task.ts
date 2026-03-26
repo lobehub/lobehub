@@ -12,6 +12,7 @@ import {
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
 import { documents } from './file';
+import { topics } from './topic';
 import { users } from './user';
 
 // ── Tasks ────────────────────────────────────────────────
@@ -173,7 +174,7 @@ export const taskTopics = pgTable(
     taskId: text('task_id')
       .references(() => tasks.id, { onDelete: 'cascade' })
       .notNull(),
-    topicId: text('topic_id').notNull(),
+    topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),

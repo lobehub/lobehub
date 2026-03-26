@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "d5ec3479-fec9-4859-b175-42d8bbfc84b7",
+  "id": "1645e46a-4a04-4eb4-a277-8db93a1d590b",
   "policies": {},
   "prevId": "2dc5d5f6-130c-405d-8a38-bab68368d838",
   "roles": {},
@@ -10800,7 +10800,7 @@
           "name": "topic_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "user_id": {
           "name": "user_id",
@@ -10982,6 +10982,15 @@
           "columnsFrom": ["task_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "task_topics_topic_id_topics_id_fk": {
+          "name": "task_topics_topic_id_topics_id_fk",
+          "tableFrom": "task_topics",
+          "tableTo": "topics",
+          "columnsFrom": ["topic_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "task_topics_user_id_users_id_fk": {

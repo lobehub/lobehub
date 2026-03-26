@@ -1430,7 +1430,7 @@ table task_documents {
 table task_topics {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   task_id text [not null]
-  topic_id text [not null]
+  topic_id text
   user_id text [not null]
   seq integer [not null]
   operation_id text
