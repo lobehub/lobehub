@@ -170,8 +170,7 @@ export class FileActionImpl {
       // image don't need to be chunked and embedding
       if (isChunkingUnsupported(file.type)) return;
 
-      const data = await ragService.parseFileContent(fileResult.id);
-      console.info('parseFileContent data:', data);
+      await ragService.parseFileContent(fileResult.id);
     });
 
     await Promise.all(pools);
