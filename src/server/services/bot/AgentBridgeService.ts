@@ -786,7 +786,8 @@ export class AgentBridgeService {
                 totalCost: stepData.totalCost ?? 0,
                 totalTokens: stepData.totalTokens ?? 0,
               };
-              const progressText = client?.formatReply?.(msgBody, stats) ?? msgBody;
+              const formatted = client?.formatMarkdown?.(msgBody) ?? msgBody;
+              const progressText = client?.formatReply?.(formatted, stats) ?? formatted;
 
               if (content) lastLLMContent = content;
               if (toolsCalling) lastToolsCalling = toolsCalling;
@@ -849,7 +850,9 @@ export class AgentBridgeService {
                     totalCost: finalState.cost?.total ?? 0,
                     totalTokens: finalState.usage?.llm?.tokens?.total ?? 0,
                   };
-                  const finalText = client?.formatReply?.(replyBody, replyStats) ?? replyBody;
+                  const formattedBody = client?.formatMarkdown?.(replyBody) ?? replyBody;
+                  const finalText =
+                    client?.formatReply?.(formattedBody, replyStats) ?? formattedBody;
 
                   const chunks = splitMessage(finalText, charLimit);
 

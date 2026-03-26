@@ -184,7 +184,8 @@ export class BotCallbackService {
       totalTokens: body.totalTokens ?? 0,
     };
 
-    const progressText = client.formatReply?.(msgBody, stats) ?? msgBody;
+    const formatted = client.formatMarkdown?.(msgBody) ?? msgBody;
+    const progressText = client.formatReply?.(formatted, stats) ?? formatted;
 
     const isLlmFinalResponse =
       body.stepType === 'call_llm' && !body.toolsCalling?.length && body.content;
@@ -248,7 +249,8 @@ export class BotCallbackService {
       totalTokens: body.totalTokens ?? 0,
     };
 
-    const finalText = client.formatReply?.(msgBody, stats) ?? msgBody;
+    const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
+    const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
     const chunks = splitMessage(finalText, charLimit);
 
     try {

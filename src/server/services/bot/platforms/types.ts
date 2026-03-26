@@ -100,6 +100,16 @@ export interface PlatformClient {
   extractChatId: (platformThreadId: string) => string;
 
   /**
+   * Transform outbound Markdown content into a format the platform can render.
+   * Called before `formatReply` and `splitMessage`.
+   *
+   * Platforms that don't support Markdown (e.g. WeChat, QQ) should strip
+   * formatting to plain text. Platforms with native Markdown support can
+   * omit this method — the content is passed through as-is.
+   */
+  formatMarkdown?: (markdown: string) => string;
+
+  /**
    * Format the final outbound reply from body content and optional usage stats.
    * Each platform decides whether to render the stats and how to format them
    * (e.g. Discord uses `-# stats` when the user enables usage display).
@@ -276,6 +286,14 @@ export interface PlatformDefinition {
 
   /** Whether to show webhook URL for manual configuration. When true, the UI displays the webhook endpoint for the user to copy. */
   showWebhookUrl?: boolean;
+
+  /**
+   * Whether the platform supports rendering Markdown in messages.
+   * When false, outbound markdown is converted to plain text before sending,
+   * and the AI is instructed to avoid markdown formatting.
+   * Defaults to true.
+   */
+  supportsMarkdown?: boolean;
 
   /**
    * Whether the platform supports editing sent messages.
