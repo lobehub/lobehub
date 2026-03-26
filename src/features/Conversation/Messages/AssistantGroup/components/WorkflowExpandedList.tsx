@@ -2,7 +2,8 @@ import { memo } from 'react';
 
 import { type AssistantContentBlock } from '@/types/index';
 
-import ContentBlock from './ContentBlock';
+import WorkflowReasoningLine from './WorkflowReasoningLine';
+import WorkflowToolLine from './WorkflowToolLine';
 
 interface WorkflowExpandedListProps {
   assistantId: string;
@@ -13,16 +14,21 @@ interface WorkflowExpandedListProps {
 const WorkflowExpandedList = memo<WorkflowExpandedListProps>(
   ({ blocks, assistantId, disableEditing }) => {
     return (
-      <>
+      <div>
         {blocks.map((block) => (
-          <ContentBlock
-            {...block}
-            assistantId={assistantId}
-            disableEditing={disableEditing}
-            key={block.id}
-          />
+          <div key={block.id}>
+            {block.reasoning && <WorkflowReasoningLine reasoning={block.reasoning} />}
+            {block.tools?.map((tool) => (
+              <WorkflowToolLine
+                assistantMessageId={assistantId}
+                disableEditing={disableEditing}
+                key={tool.id}
+                tool={tool}
+              />
+            ))}
+          </div>
         ))}
-      </>
+      </div>
     );
   },
 );
