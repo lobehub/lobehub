@@ -1,7 +1,7 @@
 import { type SkillItem, skillsPrompts } from '@lobechat/prompts';
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
@@ -48,7 +48,7 @@ export interface SkillContextProviderConfig {
  * Injects lightweight skill metadata into the system prompt so the LLM knows
  * which skills are available and can invoke them via `runSkill`.
  */
-export class SkillContextProvider extends BaseProvider {
+export class SkillContextProvider extends BaseSystemRoleProvider {
   readonly name = 'SkillContextProvider';
 
   constructor(
@@ -58,14 +58,12 @@ export class SkillContextProvider extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
+  protected buildSystemRoleContent(_context: PipelineContext): string | null {
     const { enabledSkills } = this.config;
 
     if (!enabledSkills || enabledSkills.length === 0) {
       log('No enabled skills, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
     // Separate activated skills (inject content directly) from available skills (list only)
@@ -97,45 +95,14 @@ export class SkillContextProvider extends BaseProvider {
 
     if (contentParts.length === 0) {
       log('No skill content generated, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    this.injectSkillContext(clonedContext, contentParts.join('\n\n'));
-
-    clonedContext.metadata.skillContext = {
-      injected: true,
-      skillsCount: enabledSkills.length,
-    };
-
     log(
-      'Skill context injected: %d activated, %d available',
+      'Skill context prepared: %d activated, %d available',
       activatedSkills.length,
       availableSkills.length,
     );
-    return this.markAsExecuted(clonedContext);
-  }
-
-  /**
-   * Inject skill context into the system message
-   */
-  private injectSkillContext(context: PipelineContext, skillContent: string): void {
-    const existingSystemMessage = context.messages.find((msg) => msg.role === 'system');
-
-    if (existingSystemMessage) {
-      existingSystemMessage.content = [existingSystemMessage.content, skillContent]
-        .filter(Boolean)
-        .join('\n\n');
-
-      log(
-        `Skill context merged to existing system message, final length: ${existingSystemMessage.content.length}`,
-      );
-    } else {
-      context.messages.unshift({
-        content: skillContent,
-        id: `skill-context-${Date.now()}`,
-        role: 'system' as const,
-      } as any);
-      log(`New skill system message created, content length: ${skillContent.length}`);
-    }
+    return contentParts.join('\n\n');
   }
 }

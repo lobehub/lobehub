@@ -6,6 +6,7 @@ export { BaseFirstUserContentProvider } from './base/BaseFirstUserContentProvide
 export { BaseLastUserContentProvider } from './base/BaseLastUserContentProvider';
 export { BaseProcessor } from './base/BaseProcessor';
 export { BaseProvider } from './base/BaseProvider';
+export { BaseSystemRoleProvider } from './base/BaseSystemRoleProvider';
 
 // Context Engine
 export * from './engine';
