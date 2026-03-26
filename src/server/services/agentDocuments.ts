@@ -1,9 +1,9 @@
-import type {
-  AgentDocumentPolicy,
+import {
+  type AgentDocumentPolicy,
   type DOCUMENT_TEMPLATES,
   DocumentLoadPosition,
-  DocumentLoadRules,
-  DocumentTemplateSet,
+  type DocumentLoadRules,
+  type DocumentTemplateSet,
   getDocumentTemplate,
 } from '@lobechat/agent-templates';
 import type { LobeChatDatabase } from '@lobechat/database';
