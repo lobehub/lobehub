@@ -189,31 +189,47 @@ export class MessagesEngine {
 
     return [
       // =============================================
-      // Phase 0: History Truncation
-      // MUST be first to ensure subsequent processors only work with truncated messages
+      // Phase 1: History Truncation
+      // MUST run first — all subsequent processors work on truncated messages only
       // =============================================
 
       new HistoryTruncateProcessor({ enableHistoryCount, historyCount }),
 
       // =============================================
-      // Phase 1: System Role Assembly
-      // Builds the single system message by appending content from each provider
+      // Phase 2: System Message Assembly
+      // Each provider appends content to a single system message via BaseSystemRoleProvider
       // =============================================
 
-      // Agent's system role
+      // Agent's system role (creates the initial system message)
       new SystemRoleInjector({ systemRole }),
-      // Eval context (appends envPrompt to system message)
+      // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
       new BotPlatformContextInjector({
         context: botPlatformContext,
         enabled: !!botPlatformContext,
       }),
-      // System date (appends current date to system message)
+      // System date
       new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      // Skill context (available skills list + activated skill content)
+      new SkillContextProvider({
+        enabled: !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
+        enabledSkills: skillsConfig?.enabledSkills,
+      }),
+      // Tool system role (tool manifests and API definitions)
+      new ToolSystemRoleProvider({
+        enabled: !!(toolsConfig?.manifests && toolsConfig.manifests.length > 0),
+        isCanUseFC: capabilities?.isCanUseFC || (() => true),
+        manifests: toolsConfig?.manifests,
+        model,
+        provider,
+      }),
+      // History summary (conversation summary from compression)
+      new HistorySummaryProvider({ formatHistorySummary, historySummary }),
 
       // =============================================
-      // Phase 2: Context Injection (before first user message)
+      // Phase 3: Context Injection (before first user message)
+      // Providers consolidate into a single injection message via BaseFirstUserContentProvider
       // Order matters: first executed = first in content
       // =============================================
 
@@ -229,11 +245,11 @@ export class MessagesEngine {
         members: agentGroup?.members,
         systemPrompt: agentGroup?.systemPrompt,
       }),
-      // Discord context (channel/guild info for Discord bot scenarios)
+      // Discord context (channel/guild info)
       new DiscordContextProvider({ context: discordContext, enabled: !!discordContext }),
       // GTD Plan
       new GTDPlanInjector({ enabled: !!isGTDPlanEnabled, plan: gtd?.plan }),
-      // Knowledge (full content for agent files + metadata for knowledge bases)
+      // Knowledge (agent files + knowledge bases)
       new KnowledgeInjector({
         fileContents: knowledge?.fileContents,
         knowledgeBases: knowledge?.knowledgeBases,
@@ -250,17 +266,12 @@ export class MessagesEngine {
         enabled:
           !!toolDiscoveryConfig?.availableTools && toolDiscoveryConfig.availableTools.length > 0,
       }),
-
-      // =============================================
-      // Phase 3: Extended Context
-      // =============================================
-
       // Agent Builder context (current agent config/meta for editing)
       new AgentBuilderContextInjector({
         enabled: isAgentBuilderEnabled,
         agentContext: agentBuilderContext,
       }),
-      // Agent Management context (available models and plugins for agent creation)
+      // Agent Management context (available models and plugins)
       new AgentManagementContextInjector({
         enabled: isAgentManagementEnabled,
         context: agentManagementContext,
@@ -270,21 +281,12 @@ export class MessagesEngine {
         enabled: isGroupAgentBuilderEnabled,
         groupContext: groupAgentBuilderContext,
       }),
-      // Skill context
-      new SkillContextProvider({
-        enabled: !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
-        enabledSkills: skillsConfig?.enabledSkills,
-      }),
-      // Tool system role
-      new ToolSystemRoleProvider({
-        enabled: !!(toolsConfig?.manifests && toolsConfig.manifests.length > 0),
-        isCanUseFC: capabilities?.isCanUseFC || (() => true),
-        manifests: toolsConfig?.manifests,
-        model,
-        provider,
-      }),
-      // History summary
-      new HistorySummaryProvider({ formatHistorySummary, historySummary }),
+
+      // =============================================
+      // Phase 4: User Message Augmentation
+      // Injects context into specific user messages (last user, selected, etc.)
+      // =============================================
+
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Page selections (inject user-selected text into each user message)
@@ -315,7 +317,8 @@ export class MessagesEngine {
       }),
 
       // =============================================
-      // Phase 4: Message Transformation
+      // Phase 5: Message Transformation
+      // Flattens group/task messages, applies templates and variables
       // =============================================
 
       // Input template processing
@@ -357,7 +360,8 @@ export class MessagesEngine {
         : []),
 
       // =============================================
-      // Phase 5: Content Processing & Cleanup
+      // Phase 6: Content Processing & Cleanup
+      // Final transformations: multimodal encoding, tool calls, cleanup
       // =============================================
 
       // Reaction feedback
@@ -379,7 +383,7 @@ export class MessagesEngine {
       }),
       // Tool message reordering
       new ToolMessageReorder(),
-      // Force finish summary (when maxSteps exceeded, inject summary prompt)
+      // Force finish summary (when maxSteps exceeded)
       new ForceFinishSummaryInjector({ enabled: !!forceFinish }),
       // Message cleanup (final step)
       new MessageCleanupProcessor(),
