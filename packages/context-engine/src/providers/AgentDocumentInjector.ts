@@ -51,6 +51,7 @@ export interface AgentDocumentInjectorConfig {
   currentTime?: Date;
   currentUserMessage?: string;
   documents?: AgentContextDocument[];
+  enabled?: boolean;
   truncateContent?: (content: string, maxTokens: number) => string;
 }
 
@@ -65,6 +66,10 @@ export class AgentDocumentInjector extends BaseProvider {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    if (this.config.enabled === false) {
+      return this.markAsExecuted(context);
+    }
+
     const clonedContext = this.cloneContext(context);
     const documents = this.config.documents || [];
 

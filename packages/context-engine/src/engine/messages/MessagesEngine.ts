@@ -253,14 +253,11 @@ export class MessagesEngine {
       }),
 
       // 7.5 Agent document injection (policy-based autoload documents)
-      ...(hasAgentDocuments
-        ? [
-            new AgentDocumentInjector({
-              currentUserMessage,
-              documents: agentDocuments,
-            }),
-          ]
-        : []),
+      new AgentDocumentInjector({
+        currentUserMessage,
+        documents: agentDocuments,
+        enabled: hasAgentDocuments,
+      }),
 
       // 8. Tool Discovery context injection (available tools for dynamic activation)
       ...(toolDiscoveryConfig?.availableTools && toolDiscoveryConfig.availableTools.length > 0
