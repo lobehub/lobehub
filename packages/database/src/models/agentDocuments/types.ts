@@ -1,5 +1,8 @@
 // Re-export all types from @lobechat/agent-templates for backward compatibility
-// Import types needed for interfaces above
+
+// Runtime values (enums, consts)
+// Database-specific types that remain here
+
 import type {
   AgentDocumentPolicy,
   DocumentLoadFormat,
@@ -9,16 +12,15 @@ import type {
 
 export {
   AgentAccess,
-  AgentDocumentPolicy,
   AutoLoadAccess,
   DocumentLoadFormat,
   DocumentLoadPosition,
   DocumentLoadRule,
-  DocumentLoadRules,
   PolicyLoad,
 } from '@lobechat/agent-templates';
 
-// Database-specific types that remain here
+// Type-only exports (interfaces)
+export type { AgentDocumentPolicy, DocumentLoadRules } from '@lobechat/agent-templates';
 
 export interface AgentDocument {
   accessPublic: number;

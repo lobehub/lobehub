@@ -1,8 +1,11 @@
 // @vitest-environment node
+import {
+  DocumentLoadFormat,
+  DocumentLoadPosition,
+  DocumentLoadRule,
+  DocumentTemplateManager,
+} from '@lobechat/agent-templates';
 import { describe, expect, it } from 'vitest';
-
-import { DocumentTemplateManager } from '../template';
-import { DocumentLoadFormat, DocumentLoadPosition, DocumentLoadRule } from '../types';
 
 describe('DocumentTemplateManager', () => {
   describe('validate', () => {
