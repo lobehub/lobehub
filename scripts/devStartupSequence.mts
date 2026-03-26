@@ -1,25 +1,17 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import dotenv from 'dotenv';
 import net from 'node:net';
-import { resolve } from 'node:path';
+
+dotenv.config();
 
 const NEXT_HOST = 'localhost';
 
 /**
- * Parse the Next.js dev port from the `dev:next` script in the nearest package.json.
- * Supports both `--port <n>` and `-p <n>` flags. Falls back to 3010.
+ * Resolve the Next.js dev port.
+ * Respects the PORT environment variable, falls back to 3010.
  */
 const resolveNextPort = (): number => {
-  try {
-    const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf-8'));
-    const devNext: string | undefined = pkg?.scripts?.['dev:next'];
-    if (devNext) {
-      const match = devNext.match(/(?:--port|-p)\s+(\d+)/);
-      if (match) return Number(match[1]);
-    }
-  } catch {
-    /* fallback */
-  }
+  if (process.env.PORT) return Number(process.env.PORT);
   return 3010;
 };
 
@@ -120,7 +112,11 @@ const main = async () => {
   process.once('SIGINT', () => shutdownAll('SIGINT'));
   process.once('SIGTERM', () => shutdownAll('SIGTERM'));
 
-  nextProcess = runNpmScript('dev:next');
+  nextProcess = spawn('npx', ['next', 'dev', '-p', String(NEXT_PORT)], {
+    env: process.env,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
   watchChildExit(nextProcess, 'next');
 
   viteProcess = runNpmScript('dev:spa');

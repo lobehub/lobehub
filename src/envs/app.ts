@@ -22,8 +22,8 @@ const APP_URL = process.env.APP_URL
   : isInVercel
     ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
-      ? 'http://localhost:3010'
-      : 'http://localhost:3210';
+      ? `http://localhost:${process.env.PORT || 3010}`
+      : `http://localhost:${process.env.PORT || 3210}`;
 
 // INTERNAL_APP_URL is used for server-to-server calls to bypass CDN/proxy
 // Falls back to APP_URL if not set

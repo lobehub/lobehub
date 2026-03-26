@@ -108,10 +108,10 @@ export default defineConfig({
     port: 9876,
     host: true,
     proxy: {
-      '/api': 'http://localhost:3010',
-      '/oidc': 'http://localhost:3010',
-      '/trpc': 'http://localhost:3010',
-      '/webapi': 'http://localhost:3010',
+      '/api': `http://localhost:${process.env.PORT || 3010}`,
+      '/oidc': `http://localhost:${process.env.PORT || 3010}`,
+      '/trpc': `http://localhost:${process.env.PORT || 3010}`,
+      '/webapi': `http://localhost:${process.env.PORT || 3010}`,
     },
     warmup: {
       clientFiles: [
