@@ -2,8 +2,6 @@ import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import type { MessageExecutionRuntime } from '../ExecutionRuntime';
-import { MessageToolIdentifier } from '../types';
-import { MessageApiName } from '../types';
 import type {
   CreatePollParams,
   CreateThreadParams,
@@ -23,6 +21,7 @@ import type {
   SendMessageParams,
   UnpinMessageParams,
 } from '../types';
+import { MessageApiName, MessageToolIdentifier } from '../types';
 
 class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
   readonly identifier = MessageToolIdentifier;

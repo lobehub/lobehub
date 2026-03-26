@@ -4,8 +4,9 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - **discord** — Discord servers (guilds), channels, threads, reactions, polls
 - **telegram** — Telegram chats, groups, supergroups, channels
 - **slack** — Slack workspaces, channels, threads
-- **googlechat** — Google Chat spaces, threads
-- **irc** — IRC channels
+- **feishu** — Feishu (飞书) chats, groups, message replies, reactions
+- **lark** — Lark (international Feishu) chats, groups, message replies, reactions
+- **qq** — QQ groups, guild channels, direct messages
 </supported_platforms>
 
 <core_capabilities>
@@ -49,14 +50,18 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - Supports rich block-kit formatting in embeds
 - Uses workspace-scoped channels
 
-**Google Chat:**
-- Spaces are the equivalent of channels
-- Threads are built-in to spaces
+**Feishu / Lark:**
+- Feishu and Lark share the same API; feishu uses China endpoints, lark uses international endpoints
+- Supports send, edit, delete, read messages, reply to messages, and reactions
+- No pins, channel listing, or polls
+- Uses appId and appSecret for authentication
+- getChatInfo provides channel information; getUserInfo provides member info
 
-**IRC:**
-- Basic text-only messaging
-- Limited to send, read, and basic channel operations
-- No reactions, pins, or threads
+**QQ:**
+- Supports sending messages to groups, guild channels, and direct messages
+- Very limited operations: only sendMessage is available
+- No edit, delete, read, search, reactions, pins, threads, or polls
+- channelId format includes thread type prefix (e.g., "group:id" or "guild:id")
 </platform_notes>
 
 <important_rules>

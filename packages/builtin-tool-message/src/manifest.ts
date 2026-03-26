@@ -3,14 +3,13 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 import { systemPrompt } from './systemRole';
 import { MessageApiName, MessageToolIdentifier } from './types';
 
-const platformEnum = ['discord', 'telegram', 'slack', 'googlechat', 'irc'];
+const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq'];
 
 export const MessageManifest: BuiltinToolManifest = {
   api: [
     // ==================== Core Message Operations ====================
     {
-      description:
-        'Send a message to a specific channel or conversation on the target platform.',
+      description: 'Send a message to a specific channel or conversation on the target platform.',
       name: MessageApiName.sendMessage,
       parameters: {
         additionalProperties: false,
@@ -25,8 +24,7 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'string',
           },
           embeds: {
-            description:
-              'Optional array of embed/attachment objects (platform-specific structure)',
+            description: 'Optional array of embed/attachment objects (platform-specific structure)',
             items: { type: 'object' },
             type: 'array',
           },
@@ -109,8 +107,7 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Delete a message from a channel. Requires appropriate permissions.',
+      description: 'Delete a message from a channel. Requires appropriate permissions.',
       name: MessageApiName.deleteMessage,
       parameters: {
         additionalProperties: false,
@@ -359,8 +356,7 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'string',
           },
           serverId: {
-            description:
-              'Server / workspace ID. Required for some platforms to scope the lookup.',
+            description: 'Server / workspace ID. Required for some platforms to scope the lookup.',
             type: 'string',
           },
         },

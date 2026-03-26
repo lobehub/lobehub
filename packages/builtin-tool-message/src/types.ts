@@ -6,8 +6,9 @@ export const MessageToolIdentifier = 'lobe-message';
 
 export const MessagePlatform = {
   discord: 'discord',
-  googlechat: 'googlechat',
-  irc: 'irc',
+  feishu: 'feishu',
+  lark: 'lark',
+  qq: 'qq',
   slack: 'slack',
   telegram: 'telegram',
 } as const;

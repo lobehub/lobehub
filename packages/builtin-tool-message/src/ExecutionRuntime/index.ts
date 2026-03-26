@@ -37,6 +37,45 @@ import type {
   UnpinMessageState,
 } from '../types';
 
+// Re-export all param/state types so adapters can import from executionRuntime entry
+export type {
+  CreatePollParams,
+  CreatePollState,
+  CreateThreadParams,
+  CreateThreadState,
+  DeleteMessageParams,
+  DeleteMessageState,
+  EditMessageParams,
+  EditMessageState,
+  GetChannelInfoParams,
+  GetChannelInfoState,
+  GetMemberInfoParams,
+  GetMemberInfoState,
+  GetReactionsParams,
+  GetReactionsState,
+  ListChannelsParams,
+  ListChannelsState,
+  ListPinsParams,
+  ListPinsState,
+  ListThreadsParams,
+  ListThreadsState,
+  PinMessageParams,
+  PinMessageState,
+  ReactToMessageParams,
+  ReactToMessageState,
+  ReadMessagesParams,
+  ReadMessagesState,
+  ReplyToThreadParams,
+  ReplyToThreadState,
+  SearchMessagesParams,
+  SearchMessagesState,
+  SendMessageParams,
+  SendMessageState,
+  UnpinMessageParams,
+  UnpinMessageState,
+} from '../types';
+export type { MessageItem } from '../types';
+
 /**
  * Service interface for message operations.
  * Each platform adapter must implement this interface for its supported operations.
@@ -186,9 +225,7 @@ export class MessageExecutionRuntime {
   async getReactions(params: GetReactionsParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.service.getReactions(params);
-      const formatted = result.reactions
-        ?.map((r) => `${r.emoji}: ${r.count}`)
-        .join(', ');
+      const formatted = result.reactions?.map((r) => `${r.emoji}: ${r.count}`).join(', ');
 
       return {
         content: `Reactions on message ${params.messageId}: ${formatted ?? '(none)'}`,
@@ -277,9 +314,7 @@ export class MessageExecutionRuntime {
     try {
       const result = await this.service.listChannels(params);
       const count = result.channels?.length ?? 0;
-      const formatted = result.channels
-        ?.map((c) => `#${c.name} (${c.id})`)
-        .join('\n');
+      const formatted = result.channels?.map((c) => `#${c.name} (${c.id})`).join('\n');
 
       return {
         content: `${count} channels found on ${params.platform}\n\n${formatted ?? '(none)'}`,
@@ -334,9 +369,7 @@ export class MessageExecutionRuntime {
     try {
       const result = await this.service.listThreads(params);
       const count = result.threads?.length ?? 0;
-      const formatted = result.threads
-        ?.map((t) => `${t.name} (${t.id})`)
-        .join('\n');
+      const formatted = result.threads?.map((t) => `${t.name} (${t.id})`).join('\n');
 
       return {
         content: `${count} threads in ${params.platform}:${params.channelId}\n\n${formatted ?? '(none)'}`,
