@@ -425,26 +425,36 @@ const githubCopilotChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 400_000,
     description: 'Raptor mini is a preview model optimized for code-related tasks.',
-    displayName: 'Raptor mini (Preview)',
+    displayName: 'Raptor mini',
     enabled: true,
     id: 'oswe-vscode-prime',
-    maxOutput: 16_384,
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+    },
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 400_000,
     description: 'Raptor mini is a preview model optimized for code-related tasks.',
-    displayName: 'Raptor mini (Preview)',
+    displayName: 'Raptor mini (Secondary)',
     id: 'oswe-vscode-secondary',
-    maxOutput: 16_384,
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+    },
     type: 'chat',
   },
 ];

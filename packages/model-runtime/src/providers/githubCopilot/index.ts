@@ -248,7 +248,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         },
       });
 
-      if (responsesAPIModels.has(model) || (payload as any).apiMode === 'responses') {
+      if (
+        responsesAPIModels.has(model) ||
+        model.toLowerCase().includes('oswe') ||
+        (payload as any).apiMode === 'responses'
+      ) {
         const {
           messages,
           reasoning_effort,
