@@ -665,6 +665,13 @@
       "when": 1773764776073,
       "tag": "0094_agent_bot_providers_add_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1774502940061,
+      "tag": "0095_add_agent_task_system",
+      "breakpoints": true
     }
   ],
   "version": "6"
