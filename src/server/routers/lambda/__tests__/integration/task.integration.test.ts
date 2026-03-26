@@ -4,7 +4,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskRouter } from '../../task';
-import { cleanupTestUser, createTestContext, createTestUser } from './setup';
+import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } from './setup';
 
 // Mock getServerDB
 let testDB: LobeChatDatabase;
@@ -48,6 +48,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 describe('Task Router Integration', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
+  let testAgentId: string;
   let caller: ReturnType<typeof taskRouter.createCaller>;
 
   beforeEach(async () => {
@@ -55,6 +56,7 @@ describe('Task Router Integration', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    testAgentId = await createTestAgent(serverDB, userId, 'test-agent');
     caller = taskRouter.createCaller(createTestContext(userId));
   });
 
@@ -325,7 +327,7 @@ describe('Task Router Integration', () => {
       // Document should appear somewhere in the workspace tree
       const allDocs = detail.data.workspace!.flatMap((f) => [
         { documentId: f.documentId, title: f.title },
-        ...f.children,
+        ...(f.children ?? []),
       ]);
       expect(allDocs.find((d) => d.documentId === doc.id)?.title).toBe('Test Doc');
 
