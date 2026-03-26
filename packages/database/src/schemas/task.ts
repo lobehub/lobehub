@@ -67,7 +67,7 @@ export const tasks = pgTable(
     // Topic management
     totalTopics: integer('total_topics').default(0),
     maxTopics: integer('max_topics'), // null = unlimited
-    currentTopicId: text('current_topic_id'),
+    currentTopicId: text('current_topic_id').references(() => topics.id, { onDelete: 'set null' }),
 
     // Context & config (each task independent, no inheritance from parent)
     context: jsonb('context').default({}),
@@ -85,12 +85,6 @@ export const tasks = pgTable(
       columns: [t.parentTaskId],
       foreignColumns: [t.id],
       name: 'tasks_parent_task_id_tasks_id_fk',
-    }).onDelete('set null'),
-    // Topic FK (topic deleted → current pointer nulled)
-    foreignKey({
-      columns: [t.currentTopicId],
-      foreignColumns: [topics.id],
-      name: 'tasks_current_topic_id_topics_id_fk',
     }).onDelete('set null'),
     uniqueIndex('tasks_identifier_idx').on(t.identifier, t.createdByUserId),
     index('tasks_created_by_user_id_idx').on(t.createdByUserId),
