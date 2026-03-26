@@ -15,6 +15,7 @@ export interface ElectronMainStore {
   gatewayDeviceDescription: string;
   gatewayDeviceId: string;
   gatewayDeviceName: string;
+  gatewayEnabled: boolean;
   gatewayUrl: string;
   locale: string;
   networkProxy: NetworkProxySettings;

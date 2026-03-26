@@ -196,7 +196,10 @@ describe('GatewayConnectionCtr', () => {
     vi.useFakeTimers();
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
-    mockStoreGet.mockReturnValue(undefined);
+    mockStoreGet.mockImplementation((key: string) => {
+      if (key === 'gatewayEnabled') return true;
+      return undefined;
+    });
 
     mockGatewayConnectionSrv = new GatewayConnectionService(mockApp);
     ctr = new GatewayConnectionCtr(mockApp);
@@ -212,6 +215,7 @@ describe('GatewayConnectionCtr', () => {
   describe('connect', () => {
     it('should create GatewayClient with correct options', async () => {
       mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
         if (key === 'gatewayDeviceId') return 'stored-device-id';
         if (key === 'gatewayUrl') return undefined;
         return undefined;
@@ -231,6 +235,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('should use custom gateway URL from store when set', async () => {
       mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
         if (key === 'gatewayUrl') return 'http://localhost:8787';
         return undefined;
       });
@@ -253,6 +258,16 @@ describe('GatewayConnectionCtr', () => {
       const result = await ctr.connect();
       expect(result).toEqual({ error: 'No access token available', success: false });
       expect(MockGatewayClient.lastInstance).toBeNull();
+    });
+
+    it('should persist gatewayEnabled=true on connect', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      await ctr.connect();
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
     });
 
     it('should no-op when already connected', async () => {
@@ -299,6 +314,16 @@ describe('GatewayConnectionCtr', () => {
       });
     });
 
+    it('should persist gatewayEnabled=false on disconnect', async () => {
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+      MockGatewayClient.lastInstance!.simulateConnected();
+      mockStoreSet.mockClear();
+
+      await ctr.disconnect();
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', false);
+    });
+
     it('should not trigger reconnect after intentional disconnect', async () => {
       ctr.afterAppReady();
       await vi.advanceTimersByTimeAsync(0);
@@ -327,6 +352,19 @@ describe('GatewayConnectionCtr', () => {
       expect(MockGatewayClient.lastInstance!.connect).toHaveBeenCalled();
     });
 
+    it('should skip auto-connect when gatewayEnabled is false', async () => {
+      mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return false;
+        return undefined;
+      });
+
+      ctr = new GatewayConnectionCtr(mockApp);
+      ctr.afterAppReady();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(MockGatewayClient.lastInstance).toBeNull();
+    });
+
     it('should skip auto-connect when remote server not configured', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
 
@@ -353,9 +391,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should reuse persisted device ID', () => {
-      mockStoreGet.mockImplementation((key: string) =>
-        key === 'gatewayDeviceId' ? 'existing-id' : undefined,
-      );
+      mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
+        if (key === 'gatewayDeviceId') return 'existing-id';
+        return undefined;
+      });
       ctr = new GatewayConnectionCtr(mockApp);
       ctr.afterAppReady();
 
@@ -545,9 +585,11 @@ describe('GatewayConnectionCtr', () => {
 
   describe('getDeviceInfo', () => {
     it('should return device information', async () => {
-      mockStoreGet.mockImplementation((key: string) =>
-        key === 'gatewayDeviceId' ? 'my-device' : undefined,
-      );
+      mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
+        if (key === 'gatewayDeviceId') return 'my-device';
+        return undefined;
+      });
       ctr = new GatewayConnectionCtr(mockApp);
       ctr.afterAppReady();
 

@@ -31,6 +31,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   gatewayDeviceDescription: '',
   gatewayDeviceId: '',
   gatewayDeviceName: '',
+  gatewayEnabled: true,
   gatewayUrl: 'https://device-gateway.lobehub.com',
   locale: 'auto',
   networkProxy: defaultProxySettings,
