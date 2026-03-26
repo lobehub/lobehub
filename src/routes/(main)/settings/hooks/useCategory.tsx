@@ -101,11 +101,12 @@ export const useCategory = () => {
         key: SettingsTabs.Hotkey,
         label: t('tab.hotkey'),
       },
-      enableBusinessFeatures && {
-        icon: BellIcon,
-        key: SettingsTabs.Notification,
-        label: t('tab.notification'),
-      },
+      // TODO: temporarily disabled until notification UI is polished
+      // enableBusinessFeatures && {
+      //   icon: BellIcon,
+      //   key: SettingsTabs.Notification,
+      //   label: t('tab.notification'),
+      // },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
