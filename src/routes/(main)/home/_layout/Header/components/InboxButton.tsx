@@ -33,9 +33,7 @@ const InboxButton = memo(() => {
     setOpen(false);
   }, []);
 
-  // TODO: temporarily disabled until notification UI is polished
   if (!enableBusinessFeatures) return null;
-  return null;
 
   return (
     <>
