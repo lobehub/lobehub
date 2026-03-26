@@ -1488,6 +1488,7 @@ table tasks {
 
   indexes {
     
+    
     (identifier, created_by_user_id) [name: 'tasks_identifier_idx', unique]
     created_by_user_id [name: 'tasks_created_by_user_id_idx']
     created_by_agent_id [name: 'tasks_created_by_agent_id_idx']

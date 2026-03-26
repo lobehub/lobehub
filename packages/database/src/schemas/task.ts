@@ -82,6 +82,11 @@ export const tasks = pgTable(
       foreignColumns: [t.id],
       name: 'tasks_parent_task_id_tasks_id_fk',
     }).onDelete('set null'),
+    foreignKey({
+      columns: [t.currentTopicId],
+      foreignColumns: [topics.id],
+      name: 'tasks_current_topic_id_topics_id_fk',
+    }).onDelete('set null'),
     uniqueIndex('tasks_identifier_idx').on(t.identifier, t.createdByUserId),
     index('tasks_created_by_user_id_idx').on(t.createdByUserId),
     index('tasks_created_by_agent_id_idx').on(t.createdByAgentId),

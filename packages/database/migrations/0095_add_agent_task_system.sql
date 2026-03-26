@@ -136,6 +136,8 @@ ALTER TABLE "tasks" DROP CONSTRAINT IF EXISTS "tasks_created_by_user_id_users_id
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" DROP CONSTRAINT IF EXISTS "tasks_parent_task_id_tasks_id_fk";--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_parent_task_id_tasks_id_fk" FOREIGN KEY ("parent_task_id") REFERENCES "public"."tasks"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tasks" DROP CONSTRAINT IF EXISTS "tasks_current_topic_id_topics_id_fk";--> statement-breakpoint
+ALTER TABLE "tasks" ADD CONSTRAINT "tasks_current_topic_id_topics_id_fk" FOREIGN KEY ("current_topic_id") REFERENCES "public"."topics"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "briefs_user_id_idx" ON "briefs" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "briefs_task_id_idx" ON "briefs" USING btree ("task_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "briefs_cron_job_id_idx" ON "briefs" USING btree ("cron_job_id");--> statement-breakpoint

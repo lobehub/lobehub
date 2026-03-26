@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "1645e46a-4a04-4eb4-a277-8db93a1d590b",
+  "id": "98077354-e06e-4704-b67a-0bf07a9a2da9",
   "policies": {},
   "prevId": "2dc5d5f6-130c-405d-8a38-bab68368d838",
   "roles": {},
@@ -11369,6 +11369,15 @@
           "tableFrom": "tasks",
           "tableTo": "tasks",
           "columnsFrom": ["parent_task_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "tasks_current_topic_id_topics_id_fk": {
+          "name": "tasks_current_topic_id_topics_id_fk",
+          "tableFrom": "tasks",
+          "tableTo": "topics",
+          "columnsFrom": ["current_topic_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
