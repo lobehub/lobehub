@@ -25,9 +25,9 @@ CREATE TABLE IF NOT EXISTS "notifications" (
 );
 --> statement-breakpoint
 ALTER TABLE "user_settings" ADD COLUMN IF NOT EXISTS "notification" jsonb;--> statement-breakpoint
-ALTER TABLE "notification_deliveries" DROP CONSTRAINT IF EXISTS "notification_deliveries_notification_id_notifications_id_fk";
+ALTER TABLE "notification_deliveries" DROP CONSTRAINT IF EXISTS "notification_deliveries_notification_id_notifications_id_fk";--> statement-breakpoint
 ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_notification_id_notifications_id_fk" FOREIGN KEY ("notification_id") REFERENCES "public"."notifications"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notifications" DROP CONSTRAINT IF EXISTS "notifications_user_id_users_id_fk";
+ALTER TABLE "notifications" DROP CONSTRAINT IF EXISTS "notifications_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_deliveries_notification" ON "notification_deliveries" USING btree ("notification_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_notifications_user_active" ON "notifications" USING btree ("user_id","created_at") WHERE "notifications"."is_archived" = false;--> statement-breakpoint
