@@ -22,6 +22,12 @@ export const componentMap = {
   [SettingsTabs.Memory]: dynamic(() => import('../memory'), {
     loading: loading('Settings > Memory'),
   }),
+  [SettingsTabs.Notification]: dynamic(
+    () => import('@/business/client/BusinessSettingPages/Notification'),
+    {
+      loading: loading('Settings > Notification'),
+    },
+  ),
   [SettingsTabs.About]: dynamic(() => import('../about'), {
     loading: loading('Settings > About'),
   }),

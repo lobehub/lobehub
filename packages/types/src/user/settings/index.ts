@@ -8,6 +8,7 @@ import type { UserKeyVaults } from './keyVaults';
 import type { MarketAuthTokens } from './market';
 import type { UserMemorySettings } from './memory';
 import type { UserModelProviderConfig } from './modelProvider';
+import type { NotificationSettings } from './notification';
 import type { UserSystemAgentConfig } from './systemAgent';
 import type { UserToolConfig } from './tool';
 import type { UserTTSConfig } from './tts';
@@ -22,6 +23,7 @@ export * from './keyVaults';
 export * from './market';
 export * from './memory';
 export * from './modelProvider';
+export * from './notification';
 export * from './sync';
 export * from './systemAgent';
 export * from './tool';
@@ -39,6 +41,7 @@ export interface UserSettings {
   languageModel: UserModelProviderConfig;
   market?: MarketAuthTokens;
   memory?: UserMemorySettings;
+  notification?: NotificationSettings;
   systemAgent: UserSystemAgentConfig;
   tool: UserToolConfig;
   tts: UserTTSConfig;
@@ -58,6 +61,7 @@ export const UserSettingsSchema = z
     languageModel: z.any().optional(),
     market: z.any().optional(),
     memory: z.any().optional(),
+    notification: z.any().optional(),
     systemAgent: z.any().optional(),
     tool: z.any().optional(),
     tts: z.any().optional(),

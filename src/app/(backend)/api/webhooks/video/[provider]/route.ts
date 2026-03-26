@@ -15,6 +15,7 @@ import { type RuntimeVideoGenParams } from 'model-bank';
 import { NextResponse } from 'next/server';
 
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
+import { notifyVideoCompleted } from '@/business/server/video-generation/notifyVideoCompleted';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { generationBatches } from '@/database/schemas';
@@ -200,6 +201,14 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       duration,
       status: AsyncTaskStatus.Success,
     });
+
+    notifyVideoCompleted({
+      generationBatchId: generation.generationBatchId!,
+      model: resolvedModel,
+      prompt: batch?.prompt ?? '',
+      topicId: batch?.generationTopicId,
+      userId: asyncTask.userId,
+    }).catch((err) => console.error('[video-webhook] notification failed:', err));
 
     // Charge after successful video generation
     try {
