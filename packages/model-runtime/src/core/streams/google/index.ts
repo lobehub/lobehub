@@ -30,7 +30,9 @@ const getBlockReasonMessage = (blockReason: string): string => {
   );
 };
 
-const getCandidateBlockedReason = (candidate: GenerateContentResponse['candidates'][0]) => {
+const getCandidateBlockedReason = (
+  candidate: NonNullable<GenerateContentResponse['candidates']>[number] | undefined,
+) => {
   const finishReason = candidate?.finishReason;
 
   if (!finishReason || typeof finishReason !== 'string') return undefined;
@@ -81,7 +83,9 @@ const transformGoogleGenerativeAIStream = (
   // Handle blocked terminal candidate finishReason (e.g., PROHIBITED_CONTENT, SAFETY)
   const blockedReason = getCandidateBlockedReason(candidate);
   if (blockedReason) {
-    const convertedUsage = convertGoogleAIUsage(usageMetadata, payload?.pricing);
+    const convertedUsage = usageMetadata
+      ? convertGoogleAIUsage(usageMetadata, payload?.pricing)
+      : undefined;
     const humanFriendlyMessage = getBlockReasonMessage(blockedReason);
 
     return [

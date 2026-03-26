@@ -119,6 +119,20 @@ const localizeGoogleBlockedError = (error: ChatMessageError): ChatMessageError =
   };
 };
 
+const localizeError = (error: ChatMessageError): ChatMessageError => {
+  const body = error.body as
+    | {
+        provider?: unknown;
+      }
+    | undefined;
+
+  if (body?.provider === 'google') {
+    return localizeGoogleBlockedError(error);
+  }
+
+  return error;
+};
+
 /**
  * Creates custom executors for the Chat Agent Runtime
  * These executors wrap existing chat store methods to integrate with agent-runtime
@@ -462,7 +476,7 @@ export const createAgentExecutors = (context: {
           traceName: TraceNameMap.Conversation,
         },
         onErrorHandle: async (error) => {
-          const localizedError = localizeGoogleBlockedError(error);
+          const localizedError = localizeError(error);
 
           await context.get().optimisticUpdateMessageError(assistantMessageId, localizedError, {
             operationId: context.operationId,
