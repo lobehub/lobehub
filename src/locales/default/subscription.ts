@@ -290,9 +290,9 @@ export default {
   'plans.payonce.cancel': 'Cancel',
   'plans.payonce.ok': 'Confirm Selection',
   'plans.payonce.popconfirm':
-    'After one-time payment, you must wait until subscription expires to switch plans or change billing cycle. Please confirm your selection.',
+    'After one-time payment, you can upgrade anytime but downgrade requires waiting for expiration. Please confirm your selection.',
   'plans.payonce.tooltip':
-    'One-time payment requires waiting until subscription expires to switch plans or change billing cycle',
+    'One-time payment only supports upgrading to a higher tier or longer duration',
   'plans.payonce.upgradeOk': 'Confirm Upgrade',
   'plans.payonce.upgradePopconfirm':
     'Remaining value from your current plan will be applied as a discount to the new plan.',
