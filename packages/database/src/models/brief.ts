@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 
-import type { BriefItem, NewBrief } from '../schemas/brief';
-import { briefs } from '../schemas/brief';
+import type { BriefItem, NewBrief } from '../schemas/task';
+import { briefs } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 
 export class BriefModel {
