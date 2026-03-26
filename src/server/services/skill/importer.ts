@@ -295,9 +295,15 @@ export class SkillImporter {
       throw new SkillImportError('Invalid URL format', 'INVALID_URL');
     }
 
-    // 1.5. Detect GitHub URLs and delegate to importFromGitHub for full directory support
-    if (url.hostname === 'github.com') {
-      log('importFromUrl: detected GitHub URL, delegating to importFromGitHub');
+    // 1.5. Detect GitHub repo/tree/blob URLs and delegate to importFromGitHub for full directory support
+    // Only delegate URLs that parseRepoUrl can handle (owner/repo, tree, blob patterns).
+    // Let direct download URLs (e.g. /archive/*.zip, /releases/download/*) fall through
+    // to the generic fetch logic below which handles ZIP files correctly.
+    if (
+      url.hostname === 'github.com' &&
+      /^\/[^/]+\/[^/]+(?:\/(?:tree|blob)\/.+)?$/.test(url.pathname.replace(/\/+$/, ''))
+    ) {
+      log('importFromUrl: detected GitHub repo URL, delegating to importFromGitHub');
       return this.importFromGitHub({ gitUrl: input.url });
     }
 
