@@ -11,6 +11,7 @@ export const MessagePlatform = {
   qq: 'qq',
   slack: 'slack',
   telegram: 'telegram',
+  wechat: 'wechat',
 } as const;
 
 export type MessagePlatformType = (typeof MessagePlatform)[keyof typeof MessagePlatform];

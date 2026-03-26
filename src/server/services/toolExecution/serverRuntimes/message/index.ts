@@ -13,6 +13,7 @@ import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { SlackMessageAdapter } from '@/server/services/bot/platforms/slack/service';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramMessageAdapter } from '@/server/services/bot/platforms/telegram/service';
+import { WechatMessageAdapter } from '@/server/services/bot/platforms/wechat/service';
 
 import type { ServerRuntimeRegistration } from '../types';
 import { MessageDispatcherService } from './MessageDispatcherService';
@@ -77,6 +78,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
       telegram: async () => {
         const { credentials } = await resolveCredentials(providerModel, 'telegram');
         return new TelegramMessageAdapter(new TelegramApi(credentials.botToken));
+      },
+      wechat: async () => {
+        return new WechatMessageAdapter();
       },
     });
 

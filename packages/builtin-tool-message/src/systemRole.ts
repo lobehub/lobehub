@@ -7,6 +7,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - **feishu** — Feishu (飞书) chats, groups, message replies, reactions
 - **lark** — Lark (international Feishu) chats, groups, message replies, reactions
 - **qq** — QQ groups, guild channels, direct messages
+- **wechat** — WeChat (微信) iLink Bot conversations
 </supported_platforms>
 
 <core_capabilities>
@@ -62,6 +63,13 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - Very limited operations: only sendMessage is available
 - No edit, delete, read, search, reactions, pins, threads, or polls
 - channelId format includes thread type prefix (e.g., "group:id" or "guild:id")
+
+**WeChat:**
+- Uses iLink Bot API with long-polling for message delivery
+- Sending messages requires a context token from an active conversation
+- Only sendMessage is available, and only within active conversation context
+- No edit, delete, read, search, reactions, pins, threads, or polls
+- Message operations may fail if no active conversation context exists
 </platform_notes>
 
 <important_rules>
