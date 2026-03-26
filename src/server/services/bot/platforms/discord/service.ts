@@ -118,10 +118,10 @@ export class DiscordMessageAdapter implements MessagePlatformAdapter {
   };
 
   getReactions = async (params: GetReactionsParams): Promise<GetReactionsState> => {
-    const messages = await this.api.getMessages(params.channelId, { limit: 1 });
-    const msg = messages.find((m: any) => m.id === params.messageId);
+    // Fetch the specific message to get its reaction metadata
+    const msg = await this.api.getMessage(params.channelId, params.messageId);
 
-    if (!msg || !(msg as any).reactions) {
+    if (!(msg as any).reactions) {
       return { messageId: params.messageId, reactions: [] };
     }
 

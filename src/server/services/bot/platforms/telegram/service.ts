@@ -139,7 +139,8 @@ export class TelegramMessageAdapter implements MessagePlatformAdapter {
     if (params.content) {
       await this.api.sendMessageToTopic(params.channelId, result.message_thread_id, params.content);
     }
-    return { threadId: String(result.message_thread_id) };
+    // Return compound format "chatId:topicId" so replyToThread can parse it
+    return { threadId: `${params.channelId}:${result.message_thread_id}` };
   };
 
   listThreads = async (_params: ListThreadsParams): Promise<ListThreadsState> => {

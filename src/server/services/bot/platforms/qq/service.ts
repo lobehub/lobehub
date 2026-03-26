@@ -83,14 +83,15 @@ const sendQQMessage = async (
 export class QQMessageAdapter implements MessagePlatformAdapter {
   constructor(private api: QQApiClient) {}
 
-  sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {
-    const { threadType, targetId } = parseChannelId(params.channelId);
-    const messageId = await sendQQMessage(this.api, threadType, targetId, params.content);
-    return {
-      channelId: params.channelId,
-      messageId: messageId ?? undefined,
-      platform: 'qq',
-    };
+  sendMessage = async (_params: SendMessageParams): Promise<SendMessageState> => {
+    // QQ requires msg_id (from a triggering user message) for passive replies.
+    // Active messages (without msg_id) are limited to 4/month/group and have been
+    // disabled since April 2025. The message tool context does not carry the
+    // triggering msg_id, so sendMessage cannot work reliably.
+    throw new PlatformUnsupportedError(
+      'QQ',
+      'sendMessage (requires msg_id from triggering message for passive replies)',
+    );
   };
 
   readMessages = async (_params: ReadMessagesParams): Promise<ReadMessagesState> => {

@@ -291,9 +291,8 @@ describe('messageRuntime', () => {
   });
 
   describe('QQ adapter', () => {
-    it('should send a message via QQ', async () => {
+    it('should return error for unsupported sendMessage (requires msg_id)', async () => {
       mockProviderFor('qq', { appSecret: 'qq-secret' });
-      mockQQSendGroupMessage.mockResolvedValue({ id: 'qq-msg-1' });
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.sendMessage({
@@ -302,12 +301,8 @@ describe('messageRuntime', () => {
         platform: 'qq',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.state).toMatchObject({
-        channelId: 'group:123456',
-        messageId: 'qq-msg-1',
-        platform: 'qq',
-      });
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not supported on QQ');
     });
 
     it('should return error for unsupported editMessage', async () => {

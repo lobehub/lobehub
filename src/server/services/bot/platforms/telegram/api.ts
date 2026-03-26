@@ -138,6 +138,7 @@ export class TelegramApi {
     const data = await this.call('sendMessage', {
       chat_id: chatId,
       message_thread_id: topicId,
+      parse_mode: 'HTML',
       text: this.truncateText(text),
     });
     return { message_id: data.result.message_id };

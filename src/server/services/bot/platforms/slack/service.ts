@@ -88,17 +88,13 @@ export class SlackMessageAdapter implements MessagePlatformAdapter {
     return { messageId: params.messageId, success: true };
   };
 
-  searchMessages = async (params: SearchMessagesParams): Promise<SearchMessagesState> => {
-    let query = params.query;
-    if (params.channelId) query = `in:<#${params.channelId}> ${query}`;
-    if (params.authorId) query = `from:<@${params.authorId}> ${query}`;
-
-    const result = await this.api.search(query, {
-      count: Math.min(params.limit ?? 25, 100),
-    });
-
-    const messages = result.matches.map((m: any) => toMessageItem(m));
-    return { messages, query: params.query, totalFound: result.total };
+  searchMessages = async (_params: SearchMessagesParams): Promise<SearchMessagesState> => {
+    // Slack search.messages requires a user token (xoxp-), not a bot token (xoxb-).
+    // Bot tokens do not have the search:read scope.
+    throw new PlatformUnsupportedError(
+      'Slack',
+      'searchMessages (requires user token, not bot token)',
+    );
   };
 
   // ==================== Reactions ====================
@@ -192,7 +188,7 @@ export class SlackMessageAdapter implements MessagePlatformAdapter {
     const threads = result.messages
       .filter((m: any) => m.reply_count && m.reply_count > 0)
       .map((m: any) => ({
-        id: m.ts,
+        id: `${params.channelId}:${m.ts}`,
         messageCount: m.reply_count,
         name: (m.text ?? '').slice(0, 80) || '(thread)',
       }));

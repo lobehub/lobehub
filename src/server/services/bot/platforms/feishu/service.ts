@@ -61,7 +61,7 @@ const toMessageItem = (msg: any): MessageItem => {
     id: msg.message_id ?? '',
     replyTo: msg.parent_id ?? msg.root_id ?? undefined,
     timestamp: msg.create_time
-      ? new Date(Number(msg.create_time) * 1000).toISOString()
+      ? new Date(Number(msg.create_time)).toISOString()
       : new Date().toISOString(),
   };
 };
@@ -89,7 +89,10 @@ export class FeishuMessageAdapter implements MessagePlatformAdapter {
 
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
     const result = await this.api.listMessages(params.channelId, {
+      // Feishu uses Unix second timestamps for startTime/endTime
+      endTime: params.before,
       pageSize: Math.min(params.limit ?? 50, 50),
+      startTime: params.after,
     });
     const messages = result.items.map(toMessageItem);
     return {

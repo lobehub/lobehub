@@ -117,7 +117,7 @@ export class SlackApi {
 
   async getChannelInfo(channel: string): Promise<any> {
     log('getChannelInfo: channel=%s', channel);
-    const data = await this.call('conversations.info', { channel });
+    const data = await this.call('conversations.info', { channel, include_num_members: true });
     return data.channel;
   }
 

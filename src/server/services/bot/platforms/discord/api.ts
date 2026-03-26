@@ -1,8 +1,10 @@
 import { REST } from '@discordjs/rest';
 import debug from 'debug';
 import {
+  ApplicationCommandType,
   ChannelType,
   type RESTGetAPIChannelMessageReactionUsersResult,
+  type RESTGetAPIChannelMessageResult,
   type RESTGetAPIChannelMessagesResult,
   type RESTGetAPIChannelPinsResult,
   type RESTGetAPIChannelResult,
@@ -11,7 +13,6 @@ import {
   type RESTGetAPIGuildThreadsResult,
   type RESTPostAPIChannelMessageResult,
   type RESTPostAPIChannelThreadsResult,
-  ApplicationCommandType,
   Routes,
 } from 'discord-api-types/v10';
 
@@ -72,6 +73,13 @@ export class DiscordApi {
           .map(([k, v]) => [k, String(v)]),
       ),
     })) as RESTGetAPIChannelMessagesResult;
+  }
+
+  async getMessage(channelId: string, messageId: string): Promise<RESTGetAPIChannelMessageResult> {
+    log('getMessage: channel=%s, message=%s', channelId, messageId);
+    return (await this.rest.get(
+      Routes.channelMessage(channelId, messageId),
+    )) as RESTGetAPIChannelMessageResult;
   }
 
   async deleteMessage(channelId: string, messageId: string): Promise<void> {
