@@ -269,10 +269,7 @@ const SearchGrounding = memo<GroundingSearch>(
                           >
                             <Flexbox gap={2}>
                               {item.title && (
-                                <div
-                                  className={styles.imageTitle}
-                                  dangerouslySetInnerHTML={{ __html: item.title }}
-                                />
+                                <div className={styles.imageTitle}>{stripHtml(item.title)}</div>
                               )}
                               {item.domain && (
                                 <Flexbox horizontal align="center" gap={4}>
