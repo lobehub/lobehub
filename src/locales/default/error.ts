@@ -104,6 +104,11 @@ export default {
     'The request returned empty. Please check if the API proxy address does not end with `/v1`.',
   'response.CreateMessageError':
     'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
+  'exceededContext.compact': 'Compact Context',
+  'exceededContext.desc':
+    'The conversation has exceeded the context window limit. You can compact the context to compress history and continue chatting.',
+  'exceededContext.title': 'Context Window Exceeded',
+
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
   'response.ExceededContextWindowCloud':

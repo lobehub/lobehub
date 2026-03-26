@@ -149,7 +149,7 @@ export class ConversationLifecycleActionImpl {
         compressContext.topicId &&
         !hasRunningCompressionOperation(Object.values(this.#get().operations), compressContext)
       ) {
-        await this.#executeCompression(compressContext, '');
+        await this.executeCompression(compressContext, '');
       }
       return;
     }
@@ -596,7 +596,7 @@ export class ConversationLifecycleActionImpl {
    * Execute context compression for /compact command.
    * Reuses the same service methods as the agent runtime's compress_context executor.
    */
-  #executeCompression = async (
+  executeCompression = async (
     context: Record<string, any>,
     parentOperationId: string,
   ): Promise<void> => {

@@ -38,6 +38,11 @@ const loading = () => (
   </Block>
 );
 
+const ExceededContextWindowError = dynamic(() => import('./ExceededContextWindowError'), {
+  loading,
+  ssr: false,
+});
+
 const OllamaBizError = dynamic(() => import('./OllamaBizError'), { loading, ssr: false });
 
 const OllamaSetupGuide = dynamic(() => import('./OllamaSetupGuide'), {
@@ -128,6 +133,10 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
 
     case AgentRuntimeErrorType.OllamaBizError: {
       return <OllamaBizError {...data} />;
+    }
+
+    case AgentRuntimeErrorType.ExceededContextWindow: {
+      return <ExceededContextWindowError id={data.id} />;
     }
 
     /* ↓ cloud slot ↓ */
