@@ -1,4 +1,13 @@
-import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
@@ -28,8 +37,8 @@ export const tasks = pgTable(
     assigneeUserId: text('assignee_user_id'),
     assigneeAgentId: text('assignee_agent_id'),
 
-    // Tree structure (self-referencing, parent deleted → children become root)
-    parentTaskId: text('parent_task_id').references(() => tasks.id, { onDelete: 'set null' }),
+    // Tree structure (self-referencing, FK defined in extras to avoid circular type inference)
+    parentTaskId: text('parent_task_id'),
 
     // Task definition
     name: text('name'),
@@ -67,6 +76,11 @@ export const tasks = pgTable(
     ...timestamps,
   },
   (t) => [
+    foreignKey({
+      columns: [t.parentTaskId],
+      foreignColumns: [t.id],
+      name: 'tasks_parent_task_id_tasks_id_fk',
+    }).onDelete('set null'),
     uniqueIndex('tasks_identifier_idx').on(t.identifier, t.createdByUserId),
     index('tasks_created_by_user_id_idx').on(t.createdByUserId),
     index('tasks_created_by_agent_id_idx').on(t.createdByAgentId),
