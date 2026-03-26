@@ -11,6 +11,7 @@ import { useAiInfraStore } from '@/store/aiInfra/store';
 import { type AiProviderDetailItem, type UpdateAiProviderParams } from '@/types/aiProvider';
 
 import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../../customProviderSdkOptions';
+import { normalizeProviderSettings } from '../../providerSettings';
 
 interface CreateNewProviderProps {
   id: string;
@@ -34,7 +35,15 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initial
     setLoading(true);
 
     try {
-      await updateAiProvider(id, values);
+      const finalValues: UpdateAiProviderParams = {
+        ...values,
+        settings: normalizeProviderSettings({
+          nextSettings: values.settings,
+          previousSettings: initialValues.settings,
+        }) as UpdateAiProviderParams['settings'],
+      };
+
+      await updateAiProvider(id, finalValues);
       setLoading(false);
       message.success(t('updateAiProvider.updateSuccess'));
       onClose?.();
