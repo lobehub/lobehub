@@ -88,19 +88,21 @@ function padEnd(s: string, len: number): string {
 
 // Application-defined structural XML tags — rendered in blue+bold
 const STRUCTURAL_TAGS = new Set([
-  'plugins',
+  'agent_document',
+  'api',
+  'available_tools',
   'collection',
   'collection.instructions',
-  'available_tools',
-  'api',
-  'user_context',
-  'session_context',
-  'user_memory',
-  'persona',
-  'instruction',
-  'online-devices',
   'device',
+  'discord_context',
+  'instruction',
   'memory_effort_policy',
+  'online-devices',
+  'persona',
+  'plugins',
+  'session_context',
+  'user_context',
+  'user_memory',
 ]);
 
 /**
@@ -385,7 +387,7 @@ export function renderMessageDetail(
 
   const rawContent =
     typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2);
-  if (rawContent) lines.push(rawContent);
+  if (rawContent) lines.push(formatXmlContent(rawContent));
 
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     lines.push('');

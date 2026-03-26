@@ -12,7 +12,6 @@ export const wechat: PlatformDefinition = {
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/wechat',
   },
   schema,
-  supportsMarkdown: false,
   supportsMessageEdit: false,
   clientFactory: new WechatClientFactory(),
 };
