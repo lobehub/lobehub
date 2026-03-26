@@ -1,6 +1,11 @@
 // Context Provider exports
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
-export { AGENT_DOCUMENT_INJECTION_POSITIONS, AgentDocumentInjector } from './AgentDocumentInjector';
+export {
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+  AgentDocumentContextInjector,
+  AgentDocumentMessageInjector,
+  AgentDocumentSystemInjector,
+} from './AgentDocumentInjector';
 export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { BotPlatformContextInjector } from './BotPlatformContextInjector';
 export { DiscordContextProvider } from './DiscordContextProvider';
@@ -31,10 +36,12 @@ export type {
 } from './AgentBuilderContextInjector';
 export type {
   AgentContextDocument,
+  AgentDocumentContextInjectorConfig,
   AgentDocumentInjectionPosition,
-  AgentDocumentInjectorConfig,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
+  AgentDocumentMessageInjectorConfig,
+  AgentDocumentSystemInjectorConfig,
 } from './AgentDocumentInjector';
 export type {
   AgentManagementContext,

@@ -23,7 +23,9 @@ import {
 } from '../../processors';
 import {
   AgentBuilderContextInjector,
-  AgentDocumentInjector,
+  AgentDocumentContextInjector,
+  AgentDocumentMessageInjector,
+  AgentDocumentSystemInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
   DiscordContextProvider,
@@ -165,7 +167,7 @@ export class MessagesEngine {
     const isAgentGroupEnabled = agentGroup?.agentMap && Object.keys(agentGroup.agentMap).length > 0;
     const isGroupContextEnabled =
       isAgentGroupEnabled || !!agentGroup?.currentAgentId || !!agentGroup?.members;
-    const isUserMemoryEnabled = userMemory?.enabled && userMemory?.memories;
+    const isUserMemoryEnabled = !!(userMemory?.enabled && userMemory?.memories);
     const hasSelectedSkills = (selectedSkills?.length ?? 0) > 0;
 
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0;
@@ -186,6 +188,13 @@ export class MessagesEngine {
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
       | string
       | undefined;
+
+    // Shared config for all agent document injectors
+    const agentDocConfig = {
+      currentUserMessage,
+      documents: agentDocuments,
+      enabled: hasAgentDocuments,
+    };
 
     return [
       // =============================================
@@ -226,6 +235,8 @@ export class MessagesEngine {
       }),
       // History summary (conversation summary from compression)
       new HistorySummaryProvider({ formatHistorySummary, historySummary }),
+      // Agent documents → system message (before-system, system-append, system-replace)
+      new AgentDocumentSystemInjector(agentDocConfig),
 
       // =============================================
       // Phase 3: Context Injection (before first user message)
@@ -254,12 +265,8 @@ export class MessagesEngine {
         fileContents: knowledge?.fileContents,
         knowledgeBases: knowledge?.knowledgeBases,
       }),
-      // Agent documents (policy-based autoload documents)
-      new AgentDocumentInjector({
-        currentUserMessage,
-        documents: agentDocuments,
-        enabled: hasAgentDocuments,
-      }),
+      // Agent documents → before first user message
+      new AgentDocumentContextInjector(agentDocConfig),
       // Tool Discovery (available tools for dynamic activation)
       new ToolDiscoveryProvider({
         availableTools: toolDiscoveryConfig?.availableTools,
@@ -287,6 +294,8 @@ export class MessagesEngine {
       // Injects context into specific user messages (last user, selected, etc.)
       // =============================================
 
+      // Agent documents → after-first-user, context-end
+      new AgentDocumentMessageInjector(agentDocConfig),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Page selections (inject user-selected text into each user message)
