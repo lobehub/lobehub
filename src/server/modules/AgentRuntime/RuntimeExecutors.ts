@@ -10,11 +10,15 @@ import {
 } from '@lobechat/agent-runtime';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+  type AgentContextDocument,
+  buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
   type OperationToolSet,
   type ResolvedToolSet,
   resolveTopicReferences,
+  SkillResolver,
   ToolNameResolver,
   ToolResolver,
 } from '@lobechat/context-engine';
@@ -31,6 +35,7 @@ import { type LobeChatDatabase } from '@/database/type';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { MessageService } from '@/server/services/message';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
@@ -38,6 +43,19 @@ import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
+
+const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+);
+
+const normalizeDocumentPosition = (
+  position: string | null | undefined,
+): AgentContextDocument['loadPosition'] | undefined => {
+  if (!position) return undefined;
+  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
+    ? (position as AgentContextDocument['loadPosition'])
+    : undefined;
+};
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
@@ -158,6 +176,17 @@ export const createRuntimeExecutors = (
       );
     }
 
+    // Resolve skills via SkillResolver (unified skill injection)
+    const skillResolver = new SkillResolver();
+    const stepSkillDelta = buildStepSkillDelta();
+    const resolvedSkills = state.metadata?.operationSkillSet
+      ? skillResolver.resolve(
+          state.metadata.operationSkillSet,
+          stepSkillDelta,
+          state.activatedStepSkills ?? [],
+        )
+      : undefined;
+
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
     }
@@ -254,7 +283,35 @@ export const createRuntimeExecutors = (
           );
         }
 
+        // Fetch agent documents for context injection
+        let agentDocuments: AgentContextDocument[] | undefined;
+        const agentId = state.metadata?.agentId;
+        if (agentId && ctx.serverDB && ctx.userId) {
+          try {
+            const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const docs = await agentDocService.getAgentDocuments(agentId);
+            if (docs.length > 0) {
+              agentDocuments = docs.map((doc) => ({
+                content: doc.content,
+                filename: doc.filename,
+                id: doc.id,
+                loadPosition: normalizeDocumentPosition(
+                  doc.policy?.context?.position || doc.policyLoadPosition,
+                ),
+                loadRules: doc.loadRules,
+                policyId: doc.templateId,
+                policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
+                title: doc.title,
+              }));
+              log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
+            }
+          } catch (error) {
+            log('Failed to resolve agent documents for agent %s: %O', agentId, error);
+          }
+        }
+
         const contextEngineInput = {
+          agentDocuments,
           additionalVariables: state.metadata?.deviceSystemInfo,
           userTimezone: ctx.userTimezone,
           capabilities: {
@@ -309,8 +366,8 @@ export const createRuntimeExecutors = (
           userMemory: state.metadata?.userMemory,
 
           // Skills configuration for <available_skills> injection
-          ...(state.metadata?.skillMetas?.length && {
-            skillsConfig: { enabledSkills: state.metadata.skillMetas },
+          ...(resolvedSkills?.enabledSkills?.length && {
+            skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
           }),
 
           // Topic reference summaries

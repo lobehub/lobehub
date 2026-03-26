@@ -54,7 +54,7 @@ import {
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
-import { createSkillEngine } from './skillEngineering';
+import { resolveClientSkills } from './skillEngineering';
 import { stripActionTagsFromText } from './skillPreload';
 
 const log = debug('context-engine:contextEngineering');
@@ -644,7 +644,7 @@ export const contextEngineering = async ({
 
     // Skills configuration — expose all installed skills so the AI can discover and activate them
     skillsConfig: {
-      enabledSkills: plugins ? createSkillEngine().getAllSkills() : undefined,
+      enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
     },
 
     // Tool Discovery configuration

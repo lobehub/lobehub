@@ -9,7 +9,8 @@ import {
 } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { LobeToolManifest, SkillMeta } from '@lobechat/context-engine';
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ChatTopicBotContext,
@@ -34,6 +35,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
@@ -839,14 +841,12 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
-    // 18. Build skill metas for <available_skills> prompt injection
-    // Combine builtin skills + user DB skills so AI can discover all installed skills
-    // Skills whose identifier is in the agent's enabled plugins are auto-activated (content injected directly)
-    const enabledPluginIds = new Set(agentPlugins);
-    let skillMetas: SkillMeta[] = [];
+    // 18. Build OperationSkillSet via SkillEngine
+    // Combines builtin skills + user DB skills, filters by platform via enableChecker,
+    // and pairs with agent's enabled plugin IDs for downstream SkillResolver consumption.
+    let operationSkillSet;
     try {
       const builtinMetas = builtinSkills.map((s) => ({
-        activated: enabledPluginIds.has(s.identifier),
         content: s.content,
         description: s.description,
         identifier: s.identifier,
@@ -859,9 +859,14 @@ export class AiAgentService {
         identifier: s.identifier,
         name: s.name,
       }));
-      skillMetas = [...builtinMetas, ...dbMetas];
+
+      const skillEngine = new SkillEngine({
+        enableChecker: (skill) => shouldEnableBuiltinSkill(skill.identifier),
+        skills: [...builtinMetas, ...dbMetas],
+      });
+      operationSkillSet = skillEngine.generate(agentPlugins ?? []);
     } catch (error) {
-      log('execAgent: failed to fetch skill metas: %O', error);
+      log('execAgent: failed to build operationSkillSet: %O', error);
     }
 
     // 19. Create operation using AgentRuntimeService
@@ -902,7 +907,7 @@ export class AiAgentService {
           sourceMap: toolSourceMap,
           tools,
         },
-        skillMetas,
+        operationSkillSet,
         userId: this.userId,
         userInterventionConfig,
         userMemory,
