@@ -1,12 +1,14 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
 class NotificationService {
-  list = (params?: {
-    category?: string;
-    cursor?: string;
-    limit?: number;
-    unreadOnly?: boolean;
-  }) => {
+  list = (
+    params: {
+      category?: string;
+      cursor?: string;
+      limit?: number;
+      unreadOnly?: boolean;
+    } = {},
+  ) => {
     return lambdaClient.notification.list.query(params);
   };
 
