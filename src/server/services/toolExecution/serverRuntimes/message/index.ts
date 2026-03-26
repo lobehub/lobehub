@@ -2,6 +2,7 @@ import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executionRuntime';
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import { QQApiClient } from '@lobechat/chat-adapter-qq';
+import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -80,7 +81,11 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return new TelegramMessageAdapter(new TelegramApi(credentials.botToken));
       },
       wechat: async () => {
-        return new WechatMessageAdapter();
+        const { applicationId, credentials } = await resolveCredentials(providerModel, 'wechat');
+        return new WechatMessageAdapter(
+          new WechatApiClient(credentials.botToken, credentials.botId),
+          applicationId,
+        );
       },
     });
 
