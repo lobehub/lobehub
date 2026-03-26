@@ -109,6 +109,11 @@ export default {
     'The conversation has exceeded the context window limit. You can compact the context to compress history and continue chatting.',
   'exceededContext.title': 'Context Window Exceeded',
 
+  'unknownError.copyTraceId': 'Trace ID Copied',
+  'unknownError.desc': 'An unexpected error occurred. You can retry or report on',
+  'unknownError.retry': 'Retry',
+  'unknownError.title': 'Oops, the request took a nap',
+
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
   'response.ExceededContextWindowCloud':
