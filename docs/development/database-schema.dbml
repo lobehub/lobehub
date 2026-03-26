@@ -465,36 +465,6 @@ table verifications {
   }
 }
 
-table briefs {
-  id text [pk, not null]
-  user_id text [not null]
-  task_id text
-  cron_job_id text
-  topic_id text
-  agent_id text
-  type text [not null]
-  priority text [default: 'info']
-  title text [not null]
-  summary text [not null]
-  artifacts jsonb
-  actions jsonb
-  resolved_action text
-  resolved_comment text
-  read_at "timestamp with time zone"
-  resolved_at "timestamp with time zone"
-  created_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'briefs_user_id_idx']
-    task_id [name: 'briefs_task_id_idx']
-    cron_job_id [name: 'briefs_cron_job_id_idx']
-    agent_id [name: 'briefs_agent_id_idx']
-    type [name: 'briefs_type_idx']
-    priority [name: 'briefs_priority_idx']
-    (user_id, resolved_at) [name: 'briefs_unresolved_idx']
-  }
-}
-
 table chat_groups {
   id text [pk, not null]
   title text
@@ -1367,6 +1337,36 @@ table sessions {
     (id, user_id) [name: 'sessions_id_user_id_idx']
     (user_id, updated_at) [name: 'sessions_user_id_updated_at_idx']
     group_id [name: 'sessions_group_id_idx']
+  }
+}
+
+table briefs {
+  id text [pk, not null]
+  user_id text [not null]
+  task_id text
+  cron_job_id text
+  topic_id text
+  agent_id text
+  type text [not null]
+  priority text [default: 'info']
+  title text [not null]
+  summary text [not null]
+  artifacts jsonb
+  actions jsonb
+  resolved_action text
+  resolved_comment text
+  read_at "timestamp with time zone"
+  resolved_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'briefs_user_id_idx']
+    task_id [name: 'briefs_task_id_idx']
+    cron_job_id [name: 'briefs_cron_job_id_idx']
+    agent_id [name: 'briefs_agent_id_idx']
+    type [name: 'briefs_type_idx']
+    priority [name: 'briefs_priority_idx']
+    (user_id, resolved_at) [name: 'briefs_unresolved_idx']
   }
 }
 

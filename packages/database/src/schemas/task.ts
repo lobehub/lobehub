@@ -12,7 +12,7 @@ import {
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
-import { briefs } from './brief';
+import { agentCronJobs } from './agentCronJob';
 import { documents } from './file';
 import { topics } from './topic';
 import { users } from './user';
@@ -213,6 +213,55 @@ export const taskTopics = pgTable(
 
 export type NewTaskTopic = typeof taskTopics.$inferInsert;
 export type TaskTopicItem = typeof taskTopics.$inferSelect;
+
+// ── Briefs ─────────────────────────────────────────────
+
+export const briefs = pgTable(
+  'briefs',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => idGenerator('briefs'))
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    // Source (polymorphic, fill as needed)
+    taskId: text('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+    cronJobId: text('cron_job_id').references(() => agentCronJobs.id, { onDelete: 'cascade' }),
+    topicId: text('topic_id'),
+    agentId: text('agent_id'),
+
+    // Content
+    type: text('type').notNull(), // 'decision' | 'result' | 'insight' | 'error'
+    priority: text('priority').default('info'), // 'urgent' | 'normal' | 'info'
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    artifacts: jsonb('artifacts'), // document ids
+    actions: jsonb('actions'), // BriefAction[]
+
+    // Resolution
+    resolvedAction: text('resolved_action'),
+    resolvedComment: text('resolved_comment'),
+    readAt: timestamptz('read_at'),
+    resolvedAt: timestamptz('resolved_at'),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('briefs_user_id_idx').on(t.userId),
+    index('briefs_task_id_idx').on(t.taskId),
+    index('briefs_cron_job_id_idx').on(t.cronJobId),
+    index('briefs_agent_id_idx').on(t.agentId),
+    index('briefs_type_idx').on(t.type),
+    index('briefs_priority_idx').on(t.priority),
+    index('briefs_unresolved_idx').on(t.userId, t.resolvedAt),
+  ],
+);
+
+export type NewBrief = typeof briefs.$inferInsert;
+export type BriefItem = typeof briefs.$inferSelect;
 
 // ── Task Comments ───────────────────────────────────────
 
