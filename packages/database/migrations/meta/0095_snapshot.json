@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "0a902fb3-6eeb-469c-9aaf-70f370ba9461",
+  "id": "00ae4a3e-19b4-408e-a548-300aaa406402",
   "policies": {},
   "prevId": "2dc5d5f6-130c-405d-8a38-bab68368d838",
   "roles": {},
@@ -11398,6 +11398,15 @@
           "columnsFrom": ["created_by_user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tasks_created_by_agent_id_agents_id_fk": {
+          "name": "tasks_created_by_agent_id_agents_id_fk",
+          "tableFrom": "tasks",
+          "tableTo": "agents",
+          "columnsFrom": ["created_by_agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "tasks_assignee_user_id_users_id_fk": {

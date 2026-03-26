@@ -34,7 +34,9 @@ export const tasks = pgTable(
     createdByUserId: text('created_by_user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
-    createdByAgentId: text('created_by_agent_id'),
+    createdByAgentId: text('created_by_agent_id').references(() => agents.id, {
+      onDelete: 'set null',
+    }),
 
     // Assignee (user and agent can coexist, both nullable)
     assigneeUserId: text('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
