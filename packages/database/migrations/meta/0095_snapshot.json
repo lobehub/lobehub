@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "acf21e00-8bc1-46a1-a646-96e2a785ac2f",
+  "id": "ecd33ca9-01e4-4fe1-ae61-01587dbecec1",
   "policies": {},
   "prevId": "2dc5d5f6-130c-405d-8a38-bab68368d838",
   "roles": {},
@@ -10486,6 +10486,24 @@
           "tableFrom": "task_comments",
           "tableTo": "agents",
           "columnsFrom": ["author_agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "task_comments_brief_id_briefs_id_fk": {
+          "name": "task_comments_brief_id_briefs_id_fk",
+          "tableFrom": "task_comments",
+          "tableTo": "briefs",
+          "columnsFrom": ["brief_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "task_comments_topic_id_topics_id_fk": {
+          "name": "task_comments_topic_id_topics_id_fk",
+          "tableFrom": "task_comments",
+          "tableTo": "topics",
+          "columnsFrom": ["topic_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"

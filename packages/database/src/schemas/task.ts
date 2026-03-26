@@ -12,6 +12,7 @@ import {
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
+import { briefs } from './brief';
 import { documents } from './file';
 import { topics } from './topic';
 import { users } from './user';
@@ -238,8 +239,8 @@ export const taskComments = pgTable(
     editorData: jsonb('editor_data'),
 
     // Optional references
-    briefId: text('brief_id'), // reply to a brief
-    topicId: text('topic_id'), // related topic
+    briefId: text('brief_id').references(() => briefs.id, { onDelete: 'set null' }),
+    topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
 
     ...timestamps,
   },

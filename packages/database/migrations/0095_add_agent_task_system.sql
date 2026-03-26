@@ -118,6 +118,10 @@ ALTER TABLE "task_comments" DROP CONSTRAINT IF EXISTS "task_comments_author_user
 ALTER TABLE "task_comments" ADD CONSTRAINT "task_comments_author_user_id_users_id_fk" FOREIGN KEY ("author_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_comments" DROP CONSTRAINT IF EXISTS "task_comments_author_agent_id_agents_id_fk";--> statement-breakpoint
 ALTER TABLE "task_comments" ADD CONSTRAINT "task_comments_author_agent_id_agents_id_fk" FOREIGN KEY ("author_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_comments" DROP CONSTRAINT IF EXISTS "task_comments_brief_id_briefs_id_fk";--> statement-breakpoint
+ALTER TABLE "task_comments" ADD CONSTRAINT "task_comments_brief_id_briefs_id_fk" FOREIGN KEY ("brief_id") REFERENCES "public"."briefs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_comments" DROP CONSTRAINT IF EXISTS "task_comments_topic_id_topics_id_fk";--> statement-breakpoint
+ALTER TABLE "task_comments" ADD CONSTRAINT "task_comments_topic_id_topics_id_fk" FOREIGN KEY ("topic_id") REFERENCES "public"."topics"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_dependencies" DROP CONSTRAINT IF EXISTS "task_dependencies_task_id_tasks_id_fk";--> statement-breakpoint
 ALTER TABLE "task_dependencies" ADD CONSTRAINT "task_dependencies_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_dependencies" DROP CONSTRAINT IF EXISTS "task_dependencies_depends_on_id_tasks_id_fk";--> statement-breakpoint
