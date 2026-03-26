@@ -22,7 +22,7 @@ export const LoadingState = memo<LoadingStateProps>(
     return (
       <Block
         align={'center'}
-        className={styles.placeholderContainer}
+        className={`${styles.placeholderContainer} ${styles.placeholderContainerLoading}`}
         justify={'center'}
         variant={'filled'}
         style={{
@@ -30,7 +30,7 @@ export const LoadingState = memo<LoadingStateProps>(
           maxWidth: getThumbnailMaxWidth(generation, generationBatch),
         }}
       >
-        <div className={styles.placeholderContainer} />
+        <div className={`${styles.placeholderContainer} ${styles.placeholderContainerLoading}`} />
         <Center gap={8} style={{ zIndex: 2 }}>
           <NeuralNetworkLoading size={48} />
           <ElapsedTime generationId={generation.id} isActive={isGenerating} />

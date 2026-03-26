@@ -43,6 +43,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     width: 100%;
 
+    &:hover .generation-actions {
+      opacity: 1;
+    }
+  `,
+
+  placeholderContainerLoading: css`
     &::before {
       content: '';
 
@@ -53,10 +59,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillSecondary};
 
       animation: ${shimmer} 2s linear infinite;
-    }
-
-    &:hover .generation-actions {
-      opacity: 1;
     }
   `,
 
