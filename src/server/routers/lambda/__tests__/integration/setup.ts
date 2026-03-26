@@ -51,18 +51,7 @@ export const createTestTopic = async (
   const id = topicId || `tpc_${uuid()}`;
   const { topics } = await import('@/database/schemas');
 
-  // topics requires a sessionId; create a minimal session first
-  const { sessions } = await import('@/database/schemas');
-  const [session] = await serverDB
-    .insert(sessions)
-    .values({ id: uuid(), userId })
-    .onConflictDoNothing()
-    .returning();
-
-  await serverDB
-    .insert(topics)
-    .values({ id, sessionId: session?.id || uuid(), userId })
-    .onConflictDoNothing();
+  await serverDB.insert(topics).values({ id, userId }).onConflictDoNothing();
 
   return id;
 };

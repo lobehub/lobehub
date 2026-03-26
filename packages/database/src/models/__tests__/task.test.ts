@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, users } from '../../schemas';
+import { agents, briefs, documents, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 
@@ -10,6 +10,16 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'task-test-user-id';
 const userId2 = 'task-test-user-id-2';
+
+const createAgent = async (id: string, uid = userId) => {
+  await serverDB.insert(agents).values({ id, slug: id, userId: uid }).onConflictDoNothing();
+  return id;
+};
+
+const createTopic = async (id: string, uid = userId) => {
+  await serverDB.insert(topics).values({ id, userId: uid }).onConflictDoNothing();
+  return id;
+};
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -72,6 +82,7 @@ describe('TaskModel', () => {
 
     it('should create task with all optional fields', async () => {
       const model = new TaskModel(serverDB, userId);
+      await createAgent('agent-1');
       const result = await model.create({
         assigneeAgentId: 'agent-1',
         assigneeUserId: userId,
@@ -603,6 +614,7 @@ describe('TaskModel', () => {
     it('should update current topic', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
+      await createTopic('topic-123');
 
       await model.updateCurrentTopic(task.id, 'topic-123');
 
@@ -689,23 +701,29 @@ describe('TaskModel', () => {
     it('should add comment with briefId and topicId', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
+      await createTopic('tpc_abc');
+      const [brief] = await serverDB
+        .insert(briefs)
+        .values({ id: 'brf_test1', summary: 'test', title: 'test', type: 'decision', userId })
+        .returning();
 
       const comment = await model.addComment({
         authorUserId: userId,
-        briefId: '00000000-0000-0000-0000-000000000001',
+        briefId: brief.id,
         content: 'Reply to brief',
         taskId: task.id,
         topicId: 'tpc_abc',
         userId,
       });
 
-      expect(comment.briefId).toBe('00000000-0000-0000-0000-000000000001');
+      expect(comment.briefId).toBe(brief.id);
       expect(comment.topicId).toBe('tpc_abc');
     });
 
     it('should add comment from agent', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
+      await createAgent('agt_xxx');
 
       const comment = await model.addComment({
         authorAgentId: 'agt_xxx',

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users } from '../../schemas';
+import { topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 import { TaskTopicModel } from '../taskTopic';
@@ -11,6 +11,11 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'task-topic-test-user-id';
 const userId2 = 'task-topic-test-user-id-2';
+
+const createTopic = async (id: string, uid = userId) => {
+  await serverDB.insert(topics).values({ id, userId: uid }).onConflictDoNothing();
+  return id;
+};
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -27,6 +32,8 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
+      await createTopic('tpc_bbb');
 
       await topicModel.add(task.id, 'tpc_aaa', { operationId: 'op_1', seq: 1 });
       await topicModel.add(task.id, 'tpc_bbb', { operationId: 'op_2', seq: 2 });
@@ -43,6 +50,7 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
 
       await topicModel.add(task.id, 'tpc_aaa', { seq: 1 });
       await topicModel.add(task.id, 'tpc_aaa', { seq: 1 }); // duplicate
@@ -57,6 +65,7 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
 
       await topicModel.add(task.id, 'tpc_aaa', { seq: 1 });
       await topicModel.updateStatus(task.id, 'tpc_aaa', 'completed');
@@ -71,6 +80,8 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
+      await createTopic('tpc_bbb');
 
       await topicModel.add(task.id, 'tpc_aaa', { seq: 1 });
       await topicModel.add(task.id, 'tpc_bbb', { seq: 2 });
@@ -92,6 +103,7 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
 
       await topicModel.add(task.id, 'tpc_aaa', { seq: 1 });
       await topicModel.updateHandoff(task.id, 'tpc_aaa', {
@@ -115,6 +127,7 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_review');
 
       await topicModel.add(task.id, 'tpc_review', { seq: 1 });
       await topicModel.updateReview(task.id, 'tpc_review', {
@@ -145,6 +158,7 @@ describe('TaskTopicModel', () => {
       const taskModel = new TaskModel(serverDB, userId);
       const topicModel = new TaskTopicModel(serverDB, userId);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
 
       await topicModel.add(task.id, 'tpc_aaa', { seq: 1 });
       const removed = await topicModel.remove(task.id, 'tpc_aaa');
@@ -159,6 +173,7 @@ describe('TaskTopicModel', () => {
       const topicModel1 = new TaskTopicModel(serverDB, userId);
       const topicModel2 = new TaskTopicModel(serverDB, userId2);
       const task = await taskModel.create({ instruction: 'Test' });
+      await createTopic('tpc_aaa');
 
       await topicModel1.add(task.id, 'tpc_aaa', { seq: 1 });
       const removed = await topicModel2.remove(task.id, 'tpc_aaa');
