@@ -1,4 +1,5 @@
 import { dirname, join, resolve } from 'node:path';
+
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
