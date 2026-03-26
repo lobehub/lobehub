@@ -883,6 +883,15 @@ export class AiAgentService {
     }
 
     // 19. Create operation using AgentRuntimeService
+    log(
+      'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
+      operationId,
+      hasAgentDocuments ? 'yes' : 0,
+      hasEnabledKnowledgeBases,
+      tools?.length ?? 0,
+      operationSkillSet?.metas?.length ?? 0,
+    );
+
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
