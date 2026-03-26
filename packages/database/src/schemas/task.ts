@@ -11,6 +11,7 @@ import {
 
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
+import { agents } from './agent';
 import { documents } from './file';
 import { topics } from './topic';
 import { users } from './user';
@@ -35,10 +36,12 @@ export const tasks = pgTable(
     createdByAgentId: text('created_by_agent_id'),
 
     // Assignee (user and agent can coexist, both nullable)
-    assigneeUserId: text('assignee_user_id'),
-    assigneeAgentId: text('assignee_agent_id'),
+    assigneeUserId: text('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
+    assigneeAgentId: text('assignee_agent_id').references(() => agents.id, {
+      onDelete: 'set null',
+    }),
 
-    // Tree structure (self-referencing, FK defined in extras to avoid circular type inference)
+    // Tree structure (self-referencing, no depth limit)
     parentTaskId: text('parent_task_id'),
 
     // Task definition
@@ -77,11 +80,13 @@ export const tasks = pgTable(
     ...timestamps,
   },
   (t) => [
+    // Self-referential FK (defined here to avoid TS circular inference)
     foreignKey({
       columns: [t.parentTaskId],
       foreignColumns: [t.id],
       name: 'tasks_parent_task_id_tasks_id_fk',
     }).onDelete('set null'),
+    // Topic FK (topic deleted → current pointer nulled)
     foreignKey({
       columns: [t.currentTopicId],
       foreignColumns: [topics.id],
@@ -230,9 +235,9 @@ export const taskComments = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    // Author (one of)
-    authorUserId: text('author_user_id'),
-    authorAgentId: text('author_agent_id'),
+    // Author (user or agent, both nullable)
+    authorUserId: text('author_user_id').references(() => users.id, { onDelete: 'set null' }),
+    authorAgentId: text('author_agent_id').references(() => agents.id, { onDelete: 'set null' }),
 
     // Content
     content: text('content').notNull(),
