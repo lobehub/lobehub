@@ -17,41 +17,36 @@ const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }
   const { t } = useTranslation('error');
   const [loading, setLoading] = useState(false);
 
-  const [deleteMessage, regenerateAssistantMessage] = useConversationStore((s) => [
-    s.deleteMessage,
-    s.regenerateAssistantMessage,
-  ]);
-
-  const topicId = useChatStore((s) => s.activeTopicId);
+  const context = useConversationStore((s) => s.context);
+  const regenerateUserMessage = useConversationStore((s) => s.regenerateUserMessage);
+  const parentId = useConversationStore(
+    (s) => s.displayMessages.find((m) => m.id === id)?.parentId,
+  );
 
   const handleCompact = useCallback(async () => {
-    if (!topicId) return;
+    if (!context.topicId || !parentId) return;
 
     setLoading(true);
     try {
-      const chatState = useChatStore.getState();
-      const context = {
-        agentId: chatState.activeAgentId,
-        groupId: chatState.activeGroupId,
-        topicId,
-      };
-
-      // Delete the error message first (optimistic update removes it from UI immediately)
-      await deleteMessage(id);
-      await chatState.executeCompression(context, '');
-      await regenerateAssistantMessage(id);
+      await useChatStore.getState().executeCompression(context, '');
+      await regenerateUserMessage(parentId);
     } finally {
       setLoading(false);
     }
-  }, [deleteMessage, id, regenerateAssistantMessage, topicId]);
+  }, [context, parentId, regenerateUserMessage]);
 
   return (
     <BaseErrorForm
-      avatar={<Icon icon={Minimize2} size={{ fontSize: 24 }} />}
+      avatar={<Icon icon={Minimize2} size={24} />}
       desc={t('exceededContext.desc')}
       title={t('exceededContext.title')}
       action={
-        <Button disabled={!topicId} loading={loading} type={'primary'} onClick={handleCompact}>
+        <Button
+          disabled={!context.topicId}
+          loading={loading}
+          type={'primary'}
+          onClick={handleCompact}
+        >
           {t('exceededContext.compact')}
         </Button>
       }
