@@ -549,10 +549,24 @@ export class AgentBridgeService {
       trigger?: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    if (isQueueAgentRuntimeEnabled()) {
-      return this.executeWithWebhooks(thread, userMessage, opts);
+    // Resolve bot platform context from platform registry
+    let botPlatformContext: { platformName: string; supportsMarkdown: boolean } | undefined;
+    if (opts.botContext?.platform) {
+      const platformDef = platformRegistry.getPlatform(opts.botContext.platform);
+      if (platformDef) {
+        botPlatformContext = {
+          platformName: platformDef.name,
+          supportsMarkdown: platformDef.supportsMarkdown !== false,
+        };
+      }
     }
-    return this.executeWithInMemoryCallbacks(thread, userMessage, opts);
+
+    const optsWithPlatform = { ...opts, botPlatformContext };
+
+    if (isQueueAgentRuntimeEnabled()) {
+      return this.executeWithWebhooks(thread, userMessage, optsWithPlatform);
+    }
+    return this.executeWithInMemoryCallbacks(thread, userMessage, optsWithPlatform);
   }
 
   /**
@@ -566,13 +580,15 @@ export class AgentBridgeService {
     opts: {
       agentId: string;
       botContext?: ChatTopicBotContext;
+      botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
       channelContext?: DiscordChannelContext;
       client?: PlatformClient;
       topicId?: string;
       trigger?: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    const { agentId, botContext, channelContext, client, topicId, trigger } = opts;
+    const { agentId, botContext, botPlatformContext, channelContext, client, topicId, trigger } =
+      opts;
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
@@ -634,6 +650,7 @@ export class AgentBridgeService {
           appContext: topicId ? { topicId } : undefined,
           autoStart: true,
           botContext,
+          botPlatformContext,
           completionWebhook: { body: webhookBody, url: callbackUrl },
           discordContext: channelContext
             ? { channel: channelContext.channel, guild: channelContext.guild }
@@ -706,6 +723,7 @@ export class AgentBridgeService {
     opts: {
       agentId: string;
       botContext?: ChatTopicBotContext;
+      botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
       channelContext?: DiscordChannelContext;
       charLimit?: number;
       client?: PlatformClient;
@@ -713,7 +731,16 @@ export class AgentBridgeService {
       trigger?: string;
     },
   ): Promise<{ reply: string; topicId: string }> {
-    const { agentId, botContext, channelContext, charLimit, client, topicId, trigger } = opts;
+    const {
+      agentId,
+      botContext,
+      botPlatformContext,
+      channelContext,
+      charLimit,
+      client,
+      topicId,
+      trigger,
+    } = opts;
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
@@ -759,6 +786,7 @@ export class AgentBridgeService {
           appContext: topicId ? { topicId } : undefined,
           autoStart: true,
           botContext,
+          botPlatformContext,
           discordContext: channelContext
             ? { channel: channelContext.channel, guild: channelContext.guild }
             : undefined,

@@ -92,6 +92,7 @@ const formatErrorEventData = (error: unknown, phase: string) => {
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
+  botPlatformContext?: any;
   discordContext?: any;
   evalContext?: EvalContext;
   fileService?: any;
@@ -276,6 +277,7 @@ export const createRuntimeExecutors = (
               return info?.abilities?.vision ?? true;
             },
           },
+          botPlatformContext: ctx.botPlatformContext,
           discordContext: ctx.discordContext,
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,

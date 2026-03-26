@@ -274,6 +274,7 @@ export class AgentRuntimeService {
       completionWebhook,
       stepWebhook,
       webhookDelivery,
+      botPlatformContext,
       discordContext,
       evalContext,
       maxSteps,
@@ -318,6 +319,7 @@ export class AgentRuntimeService {
         metadata: {
           activeDeviceId,
           agentConfig,
+          botPlatformContext,
           completionWebhook,
           deviceSystemInfo,
           discordContext,
@@ -1502,6 +1504,7 @@ export class AgentRuntimeService {
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
       agentConfig: metadata?.agentConfig,
+      botPlatformContext: metadata?.botPlatformContext,
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,

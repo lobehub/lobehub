@@ -140,6 +140,8 @@ export interface OperationCreationParams {
     trigger?: string;
   };
   autoStart?: boolean;
+  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
+  botPlatformContext?: any;
   /**
    * Completion webhook configuration
    * When set, an HTTP POST will be fired when the operation completes (success or error).

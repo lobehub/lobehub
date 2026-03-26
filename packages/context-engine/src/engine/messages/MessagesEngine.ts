@@ -25,6 +25,7 @@ import {
   AgentBuilderContextInjector,
   AgentDocumentInjector,
   AgentManagementContextInjector,
+  BotPlatformContextInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
   ForceFinishSummaryInjector,
@@ -140,6 +141,7 @@ export class MessagesEngine {
       fileContext,
       messages,
       agentBuilderContext,
+      botPlatformContext,
       discordContext,
       evalContext,
       agentManagementContext,
@@ -206,6 +208,12 @@ export class MessagesEngine {
 
       // 2. Eval context injection (appends envPrompt to system message)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
+
+      // 2.5. Bot platform context injection (appends formatting instructions for non-Markdown platforms)
+      new BotPlatformContextInjector({
+        context: botPlatformContext,
+        enabled: !!botPlatformContext,
+      }),
 
       // 3. System date injection (appends current date to system message)
       new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),

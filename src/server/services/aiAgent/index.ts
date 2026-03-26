@@ -84,6 +84,8 @@ function formatErrorForMetadata(error: unknown): Record<string, any> | undefined
 interface InternalExecAgentParams extends ExecAgentParams {
   /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
   botContext?: ChatTopicBotContext;
+  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
+  botPlatformContext?: any;
   /**
    * Completion webhook configuration
    * Persisted in Redis state, triggered via HTTP POST when the operation completes.
@@ -207,6 +209,7 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      botPlatformContext,
       discordContext,
       existingMessageIds = [],
       files,
@@ -866,6 +869,7 @@ export class AiAgentService {
           trigger,
         },
         autoStart,
+        botPlatformContext,
         completionWebhook,
         discordContext,
         evalContext,

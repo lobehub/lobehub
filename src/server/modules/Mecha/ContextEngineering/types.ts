@@ -2,6 +2,7 @@
 import type {
   AgentBuilderContext,
   AgentManagementContext,
+  BotPlatformContext,
   DiscordContext,
   EvalContext,
   FileContent,
@@ -75,6 +76,8 @@ export interface ServerMessagesEngineParams {
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;
+  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
+  botPlatformContext?: BotPlatformContext;
   /** Discord context for injecting channel/guild info */
   discordContext?: DiscordContext;
   // ========== Eval context ==========
@@ -134,6 +137,7 @@ export interface ServerMessagesEngineParams {
 export {
   type AgentBuilderContext,
   type AgentManagementContext,
+  type BotPlatformContext,
   type DiscordContext,
   type EvalContext,
   type FileContent,
