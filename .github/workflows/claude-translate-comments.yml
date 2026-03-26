@@ -41,7 +41,7 @@ jobs:
           cp .claude/prompts/security-rules.md /tmp/claude-prompts/
 
       - name: Run Claude Code for Comment Translation
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@3ac52d0da9f8ec9ca7b4dc23bb477e36ef9c77a9 # v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}
           allowed_non_write_users: '*'

@@ -39,7 +39,7 @@ jobs:
           cp .claude/prompts/security-rules.md /tmp/claude-prompts/
 
       - name: Run Claude for translation
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@3ac52d0da9f8ec9ca7b4dc23bb477e36ef9c77a9 # v1
         id: claude
         with:
           # Warning: Permissions should have been controlled by workflow permission.
