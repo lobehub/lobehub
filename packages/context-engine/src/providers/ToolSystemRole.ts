@@ -24,10 +24,11 @@ const log = debug('context-engine:provider:ToolSystemRoleProvider');
  * Tool System Role Configuration
  */
 export interface ToolSystemRoleConfig {
+  enabled?: boolean;
   /** Function to check if function calling is supported */
   isCanUseFC: (model: string, provider: string) => boolean | undefined;
   /** Tool manifests with systemRole and API definitions */
-  manifests: LobeToolManifest[];
+  manifests?: LobeToolManifest[];
   /** Model name */
   model: string;
   /** Provider name */
@@ -52,6 +53,8 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
   }
 
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
+    if (this.config.enabled === false) return null;
+
     const toolSystemRole = this.getToolSystemRole();
 
     if (!toolSystemRole) {

@@ -224,8 +224,8 @@ export class MessagesEngine {
       // Order matters: first executed = first in content
       // =============================================
 
-      // 4. User memory injection (conditionally added, injected first)
-      ...(isUserMemoryEnabled ? [new UserMemoryInjector(userMemory)] : []),
+      // 4. User memory injection
+      new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
 
       // 5. Group context injection (agent identity and group info for multi-agent chat)
       new GroupContextInjector({
@@ -239,12 +239,10 @@ export class MessagesEngine {
       }),
 
       // 5.5. Discord context injection (channel/guild info for Discord bot scenarios)
-      ...(discordContext
-        ? [new DiscordContextProvider({ context: discordContext, enabled: true })]
-        : []),
+      new DiscordContextProvider({ context: discordContext, enabled: !!discordContext }),
 
-      // 6. GTD Plan injection (conditionally added, after user memory, before knowledge)
-      ...(isGTDPlanEnabled ? [new GTDPlanInjector({ enabled: true, plan: gtd.plan })] : []),
+      // 6. GTD Plan injection
+      new GTDPlanInjector({ enabled: !!isGTDPlanEnabled, plan: gtd?.plan }),
 
       // 7. Knowledge injection (full content for agent files + metadata for knowledge bases)
       new KnowledgeInjector({
@@ -260,9 +258,11 @@ export class MessagesEngine {
       }),
 
       // 8. Tool Discovery context injection (available tools for dynamic activation)
-      ...(toolDiscoveryConfig?.availableTools && toolDiscoveryConfig.availableTools.length > 0
-        ? [new ToolDiscoveryProvider({ availableTools: toolDiscoveryConfig.availableTools })]
-        : []),
+      new ToolDiscoveryProvider({
+        availableTools: toolDiscoveryConfig?.availableTools,
+        enabled:
+          !!toolDiscoveryConfig?.availableTools && toolDiscoveryConfig.availableTools.length > 0,
+      }),
 
       // =============================================
       // Phase 3: Additional System Context
@@ -274,52 +274,46 @@ export class MessagesEngine {
         agentContext: agentBuilderContext,
       }),
 
-      // 7. Agent Management context injection (available models and plugins for agent creation)
+      // 10. Agent Management context injection (available models and plugins for agent creation)
       new AgentManagementContextInjector({
         enabled: isAgentManagementEnabled,
         context: agentManagementContext,
       }),
 
-      // 8. Group Agent Builder context injection (current group config/members for editing)
+      // 11. Group Agent Builder context injection (current group config/members for editing)
       new GroupAgentBuilderContextInjector({
         enabled: isGroupAgentBuilderEnabled,
         groupContext: groupAgentBuilderContext,
       }),
 
-      // 11. Skill context injection (conditionally added)
-      ...(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0
-        ? [
-            new SkillContextProvider({
-              enabledSkills: skillsConfig.enabledSkills,
-            }),
-          ]
-        : []),
+      // 12. Skill context injection
+      new SkillContextProvider({
+        enabled: !!(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0),
+        enabledSkills: skillsConfig?.enabledSkills,
+      }),
 
-      // 12. Tool system role injection (conditionally added)
-      ...(toolsConfig?.manifests && toolsConfig.manifests.length > 0
-        ? [
-            new ToolSystemRoleProvider({
-              isCanUseFC: capabilities?.isCanUseFC || (() => true),
-              manifests: toolsConfig.manifests,
-              model,
-              provider,
-            }),
-          ]
-        : []),
+      // 13. Tool system role injection
+      new ToolSystemRoleProvider({
+        enabled: !!(toolsConfig?.manifests && toolsConfig.manifests.length > 0),
+        isCanUseFC: capabilities?.isCanUseFC || (() => true),
+        manifests: toolsConfig?.manifests,
+        model,
+        provider,
+      }),
 
-      // 13. History summary injection
+      // 14. History summary injection
       new HistorySummaryProvider({
         formatHistorySummary,
         historySummary,
       }),
 
-      // 14. Selected skill injection (ephemeral user-selected slash skills for this request)
-      ...(hasSelectedSkills ? [new SelectedSkillInjector({ selectedSkills })] : []),
+      // 15. Selected skill injection (ephemeral user-selected slash skills for this request)
+      new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
 
-      // 15. Page Selections injection (inject user-selected text into each user message that has them)
+      // 16. Page Selections injection (inject user-selected text into each user message that has them)
       new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
 
-      // 16. Page Editor context injection (inject current page content to last user message)
+      // 17. Page Editor context injection (inject current page content to last user message)
       new PageEditorContextInjector({
         enabled: isPageEditorEnabled,
         // Use direct pageContentContext if provided (server-side), otherwise build from initialContext + stepContext (frontend)
@@ -339,18 +333,14 @@ export class MessagesEngine {
             : undefined),
       }),
 
-      // 17. GTD Todo injection (conditionally added, at end of last user message)
-      ...(isGTDTodoEnabled ? [new GTDTodoInjector({ enabled: true, todos: gtd.todos })] : []),
+      // 18. GTD Todo injection
+      new GTDTodoInjector({ enabled: !!isGTDTodoEnabled, todos: gtd?.todos }),
 
-      // 18. Topic Reference context injection (inject referenced topic summaries to last user message)
-      ...(topicReferences && topicReferences.length > 0
-        ? [
-            new TopicReferenceContextInjector({
-              enabled: true,
-              topicReferences,
-            }),
-          ]
-        : []),
+      // 19. Topic Reference context injection
+      new TopicReferenceContextInjector({
+        enabled: !!(topicReferences && topicReferences.length > 0),
+        topicReferences,
+      }),
 
       // =============================================
       // Phase 4: Message Transformation

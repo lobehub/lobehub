@@ -17,6 +17,7 @@ declare module '../types' {
 const log = debug('context-engine:provider:SelectedSkillInjector');
 
 export interface SelectedSkillInjectorConfig {
+  enabled?: boolean;
   selectedSkills?: RuntimeSelectedSkill[];
 }
 
@@ -51,6 +52,8 @@ export class SelectedSkillInjector extends BaseLastUserContentProvider {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    if (this.config.enabled === false) return this.markAsExecuted(context);
+
     const clonedContext = this.cloneContext(context);
     const selectedSkills = this.config.selectedSkills ?? [];
 

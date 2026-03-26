@@ -40,7 +40,8 @@ export interface SkillMeta {
  * Skill Context Provider Configuration
  */
 export interface SkillContextProviderConfig {
-  enabledSkills: SkillMeta[];
+  enabled?: boolean;
+  enabledSkills?: SkillMeta[];
 }
 
 /**
@@ -59,6 +60,8 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
   }
 
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
+    if (this.config.enabled === false) return null;
+
     const { enabledSkills } = this.config;
 
     if (!enabledSkills || enabledSkills.length === 0) {
