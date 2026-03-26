@@ -81,6 +81,7 @@ export const userSettings = pgTable('user_settings', {
   memory: jsonb('memory'),
   tool: jsonb('tool'),
   image: jsonb('image'),
+  notification: jsonb('notification'),
 });
 export type UserSettingsItem = typeof userSettings.$inferSelect;
 

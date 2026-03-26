@@ -672,6 +672,13 @@
       "when": 1774502940061,
       "tag": "0095_add_agent_task_system",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1774514478074,
+      "tag": "0096_add_notification_tables",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -907,6 +907,46 @@ table nextauth_verificationtokens {
   }
 }
 
+table notification_deliveries {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  notification_id uuid [not null]
+  channel text [not null]
+  status text [not null]
+  provider_message_id text
+  failed_reason text
+  sent_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    notification_id [name: 'idx_deliveries_notification']
+    channel [name: 'idx_deliveries_channel']
+    status [name: 'idx_deliveries_status']
+  }
+}
+
+table notifications {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  category text [not null]
+  type text [not null]
+  title text [not null]
+  content text [not null]
+  dedupe_key text
+  action_url text
+  is_read boolean [not null, default: false]
+  is_archived boolean [not null, default: false]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'idx_notifications_user']
+    (user_id, created_at) [name: 'idx_notifications_user_active']
+    user_id [name: 'idx_notifications_user_unread']
+    (user_id, dedupe_key) [name: 'idx_notifications_dedupe', unique]
+    (updated_at, created_at, id) [name: 'idx_notifications_archived_cleanup']
+  }
+}
+
 table oauth_handoffs {
   id text [pk, not null]
   client varchar(50) [not null]
@@ -1623,6 +1663,7 @@ table user_settings {
   memory jsonb
   tool jsonb
   image jsonb
+  notification jsonb
 }
 
 table users {
