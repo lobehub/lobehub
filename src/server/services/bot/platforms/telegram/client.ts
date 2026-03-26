@@ -19,6 +19,7 @@ import {
 import { formatUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
 import { extractBotId, setTelegramWebhook } from './helpers';
+import { markdownToTelegramHTML } from './markdownToHTML';
 
 const log = debug('bot-platform:telegram:bot');
 
@@ -140,6 +141,10 @@ class TelegramWebhookClient implements PlatformClient {
     const telegram = new TelegramApi(this.config.credentials.botToken);
     await telegram.setMyCommands(commands);
     log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
+  }
+
+  formatMarkdown(markdown: string): string {
+    return markdownToTelegramHTML(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {
