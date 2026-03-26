@@ -2,9 +2,11 @@
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
+  AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
-  AgentDocumentSystemInjector,
+  AgentDocumentSystemAppendInjector,
+  AgentDocumentSystemReplaceInjector,
 } from './AgentDocumentInjector';
 export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { BotPlatformContextInjector } from './BotPlatformContextInjector';
@@ -36,12 +38,14 @@ export type {
 } from './AgentBuilderContextInjector';
 export type {
   AgentContextDocument,
+  AgentDocumentBeforeSystemInjectorConfig,
   AgentDocumentContextInjectorConfig,
   AgentDocumentInjectionPosition,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
   AgentDocumentMessageInjectorConfig,
-  AgentDocumentSystemInjectorConfig,
+  AgentDocumentSystemAppendInjectorConfig,
+  AgentDocumentSystemReplaceInjectorConfig,
 } from './AgentDocumentInjector';
 export type {
   AgentManagementContext,

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import {
+  AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
-  AgentDocumentSystemInjector,
+  AgentDocumentSystemAppendInjector,
+  AgentDocumentSystemReplaceInjector,
 } from '../AgentDocumentInjector';
 
 describe('AgentDocumentInjector', () => {
@@ -173,9 +175,35 @@ describe('AgentDocumentInjector', () => {
     });
   });
 
-  describe('AgentDocumentSystemInjector (system message)', () => {
+  describe('AgentDocumentBeforeSystemInjector (before-system)', () => {
+    it('should prepend documents before system message', async () => {
+      const provider = new AgentDocumentBeforeSystemInjector({
+        documents: [
+          {
+            content: 'Before system content',
+            filename: 'framework.md',
+            loadPosition: 'before-system',
+            loadRules: { rule: 'always' },
+          },
+        ],
+      });
+
+      const context = createContext([
+        { content: 'Original system', id: 'sys-1', role: 'system' },
+        { content: 'Hello', id: 'user-1', role: 'user' },
+      ]);
+
+      const result = await provider.process(context);
+
+      expect(result.messages).toHaveLength(3);
+      expect(result.messages[0].content).toContain('Before system content');
+      expect(result.messages[1].content).toBe('Original system');
+    });
+  });
+
+  describe('AgentDocumentSystemAppendInjector (system-append)', () => {
     it('should append documents to existing system message', async () => {
-      const provider = new AgentDocumentSystemInjector({
+      const provider = new AgentDocumentSystemAppendInjector({
         documents: [
           {
             content: 'System append content',
@@ -196,6 +224,32 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages).toHaveLength(2);
       expect(result.messages[0].content).toContain('Original system');
       expect(result.messages[0].content).toContain('System append content');
+    });
+  });
+
+  describe('AgentDocumentSystemReplaceInjector (system-replace)', () => {
+    it('should replace entire system message', async () => {
+      const provider = new AgentDocumentSystemReplaceInjector({
+        documents: [
+          {
+            content: 'Replacement content',
+            filename: 'override.md',
+            loadPosition: 'system-replace',
+            loadRules: { rule: 'always' },
+          },
+        ],
+      });
+
+      const context = createContext([
+        { content: 'Original system', id: 'sys-1', role: 'system' },
+        { content: 'Hello', id: 'user-1', role: 'user' },
+      ]);
+
+      const result = await provider.process(context);
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[0].content).toContain('Replacement content');
+      expect(result.messages[0].content).not.toContain('Original system');
     });
   });
 

@@ -5,24 +5,24 @@ import type { PipelineContext, ProcessorOptions } from '../../types';
 import type { AgentContextDocument, AgentDocumentFilterContext } from './shared';
 import { combineDocuments, getDocumentsForPositions } from './shared';
 
-const log = debug('context-engine:provider:AgentDocumentSystemInjector');
+const log = debug('context-engine:provider:AgentDocumentSystemAppendInjector');
 
-export interface AgentDocumentSystemInjectorConfig extends AgentDocumentFilterContext {
+export interface AgentDocumentSystemAppendInjectorConfig extends AgentDocumentFilterContext {
   documents?: AgentContextDocument[];
   enabled?: boolean;
 }
 
 /**
- * Injects agent documents into the system message.
- * Handles `before-system`, `system-append`, and `system-replace` positions.
+ * Appends agent documents to the end of the system message.
+ * Handles `system-append` position.
  *
- * Placed in Phase 2 (System Message Assembly).
+ * Placed at the end of Phase 2, after all other system role providers.
  */
-export class AgentDocumentSystemInjector extends BaseSystemRoleProvider {
-  readonly name = 'AgentDocumentSystemInjector';
+export class AgentDocumentSystemAppendInjector extends BaseSystemRoleProvider {
+  readonly name = 'AgentDocumentSystemAppendInjector';
 
   constructor(
-    private config: AgentDocumentSystemInjectorConfig,
+    private config: AgentDocumentSystemAppendInjectorConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
@@ -33,13 +33,13 @@ export class AgentDocumentSystemInjector extends BaseSystemRoleProvider {
 
     const docs = getDocumentsForPositions(
       this.config.documents || [],
-      ['before-system', 'system-append', 'system-replace'],
+      ['system-append'],
       this.config,
     );
 
     if (docs.length === 0) return null;
 
-    log('Injecting %d agent documents into system message', docs.length);
+    log('Appending %d agent documents to system message', docs.length);
     return combineDocuments(docs, this.config);
   }
 }

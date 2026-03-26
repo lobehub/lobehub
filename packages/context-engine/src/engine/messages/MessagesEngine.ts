@@ -23,9 +23,11 @@ import {
 } from '../../processors';
 import {
   AgentBuilderContextInjector,
+  AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
-  AgentDocumentSystemInjector,
+  AgentDocumentSystemAppendInjector,
+  AgentDocumentSystemReplaceInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
   DiscordContextProvider,
@@ -209,6 +211,8 @@ export class MessagesEngine {
       // Each provider appends content to a single system message via BaseSystemRoleProvider
       // =============================================
 
+      // Agent documents → before system (prepend as separate system message)
+      new AgentDocumentBeforeSystemInjector(agentDocConfig),
       // Agent's system role (creates the initial system message)
       new SystemRoleInjector({ systemRole }),
       // Eval context (appends envPrompt)
@@ -235,8 +239,10 @@ export class MessagesEngine {
       }),
       // History summary (conversation summary from compression)
       new HistorySummaryProvider({ formatHistorySummary, historySummary }),
-      // Agent documents → system message (before-system, system-append, system-replace)
-      new AgentDocumentSystemInjector(agentDocConfig),
+      // Agent documents → append to system message
+      new AgentDocumentSystemAppendInjector(agentDocConfig),
+      // Agent documents → replace entire system message (destructive, runs last)
+      new AgentDocumentSystemReplaceInjector(agentDocConfig),
 
       // =============================================
       // Phase 3: Context Injection (before first user message)
