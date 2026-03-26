@@ -1,3 +1,4 @@
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -419,6 +420,83 @@ describe('createRouterRuntime', () => {
       await expect(
         runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
       ).rejects.toThrow('empty provider options');
+    });
+
+    it('should not retry when ExceededContextWindow error is thrown', async () => {
+      const exceededError = {
+        errorType: AgentRuntimeErrorType.ExceededContextWindow,
+        error: { message: 'Too many input tokens' },
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(exceededError);
+      const mockChatSuccess = vi.fn().mockResolvedValue('success');
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      class SuccessRuntime implements LobeRuntimeAI {
+        chat = mockChatSuccess;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [
+              { apiKey: 'key-1', runtime: FailRuntime as any },
+              { apiKey: 'key-2', runtime: SuccessRuntime as any },
+            ],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(exceededError);
+
+      // Second channel should never be called
+      expect(mockChatFail).toHaveBeenCalledTimes(1);
+      expect(mockChatSuccess).not.toHaveBeenCalled();
+    });
+
+    it('should still retry on other error types', async () => {
+      const bizError = {
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        error: { message: 'Server error' },
+        provider: 'test',
+      };
+
+      const mockChatFail = vi.fn().mockRejectedValue(bizError);
+
+      class FailRuntime implements LobeRuntimeAI {
+        chat = mockChatFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: FailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toEqual(bizError);
+
+      // Both channels should be tried
+      expect(mockChatFail).toHaveBeenCalledTimes(2);
     });
 
     it('should use apiType from option item when specified for fallback', async () => {
