@@ -4,7 +4,13 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskRouter } from '../../task';
-import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } from './setup';
+import {
+  cleanupTestUser,
+  createTestAgent,
+  createTestContext,
+  createTestTopic,
+  createTestUser,
+} from './setup';
 
 // Mock getServerDB
 let testDB: LobeChatDatabase;
@@ -49,6 +55,7 @@ describe('Task Router Integration', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
   let testAgentId: string;
+  let testTopicId: string;
   let caller: ReturnType<typeof taskRouter.createCaller>;
 
   beforeEach(async () => {
@@ -57,6 +64,13 @@ describe('Task Router Integration', () => {
     testDB = serverDB;
     userId = await createTestUser(serverDB);
     testAgentId = await createTestAgent(serverDB, userId, 'agt_test');
+    testTopicId = await createTestTopic(serverDB, userId, 'tpc_test');
+    // Update mock to return the real topic ID
+    mockExecAgent.mockResolvedValue({
+      operationId: 'op_test',
+      success: true,
+      topicId: testTopicId,
+    });
     caller = taskRouter.createCaller(createTestContext(userId));
   });
 

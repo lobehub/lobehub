@@ -41,6 +41,33 @@ export const createTestAgent = async (
 };
 
 /**
+ * 创建测试 Topic
+ */
+export const createTestTopic = async (
+  serverDB: LobeChatDatabase,
+  userId: string,
+  topicId?: string,
+) => {
+  const id = topicId || `tpc_${uuid()}`;
+  const { topics } = await import('@/database/schemas');
+
+  // topics requires a sessionId; create a minimal session first
+  const { sessions } = await import('@/database/schemas');
+  const [session] = await serverDB
+    .insert(sessions)
+    .values({ id: uuid(), userId })
+    .onConflictDoNothing()
+    .returning();
+
+  await serverDB
+    .insert(topics)
+    .values({ id, sessionId: session?.id || uuid(), userId })
+    .onConflictDoNothing();
+
+  return id;
+};
+
+/**
  * 清理测试用户及其所有关联数据
  */
 export const cleanupTestUser = async (serverDB: LobeChatDatabase, userId: string) => {
