@@ -37,6 +37,7 @@ export const defaultToolIds = [
   LocalSystemManifest.identifier,
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
+  AgentDocumentsManifest.identifier,
 ];
 
 /**

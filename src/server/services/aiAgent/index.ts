@@ -43,6 +43,7 @@ import {
 } from '@/server/modules/Mecha';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
@@ -166,6 +167,7 @@ interface InternalExecAgentParams extends ExecAgentParams {
 export class AiAgentService {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
+  private readonly agentDocumentsService: AgentDocumentsService;
   private readonly agentModel: AgentModel;
   private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
@@ -183,6 +185,7 @@ export class AiAgentService {
   ) {
     this.userId = userId;
     this.db = db;
+    this.agentDocumentsService = new AgentDocumentsService(db, userId);
     this.agentModel = new AgentModel(db, userId);
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
@@ -422,6 +425,15 @@ export class AiAgentService {
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
 
+    // Check if agent has documents (for auto-enabling agent-documents tool)
+    let hasAgentDocuments = false;
+    try {
+      const docs = await this.agentDocumentsService.getAgentDocuments(agentId);
+      hasAgentDocuments = docs.length > 0;
+    } catch {
+      // Agent documents check is non-critical
+    }
+
     // Build device context for ToolsEngine enableChecker
     const gatewayConfigured = deviceProxy.isConfigured;
     const boundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
@@ -475,6 +487,7 @@ export class AiAgentService {
           }
         : undefined,
       globalMemoryEnabled,
+      hasAgentDocuments,
       hasEnabledKnowledgeBases,
       model,
       provider,
