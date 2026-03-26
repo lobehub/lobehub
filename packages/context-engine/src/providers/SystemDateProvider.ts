@@ -43,4 +43,8 @@ export class SystemDateProvider extends BaseSystemRoleProvider {
     log('System date injected: %s', dateStr);
     return `Current date: ${dateStr} (${tz})`;
   }
+
+  protected onInjected(context: PipelineContext): void {
+    context.metadata.systemDateInjected = true;
+  }
 }

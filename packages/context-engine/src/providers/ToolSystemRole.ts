@@ -51,7 +51,7 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
     this.toolNameResolver = new ToolNameResolver();
   }
 
-  protected buildSystemRoleContent(context: PipelineContext): string | null {
+  protected buildSystemRoleContent(_context: PipelineContext): string | null {
     const toolSystemRole = this.getToolSystemRole();
 
     if (!toolSystemRole) {
@@ -59,30 +59,17 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return null;
     }
 
-    // Update metadata on the live context (will be carried forward after base class clones)
-    // We override doProcess to handle metadata separately
-    this._pendingMetadata = {
-      contentLength: toolSystemRole.length,
-      injected: true,
-      supportsFunctionCall: !!this.config.isCanUseFC(this.config.model, this.config.provider),
-      toolsCount: this.config.manifests.length,
-    };
-
     log(`Tool system role injection completed, tools count: ${this.config.manifests.length}`);
     return toolSystemRole;
   }
 
-  private _pendingMetadata: PipelineContext['metadata']['toolSystemRole'] | undefined;
-
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    this._pendingMetadata = undefined;
-    const result = await super.doProcess(context);
-
-    if (this._pendingMetadata) {
-      result.metadata.toolSystemRole = this._pendingMetadata;
-    }
-
-    return result;
+  protected onInjected(context: PipelineContext, content: string): void {
+    context.metadata.toolSystemRole = {
+      contentLength: content.length,
+      injected: true,
+      supportsFunctionCall: !!this.config.isCanUseFC(this.config.model, this.config.provider),
+      toolsCount: this.config.manifests.length,
+    };
   }
 
   /**

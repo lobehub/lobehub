@@ -25,6 +25,12 @@ export abstract class BaseSystemRoleProvider extends BaseProcessor {
     context: PipelineContext,
   ): Promise<string | null> | string | null;
 
+  /**
+   * Called after content is successfully injected into the system message.
+   * Override to update pipeline metadata (e.g. tracking flags, stats).
+   */
+  protected onInjected(_context: PipelineContext, _content: string): void {}
+
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     const content = await this.buildSystemRoleContent(context);
 
@@ -54,6 +60,8 @@ export abstract class BaseSystemRoleProvider extends BaseProcessor {
       } as any);
       log('[%s] Created new system message', this.name);
     }
+
+    this.onInjected(clonedContext, content);
 
     return this.markAsExecuted(clonedContext);
   }

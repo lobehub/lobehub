@@ -56,4 +56,12 @@ export class HistorySummaryProvider extends BaseSystemRoleProvider {
     const formatter = this.config.formatHistorySummary || defaultHistorySummaryFormatter;
     return formatter(this.config.historySummary);
   }
+
+  protected onInjected(context: PipelineContext, content: string): void {
+    context.metadata.historySummary = {
+      formattedLength: content.length,
+      injected: true,
+      originalLength: this.config.historySummary!.length,
+    };
+  }
 }

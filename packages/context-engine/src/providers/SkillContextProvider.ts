@@ -105,4 +105,11 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
     );
     return contentParts.join('\n\n');
   }
+
+  protected onInjected(context: PipelineContext): void {
+    context.metadata.skillContext = {
+      injected: true,
+      skillsCount: this.config.enabledSkills.length,
+    };
+  }
 }

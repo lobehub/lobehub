@@ -43,4 +43,8 @@ export class EvalContextSystemInjector extends BaseSystemRoleProvider {
 
     return this.config.evalContext.envPrompt;
   }
+
+  protected onInjected(context: PipelineContext): void {
+    context.metadata.evalContextInjected = true;
+  }
 }
