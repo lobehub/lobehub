@@ -30,6 +30,16 @@ const getBlockReasonMessage = (blockReason: string): string => {
   );
 };
 
+const getCandidateBlockedReason = (candidate: GenerateContentResponse['candidates'][0]) => {
+  const finishReason = candidate?.finishReason;
+
+  if (!finishReason || typeof finishReason !== 'string') return undefined;
+
+  if (finishReason in GOOGLE_AI_BLOCK_REASON) return finishReason;
+
+  return undefined;
+};
+
 const transformGoogleGenerativeAIStream = (
   chunk: GenerateContentResponse,
   context: StreamContext,
@@ -67,6 +77,35 @@ const transformGoogleGenerativeAIStream = (
   // maybe need another structure to add support for multiple choices
   const candidate = chunk.candidates?.[0];
   const { usageMetadata } = chunk;
+
+  // Handle blocked terminal candidate finishReason (e.g., PROHIBITED_CONTENT, SAFETY)
+  const blockedReason = getCandidateBlockedReason(candidate);
+  if (blockedReason) {
+    const convertedUsage = convertGoogleAIUsage(usageMetadata, payload?.pricing);
+    const humanFriendlyMessage = getBlockReasonMessage(blockedReason);
+
+    return [
+      ...(convertedUsage
+        ? [{ data: convertedUsage, id: context?.id, type: 'usage' as const }]
+        : []),
+      {
+        data: {
+          body: {
+            context: {
+              finishMessage: (candidate as any)?.finishMessage,
+              finishReason: blockedReason,
+            },
+            message: humanFriendlyMessage,
+            provider: 'google',
+          },
+          type: 'ProviderBizError',
+        },
+        id: context?.id || 'error',
+        type: 'error' as const,
+      },
+    ];
+  }
+
   const usageChunks: StreamProtocolChunk[] = [];
   if (candidate?.finishReason && usageMetadata) {
     usageChunks.push({ data: candidate.finishReason, id: context?.id, type: 'stop' });

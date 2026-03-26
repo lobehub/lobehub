@@ -23,6 +23,7 @@ import { isDesktop } from '@lobechat/const';
 import type { ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
+  type ChatMessageError,
   type ChatToolPayload,
   type ConversationContext,
   type CreateMessageParams,
@@ -32,6 +33,7 @@ import {
 } from '@lobechat/types';
 import { dedupeBy } from '@lobechat/utils';
 import debug from 'debug';
+import { t } from 'i18next';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -67,6 +69,55 @@ const isAbortError = (error: unknown, abortController?: AbortController) =>
 
 const createAbortError = () =>
   Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
+
+const getGoogleBlockedReason = (error: ChatMessageError): string | undefined => {
+  const body = error.body as
+    | {
+        context?: {
+          finishReason?: unknown;
+          promptFeedback?: {
+            blockReason?: unknown;
+          };
+        };
+        provider?: unknown;
+      }
+    | undefined;
+
+  if (body?.provider !== 'google') return undefined;
+
+  const promptFeedbackReason = body.context?.promptFeedback?.blockReason;
+  if (typeof promptFeedbackReason === 'string') return promptFeedbackReason;
+
+  const finishReason = body.context?.finishReason;
+  if (typeof finishReason === 'string') return finishReason;
+
+  return undefined;
+};
+
+const localizeGoogleBlockedError = (error: ChatMessageError): ChatMessageError => {
+  const blockReason = getGoogleBlockedReason(error);
+  if (!blockReason) return error;
+
+  const translationKey = `response.GoogleAIBlockReason.${blockReason}`;
+  const localized = t(translationKey as any, {
+    defaultValue: error.message ?? '',
+    ns: 'error',
+  }).trim();
+
+  if (!localized || localized === translationKey) return error;
+
+  const normalizedBody =
+    error.body && typeof error.body === 'object' ? (error.body as Record<string, any>) : {};
+
+  return {
+    ...error,
+    body: {
+      ...normalizedBody,
+      message: localized,
+    },
+    message: localized,
+  };
+};
 
 /**
  * Creates custom executors for the Chat Agent Runtime
@@ -247,7 +298,7 @@ export const createAgentExecutors = (context: {
 
       const fetchContext = { ...operation.context, agentId };
 
-      const { agentConfig: agentConfigData, chatConfig } = context.agentConfig;
+      const { agentConfig: agentConfigData } = context.agentConfig;
 
       let finalUsage: ModelUsage | undefined;
       let finalToolCalls: MessageToolCall[] | undefined;
@@ -411,7 +462,9 @@ export const createAgentExecutors = (context: {
           traceName: TraceNameMap.Conversation,
         },
         onErrorHandle: async (error) => {
-          await context.get().optimisticUpdateMessageError(assistantMessageId, error, {
+          const localizedError = localizeGoogleBlockedError(error);
+
+          await context.get().optimisticUpdateMessageError(assistantMessageId, localizedError, {
             operationId: context.operationId,
           });
         },
