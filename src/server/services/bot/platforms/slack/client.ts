@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { SLACK_API_BASE, SlackApi } from './api';
+import { markdownToSlackMrkdwn } from './markdownToMrkdwn';
 
 const log = debug('bot-platform:slack:bot');
 
@@ -112,6 +113,10 @@ class SlackWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  formatMarkdown(markdown: string): string {
+    return markdownToSlackMrkdwn(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {
