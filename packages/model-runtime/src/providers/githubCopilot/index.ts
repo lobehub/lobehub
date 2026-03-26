@@ -280,7 +280,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
                 reasoning: {
                   ...reasoning,
                   ...(reasoning_effort && { effort: reasoning_effort }),
-                  summary: 'auto',
+                  summary: 'detailed',
                 },
               }
             : {}),
