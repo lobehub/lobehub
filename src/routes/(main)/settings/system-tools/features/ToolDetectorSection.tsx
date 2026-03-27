@@ -2,7 +2,7 @@
 
 import { type ToolStatus } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Button, CopyButton, Flexbox, Form, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Button, CopyButton, Flexbox, Form, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -108,36 +108,28 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
 const ToolDetectorSection = memo(() => {
   const { t } = useTranslation('setting');
   const [toolStatuses, setToolStatuses] = useState<Record<string, ToolStatus>>({});
-  const [loading, setLoading] = useState(true);
-  const [detecting, setDetecting] = useState(false);
+  const [detecting, setDetecting] = useState(true);
 
   const detectTools = useCallback(async (force = false) => {
     try {
-      if (force) {
-        setDetecting(true);
-      }
+      setDetecting(true);
       const statuses = await toolDetectorService.detectAllTools(force);
       setToolStatuses(statuses);
     } catch (error) {
       console.error('Failed to detect tools:', error);
     } finally {
-      setLoading(false);
       setDetecting(false);
     }
   }, []);
 
   // Auto-detect on mount
   useEffect(() => {
-    detectTools(true);
+    void detectTools(true);
   }, [detectTools]);
 
   const handleRedetect = useCallback(() => {
     detectTools(true);
   }, [detectTools]);
-
-  if (loading) {
-    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
-  }
 
   const formItems: FormGroupItemType[] = Object.entries(TOOL_CATEGORIES).map(
     ([, categoryConfig]) => ({
