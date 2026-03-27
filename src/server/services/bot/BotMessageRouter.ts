@@ -15,6 +15,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   buildRuntimeKey,
+  mergeWithDefaults,
   type PlatformClient,
   type PlatformDefinition,
   platformRegistry,
@@ -197,11 +198,17 @@ export class BotMessageRouter {
     const platform = entry.id;
     const key = buildRuntimeKey(platform, applicationId);
 
+    // Merge schema defaults with user settings (user overrides defaults)
+    const settings = mergeWithDefaults(
+      entry.schema,
+      provider.settings as Record<string, unknown> | undefined,
+    );
+
     const providerConfig: BotProviderConfig = {
       applicationId,
       credentials,
       platform,
-      settings: (provider.settings as Record<string, unknown>) || {},
+      settings,
     };
 
     const runtimeContext: BotPlatformRuntimeContext = {
@@ -214,9 +221,8 @@ export class BotMessageRouter {
 
     const commands = this.buildCommands(serverDB, { agentId, platform, userId });
 
-    const settings = provider.settings as Record<string, any> | undefined;
-    const concurrencyStrategy = (settings?.concurrency as string) || 'debounce';
-    const debounceMs = (settings?.debounceMs as number) || DEFAULT_DEBOUNCE_MS;
+    const concurrencyStrategy = (settings.concurrency as string) || 'debounce';
+    const debounceMs = (settings.debounceMs as number) || DEFAULT_DEBOUNCE_MS;
     const chatBot = this.createChatBot(
       adapters,
       `agent-${agentId}`,
@@ -227,7 +233,7 @@ export class BotMessageRouter {
       agentId,
       applicationId,
       platform,
-      settings: provider.settings as Record<string, any> | undefined,
+      settings,
       userId,
     });
     await chatBot.initialize();
@@ -301,8 +307,8 @@ export class BotMessageRouter {
   ): Chat<any> {
     const config: any = {
       adapters,
-      // concurrency:
-      //   concurrencyStrategy === 'debounce' ? { debounceMs, strategy: 'debounce' } : 'queue',
+      concurrency:
+        concurrencyStrategy === 'debounce' ? { debounceMs, strategy: 'debounce' } : 'queue',
       userName: `lobehub-bot-${label}`,
     };
 
