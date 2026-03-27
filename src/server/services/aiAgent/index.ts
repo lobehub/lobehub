@@ -428,7 +428,7 @@ export class AiAgentService {
     // Check if agent has documents (for auto-enabling agent-documents tool)
     let hasAgentDocuments = false;
     try {
-      const docs = await this.agentDocumentsService.getAgentDocuments(agentId);
+      const docs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
       hasAgentDocuments = docs.length > 0;
     } catch {
       // Agent documents check is non-critical
@@ -889,7 +889,7 @@ export class AiAgentService {
       hasAgentDocuments ? 'yes' : 0,
       hasEnabledKnowledgeBases,
       tools?.length ?? 0,
-      operationSkillSet?.metas?.length ?? 0,
+      operationSkillSet?.skills?.length ?? 0,
     );
 
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)

@@ -62,7 +62,7 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return null;
     }
 
-    log(`Tool system role injection completed, tools count: ${this.config.manifests.length}`);
+    log(`Tool system role injection completed, tools count: ${this.config.manifests?.length ?? 0}`);
     return toolSystemRole;
   }
 
@@ -71,7 +71,7 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       contentLength: content.length,
       injected: true,
       supportsFunctionCall: !!this.config.isCanUseFC(this.config.model, this.config.provider),
-      toolsCount: this.config.manifests.length,
+      toolsCount: this.config.manifests?.length ?? 0,
     };
   }
 
