@@ -1,0 +1,12 @@
+{
+  "image_generation_completed": "تم إنشاء الصورة \"{{prompt}}\" بنجاح",
+  "image_generation_completed_title": "تم إنشاء الصورة",
+  "inbox.archiveAll": "أرشفة الكل",
+  "inbox.empty": "لا توجد إشعارات بعد",
+  "inbox.emptyUnread": "لا توجد إشعارات غير مقروءة",
+  "inbox.filterUnread": "عرض غير المقروء فقط",
+  "inbox.markAllRead": "تحديد الكل كمقروء",
+  "inbox.title": "الإشعارات",
+  "video_generation_completed": "تم إنشاء الفيديو \"{{prompt}}\" بنجاح",
+  "video_generation_completed_title": "تم إنشاء الفيديو"
+}

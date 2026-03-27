@@ -1,4 +1,13 @@
 {
+  "gateway.description": "الوصف",
+  "gateway.descriptionPlaceholder": "اختياري",
+  "gateway.deviceName": "اسم الجهاز",
+  "gateway.deviceNamePlaceholder": "أدخل اسم الجهاز",
+  "gateway.enableConnection": "الاتصال بالبوابة",
+  "gateway.statusConnected": "متصل بالبوابة",
+  "gateway.statusConnecting": "جارٍ الاتصال بالبوابة...",
+  "gateway.statusDisconnected": "غير متصل بالبوابة",
+  "gateway.title": "بوابة الجهاز",
   "navigation.chat": "محادثة",
   "navigation.discover": "اكتشف",
   "navigation.discoverAssistants": "اكتشف المساعدين",
