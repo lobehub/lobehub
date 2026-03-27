@@ -14,5 +14,6 @@ export const qq: PlatformDefinition = {
   showWebhookUrl: true,
   supportsMarkdown: false,
   supportsMessageEdit: false,
+  supportsTyping: false,
   clientFactory: new QQClientFactory(),
 };

@@ -460,27 +460,24 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    // Platforms without message editing still get an initial placeholder message,
-    // but completion will be sent as follow-up messages instead of editing in place.
-    const canEdit = platformRegistry.getPlatform(client?.id ?? '')?.supportsMessageEdit !== false;
+    const platformDef = platformRegistry.getPlatform(client?.id ?? '');
+    const hasTyping = platformDef?.supportsTyping !== false;
 
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+
+    if (hasTyping) {
+      // Platform supports typing — use typing indicator instead of an ack message.
+      await thread.startTyping();
+    } else {
+      // No typing support — send a text acknowledgment so the user knows we received the message.
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+      }
     }
 
     const progressMessageId: string | undefined = progressMessage?.id;
-    if (canEdit) {
-      if (!progressMessageId) {
-        throw new Error('Failed to post initial progress message');
-      }
-
-      // Refresh typing indicator after posting the ack message,
-      // so typing stays active until the first step webhook arrives.
-      await thread.startTyping();
-    }
 
     // Build webhook URL for bot-callback endpoint
     // Prefer INTERNAL_APP_URL for server-to-server calls (bypasses CDN/proxy)
@@ -612,11 +609,21 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
+    const platformDef = platformRegistry.getPlatform(client?.id ?? '');
+    const hasTyping = platformDef?.supportsTyping !== false;
+
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
+
+    if (hasTyping) {
+      // Platform supports typing — use typing indicator instead of an ack message.
+      await thread.startTyping();
+    } else {
+      // No typing support — send a text acknowledgment so the user knows we received the message.
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
+      }
     }
 
     // Track the last LLM content and tool calls for showing during tool execution
