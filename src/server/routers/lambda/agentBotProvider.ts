@@ -92,16 +92,16 @@ export const agentBotProviderRouter = router({
         .optional(),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.agentBotProviderModel.query(input);
-    }),
+      const providers = await ctx.agentBotProviderModel.query(input);
 
-  listRuntimeStatuses: agentBotProviderProcedure
-    .input(z.object({ agentId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      const providers = await ctx.agentBotProviderModel.findByAgentId(input.agentId);
-      return Promise.all(
-        providers.map((provider) => getBotRuntimeStatus(provider.platform, provider.applicationId)),
+      const statuses = await Promise.all(
+        providers.map((p) => getBotRuntimeStatus(p.platform, p.applicationId)),
       );
+
+      return providers.map((p, i) => ({
+        ...p,
+        runtimeStatus: statuses[i].status,
+      }));
     }),
 
   connectBot: agentBotProviderProcedure

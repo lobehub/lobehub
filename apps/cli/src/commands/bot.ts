@@ -1,41 +1,13 @@
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
+import type { TrpcClient } from '../api/client';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printBoxTable, printTable, timeAgo } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerBotMessageCommands } from './botMessage';
 
-const SUPPORTED_PLATFORMS = ['discord', 'slack', 'telegram', 'lark', 'feishu', 'qq', 'wechat'];
-
-const PLATFORM_CREDENTIAL_FIELDS: Record<string, { optional?: string[]; required: string[] }> = {
-  discord: { optional: ['publicKey'], required: ['botToken'] },
-  feishu: { required: ['appSecret'] },
-  lark: { required: ['appSecret'] },
-  qq: { required: ['appSecret'] },
-  slack: { required: ['botToken', 'signingSecret'] },
-  telegram: { optional: ['secretToken', 'webhookProxyUrl'], required: ['botToken'] },
-  wechat: { required: ['botToken', 'botId'] },
-};
-
-function parseCredentials(
-  platform: string,
-  options: Record<string, string | undefined>,
-): Record<string, string> {
-  const creds: Record<string, string> = {};
-
-  if (options.botToken) creds.botToken = options.botToken;
-  if (options.botId) creds.botId = options.botId;
-  if (options.publicKey) creds.publicKey = options.publicKey;
-  if (options.signingSecret) creds.signingSecret = options.signingSecret;
-  if (options.appSecret) creds.appSecret = options.appSecret;
-  if (options.secretToken) creds.secretToken = options.secretToken;
-  if (options.webhookProxyUrl) creds.webhookProxyUrl = options.webhookProxyUrl;
-  if (options.encryptKey) creds.encryptKey = options.encryptKey;
-  if (options.verificationToken) creds.verificationToken = options.verificationToken;
-
-  return creds;
-}
+// ── Helpers ──────────────────────────────────────────────
 
 function maskValue(val: string): string {
   if (val.length > 8) return val.slice(0, 4) + '****' + val.slice(-4);
@@ -45,6 +17,68 @@ function maskValue(val: string): string {
 function camelToFlag(name: string): string {
   return '--' + name.replaceAll(/([A-Z])/g, '-$1').toLowerCase();
 }
+
+/** Extract credential field definitions from a platform schema. */
+function getCredentialFields(platformDef: any): any[] {
+  const credSchema = (platformDef.schema ?? []).find(
+    (f: any) => f.key === 'credentials' && f.properties,
+  );
+  return credSchema?.properties ?? [];
+}
+
+/** Extract credential values from CLI options based on platform schema. */
+function extractCredentials(
+  platformDef: any,
+  options: Record<string, any>,
+): { credentials: Record<string, string>; missing: any[] } {
+  const fields = getCredentialFields(platformDef);
+  const credentials: Record<string, string> = {};
+
+  for (const field of fields) {
+    const value = options[field.key];
+    if (typeof value === 'string') {
+      credentials[field.key] = value;
+    }
+  }
+
+  const missing = fields.filter((f: any) => f.required && !credentials[f.key]);
+  return { credentials, missing };
+}
+
+/** Find a bot by ID from the user's bot list. */
+async function findBot(client: TrpcClient, botId: string) {
+  const bots = await client.agentBotProvider.list.query();
+  const bot = (bots as any[]).find((b: any) => b.id === botId);
+  if (!bot) {
+    log.error(`Bot integration not found: ${botId}`);
+    process.exit(1);
+  }
+  return bot;
+}
+
+const STATUS_COLORS: Record<string, (s: string) => string> = {
+  connected: pc.green,
+  disconnected: pc.dim,
+  failed: pc.red,
+  queued: pc.yellow,
+  starting: pc.yellow,
+  unknown: pc.dim,
+};
+
+/** Validate a platform ID and return its definition. */
+async function resolvePlatform(client: TrpcClient, platformId: string) {
+  const platforms = await client.agentBotProvider.listPlatforms.query();
+  const def = (platforms as any[]).find((p: any) => p.id === platformId);
+  if (!def) {
+    const ids = (platforms as any[]).map((p: any) => p.id).join(', ');
+    log.error(`Invalid platform "${platformId}". Must be one of: ${ids}`);
+    log.info('Run `lh bot platforms` to see required credentials for each platform.');
+    process.exit(1);
+  }
+  return def;
+}
+
+// ── Command Registration ─────────────────────────────────
 
 export function registerBotCommand(program: Command) {
   const bot = program.command('bot').description('Manage bot integrations');
@@ -58,25 +92,33 @@ export function registerBotCommand(program: Command) {
     .command('platforms')
     .description('List supported platforms and their required credentials')
     .option('--json', 'Output JSON')
-    .action((options: { json?: boolean }) => {
+    .action(async (options: { json?: boolean }) => {
+      const client = await getTrpcClient();
+      const platforms = await client.agentBotProvider.listPlatforms.query();
+
       if (options.json) {
-        outputJson(PLATFORM_CREDENTIAL_FIELDS);
+        outputJson(platforms);
         return;
       }
 
       console.log(pc.bold('Supported platforms:\n'));
 
-      for (const platform of SUPPORTED_PLATFORMS) {
-        const fields = PLATFORM_CREDENTIAL_FIELDS[platform];
-        if (!fields) continue;
+      for (const p of platforms as any[]) {
+        console.log(`  ${pc.bold(pc.cyan(p.id))}`);
+        if (p.name) console.log(`    Name: ${p.name}`);
 
-        console.log(`  ${pc.bold(pc.cyan(platform))}`);
-        console.log(
-          `    Required: ${fields.required.map((f) => pc.yellow(camelToFlag(f))).join(', ')}`,
-        );
-        if (fields.optional?.length) {
+        const fields = getCredentialFields(p);
+        const required = fields.filter((f: any) => f.required);
+        const optional = fields.filter((f: any) => !f.required);
+
+        if (required.length > 0) {
           console.log(
-            `    Optional: ${fields.optional.map((f) => pc.dim(camelToFlag(f))).join(', ')}`,
+            `    Required: ${required.map((f: any) => pc.yellow(camelToFlag(f.key))).join(', ')}`,
+          );
+        }
+        if (optional.length > 0) {
+          console.log(
+            `    Optional: ${optional.map((f: any) => pc.dim(camelToFlag(f.key))).join(', ')}`,
           );
         }
         console.log();
@@ -112,14 +154,18 @@ export function registerBotCommand(program: Command) {
         return;
       }
 
-      const rows = items.map((b: any) => [
-        b.id || '',
-        b.platform || '',
-        b.applicationId || '',
-        b.agentId || '',
-        b.enabled ? pc.green('enabled') : pc.dim('disabled'),
-        b.updatedAt ? timeAgo(b.updatedAt) : pc.dim('-'),
-      ]);
+      const rows = items.map((b: any) => {
+        const status = b.enabled ? (b.runtimeStatus ?? 'disconnected') : 'disabled';
+        const colorFn = STATUS_COLORS[status] ?? pc.dim;
+        return [
+          b.id || '',
+          b.platform || '',
+          b.applicationId || '',
+          b.agentId || '',
+          colorFn(status),
+          b.updatedAt ? timeAgo(b.updatedAt) : pc.dim('-'),
+        ];
+      });
 
       printTable(rows, ['ID', 'PLATFORM', 'APP ID', 'AGENT', 'STATUS', 'UPDATED']);
     });
@@ -129,34 +175,21 @@ export function registerBotCommand(program: Command) {
   bot
     .command('view <botId>')
     .description('View bot integration details')
-    .requiredOption('-a, --agent <agentId>', 'Agent ID')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .option('--show-credentials', 'Show full credential values (unmasked)')
     .action(
-      async (
-        botId: string,
-        options: { agent: string; json?: string | boolean; showCredentials?: boolean },
-      ) => {
+      async (botId: string, options: { json?: string | boolean; showCredentials?: boolean }) => {
         const client = await getTrpcClient();
-        const result = await client.agentBotProvider.getByAgentId.query({
-          agentId: options.agent,
-        });
-        const items = Array.isArray(result) ? result : [];
-        const item = items.find((b: any) => b.id === botId);
-
-        if (!item) {
-          log.error(`Bot integration not found: ${botId}`);
-          process.exit(1);
-          return;
-        }
+        const b = await findBot(client, botId);
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(item, fields);
+          outputJson(b, fields);
           return;
         }
 
-        const b = item as any;
+        const status = b.enabled ? (b.runtimeStatus ?? 'disconnected') : 'disabled';
+        const statusColorFn = STATUS_COLORS[status] ?? pc.dim;
 
         const credentialLines: string[] = [];
         if (b.credentials && typeof b.credentials === 'object') {
@@ -184,7 +217,7 @@ export function registerBotCommand(program: Command) {
             { field: 'Platform', value: pc.cyan(b.platform || '') },
             { field: 'Application ID', value: b.applicationId || '' },
             { field: 'Agent ID', value: b.agentId || '' },
-            { field: 'Status', value: b.enabled ? pc.green('enabled') : pc.dim('disabled') },
+            { field: 'Status', value: statusColorFn(status) },
             ...(credentialLines.length > 0
               ? [{ field: 'Credentials', value: credentialLines }]
               : []),
@@ -205,7 +238,7 @@ export function registerBotCommand(program: Command) {
     .command('add')
     .description('Add a bot integration to an agent')
     .requiredOption('-a, --agent <agentId>', 'Agent ID')
-    .requiredOption('--platform <platform>', `Platform: ${SUPPORTED_PLATFORMS.join(', ')}`)
+    .requiredOption('--platform <platform>', 'Platform (run `lh bot platforms` to see options)')
     .requiredOption('--app-id <appId>', 'Application ID for webhook routing')
     .option('--bot-token <token>', 'Bot token (Discord, Slack, Telegram)')
     .option('--bot-id <id>', 'Bot ID (WeChat)')
@@ -233,25 +266,18 @@ export function registerBotCommand(program: Command) {
         verificationToken?: string;
         webhookProxyUrl?: string;
       }) => {
-        if (!SUPPORTED_PLATFORMS.includes(options.platform)) {
-          log.error(`Invalid platform. Must be one of: ${SUPPORTED_PLATFORMS.join(', ')}`);
-          log.info('Run `lh bot platforms` to see required credentials for each platform.');
-          process.exit(1);
-          return;
-        }
+        const client = await getTrpcClient();
+        const platformDef = await resolvePlatform(client, options.platform);
 
-        const credentials = parseCredentials(options.platform, options);
-        const fields = PLATFORM_CREDENTIAL_FIELDS[options.platform];
-        const missing = (fields?.required || []).filter((f) => !credentials[f]);
+        const { credentials, missing } = extractCredentials(platformDef, options);
         if (missing.length > 0) {
           log.error(
-            `Missing required credentials for ${options.platform}: ${missing.map(camelToFlag).join(', ')}`,
+            `Missing required credentials for ${options.platform}: ${missing.map((f: any) => camelToFlag(f.key)).join(', ')}`,
           );
           process.exit(1);
           return;
         }
 
-        const client = await getTrpcClient();
         const result = await client.agentBotProvider.create.mutate({
           agentId: options.agent,
           applicationId: options.appId,
@@ -304,10 +330,14 @@ export function registerBotCommand(program: Command) {
           webhookProxyUrl?: string;
         },
       ) => {
+        const client = await getTrpcClient();
         const input: Record<string, any> = { id: botId };
 
-        const credentials = parseCredentials('', options);
+        const existing = await findBot(client, botId);
+        const platform = options.platform ?? existing.platform;
+        const platformDef = await resolvePlatform(client, platform);
 
+        const { credentials } = extractCredentials(platformDef, options);
         if (Object.keys(credentials).length > 0) input.credentials = credentials;
         if (options.appId) input.applicationId = options.appId;
         if (options.platform) input.platform = options.platform;
@@ -318,7 +348,6 @@ export function registerBotCommand(program: Command) {
           return;
         }
 
-        const client = await getTrpcClient();
         await client.agentBotProvider.update.mutate(input as any);
         console.log(`${pc.green('✓')} Updated bot ${pc.bold(botId)}`);
       },
@@ -369,24 +398,10 @@ export function registerBotCommand(program: Command) {
   bot
     .command('test <botId>')
     .description('Test bot credentials against the platform API')
-    .requiredOption('-a, --agent <agentId>', 'Agent ID')
-    .action(async (botId: string, options: { agent: string }) => {
+    .action(async (botId: string) => {
       const client = await getTrpcClient();
+      const b = await findBot(client, botId);
 
-      // Fetch the bot to get platform and applicationId
-      const result = await client.agentBotProvider.getByAgentId.query({
-        agentId: options.agent,
-      });
-      const items = Array.isArray(result) ? result : [];
-      const item = items.find((b: any) => b.id === botId);
-
-      if (!item) {
-        log.error(`Bot integration not found: ${botId}`);
-        process.exit(1);
-        return;
-      }
-
-      const b = item as any;
       log.status(`Testing ${b.platform} credentials for ${b.applicationId}...`);
 
       try {
@@ -407,22 +422,10 @@ export function registerBotCommand(program: Command) {
   bot
     .command('connect <botId>')
     .description('Connect and start a bot')
-    .requiredOption('-a, --agent <agentId>', 'Agent ID')
-    .action(async (botId: string, options: { agent: string }) => {
+    .action(async (botId: string) => {
       const client = await getTrpcClient();
-      const result = await client.agentBotProvider.getByAgentId.query({
-        agentId: options.agent,
-      });
-      const items = Array.isArray(result) ? result : [];
-      const item = items.find((b: any) => b.id === botId);
+      const b = await findBot(client, botId);
 
-      if (!item) {
-        log.error(`Bot integration not found: ${botId}`);
-        process.exit(1);
-        return;
-      }
-
-      const b = item as any;
       log.status(`Connecting ${b.platform} bot ${b.applicationId}...`);
 
       const connectResult = await client.agentBotProvider.connectBot.mutate({
