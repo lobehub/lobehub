@@ -13,6 +13,5 @@ export const lark: PlatformDefinition = {
   schema: sharedSchema,
   showWebhookUrl: true,
   supportsMarkdown: false,
-  supportsTyping: false,
   clientFactory: sharedClientFactory,
 };

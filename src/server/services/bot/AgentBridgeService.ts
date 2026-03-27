@@ -468,21 +468,13 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    const platformDef = platformRegistry.getPlatform(client?.id ?? '');
-    const hasTyping = platformDef?.supportsTyping !== false;
+    await thread.startTyping();
 
     let progressMessage: SentMessage | undefined;
-
-    if (hasTyping) {
-      // Platform supports typing — use typing indicator instead of an ack message.
-      await thread.startTyping();
-    } else {
-      // No typing support — send a text acknowledgment so the user knows we received the message.
-      try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-      } catch (error) {
-        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
-      }
+    try {
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+    } catch (error) {
+      log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
     }
 
     const progressMessageId: string | undefined = progressMessage?.id;
@@ -626,21 +618,13 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    const platformDef = platformRegistry.getPlatform(client?.id ?? '');
-    const hasTyping = platformDef?.supportsTyping !== false;
+    await thread.startTyping();
 
     let progressMessage: SentMessage | undefined;
-
-    if (hasTyping) {
-      // Platform supports typing — use typing indicator instead of an ack message.
-      await thread.startTyping();
-    } else {
-      // No typing support — send a text acknowledgment so the user knows we received the message.
-      try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-      } catch (error) {
-        log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
-      }
+    try {
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+    } catch (error) {
+      log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
     }
 
     // Track the last LLM content and tool calls for showing during tool execution
