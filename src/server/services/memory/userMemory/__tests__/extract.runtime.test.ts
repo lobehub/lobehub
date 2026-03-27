@@ -345,6 +345,30 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
 
     warnSpy.mockRestore();
   });
+
+  it('does not clamp embedding context limit to openai threshold for non-openai providers', async () => {
+    const executor = createExecutor({
+      agentLayerExtractor: {
+        contextLimit: 16000,
+        layers: {
+          activity: 'layer-act',
+          context: 'layer-ctx',
+          experience: 'layer-exp',
+          identity: 'layer-id',
+          preference: 'layer-pref',
+        },
+        model: 'layer-1',
+        provider: 'openai',
+      },
+      embedding: {
+        contextLimit: 16000,
+        model: 'embedding-3',
+        provider: 'zhipu',
+      },
+    });
+
+    expect((executor as any).embeddingContextLimit).toBe(16000);
+  });
 });
 
 describe('resolveRuntimeAgentConfig', () => {

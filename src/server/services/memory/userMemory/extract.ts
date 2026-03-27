@@ -99,15 +99,10 @@ const LAYER_LABEL_MAP: Record<LayersEnum, string> = {
   [LayersEnum.Identity]: 'identities',
   [LayersEnum.Preference]: 'preferences',
 };
-const OPENAI_EMBEDDING_MAX_INPUT_TOKENS = 8192;
-const OPENAI_EMBEDDING_TOKEN_HEADROOM = 256;
-const OPENAI_SAFE_EMBEDDING_TOKEN_LIMIT =
-  OPENAI_EMBEDDING_MAX_INPUT_TOKENS - OPENAI_EMBEDDING_TOKEN_HEADROOM;
-const clampEmbeddingTokenLimit = (tokenLimit?: number) => {
-  if (!tokenLimit || tokenLimit <= 0) return OPENAI_SAFE_EMBEDDING_TOKEN_LIMIT;
-
-  return Math.min(tokenLimit, OPENAI_SAFE_EMBEDDING_TOKEN_LIMIT);
-};
+const DEFAULT_EMBEDDING_MAX_INPUT_TOKENS = 8192;
+const DEFAULT_EMBEDDING_TOKEN_HEADROOM = 256;
+const DEFAULT_SAFE_EMBEDDING_RETRY_LIMIT =
+  DEFAULT_EMBEDDING_MAX_INPUT_TOKENS - DEFAULT_EMBEDDING_TOKEN_HEADROOM;
 
 export interface MemoryExtractionWorkflowCursor {
   createdAt: string;
@@ -532,9 +527,8 @@ export class MemoryExtractionExecutor {
       observabilityS3: privateConfig.observabilityS3,
     };
 
-    this.embeddingContextLimit = clampEmbeddingTokenLimit(
-      privateConfig.embedding?.contextLimit ?? privateConfig.agentLayerExtractor.contextLimit,
-    );
+    this.embeddingContextLimit =
+      privateConfig.embedding?.contextLimit ?? privateConfig.agentLayerExtractor.contextLimit;
   }
 
   static async create() {
@@ -1104,10 +1098,21 @@ export class MemoryExtractionExecutor {
     const fullConversationText = conversations
       .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
       .join('\n\n');
-    const initialLimit = clampEmbeddingTokenLimit(tokenLimit);
-    const retryTokenLimits = Array.from(
-      new Set([initialLimit, 7000, 6144, 5120, 4096, 3072].filter((limit) => limit <= initialLimit)),
-    );
+    const initialLimit = tokenLimit;
+    const fallbackStartLimit =
+      typeof initialLimit === 'number' && initialLimit > 0
+        ? initialLimit
+        : DEFAULT_SAFE_EMBEDDING_RETRY_LIMIT;
+    const retryTokenLimits =
+      typeof fallbackStartLimit === 'number' && fallbackStartLimit > 0
+        ? Array.from(
+            new Set(
+              [fallbackStartLimit, 7000, 6144, 5120, 4096, 3072].filter(
+                (limit) => limit <= fallbackStartLimit,
+              ),
+            ),
+          )
+        : [undefined];
 
     let embeddings: Embeddings[] | undefined;
     for (const limit of retryTokenLimits) {
@@ -1128,7 +1133,7 @@ export class MemoryExtractionExecutor {
       } catch (error) {
         if (this.isEmbeddingInputTooLongError(error)) {
           console.warn(
-            `[memory-extraction] embedding input too long at ${limit} tokens, retrying with smaller limit`,
+            `[memory-extraction] embedding input too long${typeof limit === 'number' ? ` at ${limit} tokens` : ''}, retrying with smaller limit`,
           );
           continue;
         }
