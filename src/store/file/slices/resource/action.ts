@@ -319,11 +319,19 @@ export class ResourceActionImpl {
           Array.from(state.syncingIds).filter((id) => !visibleIds.has(id)),
         );
 
+        // Preserve off-screen optimistic items from other queries
+        const preservedMap = new Map<string, ResourceItem>();
+        for (const [id, item] of state.resourceMap) {
+          if (!visibleIds.has(id) && item._optimistic) {
+            preservedMap.set(id, item);
+          }
+        }
+
         return {
           hasMore: false,
           offset: 0,
           resourceList: [],
-          resourceMap: new Map(),
+          resourceMap: preservedMap,
           syncingIds,
           total: 0,
         };

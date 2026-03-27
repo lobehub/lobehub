@@ -70,7 +70,7 @@ export class ResourceManagerStoreActionImpl {
 
         await fileStore.deleteResources(resourceIds);
 
-        this.#set({ selectedFileIds: [] });
+        this.#set({ selectAllState: 'none', selectedFileIds: [] });
         return;
       }
 
@@ -79,7 +79,7 @@ export class ResourceManagerStoreActionImpl {
         if (!libraryId) return;
 
         await kbStore.removeFilesFromKnowledgeBase(libraryId, resourceIds);
-        this.#set({ selectedFileIds: [] });
+        this.#set({ selectAllState: 'none', selectedFileIds: [] });
         return;
       }
 
@@ -99,7 +99,7 @@ export class ResourceManagerStoreActionImpl {
         });
 
         await fileStore.parseFilesToChunks(chunkableFileIds, { skipExist: true });
-        this.#set({ selectedFileIds: [] });
+        this.#set({ selectAllState: 'none', selectedFileIds: [] });
         return;
       }
 
