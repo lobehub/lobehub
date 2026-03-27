@@ -140,7 +140,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
@@ -254,7 +254,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
@@ -306,7 +306,7 @@ jobs:
         run: ls -R release
 
       - name: Create Canary Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           tag_name: ${{ needs.calculate-version.outputs.tag }}
           name: 'Desktop Canary ${{ needs.calculate-version.outputs.tag }}'

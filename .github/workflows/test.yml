@@ -19,7 +19,7 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5
+        uses: fkirc/skip-duplicate-actions@f75f66ce1886f00957d99748a42c724f4330bdcf # v5
         with:
           concurrent_skipping: 'same_content_newer'
           skip_after_successful_duplicate: 'true'
@@ -44,7 +44,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ secrets.BUN_VERSION }}
 
@@ -63,6 +63,8 @@ jobs:
         if: always()
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          HEAD_LABEL: ${{ github.event.pull_request.head.label }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           curl -Os https://cli.codecov.io/latest/linux/codecov
           chmod +x codecov
@@ -76,9 +78,9 @@ jobs:
             COMMON_ARGS="$COMMON_ARGS --sha ${{ github.event.pull_request.head.sha }}"
             # Fork PR needs username:branch format for tokenless upload
             if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-              COMMON_ARGS="$COMMON_ARGS --branch ${{ github.event.pull_request.head.label }}"
+              COMMON_ARGS="$COMMON_ARGS --branch ${HEAD_LABEL}"
             else
-              COMMON_ARGS="$COMMON_ARGS --branch ${{ github.event.pull_request.head.ref }}"
+              COMMON_ARGS="$COMMON_ARGS --branch ${PR_HEAD_REF}"
             fi
           fi
 
@@ -118,7 +120,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
@@ -147,7 +149,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
@@ -165,7 +167,7 @@ jobs:
         run: bunx vitest --merge-reports --reporter=default --coverage
 
       - name: Upload App Coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/app/lcov.info
@@ -188,7 +190,7 @@ jobs:
           package-manager-cache: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 10
 
@@ -207,7 +209,7 @@ jobs:
         working-directory: apps/desktop
 
       - name: Upload Desktop App Coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./apps/desktop/coverage/lcov.info
@@ -242,7 +244,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4
 
       - name: Install deps
         run: pnpm i
@@ -260,7 +262,7 @@ jobs:
           APP_URL: https://home.com
 
       - name: Upload Database coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/database/coverage/lcov.info

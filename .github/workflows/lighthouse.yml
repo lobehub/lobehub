@@ -51,7 +51,7 @@ jobs:
         with:
           repository: 'myactionway/lighthouse-badges'
           path: temp_lighthouse_badges_nested
-      - uses: myactionway/lighthouse-badger-action@v2.2
+      - uses: myactionway/lighthouse-badger-action@0064f8e52023fe836d42f65e71231c54a93f7d0b # v2.2
         with:
           urls: ${{ matrix.URLS }}
           badges_args: ${{ matrix.BADGES_ARGS }}

@@ -20,14 +20,14 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Clean issue notice
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'close-issues'
           labels: '🚨 Sync Fail'
 
       - name: Sync upstream changes
         id: sync
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
+        uses: aormsby/Fork-Sync-With-Upstream-action@9e2e4fd0829a2fe8ca4b13693faac9230c414d51 # v3.4
         with:
           upstream_sync_repo: lobehub/lobehub
           upstream_sync_branch: main
@@ -37,7 +37,7 @@ jobs:
 
       - name: Sync check
         if: failure()
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'create-issue'
           title: '🚨 同步失败 | Sync Fail'
