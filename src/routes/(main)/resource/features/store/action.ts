@@ -92,7 +92,10 @@ export class ResourceManagerStoreActionImpl {
         const resourceIds = await resolveSelectedResourceIds();
         const chunkableFileIds = resourceIds.filter((id) => {
           const resource = fileStore.resourceMap?.get(id);
-          return resource && !isChunkingUnsupported(resource.fileType);
+          // For server-resolved IDs not yet in the local map, include them
+          // and let the server handle unsupported type filtering
+          if (!resource) return selectAllState === 'all';
+          return !isChunkingUnsupported(resource.fileType);
         });
 
         await fileStore.parseFilesToChunks(chunkableFileIds, { skipExist: true });

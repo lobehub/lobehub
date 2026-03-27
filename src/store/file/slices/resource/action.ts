@@ -174,7 +174,10 @@ export class ResourceActionImpl {
 
     const targetIndex = resourceList.findIndex((item) => item.id === targetId);
     const nextList = resourceList.filter((item) => item.id !== targetId && item.id !== resource.id);
-    const shouldInsert = this.#isResourceVisibleInCurrentQuery(resource);
+    // If the replaced item was already visible, keep the replacement visible too.
+    // This avoids slug-vs-UUID mismatches when queryParams.parentId is a slug
+    // but resource.parentId is a UUID and the parent folder isn't in resourceMap.
+    const shouldInsert = targetIndex !== -1 || this.#isResourceVisibleInCurrentQuery(resource);
 
     if (shouldInsert) {
       const insertIndex = targetIndex === -1 ? 0 : Math.min(targetIndex, nextList.length);
