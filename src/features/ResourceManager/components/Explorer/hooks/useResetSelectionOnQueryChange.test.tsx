@@ -22,7 +22,7 @@ describe('useResetSelectionOnQueryChange', () => {
           searchQuery: props.searchQuery,
         }),
       {
-        initialProps: { searchQuery: null },
+        initialProps: { searchQuery: null as string | null },
       },
     );
 
