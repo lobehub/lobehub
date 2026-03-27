@@ -4,8 +4,9 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printBoxTable, printTable, timeAgo } from '../utils/format';
 import { log } from '../utils/logger';
+import { registerBotMessageCommands } from './botMessage';
 
-const SUPPORTED_PLATFORMS = ['discord', 'slack', 'telegram', 'lark', 'feishu','qq', 'wechat'];
+const SUPPORTED_PLATFORMS = ['discord', 'slack', 'telegram', 'lark', 'feishu', 'qq', 'wechat'];
 
 const PLATFORM_CREDENTIAL_FIELDS: Record<string, { optional?: string[]; required: string[] }> = {
   discord: { optional: ['publicKey'], required: ['botToken'] },
@@ -15,7 +16,6 @@ const PLATFORM_CREDENTIAL_FIELDS: Record<string, { optional?: string[]; required
   slack: { required: ['botToken', 'signingSecret'] },
   telegram: { optional: ['secretToken', 'webhookProxyUrl'], required: ['botToken'] },
   wechat: { required: ['botToken', 'botId'] },
-
 };
 
 function parseCredentials(
@@ -48,6 +48,9 @@ function camelToFlag(name: string): string {
 
 export function registerBotCommand(program: Command) {
   const bot = program.command('bot').description('Manage bot integrations');
+
+  // Register message subcommand group
+  registerBotMessageCommands(bot);
 
   // ── platforms ───────────────────────────────────────────
 
