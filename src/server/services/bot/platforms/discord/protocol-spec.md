@@ -1271,11 +1271,46 @@ curl 'https://discord.com/api/v10/channels/123456789012345678/polls/987654321098
 }
 ```
 
-## 15. 接口一览表
+## 15. 实测验证记录
+
+### 15.1 测试环境
+
+- **Guild**: LobeHub (ID: `1127171173982154893`)
+- **测试频道**: #system (ID: `1127182445373042728`)
+- **SDK**: `@discordjs/rest`
+- **测试日期**: 2026-03-26
+
+### 15.2 测试结果
+
+全部 12 项 API 调用均通过：
+
+| 序号 | API 方法            | 测试描述                                                           | 结果 |
+| ---- | ------------------- | ------------------------------------------------------------------ | ---- |
+| 1    | `getGuildChannels`  | 成功获取 guild 频道列表                                            | Pass |
+| 2    | `createMessage`     | 发送 "🧪 Message tool API test" 成功，返回 messageId               | Pass |
+| 3    | `getMessage`        | 精确获取指定消息成功（新增的 API 方法，用于修复 getReactions bug） | Pass |
+| 4    | `editMessage`       | 编辑消息内容成功                                                   | Pass |
+| 5    | `createReaction`    | 添加 👍 表情成功                                                   | Pass |
+| 6    | `getReactions`      | 获取到 1 个反应用户（修复后使用 getMessage 而非 getMessages）      | Pass |
+| 7    | `deleteMessage`     | 删除消息成功                                                       | Pass |
+| 8    | `getMessages`       | 成功获取 3 条历史消息（limit=3）                                   | Pass |
+| 9    | `getChannel`        | 返回频道类型 (0=text) 和名称                                       | Pass |
+| 10   | `getPinnedMessages` | 返回置顶消息列表 (0 条)                                            | Pass |
+| 11   | `listActiveThreads` | 返回 250 个活跃线程                                                | Pass |
+| 12   | 全流程              | 12/12 通过                                                         | Pass |
+
+### 15.3 关键发现
+
+1. **getReactions bug 修复**：原实现使用 `getMessages(limit=1)` 获取最新消息，无法命中目标消息。修复后使用 `getMessage(channelId, messageId)` 精确获取单条消息，确保能正确读取目标消息上的 reactions 字段。
+2. **Rate limiting 自动处理**：`@discordjs/rest` 库自动处理 429 响应的 `retry-after`，无需手动实现退避逻辑。
+3. **Unicode emoji URL 编码**：URL 编码的 Unicode emoji（如 👍 编码为 `%F0%9F%91%8D`）在 reaction API 中正常工作，无需额外处理。
+
+## 16. 接口一览表
 
 | 操作           | 方法     | URL                                                                  | 请求体 | 响应码             |
 | -------------- | -------- | -------------------------------------------------------------------- | ------ | ------------------ |
 | 获取频道消息   | `GET`    | `/channels/{channel.id}/messages`                                    | 无     | 200 + Message\[]   |
+| 获取单条消息   | `GET`    | `/channels/{channel.id}/messages/{message.id}`                       | 无     | 200 + Message      |
 | 创建消息       | `POST`   | `/channels/{channel.id}/messages`                                    | JSON   | 200 + Message      |
 | 编辑消息       | `PATCH`  | `/channels/{channel.id}/messages/{message.id}`                       | JSON   | 200 + Message      |
 | 删除消息       | `DELETE` | `/channels/{channel.id}/messages/{message.id}`                       | 无     | 204                |
@@ -1293,13 +1328,14 @@ curl 'https://discord.com/api/v10/channels/123456789012345678/polls/987654321098
 | 搜索服务器消息 | `GET`    | `/guilds/{guild.id}/messages/search`                                 | 无     | 200/202 + 复合对象 |
 | 创建投票       | `POST`   | `/channels/{channel.id}/messages`（带 `poll` 字段）                  | JSON   | 200 + Message      |
 
-## 16. 附录：与 DiscordApi 类的映射关系
+## 17. 附录：与 DiscordApi 类的映射关系
 
 以下表格展示本规范中的 API 端点与代码库中 `DiscordApi` 类方法的对应关系：
 
 | DiscordApi 方法               | 对应端点                                                 | 本文章节 |
 | ----------------------------- | -------------------------------------------------------- | -------- |
 | `getMessages()`               | `GET /channels/{id}/messages`                            | 4.1      |
+| `getMessage()`                | `GET /channels/{id}/messages/{id}`                       | 4.1      |
 | `createMessage()`             | `POST /channels/{id}/messages`                           | 5.1      |
 | `editMessage()`               | `PATCH /channels/{id}/messages/{id}`                     | 6.1      |
 | `deleteMessage()`             | `DELETE /channels/{id}/messages/{id}`                    | 7.1      |

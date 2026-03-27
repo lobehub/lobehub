@@ -842,6 +842,19 @@ curl 'https://api.telegram.org/bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz/createFor
 - Bot 需要在群组中具有 `can_manage_topics` 管理员权限。
 - 返回的 `message_thread_id` 用于后续向该话题发送消息。
 
+### 11.3 threadId 复合格式约定（createThread /replyToThread）
+
+在本仓库的消息工具（message tool）抽象层中，`createThread`（对应 `createForumTopic`）和 `replyToThread` 使用 **复合 threadId 格式**，格式为 `"chatId:topicId"`（例如 `"-1001234567890:42"`）。
+
+**原因**：Telegram 的论坛话题需要 `chat_id` 和 `message_thread_id` 两个参数才能定位一个话题，而消息工具协议只有一个 `threadId` 字段。因此需要将两个标识符编码到一个字符串中。
+
+**规则**：
+
+- `createThread` 在调用 `createForumTopic` 成功后，将返回值拼接为 `"${chatId}:${message_thread_id}"`（例如 `"-1001234567890:42"`）。
+- `replyToThread` 接收到 `threadId` 后，通过 `threadId.split(':')` 解析出 `chatId` 和 `topicId`，分别作为 `chat_id` 和 `message_thread_id` 传入 `sendMessage`。
+
+**Bug 修复记录**：原始实现中 `createThread` 仅返回 `message_thread_id`（如 `"42"`），不包含 `chatId`，导致 `replyToThread` 在解析时无法获得正确的 `chat_id`，消息发送失败。修复后统一使用复合格式 `"chatId:topicId"`。
+
 ## 12. sendMessage（话题模式） — 向论坛话题发送消息
 
 ### 12.1 接口定义
@@ -862,6 +875,7 @@ curl 'https://api.telegram.org/bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz/createFor
 {
   "chat_id": -1001234567890,
   "message_thread_id": 42,
+  "parse_mode": "HTML",
   "text": "这条消息发送到指定话题"
 }
 ```
@@ -889,13 +903,15 @@ curl 'https://api.telegram.org/bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz/sendMessa
   --data-raw '{
     "chat_id": -1001234567890,
     "message_thread_id": 42,
-    "text": "在话题中回复的消息"
+    "text": "在话题中回复的消息",
+    "parse_mode": "HTML"
   }'
 ```
 
 **工程建议**
 
 - 本仓库 `TelegramApi.sendMessageToTopic` 封装了此调用，自动传入 `message_thread_id`。
+- **重要：`parse_mode` 必须与普通 `sendMessage` 一样传入**（如 `parse_mode: 'HTML'`）。此参数在话题模式下容易遗漏，曾在 code review 中发现原实现缺失了 `parse_mode: 'HTML'`，导致话题消息中 HTML 标签被原样显示而非渲染为富文本。
 - 如果群组开启了论坛模式但未指定 `message_thread_id`，消息将发送到 "General" 话题（thread_id 通常为 1）。
 - `message_thread_id` 也可用于 `sendChatAction` 等其他方法，指定动作所在的话题。
 
@@ -1137,22 +1153,22 @@ Telegram Bot API 有以下速率限制：
 
 ### 16.2 本仓库 TelegramApi 方法映射表
 
-| TelegramApi 方法        | Telegram API 方法    | 关键参数                                             |
-| ----------------------- | -------------------- | ---------------------------------------------------- |
-| `sendMessage`           | `sendMessage`        | `chat_id`, `text`, `parse_mode=HTML`                 |
-| `editMessageText`       | `editMessageText`    | `chat_id`, `message_id`, `text`, `parse_mode=HTML`   |
-| `deleteMessage`         | `deleteMessage`      | `chat_id`, `message_id`                              |
-| `sendChatAction`        | `sendChatAction`     | `chat_id`, `action=typing`                           |
-| `setMessageReaction`    | `setMessageReaction` | `chat_id`, `message_id`, `reaction=[{type,emoji}]`   |
-| `removeMessageReaction` | `setMessageReaction` | `chat_id`, `message_id`, `reaction=[]`               |
-| `pinChatMessage`        | `pinChatMessage`     | `chat_id`, `message_id`, `disable_notification=true` |
-| `unpinChatMessage`      | `unpinChatMessage`   | `chat_id`, `message_id`                              |
-| `getChat`               | `getChat`            | `chat_id`                                            |
-| `getChatMember`         | `getChatMember`      | `chat_id`, `user_id`                                 |
-| `createForumTopic`      | `createForumTopic`   | `chat_id`, `name` (max 128 chars)                    |
-| `sendMessageToTopic`    | `sendMessage`        | `chat_id`, `message_thread_id`, `text`               |
-| `sendPoll`              | `sendPoll`           | `chat_id`, `question`, `options`                     |
-| `setMyCommands`         | `setMyCommands`      | `commands`                                           |
+| TelegramApi 方法        | Telegram API 方法    | 关键参数                                                  |
+| ----------------------- | -------------------- | --------------------------------------------------------- |
+| `sendMessage`           | `sendMessage`        | `chat_id`, `text`, `parse_mode=HTML`                      |
+| `editMessageText`       | `editMessageText`    | `chat_id`, `message_id`, `text`, `parse_mode=HTML`        |
+| `deleteMessage`         | `deleteMessage`      | `chat_id`, `message_id`                                   |
+| `sendChatAction`        | `sendChatAction`     | `chat_id`, `action=typing`                                |
+| `setMessageReaction`    | `setMessageReaction` | `chat_id`, `message_id`, `reaction=[{type,emoji}]`        |
+| `removeMessageReaction` | `setMessageReaction` | `chat_id`, `message_id`, `reaction=[]`                    |
+| `pinChatMessage`        | `pinChatMessage`     | `chat_id`, `message_id`, `disable_notification=true`      |
+| `unpinChatMessage`      | `unpinChatMessage`   | `chat_id`, `message_id`                                   |
+| `getChat`               | `getChat`            | `chat_id`                                                 |
+| `getChatMember`         | `getChatMember`      | `chat_id`, `user_id`                                      |
+| `createForumTopic`      | `createForumTopic`   | `chat_id`, `name` (max 128 chars)                         |
+| `sendMessageToTopic`    | `sendMessage`        | `chat_id`, `message_thread_id`, `text`, `parse_mode=HTML` |
+| `sendPoll`              | `sendPoll`           | `chat_id`, `question`, `options`                          |
+| `setMyCommands`         | `setMyCommands`      | `commands`                                                |
 
 ### 16.3 与微信 iLink 协议的关键差异
 
@@ -1169,3 +1185,46 @@ Telegram Bot API 有以下速率限制：
 | 论坛 / 话题  | 原生支持 Forum Topics。                    | 不支持。                               |
 | 投票         | 原生支持 `sendPoll`。                      | 不支持。                               |
 | 速率限制     | 每聊天～1 msg/s，全局 30 msg/s。           | 未公开文档化。                         |
+
+## 17. 实测验证记录
+
+> 本节记录了对 Telegram Bot API 实现的实际验证结果，包含 Token 验证、API 测试和 code review 发现的问题修复。
+
+### 17.1 Token 验证
+
+通过 `getMe` 接口验证 Bot Token 有效性：
+
+- **Bot 用户名**：@JianXu_Lobehub_Test_Bot
+- **Bot ID**：8654315085
+- **验证结果**：Token 有效，Bot 身份确认。
+
+### 17.2 直接 API 测试限制
+
+由于该 Bot 已设置了活跃的 Webhook，`getUpdates`（长轮询模式）无法使用。Telegram 不允许 Webhook 模式和 `getUpdates` 同时生效 —— 调用 `getUpdates` 时会返回错误：
+
+```
+Conflict: can't use getUpdates method while webhook is active
+```
+
+因此，直接 API 测试受限于不依赖消息接收的方法（如 `getMe`、`getChat` 等）。大部分消息操作 API 的验证通过 code review 完成。
+
+### 17.3 Code Review 验证结果
+
+以下 API 实现通过 code review 对照本协议规范进行了逐项验证：
+
+| API 方法             | 验证状态   | 备注                                                                  |
+| -------------------- | ---------- | --------------------------------------------------------------------- |
+| `sendMessage`        | 通过       | 参数、parse_mode、截断逻辑均符合规范。                                |
+| `editMessageText`    | 通过       | 包含 "message is not modified" 静默处理。                             |
+| `deleteMessage`      | 通过       | 参数正确。                                                            |
+| `setMessageReaction` | 通过       | 添加 / 移除 Reaction 两种模式均正确。                                 |
+| `pinChatMessage`     | 通过       | 默认 `disable_notification=true`。                                    |
+| `unpinChatMessage`   | 通过       | 始终传递 `message_id`。                                               |
+| `sendMessageToTopic` | 修复后通过 | 原实现缺少 `parse_mode: 'HTML'`，已修复。                             |
+| `createForumTopic`   | 修复后通过 | 原 `createThread` 返回裸 topicId，已修复为复合格式 `chatId:topicId`。 |
+
+### 17.4 关键 Bug 修复摘要
+
+1. **`sendMessageToTopic` 缺少 `parse_mode`**（见第 12 节）：向论坛话题发送消息时未传入 `parse_mode: 'HTML'`，导致 HTML 标签被原样显示。修复：在 `sendMessageToTopic` 调用中补充 `parse_mode: 'HTML'` 参数。
+
+2. **`createThread` 返回的 threadId 格式不兼容**（见第 11.3 节）：`createThread` 原实现仅返回 Telegram API 的 `message_thread_id`（如 `"42"`），而 `replyToThread` 期望接收 `"chatId:topicId"` 格式。修复：`createThread` 改为返回 `"${chatId}:${message_thread_id}"` 复合格式。

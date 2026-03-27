@@ -15,6 +15,17 @@ LobeHub command-line interface.
 - To make `lh` available in your shell, run `bun run cli:link`.
 - After linking, if your shell still cannot find `lh`, run `rehash` in `zsh`.
 
+## Custom Server URL
+
+By default the CLI connects to `https://app.lobehub.com`. To point it at a different server (e.g. a local instance):
+
+| Method               | Command                                                         | Persistence                         |
+| -------------------- | --------------------------------------------------------------- | ----------------------------------- |
+| Environment variable | `LOBEHUB_SERVER=http://localhost:4000 bun run dev -- <command>` | Current command only                |
+| Login flag           | `lh login --server http://localhost:4000`                       | Saved to `~/.lobehub/settings.json` |
+
+Priority: `LOBEHUB_SERVER` env var > `settings.json` > default official URL.
+
 ## Shell Completion
 
 ### Install completion for a linked CLI

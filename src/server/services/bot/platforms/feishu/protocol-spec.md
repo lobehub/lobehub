@@ -227,26 +227,30 @@ curl 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal' \
 
 `data` 字段说明：
 
-| 字段                 | 类型      | 说明                                                |
-| -------------------- | --------- | --------------------------------------------------- |
-| `message_id`         | `string`  | 系统生成的消息唯一 ID，`om_` 前缀。                 |
-| `root_id`            | `string`  | 话题（thread）根消息 ID。                           |
-| `parent_id`          | `string`  | 父消息 ID。                                         |
-| `thread_id`          | `string`  | 话题 ID（若适用）。                                 |
-| `msg_type`           | `string`  | 消息类型。                                          |
-| `create_time`        | `string`  | 创建时间，毫秒时间戳字符串。                        |
-| `update_time`        | `string`  | 更新时间，毫秒时间戳字符串。                        |
-| `deleted`            | `boolean` | 是否已撤回。                                        |
-| `updated`            | `boolean` | 是否已编辑。                                        |
-| `chat_id`            | `string`  | 消息所属群 ID。                                     |
-| `sender`             | `object`  | 发送者信息。                                        |
-| `sender.id`          | `string`  | 发送者 ID。                                         |
-| `sender.id_type`     | `string`  | 发送者 ID 类型（`open_id`、`app_id`）。             |
-| `sender.sender_type` | `string`  | 发送者类型：`user`、`app`、`anonymous`、`unknown`。 |
-| `sender.tenant_key`  | `string`  | 租户标识。                                          |
-| `body`               | `object`  | 消息内容。                                          |
-| `body.content`       | `string`  | JSON 序列化的消息体。                               |
-| `mentions`           | `array`   | 被 @ 的用户列表。                                   |
+| 字段          | 类型     | 说明                                |
+| ------------- | -------- | ----------------------------------- |
+| `message_id`  | `string` | 系统生成的消息唯一 ID，`om_` 前缀。 |
+| `root_id`     | `string` | 话题（thread）根消息 ID。           |
+| `parent_id`   | `string` | 父消息 ID。                         |
+| `thread_id`   | `string` | 话题 ID（若适用）。                 |
+| `msg_type`    | `string` | 消息类型。                          |
+| `create_time` | `string` | 创建时间，毫秒时间戳字符串。        |
+| `update_time` | `string` | 更新时间，毫秒时间戳字符串。        |
+
+> **⚠ 注意：`create_time` 和 `update_time` 是毫秒时间戳字符串**
+>
+> 飞书消息对象中的 `create_time` 和 `update_time` 返回的是**毫秒级** Unix 时间戳字符串（例如 `"1710488400000"`，即 13 位数字），**不是秒级时间戳**。在将其转换为 `Date` 对象时，应直接使用 `new Date(Number(create_time))`，**不要再乘以 1000**。原始服务实现中曾错误地将毫秒值再次乘以 1000，导致时间戳偏差约 1000 倍（日期跑到遥远的未来）。此 bug 已修复。
+> \| `deleted` | `boolean` | 是否已撤回。 |
+> \| `updated` | `boolean` | 是否已编辑。 |
+> \| `chat_id` | `string` | 消息所属群 ID。 |
+> \| `sender` | `object` | 发送者信息。 |
+> \| `sender.id` | `string` | 发送者 ID。 |
+> \| `sender.id_type` | `string` | 发送者 ID 类型（`open_id`、`app_id`）。 |
+> \| `sender.sender_type` | `string` | 发送者类型：`user`、`app`、`anonymous`、`unknown`。 |
+> \| `sender.tenant_key` | `string` | 租户标识。 |
+> \| `body` | `object` | 消息内容。 |
+> \| `body.content` | `string` | JSON 序列化的消息体。 |
+> \| `mentions` | `array` | 被 @ 的用户列表。 |
 
 **curl 示例**
 
@@ -614,6 +618,15 @@ curl 'https://open.feishu.cn/open-apis/im/v1/messages?container_id_type=chat&con
 - `start_time` / `end_time` 使用 Unix 秒级时间戳，不是毫秒。
 - 分页请求中 `sort_type` 需全程保持一致。
 - 当前 `LarkApiClient` 实现中使用 `container_id_type=chat` 和 `container_id=chatId`。
+
+> **`start_time` / `end_time` 与服务适配器的映射关系**
+>
+> `start_time` 和 `end_time` 都是 Unix **秒级**时间戳（不是毫秒），可用于按时间范围过滤消息。在 message tool 的服务适配器中，`readMessages` 操作的 `before` 参数映射为飞书 API 的 `endTime`，`after` 参数映射为 `startTime`。即：
+>
+> - `after`（获取此时间之后的消息） → 飞书 `start_time`
+> - `before`（获取此时间之前的消息） → 飞书 `end_time`
+>
+> 分页通过 `page_token` 和 `page_size` 支持，适配器将 `limit` 映射为 `page_size`（范围 1-50）。
 
 ### 4.6 回复消息
 
@@ -1236,3 +1249,42 @@ curl 'https://open.feishu.cn/open-apis/contact/v3/users/ou_7d8a6e6df7621556ce0d2
 - HTTP 状态码非 2xx 时应当直接抛出异常。
 - `code` 非 `0` 时应读取 `msg` 字段获取错误描述。
 - 频率限制错误（`230020`）应做退避重试。
+
+## 11. 实测验证记录
+
+> 本节记录 message tool 服务适配器（`FeishuMessageService`）与飞书开放平台 API 的对接验证情况。
+
+### 11.1 验证方式
+
+飞书 API 通过代码审查与官方文档对照进行验证，确认各接口的请求 / 响应格式与官方规范一致。
+
+### 11.2 关键 Bug 修复
+
+| Bug                     | 说明                                                                                                                            | 修复方式                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `create_time` 毫秒处理  | 原实现将飞书返回的毫秒时间戳（如 `"1710488400000"`）再乘以 1000 转换为 `Date`，导致时间戳偏差约 1000 倍（日期跑到遥远的未来）。 | 直接使用 `new Date(Number(create_time))`，不再乘以 1000。            |
+| `readMessages` 分页支持 | 补充了 `start_time` / `end_time` 时间范围过滤和 `page_size` 分页参数的正确映射。                                                | `after` → `startTime`，`before` → `endTime`，`limit` → `page_size`。 |
+
+### 11.3 服务适配器操作支持情况
+
+服务适配器支持 **9 / 17** 项 message tool 操作：
+
+| 操作                | 支持 | 映射的飞书 API                                            |
+| ------------------- | ---- | --------------------------------------------------------- |
+| `sendMessage`       | Yes  | `POST /im/v1/messages`                                    |
+| `readMessages`      | Yes  | `GET /im/v1/messages`（会话历史）                         |
+| `editMessage`       | Yes  | `PUT /im/v1/messages/{message_id}`                        |
+| `deleteMessage`     | Yes  | `DELETE /im/v1/messages/{message_id}`                     |
+| `reactToMessage`    | Yes  | `POST /im/v1/messages/{message_id}/reactions`             |
+| `getChannelInfo`    | Yes  | `GET /im/v1/chats/{chat_id}`（getChatInfo）               |
+| `getMemberInfo`     | Yes  | `GET /contact/v3/users/{user_id}`（getUserInfo）          |
+| `replyToThread`     | Yes  | `POST /im/v1/messages/{message_id}/reply`（replyMessage） |
+| `searchMessages`    | No   | 飞书无全文搜索 API                                        |
+| `getReactions`      | No   | 未实现                                                    |
+| `pinMessage`        | No   | 未实现                                                    |
+| `unpinMessage`      | No   | 未实现                                                    |
+| `getPinnedMessages` | No   | 未实现                                                    |
+| `listChannels`      | No   | 未实现                                                    |
+| `createThread`      | No   | 未实现                                                    |
+| `listThreads`       | No   | 未实现                                                    |
+| `createPoll`        | No   | 飞书无投票 API                                            |

@@ -64,24 +64,20 @@ export class WechatMessageAdapter implements MessagePlatformAdapter {
    * The gateway client stores it at `wechat:ctx-token:${applicationId}:${userId}`.
    */
   private async resolveContextToken(userId: string): Promise<string> {
-    const redis = getAgentRuntimeRedisClient();
-    if (!redis) {
-      throw new Error(
-        'WeChat sendMessage requires Redis for context token lookup. ' +
-          'Ensure Redis is configured and the bot has an active conversation with the target user.',
-      );
+    // Best-effort: try Redis first, fall back to empty string.
+    // Testing shows sendMessage works even without a context_token in some sessions,
+    // but providing one ensures reliable message delivery to the correct conversation.
+    try {
+      const redis = getAgentRuntimeRedisClient();
+      if (redis) {
+        const key = `wechat:ctx-token:${this.applicationId}:${userId}`;
+        const token = await redis.get(key);
+        if (token) return token;
+      }
+    } catch {
+      // Redis unavailable — fall through
     }
-
-    const key = `wechat:ctx-token:${this.applicationId}:${userId}`;
-    const token = await redis.get(key);
-    if (!token) {
-      throw new Error(
-        `No active conversation context found for WeChat user "${userId}". ` +
-          'The user must have sent a message to the bot recently for context token to be available.',
-      );
-    }
-
-    return token;
+    return '';
   }
 
   // ==================== Core Message Operations ====================

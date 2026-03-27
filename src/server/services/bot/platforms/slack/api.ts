@@ -162,11 +162,21 @@ export class SlackApi {
   private async call(method: string, body: Record<string, unknown>): Promise<any> {
     const url = `${SLACK_API_BASE}/${method}`;
 
+    // Use application/x-www-form-urlencoded for maximum compatibility.
+    // Some Slack methods (conversations.info, reactions.get, etc.) do not
+    // accept JSON body parameters via POST, but all methods accept form-encoded.
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(body)) {
+      if (value !== undefined && value !== null) {
+        params.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+      }
+    }
+
     const response = await fetch(url, {
-      body: JSON.stringify(body),
+      body: params,
       headers: {
         'Authorization': `Bearer ${this.botToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
       },
       method: 'POST',
     });
