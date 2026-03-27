@@ -204,6 +204,13 @@ export class BotMessageRouter {
       provider.settings as Record<string, unknown> | undefined,
     );
 
+    log(
+      'createAndRegisterBot: %s settings merge: userSettings=%j, merged=%j',
+      key,
+      provider.settings,
+      settings,
+    );
+
     const providerConfig: BotProviderConfig = {
       applicationId,
       credentials,

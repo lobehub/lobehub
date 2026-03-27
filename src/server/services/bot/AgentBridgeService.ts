@@ -286,8 +286,6 @@ export class AgentBridgeService {
     const queueMode = isQueueAgentRuntimeEnabled();
     let queueHandoffSucceeded = false;
 
-    const platformThreadId = botContext?.platformThreadId ?? thread.id;
-
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       // The final reply is edited into the progress message by onComplete
@@ -365,8 +363,6 @@ export class AgentBridgeService {
       'add eyes',
     );
     await thread.startTyping();
-
-    const platformThreadId = botContext?.platformThreadId ?? thread.id;
 
     try {
       // executeWithCallback handles progress message (post + edit at each step)

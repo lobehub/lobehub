@@ -21,6 +21,7 @@ export interface BotProviderItem {
   enabled: boolean;
   id: string;
   platform: string;
+  settings?: Record<string, unknown> | null;
 }
 
 type Setter = StoreSetter<AgentStore>;
