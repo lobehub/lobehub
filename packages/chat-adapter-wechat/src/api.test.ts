@@ -218,6 +218,34 @@ describe('WechatApiClient', () => {
         client.downloadCdnMedia({ aes_key: 'x', encrypt_query_param: '' }),
       ).rejects.toThrow('Missing encrypt_query_param');
     });
+
+    it('should return raw bytes when no valid AES key is available', async () => {
+      const rawBytes = Buffer.from('plaintext image data');
+      mockFetch.mockResolvedValueOnce(new Response(new Uint8Array(rawBytes), { status: 200 }));
+
+      const result = await client.downloadCdnMedia({
+        aes_key: '',
+        encrypt_query_param: 'AAFFtest',
+      });
+
+      expect(result).toEqual(rawBytes);
+    });
+
+    it('should throw when AES key is valid but ciphertext is corrupt', async () => {
+      const aesKeyHex = '00112233445566778899aabbccddeeff';
+      // Not valid AES-128-ECB ciphertext (wrong length / padding)
+      const corruptCiphertext = Buffer.from('not valid ciphertext!');
+      mockFetch.mockResolvedValueOnce(
+        new Response(new Uint8Array(corruptCiphertext), { status: 200 }),
+      );
+
+      await expect(
+        client.downloadCdnMedia(
+          { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+          aesKeyHex,
+        ),
+      ).rejects.toThrow();
+    });
   });
 
   describe('getConfig', () => {

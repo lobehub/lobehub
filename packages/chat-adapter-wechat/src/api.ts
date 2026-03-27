@@ -214,13 +214,14 @@ export class WechatApiClient {
     const raw = Buffer.from(await response.arrayBuffer());
 
     // Per protocol-spec §8.5: when AES key is missing, return as plaintext
+    let key: Buffer;
     try {
-      const key = resolveAesKey(imageAeskey, media.aes_key);
-      return decryptAesEcb(raw, key);
+      key = resolveAesKey(imageAeskey, media.aes_key);
     } catch {
       // No valid AES key — return plaintext per spec
       return raw;
     }
+    return decryptAesEcb(raw, key);
   }
 
   /**
