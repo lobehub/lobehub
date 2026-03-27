@@ -12,11 +12,11 @@ import { useFetchResources, useResourceStore } from '@/store/file/slices/resourc
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import EmptyPlaceholder from './EmptyPlaceholder';
 import Header from './Header';
+import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 import ListView from './ListView';
 import MasonryView from './MasonryView';
 import SearchResultsOverlay from './SearchResultsOverlay';
 import { useCheckTaskStatus } from './useCheckTaskStatus';
-import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 
 /**
  * Explore resource items in a library
