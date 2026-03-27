@@ -7,14 +7,14 @@ import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
-import { DiscordMessageAdapter } from '@/server/services/bot/platforms/discord/service';
-import { FeishuMessageAdapter } from '@/server/services/bot/platforms/feishu/service';
-import { QQMessageAdapter } from '@/server/services/bot/platforms/qq/service';
+import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
+import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
+import { QQMessageService } from '@/server/services/bot/platforms/qq/service';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
-import { SlackMessageAdapter } from '@/server/services/bot/platforms/slack/service';
+import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
-import { TelegramMessageAdapter } from '@/server/services/bot/platforms/telegram/service';
-import { WechatMessageAdapter } from '@/server/services/bot/platforms/wechat/service';
+import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
+import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 
 import type { ServerRuntimeRegistration } from '../types';
 import { MessageDispatcherService } from './MessageDispatcherService';
@@ -52,37 +52,37 @@ export const messageRuntime: ServerRuntimeRegistration = {
     const service = new MessageDispatcherService({
       discord: async () => {
         const { credentials } = await resolveCredentials(providerModel, 'discord');
-        return new DiscordMessageAdapter(new DiscordApi(credentials.botToken));
+        return new DiscordMessageService(new DiscordApi(credentials.botToken));
       },
       feishu: async () => {
         const { applicationId, credentials } = await resolveCredentials(providerModel, 'feishu');
-        return new FeishuMessageAdapter(
+        return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
           'feishu',
         );
       },
       lark: async () => {
         const { applicationId, credentials } = await resolveCredentials(providerModel, 'lark');
-        return new FeishuMessageAdapter(
+        return new FeishuMessageService(
           new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
           'lark',
         );
       },
       qq: async () => {
         const { applicationId, credentials } = await resolveCredentials(providerModel, 'qq');
-        return new QQMessageAdapter(new QQApiClient(applicationId, credentials.appSecret));
+        return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
       },
       slack: async () => {
         const { credentials } = await resolveCredentials(providerModel, 'slack');
-        return new SlackMessageAdapter(new SlackApi(credentials.botToken));
+        return new SlackMessageService(new SlackApi(credentials.botToken));
       },
       telegram: async () => {
         const { credentials } = await resolveCredentials(providerModel, 'telegram');
-        return new TelegramMessageAdapter(new TelegramApi(credentials.botToken));
+        return new TelegramMessageService(new TelegramApi(credentials.botToken));
       },
       wechat: async () => {
         const { applicationId, credentials } = await resolveCredentials(providerModel, 'wechat');
-        return new WechatMessageAdapter(
+        return new WechatMessageService(
           new WechatApiClient(credentials.botToken, credentials.botId),
           applicationId,
         );

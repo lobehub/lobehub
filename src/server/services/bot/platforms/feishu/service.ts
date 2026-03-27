@@ -37,7 +37,7 @@ import type {
 } from '@lobechat/builtin-tool-message/executionRuntime';
 import type { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 /**
@@ -66,7 +66,7 @@ const toMessageItem = (msg: any): MessageItem => {
   };
 };
 
-export class FeishuMessageAdapter implements MessagePlatformAdapter {
+export class FeishuMessageService implements MessageRuntimeService {
   private platformName: string;
 
   constructor(

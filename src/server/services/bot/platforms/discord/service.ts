@@ -36,7 +36,7 @@ import type {
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
 
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 
 import type { DiscordApi } from './api';
 
@@ -52,7 +52,7 @@ const toMessageItem = (msg: any): MessageItem => ({
   timestamp: msg.timestamp ?? new Date().toISOString(),
 });
 
-export class DiscordMessageAdapter implements MessagePlatformAdapter {
+export class DiscordMessageService implements MessageRuntimeService {
   constructor(private api: DiscordApi) {}
 
   // ==================== Core Message Operations ====================

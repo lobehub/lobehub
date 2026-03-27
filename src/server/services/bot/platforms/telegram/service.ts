@@ -35,12 +35,12 @@ import type {
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
 
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 import type { TelegramApi } from './api';
 
-export class TelegramMessageAdapter implements MessagePlatformAdapter {
+export class TelegramMessageService implements MessageRuntimeService {
   constructor(private api: TelegramApi) {}
 
   // ==================== Core Message Operations ====================

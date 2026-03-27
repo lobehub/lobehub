@@ -36,7 +36,7 @@ import type {
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
 
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 import type { SlackApi } from './api';
@@ -53,7 +53,7 @@ const toMessageItem = (msg: any): MessageItem => ({
   timestamp: msg.ts ? new Date(Number(msg.ts) * 1000).toISOString() : new Date().toISOString(),
 });
 
-export class SlackMessageAdapter implements MessagePlatformAdapter {
+export class SlackMessageService implements MessageRuntimeService {
   constructor(private api: SlackApi) {}
 
   // ==================== Core Message Operations ====================

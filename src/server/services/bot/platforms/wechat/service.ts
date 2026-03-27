@@ -37,7 +37,7 @@ import type {
 import type { WechatApiClient } from '@lobechat/chat-adapter-wechat';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 /**
@@ -49,7 +49,7 @@ import { PlatformUnsupportedError } from '@/server/services/toolExecution/server
  *
  * channelId for WeChat = target user ID (e.g., "o9cq800kum_4g8Py8Qw5G0a@im.wechat")
  */
-export class WechatMessageAdapter implements MessagePlatformAdapter {
+export class WechatMessageService implements MessageRuntimeService {
   private applicationId: string;
 
   constructor(

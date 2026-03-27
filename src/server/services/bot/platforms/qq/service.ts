@@ -36,7 +36,7 @@ import type {
 } from '@lobechat/builtin-tool-message/executionRuntime';
 import type { QQApiClient } from '@lobechat/chat-adapter-qq';
 
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 /**
@@ -80,7 +80,7 @@ const sendQQMessage = async (
   return result?.id;
 };
 
-export class QQMessageAdapter implements MessagePlatformAdapter {
+export class QQMessageService implements MessageRuntimeService {
   constructor(private api: QQApiClient) {}
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {

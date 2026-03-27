@@ -1,3 +1,5 @@
+import type { MessagePlatformType } from '@lobechat/builtin-tool-message';
+import type { MessageRuntimeService } from '@lobechat/builtin-tool-message/executionRuntime';
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
@@ -10,15 +12,14 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
-import { DiscordMessageAdapter } from '@/server/services/bot/platforms/discord/service';
-import { FeishuMessageAdapter } from '@/server/services/bot/platforms/feishu/service';
-import { QQMessageAdapter } from '@/server/services/bot/platforms/qq/service';
+import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
+import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
+import { QQMessageService } from '@/server/services/bot/platforms/qq/service';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
-import { SlackMessageAdapter } from '@/server/services/bot/platforms/slack/service';
+import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
-import { TelegramMessageAdapter } from '@/server/services/bot/platforms/telegram/service';
-import { WechatMessageAdapter } from '@/server/services/bot/platforms/wechat/service';
-import type { MessagePlatformAdapter } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
+import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
+import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 
 // ── Middleware ────────────────────────────────────────────
 
@@ -33,38 +34,38 @@ const botMessageProcedure = authedProcedure.use(serverDatabase).use(async (opts)
   });
 });
 
-// ── Adapter Factory ──────────────────────────────────────
+// ── Service Factory ──────────────────────────────────────
 
-const createAdapterForBot = (provider: DecryptedBotProvider): MessagePlatformAdapter => {
+const createServiceForBot = (provider: DecryptedBotProvider): MessageRuntimeService => {
   const { platform, applicationId, credentials } = provider;
 
   switch (platform) {
     case 'discord': {
-      return new DiscordMessageAdapter(new DiscordApi(credentials.botToken));
+      return new DiscordMessageService(new DiscordApi(credentials.botToken));
     }
     case 'slack': {
-      return new SlackMessageAdapter(new SlackApi(credentials.botToken));
+      return new SlackMessageService(new SlackApi(credentials.botToken));
     }
     case 'telegram': {
-      return new TelegramMessageAdapter(new TelegramApi(credentials.botToken));
+      return new TelegramMessageService(new TelegramApi(credentials.botToken));
     }
     case 'feishu': {
-      return new FeishuMessageAdapter(
+      return new FeishuMessageService(
         new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
         'feishu',
       );
     }
     case 'lark': {
-      return new FeishuMessageAdapter(
+      return new FeishuMessageService(
         new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
         'lark',
       );
     }
     case 'qq': {
-      return new QQMessageAdapter(new QQApiClient(applicationId, credentials.appSecret));
+      return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
     }
     case 'wechat': {
-      return new WechatMessageAdapter(
+      return new WechatMessageService(
         new WechatApiClient(credentials.botToken, credentials.botId),
         applicationId,
       );
@@ -78,10 +79,10 @@ const createAdapterForBot = (provider: DecryptedBotProvider): MessagePlatformAda
   }
 };
 
-const resolveAdapter = async (
+const resolveBot = async (
   model: AgentBotProviderModel,
   botId: string,
-): Promise<MessagePlatformAdapter> => {
+): Promise<{ platform: MessagePlatformType; service: MessageRuntimeService }> => {
   const provider = await model.findById(botId);
   if (!provider) {
     throw new TRPCError({ code: 'NOT_FOUND', message: `Bot not found: ${botId}` });
@@ -89,7 +90,10 @@ const resolveAdapter = async (
   if (!provider.enabled) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: `Bot is disabled: ${botId}` });
   }
-  return createAdapterForBot(provider);
+  return {
+    service: createServiceForBot(provider),
+    platform: provider.platform as MessagePlatformType,
+  };
 };
 
 // ── Router ───────────────────────────────────────────────
@@ -108,12 +112,12 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.sendMessage({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.sendMessage({
         channelId: input.channelId,
         content: input.content,
         embeds: input.embeds,
-        platform: '' as any, // platform is resolved from bot, adapter ignores this field
+        platform,
         replyTo: input.replyTo,
       });
     }),
@@ -129,13 +133,13 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.readMessages({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.readMessages({
         after: input.after,
         before: input.before,
         channelId: input.channelId,
         limit: input.limit,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -149,12 +153,12 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.editMessage({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.editMessage({
         channelId: input.channelId,
         content: input.content,
         messageId: input.messageId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -167,11 +171,11 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.deleteMessage({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.deleteMessage({
         channelId: input.channelId,
         messageId: input.messageId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -186,12 +190,12 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.searchMessages({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.searchMessages({
         authorId: input.authorId,
         channelId: input.channelId,
         limit: input.limit,
-        platform: '' as any,
+        platform,
         query: input.query,
       });
     }),
@@ -208,12 +212,12 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.reactToMessage({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.reactToMessage({
         channelId: input.channelId,
         emoji: input.emoji,
         messageId: input.messageId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -226,11 +230,11 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.getReactions({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.getReactions({
         channelId: input.channelId,
         messageId: input.messageId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -245,11 +249,11 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.pinMessage({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.pinMessage({
         channelId: input.channelId,
         messageId: input.messageId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -262,11 +266,11 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.unpinMessage({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.unpinMessage({
         channelId: input.channelId,
         messageId: input.messageId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -278,10 +282,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.listPins({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.listPins({
         channelId: input.channelId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -295,10 +299,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.getChannelInfo({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.getChannelInfo({
         channelId: input.channelId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -311,10 +315,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.listChannels({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.listChannels({
         filter: input.filter,
-        platform: '' as any,
+        platform,
         serverId: input.serverId,
       });
     }),
@@ -330,10 +334,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.getMemberInfo({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.getMemberInfo({
         memberId: input.memberId,
-        platform: '' as any,
+        platform,
         serverId: input.serverId,
       });
     }),
@@ -351,13 +355,13 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.createThread({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.createThread({
         channelId: input.channelId,
         content: input.content,
         messageId: input.messageId,
         name: input.name,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -369,10 +373,10 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.listThreads({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.listThreads({
         channelId: input.channelId,
-        platform: '' as any,
+        platform,
       });
     }),
 
@@ -385,10 +389,10 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.replyToThread({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.replyToThread({
         content: input.content,
-        platform: '' as any,
+        platform,
         threadId: input.threadId,
       });
     }),
@@ -407,13 +411,13 @@ export const botMessageRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const adapter = await resolveAdapter(ctx.agentBotProviderModel, input.botId);
-      return adapter.createPoll({
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      return service.createPoll({
         channelId: input.channelId,
         duration: input.duration,
         multipleAnswers: input.multipleAnswers,
         options: input.options,
-        platform: '' as any,
+        platform,
         question: input.question,
       });
     }),
