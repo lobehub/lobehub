@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { initialState } from '@/store/file/initialState';
+import { useFileStore } from '@/store/file/store';
+import type { ResourceItem } from '@/types/resource';
+
 const { mockMoveResource } = vi.hoisted(() => ({
   mockMoveResource: vi.fn(),
 }));
@@ -9,10 +13,6 @@ vi.mock('@/services/resource', () => ({
     moveResource: mockMoveResource,
   },
 }));
-
-import { initialState } from '@/store/file/initialState';
-import { useFileStore } from '@/store/file/store';
-import type { ResourceItem } from '@/types/resource';
 
 const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => ({
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
