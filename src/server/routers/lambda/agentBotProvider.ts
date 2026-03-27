@@ -140,6 +140,7 @@ export const agentBotProviderRouter = router({
         provider.credentials,
         (provider.settings as Record<string, unknown>) || {},
         applicationId,
+        platform,
       );
 
       if (!result.valid) {
