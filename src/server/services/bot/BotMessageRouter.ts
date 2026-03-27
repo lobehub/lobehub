@@ -301,8 +301,8 @@ export class BotMessageRouter {
   ): Chat<any> {
     const config: any = {
       adapters,
-      concurrency:
-        concurrencyStrategy === 'debounce' ? { debounceMs, strategy: 'debounce' } : 'queue',
+      // concurrency:
+      //   concurrencyStrategy === 'debounce' ? { debounceMs, strategy: 'debounce' } : 'queue',
       userName: `lobehub-bot-${label}`,
     };
 
