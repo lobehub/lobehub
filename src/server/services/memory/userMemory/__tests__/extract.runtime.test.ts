@@ -1,10 +1,11 @@
+import { ModelRuntime } from '@lobechat/model-runtime';
 import { type AiProviderRuntimeState } from '@lobechat/types';
 import { type EnabledAiModel } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type MemoryExtractionPrivateConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
-import { MemoryExtractionExecutor } from '../extract';
+import { MemoryExtractionExecutor, resolveRuntimeAgentConfig } from '../extract';
 
 const createRuntimeState = (models: EnabledAiModel[], keyVaults: Record<string, any>) =>
   ({
@@ -260,6 +261,72 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
     expect(keyVaults).not.toHaveProperty('provider-a');
   });
 
+  it('uses configured embedding provider vault directly even when preferred providers point elsewhere', async () => {
+    const executor = createExecutor({
+      embedding: { model: 'text-embedding-3-small', provider: 'openai' },
+      embeddingPreferredProviders: ['provider-e'],
+    });
+
+    const runtimeState = createRuntimeState(
+      [
+        {
+          abilities: {},
+          enabled: true,
+          id: 'text-embedding-3-small',
+          type: 'embedding',
+          providerId: 'provider-e',
+        },
+      ],
+      {
+        openai: { apiKey: 'openai-key', baseURL: 'https://api.openai.com/v1' },
+        'provider-e': { apiKey: 'provider-e-key' },
+      },
+    );
+
+    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+
+    expect(keyVaults).toMatchObject({
+      openai: { apiKey: 'openai-key', baseURL: 'https://api.openai.com/v1' },
+    });
+  });
+
+  it('uses configured gatekeeper and layer provider vaults directly when available', async () => {
+    const executor = createExecutor({
+      agentGateKeeper: { model: 'gate-2', provider: 'openai' },
+      agentLayerExtractor: {
+        contextLimit: 2048,
+        layers: {
+          activity: 'layer-act',
+          context: 'layer-ctx',
+          experience: 'layer-exp',
+          identity: 'layer-id',
+          preference: 'layer-pref',
+        },
+        model: 'layer-1',
+        provider: 'openai',
+      },
+      embedding: { model: 'text-embedding-3-small', provider: 'zhipu' },
+    });
+
+    const runtimeState = createRuntimeState(
+      [
+        { abilities: {}, enabled: true, id: 'gate-2', type: 'chat', providerId: 'zhipu' },
+        { abilities: {}, enabled: true, id: 'layer-1', type: 'chat', providerId: 'zhipu' },
+      ],
+      {
+        openai: { apiKey: 'openai-key', baseURL: 'https://api.openai.com/v1' },
+        zhipu: { apiKey: 'zhipu-key', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+      },
+    );
+
+    const keyVaults = await (executor as any).resolveRuntimeKeyVaults(runtimeState);
+
+    expect(keyVaults).toMatchObject({
+      openai: { apiKey: 'openai-key', baseURL: 'https://api.openai.com/v1' },
+      zhipu: { apiKey: 'zhipu-key', baseURL: 'https://open.bigmodel.cn/api/paas/v4' },
+    });
+  });
+
   it('falls back to configured provider when no enabled models match', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const executor = createExecutor({
@@ -277,5 +344,96 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
     });
 
     warnSpy.mockRestore();
+  });
+});
+
+describe('resolveRuntimeAgentConfig', () => {
+  it('prefers direct providers when lobehub is configured but user has direct provider keys', async () => {
+    const initializeWithProviderSpy = vi
+      .spyOn(ModelRuntime, 'initializeWithProvider')
+      .mockResolvedValue({} as any);
+
+    await resolveRuntimeAgentConfig(
+      { model: 'gpt-5-mini', provider: 'lobehub' },
+      { openai: { apiKey: 'sk-openai' } },
+      { userId: 'user-1' },
+    );
+
+    expect(initializeWithProviderSpy).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({
+        apiKey: 'sk-openai',
+        userId: 'user-1',
+      }),
+    );
+
+    initializeWithProviderSpy.mockRestore();
+  });
+
+  it('falls back to openai when lobehub is configured but no direct provider key is available', async () => {
+    const initializeWithProviderSpy = vi
+      .spyOn(ModelRuntime, 'initializeWithProvider')
+      .mockResolvedValue({} as any);
+
+    await resolveRuntimeAgentConfig(
+      { apiKey: 'sk-system', model: 'gpt-5-mini', provider: 'lobehub' },
+      {},
+      { userId: 'user-1' },
+    );
+
+    expect(initializeWithProviderSpy).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({
+        apiKey: 'sk-system',
+        userId: 'user-1',
+      }),
+    );
+
+    initializeWithProviderSpy.mockRestore();
+  });
+
+  it('does not switch to unrelated provider from other key vault entries', async () => {
+    const initializeWithProviderSpy = vi
+      .spyOn(ModelRuntime, 'initializeWithProvider')
+      .mockResolvedValue({} as any);
+
+    await resolveRuntimeAgentConfig(
+      { apiKey: 'sk-system-openai', model: 'gpt-5-mini', provider: 'openai' },
+      { zhipu: { apiKey: 'zhipu-key', baseURL: 'https://open.bigmodel.cn/api/paas/v4' } },
+      { userId: 'user-1' },
+    );
+
+    expect(initializeWithProviderSpy).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({
+        apiKey: 'sk-system-openai',
+        userId: 'user-1',
+      }),
+    );
+
+    initializeWithProviderSpy.mockRestore();
+  });
+
+  it('supports legacy user vault key field for apiKey', async () => {
+    const initializeWithProviderSpy = vi
+      .spyOn(ModelRuntime, 'initializeWithProvider')
+      .mockResolvedValue({} as any);
+
+    await resolveRuntimeAgentConfig(
+      { model: 'gpt-5-mini', provider: 'openai' },
+      { openai: { endpoint: 'https://api.openai.com/v1', key: 'legacy-openai-key' } as any },
+      { userId: 'user-1' },
+    );
+
+    expect(initializeWithProviderSpy).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({
+        apiKey: 'legacy-openai-key',
+        baseURL: 'https://api.openai.com/v1',
+        userId: 'user-1',
+      }),
+    );
+
+    initializeWithProviderSpy.mockRestore();
   });
 });
