@@ -34,10 +34,12 @@ export async function POST(req: Request) {
       duration,
       errorDetail,
       errorMessage,
+      externalRetryCount,
       llmCalls,
       steps,
       toolCalls,
       totalTokens,
+      retryDelayExpression,
     } = body;
 
     if (!runId || !testCaseId || !userId) {
@@ -78,7 +80,9 @@ export async function POST(req: Request) {
         duration,
         errorDetail,
         errorMessage,
+        externalRetryCount,
         llmCalls,
+        retryDelayExpression,
         steps,
         toolCalls,
         totalTokens,

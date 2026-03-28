@@ -111,6 +111,7 @@ export type StepCompletionReason =
 export interface AgentExecutionParams {
   approvedToolCall?: any;
   context?: AgentRuntimeContext;
+  externalRetryCount?: number;
   humanInput?: any;
   operationId: string;
   rejectionReason?: string;

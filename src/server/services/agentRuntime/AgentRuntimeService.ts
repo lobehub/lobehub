@@ -447,8 +447,15 @@ export class AgentRuntimeService {
    * Execute Agent step
    */
   async executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
-    const { operationId, stepIndex, context, humanInput, approvedToolCall, rejectionReason } =
-      params;
+    const {
+      operationId,
+      stepIndex,
+      context,
+      humanInput,
+      approvedToolCall,
+      rejectionReason,
+      externalRetryCount = 0,
+    } = params;
 
     const callbacks = this.getStepCallbacks(operationId);
 
@@ -484,6 +491,11 @@ export class AgentRuntimeService {
       if (!agentState) {
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
+
+      agentState.metadata = {
+        ...agentState.metadata,
+        externalRetryCount,
+      };
 
       // Layer 2 defense: catch extremely delayed retries that arrive after lock TTL expired
       if (agentState.stepCount > stepIndex) {
@@ -930,6 +942,7 @@ export class AgentRuntimeService {
               stepContext: currentContext?.stepContext,
             },
             events: snapshotEvents,
+            externalRetryCount,
             executionTimeMs: stepPresentationData.executionTimeMs,
             inputTokens: stepPresentationData.stepInputTokens,
             isCompressionReset: isCompression || undefined,
@@ -1057,6 +1070,10 @@ export class AgentRuntimeService {
                 model: partial.model,
                 operationId,
                 provider: partial.provider,
+                retryDelayExpression:
+                  typeof metadata?.queueRetryDelay === 'string'
+                    ? metadata.queueRetryDelay
+                    : undefined,
                 startedAt: partial.startedAt ?? Date.now(),
                 steps: (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex),
                 totalCost: stepResult.newState.cost?.total ?? 0,
@@ -1065,6 +1082,10 @@ export class AgentRuntimeService {
                 topicId: metadata?.topicId,
                 traceId: operationId,
                 userId: metadata?.userId,
+                externalRetryCount:
+                  typeof metadata?.externalRetryCount === 'number'
+                    ? metadata.externalRetryCount
+                    : undefined,
               };
 
               await this.snapshotStore.save(snapshot as any);
@@ -1114,6 +1135,10 @@ export class AgentRuntimeService {
         finalStateWithError = {
           ...errorState!,
           error: formattedError,
+          metadata: {
+            ...errorState?.metadata,
+            externalRetryCount,
+          },
           status: 'error' as const,
           stepCount: errorState?.stepCount ?? stepIndex,
         };
@@ -1122,6 +1147,7 @@ export class AgentRuntimeService {
         // Fallback: construct a minimal error state so callbacks still receive useful info
         finalStateWithError = {
           error: formattedError,
+          metadata: { externalRetryCount },
           status: 'error' as const,
           stepCount: stepIndex,
         };
@@ -1689,6 +1715,7 @@ export class AgentRuntimeService {
         duration,
         errorDetail: state?.error,
         errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
+        externalRetryCount: metadata?.externalRetryCount,
         // Full state available in local mode only (not serialized to webhooks)
         finalState: state,
         lastAssistantContent,
@@ -1700,6 +1727,7 @@ export class AgentRuntimeService {
         toolCalls: state?.usage?.tools?.totalCalls,
         topicId: metadata?.topicId,
         totalTokens: state?.usage?.llm?.tokens?.total,
+        retryDelayExpression: metadata?.queueRetryDelay,
         userId: metadata?.userId || this.userId,
       };
 
@@ -1757,10 +1785,12 @@ export class AgentRuntimeService {
         duration,
         errorDetail: state.error,
         errorMessage: this.extractErrorMessage(state.error),
+        externalRetryCount: state.metadata?.externalRetryCount,
         lastAssistantContent,
         llmCalls: state.usage?.llm?.apiCalls,
         operationId,
         reason,
+        retryDelayExpression: state.metadata?.queueRetryDelay,
         status: state.status,
         steps: state.stepCount,
         toolCalls: state.usage?.tools?.totalCalls,

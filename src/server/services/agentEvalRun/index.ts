@@ -288,7 +288,9 @@ export class AgentEvalRunService {
                   duration: event.duration,
                   errorDetail: event.errorDetail,
                   errorMessage: event.errorMessage,
+                  externalRetryCount: event.externalRetryCount,
                   llmCalls: event.llmCalls,
+                  retryDelayExpression: event.retryDelayExpression,
                   steps: event.steps,
                   toolCalls: event.toolCalls,
                   totalTokens: event.totalTokens,
@@ -431,7 +433,9 @@ export class AgentEvalRunService {
                   cost: event.cost,
                   duration: event.duration,
                   errorMessage: event.errorMessage,
+                  externalRetryCount: event.externalRetryCount,
                   llmCalls: event.llmCalls,
+                  retryDelayExpression: event.retryDelayExpression,
                   steps: event.steps,
                   toolCalls: event.toolCalls,
                   totalTokens: event.totalTokens,
@@ -501,7 +505,9 @@ export class AgentEvalRunService {
       cost?: number;
       duration?: number;
       errorMessage?: string;
+      externalRetryCount?: number;
       llmCalls?: number;
+      retryDelayExpression?: string;
       steps?: number;
       toolCalls?: number;
       totalTokens?: number;
@@ -659,7 +665,9 @@ export class AgentEvalRunService {
       duration?: number;
       errorDetail?: unknown;
       errorMessage?: string;
+      externalRetryCount?: number;
       llmCalls?: number;
+      retryDelayExpression?: string;
       steps?: number;
       toolCalls?: number;
       totalTokens?: number;
@@ -674,7 +682,9 @@ export class AgentEvalRunService {
       completionReason: telemetry.completionReason,
       cost: telemetry.cost != null ? roundCost(telemetry.cost) : undefined,
       duration: telemetry.duration,
+      externalRetryCount: telemetry.externalRetryCount,
       llmCalls: telemetry.llmCalls,
+      retryDelayExpression: telemetry.retryDelayExpression,
       steps: telemetry.steps,
       tokens: telemetry.totalTokens,
       toolCalls: telemetry.toolCalls,
@@ -788,8 +798,10 @@ export class AgentEvalRunService {
       cost?: number;
       duration?: number;
       error?: string;
+      externalRetryCount?: number;
       llmCalls?: number;
       passed?: boolean;
+      retryDelayExpression?: string;
       rubricScores?: Array<{ reason?: string; rubricId: string; score: number }>;
       score?: number;
       status?: 'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout';
@@ -804,8 +816,10 @@ export class AgentEvalRunService {
         cost: meta.cost as number | undefined,
         duration: meta.duration as number | undefined,
         error: meta.error as string | undefined,
+        externalRetryCount: meta.externalRetryCount as number | undefined,
         llmCalls: meta.llmCalls as number | undefined,
         passed: meta.passed as boolean | undefined,
+        retryDelayExpression: meta.retryDelayExpression as string | undefined,
         rubricScores: meta.rubricScores as any,
         score: meta.score as number | undefined,
         status: meta.status as
@@ -830,6 +844,9 @@ export class AgentEvalRunService {
         evalResult: {
           awaitingExternalEval: true,
           completionReason: 'external',
+          externalRetryCount: Math.max(...threadResults.map((t) => t.externalRetryCount ?? 0)),
+          retryDelayExpression: threadResults.find((t) => t.retryDelayExpression)
+            ?.retryDelayExpression,
           threads: threadResults,
         } satisfies EvalRunTopicResult,
         status: 'external',
@@ -845,6 +862,13 @@ export class AgentEvalRunService {
     // Best score (used as the representative score)
     const scores = threadResults.filter((t) => t.score != null).map((t) => t.score!);
     const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
+    const retryDelayExpression = threadResults.find(
+      (t) => !!t.retryDelayExpression,
+    )?.retryDelayExpression;
+    const externalRetryCount = threadResults.reduce(
+      (max, threadResult) => Math.max(max, threadResult.externalRetryCount ?? 0),
+      0,
+    );
 
     // Aggregate metrics as totals across K threads
     let totalCost = 0;
@@ -876,9 +900,11 @@ export class AgentEvalRunService {
         completionReason,
         cost: totalCost ? roundCost(totalCost / k) : undefined,
         duration: totalDuration ? totalDuration / k : undefined,
+        externalRetryCount: externalRetryCount || undefined,
         llmCalls: totalLlmCalls ? Math.round((totalLlmCalls / k) * 10) / 10 : undefined,
         passAllK: allPassed,
         passAtK: anyPassed,
+        retryDelayExpression,
         steps: totalSteps ? Math.round((totalSteps / k) * 10) / 10 : undefined,
         threads: threadResults,
         tokens: totalTokens ? totalTokens / k : undefined,
@@ -967,7 +993,9 @@ export class AgentEvalRunService {
       duration?: number;
       errorDetail?: unknown;
       errorMessage?: string;
+      externalRetryCount?: number;
       llmCalls?: number;
+      retryDelayExpression?: string;
       steps?: number;
       toolCalls?: number;
       totalTokens?: number;
@@ -991,7 +1019,9 @@ export class AgentEvalRunService {
           completionReason: telemetry.completionReason,
           cost: telemetry.cost != null ? roundCost(telemetry.cost) : undefined,
           duration: telemetry.duration,
+          externalRetryCount: telemetry.externalRetryCount,
           llmCalls: telemetry.llmCalls,
+          retryDelayExpression: telemetry.retryDelayExpression,
           rubricScores: runTopic.evalResult?.rubricScores,
           steps: telemetry.steps,
           tokens: telemetry.totalTokens,
