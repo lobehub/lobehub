@@ -102,7 +102,7 @@ const PlatformList = memo<PlatformListProps>(
 
     const handleExport = useCallback(() => {
       if (!providers?.length) return;
-      const exportData = providers.map(({ id, ...rest }) => rest);
+      const exportData = providers.map(({ id: _, ...rest }) => rest);
       exportJSONFile(exportData, `lobehub-channels-${agentId}.json`);
     }, [providers, agentId]);
 
@@ -124,7 +124,6 @@ const PlatformList = memo<PlatformListProps>(
             return;
           }
 
-          // Validate all items first
           for (const item of data) {
             if (!item.platform || !item.applicationId || !item.credentials) {
               message.error(t('channel.importInvalidFormat'));
@@ -132,16 +131,7 @@ const PlatformList = memo<PlatformListProps>(
             }
           }
 
-          const hide = message.loading(
-            t('channel.importProgress', { count: data.length, current: 0 }),
-            0,
-          );
-
-          for (let i = 0; i < data.length; i++) {
-            const item = data[i];
-            hide();
-            message.loading(t('channel.importProgress', { count: data.length, current: i + 1 }), 0);
-
+          for (const item of data) {
             await createBotProvider({
               agentId,
               applicationId: item.applicationId,
@@ -158,7 +148,6 @@ const PlatformList = memo<PlatformListProps>(
             }
           }
 
-          message.destroy();
           message.success(t('channel.importSuccess'));
         } catch {
           message.error(t('channel.importFailed'));
