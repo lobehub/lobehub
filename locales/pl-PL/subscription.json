@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Subskrybuj płatny plan, aby włączyć automatyczne doładowanie",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Docelowe saldo musi być większe niż próg",
   "credits.packages.auto": "Automatyczne",
+  "credits.packages.charged": "Obciążono {{amount}} $",
   "credits.packages.expired": "Wygasło",
   "credits.packages.expiresIn": "Wygasa za {{days}} dni",
   "credits.packages.expiresToday": "Wygasa dzisiaj",

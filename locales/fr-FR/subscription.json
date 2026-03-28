@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Abonnez-vous à un plan payant pour activer la recharge automatique",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Le solde cible doit être supérieur au seuil",
   "credits.packages.auto": "Automatique",
+  "credits.packages.charged": "Facturé ${{amount}}",
   "credits.packages.expired": "Expiré",
   "credits.packages.expiresIn": "Expire dans {{days}} jours",
   "credits.packages.expiresToday": "Expire aujourd'hui",

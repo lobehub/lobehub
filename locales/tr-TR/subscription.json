@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Otomatik yüklemeyi etkinleştirmek için ücretli bir plana abone olun",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Hedef bakiye eşik değerinden büyük olmalıdır",
   "credits.packages.auto": "Otomatik",
+  "credits.packages.charged": "${{amount}} tutarında ücret alındı",
   "credits.packages.expired": "Süresi Doldu",
   "credits.packages.expiresIn": "{{days}} gün içinde sona eriyor",
   "credits.packages.expiresToday": "Bugün sona eriyor",

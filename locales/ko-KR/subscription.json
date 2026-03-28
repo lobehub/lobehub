@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "유료 플랜을 구독하여 자동 충전을 활성화하세요",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "목표 잔액은 임계값보다 커야 합니다",
   "credits.packages.auto": "자동",
+  "credits.packages.charged": "${{amount}} 청구됨",
   "credits.packages.expired": "만료됨",
   "credits.packages.expiresIn": "{{days}}일 후 만료",
   "credits.packages.expiresToday": "오늘 만료",

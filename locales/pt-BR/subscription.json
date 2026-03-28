@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Assine um plano pago para ativar a recarga automática",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "O saldo alvo deve ser maior que o limite",
   "credits.packages.auto": "Automático",
+  "credits.packages.charged": "Cobrado R${{amount}}",
   "credits.packages.expired": "Expirado",
   "credits.packages.expiresIn": "Expira em {{days}} dias",
   "credits.packages.expiresToday": "Expira hoje",

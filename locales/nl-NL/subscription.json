@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Abonneer je op een betaald plan om automatisch opladen in te schakelen",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Doelsaldo moet hoger zijn dan de drempel",
   "credits.packages.auto": "Automatisch",
+  "credits.packages.charged": "In rekening gebracht ${{amount}}",
   "credits.packages.expired": "Verlopen",
   "credits.packages.expiresIn": "Verloopt over {{days}} dagen",
   "credits.packages.expiresToday": "Verloopt vandaag",

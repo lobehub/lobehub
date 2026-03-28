@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "訂閱付費方案以啟用自動加值",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "目標餘額必須大於觸發門檻",
   "credits.packages.auto": "自動",
+  "credits.packages.charged": "已收取 ${{amount}}",
   "credits.packages.expired": "已過期",
   "credits.packages.expiresIn": "{{days}} 天後過期",
   "credits.packages.expiresToday": "今日過期",
