@@ -98,6 +98,7 @@ const PlatformList = memo<PlatformListProps>(
     const fileInputRef = useRef<HTMLInputElement>(null);
     const deleteAllBotProviders = useAgentStore((s) => s.deleteAllBotProviders);
     const createBotProvider = useAgentStore((s) => s.createBotProvider);
+    const connectBot = useAgentStore((s) => s.connectBot);
 
     const handleExport = useCallback(() => {
       if (!providers?.length) return;
@@ -123,11 +124,24 @@ const PlatformList = memo<PlatformListProps>(
             return;
           }
 
+          // Validate all items first
           for (const item of data) {
             if (!item.platform || !item.applicationId || !item.credentials) {
               message.error(t('channel.importInvalidFormat'));
               return;
             }
+          }
+
+          const hide = message.loading(
+            t('channel.importProgress', { count: data.length, current: 0 }),
+            0,
+          );
+
+          for (let i = 0; i < data.length; i++) {
+            const item = data[i];
+            hide();
+            message.loading(t('channel.importProgress', { count: data.length, current: i + 1 }), 0);
+
             await createBotProvider({
               agentId,
               applicationId: item.applicationId,
@@ -135,8 +149,16 @@ const PlatformList = memo<PlatformListProps>(
               platform: item.platform,
               settings: item.settings ?? undefined,
             });
+            if (item.enabled) {
+              await connectBot({
+                agentId,
+                applicationId: item.applicationId,
+                platform: item.platform,
+              });
+            }
           }
 
+          message.destroy();
           message.success(t('channel.importSuccess'));
         } catch {
           message.error(t('channel.importFailed'));
@@ -144,7 +166,7 @@ const PlatformList = memo<PlatformListProps>(
           e.target.value = '';
         }
       },
-      [agentId, createBotProvider, message, t],
+      [agentId, connectBot, createBotProvider, message, t],
     );
 
     const handleDeleteAll = useCallback(() => {
