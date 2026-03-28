@@ -73,7 +73,16 @@ export const agentBotProviderRouter = router({
   getByAgentId: agentBotProviderProcedure
     .input(z.object({ agentId: z.string() }))
     .query(async ({ input, ctx }) => {
-      return ctx.agentBotProviderModel.findByAgentId(input.agentId);
+      const providers = await ctx.agentBotProviderModel.findByAgentId(input.agentId);
+
+      const statuses = await Promise.all(
+        providers.map((p) => getBotRuntimeStatus(p.platform, p.applicationId)),
+      );
+
+      return providers.map((p, i) => ({
+        ...p,
+        runtimeStatus: statuses[i].status,
+      }));
     }),
 
   getRuntimeStatus: authedProcedure
