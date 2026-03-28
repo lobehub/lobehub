@@ -4,7 +4,7 @@ import type { MouseEvent } from 'react';
 import { memo } from 'react';
 
 import MenuItem from './MenuItem';
-import { useStyles } from './style';
+import { styles } from './style';
 import type { MentionCategory } from './types';
 
 interface CategoryViewProps {
@@ -15,7 +15,6 @@ interface CategoryViewProps {
 }
 
 const CategoryView = memo<CategoryViewProps>(({ category, activeKey, onSelectItem, onBack }) => {
-  const { styles } = useStyles();
   const handleMouseDown = (event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
   };

@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { ListChecksIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -11,15 +11,15 @@ import type { Plan } from '../../../types';
 
 const MAX_CONTENT_HEIGHT = 100;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     overflow: hidden auto;
 
     max-height: ${MAX_CONTENT_HEIGHT}px;
     padding: 12px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   header: css`
     cursor: pointer;
@@ -38,7 +38,6 @@ interface PlanCardProps {
 }
 
 const PlanCard = memo<PlanCardProps>(({ plan }) => {
-  const { styles } = useStyles();
   const openDocument = useChatStore((s) => s.openDocument);
 
   const handleHeaderClick = () => {
