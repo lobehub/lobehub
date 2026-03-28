@@ -113,6 +113,10 @@ CLAUDE.local.md
 # MCP tools
 .serena/**
 
+# Device Gateway local dev artifacts
+apps/device-gateway/.dev.vars
+apps/device-gateway/.wrangler/
+
 # Docker development data
 docker-compose/dev/data/
 
