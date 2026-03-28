@@ -1,28 +1,42 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
+  ConfiguredBotInfo,
+  ConnectBotParams,
+  ConnectBotState,
+  CreateBotParams,
+  CreateBotState,
   CreatePollParams,
   CreatePollState,
   CreateThreadParams,
   CreateThreadState,
+  DeleteBotParams,
+  DeleteBotState,
   DeleteMessageParams,
   DeleteMessageState,
   EditMessageParams,
   EditMessageState,
+  GetBotDetailParams,
+  GetBotDetailState,
   GetChannelInfoParams,
   GetChannelInfoState,
   GetMemberInfoParams,
   GetMemberInfoState,
   GetReactionsParams,
   GetReactionsState,
+  ListBotsParams,
+  ListBotsState,
   ListChannelsParams,
   ListChannelsState,
   ListPinsParams,
   ListPinsState,
+  ListPlatformsParams,
+  ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
   PinMessageParams,
   PinMessageState,
+  PlatformInfo,
   ReactToMessageParams,
   ReactToMessageState,
   ReadMessagesParams,
@@ -33,34 +47,52 @@ import type {
   SearchMessagesState,
   SendMessageParams,
   SendMessageState,
+  ToggleBotParams,
+  ToggleBotState,
   UnpinMessageParams,
   UnpinMessageState,
+  UpdateBotParams,
+  UpdateBotState,
 } from '../types';
 
 // Re-export all param/state types so adapters can import from executionRuntime entry
 export type {
+  ConfiguredBotInfo,
+  ConnectBotParams,
+  ConnectBotState,
+  CreateBotParams,
+  CreateBotState,
   CreatePollParams,
   CreatePollState,
   CreateThreadParams,
   CreateThreadState,
+  DeleteBotParams,
+  DeleteBotState,
   DeleteMessageParams,
   DeleteMessageState,
   EditMessageParams,
   EditMessageState,
+  GetBotDetailParams,
+  GetBotDetailState,
   GetChannelInfoParams,
   GetChannelInfoState,
   GetMemberInfoParams,
   GetMemberInfoState,
   GetReactionsParams,
   GetReactionsState,
+  ListBotsParams,
+  ListBotsState,
   ListChannelsParams,
   ListChannelsState,
   ListPinsParams,
   ListPinsState,
+  ListPlatformsParams,
+  ListPlatformsState,
   ListThreadsParams,
   ListThreadsState,
   PinMessageParams,
   PinMessageState,
+  PlatformInfo,
   ReactToMessageParams,
   ReactToMessageState,
   ReadMessagesParams,
@@ -71,8 +103,12 @@ export type {
   SearchMessagesState,
   SendMessageParams,
   SendMessageState,
+  ToggleBotParams,
+  ToggleBotState,
   UnpinMessageParams,
   UnpinMessageState,
+  UpdateBotParams,
+  UpdateBotState,
 } from '../types';
 export type { MessageItem } from '../types';
 
@@ -101,15 +137,41 @@ export interface MessageRuntimeService {
   unpinMessage: (params: UnpinMessageParams) => Promise<UnpinMessageState>;
 }
 
+/**
+ * Interface for bot provider management operations.
+ * Implemented by the server-side factory using AgentBotProviderModel + TRPC router logic.
+ */
+export interface BotProviderQuery {
+  connectBot: (botId: string) => Promise<{ status: string }>;
+  createBot: (params: {
+    agentId: string;
+    applicationId: string;
+    credentials: Record<string, string>;
+    platform: string;
+  }) => Promise<{ id: string; platform: string }>;
+  deleteBot: (botId: string) => Promise<void>;
+  getBotDetail: (botId: string) => Promise<GetBotDetailState | null>;
+  listBots: () => Promise<ConfiguredBotInfo[]>;
+  listPlatforms: () => Promise<PlatformInfo[]>;
+  toggleBot: (botId: string, enabled: boolean) => Promise<void>;
+  updateBot: (
+    botId: string,
+    params: { credentials?: Record<string, string>; settings?: Record<string, unknown> },
+  ) => Promise<void>;
+}
+
 export interface MessageExecutionRuntimeOptions {
+  botProvider?: BotProviderQuery;
   service: MessageRuntimeService;
 }
 
 export class MessageExecutionRuntime {
+  private botProvider?: BotProviderQuery;
   private service: MessageRuntimeService;
 
   constructor(options: MessageExecutionRuntimeOptions) {
     this.service = options.service;
+    this.botProvider = options.botProvider;
   }
 
   // ==================== Core Message Operations ====================
@@ -415,6 +477,169 @@ export class MessageExecutionRuntime {
         content: `createPoll error: ${(e as Error).message}`,
         success: false,
       };
+    }
+  }
+
+  // ==================== Bot Management ====================
+
+  async listPlatforms(_params: ListPlatformsParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      const platforms = await this.botProvider.listPlatforms();
+      const formatted = platforms
+        .map((p) => {
+          const reqFields = p.credentialFields
+            .filter((f) => f.required)
+            .map((f) => f.key)
+            .join(', ');
+          return `- **${p.name}** (${p.id})${reqFields ? ` — requires: ${reqFields}` : ''}`;
+        })
+        .join('\n');
+
+      return {
+        content: `${platforms.length} supported platform(s):\n${formatted}`,
+        state: { platforms } satisfies ListPlatformsState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `listPlatforms error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async listBots(_params: ListBotsParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return {
+        content: 'Bot provider query is not available in this context.',
+        success: false,
+      };
+    }
+
+    try {
+      const bots = await this.botProvider.listBots();
+      const formatted = bots
+        .map(
+          (b) =>
+            `- ${b.platform} (appId: ${b.applicationId}, botId: ${b.id}, enabled: ${b.enabled}, status: ${b.runtimeStatus ?? 'unknown'})`,
+        )
+        .join('\n');
+
+      return {
+        content:
+          bots.length > 0
+            ? `${bots.length} configured bot(s):\n${formatted}`
+            : 'No bots configured for this agent. Set up a bot integration first.',
+        state: { bots } satisfies ListBotsState,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `listBots error: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async getBotDetail(params: GetBotDetailParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      const bot = await this.botProvider.getBotDetail(params.botId);
+      if (!bot) {
+        return { content: `Bot not found: ${params.botId}`, success: false };
+      }
+      return {
+        content: `Bot ${bot.id}:\n- Platform: ${bot.platform}\n- App ID: ${bot.applicationId}\n- Enabled: ${bot.enabled}\n- Status: ${bot.runtimeStatus ?? 'unknown'}`,
+        state: bot satisfies GetBotDetailState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `getBotDetail error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async createBot(params: CreateBotParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      const result = await this.botProvider.createBot(params);
+      return {
+        content: `Created ${result.platform} bot (id: ${result.id})`,
+        state: result satisfies CreateBotState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `createBot error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async updateBot(params: UpdateBotParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      await this.botProvider.updateBot(params.botId, {
+        credentials: params.credentials,
+        settings: params.settings,
+      });
+      return {
+        content: `Updated bot ${params.botId}`,
+        state: { success: true } satisfies UpdateBotState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `updateBot error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async deleteBot(params: DeleteBotParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      await this.botProvider.deleteBot(params.botId);
+      return {
+        content: `Deleted bot ${params.botId}`,
+        state: { success: true } satisfies DeleteBotState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `deleteBot error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async toggleBot(params: ToggleBotParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      await this.botProvider.toggleBot(params.botId, params.enabled);
+      return {
+        content: `Bot ${params.botId} ${params.enabled ? 'enabled' : 'disabled'}`,
+        state: { enabled: params.enabled, success: true } satisfies ToggleBotState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `toggleBot error: ${(e as Error).message}`, success: false };
+    }
+  }
+
+  async connectBot(params: ConnectBotParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.botProvider) {
+      return { content: 'Bot provider is not available.', success: false };
+    }
+    try {
+      const result = await this.botProvider.connectBot(params.botId);
+      return {
+        content: `Bot connection initiated (status: ${result.status})`,
+        state: result satisfies ConnectBotState,
+        success: true,
+      };
+    } catch (e) {
+      return { content: `connectBot error: ${(e as Error).message}`, success: false };
     }
   }
 }

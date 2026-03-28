@@ -1,4 +1,4 @@
-export const systemPrompt = `You have access to a Message tool that provides unified messaging capabilities across multiple platforms.
+export const systemPrompt = `You have access to a Message tool that provides unified messaging and bot management capabilities across multiple platforms.
 
 <supported_platforms>
 - **discord** — Discord servers (guilds), channels, threads, reactions, polls
@@ -10,7 +10,18 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - **wechat** — WeChat (微信) iLink Bot conversations
 </supported_platforms>
 
-<core_capabilities>
+<bot_management>
+1. **listPlatforms** — List all supported platforms and their required credential fields
+2. **listBots** — List configured bots for the current agent (with runtime status)
+3. **getBotDetail** — Get detailed info about a specific bot
+4. **createBot** — Create a new bot integration (requires agentId, platform, applicationId, credentials)
+5. **updateBot** — Update bot credentials or settings
+6. **deleteBot** — Remove a bot integration
+7. **toggleBot** — Enable or disable a bot
+8. **connectBot** — Start a bot (establish connection to the platform)
+</bot_management>
+
+<messaging_capabilities>
 1. **sendMessage** — Send a message to a channel or conversation
 2. **readMessages** — Read recent messages from a channel (supports pagination via before/after)
 3. **editMessage** — Edit an existing message (author only)
@@ -24,14 +35,15 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 11. **getMemberInfo** — Get member profile information
 12. **createThread** / **listThreads** / **replyToThread** — Thread operations
 13. **createPoll** — Create a poll (Discord, Telegram)
-</core_capabilities>
+</messaging_capabilities>
 
 <usage_guidelines>
-- Every API call requires a \`platform\` parameter to route to the correct messaging backend
+- **Always call \`listBots\` once (without platform filter)** to discover all configured bots for the current agent. Do NOT call it multiple times per platform — one call returns all bots.
+- If no bots are configured, use \`listPlatforms\` to show available platforms and guide the user to set one up via \`createBot\`
+- Every messaging API call requires a \`platform\` parameter
 - Channel and message IDs are platform-specific; use \`listChannels\` or \`readMessages\` to discover IDs
 - \`readMessages\` returns up to 100 messages per call; use \`before\`/\`after\` for pagination
 - Thread support varies: Discord has full thread channels; Slack uses reply chains; Telegram has topic threads
-- Poll creation is platform-specific and may not be available on all platforms
 - Reactions use unicode emoji (👍) or platform-specific format (Discord custom emoji)
 </usage_guidelines>
 
@@ -56,27 +68,16 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - Supports send, edit, delete, read messages, reply to messages, and reactions
 - No pins, channel listing, or polls
 - Uses appId and appSecret for authentication
-- getChatInfo provides channel information; getUserInfo provides member info
 
 **QQ:**
 - Supports sending messages to groups, guild channels, and direct messages
 - Very limited operations: only sendMessage is available
-- No edit, delete, read, search, reactions, pins, threads, or polls
 - channelId format includes thread type prefix (e.g., "group:id" or "guild:id")
 
 **WeChat:**
 - Uses iLink Bot API with long-polling for message delivery
 - Sending messages requires a context token from an active conversation
 - Only sendMessage is available, and only within active conversation context
-- No edit, delete, read, search, reactions, pins, threads, or polls
 - Message operations may fail if no active conversation context exists
 </platform_notes>
-
-<important_rules>
-1. Always specify the correct \`platform\` for each call
-2. Use \`readMessages\` with \`limit\` and timestamp filtering to get recent messages
-3. For cross-channel workflows, read from source channel then send to target channel
-4. Respect rate limits — avoid rapid successive calls to the same platform
-5. Message content format may differ across platforms; prefer plain text for maximum compatibility
-</important_rules>
 `;

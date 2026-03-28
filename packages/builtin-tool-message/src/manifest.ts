@@ -485,6 +485,145 @@ export const MessageManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+
+    // ==================== Bot Management ====================
+    {
+      description:
+        'List all supported messaging platforms and their required credential fields. Use this to guide users when setting up a new bot.',
+      name: MessageApiName.listPlatforms,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'List all configured bot integrations for the current agent. Use this first to discover which platforms are connected and get bot IDs.',
+      name: MessageApiName.listBots,
+      parameters: {
+        additionalProperties: false,
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description: 'Get detailed information about a specific bot integration.',
+      name: MessageApiName.getBotDetail,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID',
+            type: 'string',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create a new bot integration for a platform. Call listPlatforms first to see required credentials.',
+      name: MessageApiName.createBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          agentId: {
+            description: 'Agent ID to attach the bot to',
+            type: 'string',
+          },
+          applicationId: {
+            description: 'Application ID for webhook routing (platform-specific)',
+            type: 'string',
+          },
+          credentials: {
+            description:
+              'Credential key-value pairs. Required fields depend on the platform (e.g. botToken for Discord, appSecret for Feishu).',
+            type: 'object',
+          },
+          platform: {
+            description: 'Target platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+        },
+        required: ['platform', 'agentId', 'applicationId', 'credentials'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Update credentials or settings of an existing bot integration.',
+      name: MessageApiName.updateBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID',
+            type: 'string',
+          },
+          credentials: {
+            description: 'Updated credential key-value pairs (partial update)',
+            type: 'object',
+          },
+          settings: {
+            description: 'Updated settings (partial update)',
+            type: 'object',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Delete a bot integration.',
+      name: MessageApiName.deleteBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID to delete',
+            type: 'string',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Enable or disable a bot integration.',
+      name: MessageApiName.toggleBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID',
+            type: 'string',
+          },
+          enabled: {
+            description: 'true to enable, false to disable',
+            type: 'boolean',
+          },
+        },
+        required: ['botId', 'enabled'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Connect and start a bot. The bot must be enabled and have valid credentials.',
+      name: MessageApiName.connectBot,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          botId: {
+            description: 'Bot integration ID to connect',
+            type: 'string',
+          },
+        },
+        required: ['botId'],
+        type: 'object',
+      },
+    },
   ],
   identifier: MessageToolIdentifier,
   meta: {

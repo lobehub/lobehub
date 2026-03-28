@@ -3,15 +3,21 @@ import { BaseExecutor } from '@lobechat/types';
 
 import type { MessageExecutionRuntime } from '../ExecutionRuntime';
 import type {
+  ConnectBotParams,
+  CreateBotParams,
   CreatePollParams,
   CreateThreadParams,
+  DeleteBotParams,
   DeleteMessageParams,
   EditMessageParams,
+  GetBotDetailParams,
   GetChannelInfoParams,
   GetMemberInfoParams,
   GetReactionsParams,
+  ListBotsParams,
   ListChannelsParams,
   ListPinsParams,
+  ListPlatformsParams,
   ListThreadsParams,
   PinMessageParams,
   ReactToMessageParams,
@@ -19,7 +25,9 @@ import type {
   ReplyToThreadParams,
   SearchMessagesParams,
   SendMessageParams,
+  ToggleBotParams,
   UnpinMessageParams,
+  UpdateBotParams,
 } from '../types';
 import { MessageApiName, MessageToolIdentifier } from '../types';
 
@@ -165,6 +173,64 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.createPoll(params);
+  };
+
+  // ==================== Bot Management ====================
+
+  listPlatforms = async (
+    params: ListPlatformsParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.listPlatforms(params);
+  };
+
+  listBots = async (
+    params: ListBotsParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.listBots(params);
+  };
+
+  getBotDetail = async (
+    params: GetBotDetailParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.getBotDetail(params);
+  };
+
+  createBot = async (
+    params: CreateBotParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.createBot(params);
+  };
+
+  updateBot = async (
+    params: UpdateBotParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.updateBot(params);
+  };
+
+  deleteBot = async (
+    params: DeleteBotParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.deleteBot(params);
+  };
+
+  toggleBot = async (
+    params: ToggleBotParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.toggleBot(params);
+  };
+
+  connectBot = async (
+    params: ConnectBotParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.connectBot(params);
   };
 }
 

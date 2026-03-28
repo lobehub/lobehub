@@ -45,6 +45,16 @@ export const MessageApiName = {
 
   // Platform-specific
   createPoll: 'createPoll',
+
+  // Bot management
+  connectBot: 'connectBot',
+  createBot: 'createBot',
+  deleteBot: 'deleteBot',
+  getBotDetail: 'getBotDetail',
+  listBots: 'listBots',
+  listPlatforms: 'listPlatforms',
+  toggleBot: 'toggleBot',
+  updateBot: 'updateBot',
 } as const;
 
 export type MessageApiNameType = (typeof MessageApiName)[keyof typeof MessageApiName];
@@ -342,4 +352,101 @@ export interface CreatePollParams {
 export interface CreatePollState {
   messageId?: string;
   pollId?: string;
+}
+
+// --- Bot Management ---
+
+export interface ListPlatformsParams {
+  /** No parameters needed */
+}
+
+export interface PlatformInfo {
+  credentialFields: { key: string; label: string; required: boolean; type: string }[];
+  id: string;
+  name: string;
+}
+
+export interface ListPlatformsState {
+  platforms: PlatformInfo[];
+}
+
+export interface ListBotsParams {
+  /** No parameters needed — returns all bots for the current agent */
+}
+
+export interface ConfiguredBotInfo {
+  applicationId: string;
+  enabled: boolean;
+  id: string;
+  platform: string;
+  runtimeStatus?: string;
+}
+
+export interface ListBotsState {
+  bots: ConfiguredBotInfo[];
+}
+
+export interface GetBotDetailParams {
+  botId: string;
+}
+
+export interface GetBotDetailState {
+  applicationId: string;
+  enabled: boolean;
+  id: string;
+  platform: string;
+  runtimeStatus?: string;
+  settings?: Record<string, unknown>;
+}
+
+export interface CreateBotParams {
+  /** Agent ID to attach the bot to */
+  agentId: string;
+  /** Application ID for webhook routing */
+  applicationId: string;
+  /** Credential key-value pairs (platform-specific) */
+  credentials: Record<string, string>;
+  /** Target platform */
+  platform: string;
+}
+
+export interface CreateBotState {
+  id: string;
+  platform: string;
+}
+
+export interface UpdateBotParams {
+  botId: string;
+  credentials?: Record<string, string>;
+  settings?: Record<string, unknown>;
+}
+
+export interface UpdateBotState {
+  success: boolean;
+}
+
+export interface DeleteBotParams {
+  botId: string;
+}
+
+export interface DeleteBotState {
+  success: boolean;
+}
+
+export interface ToggleBotParams {
+  botId: string;
+  enabled: boolean;
+}
+
+export interface ToggleBotState {
+  enabled: boolean;
+  success: boolean;
+}
+
+export interface ConnectBotParams {
+  botId: string;
+}
+
+export interface ConnectBotState {
+  status: string;
 }
