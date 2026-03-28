@@ -26,6 +26,7 @@ import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { type ChatStore } from '@/store/chat/store';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
@@ -229,6 +230,10 @@ export class StreamingExecutorActionImpl {
         model: agentConfigData.model,
         provider: agentConfigData.provider!,
       },
+      contextWindowTokens: aiModelSelectors.modelContextWindowTokens(
+        agentConfigData.model,
+        agentConfigData.provider!,
+      )(getAiInfraStoreState()),
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
     };
@@ -439,6 +444,10 @@ export class StreamingExecutorActionImpl {
     const modelRuntimeConfig = {
       model,
       provider: provider!,
+      contextWindowTokens: aiModelSelectors.modelContextWindowTokens(
+        model,
+        provider!,
+      )(getAiInfraStoreState()),
       // TODO: Support dedicated compression model from chatConfig.compressionModelId
       compressionModel: { model, provider: provider! },
     };
@@ -451,6 +460,7 @@ export class StreamingExecutorActionImpl {
       agentConfig: { maxSteps: 1000 },
       compressionConfig: {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
+        maxWindowToken: modelRuntimeConfig.contextWindowTokens,
       },
       dynamicInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,
