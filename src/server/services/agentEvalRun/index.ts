@@ -29,7 +29,7 @@ import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 /** Round cost to at most 6 decimal places to avoid floating-point noise */
 const roundCost = (v: number): number => Math.round(v * 1e6) / 1e6;
 const EVAL_AGENT_RUNTIME_QSTASH_RETRIES = 10;
-const EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY = '7000 * pow(2, retried)';
+const EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY = '10000 * (1 + retried)';
 
 export class AgentEvalRunService {
   private readonly db: LobeChatDatabase;
