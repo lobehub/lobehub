@@ -121,6 +121,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   hooks?: AgentHook[];
   /** Maximum steps for the agent operation */
   maxSteps?: number;
+  queueRetries?: number;
+  queueRetryDelay?: string;
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
@@ -241,6 +243,8 @@ export class AiAgentService {
       signal,
       userInterventionConfig,
       completionWebhook,
+      queueRetries,
+      queueRetryDelay,
       stepWebhook,
       webhookDelivery,
     } = params;
@@ -915,6 +919,8 @@ export class AiAgentService {
         signal,
         stepCallbacks,
         stepWebhook,
+        queueRetries,
+        queueRetryDelay,
         stream,
         toolSet: {
           enabledToolIds: toolsResult.enabledToolIds,

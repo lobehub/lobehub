@@ -268,6 +268,8 @@ export class AgentRuntimeService {
       userInterventionConfig,
       completionWebhook,
       stepWebhook,
+      queueRetries,
+      queueRetryDelay,
       webhookDelivery,
       botPlatformContext,
       discordContext,
@@ -321,6 +323,8 @@ export class AgentRuntimeService {
           evalContext,
           // need be removed
           modelRuntimeConfig,
+          queueRetries,
+          queueRetryDelay,
           stepWebhook,
           stream,
           operationSkillSet,
@@ -399,6 +403,8 @@ export class AgentRuntimeService {
           endpoint: `${this.baseURL}/run`,
           operationId,
           priority: 'high',
+          retryDelay: queueRetryDelay,
+          retries: queueRetries,
           stepIndex: 0,
         });
         autoStarted = true;
@@ -989,6 +995,14 @@ export class AgentRuntimeService {
           endpoint: `${this.baseURL}/run`,
           operationId,
           priority,
+          retryDelay:
+            typeof stepResult.newState.metadata?.queueRetryDelay === 'string'
+              ? stepResult.newState.metadata.queueRetryDelay
+              : undefined,
+          retries:
+            typeof stepResult.newState.metadata?.queueRetries === 'number'
+              ? stepResult.newState.metadata.queueRetries
+              : undefined,
           stepIndex: nextStepIndex,
         });
         nextStepScheduled = true;

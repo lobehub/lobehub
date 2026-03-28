@@ -169,6 +169,8 @@ export interface OperationCreationParams {
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;
+  queueRetries?: number;
+  queueRetryDelay?: string;
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /**
