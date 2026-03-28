@@ -23,7 +23,7 @@ const Nav = memo(() => {
   const agentId = params.aid;
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
-  const isIntegrationActive = pathname.includes('/channel');
+  const isChannelActive = pathname.includes('/channel');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
@@ -34,7 +34,7 @@ const Nav = memo(() => {
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
     // If in agent sub-route, navigate back to agent chat first
-    if (isProfileActive && agentId) {
+    if ((isProfileActive || isChannelActive) && agentId) {
       router.push(urlJoin('/agent', agentId));
     }
     mutate();
@@ -60,7 +60,7 @@ const Nav = memo(() => {
       )}
       {!hideProfile && (
         <NavItem
-          active={isIntegrationActive}
+          active={isChannelActive}
           icon={RadioTowerIcon}
           title={t('tab.integration')}
           onClick={() => {
