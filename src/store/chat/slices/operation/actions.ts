@@ -160,11 +160,7 @@ export class OperationActionsImpl {
 
         // Update context index (if agentId exists)
         if (context.agentId) {
-          const contextKey = messageMapKey({
-            agentId: context.agentId,
-            groupId: context.groupId,
-            topicId: context.topicId !== undefined ? context.topicId : null,
-          });
+          const contextKey = messageMapKey(context as MessageMapKeyInput);
           if (!state.operationsByContext[contextKey]) {
             state.operationsByContext[contextKey] = [];
           }
@@ -582,11 +578,7 @@ export class OperationActionsImpl {
 
           // Remove from context index
           if (op.context.agentId) {
-            const contextKey = messageMapKey({
-              agentId: op.context.agentId,
-              groupId: op.context.groupId,
-              topicId: op.context.topicId !== undefined ? op.context.topicId : null,
-            });
+            const contextKey = messageMapKey(op.context as MessageMapKeyInput);
             const contextIndex = state.operationsByContext[contextKey];
             if (contextIndex) {
               state.operationsByContext[contextKey] = contextIndex.filter(

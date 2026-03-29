@@ -193,6 +193,26 @@ export interface QueuedMessage {
 }
 
 /**
+ * Merged message ready for injection
+ */
+export interface MergedQueuedMessage {
+  content: string;
+  files: string[];
+}
+
+/**
+ * Merge multiple queued messages into a single message.
+ * Sorted by creation time, content joined with double newlines.
+ */
+export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMessage => {
+  const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+  return {
+    content: sorted.map((m) => m.content).join('\n\n'),
+    files: sorted.flatMap((m) => m.files ?? []),
+  };
+};
+
+/**
  * Operation filter for querying operations
  */
 export interface OperationFilter {
