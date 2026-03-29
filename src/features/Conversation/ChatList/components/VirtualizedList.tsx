@@ -136,6 +136,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     dataSourceLength: dataSource.length,
     isSecondLastMessageFromUser,
     scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
+    spacerActive,
   });
 
   // Scroll to bottom on initial render

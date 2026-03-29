@@ -13,28 +13,32 @@ describe('useScrollToUserMessage', () => {
   });
 
   describe('when user sends a new message', () => {
-    it('should retry scrolling to user message when 2 new messages are added (user + assistant pair)', () => {
+    it('should retry scrolling to user message when 2 new messages are added and spacer is active', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 2,
             isSecondLastMessageFromUser: false,
+            spacerActive: false,
           },
         },
       );
 
       // User sends a new message (2 messages added: user + assistant, second-to-last is user)
+      // spacerActive is already true (e.g. from previous message)
       rerender({
         dataSourceLength: 4,
         isSecondLastMessageFromUser: true,
+        spacerActive: true,
       });
 
       act(() => {
@@ -47,20 +51,72 @@ describe('useScrollToUserMessage', () => {
       expect(scrollToIndex).toHaveBeenNthCalledWith(3, 2, { align: 'start', smooth: true });
     });
 
-    it('should scroll to correct index when multiple user messages are sent', () => {
+    it('should defer scroll until spacer becomes active', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
+          }),
+        {
+          initialProps: {
+            dataSourceLength: 2,
+            isSecondLastMessageFromUser: false,
+            spacerActive: false,
+          },
+        },
+      );
+
+      // User sends a new message but spacer is not yet active
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: false,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // Should NOT scroll yet - spacer not mounted
+      expect(scrollToIndex).not.toHaveBeenCalled();
+
+      // Spacer becomes active
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // Now it should scroll
+      expect(scrollToIndex).toHaveBeenCalledTimes(3);
+      expect(scrollToIndex).toHaveBeenNthCalledWith(1, 2, { align: 'start', smooth: true });
+    });
+
+    it('should scroll to correct index when multiple user messages are sent', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
+          useScrollToUserMessage({
+            dataSourceLength,
+            isSecondLastMessageFromUser,
+            scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 4,
             isSecondLastMessageFromUser: false,
+            spacerActive: false,
           },
         },
       );
@@ -69,6 +125,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 6,
         isSecondLastMessageFromUser: true,
+        spacerActive: true,
       });
 
       act(() => {
@@ -84,16 +141,18 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 4,
             isSecondLastMessageFromUser: true,
+            spacerActive: false,
           },
         },
       );
@@ -102,6 +161,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 5,
         isSecondLastMessageFromUser: false,
+        spacerActive: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -111,16 +171,18 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 4,
             isSecondLastMessageFromUser: true,
+            spacerActive: false,
           },
         },
       );
@@ -129,6 +191,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 5,
         isSecondLastMessageFromUser: false,
+        spacerActive: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -137,6 +200,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 6,
         isSecondLastMessageFromUser: false,
+        spacerActive: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -146,16 +210,18 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 4,
             isSecondLastMessageFromUser: false,
+            spacerActive: false,
           },
         },
       );
@@ -164,6 +230,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 6,
         isSecondLastMessageFromUser: false,
+        spacerActive: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -175,16 +242,18 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 6,
             isSecondLastMessageFromUser: true,
+            spacerActive: false,
           },
         },
       );
@@ -193,6 +262,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 4,
         isSecondLastMessageFromUser: true,
+        spacerActive: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -202,16 +272,18 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 4,
             isSecondLastMessageFromUser: true,
+            spacerActive: false,
           },
         },
       );
@@ -220,6 +292,7 @@ describe('useScrollToUserMessage', () => {
       rerender({
         dataSourceLength: 4,
         isSecondLastMessageFromUser: true,
+        spacerActive: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -227,16 +300,18 @@ describe('useScrollToUserMessage', () => {
 
     it('should handle null scrollToIndex gracefully', () => {
       const { rerender } = renderHook(
-        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
           useScrollToUserMessage({
             dataSourceLength,
             isSecondLastMessageFromUser,
             scrollToIndex: null,
+            spacerActive,
           }),
         {
           initialProps: {
             dataSourceLength: 2,
             isSecondLastMessageFromUser: false,
+            spacerActive: false,
           },
         },
       );
@@ -246,6 +321,7 @@ describe('useScrollToUserMessage', () => {
         rerender({
           dataSourceLength: 4,
           isSecondLastMessageFromUser: true,
+          spacerActive: true,
         });
       }).not.toThrow();
     });
@@ -258,6 +334,7 @@ describe('useScrollToUserMessage', () => {
           dataSourceLength: 6,
           isSecondLastMessageFromUser: true,
           scrollToIndex,
+          spacerActive: true,
         }),
       );
 
