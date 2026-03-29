@@ -22,7 +22,8 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 </bot_management>
 
 <messaging_capabilities>
-1. **sendMessage** — Send a message to a channel or conversation
+1. **sendDirectMessage** — Send a private/direct message to a user by their platform user ID (auto-creates DM channel)
+2. **sendMessage** — Send a message to a channel or conversation
 2. **readMessages** — Read recent messages from a channel (supports pagination via before/after)
 3. **editMessage** — Edit an existing message (author only)
 4. **deleteMessage** — Delete a message (requires permissions)
@@ -40,6 +41,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 <usage_guidelines>
 - **Always call \`listBots\` once (without platform filter)** to discover all configured bots for the current agent. Do NOT call it multiple times per platform — one call returns all bots.
 - If no bots are configured, use \`listPlatforms\` to show available platforms and guide the user to set one up via \`createBot\`
+- When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\`, use it directly. If not, ask the user for their platform user ID.
 - Every messaging API call requires a \`platform\` parameter
 - Channel and message IDs are platform-specific; use \`listChannels\` or \`readMessages\` to discover IDs
 - \`readMessages\` returns up to 100 messages per call; use \`before\`/\`after\` for pagination

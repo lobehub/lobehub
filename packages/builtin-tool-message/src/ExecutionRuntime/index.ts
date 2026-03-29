@@ -45,6 +45,8 @@ import type {
   ReplyToThreadState,
   SearchMessagesParams,
   SearchMessagesState,
+  SendDirectMessageParams,
+  SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
   ToggleBotParams,
@@ -101,6 +103,8 @@ export type {
   ReplyToThreadState,
   SearchMessagesParams,
   SearchMessagesState,
+  SendDirectMessageParams,
+  SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
   ToggleBotParams,
@@ -133,6 +137,7 @@ export interface MessageRuntimeService {
   readMessages: (params: ReadMessagesParams) => Promise<ReadMessagesState>;
   replyToThread: (params: ReplyToThreadParams) => Promise<ReplyToThreadState>;
   searchMessages: (params: SearchMessagesParams) => Promise<SearchMessagesState>;
+  sendDirectMessage?: (params: SendDirectMessageParams) => Promise<SendDirectMessageState>;
   sendMessage: (params: SendMessageParams) => Promise<SendMessageState>;
   unpinMessage: (params: UnpinMessageParams) => Promise<UnpinMessageState>;
 }
@@ -480,6 +485,30 @@ export class MessageExecutionRuntime {
     }
   }
 
+  // ==================== Direct Messaging ====================
+
+  async sendDirectMessage(params: SendDirectMessageParams): Promise<BuiltinServerRuntimeOutput> {
+    if (!this.service.sendDirectMessage) {
+      return {
+        content: `sendDirectMessage is not supported on ${params.platform}`,
+        success: false,
+      };
+    }
+    try {
+      const result = await this.service.sendDirectMessage(params);
+      return {
+        content: `Direct message sent to user ${params.userId} on ${params.platform} (messageId: ${result.messageId})`,
+        state: result,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `sendDirectMessage error: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
   // ==================== Bot Management ====================
 
   async listPlatforms(_params: ListPlatformsParams): Promise<BuiltinServerRuntimeOutput> {
@@ -519,10 +548,18 @@ export class MessageExecutionRuntime {
     try {
       const bots = await this.botProvider.listBots();
       const formatted = bots
-        .map(
-          (b) =>
-            `- ${b.platform} (appId: ${b.applicationId}, botId: ${b.id}, enabled: ${b.enabled}, status: ${b.runtimeStatus ?? 'unknown'})`,
-        )
+        .map((b) => {
+          const parts = [
+            `platform: ${b.platform}`,
+            `botId: ${b.id}`,
+            `enabled: ${b.enabled}`,
+            `status: ${b.runtimeStatus ?? 'unknown'}`,
+          ];
+          if (b.userId) {
+            parts.push(`ownerUserId: ${b.userId}`);
+          }
+          return `- ${b.platform} (${parts.join(', ')})`;
+        })
         .join('\n');
 
       return {

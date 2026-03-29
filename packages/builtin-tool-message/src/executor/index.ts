@@ -24,6 +24,7 @@ import type {
   ReadMessagesParams,
   ReplyToThreadParams,
   SearchMessagesParams,
+  SendDirectMessageParams,
   SendMessageParams,
   ToggleBotParams,
   UnpinMessageParams,
@@ -173,6 +174,15 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.createPoll(params);
+  };
+
+  // ==================== Direct Messaging ====================
+
+  sendDirectMessage = async (
+    params: SendDirectMessageParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.sendDirectMessage(params);
   };
 
   // ==================== Bot Management ====================

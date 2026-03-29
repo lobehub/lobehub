@@ -51,10 +51,18 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
       }
 
       const bots = await agentBotProviderService.getByAgentId(agentId);
-      const items = (bots as any[]).map(
-        (b: any) =>
-          `- ${b.platform} (appId: ${b.applicationId}, botId: ${b.id}, enabled: ${b.enabled}, status: ${b.runtimeStatus ?? 'unknown'})`,
-      );
+      const items = (bots as any[]).map((b: any) => {
+        const parts = [
+          `platform: ${b.platform}`,
+          `botId: ${b.id}`,
+          `enabled: ${b.enabled}`,
+          `status: ${b.runtimeStatus ?? 'unknown'}`,
+        ];
+        if (b.settings?.userId) {
+          parts.push(`ownerUserId: ${b.settings.userId}`);
+        }
+        return `- ${b.platform} (${parts.join(', ')})`;
+      });
 
       return {
         content:
@@ -181,6 +189,12 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     } catch (e) {
       return { content: `connectBot error: ${(e as Error).message}`, success: false };
     }
+  };
+
+  // ==================== Direct Messaging ====================
+
+  sendDirectMessage = async (params: any, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
+    return this._callBotMessage('sendDirectMessage', params);
   };
 
   // ==================== Message Operations ====================

@@ -93,6 +93,8 @@
   "channel.testFailed": "连接测试失败",
   "channel.testSuccess": "连接测试通过",
   "channel.updateFailed": "更新状态失败",
+  "channel.userId": "你的平台用户 ID",
+  "channel.userIdHint": "你在该平台上的用户 ID，AI 可以用它向你发送私信。",
   "channel.validationError": "请填写应用 ID 和 Token",
   "channel.verificationToken": "Verification Token",
   "channel.verificationTokenHint": "可选。用于验证事件推送来源。",

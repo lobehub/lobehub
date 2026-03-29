@@ -124,5 +124,8 @@ export default {
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
+  'channel.userId': 'Your Platform User ID',
+  'channel.userIdHint':
+    'Your user ID on this platform. The AI can use it to send you direct messages.',
   'channel.runtimeDisconnected': 'Bot disconnected',
 } as const;

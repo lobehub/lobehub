@@ -99,6 +99,31 @@ const resolveBot = async (
 // ── Router ───────────────────────────────────────────────
 
 export const botMessageRouter = router({
+  // ==================== Direct Messaging ====================
+
+  sendDirectMessage: botMessageProcedure
+    .input(
+      z.object({
+        botId: z.string(),
+        content: z.string(),
+        userId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      if (!service.sendDirectMessage) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `sendDirectMessage is not supported on ${platform}`,
+        });
+      }
+      return service.sendDirectMessage({
+        content: input.content,
+        platform,
+        userId: input.userId,
+      });
+    }),
+
   // ==================== Core Message Operations ====================
 
   sendMessage: botMessageProcedure

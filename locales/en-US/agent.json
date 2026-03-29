@@ -93,6 +93,8 @@
   "channel.testFailed": "Connection test failed",
   "channel.testSuccess": "Connection test passed",
   "channel.updateFailed": "Failed to update status",
+  "channel.userId": "Your Platform User ID",
+  "channel.userIdHint": "Your user ID on this platform. The AI can use it to send you direct messages.",
   "channel.validationError": "Please fill in Application ID and Token",
   "channel.verificationToken": "Verification Token",
   "channel.verificationTokenHint": "Optional. Used to verify webhook event source.",

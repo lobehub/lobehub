@@ -7,6 +7,33 @@ const platformEnum = ['discord', 'telegram', 'slack', 'feishu', 'lark', 'qq', 'w
 
 export const MessageManifest: BuiltinToolManifest = {
   api: [
+    // ==================== Direct Messaging ====================
+    {
+      description:
+        'Send a direct/private message to a user by their platform user ID. Creates a DM channel automatically. Use this when the user asks to "DM me" or "send me a private message".',
+      name: MessageApiName.sendDirectMessage,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          content: {
+            description: 'Message content',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          userId: {
+            description: 'Target user ID on the platform (e.g. Discord user ID)',
+            type: 'string',
+          },
+        },
+        required: ['platform', 'userId', 'content'],
+        type: 'object',
+      },
+    },
+
     // ==================== Core Message Operations ====================
     {
       description: 'Send a message to a specific channel or conversation on the target platform.',

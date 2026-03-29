@@ -46,6 +46,9 @@ export const MessageApiName = {
   // Platform-specific
   createPoll: 'createPoll',
 
+  // Direct messaging
+  sendDirectMessage: 'sendDirectMessage',
+
   // Bot management
   connectBot: 'connectBot',
   createBot: 'createBot',
@@ -69,6 +72,23 @@ export interface MessageTarget {
 }
 
 // ==================== Parameter Types ====================
+
+// --- Direct Messaging ---
+
+export interface SendDirectMessageParams {
+  /** Message content */
+  content: string;
+  /** Platform */
+  platform: MessagePlatformType;
+  /** Target user ID on the platform */
+  userId: string;
+}
+
+export interface SendDirectMessageState {
+  channelId?: string;
+  messageId?: string;
+  platform?: string;
+}
 
 // --- Core Message Operations ---
 
@@ -380,6 +400,8 @@ export interface ConfiguredBotInfo {
   id: string;
   platform: string;
   runtimeStatus?: string;
+  /** Owner's user ID on the platform (for sending DMs) */
+  userId?: string;
 }
 
 export interface ListBotsState {

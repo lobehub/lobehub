@@ -1,4 +1,4 @@
-import { DEFAULT_DEBOUNCE_MS, MAX_DEBOUNCE_MS } from '../const';
+import { DEFAULT_DEBOUNCE_MS, MAX_DEBOUNCE_MS, userIdField } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -69,6 +69,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      userIdField,
       // TODO: DM schema - not implemented yet
       // {
       //   key: 'dm',

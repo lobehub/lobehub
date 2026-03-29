@@ -55,6 +55,17 @@ const toMessageItem = (msg: any): MessageItem => ({
 export class DiscordMessageService implements MessageRuntimeService {
   constructor(private api: DiscordApi) {}
 
+  // ==================== Direct Messaging ====================
+
+  sendDirectMessage = async (params: {
+    content: string;
+    userId: string;
+  }): Promise<{ channelId?: string; messageId?: string; platform?: string }> => {
+    const dmChannel = await this.api.createDMChannel(params.userId);
+    const result = await this.api.createMessage(dmChannel.id, params.content);
+    return { channelId: dmChannel.id, messageId: result.id, platform: 'discord' };
+  };
+
   // ==================== Core Message Operations ====================
 
   sendMessage = async (params: SendMessageParams): Promise<SendMessageState> => {

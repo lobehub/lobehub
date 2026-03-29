@@ -25,6 +25,16 @@ export class DiscordApi {
     this.rest = new REST({ version: '10' }).setToken(botToken);
   }
 
+  // ==================== DM ====================
+
+  async createDMChannel(recipientId: string): Promise<{ id: string }> {
+    log('createDMChannel: recipientId=%s', recipientId);
+    const data = (await this.rest.post(Routes.userChannels(), {
+      body: { recipient_id: recipientId },
+    })) as { id: string };
+    return { id: data.id };
+  }
+
   // ==================== Existing Methods ====================
 
   async editMessage(channelId: string, messageId: string, content: string): Promise<void> {
