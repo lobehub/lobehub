@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { agentRuntimeClient } from '@/services/agentRuntime';
+import { agentRuntimeClient, agentRuntimeService } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
 
 // Keep zustand mock as it's needed globally
@@ -29,6 +29,9 @@ vi.mock('@/services/agentRuntime', () => ({
   agentRuntimeClient: {
     createStreamConnection: vi.fn(),
   },
+  agentRuntimeService: {
+    getOperationStatus: vi.fn(),
+  },
   StreamEvent: {},
 }));
 
@@ -45,6 +48,14 @@ const TEST_IDS = {
 const TEST_CONTENT = {
   GROUP_MESSAGE: 'Hello group!',
   EMPTY: '',
+} as const;
+
+const COMPLETED_OPERATION_STATUS = {
+  currentState: { status: 'done' },
+  hasError: false,
+  isActive: false,
+  isCompleted: true,
+  needsHumanInput: false,
 } as const;
 
 // Helper to reset test environment
@@ -107,6 +118,9 @@ const createMockExecGroupAgentResponse = (overrides: any = {}) => ({
 describe('agentGroup actions', () => {
   beforeEach(() => {
     resetTestEnvironment();
+    vi.mocked(agentRuntimeService.getOperationStatus).mockResolvedValue(
+      COMPLETED_OPERATION_STATUS as any,
+    );
 
     // Setup default mocks for store methods
     act(() => {
@@ -118,6 +132,7 @@ describe('agentGroup actions', () => {
         internal_cleanupAgentOperation: vi.fn(),
         internal_handleAgentError: vi.fn(),
         internal_updateTopics: vi.fn(),
+        refreshMessages: vi.fn(),
         replaceMessages: vi.fn(),
         startOperation: vi
           .fn()
@@ -415,6 +430,48 @@ describe('agentGroup actions', () => {
         );
       });
 
+      it('should not reconcile or complete operations after client-side stream cancellation', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        vi.mocked(lambdaClient.aiAgent.execGroupAgent.mutate).mockResolvedValue(
+          createMockExecGroupAgentResponse(),
+        );
+
+        const abort = vi.fn();
+        let onDisconnectCallback: (() => void) | undefined;
+
+        vi.mocked(agentRuntimeClient.createStreamConnection).mockImplementation(
+          (_operationId, options) => {
+            onDisconnectCallback = options?.onDisconnect;
+            return { abort } as any;
+          },
+        );
+
+        await act(async () => {
+          await result.current.sendGroupMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.GROUP_MESSAGE,
+          });
+        });
+
+        const cancelHandler = vi.mocked(result.current.onOperationCancel).mock.calls[0]?.[1];
+
+        await act(async () => {
+          await cancelHandler?.({
+            metadata: {},
+            operationId: TEST_IDS.OPERATION_ID,
+            reason: 'User cancelled',
+            type: 'groupAgentStream',
+          });
+          onDisconnectCallback?.();
+        });
+
+        expect(abort).toHaveBeenCalledTimes(1);
+        expect(agentRuntimeService.getOperationStatus).not.toHaveBeenCalled();
+        expect(result.current.refreshMessages).not.toHaveBeenCalled();
+        expect(result.current.completeOperation).not.toHaveBeenCalled();
+      });
+
       it('should associate assistant message with both execServerAgentRuntime and groupAgentStream operations', async () => {
         const { result } = renderHook(() => useChatStore());
 
@@ -446,7 +503,7 @@ describe('agentGroup actions', () => {
         expect(result.current.associateMessageWithOperation).toHaveBeenCalledTimes(2);
       });
 
-      it('should create stream connection with operationId', async () => {
+      it('should create stream connection with history replay enabled', async () => {
         const { result } = renderHook(() => useChatStore());
 
         vi.mocked(lambdaClient.aiAgent.execGroupAgent.mutate).mockResolvedValue(
@@ -464,7 +521,8 @@ describe('agentGroup actions', () => {
         expect(agentRuntimeClient.createStreamConnection).toHaveBeenCalledWith(
           TEST_IDS.OPERATION_ID,
           expect.objectContaining({
-            includeHistory: false,
+            includeHistory: true,
+            lastEventId: '0',
             onConnect: expect.any(Function),
             onDisconnect: expect.any(Function),
             onError: expect.any(Function),
@@ -473,7 +531,7 @@ describe('agentGroup actions', () => {
         );
       });
 
-      it('should complete operations on stream disconnect', async () => {
+      it('should reconcile backend status before completing operations on stream disconnect', async () => {
         const { result } = renderHook(() => useChatStore());
 
         vi.mocked(lambdaClient.aiAgent.execGroupAgent.mutate).mockResolvedValue(
@@ -500,9 +558,73 @@ describe('agentGroup actions', () => {
           onDisconnectCallback?.();
         });
 
+        expect(result.current.refreshMessages).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentId: TEST_IDS.AGENT_ID,
+            groupId: TEST_IDS.GROUP_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+          }),
+        );
+        expect(agentRuntimeService.getOperationStatus).toHaveBeenCalledWith(
+          TEST_IDS.OPERATION_ID,
+          true,
+        );
         // Should complete both the stream operation and the main execServerAgentRuntime operation
         expect(result.current.completeOperation).toHaveBeenCalledWith(TEST_IDS.OPERATION_ID);
         expect(result.current.completeOperation).toHaveBeenCalledWith('op-exec');
+      });
+
+      it('should reconnect with history when stream disconnects before completion', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        vi.mocked(lambdaClient.aiAgent.execGroupAgent.mutate).mockResolvedValue(
+          createMockExecGroupAgentResponse(),
+        );
+        vi.mocked(agentRuntimeService.getOperationStatus).mockResolvedValue({
+          currentState: { status: 'running' },
+          hasError: false,
+          isActive: true,
+          isCompleted: false,
+          needsHumanInput: false,
+        } as any);
+
+        let onDisconnectCallback: (() => void) | undefined;
+        let onEventCallback: ((event: any) => Promise<void>) | undefined;
+
+        vi.mocked(agentRuntimeClient.createStreamConnection).mockImplementation(
+          (_operationId, options) => {
+            onDisconnectCallback = options?.onDisconnect;
+            onEventCallback = options?.onEvent;
+            return {} as any;
+          },
+        );
+
+        await act(async () => {
+          await result.current.sendGroupMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.GROUP_MESSAGE,
+          });
+        });
+
+        await act(async () => {
+          await onEventCallback?.({
+            data: {},
+            operationId: TEST_IDS.OPERATION_ID,
+            stepIndex: 0,
+            timestamp: 123456,
+            type: 'stream_chunk',
+          });
+          onDisconnectCallback?.();
+        });
+
+        expect(agentRuntimeClient.createStreamConnection).toHaveBeenNthCalledWith(
+          2,
+          TEST_IDS.OPERATION_ID,
+          expect.objectContaining({
+            includeHistory: true,
+            lastEventId: '123456',
+          }),
+        );
       });
 
       it('should update topics when new topic is created', async () => {

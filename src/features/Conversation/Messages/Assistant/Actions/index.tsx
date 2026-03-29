@@ -102,7 +102,7 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
       onOpenShareModal: handleOpenShareModal,
     });
 
-    const hasTools = !!tools;
+    const hasTools = !!tools?.length;
 
     // Get collapse/expand action based on current state
     const collapseAction = isCollapsed ? defaultActions.expand : defaultActions.collapse;

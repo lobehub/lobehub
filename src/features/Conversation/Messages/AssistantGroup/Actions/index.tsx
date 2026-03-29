@@ -103,7 +103,7 @@ const WithContentId = memo<GroupActionsProps>(({ actionsConfig, id, data, conten
     onOpenShareModal: handleOpenShareModal,
   });
 
-  const hasTools = !!tools;
+  const hasTools = !!tools?.length;
 
   // Get collapse/expand action based on current state
   const collapseAction = isCollapsed ? defaultActions.expand : defaultActions.collapse;

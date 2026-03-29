@@ -29,7 +29,7 @@ const DisplayContent = memo<{
     id,
   }) => {
     const message = normalizeThinkTags(processWithArtifact(content));
-    if (isToolCallGenerating) return;
+    if (isToolCallGenerating) return <ContentLoading id={id} />;
 
     if ((!content && !hasImages) || content === LOADING_FLAT) return <ContentLoading id={id} />;
 

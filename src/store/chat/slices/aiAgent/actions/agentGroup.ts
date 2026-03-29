@@ -6,7 +6,7 @@ import debug from 'debug';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { type StreamEvent } from '@/services/agentRuntime';
-import { agentRuntimeClient } from '@/services/agentRuntime';
+import { agentRuntimeClient, agentRuntimeService } from '@/services/agentRuntime';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -14,6 +14,7 @@ import { setNamespace } from '@/utils/storeDebug';
 const log = debug('store:chat:ai-agent:agentGroup');
 
 const n = setNamespace('aiAgentGroup');
+const MAX_STREAM_RECONNECT_ATTEMPTS = 1;
 
 type Setter = StoreSetter<ChatStore>;
 export const agentGroupSlice = (set: Setter, get: () => ChatStore, _api?: unknown) =>
@@ -163,7 +164,110 @@ export class ChatGroupChatActionImpl {
         assistantId: result.assistantMessageId,
         content: '',
         reasoning: '',
+        receivedTerminalEvent: false,
         tmpAssistantId: tempAssistantId, // Used for cleanup if needed
+      };
+
+      let lastEventId = '0';
+      let reconnectAttempts = 0;
+      let currentStreamConnection: AbortController | undefined;
+      let reconnectInFlight = false;
+      let streamClosedByClient = false;
+
+      const completeStreamOperations = () => {
+        this.#get().completeOperation(result.operationId);
+        this.#get().completeOperation(execOperationId);
+      };
+
+      const failStreamOperations = (message: string) => {
+        this.#get().failOperation(result.operationId, {
+          message,
+          type: 'AgentStreamDisconnected',
+        });
+        this.#get().failOperation(execOperationId, {
+          message,
+          type: 'AgentStreamDisconnected',
+        });
+      };
+
+      const reconcileUnexpectedStreamClose = async (error?: Error) => {
+        if (reconnectInFlight) return;
+        reconnectInFlight = true;
+
+        try {
+          if (streamClosedByClient) return;
+
+          if (streamContext.receivedTerminalEvent) {
+            completeStreamOperations();
+            return;
+          }
+
+          const status = await agentRuntimeService.getOperationStatus(result.operationId, true);
+          await this.#get().refreshMessages(execContext);
+
+          if (!status) {
+            failStreamOperations(error?.message || 'Agent stream state is no longer available');
+            return;
+          }
+
+          if (status?.hasError) {
+            const errorMessage =
+              status.currentState?.error?.message || error?.message || 'Agent runtime failed';
+            failStreamOperations(errorMessage);
+            return;
+          }
+
+          if (status.needsHumanInput || status.isCompleted || !status.isActive) {
+            completeStreamOperations();
+            return;
+          }
+
+          if (reconnectAttempts < MAX_STREAM_RECONNECT_ATTEMPTS) {
+            reconnectAttempts += 1;
+            log(
+              'Stream closed before completion for %s, reconnecting with history from %s (attempt %d)',
+              result.operationId,
+              lastEventId,
+              reconnectAttempts,
+            );
+            connectStream();
+            return;
+          }
+
+          failStreamOperations(error?.message || 'Agent stream disconnected before completion');
+        } catch (streamError) {
+          console.error('Failed to reconcile group agent stream state:', streamError);
+          failStreamOperations(error?.message || 'Agent stream disconnected before completion');
+        } finally {
+          reconnectInFlight = false;
+        }
+      };
+
+      const connectStream = () => {
+        currentStreamConnection = agentRuntimeClient.createStreamConnection(result.operationId, {
+          includeHistory: true,
+          lastEventId,
+          onConnect: () => {
+            log('Stream connected to %s from %s', result.operationId, lastEventId);
+          },
+          onDisconnect: () => {
+            log('Stream disconnected from %s', result.operationId);
+            void reconcileUnexpectedStreamClose();
+          },
+          onError: (error: Error) => {
+            log('Stream error for %s: %O', result.operationId, error);
+            void reconcileUnexpectedStreamClose(error);
+          },
+          onEvent: async (event: StreamEvent) => {
+            lastEventId = event.timestamp.toString();
+
+            if (event.type === 'agent_runtime_end' || event.type === 'stream_end') {
+              streamContext.receivedTerminalEvent = true;
+            }
+
+            await internal_handleAgentStreamEvent(result.operationId, event, streamContext);
+          },
+        });
       };
 
       // 9. Start child operation for SSE stream using backend operationId
@@ -181,39 +285,15 @@ export class ChatGroupChatActionImpl {
       this.#get().associateMessageWithOperation(result.assistantMessageId, execOperationId);
       this.#get().associateMessageWithOperation(result.assistantMessageId, result.operationId);
 
-      // 10. Connect to SSE stream
-      // Server will automatically close the connection after sending agent_runtime_end event
-      const eventSource = agentRuntimeClient.createStreamConnection(result.operationId, {
-        includeHistory: false,
-        onConnect: () => {
-          log('Stream connected to %s', result.operationId);
-        },
-        onDisconnect: () => {
-          log('Stream disconnected from %s', result.operationId);
-          // Complete both operations when stream disconnects (either by server close or client abort)
-          this.#get().completeOperation(result.operationId);
-          this.#get().completeOperation(execOperationId);
-        },
-        onError: (error: Error) => {
-          log('Stream error for %s: %O', result.operationId, error);
-          // Fail the stream operation on error
-          this.#get().failOperation(result.operationId, {
-            message: error.message,
-            type: 'AgentStreamError',
-          });
-          if (streamContext.assistantId) {
-            this.#get().internal_handleAgentError(streamContext.assistantId, error.message);
-          }
-        },
-        onEvent: async (event: StreamEvent) => {
-          await internal_handleAgentStreamEvent(result.operationId, event, streamContext);
-        },
-      });
+      // 10. Connect to SSE stream.
+      // Enable history replay so fast operations don't outrun the client connection.
+      connectStream();
 
       // 11. Register cancel handler for aborting SSE stream
       this.#get().onOperationCancel(result.operationId, () => {
         log('Cancelling SSE stream for operation %s', result.operationId);
-        eventSource.abort();
+        streamClosedByClient = true;
+        currentStreamConnection?.abort();
       });
     } catch (error) {
       // Check if this is an abort error (user cancelled the operation)

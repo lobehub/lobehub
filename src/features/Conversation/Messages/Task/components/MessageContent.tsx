@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { useMarkdown } from '../../Assistant/useMarkdown';
 import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessage';
+import { Tools } from '../../AssistantGroup/Tools';
 import DisplayContent from '../../components/DisplayContent';
 import FileChunks from '../../components/FileChunks';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
@@ -21,7 +22,9 @@ const MessageContent = memo<UIChatMessage>(
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
     const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
 
-    const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && !!tools;
+    const messageTools = tools ?? [];
+    const hasTools = messageTools.length > 0;
+    const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && hasTools;
 
     // TODO: Need to implement isIntentUnderstanding selector in ConversationStore if needed
     const isIntentUnderstanding = false;
@@ -65,6 +68,7 @@ const MessageContent = memo<UIChatMessage>(
           />
         )}
         {showImageItems && <ImageFileListViewer items={imageList} />}
+        {hasTools && <Tools messageId={id} tools={messageTools} />}
       </Flexbox>
     );
   },
