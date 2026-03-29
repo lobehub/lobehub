@@ -20,8 +20,9 @@ interface UseScrollToUserMessageOptions {
     | null;
   /**
    * Whether the conversation spacer is mounted and providing fill height.
-   * Scroll is deferred until the spacer is active so there is enough
-   * scrollable height to pin the user message to the top.
+   * When the spacer mounts after the initial scroll, a follow-up scroll is
+   * fired so the user message lands at the correct position once the extra
+   * height is available.
    */
   spacerActive: boolean;
 }
@@ -31,8 +32,9 @@ interface UseScrollToUserMessageOptions {
  * Only triggers scroll when user sends a new message (detected by checking if
  * 2 new messages were added and the second-to-last is from user).
  *
- * Scroll is deferred until the conversation spacer is mounted so the extra
- * fill height is available in the scroll container.
+ * Scrolls immediately on message send (works when content already fills the
+ * viewport). If a conversation spacer mounts afterwards (adding fill height),
+ * a follow-up scroll is fired so the user message lands correctly.
  *
  * This ensures that in group chat scenarios, when multiple agents are responding,
  * the view doesn't jump around as each agent starts speaking.
@@ -79,7 +81,7 @@ export function useScrollToUserMessage({
     return clearPendingPins;
   }, [clearPendingPins]);
 
-  // Detect when user sends a new message and mark pending scroll
+  // Detect when user sends a new message and scroll immediately
   useEffect(() => {
     const newMessageCount = dataSourceLength - prevLengthRef.current;
     prevLengthRef.current = dataSourceLength;
@@ -88,17 +90,14 @@ export function useScrollToUserMessage({
     if (newMessageCount === 2 && isSecondLastMessageFromUser && scrollToIndex) {
       const userMessageIndex = dataSourceLength - 2;
 
-      if (spacerActive) {
-        // Spacer already mounted (e.g. from previous message) – scroll immediately
-        executeScroll(userMessageIndex);
-      } else {
-        // Defer scroll until spacer mounts and provides enough height
-        pendingScrollIndexRef.current = userMessageIndex;
-      }
+      // Always scroll immediately – works when content already fills the viewport.
+      // Also store the index so a follow-up scroll can fire once the spacer mounts.
+      pendingScrollIndexRef.current = userMessageIndex;
+      executeScroll(userMessageIndex);
     }
-  }, [dataSourceLength, isSecondLastMessageFromUser, scrollToIndex, spacerActive, executeScroll]);
+  }, [dataSourceLength, isSecondLastMessageFromUser, scrollToIndex, executeScroll]);
 
-  // Execute deferred scroll once spacer becomes active
+  // Re-scroll when spacer mounts (provides the extra fill height)
   useEffect(() => {
     if (spacerActive && pendingScrollIndexRef.current !== null) {
       const index = pendingScrollIndexRef.current;

@@ -51,7 +51,7 @@ describe('useScrollToUserMessage', () => {
       expect(scrollToIndex).toHaveBeenNthCalledWith(3, 2, { align: 'start', smooth: true });
     });
 
-    it('should defer scroll until spacer becomes active', () => {
+    it('should scroll immediately and re-scroll when spacer becomes active', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
@@ -71,7 +71,7 @@ describe('useScrollToUserMessage', () => {
         },
       );
 
-      // User sends a new message but spacer is not yet active
+      // User sends a new message, spacer not yet active
       rerender({
         dataSourceLength: 4,
         isSecondLastMessageFromUser: true,
@@ -82,10 +82,13 @@ describe('useScrollToUserMessage', () => {
         vi.runAllTimers();
       });
 
-      // Should NOT scroll yet - spacer not mounted
-      expect(scrollToIndex).not.toHaveBeenCalled();
+      // Should scroll immediately even without spacer (content may fill viewport)
+      expect(scrollToIndex).toHaveBeenCalledTimes(3);
+      expect(scrollToIndex).toHaveBeenNthCalledWith(1, 2, { align: 'start', smooth: true });
 
-      // Spacer becomes active
+      scrollToIndex.mockClear();
+
+      // Spacer becomes active – should re-scroll with correct fill height
       rerender({
         dataSourceLength: 4,
         isSecondLastMessageFromUser: true,
@@ -96,7 +99,43 @@ describe('useScrollToUserMessage', () => {
         vi.runAllTimers();
       });
 
-      // Now it should scroll
+      // Follow-up scroll after spacer mounted
+      expect(scrollToIndex).toHaveBeenCalledTimes(3);
+      expect(scrollToIndex).toHaveBeenNthCalledWith(1, 2, { align: 'start', smooth: true });
+    });
+
+    it('should scroll without spacer when spacer never mounts (content fills viewport)', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ dataSourceLength, isSecondLastMessageFromUser, spacerActive }) =>
+          useScrollToUserMessage({
+            dataSourceLength,
+            isSecondLastMessageFromUser,
+            scrollToIndex,
+            spacerActive,
+          }),
+        {
+          initialProps: {
+            dataSourceLength: 2,
+            isSecondLastMessageFromUser: false,
+            spacerActive: false,
+          },
+        },
+      );
+
+      // User sends a new message, spacer will never mount (height = 0)
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: false,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // Should still scroll – no spacer needed when content fills viewport
       expect(scrollToIndex).toHaveBeenCalledTimes(3);
       expect(scrollToIndex).toHaveBeenNthCalledWith(1, 2, { align: 'start', smooth: true });
     });
