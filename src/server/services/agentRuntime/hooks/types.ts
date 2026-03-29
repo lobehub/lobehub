@@ -82,11 +82,9 @@ export interface AgentHookEvent {
   retryDelayExpression?: string;
   // Step-specific (for beforeStep/afterStep)
   shouldContinue?: boolean;
-
   status?: string; // 'done' | 'error' | 'interrupted' | 'waiting_for_human'
   stepIndex?: number;
   steps?: number;
-
   stepType?: string; // 'call_llm' | 'call_tool'
   toolCalls?: number;
   topicId?: string;
