@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Traitement du fichier...",
   "uploadDock.body.item.restTime": "Temps restant : {{time}}",
   "uploadDock.fileQueueInfo": "Importation des {{count}} premiers fichiers, {{remaining}} en attente",
+  "uploadDock.header.cancelAll": "Tout annuler",
   "uploadDock.totalCount": "Total : {{count}} éléments",
   "uploadDock.uploadStatus.cancelled": "Téléversement annulé",
   "uploadDock.uploadStatus.error": "Erreur d’importation",

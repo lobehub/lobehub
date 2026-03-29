@@ -206,6 +206,7 @@ interface BodyProps {
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    settings?: Record<string, unknown> | null;
   };
   form: FormInstance<ChannelFormValues>;
   hasConfig?: boolean;

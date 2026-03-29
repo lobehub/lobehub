@@ -69,6 +69,9 @@ vi.mock('../AgentBridgeService', () => ({
 const mockCreateAdapter = vi.hoisted(() =>
   vi.fn().mockReturnValue({ testplatform: { type: 'mock-adapter' } }),
 );
+const mockMergeWithDefaults = vi.hoisted(() =>
+  vi.fn((_: unknown, settings?: Record<string, unknown>) => settings ?? {}),
+);
 
 const mockGetPlatform = vi.hoisted(() =>
   vi.fn().mockImplementation((platform: string) => {
@@ -100,6 +103,7 @@ const mockGetPlatform = vi.hoisted(() =>
 
 vi.mock('../platforms', () => ({
   buildRuntimeKey: (platform: string, appId: string) => `${platform}:${appId}`,
+  mergeWithDefaults: mockMergeWithDefaults,
   platformRegistry: {
     getPlatform: mockGetPlatform,
   },

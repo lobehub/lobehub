@@ -10,6 +10,7 @@ export interface ResourceItem {
     error?: Error;
     isPending: boolean;
     lastSyncAttempt?: Date;
+    queryKey?: string;
     retryCount: number;
   };
 
@@ -52,23 +53,6 @@ export interface ResourceItem {
 
   // File-specific (optional)
   url?: string;
-}
-
-/**
- * Sync operation queued for background processing
- */
-export interface SyncOperation {
-  id: string;
-  payload: any;
-  reject?: (reason?: any) => void;
-  // Promise resolver for async operations
-  resolve?: (value?: any) => void;
-  // Operation ID (sync-{resourceId}-{timestamp})
-  resourceId: string;
-  retryCount: number;
-  timestamp: Date;
-  // Resource ID (temp or real)
-  type: 'create' | 'update' | 'delete' | 'move';
 }
 
 /**

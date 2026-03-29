@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import RepoIcon from '@/components/LibIcon';
+import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
@@ -64,17 +65,11 @@ export const useFileItemDropdown = ({
     }),
     shallow,
   );
-  const [removeFilesFromKnowledgeBase, addFilesToKnowledgeBase, useFetchKnowledgeBaseList] =
-    useKnowledgeBaseStore((s) => [
-      s.removeFilesFromKnowledgeBase,
-      s.addFilesToKnowledgeBase,
-      s.useFetchKnowledgeBaseList,
-    ]);
-
-  // Fetch knowledge bases - SWR caches this across all dropdown instances
-  // Only the first call fetches from server, subsequent calls use cache
-  // The expensive menu computation is deferred until dropdown opens (menuItems is a function)
-  const { data: libraries } = useFetchKnowledgeBaseList();
+  const [removeFilesFromKnowledgeBase, addFilesToKnowledgeBase] = useKnowledgeBaseStore((s) => [
+    s.removeFilesFromKnowledgeBase,
+    s.addFilesToKnowledgeBase,
+  ]);
+  const libraries = useKnowledgeBaseListContext();
 
   const isInLibrary = !!libraryId;
   const isFolder = fileType === 'custom/folder';
@@ -94,7 +89,7 @@ export const useFileItemDropdown = ({
 
   const menuItems = useCallback(() => {
     // Filter out current knowledge base and create submenu items
-    const availableKnowledgeBases = (libraries || []).filter((kb) => kb.id !== libraryId);
+    const availableKnowledgeBases = libraries.filter((kb) => kb.id !== libraryId);
 
     // Submenu for adding files to a library (used when NOT in a library)
     const addToKnowledgeBaseSubmenu: ItemType[] = availableKnowledgeBases.map((kb) => ({
@@ -319,7 +314,7 @@ export const useFileItemDropdown = ({
                 if (libraryId) {
                   await clearTreeFolderCache(libraryId);
                 }
-                await refreshFileList();
+                await refreshFileList({ revalidateResources: false });
 
                 message.success(t('FileManager.actions.deleteSuccess'));
               },
@@ -330,7 +325,7 @@ export const useFileItemDropdown = ({
     ).filter(Boolean);
   }, [
     addFilesToKnowledgeBase,
-    clearTreeFolderCache,
+    appOrigin,
     deleteResource,
     filename,
     id,

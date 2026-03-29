@@ -30,6 +30,10 @@ const log = debug('lobe-server:bot:agent-bridge');
 
 const EXECUTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
+// PostgreSQL error code for foreign key constraint violations.
+// See: https://www.postgresql.org/docs/current/errcodes-appendix.html
+const PG_FOREIGN_KEY_VIOLATION = '23503';
+
 // Status emoji added on receive, removed on complete
 const RECEIVED_EMOJI = emoji.eyes;
 
@@ -282,8 +286,6 @@ export class AgentBridgeService {
     const queueMode = isQueueAgentRuntimeEnabled();
     let queueHandoffSucceeded = false;
 
-    const platformThreadId = botContext?.platformThreadId ?? thread.id;
-
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       // The final reply is edited into the progress message by onComplete
@@ -362,8 +364,6 @@ export class AgentBridgeService {
     );
     await thread.startTyping();
 
-    const platformThreadId = botContext?.platformThreadId ?? thread.id;
-
     try {
       // executeWithCallback handles progress message (post + edit at each step)
       await this.executeWithCallback(thread, message, {
@@ -379,12 +379,16 @@ export class AgentBridgeService {
     } catch (error) {
       // If the cached topicId references a deleted topic (FK violation),
       // clear thread state and retry as a fresh mention instead of surfacing the DB error.
+      const cause = (error as any)?.cause;
+      const isFKViolation =
+        cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
       const errMsg = error instanceof Error ? error.message : String(error);
-      if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+      if (isFKViolation) {
         log(
           'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
           topicId,
         );
+        AgentBridgeService.activeThreads.delete(thread.id);
         await thread.setState({ ...threadState, topicId: undefined });
         return this.handleMention(thread, message, opts);
       }
@@ -460,21 +464,13 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    const platformDef = platformRegistry.getPlatform(client?.id ?? '');
-    const hasTyping = platformDef?.supportsTyping !== false;
+    await thread.startTyping();
 
     let progressMessage: SentMessage | undefined;
-
-    if (hasTyping) {
-      // Platform supports typing — use typing indicator instead of an ack message.
-      await thread.startTyping();
-    } else {
-      // No typing support — send a text acknowledgment so the user knows we received the message.
-      try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-      } catch (error) {
-        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
-      }
+    try {
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+    } catch (error) {
+      log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
     }
 
     const progressMessageId: string | undefined = progressMessage?.id;
@@ -530,6 +526,15 @@ export class AgentBridgeService {
         }),
       );
     } catch (error) {
+      log('executeWithWebhooks: execAgent failed: %O', error);
+
+      // Rethrow FK violation errors (e.g. stale topic_id) so that callers like
+      // handleSubscribedMessage can detect and recover (reset thread state).
+      const cause = (error as any)?.cause;
+      if (cause?.code === PG_FOREIGN_KEY_VIOLATION) {
+        throw error;
+      }
+
       await this.finishStartupFailure({
         error,
         progressMessage,
@@ -609,21 +614,13 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    const platformDef = platformRegistry.getPlatform(client?.id ?? '');
-    const hasTyping = platformDef?.supportsTyping !== false;
+    await thread.startTyping();
 
     let progressMessage: SentMessage | undefined;
-
-    if (hasTyping) {
-      // Platform supports typing — use typing indicator instead of an ack message.
-      await thread.startTyping();
-    } else {
-      // No typing support — send a text acknowledgment so the user knows we received the message.
-      try {
-        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-      } catch (error) {
-        log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
-      }
+    try {
+      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+    } catch (error) {
+      log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
     }
 
     // Track the last LLM content and tool calls for showing during tool execution

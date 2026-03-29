@@ -92,6 +92,7 @@ export default {
   'credits.packages.filter.gift': 'Gift',
   'credits.packages.filter.manual': 'Manual',
   'credits.packages.noPackages': 'No credit packages',
+  'credits.packages.charged': 'Charged ${{amount}}',
   'credits.packages.purchaseFirst': 'Purchase your first credit package',
   'credits.packages.purchasedOn': 'Purchased on {{date}}',
   'credits.packages.sort.amountAsc': 'Amount: Low to High',

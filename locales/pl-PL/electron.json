@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Opis",
+  "gateway.descriptionPlaceholder": "Opcjonalne",
+  "gateway.deviceName": "Nazwa urządzenia",
+  "gateway.deviceNamePlaceholder": "Wprowadź nazwę urządzenia",
+  "gateway.enableConnection": "Połącz z bramą",
+  "gateway.statusConnected": "Połączono z bramą",
+  "gateway.statusConnecting": "Łączenie z bramą...",
+  "gateway.statusDisconnected": "Nie połączono z bramą",
+  "gateway.title": "Bramka urządzenia",
   "navigation.chat": "Czat",
   "navigation.discover": "Odkryj",
   "navigation.discoverAssistants": "Odkryj Asystentów",

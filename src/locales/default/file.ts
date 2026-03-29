@@ -139,6 +139,7 @@ export default {
   'title': 'Resources',
   'toggleLeftPanel': 'Show/Hide Left Panel',
   'uploadDock.body.collapse': 'Collapse',
+  'uploadDock.header.cancelAll': 'Cancel all',
   'uploadDock.body.item.cancel': 'Cancel',
   'uploadDock.body.item.cancelled': 'Cancelled',
   'uploadDock.body.item.done': 'Uploaded',

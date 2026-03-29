@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { message } from '@/components/AntdStaticMethods';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
+import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 import { FilesTabs } from '@/types/files';
@@ -46,28 +47,21 @@ const AddButton = () => {
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
   const [menuOpen, setMenuOpen] = useState(false);
+  const currentFolderId = useCurrentFolderId();
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
 
-  const [
-    libraryId,
-    category,
-    currentFolderId,
-    setCategory,
-    setCurrentViewItemId,
-    setMode,
-    setPendingRenameItemId,
-  ] = useResourceManagerStore((s) => [
-    s.libraryId,
-    s.category,
-    s.currentFolderId,
-    s.setCategory,
-    s.setCurrentViewItemId,
-    s.setMode,
-    s.setPendingRenameItemId,
-  ]);
+  const [libraryId, category, setCategory, setCurrentViewItemId, setMode, setPendingRenameItemId] =
+    useResourceManagerStore((s) => [
+      s.libraryId,
+      s.category,
+      s.setCategory,
+      s.setCurrentViewItemId,
+      s.setMode,
+      s.setPendingRenameItemId,
+    ]);
 
   const handleOpenPageEditor = useCallback(async () => {
     // Navigate to "All" category first if not already there
@@ -167,10 +161,6 @@ const AddButton = () => {
     createDocument,
     currentFolderId,
     libraryId,
-    refetchResources: async () => {
-      const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
-      await revalidateResources();
-    },
     t,
   });
 

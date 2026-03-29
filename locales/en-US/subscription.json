@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Subscribe to a paid plan to enable auto top-up",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Target balance must be greater than threshold",
   "credits.packages.auto": "Auto",
+  "credits.packages.charged": "Charged ${{amount}}",
   "credits.packages.expired": "Expired",
   "credits.packages.expiresIn": "Expires in {{days}} days",
   "credits.packages.expiresToday": "Expires today",

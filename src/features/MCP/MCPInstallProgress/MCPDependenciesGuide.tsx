@@ -2,7 +2,7 @@ import { Button, Flexbox, Markdown, Snippet, Text } from '@lobehub/ui';
 import { Card, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AlertTriangle, CheckCircle, ExternalLink, Terminal } from 'lucide-react';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -92,13 +92,13 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
     };
 
     return (
-      <motion.div
+      <m.div
         animate={{ y: 0 }}
         className={styles.container}
         initial={{ y: 8 }}
         transition={{ delay: 0.1, duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
       >
-        <motion.div
+        <m.div
           animate={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 4 }}
           style={{ marginBottom: 8 }}
@@ -115,9 +115,9 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
               {t('mcpInstall.dependenciesDescription')}
             </Text>
           </Flexbox>
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           animate={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 4 }}
           transition={{ delay: 0.2, duration: 0.2 }}
@@ -185,9 +185,9 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
               </Card>
             ))}
           </Flexbox>
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           animate={{ opacity: 1, y: 0 }}
           className={styles.footer}
           initial={{ opacity: 0, y: 4 }}
@@ -206,8 +206,8 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
               </Button>
             </Space>
           </Flexbox>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     );
   },
 );

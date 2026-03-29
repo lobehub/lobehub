@@ -1,6 +1,6 @@
 import { Flexbox, Highlighter, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +14,7 @@ const ErrorDetails = memo<{
 
   return (
     <Flexbox gap={8}>
-      <motion.div
+      <m.div
         animate={{ height: 'auto', opacity: 1 }}
         initial={{ height: 0, opacity: 0 }}
         style={{ overflow: 'hidden' }}
@@ -77,7 +77,7 @@ const ErrorDetails = memo<{
             </div>
           )}
         </Flexbox>
-      </motion.div>
+      </m.div>
     </Flexbox>
   );
 });

@@ -1,0 +1,12 @@
+{
+  "image_generation_completed": "Изображението \"{{prompt}}\" беше успешно генерирано",
+  "image_generation_completed_title": "Изображението е генерирано",
+  "inbox.archiveAll": "Архивирай всички",
+  "inbox.empty": "Все още няма известия",
+  "inbox.emptyUnread": "Няма непрочетени известия",
+  "inbox.filterUnread": "Показвай само непрочетените",
+  "inbox.markAllRead": "Маркирай всички като прочетени",
+  "inbox.title": "Известия",
+  "video_generation_completed": "Видеото \"{{prompt}}\" беше успешно генерирано",
+  "video_generation_completed_title": "Видеото е генерирано"
+}

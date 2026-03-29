@@ -1,7 +1,7 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Input, Popover, Switch } from 'antd';
-import { createStyles, cssVar } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { HardDrive } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   fieldLabel: css`
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
@@ -28,11 +28,11 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   input: css`
     border: none;
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
 
     &:hover,
     &:focus {
-      background: ${token.colorFillSecondary};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   popoverContent: css`
@@ -49,8 +49,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const DeviceGateway = memo(() => {
   const { t } = useTranslation('electron');
-  const { styles } = useStyles();
-
   const [
     gatewayStatus,
     connectGateway,

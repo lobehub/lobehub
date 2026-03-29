@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Description",
+  "gateway.descriptionPlaceholder": "Optionnel",
+  "gateway.deviceName": "Nom de l'appareil",
+  "gateway.deviceNamePlaceholder": "Entrez le nom de l'appareil",
+  "gateway.enableConnection": "Se connecter à la passerelle",
+  "gateway.statusConnected": "Connecté à la passerelle",
+  "gateway.statusConnecting": "Connexion à la passerelle...",
+  "gateway.statusDisconnected": "Non connecté à la passerelle",
+  "gateway.title": "Passerelle de l'appareil",
   "navigation.chat": "Chat",
   "navigation.discover": "Découvrir",
   "navigation.discoverAssistants": "Découvrir les Assistants",

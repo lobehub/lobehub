@@ -6,6 +6,7 @@ import { resourceService } from '@/services/resource';
 import { type ResourceQueryParams } from '@/types/resource';
 
 import { useFileStore } from '../../store';
+import { mergeServerResourcesWithOptimistic } from './utils';
 
 const SWR_KEY_RESOURCES = 'SWR_RESOURCES';
 
@@ -39,9 +40,9 @@ export const useFetchResources = (params: ResourceQueryParams | null, enable: an
       dedupingInterval: 2000,
       onSuccess: (data: { hasMore: boolean; items: any[]; total?: number }) => {
         const { resourceList, resourceMap } = useFileStore.getState();
-
-        const newResourceMap = new Map(data.items.map((item) => [item.id, item]));
-        const newResourceList = data.items;
+        const merged = mergeServerResourcesWithOptimistic(data.items, resourceMap, params);
+        const newResourceList = merged.resourceList;
+        const newResourceMap = merged.resourceMap;
 
         // Only update store if data actually changed
         if (!isEqual(newResourceList, resourceList) || !isEqual(newResourceMap, resourceMap)) {

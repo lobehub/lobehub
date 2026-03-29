@@ -12,6 +12,7 @@ import { unzipFile } from '@/utils/unzipFile';
 import { withSWR } from '~test-utils';
 
 import { useFileStore as useStore } from '../../store';
+import * as resourceHooks from '../resource/hooks';
 
 vi.mock('zustand/traditional');
 
@@ -75,6 +76,8 @@ beforeEach(() => {
       creatingEmbeddingTaskIds: [],
       dockUploadFileList: [],
       fileList: [],
+      resourceList: [],
+      resourceMap: new Map(),
       queryListParams: undefined,
     },
     false,
@@ -86,6 +89,47 @@ afterEach(() => {
 });
 
 describe('FileManagerActions', () => {
+  describe('cancelUploads', () => {
+    it('should abort matched uploads and update their status in a batch', () => {
+      const { result } = renderHook(() => useStore());
+      const controller1 = new AbortController();
+      const controller2 = new AbortController();
+      const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            {
+              abortController: controller1,
+              file: new File([], 'test-1.txt'),
+              id: 'file-1',
+              status: 'pending',
+            },
+            {
+              abortController: controller2,
+              file: new File([], 'test-2.txt'),
+              id: 'file-2',
+              status: 'uploading',
+            },
+            { file: new File([], 'test-3.txt'), id: 'file-3', status: 'success' },
+          ] as UploadFileItem[],
+        });
+      });
+
+      act(() => {
+        result.current.cancelUploads(['file-1', 'file-2', 'file-404']);
+      });
+
+      expect(controller1.signal.aborted).toBe(true);
+      expect(controller2.signal.aborted).toBe(true);
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        ids: ['file-1', 'file-2'],
+        status: 'cancelled',
+        type: 'updateFileStatuses',
+      });
+    });
+  });
+
   describe('dispatchDockFileList', () => {
     it('should update dockUploadFileList with new value', () => {
       const { result } = renderHook(() => useStore());
@@ -135,6 +179,32 @@ describe('FileManagerActions', () => {
       });
 
       expect(result.current.dockUploadFileList[0].status).toBe('success');
+    });
+
+    it('should handle updateFileStatuses dispatch', () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          dockUploadFileList: [
+            { file: new File([], 'test-1.txt'), id: 'file-1', status: 'pending' },
+            { file: new File([], 'test-2.txt'), id: 'file-2', status: 'uploading' },
+            { file: new File([], 'test-3.txt'), id: 'file-3', status: 'success' },
+          ] as UploadFileItem[],
+        });
+      });
+
+      act(() => {
+        result.current.dispatchDockFileList({
+          ids: ['file-1', 'file-2'],
+          status: 'cancelled',
+          type: 'updateFileStatuses',
+        });
+      });
+
+      expect(result.current.dockUploadFileList[0].status).toBe('cancelled');
+      expect(result.current.dockUploadFileList[1].status).toBe('cancelled');
+      expect(result.current.dockUploadFileList[2].status).toBe('success');
     });
 
     it('should handle removeFile dispatch', () => {
@@ -266,7 +336,6 @@ describe('FileManagerActions', () => {
       const uploadSpy = vi
         .spyOn(result.current, 'uploadWithProgress')
         .mockResolvedValue({ id: 'file-1', url: 'http://example.com/file-1' });
-      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
       const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
 
@@ -278,7 +347,7 @@ describe('FileManagerActions', () => {
       expect(dispatchSpy).toHaveBeenCalledWith({
         atStart: true,
         files: [
-          expect.objectContaining({ file: validFile, id: validFile.name, status: 'pending' }),
+          expect.objectContaining({ file: validFile, id: expect.any(String), status: 'pending' }),
         ],
         type: 'addFiles',
       });
@@ -288,8 +357,9 @@ describe('FileManagerActions', () => {
         file: validFile,
         knowledgeBaseId: undefined,
         onStatusUpdate: expect.any(Function),
+        parentId: undefined,
+        uploadId: expect.any(String),
       });
-      expect(refreshSpy).toHaveBeenCalled();
       // Should auto-parse text files
       expect(parseSpy).toHaveBeenCalledWith(['file-1'], { skipExist: false });
     });
@@ -302,7 +372,6 @@ describe('FileManagerActions', () => {
       const uploadSpy = vi
         .spyOn(result.current, 'uploadWithProgress')
         .mockResolvedValue({ id: 'file-1', url: 'http://example.com/file-1' });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
 
       await act(async () => {
@@ -314,6 +383,8 @@ describe('FileManagerActions', () => {
         file,
         knowledgeBaseId: 'kb-123',
         onStatusUpdate: expect.any(Function),
+        parentId: undefined,
+        uploadId: expect.any(String),
       });
     });
 
@@ -324,11 +395,14 @@ describe('FileManagerActions', () => {
 
       const uploadSpy = vi
         .spyOn(result.current, 'uploadWithProgress')
-        .mockImplementation(async ({ onStatusUpdate }) => {
-          onStatusUpdate?.({ id: file.name, type: 'updateFile', value: { status: 'uploading' } });
+        .mockImplementation(async ({ onStatusUpdate, uploadId }) => {
+          onStatusUpdate?.({
+            id: uploadId!,
+            type: 'updateFile',
+            value: { status: 'uploading' },
+          });
           return { id: 'file-1', url: 'http://example.com/file-1' };
         });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
       const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
 
@@ -344,7 +418,6 @@ describe('FileManagerActions', () => {
       const { result } = renderHook(() => useStore());
 
       const uploadSpy = vi.spyOn(result.current, 'uploadWithProgress');
-      const refreshSpy = vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks');
 
       await act(async () => {
@@ -352,8 +425,6 @@ describe('FileManagerActions', () => {
       });
 
       expect(uploadSpy).not.toHaveBeenCalled();
-      // refreshFileList is always called after uploads complete, even for empty list
-      expect(refreshSpy).toHaveBeenCalled();
       expect(parseSpy).not.toHaveBeenCalled();
     });
 
@@ -366,7 +437,6 @@ describe('FileManagerActions', () => {
       vi.spyOn(result.current, 'uploadWithProgress')
         .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
         .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
 
       await act(async () => {
@@ -388,7 +458,6 @@ describe('FileManagerActions', () => {
         .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
         .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' })
         .mockResolvedValueOnce({ id: 'file-3', url: 'http://example.com/file-3' });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
 
       await act(async () => {
@@ -410,7 +479,6 @@ describe('FileManagerActions', () => {
         .mockResolvedValueOnce({ id: 'file-1', url: 'http://example.com/file-1' })
         .mockResolvedValueOnce({ id: 'file-2', url: 'http://example.com/file-2' })
         .mockResolvedValueOnce({ id: 'file-3', url: 'http://example.com/file-3' });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
 
       await act(async () => {
@@ -427,7 +495,6 @@ describe('FileManagerActions', () => {
       const textFile = new File(['text content'], 'doc.txt', { type: 'text/plain' });
 
       vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       const parseSpy = vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
 
       await act(async () => {
@@ -452,7 +519,6 @@ describe('FileManagerActions', () => {
         id: 'file-1',
         url: 'http://example.com/file-1',
       });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
       const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
 
@@ -491,7 +557,6 @@ describe('FileManagerActions', () => {
         id: 'file-1',
         url: 'http://example.com/file-1',
       });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
       const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
 
@@ -506,7 +571,7 @@ describe('FileManagerActions', () => {
       expect(dispatchSpy).toHaveBeenCalledWith({
         atStart: true,
         files: extractedFiles.map((file) =>
-          expect.objectContaining({ file, id: file.name, status: 'pending' }),
+          expect.objectContaining({ file, id: expect.any(String), status: 'pending' }),
         ),
         type: 'addFiles',
       });
@@ -523,7 +588,6 @@ describe('FileManagerActions', () => {
         id: 'file-1',
         url: 'http://example.com/file-1',
       });
-      vi.spyOn(result.current, 'refreshFileList').mockResolvedValue();
       vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
       const dispatchSpy = vi.spyOn(result.current, 'dispatchDockFileList');
 
@@ -537,9 +601,52 @@ describe('FileManagerActions', () => {
       // Should fallback to uploading the ZIP file itself
       expect(dispatchSpy).toHaveBeenCalledWith({
         atStart: true,
-        files: [expect.objectContaining({ file: zipFile, id: zipFile.name, status: 'pending' })],
+        files: [
+          expect.objectContaining({ file: zipFile, id: expect.any(String), status: 'pending' }),
+        ],
         type: 'addFiles',
       });
+    });
+
+    it('should insert optimistic resources and replace them with real resources after upload', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue({
+        id: 'file-1',
+        url: 'http://example.com/file-1',
+      });
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([file]);
+      });
+
+      expect(result.current.resourceList).toEqual([
+        expect.objectContaining({
+          fileType: 'text/plain',
+          id: 'file-1',
+          name: 'test.txt',
+          size: file.size,
+          url: 'http://example.com/file-1',
+        }),
+      ]);
+      expect(result.current.resourceMap.has('file-1')).toBe(true);
+    });
+
+    it('should remove optimistic resources when upload returns undefined', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+      vi.spyOn(result.current, 'uploadWithProgress').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'parseFilesToChunks').mockResolvedValue();
+
+      await act(async () => {
+        await result.current.pushDockFileList([file]);
+      });
+
+      expect(result.current.resourceList).toEqual([]);
+      expect(result.current.resourceMap.size).toBe(0);
     });
   });
 
@@ -606,17 +713,36 @@ describe('FileManagerActions', () => {
   });
 
   describe('refreshFileList', () => {
-    it('should call mutate with key matcher function and revalidate option', async () => {
+    it('should refresh knowledge caches and revalidate resources by default', async () => {
       const { result } = renderHook(() => useStore());
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.refreshFileList();
       });
 
-      // The implementation now uses a key matcher function
       expect(mutate).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
         revalidate: true,
       });
+      expect(revalidateResourcesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip resource revalidation when explicitly disabled', async () => {
+      const { result } = renderHook(() => useStore());
+      const revalidateResourcesSpy = vi
+        .spyOn(resourceHooks, 'revalidateResources')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.refreshFileList({ revalidateResources: false });
+      });
+
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
+        revalidate: true,
+      });
+      expect(revalidateResourcesSpy).not.toHaveBeenCalled();
     });
   });
 

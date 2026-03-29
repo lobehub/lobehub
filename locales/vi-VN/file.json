@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Đang xử lý tệp...",
   "uploadDock.body.item.restTime": "Còn lại {{time}}",
   "uploadDock.fileQueueInfo": "Đang tải lên {{count}} tệp đầu tiên, còn lại {{remaining}} trong hàng đợi",
+  "uploadDock.header.cancelAll": "Hủy tất cả",
   "uploadDock.totalCount": "Tổng cộng {{count}} mục",
   "uploadDock.uploadStatus.cancelled": "Tải lên đã bị hủy",
   "uploadDock.uploadStatus.error": "Lỗi tải lên",

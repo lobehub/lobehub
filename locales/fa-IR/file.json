@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "در حال پردازش فایل...",
   "uploadDock.body.item.restTime": "زمان باقی‌مانده: {{time}}",
   "uploadDock.fileQueueInfo": "در حال بارگذاری {{count}} فایل اول، {{remaining}} فایل در صف باقی مانده",
+  "uploadDock.header.cancelAll": "لغو همه",
   "uploadDock.totalCount": "مجموع {{count}} مورد",
   "uploadDock.uploadStatus.cancelled": "بارگذاری لغو شد",
   "uploadDock.uploadStatus.error": "خطای بارگذاری",
