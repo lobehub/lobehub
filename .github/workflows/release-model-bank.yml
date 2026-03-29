@@ -106,10 +106,13 @@ jobs:
           const exports = Object.fromEntries(
             Object.entries(packageJson.exports ?? {}).map(([key, value]) => [key, rewriteExportTarget(value)]),
           );
+          const dependencies = Object.fromEntries(
+            Object.entries(packageJson.dependencies ?? {}).filter(([name]) => name !== '@lobechat/business-const'),
+          );
 
           const publishPackageJson = {
             author: 'LobeHub <i@lobehub.com>',
-            dependencies: packageJson.dependencies,
+            dependencies,
             exports,
             files: ['dist', 'LICENSE'],
             homepage: 'https://github.com/lobehub/lobehub',

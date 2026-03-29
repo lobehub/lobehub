@@ -2,6 +2,9 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   clean: true,
+  deps: {
+    alwaysBundle: ['@lobechat/business-const'],
+  },
   dts: true,
   entry: [
     'src/index.ts',
