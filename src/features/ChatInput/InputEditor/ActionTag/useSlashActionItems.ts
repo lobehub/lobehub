@@ -1,7 +1,8 @@
 import type { IEditor, SlashOptions } from '@lobehub/editor';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { ArchiveIcon, MessageSquarePlusIcon, WrenchIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { type FC, createElement, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,7 +33,7 @@ const isUrl = (str: string) => str.startsWith('http://') || str.startsWith('http
 const iconCache = new Map<string, FC>();
 
 const getIconComponent = (avatar: string | undefined): any => {
-  if (!avatar) return WrenchIcon;
+  if (!avatar) return SkillsIcon;
 
   const cached = iconCache.get(avatar);
   if (cached) return cached;
