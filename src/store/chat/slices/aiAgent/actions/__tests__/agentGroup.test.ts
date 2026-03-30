@@ -458,7 +458,7 @@ describe('agentGroup actions', () => {
 
         await act(async () => {
           await cancelHandler?.({
-            metadata: {},
+            metadata: { startTime: Date.now() },
             operationId: TEST_IDS.OPERATION_ID,
             reason: 'User cancelled',
             type: 'groupAgentStream',
@@ -482,7 +482,10 @@ describe('agentGroup actions', () => {
         // Make getOperationStatus slow so we can cancel during the await
         let resolveStatus: ((v: any) => void) | undefined;
         vi.mocked(agentRuntimeService.getOperationStatus).mockImplementation(
-          () => new Promise((resolve) => { resolveStatus = resolve; }),
+          () =>
+            new Promise((resolve) => {
+              resolveStatus = resolve;
+            }),
         );
 
         const abort = vi.fn();
@@ -512,7 +515,7 @@ describe('agentGroup actions', () => {
         // While reconciliation is awaiting, user cancels
         await act(async () => {
           await cancelHandler?.({
-            metadata: {},
+            metadata: { startTime: Date.now() },
             operationId: TEST_IDS.OPERATION_ID,
             reason: 'User cancelled',
             type: 'groupAgentStream',
@@ -652,7 +655,7 @@ describe('agentGroup actions', () => {
         } as any);
 
         let onDisconnectCallback: (() => void) | undefined;
-        let onEventCallback: ((event: any) => Promise<void>) | undefined;
+        let onEventCallback: ((event: any) => void) | undefined;
 
         vi.mocked(agentRuntimeClient.createStreamConnection).mockImplementation(
           (_operationId, options) => {
