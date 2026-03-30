@@ -528,10 +528,10 @@ export class AgentBridgeService {
     } catch (error) {
       log('executeWithWebhooks: execAgent failed: %O', error);
 
-      // Rethrow FK violation errors (e.g. stale topic_id) so that callers like
-      // handleSubscribedMessage can detect and recover (reset thread state).
-      const cause = (error as any)?.cause;
-      if (cause?.code === PG_FOREIGN_KEY_VIOLATION) {
+      // For stale topicId FK violations, re-throw so handleSubscribedMessage can clear
+      // the cached topicId and retry as a fresh mention instead of showing a DB error.
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
         throw error;
       }
 

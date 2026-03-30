@@ -21,6 +21,7 @@ const DEFAULT_GATEWAY_URL = 'https://device-gateway.lobehub.com';
 const HEARTBEAT_INTERVAL = 30_000; // 30s
 const INITIAL_RECONNECT_DELAY = 1000; // 1s
 const MAX_RECONNECT_DELAY = 30_000; // 30s
+const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
 
 // ─── Logger Interface ───
 
@@ -55,6 +56,7 @@ export class GatewayClient extends EventEmitter {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = INITIAL_RECONNECT_DELAY;
+  private missedHeartbeats = 0;
   private status: ConnectionStatus = 'disconnected';
   private intentionalDisconnect = false;
   private deviceId: string;
@@ -100,6 +102,25 @@ export class GatewayClient extends EventEmitter {
     ...args: Parameters<GatewayClientEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
+  }
+
+  /**
+   * Update the auth token used for (re)connections.
+   * Call this after refreshing an expired JWT, then call `reconnect()`.
+   */
+  updateToken(token: string): void {
+    this.token = token;
+  }
+
+  /**
+   * Force a reconnect cycle: close the current WebSocket and establish a new connection.
+   * Useful after calling `updateToken()` with a fresh JWT.
+   */
+  async reconnect(): Promise<void> {
+    this.cleanup();
+    this.intentionalDisconnect = false;
+    this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+    this.doConnect();
   }
 
   async connect(): Promise<void> {
@@ -216,6 +237,7 @@ export class GatewayClient extends EventEmitter {
         }
 
         case 'heartbeat_ack': {
+          this.missedHeartbeats = 0;
           this.emit('heartbeat_ack');
           break;
         }
@@ -268,7 +290,25 @@ export class GatewayClient extends EventEmitter {
 
   private startHeartbeat() {
     this.stopHeartbeat();
+    this.missedHeartbeats = 0;
     this.heartbeatTimer = setInterval(() => {
+      this.missedHeartbeats++;
+      if (this.missedHeartbeats > MAX_MISSED_HEARTBEATS) {
+        this.logger.warn(
+          `Missed ${this.missedHeartbeats} heartbeat acks, forcing reconnect`,
+        );
+        this.closeWebSocket();
+        // handleClose won't fire after removeAllListeners, so trigger reconnect manually
+        this.stopHeartbeat();
+        if (this.autoReconnect) {
+          this.setStatus('reconnecting');
+          this.scheduleReconnect();
+        } else {
+          this.setStatus('disconnected');
+          this.emit('disconnected');
+        }
+        return;
+      }
       this.sendMessage({ type: 'heartbeat' });
     }, HEARTBEAT_INTERVAL);
   }

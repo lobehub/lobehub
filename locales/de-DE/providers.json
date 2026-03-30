@@ -33,7 +33,6 @@
   "jina.description": "Jina AI wurde 2020 gegründet und ist ein führendes Unternehmen im Bereich Such-KI. Der Such-Stack umfasst Vektormodelle, Reranker und kleine Sprachmodelle für zuverlässige, hochwertige generative und multimodale Suchanwendungen.",
   "kimicodingplan.description": "Kimi Code von Moonshot AI bietet Zugriff auf Kimi-Modelle, darunter K2.5, für Coding-Aufgaben.",
   "lmstudio.description": "LM Studio ist eine Desktop-App zur Entwicklung und zum Experimentieren mit LLMs auf dem eigenen Computer.",
-  "lobehub.description": "LobeHub Cloud verwendet offizielle APIs, um auf KI-Modelle zuzugreifen, und misst die Nutzung mit Credits, die an Modell-Tokens gebunden sind.",
   "longcat.description": "LongCat ist eine Reihe von generativen KI-Großmodellen, die unabhängig von Meituan entwickelt wurden. Sie sind darauf ausgelegt, die Produktivität innerhalb des Unternehmens zu steigern und innovative Anwendungen durch eine effiziente Rechenarchitektur und starke multimodale Fähigkeiten zu ermöglichen.",
   "minimax.description": "MiniMax wurde 2021 gegründet und entwickelt allgemeine KI mit multimodalen Foundation-Modellen, darunter Textmodelle mit Billionen Parametern, Sprach- und Bildmodelle sowie Apps wie Hailuo AI.",
   "minimaxcodingplan.description": "Der MiniMax Token Plan bietet Zugriff auf MiniMax-Modelle, darunter M2.7, für Coding-Aufgaben im Rahmen eines Festpreis-Abonnements.",

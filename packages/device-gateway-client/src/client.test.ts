@@ -532,4 +532,145 @@ describe('GatewayClient', () => {
       expect(ws.close).not.toHaveBeenCalled();
     });
   });
+
+  describe('updateToken', () => {
+    it('should update the internal token', () => {
+      expect((client as any).token).toBe('test-token');
+      client.updateToken('new-token');
+      expect((client as any).token).toBe('new-token');
+    });
+
+    it('should use the new token on next connect', async () => {
+      client.updateToken('refreshed-token');
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws = (client as any).ws;
+      expect(ws.send).toHaveBeenCalledWith(
+        expect.stringContaining('"token":"refreshed-token"'),
+      );
+    });
+  });
+
+  describe('reconnect', () => {
+    it('should close existing connection and reconnect', async () => {
+      client = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'old-token',
+      });
+
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const handler = (client as any).handleMessage;
+      handler(JSON.stringify({ type: 'auth_success' }));
+      expect(client.connectionStatus).toBe('connected');
+
+      // Update token and reconnect
+      client.updateToken('new-token');
+      await client.reconnect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(client.connectionStatus).toBe('authenticating');
+      const ws = (client as any).ws;
+      expect(ws.send).toHaveBeenCalledWith(
+        expect.stringContaining('"token":"new-token"'),
+      );
+    });
+
+    it('should reset reconnect delay', async () => {
+      const reconnectClient = new GatewayClient({
+        autoReconnect: true,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+      });
+
+      reconnectClient.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      // Force backoff delay up
+      const closeHandler = (reconnectClient as any).handleClose;
+      closeHandler(1000, Buffer.from(''));
+      closeHandler(1000, Buffer.from(''));
+      expect((reconnectClient as any).reconnectDelay).toBe(4000);
+
+      // reconnect() should reset
+      await reconnectClient.reconnect();
+      expect((reconnectClient as any).reconnectDelay).toBe(1000);
+
+      reconnectClient.disconnect();
+    });
+  });
+
+  describe('missed heartbeat ack detection', () => {
+    it('should force reconnect after exceeding missed heartbeat threshold', async () => {
+      const reconnectClient = new GatewayClient({
+        autoReconnect: true,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+      });
+      const reconnectingCb = vi.fn();
+      reconnectClient.on('reconnecting', reconnectingCb);
+
+      reconnectClient.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      // Authenticate
+      const handler = (reconnectClient as any).handleMessage;
+      handler(JSON.stringify({ type: 'auth_success' }));
+      expect(reconnectClient.connectionStatus).toBe('connected');
+
+      // Advance 4 heartbeat intervals without any ack (30s × 4 = 120s)
+      // After 3 missed, the 4th tick triggers forced reconnect
+      await vi.advanceTimersByTimeAsync(30_000 * 4);
+
+      expect(reconnectClient.connectionStatus).toBe('reconnecting');
+      expect(reconnectingCb).toHaveBeenCalled();
+
+      reconnectClient.disconnect();
+    });
+
+    it('should reset missed counter on heartbeat_ack', async () => {
+      const reconnectClient = new GatewayClient({
+        autoReconnect: true,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+      });
+
+      reconnectClient.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const handler = (reconnectClient as any).handleMessage;
+      handler(JSON.stringify({ type: 'auth_success' }));
+
+      // 2 heartbeats without ack
+      await vi.advanceTimersByTimeAsync(30_000 * 2);
+      expect((reconnectClient as any).missedHeartbeats).toBe(2);
+
+      // Receive ack — counter resets
+      handler(JSON.stringify({ type: 'heartbeat_ack' }));
+      expect((reconnectClient as any).missedHeartbeats).toBe(0);
+
+      reconnectClient.disconnect();
+    });
+
+    it('should emit disconnected when autoReconnect is false and heartbeats missed', async () => {
+      const disconnectedCb = vi.fn();
+      // client has autoReconnect: false
+      client.on('disconnected', disconnectedCb);
+
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const handler = (client as any).handleMessage;
+      handler(JSON.stringify({ type: 'auth_success' }));
+
+      // Advance past threshold: 4 intervals
+      await vi.advanceTimersByTimeAsync(30_000 * 4);
+
+      expect(client.connectionStatus).toBe('disconnected');
+      expect(disconnectedCb).toHaveBeenCalled();
+    });
+  });
 });
