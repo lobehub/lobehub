@@ -160,7 +160,7 @@ export interface UniformTool {
 
 // ---- Tool Lifecycle Types ----
 
-export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill';
+export type ToolSource = 'builtin' | 'client' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill';
 
 /**
  * How a tool was activated at step level

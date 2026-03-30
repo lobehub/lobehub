@@ -1017,6 +1017,45 @@ export const createRuntimeExecutors = (
 
       const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
 
+      // Check if this is a client-side function tool — pause instead of executing
+      const toolSource =
+        state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
+        state.toolSourceMap?.[chatToolPayload.identifier];
+
+      if (toolSource === 'client') {
+        log(`[${operationLogId}] Client function tool detected: ${toolName}, pausing for client`);
+
+        // Publish tool call info so streaming can emit function_call events
+        await streamManager.publishStreamChunk(operationId, stepIndex, {
+          chunkType: 'tools_calling',
+          toolsCalling: [chatToolPayload] as any,
+        });
+
+        const newState = structuredClone(state);
+        newState.lastModified = new Date().toISOString();
+        newState.status = 'interrupted';
+        newState.interruption = {
+          canResume: true,
+          interruptedAt: new Date().toISOString(),
+          interruptedInstruction: instruction,
+          reason: 'client_tool_execution',
+        };
+        newState.pendingToolsCalling = [chatToolPayload];
+
+        return {
+          events: [
+            {
+              canResume: true,
+              interruptedAt: new Date().toISOString(),
+              reason: 'client_tool_execution',
+              type: 'interrupted',
+            },
+          ],
+          newState,
+          // No nextContext — loop stops, waiting for client to provide tool result
+        };
+      }
+
       // Extract toolResultMaxLength from agent config
       const agentConfig = state.metadata?.agentConfig;
       const toolResultMaxLength = agentConfig?.chatConfig?.toolResultMaxLength;
@@ -1221,13 +1260,61 @@ export const createRuntimeExecutors = (
       `[${operationLogId}][call_tools_batch] Starting batch execution for ${toolsCalling.length} tools`,
     );
 
+    // Split client vs server tools
+    const clientTools: ChatToolPayload[] = [];
+    const serverTools: ChatToolPayload[] = [];
+    for (const tp of toolsCalling) {
+      const src =
+        state.operationToolSet?.sourceMap?.[tp.identifier] ?? state.toolSourceMap?.[tp.identifier];
+      if (src === 'client') {
+        clientTools.push(tp);
+      } else {
+        serverTools.push(tp);
+      }
+    }
+
+    // If all tools are client-side, pause immediately
+    if (clientTools.length > 0 && serverTools.length === 0) {
+      log(
+        `[${operationLogId}][call_tools_batch] All ${clientTools.length} tools are client-side, pausing`,
+      );
+
+      await streamManager.publishStreamChunk(operationId, stepIndex, {
+        chunkType: 'tools_calling',
+        toolsCalling: clientTools as any,
+      });
+
+      const newState = structuredClone(state);
+      newState.lastModified = new Date().toISOString();
+      newState.status = 'interrupted';
+      newState.interruption = {
+        canResume: true,
+        interruptedAt: new Date().toISOString(),
+        reason: 'client_tool_execution',
+      };
+      newState.pendingToolsCalling = clientTools;
+
+      return {
+        events: [
+          {
+            canResume: true,
+            interruptedAt: new Date().toISOString(),
+            reason: 'client_tool_execution',
+            type: 'interrupted',
+          },
+        ],
+        newState,
+      };
+    }
+
     // Track all tool message IDs created during execution
     const toolMessageIds: string[] = [];
     const toolResults: any[] = [];
 
-    // Execute all tools concurrently
+    // Execute server tools concurrently (skip client tools in mixed batch)
+    const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
     await Promise.all(
-      toolsCalling.map(async (chatToolPayload: ChatToolPayload) => {
+      toolsToExecute.map(async (chatToolPayload: ChatToolPayload) => {
         const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
 
         // Publish tool execution start event
@@ -1414,6 +1501,39 @@ export const createRuntimeExecutors = (
 
     // Get the last tool message ID as parentMessageId for next LLM call
     const lastToolMessageId = toolMessageIds.at(-1);
+
+    // If there are remaining client tools in a mixed batch, interrupt after server tools
+    if (clientTools.length > 0) {
+      log(
+        `[${operationLogId}][call_tools_batch] Mixed batch: ${serverTools.length} server tools done, pausing for ${clientTools.length} client tools`,
+      );
+
+      await streamManager.publishStreamChunk(operationId, stepIndex, {
+        chunkType: 'tools_calling',
+        toolsCalling: clientTools as any,
+      });
+
+      newState.status = 'interrupted';
+      newState.interruption = {
+        canResume: true,
+        interruptedAt: new Date().toISOString(),
+        reason: 'client_tool_execution',
+      };
+      newState.pendingToolsCalling = clientTools;
+
+      return {
+        events: [
+          ...events,
+          {
+            canResume: true,
+            interruptedAt: new Date().toISOString(),
+            reason: 'client_tool_execution',
+            type: 'interrupted',
+          },
+        ],
+        newState,
+      };
+    }
 
     return {
       events,

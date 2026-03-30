@@ -9,7 +9,7 @@ import {
 } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import type { LobeToolManifest, ToolSource } from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
@@ -117,6 +117,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
     /** External URL — fetched if no buffer provided */
     url?: string;
   }>;
+  /** Client-side function tools from Response API — injected into LLM with source='client' */
+  functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
   /** External lifecycle hooks (auto-adapt to local/production mode) */
   hooks?: AgentHook[];
   /** Maximum steps for the agent operation */
@@ -228,6 +230,7 @@ export class AiAgentService {
       discordContext,
       existingMessageIds = [],
       files,
+      functionTools,
       hooks,
       instructions,
       stepCallbacks,
@@ -531,8 +534,7 @@ export class AiAgentService {
     });
 
     // Build toolSourceMap for routing tool execution
-    const toolSourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> =
-      {};
+    const toolSourceMap: Record<string, ToolSource> = {};
     // Mark lobehub skills
     for (const manifest of lobehubSkillManifests) {
       toolSourceMap[manifest.identifier] = 'lobehubSkill';
@@ -542,12 +544,40 @@ export class AiAgentService {
       toolSourceMap[manifest.identifier] = 'klavis';
     }
 
+    // Inject client function tools from Response API
+    const CLIENT_FN_IDENTIFIER = '__fn__';
+    if (functionTools?.length) {
+      for (const ft of functionTools) {
+        tools?.push({
+          function: {
+            description: ft.description,
+            name: `${CLIENT_FN_IDENTIFIER}____${ft.name}`,
+            parameters: ft.parameters,
+          },
+          type: 'function',
+        });
+      }
+      toolSourceMap[CLIENT_FN_IDENTIFIER] = 'client';
+      toolManifestMap[CLIENT_FN_IDENTIFIER] = {
+        api: functionTools.map((ft) => ({
+          description: ft.description ?? '',
+          name: ft.name,
+          parameters: ft.parameters ?? {},
+        })),
+        identifier: CLIENT_FN_IDENTIFIER,
+        meta: { title: 'Client Functions' },
+        type: 'default',
+      };
+      toolsResult.enabledToolIds.push(CLIENT_FN_IDENTIFIER);
+    }
+
     log(
-      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills, %d klavis tools',
+      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills, %d klavis tools, %d client function tools',
       tools?.length ?? 0,
       pluginIds.length,
       lobehubSkillManifests.length,
       klavisManifests.length,
+      functionTools?.length ?? 0,
     );
 
     // Override RemoteDevice manifest's systemRole with dynamic device list prompt
