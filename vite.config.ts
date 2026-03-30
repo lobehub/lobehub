@@ -25,6 +25,7 @@ export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
+    reportCompressedSize: false,
     rollupOptions: {
       input: resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: sharedRollupOutput,
