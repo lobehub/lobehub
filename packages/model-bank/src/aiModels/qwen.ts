@@ -1843,11 +1843,11 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3.5-omni-plus-2026-03-15',
+      deploymentName: 'qwen3.5-omni-plus',
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3.5-Omni is the latest generation multimodal large model from Qwen. It supports understanding and interaction across text, images, audio, and video. As a comprehensive evolution of Qwen3-Omni, it enables audio understanding for over 10 hours and supports video understanding and dialogue for more than 400 seconds of 720P (1 FPS) content. It further expands language coverage, supporting audio input in over 60 languages and speech output in more than 30 languages. Additionally, it features powerful structured audio-video understanding capabilities and is widely applicable in scenarios such as text creation, voice assistants, and multimedia analysis, delivering a natural and seamless multimodal interaction experience.',
+      'Qwen3.5 Omni Plus supports text, image, and video input. It is the latest full-modal Qwen model for high-quality multimodal understanding and generation.',
     displayName: 'Qwen3.5 Omni Plus',
     id: 'qwen3.5-omni-plus',
     maxOutput: 65_536,
@@ -1859,7 +1859,7 @@ const qwenChatModels: AIChatModelCard[] = [
           lookup: {
             prices: {
               '[0, 0.128]': 0.8,
-              '[0.128, infinity]': 2,
+              '[0.128, 0.256]': 2,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1884,7 +1884,7 @@ const qwenChatModels: AIChatModelCard[] = [
           lookup: {
             prices: {
               '[0, 0.128]': 9.6,
-              '[0.128, infinity]': 24,
+              '[0.128, 0.256]': 24,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1907,11 +1907,11 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3.5-omni-flash-2026-03-15',
+      deploymentName: 'qwen3.5-omni-flash',
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3.5-Omni is the latest generation multimodal large model from Qwen. It supports understanding and interaction across text, images, audio, and video. As a comprehensive evolution of Qwen3-Omni, it enables audio understanding for over 10 hours and supports video understanding and dialogue for more than 400 seconds of 720P (1 FPS) content. It further expands language coverage, supporting audio input in over 60 languages and speech output in more than 30 languages. Additionally, it features powerful structured audio-video understanding capabilities and is widely applicable in scenarios such as text creation, voice assistants, and multimedia analysis, delivering a natural and seamless multimodal interaction experience.',
+      'Qwen3.5 Omni Flash is a fast, cost-effective full-modal Qwen model that supports text, image, and video input.',
     displayName: 'Qwen3.5 Omni Flash',
     id: 'qwen3.5-omni-flash',
     maxOutput: 65_536,
@@ -1923,7 +1923,7 @@ const qwenChatModels: AIChatModelCard[] = [
           lookup: {
             prices: {
               '[0, 0.128]': 0.2,
-              '[0.128, infinity]': 0.8,
+              '[0.128, 0.256]': 0.8,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1948,7 +1948,7 @@ const qwenChatModels: AIChatModelCard[] = [
           lookup: {
             prices: {
               '[0, 0.128]': 4,
-              '[0.128, infinity]': 16,
+              '[0.128, 0.256]': 16,
             },
             pricingParams: ['textInputRange'],
           },
