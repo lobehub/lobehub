@@ -1,5 +1,5 @@
 import { type IEditor } from '@lobehub/editor';
-import { ReactLinkPlugin, ReactMentionPlugin, ReactTablePlugin } from '@lobehub/editor';
+import { ReactLinkPlugin, ReactTablePlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { type FC, useMemo } from 'react';
@@ -17,7 +17,6 @@ interface EditorCanvasProps {
 const EDITOR_PLUGINS = [
   ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
   ReactTablePlugin,
-  ReactMentionPlugin,
 ];
 
 const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor, editorData }) => {
