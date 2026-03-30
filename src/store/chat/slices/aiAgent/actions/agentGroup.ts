@@ -205,6 +205,9 @@ export class ChatGroupChatActionImpl {
           const status = await agentRuntimeService.getOperationStatus(result.operationId, true);
           await this.#get().refreshMessages(execContext);
 
+          // Re-check after async calls — user may have cancelled during the awaits
+          if (streamClosedByClient) return;
+
           if (!status) {
             failStreamOperations(error?.message || 'Agent stream state is no longer available');
             return;

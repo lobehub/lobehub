@@ -472,6 +472,69 @@ describe('agentGroup actions', () => {
         expect(result.current.completeOperation).not.toHaveBeenCalled();
       });
 
+      it('should not reconnect or complete when user cancels during async reconciliation', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        vi.mocked(lambdaClient.aiAgent.execGroupAgent.mutate).mockResolvedValue(
+          createMockExecGroupAgentResponse(),
+        );
+
+        // Make getOperationStatus slow so we can cancel during the await
+        let resolveStatus: ((v: any) => void) | undefined;
+        vi.mocked(agentRuntimeService.getOperationStatus).mockImplementation(
+          () => new Promise((resolve) => { resolveStatus = resolve; }),
+        );
+
+        const abort = vi.fn();
+        let onDisconnectCallback: (() => void) | undefined;
+
+        vi.mocked(agentRuntimeClient.createStreamConnection).mockImplementation(
+          (_operationId, options) => {
+            onDisconnectCallback = options?.onDisconnect;
+            return { abort } as any;
+          },
+        );
+
+        await act(async () => {
+          await result.current.sendGroupMessage({
+            context: createTestContext(),
+            message: TEST_CONTENT.GROUP_MESSAGE,
+          });
+        });
+
+        const cancelHandler = vi.mocked(result.current.onOperationCancel).mock.calls[0]?.[1];
+
+        // Trigger disconnect — starts reconciliation which awaits getOperationStatus
+        await act(async () => {
+          onDisconnectCallback?.();
+        });
+
+        // While reconciliation is awaiting, user cancels
+        await act(async () => {
+          await cancelHandler?.({
+            metadata: {},
+            operationId: TEST_IDS.OPERATION_ID,
+            reason: 'User cancelled',
+            type: 'groupAgentStream',
+          });
+        });
+
+        // Now resolve the pending getOperationStatus — reconciliation resumes
+        await act(async () => {
+          resolveStatus?.({
+            currentState: { status: 'running' },
+            hasError: false,
+            isActive: true,
+            isCompleted: false,
+            needsHumanInput: false,
+          });
+        });
+
+        // Should NOT reconnect or complete because user already cancelled
+        expect(agentRuntimeClient.createStreamConnection).toHaveBeenCalledTimes(1); // only the initial
+        expect(result.current.completeOperation).not.toHaveBeenCalled();
+      });
+
       it('should associate assistant message with both execServerAgentRuntime and groupAgentStream operations', async () => {
         const { result } = renderHook(() => useChatStore());
 
