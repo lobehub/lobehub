@@ -3,6 +3,7 @@ import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobech
 import type {
   RuntimeInitialContext,
   RuntimeSelectedSkill,
+  RuntimeSelectedTool,
   RuntimeStepContext,
 } from '@lobechat/types';
 
@@ -251,6 +252,8 @@ export interface MessagesEngineParams {
   skillsConfig?: SkillsConfig;
   /** Skills explicitly selected by the user for the current request */
   selectedSkills?: RuntimeSelectedSkill[];
+  /** Tools explicitly selected by the user for the current request */
+  selectedTools?: RuntimeSelectedTool[];
 
   // ========== Tool Discovery ==========
   /** Tool Discovery configuration (available tools for dynamic activation) */

@@ -642,6 +642,10 @@ export const contextEngineering = async ({
     initialContext,
     stepContext,
 
+    // Selected skills/tools from user for this request
+    selectedSkills: initialContext?.selectedSkills,
+    selectedTools: initialContext?.selectedTools,
+
     // Skills configuration — expose all installed skills so the AI can discover and activate them
     skillsConfig: {
       enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,

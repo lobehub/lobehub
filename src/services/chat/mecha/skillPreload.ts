@@ -198,3 +198,28 @@ export const prepareSelectedSkillPreload = async ({
 
   return buildPersistedPreloadMessages(resolvedSkills);
 };
+
+/**
+ * Enrich selected skills with preloaded content from skill store.
+ * Skills with available content get it attached directly, enabling
+ * SelectedSkillInjector to inline the content into the user message
+ * instead of constructing fake activateSkill tool-call preload messages.
+ */
+export const resolveSelectedSkillsWithContent = async ({
+  message,
+  selectedSkills,
+  userCreds,
+}: PrepareSelectedSkillPreloadParams): Promise<RuntimeSelectedSkill[]> => {
+  const resolved = resolveSelectedSkills(message, selectedSkills);
+
+  if (resolved.length === 0) return [];
+
+  const enriched = await Promise.all(
+    resolved.map(async (skill) => {
+      const loaded = await loadSkillContent(skill, userCreds);
+      return loaded ? { ...skill, content: loaded.content } : skill;
+    }),
+  );
+
+  return enriched;
+};

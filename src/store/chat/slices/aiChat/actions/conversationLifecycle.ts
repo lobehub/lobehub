@@ -18,7 +18,8 @@ import { t } from 'i18next';
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
-import { prepareSelectedSkillPreload } from '@/services/chat/mecha/skillPreload';
+import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
+import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -196,9 +197,16 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
-    const preloadMessages = await prepareSelectedSkillPreload({
+
+    // Enrich selected skills/tools with preloaded content, injected directly
+    // via SelectedSkillInjector/SelectedToolInjector — no fake tool-call preload messages
+    const enrichedSelectedSkills = await resolveSelectedSkillsWithContent({
       message,
       selectedSkills,
+    });
+    const enrichedSelectedTools = resolveSelectedToolsWithContent({
+      message,
+      selectedTools,
     });
 
     const hasFile = !!fileIdList && fileIdList.length > 0;
@@ -346,7 +354,7 @@ export class ConversationLifecycleActionImpl {
             pageSelections,
             parentId,
           },
-          preloadMessages: preloadMessages.length > 0 ? preloadMessages : undefined,
+          preloadMessages: undefined,
           // if there is topicId，then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,
@@ -560,20 +568,24 @@ export class ConversationLifecycleActionImpl {
         // so the supervisor can delegate via callAgent
         const effectiveSelectedTools =
           hasMentionedAgents &&
-          !selectedTools.some((t) => t.identifier === AgentManagementIdentifier)
+          !enrichedSelectedTools.some((t) => t.identifier === AgentManagementIdentifier)
             ? [
-                ...selectedTools,
+                ...enrichedSelectedTools,
                 { identifier: AgentManagementIdentifier, name: 'Agent Management' },
               ]
-            : selectedTools;
+            : enrichedSelectedTools;
 
         const hasInitialContext =
-          effectiveSelectedTools.length > 0 || selectedSkills.length > 0 || hasMentionedAgents;
+          effectiveSelectedTools.length > 0 ||
+          enrichedSelectedSkills.length > 0 ||
+          hasMentionedAgents;
 
         const agentRuntimeInitialContext = hasInitialContext
           ? {
               initialContext: {
-                ...(selectedSkills.length > 0 ? { selectedSkills } : undefined),
+                ...(enrichedSelectedSkills.length > 0
+                  ? { selectedSkills: enrichedSelectedSkills }
+                  : undefined),
                 ...(effectiveSelectedTools.length > 0
                   ? { selectedTools: effectiveSelectedTools }
                   : undefined),

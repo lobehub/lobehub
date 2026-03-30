@@ -27,12 +27,23 @@ const formatSelectedSkills = (selectedSkills: RuntimeSelectedSkill[]): string | 
   const lines = [
     'The user explicitly selected these skills for this request. Prefer them when relevant.',
     '<selected_skills>',
-    ...selectedSkills.map(
-      (skill) =>
-        `  <skill identifier="${escapeXml(skill.identifier)}" name="${escapeXml(skill.name)}" />`,
-    ),
-    '</selected_skills>',
   ];
+
+  for (const skill of selectedSkills) {
+    if (skill.content) {
+      lines.push(
+        `  <skill identifier="${escapeXml(skill.identifier)}" name="${escapeXml(skill.name)}">`,
+        skill.content,
+        '  </skill>',
+      );
+    } else {
+      lines.push(
+        `  <skill identifier="${escapeXml(skill.identifier)}" name="${escapeXml(skill.name)}" />`,
+      );
+    }
+  }
+
+  lines.push('</selected_skills>');
 
   return lines.join('\n');
 };

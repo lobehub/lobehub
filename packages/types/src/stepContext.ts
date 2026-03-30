@@ -80,6 +80,12 @@ export interface InitialPageEditorContext {
  */
 export interface RuntimeSelectedSkill {
   /**
+   * Preloaded skill content (markdown instructions).
+   * When present, injected directly into user message instead of
+   * constructing fake activateSkill tool-call preload messages.
+   */
+  content?: string;
+  /**
    * Skill identifier used by runtime/tooling
    */
   identifier: string;
@@ -94,6 +100,12 @@ export interface RuntimeSelectedSkill {
  * Captured from slash-menu tool action tags before send
  */
 export interface RuntimeSelectedTool {
+  /**
+   * Preloaded tool context (systemRole + API descriptions).
+   * When present, injected directly into user message instead of relying on
+   * LLM to discover/activate the tool at runtime — saves tokens.
+   */
+  content?: string;
   /**
    * Tool identifier used by runtime/tooling
    */
