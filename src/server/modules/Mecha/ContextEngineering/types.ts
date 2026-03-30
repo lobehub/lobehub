@@ -10,6 +10,7 @@ import type {
   KnowledgeBaseInfo,
   LobeToolManifest,
   SkillMeta,
+  ToolDiscoveryConfig,
   TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -124,6 +125,8 @@ export interface ServerMessagesEngineParams {
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */
   skillsConfig?: { enabledSkills?: SkillMeta[] };
+  /** Tool discovery configuration for <available_tools> injection */
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
   // ========== Tools ==========
   /** Tools configuration */
   toolsConfig?: ServerToolsConfig;

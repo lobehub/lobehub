@@ -9,6 +9,7 @@ import {
   type InstructionExecutor,
   UsageCounter,
 } from '@lobechat/agent-runtime';
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
@@ -145,6 +146,27 @@ const executeToolWithRetry = async (
   throw new Error('Tool execution retry loop exited unexpectedly');
 };
 
+const buildToolDiscoveryConfig = (
+  operationToolSet: OperationToolSet,
+  enabledToolIds: string[],
+) => {
+  const enabledToolSet = new Set(enabledToolIds);
+
+  if (!enabledToolSet.has(LobeActivatorIdentifier)) return undefined;
+
+  const availableTools = Object.entries(operationToolSet.manifestMap)
+    .filter(([identifier]) => !enabledToolSet.has(identifier))
+    .map(([identifier, manifest]) => ({
+      description: manifest.meta?.description || '',
+      identifier,
+      name: manifest.meta?.title || identifier,
+    }));
+
+  if (availableTools.length === 0) return undefined;
+
+  return { availableTools }
+};
+
 const formatErrorEventData = (error: unknown, phase: string) => {
   let errorMessage = 'Unknown error';
   let errorType: string | undefined;
@@ -250,6 +272,7 @@ export const createRuntimeExecutors = (
     );
 
     const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+    const toolDiscoveryConfig = buildToolDiscoveryConfig(operationToolSet, resolved.enabledToolIds);
 
     if (stepDelta.activatedTools.length > 0) {
       log(
@@ -428,6 +451,7 @@ export const createRuntimeExecutors = (
           model,
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
+          toolDiscoveryConfig,
           toolsConfig: {
             manifests: Object.values(resolved.manifestMap),
             tools: resolved.enabledToolIds,
