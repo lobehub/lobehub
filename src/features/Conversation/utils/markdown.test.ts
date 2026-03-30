@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { processWithArtifact } from './markdown';
+import { processWithArtifact, promoteDisplayOnlyLatex } from './markdown';
 
 describe('processWithArtifact', () => {
   it('should removeLineBreaks with closed tag', () => {
@@ -496,5 +496,84 @@ This HTML document includes the temperature converter with the requested feature
       expect(output).toContain('</lobeThinking> <lobeArtifact');
       expect(output).not.toContain('</lobeThinking>\n\n<lobeArtifact');
     });
+  });
+});
+
+describe('promoteDisplayOnlyLatex', () => {
+  it('should promote inline dollar math with \\tag to display math', () => {
+    const input = 'Before $\\hat{\\sigma}\\tag{1}$ after';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(
+      'Before \n$$\n\\hat{\\sigma}\\tag{1}\n$$\n after',
+    );
+  });
+
+  it('should promote inline parenthesis math with \\tag* to display math', () => {
+    const input = 'Before \\(E=mc^2 \\tag*{Energy}\\) after';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(
+      'Before \n$$\nE=mc^2 \\tag*{Energy}\n$$\n after',
+    );
+  });
+
+  it('should promote display-only environments used inside inline math', () => {
+    const input = '$\\begin{equation}a=b\\end{equation}$ and $\\begin{split}x&=1\\end{split}$';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(
+      '\n$$\n\\begin{equation}a=b\\end{equation}\n$$\n and \n$$\n\\begin{split}x&=1\\end{split}\n$$\n',
+    );
+  });
+
+  it('should promote other display-only environments used inside inline math', () => {
+    const input =
+      '$\\begin{align}a&=b\\\\c&=d\\end{align}$ $\\begin{alignat}{2}a&=b\\\\c&=d\\end{alignat}$ $\\begin{gather}a\\\\b\\end{gather}$ $\\begin{CD}A@>>>B\\end{CD}$';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(
+      '\n$$\n\\begin{align}a&=b\\\\c&=d\\end{align}\n$$\n \n$$\n\\begin{alignat}{2}a&=b\\\\c&=d\\end{alignat}\n$$\n \n$$\n\\begin{gather}a\\\\b\\end{gather}\n$$\n \n$$\n\\begin{CD}A@>>>B\\end{CD}\n$$\n',
+    );
+  });
+
+  it('should keep inline-safe environments unchanged', () => {
+    const input =
+      '$\\begin{aligned}a&=b\\end{aligned}$ $\\begin{alignedat}{2}a&=b\\end{alignedat}$ $\\begin{gathered}a\\\\b\\end{gathered}$ and $x^2$';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(input);
+  });
+
+  it('should not rewrite formulas inside inline code or fenced code blocks', () => {
+    const input = [
+      'Inline code: `$\\hat{\\sigma}\\tag{1}$`',
+      '',
+      '```tex',
+      '$\\hat{\\sigma}\\tag{1}$',
+      '```',
+      '',
+    ].join('\n');
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(input);
+  });
+
+  it('should not rewrite formulas inside lobeArtifact content', () => {
+    const input =
+      'Before $\\hat{\\sigma}\\tag{1}$ after\n\n<lobeArtifact identifier="demo" type="text/html" title="Demo"><script>const raw = "$\\\\tag{artifact}$";</script></lobeArtifact>';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(
+      'Before \n$$\n\\hat{\\sigma}\\tag{1}\n$$\n after\n\n<lobeArtifact identifier="demo" type="text/html" title="Demo"><script>const raw = "$\\\\tag{artifact}$";</script></lobeArtifact>',
+    );
+  });
+
+  it('should keep existing display math blocks unchanged', () => {
+    const input =
+      'Before $$\\begin{align}a&=b\\\\c&=d\\end{align}$$ after\n\n\\[\n\\hat{\\sigma}\\tag{1}\n\\]';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(input);
+  });
+
+  it('should be idempotent', () => {
+    const input =
+      'Before $\\hat{\\sigma}\\tag{1}$ after and $$\\begin{align}a&=b\\\\c&=d\\end{align}$$';
+    const firstPass = promoteDisplayOnlyLatex(input);
+
+    expect(promoteDisplayOnlyLatex(firstPass)).toEqual(firstPass);
   });
 });

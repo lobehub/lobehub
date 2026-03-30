@@ -2,6 +2,7 @@ import { type MarkdownProps } from '@lobehub/ui';
 import { Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { promoteDisplayOnlyLatex } from '@/features/Conversation/utils/markdown';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -9,6 +10,8 @@ const MarkdownMessage = memo<MarkdownProps>(({ children, componentProps, ...rest
   const { highlighterTheme, mermaidTheme, fontSize } = useUserStore(
     userGeneralSettingsSelectors.config,
   );
+  const normalizedChildren =
+    typeof children === 'string' ? promoteDisplayOnlyLatex(children) : children;
 
   return (
     <Markdown
@@ -25,7 +28,7 @@ const MarkdownMessage = memo<MarkdownProps>(({ children, componentProps, ...rest
       }}
       {...rest}
     >
-      {children}
+      {normalizedChildren}
     </Markdown>
   );
 });

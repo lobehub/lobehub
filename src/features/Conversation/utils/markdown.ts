@@ -1,5 +1,58 @@
 import { ARTIFACT_TAG_REGEX, ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
+const DISPLAY_ONLY_LATEX_COMMAND_PATTERN = /\\tag(?:\*|\b)/;
+const DISPLAY_ONLY_LATEX_ENVIRONMENTS = [
+  'align',
+  'align*',
+  'alignat',
+  'alignat*',
+  'CD',
+  'equation',
+  'equation*',
+  'gather',
+  'gather*',
+  'split',
+] as const;
+const PROTECTED_MARKDOWN_SEGMENT_PATTERN =
+  /(```[\s\S]*?```|`[^\n`]*`|(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|\\\[[\s\S]*?(?<!\\)\\\]|<lobeArtifact\b[^>]*>[\s\S]*?(?:<\/lobeArtifact>|$))/g;
+
+const escapeRegExp = (value: string) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const DISPLAY_ONLY_LATEX_ENVIRONMENT_PATTERN = new RegExp(
+  String.raw`\\begin\{(?:${DISPLAY_ONLY_LATEX_ENVIRONMENTS.map(escapeRegExp).join('|')})\}`,
+);
+const INLINE_LATEX_PATTERN = /\\\(([\s\S]*?)(?<!\\)\\\)|(?<!\\)\$(?!\$)([\s\S]+?)(?<!\\)\$(?!\$)/g;
+const PROTECTED_MARKDOWN_PLACEHOLDER_PATTERN = /<<LOBE_MD_PROTECTED_(\d+)>>/g;
+
+const shouldPromoteInlineLatex = (formula: string) =>
+  DISPLAY_ONLY_LATEX_COMMAND_PATTERN.test(formula) ||
+  DISPLAY_ONLY_LATEX_ENVIRONMENT_PATTERN.test(formula);
+
+const toDisplayMathBlock = (formula: string) => `\n$$\n${formula.trim()}\n$$\n`;
+
+const withProtectedMarkdownSegments = (input: string, transformer: (content: string) => string) => {
+  const protectedSegments: string[] = [];
+  const protectedInput = input.replaceAll(PROTECTED_MARKDOWN_SEGMENT_PATTERN, (match) => {
+    const index = protectedSegments.push(match) - 1;
+    return `<<LOBE_MD_PROTECTED_${index}>>`;
+  });
+
+  return transformer(protectedInput).replaceAll(
+    PROTECTED_MARKDOWN_PLACEHOLDER_PATTERN,
+    (_, index) => {
+      return protectedSegments[Number(index)] || '';
+    },
+  );
+};
+
+export const promoteDisplayOnlyLatex = (input: string = '') =>
+  withProtectedMarkdownSegments(input, (content) =>
+    content.replaceAll(INLINE_LATEX_PATTERN, (match, parenFormula, dollarFormula) => {
+      const formula = parenFormula || dollarFormula;
+
+      return shouldPromoteInlineLatex(formula) ? toDisplayMathBlock(formula) : match;
+    }),
+  );
+
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
