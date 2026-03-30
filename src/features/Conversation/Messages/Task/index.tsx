@@ -16,7 +16,7 @@ import { useGlobalStore } from '@/store/global';
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import { processWithArtifact } from '../../utils/markdown';
 import { AssistantActionsBar } from './Actions';
 import ClientTaskDetail from './ClientTaskDetail';
 import TaskDetailPanel from './TaskDetailPanel';
@@ -46,7 +46,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
   const errorContent = useErrorContent(error);
 
   // remove line breaks in artifact tag to make the ast transform easier
-  const message = !editing ? normalizeThinkTags(processWithArtifact(content), generating) : content;
+  const message = !editing ? processWithArtifact(content) : content;
 
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);

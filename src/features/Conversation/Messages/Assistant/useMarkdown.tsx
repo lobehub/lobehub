@@ -5,13 +5,11 @@ import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
 import { HtmlPreviewAction } from '@/components/HtmlPreview';
-import { THINKING_TAG } from '@/const/plugin';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { markdownElements } from '../../Markdown/plugins';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-import { shouldProcessThinkTags } from '../../utils/markdown';
 
 const isHtmlCode = (content: string, language: string) => {
   return (
@@ -27,13 +25,6 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const animated = transitionMode === 'fadeIn' && generating;
-  const shouldEnableThinkTag = shouldProcessThinkTags(item?.content, generating);
-
-  const activeMarkdownElements = useMemo(
-    () =>
-      markdownElements.filter((element) => element.tag !== THINKING_TAG || shouldEnableThinkTag),
-    [shouldEnableThinkTag],
-  );
 
   const components = useMemo(
     () =>
@@ -47,12 +38,12 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
   );
 
   const rehypePlugins = useMemo(
-    () => activeMarkdownElements.map((element) => element.rehypePlugin).filter(Boolean),
-    [activeMarkdownElements],
+    () => markdownElements.map((element) => element.rehypePlugin).filter(Boolean),
+    [],
   );
   const remarkPlugins = useMemo(
-    () => activeMarkdownElements.map((element) => element.remarkPlugin).filter(Boolean),
-    [activeMarkdownElements],
+    () => markdownElements.map((element) => element.remarkPlugin).filter(Boolean),
+    [],
   );
 
   return useMemo(
