@@ -15,7 +15,7 @@ services:
       - .env
 
   postgresql:
-    image: pgvector/pgvector:pg17
+    image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
     ports:
       - '5432:5432'
@@ -63,11 +63,11 @@ services:
     volumes:
       - rustfs-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
       interval: 5s
       timeout: 3s
       retries: 30
-    command: ["--access-key","${RUSTFS_ACCESS_KEY}","--secret-key","${RUSTFS_SECRET_KEY}","/data"]
+    command: ['--access-key','${RUSTFS_ACCESS_KEY}','--secret-key','${RUSTFS_SECRET_KEY}','/data']
     env_file:
       - .env
 
@@ -90,7 +90,7 @@ services:
         mc admin info rustfs || true;
         mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
       '
-    restart: "no"
+    restart: 'no'
     networks:
       - lobe-network
     env_file:

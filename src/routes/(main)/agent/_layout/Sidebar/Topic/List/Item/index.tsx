@@ -1,7 +1,7 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -44,6 +44,16 @@ const styles = createStaticStyles(({ css }) => ({
     margin-inline-start: -6px;
 
     transition: width 0.2s ${cssVar.motionEaseOut};
+  `,
+  neonDot: css`
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorInfo};
+    box-shadow:
+      0 0 3px ${cssVar.colorInfo},
+      0 0 6px ${cssVar.colorInfo};
   `,
 }));
 
@@ -119,12 +129,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const hasUnread = id && isUnreadCompleted;
-  const successColor = cssVar.colorSuccess;
+  const infoColor = cssVar.colorInfo;
   const unreadNode = (
     <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
       <AnimatePresence mode="popLayout">
         {hasUnread && (
-          <motion.div
+          <m.div
             className={styles.neonDotWrapper}
             initial={{ scale: 0, opacity: 0 }}
             animate={{
@@ -136,23 +146,17 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
               opacity: 0,
             }}
           >
-            <motion.span
+            <m.span
+              className={styles.neonDot}
               initial={false}
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [1, 0.9, 1],
                 boxShadow: [
-                  `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
-                  `0 0 5px ${successColor}, 0 0 8px color-mix(in srgb, ${successColor} 60%, transparent)`,
-                  `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
+                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
+                  `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
+                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
                 ],
-              }}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: successColor,
-                boxShadow: `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
               }}
               transition={{
                 duration: 1.2,
@@ -160,7 +164,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
                 ease: 'easeInOut',
               }}
             />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </span>

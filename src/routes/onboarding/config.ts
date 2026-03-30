@@ -1,3 +1,5 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { isDev } from '@lobechat/utils';
 import {
   ChartNetworkIcon,
   CodeXmlIcon,
@@ -8,6 +10,19 @@ import {
   PercentIcon,
   TargetIcon,
 } from 'lucide-react';
+
+/** Default target when the user opens `/onboarding`. Flip to `'agent'` when agent onboarding is ready to ship as the primary flow. */
+export type DefaultOnboardingEntryVariant = 'agent' | 'classic';
+
+export const DEFAULT_ONBOARDING_ENTRY_VARIANT: DefaultOnboardingEntryVariant = 'classic';
+
+export const AGENT_ONBOARDING_ENABLED = ENABLE_BUSINESS_FEATURES || isDev;
+
+const resolveDefaultOnboardingPath = (variant: DefaultOnboardingEntryVariant) =>
+  variant === 'agent' && AGENT_ONBOARDING_ENABLED ? '/onboarding/agent' : '/onboarding/classic';
+
+export const DEFAULT_ONBOARDING_PATH: '/onboarding/agent' | '/onboarding/classic' =
+  resolveDefaultOnboardingPath(DEFAULT_ONBOARDING_ENTRY_VARIANT);
 
 /**
  * Predefined interest areas with icons and translation keys.

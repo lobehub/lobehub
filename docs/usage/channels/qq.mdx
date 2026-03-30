@@ -13,11 +13,6 @@ tags:
 
 # Connect LobeHub to QQ
 
-<Callout type={'info'}>
-  This feature is currently in development and may not be fully stable. You can enable it by turning
-  on **Developer Mode** in **Settings** → **Advanced Settings** → **Developer Mode**.
-</Callout>
-
 By connecting a QQ channel to your LobeHub agent, users can interact with the AI assistant through QQ group chats, guild channels, and direct messages.
 
 ## Prerequisites
@@ -45,6 +40,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 
   > **Important:** Keep your App Secret confidential. Never share it publicly.
 
+  ![](/blog/assets276a4e8748e9bd300b30dcd9d0e24980.webp)
+
   ### Configure Webhook URL
 
   In the QQ Open Platform, navigate to **Development Settings** → **Callback Configuration**. You will need to paste the LobeHub Callback URL here after completing Step 2.
@@ -69,6 +66,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   Click **Save Configuration**. After saving, a **Callback URL** will be displayed. Copy this URL.
 
   Your credentials will be encrypted and stored securely.
+
+  ![](/blog/assetsf9317924035e48fcb1d1ae586568ea5f.webp)
 </Steps>
 
 ## Step 3: Configure Callback in QQ Open Platform
@@ -87,6 +86,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   - `AT_MESSAGE_CREATE` — Triggered when the bot is @mentioned in a guild channel
   - `DIRECT_MESSAGE_CREATE` — Triggered for direct messages in a guild
 
+  ![](/blog/assets737e194726e134bc205a37d74eaee98e.webp)
+
   ### Verify the Callback
 
   The QQ Open Platform will send a verification request to your Callback URL. LobeHub handles this automatically using Ed25519 signature verification.
@@ -102,6 +103,8 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   ### Wait for Approval
 
   QQ will review your bot. Once approved, the bot will be published and ready to use. For sandbox testing, you can add test users directly without publishing.
+
+  ![](/blog/assets862c2fcdfd3a9e51c44c721c47e1ff5a.webp)
 </Steps>
 
 ## Step 5: Test the Connection

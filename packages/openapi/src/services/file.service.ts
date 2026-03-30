@@ -1277,10 +1277,10 @@ export class FileUploadService extends BaseService {
   }
 
   /**
-   * 根据权限结果查询单个文件
-   * @param fileId 文件 ID
-   * @param permissionResult 权限校验结果
-   * @returns 文件记录，如果找不到则抛出错误
+   * Query a single file based on permission result
+   * @param fileId File ID
+   * @param permissionResult Permission check result
+   * @returns File record, throws an error if not found
    */
   private async findFileByIdWithPermission(
     fileId: string,

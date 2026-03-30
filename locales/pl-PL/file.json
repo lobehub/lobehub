@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Przetwarzanie pliku...",
   "uploadDock.body.item.restTime": "Pozostało {{time}}",
   "uploadDock.fileQueueInfo": "Przesyłanie pierwszych {{count}} plików, {{remaining}} w kolejce",
+  "uploadDock.header.cancelAll": "Anuluj wszystko",
   "uploadDock.totalCount": "Łącznie {{count}} elementów",
   "uploadDock.uploadStatus.cancelled": "Przesyłanie anulowane",
   "uploadDock.uploadStatus.error": "Błąd przesyłania",

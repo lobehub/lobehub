@@ -81,7 +81,9 @@ const ChannelPage = memo(() => {
           <div className={styles.container}>
             <PlatformList
               activeId={effectiveActiveId}
+              agentId={aid}
               platforms={platforms}
+              providers={providers}
               runtimeStatuses={platformRuntimeStatuses}
               onSelect={setActiveProviderId}
             />

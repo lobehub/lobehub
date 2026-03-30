@@ -2,7 +2,7 @@
   "buildCommand": "bun run build:vercel",
   "headers": [
     {
-      "source": "/spa/assets/(.*)",
+      "source": "/_spa/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

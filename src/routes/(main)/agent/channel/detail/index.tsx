@@ -15,6 +15,7 @@ import {
 } from '../../../../../types/botRuntimeStatus';
 import Body from './Body';
 import Footer from './Footer';
+import { getChannelFormValues } from './formState';
 import Header from './Header';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -33,18 +34,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const omitUndefinedValues = <T extends Record<string, unknown>>(record: T) =>
+  Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as T;
+
 interface CurrentConfig {
   applicationId: string;
   credentials: Record<string, string>;
   enabled: boolean;
   id: string;
   platform: string;
+  settings?: Record<string, unknown> | null;
 }
 
 export interface ChannelFormValues {
   applicationId?: string;
   credentials: Record<string, string>;
-  settings: Record<string, unknown>;
+  settings: Record<string, {} | undefined>;
 }
 
 export interface TestResult {
@@ -188,10 +193,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
   // Sync form with saved config
   useEffect(() => {
     if (currentConfig) {
-      form.setFieldsValue({
-        applicationId: currentConfig.applicationId || '',
-        credentials: currentConfig.credentials || {},
-      } as any);
+      form.setFieldsValue(getChannelFormValues(currentConfig));
     }
   }, [currentConfig, form]);
 
@@ -229,7 +231,8 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
 
   const handleSave = useCallback(async () => {
     try {
-      const values = await form.validateFields();
+      await form.validateFields();
+      const values = form.getFieldsValue(true) as ChannelFormValues;
 
       setSaving(true);
       setSaveResult(undefined);
@@ -238,13 +241,14 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       const {
         applicationId: formAppId,
         credentials: rawCredentials = {},
-        settings = {},
+        settings: rawSettings = {},
       } = values as ChannelFormValues;
 
       // Strip undefined values from credentials (optional fields left empty by antd form)
       const credentials = Object.fromEntries(
         Object.entries(rawCredentials).filter(([, v]) => v !== undefined && v !== ''),
       );
+      const settings = omitUndefinedValues(rawSettings);
 
       // Use explicit applicationId from form; fall back to deriving from botToken (Telegram)
       let applicationId = formAppId || '';
@@ -271,6 +275,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
       }
 
       setSaveResult({ type: 'success' });
+      setTimeout(() => setSaveResult(undefined), 3000);
       setSaving(false);
 
       // Auto-connect bot after save
@@ -291,26 +296,15 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
     connectCurrentBot,
   ]);
 
-  const handleQrAuthenticated = useCallback(
-    async (creds: { botId: string; botToken: string; userId: string }) => {
+  const handleExternalAuth = useCallback(
+    async (params: { applicationId: string; credentials: Record<string, string> }) => {
       setSaving(true);
       setSaveResult(undefined);
       setConnectResult(undefined);
 
       try {
-        const botToken = creds.botToken?.trim();
-
-        if (!creds.botId && !botToken) {
-          throw new Error('Bot Token is required');
-        }
-
-        const credentials = {
-          botId: creds.botId,
-          botToken: creds.botToken,
-          userId: creds.userId,
-        };
-        const applicationId = creds.botId || botToken?.slice(0, 16) || '';
-        const settings = form.getFieldValue('settings') || {};
+        const { applicationId, credentials } = params;
+        const settings = omitUndefinedValues(form.getFieldValue('settings') || {});
 
         if (currentConfig) {
           await updateBotProvider(currentConfig.id, agentId, {
@@ -429,7 +423,7 @@ const PlatformDetail = memo<PlatformDetailProps>(({ platformDef, agentId, curren
         form={form}
         hasConfig={!!currentConfig}
         platformDef={platformDef}
-        onQrAuthenticated={platformDef.authFlow === 'qrcode' ? handleQrAuthenticated : undefined}
+        onAuthenticated={handleExternalAuth}
       />
       <Footer
         connectResult={connectResult}

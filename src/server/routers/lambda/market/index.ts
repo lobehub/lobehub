@@ -23,6 +23,7 @@ import { credsRouter } from './creds';
 import { oidcRouter } from './oidc';
 import { skillRouter } from './skill';
 import { socialRouter } from './social';
+import { socialProfileRouter } from './socialProfile';
 import { userRouter } from './user';
 
 const log = debug('lambda-router:market');
@@ -892,6 +893,9 @@ export const marketRouter = router({
 
   // ============================== Social Features ==============================
   social: socialRouter,
+
+  // ============================== Social Profile OAuth ==============================
+  socialProfile: socialProfileRouter,
 
   submitFeedback: marketProcedure
     .input(

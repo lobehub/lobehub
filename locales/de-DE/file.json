@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Datei wird verarbeitet...",
   "uploadDock.body.item.restTime": "Verbleibend {{time}}",
   "uploadDock.fileQueueInfo": "Die ersten {{count}} Dateien werden hochgeladen, {{remaining}} verbleiben in der Warteschlange",
+  "uploadDock.header.cancelAll": "Alle abbrechen",
   "uploadDock.totalCount": "Insgesamt {{count}} Elemente",
   "uploadDock.uploadStatus.cancelled": "Upload abgebrochen",
   "uploadDock.uploadStatus.error": "Upload-Fehler",

@@ -1,8 +1,9 @@
 import type { IEditor, SlashOptions } from '@lobehub/editor';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { ArchiveIcon, MessageSquarePlusIcon, WrenchIcon } from 'lucide-react';
-import { useCallback } from 'react';
+import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { createElement, type FC, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -25,6 +26,40 @@ interface SlashMenuOption {
 const COMMAND_ICONS: Record<string, any> = {
   compact: ArchiveIcon,
   newTopic: MessageSquarePlusIcon,
+};
+
+/** Remote/object URLs and data-URI images (plugin/skill avatars); not plain text. */
+const shouldRenderIconAsImage = (str: string) =>
+  str.startsWith('http://') ||
+  str.startsWith('https://') ||
+  str.startsWith('blob:') ||
+  /^data:image\//i.test(str);
+
+const iconCache = new Map<string, FC>();
+
+const getIconComponent = (avatar: string | undefined): any => {
+  if (!avatar) return SkillsIcon;
+
+  const cached = iconCache.get(avatar);
+  if (cached) return cached;
+
+  let IconComp: FC;
+
+  if (shouldRenderIconAsImage(avatar)) {
+    IconComp = () =>
+      createElement('img', {
+        alt: '',
+        height: 16,
+        src: avatar,
+        style: { flexShrink: 0, objectFit: 'contain' },
+        width: 16,
+      });
+  } else {
+    IconComp = () => createElement('span', { style: { fontSize: 16, lineHeight: 1 } }, avatar);
+  }
+
+  iconCache.set(avatar, IconComp);
+  return IconComp;
 };
 
 export const useSlashActionItems = (): SlashOptions['items'] => {
@@ -55,7 +90,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
       });
 
       const makeActionItem = (item: ActionTagData): SlashMenuOption => ({
-        icon: WrenchIcon,
+        icon: getIconComponent(item.icon),
         key: `${item.category}-${item.type}`,
         label: item.label,
         metadata: { category: item.category, type: item.type },

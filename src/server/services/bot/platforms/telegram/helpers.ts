@@ -18,7 +18,20 @@ export async function setTelegramWebhook(
   url: string,
   secretToken?: string,
 ): Promise<void> {
-  const params: Record<string, string> = { url };
+  const params: Record<string, unknown> = {
+    // Explicitly request all update types we need, including group messages.
+    // Without this, Telegram keeps whatever `allowed_updates` was set previously,
+    // which may silently exclude group messages.
+    allowed_updates: [
+      'message',
+      'edited_message',
+      'channel_post',
+      'edited_channel_post',
+      'callback_query',
+      'message_reaction',
+    ],
+    url,
+  };
   if (secretToken) {
     params.secret_token = secretToken;
   }

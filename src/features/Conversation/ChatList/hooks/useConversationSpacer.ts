@@ -42,7 +42,8 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const getItemSize = useConversationStore((s) => s.virtuaScrollMethods?.getItemSize);
   const getViewportSize = useConversationStore((s) => s.virtuaScrollMethods?.getViewportSize);
 
-  const [height, setHeight] = useState(0);
+  const [naturalHeight, setNaturalHeight] = useState(0);
+  const [scrollReduction, setScrollReduction] = useState(0);
   const [mounted, setMounted] = useState(false);
 
   const prevLengthRef = useRef(dataSource.length);
@@ -50,6 +51,18 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const userMessageIndexRef = useRef<number | null>(null);
   const assistantMessageIndexRef = useRef<number | null>(null);
+
+  // Refs for scroll-shrink feature (stable callback access)
+  const mountedRef = useRef(false);
+  mountedRef.current = mounted;
+  const isAIGeneratingRef = useRef(isAIGenerating);
+  isAIGeneratingRef.current = isAIGenerating;
+  const prevScrollOffsetRef = useRef<number | null>(null);
+  const scrollShrinkEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Derived rendered height: natural height minus user scroll reduction
+  const renderedHeight = Math.max(naturalHeight - scrollReduction, 0);
+  const isScrollShrinking = scrollReduction > 0;
 
   const getTrackedMessages = useCallback(() => {
     const userIndex = userMessageIndexRef.current;
@@ -115,13 +128,13 @@ export const useConversationSpacer = (dataSource: string[]) => {
     }
 
     if (nextHeight === 0) {
-      setHeight(0);
+      setNaturalHeight(0);
       scheduleUnmount();
       return;
     }
 
     setMounted(true);
-    setHeight(nextHeight);
+    setNaturalHeight(nextHeight);
   }, [
     clearRemoveTimer,
     getTrackedMessages,
@@ -131,10 +144,43 @@ export const useConversationSpacer = (dataSource: string[]) => {
     scheduleUnmount,
   ]);
 
+  // Reset prev scroll offset when generation state changes to avoid stale deltas
+  useEffect(() => {
+    prevScrollOffsetRef.current = null;
+  }, [isAIGenerating]);
+
+  // Stable scroll handler for shrinking spacer on scroll-up when not streaming
+  const handleScrollOffset = useCallback((currentScrollOffset: number) => {
+    const prevOffset = prevScrollOffsetRef.current;
+    prevScrollOffsetRef.current = currentScrollOffset;
+
+    if (!mountedRef.current || isAIGeneratingRef.current || prevOffset === null) return;
+
+    const delta = currentScrollOffset - prevOffset;
+    if (delta >= 0) return;
+
+    setScrollReduction((prev) => prev + Math.abs(delta));
+
+    if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
+    scrollShrinkEndTimerRef.current = setTimeout(() => {
+      scrollShrinkEndTimerRef.current = null;
+    }, 150);
+  }, []);
+
+  // Unmount when rendered height reaches zero via scroll reduction
+  useEffect(() => {
+    if (renderedHeight === 0 && mounted && scrollReduction > 0) {
+      setMounted(false);
+      setScrollReduction(0);
+      prevScrollOffsetRef.current = null;
+    }
+  }, [renderedHeight, mounted, scrollReduction]);
+
   useEffect(() => {
     return () => {
       cleanupObserver();
       clearRemoveTimer();
+      if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
     };
   }, [cleanupObserver, clearRemoveTimer]);
 
@@ -147,6 +193,8 @@ export const useConversationSpacer = (dataSource: string[]) => {
 
     if (newMessageCount !== 2 || userMessage?.role !== 'user' || !assistantMessage) return;
 
+    setScrollReduction(0);
+    prevScrollOffsetRef.current = null;
     userMessageIndexRef.current = dataSource.length - 2;
     assistantMessageIndexRef.current = dataSource.length - 1;
 
@@ -197,9 +245,11 @@ export const useConversationSpacer = (dataSource: string[]) => {
   );
 
   return {
+    handleScrollOffset,
     isSpacerMessage: (id: string) => id === CONVERSATION_SPACER_ID,
     listData,
+    scrollShrinking: isScrollShrinking,
     spacerActive: mounted,
-    spacerHeight: height,
+    spacerHeight: renderedHeight,
   };
 };

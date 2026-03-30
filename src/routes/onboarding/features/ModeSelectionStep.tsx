@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useIsDark } from '@/hooks/useIsDark';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { useUserStore } from '@/store/user';
+import { isDev } from '@/utils/env';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   base: css`
@@ -96,7 +97,10 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
   const handleSelectLite = () => {
     updateGeneralConfig({ isLiteMode: true });
     finishOnboarding();
-    navigate('/');
+
+    if (!isDev) {
+      navigate('/');
+    }
   };
 
   const handleSelectPro = () => {

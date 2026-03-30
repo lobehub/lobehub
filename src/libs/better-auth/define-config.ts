@@ -177,7 +177,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     session: {
       cookieCache: {
         enabled: true,
-        maxAge: 10 * 60, // Cache duration in seconds
+        maxAge: 2 * 60, // Cache duration in seconds
       },
       // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
       storeSessionInDatabase: true,

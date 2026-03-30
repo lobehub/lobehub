@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Descripción",
+  "gateway.descriptionPlaceholder": "Opcional",
+  "gateway.deviceName": "Nombre del Dispositivo",
+  "gateway.deviceNamePlaceholder": "Ingrese el nombre del dispositivo",
+  "gateway.enableConnection": "Conectar al Gateway",
+  "gateway.statusConnected": "Conectado al Gateway",
+  "gateway.statusConnecting": "Conectando al Gateway...",
+  "gateway.statusDisconnected": "No conectado al Gateway",
+  "gateway.title": "Gateway de Dispositivo",
   "navigation.chat": "Chat",
   "navigation.discover": "Descubrir",
   "navigation.discoverAssistants": "Descubrir Asistentes",

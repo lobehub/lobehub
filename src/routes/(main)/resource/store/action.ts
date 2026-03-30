@@ -1,44 +1,51 @@
-import { type StateCreator } from 'zustand/vanilla';
+import type { StateCreator } from 'zustand/vanilla';
 
-import { type ResourceManagerMode } from '@/features/ResourceManager';
+import type { ResourceManagerMode } from '@/features/ResourceManager';
+import type { StoreSetter } from '@/store/types';
+import { flattenActions } from '@/store/utils/flattenActions';
 
-import { type State } from './initialState';
+import type { State } from './initialState';
 import { initialState } from './initialState';
 
-export interface Action {
-  /**
-   * Set the current view item ID
-   */
-  setCurrentViewItemId: (id?: string) => void;
-  /**
-   * Set the view mode
-   */
-  setMode: (mode: ResourceManagerMode) => void;
-  /**
-   * Set selected file IDs
-   */
-  setSelectedFileIds: (ids: string[]) => void;
+export type Store = Action & State;
+
+type Setter = StoreSetter<Store>;
+
+export class ResourceStoreActionImpl {
+  readonly #set: Setter;
+
+  constructor(set: Setter, _get: () => Store, _api?: unknown) {
+    void _api;
+    void _get;
+    this.#set = set;
+  }
+
+  setCurrentViewItemId = (currentViewItemId?: string): void => {
+    this.#set({ currentViewItemId });
+  };
+
+  setMode = (mode: ResourceManagerMode): void => {
+    this.#set({ mode });
+  };
+
+  setSelectedFileIds = (selectedFileIds: string[]): void => {
+    this.#set({ selectedFileIds });
+  };
 }
 
-export type Store = Action & State;
+export type Action = Pick<ResourceStoreActionImpl, keyof ResourceStoreActionImpl>;
+
+export const createResourceStoreSlice = (set: Setter, get: () => Store, _api?: unknown) =>
+  new ResourceStoreActionImpl(set, get, _api);
 
 type CreateStore = (
   initState?: Partial<State>,
 ) => StateCreator<Store, [['zustand/devtools', never]]>;
 
-export const store: CreateStore = (publicState) => (set) => ({
-  ...initialState,
-  ...publicState,
-
-  setCurrentViewItemId: (currentViewItemId) => {
-    set({ currentViewItemId });
-  },
-
-  setMode: (mode) => {
-    set({ mode });
-  },
-
-  setSelectedFileIds: (selectedFileIds) => {
-    set({ selectedFileIds });
-  },
-});
+export const store: CreateStore =
+  (publicState) =>
+  (...params) => ({
+    ...initialState,
+    ...publicState,
+    ...flattenActions<Action>([createResourceStoreSlice(...params)]),
+  });

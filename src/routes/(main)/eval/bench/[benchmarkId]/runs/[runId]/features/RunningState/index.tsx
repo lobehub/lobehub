@@ -1,12 +1,12 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Brain, ChartBar, Loader2, MessageSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   center: css`
     position: absolute;
     inset: 0;
@@ -20,9 +20,9 @@ const useStyles = createStyles(({ css, token }) => ({
     margin: auto;
     border-radius: 50%;
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   container: css`
     position: relative;
@@ -37,7 +37,7 @@ const useStyles = createStyles(({ css, token }) => ({
   hint: css`
     margin-block-start: 24px;
     font-size: 13px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   icon: css`
     position: absolute;
@@ -54,27 +54,27 @@ const useStyles = createStyles(({ css, token }) => ({
   icon1: css`
     inset-block-start: 15px;
     inset-inline-start: 100px;
-    color: ${token.geekblue};
-    background: ${token.geekblue1};
+    color: ${cssVar.geekblue};
+    background: ${cssVar.geekblue1};
   `,
   icon2: css`
     inset-block-start: 143px;
     inset-inline-start: 174px;
-    color: ${token.colorSuccess};
-    background: ${token.colorSuccessBg};
+    color: ${cssVar.colorSuccess};
+    background: ${cssVar.colorSuccessBg};
   `,
   icon3: css`
     inset-block-start: 143px;
     inset-inline-start: 26px;
-    color: ${token.purple};
-    background: ${token.purple1};
+    color: ${cssVar.purple};
+    background: ${cssVar.purple1};
   `,
   orbit: css`
     position: absolute;
     inset: 0;
 
     margin: auto;
-    border: 1px dashed ${token.colorBorderSecondary};
+    border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: 50%;
   `,
   orbit1: css`
@@ -123,7 +123,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const RunningState = memo(() => {
   const { t } = useTranslation('eval');
-  const { cx, styles } = useStyles();
 
   return (
     <div className={styles.container}>

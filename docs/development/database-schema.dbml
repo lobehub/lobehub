@@ -1678,6 +1678,7 @@ table users {
   full_name text
   interests "varchar(64)[]"
   is_onboarded boolean [default: false]
+  agent_onboarding jsonb
   onboarding jsonb
   clerk_created_at "timestamp with time zone"
   email_verified boolean [not null, default: false]

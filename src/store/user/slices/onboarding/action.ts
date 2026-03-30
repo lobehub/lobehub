@@ -35,6 +35,25 @@ export class OnboardingActionImpl {
     await this.#get().refreshUserState();
   };
 
+  resetOnboarding = async (): Promise<void> => {
+    this.#set(
+      {
+        isProcessingStepQueue: false,
+        localOnboardingStep: 1,
+        stepUpdateQueue: [],
+      },
+      false,
+      'resetOnboarding/optimistic',
+    );
+
+    await userService.updateOnboarding({
+      currentStep: 1,
+      version: CURRENT_ONBOARDING_VERSION,
+    });
+
+    await this.#get().refreshUserState();
+  };
+
   goToNextStep = (): void => {
     const currentStep = onboardingSelectors.currentStep(this.#get());
     if (currentStep === MAX_ONBOARDING_STEPS) return;

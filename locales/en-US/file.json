@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Processing file...",
   "uploadDock.body.item.restTime": "Remaining {{time}}",
   "uploadDock.fileQueueInfo": "Uploading the first {{count}} files, {{remaining}} remaining in queue",
+  "uploadDock.header.cancelAll": "Cancel all",
   "uploadDock.totalCount": "Total {{count}} items",
   "uploadDock.uploadStatus.cancelled": "Upload cancelled",
   "uploadDock.uploadStatus.error": "Upload error",

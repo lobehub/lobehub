@@ -16,6 +16,7 @@ import type {
   ResponseObject,
   ResponseStreamEvent,
   ResponseUsage,
+  Tool,
 } from '../types/responses.type';
 
 /**
@@ -27,6 +28,14 @@ import type {
  * with executeSync used when synchronous results are needed.
  */
 export class ResponsesService extends BaseService {
+  /**
+   * Extract hosted builtin tool identifiers from tools array
+   */
+  private extractHostedToolIds(tools?: Tool[] | null): string[] {
+    if (!tools) return [];
+    return tools.filter((t) => t.type !== 'function').map((t) => t.type);
+  }
+
   /**
    * Extract a prompt string from OpenResponses input
    */
@@ -133,7 +142,7 @@ export class ResponsesService extends BaseService {
             output.push({
               arguments: toolCall.function?.arguments ?? '{}',
               call_id: toolCall.id ?? `call_${itemCounter}`,
-              id: `fc_${responseId.slice(5)}_${itemCounter++}`,
+              id: `fc_${responseId}_${itemCounter++}`,
               name: toolCall.function?.name ?? '',
               status: 'completed' as const,
               type: 'function_call' as const,
@@ -150,7 +159,7 @@ export class ResponsesService extends BaseService {
               content: [
                 { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
               ],
-              id: `msg_${responseId.slice(5)}_${itemCounter++}`,
+              id: `msg_${responseId}_${itemCounter++}`,
               role: 'assistant' as const,
               status: 'completed' as const,
               type: 'message' as const,
@@ -160,7 +169,7 @@ export class ResponsesService extends BaseService {
       } else if (msg.role === 'tool') {
         output.push({
           call_id: msg.tool_call_id ?? '',
-          id: `fco_${responseId.slice(5)}_${itemCounter++}`,
+          id: `fco_${responseId}_${itemCounter++}`,
           output: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
           status: 'completed' as const,
           type: 'function_call_output' as const,
@@ -209,8 +218,10 @@ export class ResponsesService extends BaseService {
 
       // 1. Create agent operation without auto-start
       // model field is used as agentId
+      const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
@@ -274,8 +285,6 @@ export class ResponsesService extends BaseService {
   ): AsyncGenerator<ResponseStreamEvent> {
     const createdAt = Math.floor(Date.now() / 1000);
     let sequenceNumber = 0;
-    const outputIndex = 0;
-    const contentIndex = 0;
 
     try {
       const model = params.model;
@@ -289,8 +298,10 @@ export class ResponsesService extends BaseService {
 
       // 1. Create agent operation (before generating responseId so we have topicId)
       // model field is used as agentId
+      const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
@@ -307,7 +318,6 @@ export class ResponsesService extends BaseService {
 
       // Generate response ID encoding topicId for multi-turn support
       const responseId = this.generateResponseId(execResult.topicId);
-      const outputItemId = `msg_${responseId.slice(5)}`;
 
       const response = this.buildResponseObject({
         createdAt,
@@ -375,32 +385,78 @@ export class ResponsesService extends BaseService {
           }
         });
 
-      // 5. Emit output_item.added + content_part.added immediately
-      const outputItem: OutputItem = {
-        content: [{ annotations: [], logprobs: [], text: '', type: 'output_text' as const }],
-        id: outputItemId,
-        role: 'assistant' as const,
-        status: 'in_progress' as const,
-        type: 'message' as const,
-      };
-
-      yield {
-        item: outputItem,
-        output_index: outputIndex,
-        sequence_number: sequenceNumber++,
-        type: 'response.output_item.added' as const,
-      };
-      yield {
-        content_index: contentIndex,
-        item_id: outputItemId,
-        output_index: outputIndex,
-        part: { annotations: [], logprobs: [], text: '', type: 'output_text' as const },
-        sequence_number: sequenceNumber++,
-        type: 'response.content_part.added' as const,
-      };
-
-      // 6. Process stream events and emit text deltas
+      // 5. Process stream events and emit output items
       let accumulatedText = '';
+      let currentOutputIndex = 0;
+      let itemCounter = 0;
+      let textMessageStarted = false;
+      let currentTextItemId = '';
+
+      const startTextMessage = function* (seq: { n: number }) {
+        if (textMessageStarted) return;
+        textMessageStarted = true;
+        currentTextItemId = `msg_${responseId}_${itemCounter++}`;
+        const item: OutputItem = {
+          content: [{ annotations: [], logprobs: [], text: '', type: 'output_text' as const }],
+          id: currentTextItemId,
+          role: 'assistant' as const,
+          status: 'in_progress' as const,
+          type: 'message' as const,
+        };
+        yield {
+          item,
+          output_index: currentOutputIndex,
+          sequence_number: seq.n++,
+          type: 'response.output_item.added' as const,
+        };
+        yield {
+          content_index: 0,
+          item_id: currentTextItemId,
+          output_index: currentOutputIndex,
+          part: { annotations: [], logprobs: [], text: '', type: 'output_text' as const },
+          sequence_number: seq.n++,
+          type: 'response.content_part.added' as const,
+        };
+      };
+
+      const finishTextMessage = function* (seq: { n: number }, text: string) {
+        if (!textMessageStarted) return;
+        textMessageStarted = false;
+
+        yield {
+          content_index: 0,
+          item_id: currentTextItemId,
+          logprobs: [],
+          output_index: currentOutputIndex,
+          sequence_number: seq.n++,
+          text,
+          type: 'response.output_text.done' as const,
+        };
+        yield {
+          content_index: 0,
+          item_id: currentTextItemId,
+          output_index: currentOutputIndex,
+          part: { annotations: [], logprobs: [], text, type: 'output_text' as const },
+          sequence_number: seq.n++,
+          type: 'response.content_part.done' as const,
+        };
+        yield {
+          item: {
+            content: [{ annotations: [], logprobs: [], text, type: 'output_text' as const }],
+            id: currentTextItemId,
+            role: 'assistant' as const,
+            status: 'completed' as const,
+            type: 'message' as const,
+          } as OutputItem,
+          output_index: currentOutputIndex,
+          sequence_number: seq.n++,
+          type: 'response.output_item.done' as const,
+        };
+        currentOutputIndex++;
+      };
+
+      // Shared mutable sequence counter for generators
+      const seq = { n: sequenceNumber };
 
       while (!executionDone || eventQueue.length > 0) {
         await waitForEvents();
@@ -410,23 +466,117 @@ export class ResponsesService extends BaseService {
 
           if (event.type === 'stream_chunk') {
             const chunk = event.data as StreamChunkData;
+
             if (chunk.chunkType === 'text' && chunk.content) {
+              // Start text message output item if not already started
+              yield* startTextMessage(seq);
+
               accumulatedText += chunk.content;
               yield {
-                content_index: contentIndex,
+                content_index: 0,
                 delta: chunk.content,
-                item_id: outputItemId,
+                item_id: currentTextItemId,
                 logprobs: [],
-                output_index: outputIndex,
-                sequence_number: sequenceNumber++,
+                output_index: currentOutputIndex,
+                sequence_number: seq.n++,
                 type: 'response.output_text.delta' as const,
               };
+            } else if (chunk.chunkType === 'tools_calling' && chunk.toolsCalling) {
+              // Close any open text message before emitting tool calls
+              yield* finishTextMessage(seq, accumulatedText);
+              accumulatedText = '';
+
+              // Emit function_call output items for each tool call
+              for (const toolCall of chunk.toolsCalling) {
+                const fcItemId = `fc_${responseId}_${itemCounter++}`;
+                yield {
+                  item: {
+                    arguments: toolCall.arguments ?? '{}',
+                    call_id: toolCall.id,
+                    id: fcItemId,
+                    name: `${toolCall.identifier}/${toolCall.apiName}`,
+                    status: 'in_progress' as const,
+                    type: 'function_call' as const,
+                  } as OutputItem,
+                  output_index: currentOutputIndex,
+                  sequence_number: seq.n++,
+                  type: 'response.output_item.added' as const,
+                };
+
+                // Emit arguments delta
+                if (toolCall.arguments) {
+                  yield {
+                    delta: toolCall.arguments,
+                    item_id: fcItemId,
+                    output_index: currentOutputIndex,
+                    sequence_number: seq.n++,
+                    type: 'response.function_call_arguments.delta' as const,
+                  };
+                }
+
+                // Complete the function_call item
+                yield {
+                  item: {
+                    arguments: toolCall.arguments ?? '{}',
+                    call_id: toolCall.id,
+                    id: fcItemId,
+                    name: `${toolCall.identifier}/${toolCall.apiName}`,
+                    status: 'completed' as const,
+                    type: 'function_call' as const,
+                  } as OutputItem,
+                  output_index: currentOutputIndex,
+                  sequence_number: seq.n++,
+                  type: 'response.output_item.done' as const,
+                };
+                currentOutputIndex++;
+              }
+            } else if (chunk.chunkType === 'reasoning' && chunk.reasoning) {
+              // Emit reasoning as text delta (within a text message)
+              yield* startTextMessage(seq);
             }
+          } else if (event.type === 'tool_end') {
+            // Emit function_call_output for completed tool execution
+            const toolData = event.data as {
+              isSuccess: boolean;
+              payload: { toolCalling: { id: string } };
+              result: { content: string };
+            };
+            const fcoItemId = `fco_${responseId}_${itemCounter++}`;
+
+            yield {
+              item: {
+                call_id: toolData.payload.toolCalling.id,
+                id: fcoItemId,
+                output: toolData.result?.content ?? '',
+                status: 'completed' as const,
+                type: 'function_call_output' as const,
+              } as OutputItem,
+              output_index: currentOutputIndex,
+              sequence_number: seq.n++,
+              type: 'response.output_item.added' as const,
+            };
+            yield {
+              item: {
+                call_id: toolData.payload.toolCalling.id,
+                id: fcoItemId,
+                output: toolData.result?.content ?? '',
+                status: 'completed' as const,
+                type: 'function_call_output' as const,
+              } as OutputItem,
+              output_index: currentOutputIndex,
+              sequence_number: seq.n++,
+              type: 'response.output_item.done' as const,
+            };
+            currentOutputIndex++;
           }
         }
       }
 
-      // 7. Wait for execution to fully complete
+      // Close any remaining open text message
+      yield* finishTextMessage(seq, accumulatedText);
+      sequenceNumber = seq.n;
+
+      // 6. Wait for execution to fully complete
       await executionPromise;
       unsubscribe();
 
@@ -439,52 +589,10 @@ export class ResponsesService extends BaseService {
         ? this.extractUsage(finalState)
         : { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
 
-      // 8. Emit closing events for text content
-      yield {
-        content_index: contentIndex,
-        item_id: outputItemId,
-        logprobs: [],
-        output_index: outputIndex,
-        sequence_number: sequenceNumber++,
-        text: accumulatedText,
-        type: 'response.output_text.done' as const,
-      };
-
-      yield {
-        content_index: contentIndex,
-        item_id: outputItemId,
-        output_index: outputIndex,
-        part: {
-          annotations: [],
-          logprobs: [],
-          text: accumulatedText,
-          type: 'output_text' as const,
-        },
-        sequence_number: sequenceNumber++,
-        type: 'response.content_part.done' as const,
-      };
-
-      const completedItem: OutputItem = {
-        content: [
-          { annotations: [], logprobs: [], text: accumulatedText, type: 'output_text' as const },
-        ],
-        id: outputItemId,
-        role: 'assistant' as const,
-        status: 'completed' as const,
-        type: 'message' as const,
-      };
-
-      yield {
-        item: completedItem,
-        output_index: outputIndex,
-        sequence_number: sequenceNumber++,
-        type: 'response.output_item.done' as const,
-      };
-
-      // 9. Build final output including tool calls from AgentState
+      // 7. Build final output including tool calls from AgentState
       const fullOutput = finalState
         ? this.extractOutputItems(finalState, responseId)
-        : { output: [completedItem], outputText: accumulatedText };
+        : { output: [], outputText: accumulatedText };
 
       yield {
         response: {
@@ -530,38 +638,27 @@ export class ResponsesService extends BaseService {
   }
 
   /**
-   * Generate a response ID that encodes the topicId for multi-turn support.
-   * Format: resp_{topicId}_{8-char-random-suffix}
-   * When no topicId is available, generates a plain random ID.
+   * Generate a response ID.
+   * Uses topicId directly as the response ID for multi-turn support.
+   * When no topicId is available, generates a random ID.
    */
   private generateResponseId(topicId?: string): string {
+    if (topicId) return topicId;
+
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let suffix = '';
-    for (let i = 0; i < 8; i++) {
-      suffix += chars[Math.floor(Math.random() * chars.length)];
-    }
-    if (topicId) {
-      return `resp_${topicId}_${suffix}`;
-    }
-    // Fallback: plain 24-char random ID
     let id = '';
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 24; i++) {
       id += chars[Math.floor(Math.random() * chars.length)];
     }
-    return `resp_${id}_${suffix}`;
+    return id;
   }
 
   /**
    * Extract topicId from a response ID (previous_response_id).
-   * Reverses the encoding from generateResponseId.
+   * Since response ID is the topicId itself, just return it directly.
    */
   private extractTopicIdFromResponseId(responseId: string): string | null {
-    if (!responseId.startsWith('resp_')) return null;
-    const withoutPrefix = responseId.slice(5); // remove "resp_"
-    const lastUnderscore = withoutPrefix.lastIndexOf('_');
-    if (lastUnderscore === -1) return null;
-    const topicId = withoutPrefix.slice(0, lastUnderscore);
-    return topicId || null;
+    return responseId || null;
   }
 
   private buildResponseObject(opts: {

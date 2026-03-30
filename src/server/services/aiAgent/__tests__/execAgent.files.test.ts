@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockMessageCreate, mockCreateOperation, mockUploadFromUrl } = vi.hoisted(() => ({
+const { mockMessageCreate, mockCreateOperation, mockIngestAttachment } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
+  mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
-  mockUploadFromUrl: vi.fn(),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -96,8 +96,11 @@ vi.mock('@/server/services/file', () => ({
     getFullFileUrl: vi
       .fn()
       .mockImplementation((key: string) => Promise.resolve(`https://s3.example.com/${key}`)),
-    uploadFromUrl: mockUploadFromUrl,
   })),
+}));
+
+vi.mock('../ingestAttachment', () => ({
+  ingestAttachment: mockIngestAttachment,
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -153,10 +156,11 @@ describe('AiAgentService.execAgent - file upload handling', () => {
 
   describe('when files are provided', () => {
     it('should upload files to S3 and pass fileIds to messageModel.create', async () => {
-      mockUploadFromUrl.mockResolvedValue({
+      mockIngestAttachment.mockResolvedValue({
         fileId: 'file-abc',
+        isImage: true,
         key: 'files/test-user-id/xxx/photo.png',
-        url: 'https://app.lobehub.com/f/file-abc',
+        resolvedUrl: 'https://s3.example.com/files/test-user-id/xxx/photo.png',
       });
 
       await service.execAgent({
@@ -172,10 +176,11 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         prompt: 'What is in this image?',
       });
 
-      // Verify uploadFromUrl was called with the external URL
-      expect(mockUploadFromUrl).toHaveBeenCalledWith(
-        'https://cdn.discordapp.com/attachments/123/456/photo.png',
-        expect.stringContaining('photo.png'),
+      // Verify ingestAttachment was called
+      expect(mockIngestAttachment).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'photo.png', mimeType: 'image/png' }),
+        expect.any(Object),
+        'test-user-id',
       );
 
       // Verify messageModel.create was called with files
@@ -184,10 +189,11 @@ describe('AiAgentService.execAgent - file upload handling', () => {
     });
 
     it('should include imageList in initialMessages for vision models', async () => {
-      mockUploadFromUrl.mockResolvedValue({
+      mockIngestAttachment.mockResolvedValue({
         fileId: 'file-img',
+        isImage: true,
         key: 'files/test-user-id/xxx/screenshot.jpg',
-        url: 'https://app.lobehub.com/f/file-img',
+        resolvedUrl: 'https://s3.example.com/files/test-user-id/xxx/screenshot.jpg',
       });
 
       await service.execAgent({
@@ -221,10 +227,11 @@ describe('AiAgentService.execAgent - file upload handling', () => {
     });
 
     it('should not include imageList for non-image files', async () => {
-      mockUploadFromUrl.mockResolvedValue({
+      mockIngestAttachment.mockResolvedValue({
         fileId: 'file-pdf',
+        isImage: false,
         key: 'files/test-user-id/xxx/doc.pdf',
-        url: 'https://app.lobehub.com/f/file-pdf',
+        resolvedUrl: '',
       });
 
       await service.execAgent({
@@ -253,7 +260,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         prompt: 'Hello',
       });
 
-      expect(mockUploadFromUrl).not.toHaveBeenCalled();
+      expect(mockIngestAttachment).not.toHaveBeenCalled();
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
       expect(userMessageCall![0].files).toBeUndefined();
@@ -262,7 +269,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
 
   describe('when file upload fails', () => {
     it('should continue execution without the failed file', async () => {
-      mockUploadFromUrl.mockRejectedValue(new Error('Download failed'));
+      mockIngestAttachment.mockRejectedValue(new Error('Download failed'));
 
       await service.execAgent({
         agentId: 'agent-1',

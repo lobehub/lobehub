@@ -15,7 +15,6 @@ import { chatService } from '@/services/chat';
 import { threadService } from '@/services/thread';
 import { threadSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
-import { globalHelpers } from '@/store/global/helpers';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -206,8 +205,7 @@ export class ChatThreadActionImpl {
         threadConfig,
         chainSummaryTitle(
           messages,
-          userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()) ||
-            globalHelpers.getCurrentLanguage(),
+          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
         ),
       ),
     });

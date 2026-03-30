@@ -19,7 +19,9 @@ import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
+import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
@@ -183,6 +185,20 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: TopicReferenceManifest.identifier,
     manifest: TopicReferenceManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: WebOnboardingManifest.identifier,
+    manifest: WebOnboardingManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: UserInteractionManifest.identifier,
+    manifest: UserInteractionManifest,
     type: 'builtin',
   },
   {

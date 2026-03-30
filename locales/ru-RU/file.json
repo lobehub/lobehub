@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Обработка файла...",
   "uploadDock.body.item.restTime": "Осталось {{time}}",
   "uploadDock.fileQueueInfo": "Загружаются первые {{count}} файлов, {{remaining}} в очереди",
+  "uploadDock.header.cancelAll": "Отменить все",
   "uploadDock.totalCount": "Всего {{count}} элементов",
   "uploadDock.uploadStatus.cancelled": "Загрузка отменена",
   "uploadDock.uploadStatus.error": "Ошибка загрузки",

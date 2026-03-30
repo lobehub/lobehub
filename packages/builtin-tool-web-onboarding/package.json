@@ -1,0 +1,16 @@
+{
+  "name": "@lobechat/builtin-tool-web-onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/builtin-agent-onboarding": "workspace:*",
+    "@lobechat/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

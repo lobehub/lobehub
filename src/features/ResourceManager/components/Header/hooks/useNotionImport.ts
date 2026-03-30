@@ -12,7 +12,7 @@ interface UseNotionImportOptions {
   createDocument: DocumentAction['createDocument'];
   currentFolderId?: string | null;
   libraryId?: string | null;
-  refetchResources: () => Promise<void>;
+  refetchResources?: () => Promise<void>;
   t: TFunction<'file'>;
 }
 
@@ -172,8 +172,7 @@ const useNotionImport = ({
           );
         }
 
-        // Refetch resources to show imported documents
-        await refetchResources();
+        await refetchResources?.();
       } catch (error) {
         console.error('Failed to import Notion export:', error);
         const { message } = await import('antd');

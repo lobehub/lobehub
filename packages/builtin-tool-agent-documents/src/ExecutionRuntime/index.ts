@@ -4,14 +4,18 @@ import type {
   CopyDocumentArgs,
   CreateDocumentArgs,
   EditDocumentArgs,
+  ListDocumentsArgs,
   ReadDocumentArgs,
+  ReadDocumentByFilenameArgs,
   RemoveDocumentArgs,
   RenameDocumentArgs,
   UpdateLoadRuleArgs,
+  UpsertDocumentByFilenameArgs,
 } from '../types';
 
 interface AgentDocumentRecord {
   content?: string;
+  filename?: string;
   id: string;
   title?: string;
 }
@@ -36,8 +40,18 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
+  listDocuments: (
+    params: ListDocumentsArgs & {
+      agentId: string;
+    },
+  ) => Promise<AgentDocumentRecord[]>;
   readDocument: (
     params: ReadDocumentArgs & {
+      agentId: string;
+    },
+  ) => Promise<AgentDocumentRecord | undefined>;
+  readDocumentByFilename: (
+    params: ReadDocumentByFilenameArgs & {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
@@ -56,6 +70,11 @@ export interface AgentDocumentsRuntimeService {
       agentId: string;
     },
   ) => Promise<AgentDocumentRecord | undefined>;
+  upsertDocumentByFilename: (
+    params: UpsertDocumentByFilenameArgs & {
+      agentId: string;
+    },
+  ) => Promise<AgentDocumentRecord | undefined>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -64,6 +83,76 @@ export class AgentDocumentsExecutionRuntime {
   private resolveAgentId(context?: AgentDocumentOperationContext) {
     if (!context?.agentId) return;
     return context.agentId;
+  }
+
+  async listDocuments(
+    _args: ListDocumentsArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot list agent documents without agentId context.',
+        success: false,
+      };
+    }
+
+    const docs = await this.service.listDocuments({ agentId });
+    const list = docs.map((d) => ({
+      filename: d.filename ?? d.title ?? '',
+      id: d.id,
+      title: d.title,
+    }));
+
+    return {
+      content: JSON.stringify(list),
+      state: { documents: list },
+      success: true,
+    };
+  }
+
+  async readDocumentByFilename(
+    args: ReadDocumentByFilenameArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot read agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    const doc = await this.service.readDocumentByFilename({ ...args, agentId });
+    if (!doc) return { content: `Document not found: ${args.filename}`, success: false };
+
+    return {
+      content: doc.content || '',
+      state: { content: doc.content, filename: args.filename, id: doc.id, title: doc.title },
+      success: true,
+    };
+  }
+
+  async upsertDocumentByFilename(
+    args: UpsertDocumentByFilenameArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot upsert agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    const doc = await this.service.upsertDocumentByFilename({ ...args, agentId });
+    if (!doc) return { content: `Failed to upsert document: ${args.filename}`, success: false };
+
+    return {
+      content: `Upserted document "${args.filename}" (${doc.id}).`,
+      state: { filename: args.filename, id: doc.id },
+      success: true,
+    };
   }
 
   async createDocument(

@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Dosya işleniyor...",
   "uploadDock.body.item.restTime": "Kalan süre: {{time}}",
   "uploadDock.fileQueueInfo": "İlk {{count}} dosya yükleniyor, sırada {{remaining}} dosya kaldı",
+  "uploadDock.header.cancelAll": "Tümünü iptal et",
   "uploadDock.totalCount": "Toplam {{count}} öğe",
   "uploadDock.uploadStatus.cancelled": "Yükleme iptal edildi",
   "uploadDock.uploadStatus.error": "Yükleme hatası",

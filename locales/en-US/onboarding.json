@@ -1,4 +1,9 @@
 {
+  "agent.completionSubtitle": "Your assistant is configured and ready to go.",
+  "agent.completionTitle": "You're All Set!",
+  "agent.enterApp": "Enter App",
+  "agent.skipOnboarding": "Skip onboarding",
+  "agent.welcome": "...hm? I just woke up — my mind's a blank. Who are you? And — what should I be called? I need a name too.",
   "back": "Back",
   "finish": "Get Started",
   "interests.area.business": "Business & Strategy",

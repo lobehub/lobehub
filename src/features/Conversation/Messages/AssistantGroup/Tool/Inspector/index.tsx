@@ -4,6 +4,7 @@ import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 
 import StatusIndicator from './StatusIndicator';
@@ -43,16 +44,18 @@ const Inspectors = memo<InspectorProps>(
       return (
         <Flexbox allowShrink horizontal align={'center'} gap={6}>
           <StatusIndicator intervention={intervention} result={result} />
-          <CustomInspector
-            apiName={apiName}
-            args={args || {}}
-            identifier={identifier}
-            isArgumentsStreaming={isArgumentsStreaming}
-            isLoading={isTitleLoading}
-            partialArgs={partialJson}
-            pluginState={result?.state}
-            result={result}
-          />
+          <SafeBoundary minHeight={22} resetKeys={[argsStr, result]}>
+            <CustomInspector
+              apiName={apiName}
+              args={args || {}}
+              identifier={identifier}
+              isArgumentsStreaming={isArgumentsStreaming}
+              isLoading={isTitleLoading}
+              partialArgs={partialJson}
+              pluginState={result?.state}
+              result={result}
+            />
+          </SafeBoundary>
         </Flexbox>
       );
     }

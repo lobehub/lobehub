@@ -8,7 +8,6 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
-import { globalHelpers } from '@/store/global/helpers';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type ImageGenerationTopic } from '@/types/generation';
@@ -255,8 +254,7 @@ export const createGenerationTopicSlice: StateCreator<
         chainSummaryGenerationTitle(
           prompts,
           'video',
-          userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()) ||
-            globalHelpers.getCurrentLanguage(),
+          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
         ),
       ),
     });

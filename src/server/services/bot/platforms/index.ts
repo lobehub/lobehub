@@ -30,6 +30,7 @@ export {
   formatDuration,
   formatTokens,
   formatUsageStats,
+  mergeWithDefaults,
   parseRuntimeKey,
 } from './utils';
 

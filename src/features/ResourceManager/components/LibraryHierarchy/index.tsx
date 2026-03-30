@@ -10,6 +10,7 @@ import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 import { type ResourceQueryParams } from '@/types/resource';
 
+import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import { HierarchyNode } from './HierarchyNode';
 import TreeSkeleton from './TreeSkeleton';
 import {
@@ -368,28 +369,30 @@ const LibraryHierarchy = memo(() => {
       : currentFolderSlug;
 
   return (
-    <Flexbox paddingInline={4} style={{ height: '100%' }}>
-      <VList
-        bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-        style={{ height: '100%' }}
-      >
-        {visibleNodes.map(({ item, key, level }) => (
-          <div key={key} style={{ paddingBottom: 2 }}>
-            <HierarchyNode
-              expandedFolders={expandedFolders}
-              folderChildrenCache={folderChildrenCache}
-              item={item}
-              level={level}
-              loadingFolders={loadingFolders}
-              selectedKey={selectedKey}
-              updateKey={updateKey}
-              onLoadFolder={handleLoadFolder}
-              onToggleFolder={handleToggleFolder}
-            />
-          </div>
-        ))}
-      </VList>
-    </Flexbox>
+    <KnowledgeBaseListProvider>
+      <Flexbox paddingInline={4} style={{ height: '100%' }}>
+        <VList
+          bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+          style={{ height: '100%' }}
+        >
+          {visibleNodes.map(({ item, key, level }) => (
+            <div key={key} style={{ paddingBottom: 2 }}>
+              <HierarchyNode
+                expandedFolders={expandedFolders}
+                folderChildrenCache={folderChildrenCache}
+                item={item}
+                level={level}
+                loadingFolders={loadingFolders}
+                selectedKey={selectedKey}
+                updateKey={updateKey}
+                onLoadFolder={handleLoadFolder}
+                onToggleFolder={handleToggleFolder}
+              />
+            </div>
+          ))}
+        </VList>
+      </Flexbox>
+    </KnowledgeBaseListProvider>
   );
 });
 

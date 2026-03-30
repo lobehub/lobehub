@@ -192,6 +192,8 @@ export class WechatApiClient {
    * Flow per protocol-spec §8.3:
    *   GET CDN_BASE_URL/download?encrypted_query_param=... → AES-128-ECB decrypt
    *
+   * Per §8.5: when AES key is missing, try downloading as plaintext.
+   *
    * @param media  CDNMedia reference from the message item
    * @param imageAeskey  Optional hex AES key from image_item.aeskey (takes priority)
    */
@@ -209,10 +211,17 @@ export class WechatApiClient {
       throw new Error(`CDN download failed: ${response.status} ${response.statusText}`);
     }
 
-    const ciphertext = Buffer.from(await response.arrayBuffer());
-    const key = resolveAesKey(imageAeskey, media.aes_key);
+    const raw = Buffer.from(await response.arrayBuffer());
 
-    return decryptAesEcb(ciphertext, key);
+    // Per protocol-spec §8.5: when AES key is missing, return as plaintext
+    let key: Buffer;
+    try {
+      key = resolveAesKey(imageAeskey, media.aes_key);
+    } catch {
+      // No valid AES key — return plaintext per spec
+      return raw;
+    }
+    return decryptAesEcb(raw, key);
   }
 
   /**

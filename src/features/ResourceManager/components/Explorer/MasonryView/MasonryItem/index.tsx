@@ -5,7 +5,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import {
   getTransparentDragImage,
   useDragActive,
-  useDragState,
+  useSetCurrentDrag,
 } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
 import { type FileListItem } from '@/types/files';
@@ -204,7 +204,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     const [isLoadingMarkdown, setIsLoadingMarkdown] = useState(false);
 
     const isDragActive = useDragActive();
-    const { setCurrentDrag } = useDragState();
+    const setCurrentDrag = useSetCurrentDrag();
     const [isDragging, setIsDragging] = useState(false);
     const [isOver, setIsOver] = useState(false);
 

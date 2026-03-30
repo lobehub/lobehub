@@ -251,13 +251,6 @@ export abstract class ClientFactory {
  * Contains metadata, factory, and validation. All runtime operations go through PlatformClient.
  */
 export interface PlatformDefinition {
-  /**
-   * Authentication flow for obtaining credentials.
-   * - 'qrcode': QR code scan flow (e.g. WeChat iLink)
-   * When set, the frontend renders a QR code auth UI instead of manual credential inputs.
-   */
-  authFlow?: 'qrcode';
-
   /** Factory for creating PlatformClient instances and validating credentials/settings. */
   clientFactory: ClientFactory;
 

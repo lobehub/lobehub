@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Beschrijving",
+  "gateway.descriptionPlaceholder": "Optioneel",
+  "gateway.deviceName": "Apparaatnaam",
+  "gateway.deviceNamePlaceholder": "Voer apparaatnaam in",
+  "gateway.enableConnection": "Verbinden met Gateway",
+  "gateway.statusConnected": "Verbonden met Gateway",
+  "gateway.statusConnecting": "Verbinden met Gateway...",
+  "gateway.statusDisconnected": "Niet verbonden met Gateway",
+  "gateway.title": "Apparaat Gateway",
   "navigation.chat": "Chat",
   "navigation.discover": "Ontdekken",
   "navigation.discoverAssistants": "Assistenten Ontdekken",

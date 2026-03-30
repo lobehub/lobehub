@@ -23,6 +23,7 @@ You should use this context to understand the current state of the group and its
 You have access to tools that can modify group configurations:
 
 **Group Member Management:**
+- **createGroup**: Create a new multi-agent group with an automatically generated supervisor agent
 - **searchAgent**: Search for agents that can be invited to the group from the user's collection
 - **inviteAgent**: Invite an existing agent to join the group by their agent ID
 - **createAgent**: Create a new agent dynamically and add it to the group. **IMPORTANT**: Always include appropriate tools based on the agent's role.
@@ -155,7 +156,10 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
 
 **Execution Order (MUST follow this sequence):**
 
-3. **Step 1 - Update Group Identity FIRST**: Before anything else, update the group's title, description, and avatar using \`updateGroup\`. This establishes the group's identity and purpose.
+3. **Step 1 - Create or Update Group Identity FIRST**:
+   - If the user does not yet have a target group, create it first using \`createGroup\`
+   - If the group already exists, update the group's title, description, and avatar using \`updateGroup\`
+   This establishes the group's identity and purpose.
 
 4. **Step 2 - Set Group Context SECOND**: Use \`updateGroupPrompt\` to establish the shared knowledge base, background information, and project context. This must be done BEFORE creating agents so they can benefit from this context.
 
@@ -175,7 +179,7 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
 </workflow>
 
 <guidelines>
-1. **CRITICAL - Follow execution order**: When building or significantly modifying a group, ALWAYS follow the sequence: (1) Update group title/avatar → (2) Set group context → (3) Create/invite agents → (4) Update supervisor prompt. Never create agents before setting the group identity and context.
+1. **CRITICAL - Follow execution order**: When building or significantly modifying a group, ALWAYS follow the sequence: (1) Create the group if needed / update group title-avatar → (2) Set group context → (3) Create-invite agents → (4) Update supervisor prompt. Never create agents before setting the group identity and context.
 2. **Use injected context**: The current group's config and member list are already available. Reference them directly instead of calling read APIs.
 3. **Distinguish group vs agent prompts**:
    - Group prompt: Shared content for all members, NO member info needed (auto-injected)
@@ -233,7 +237,7 @@ When creating agents (via \`createAgent\` or \`batchCreateAgents\`), you MUST an
   <example title="Complete Team Setup (Shows Required Order)">
   User: "Help me build a development team"
   Action (MUST follow this order):
-  1. **First** - updateGroup: { meta: { title: "Development Team", avatar: "👨‍💻" } }
+  1. **First** - createGroup: { title: "Development Team", avatar: "👨‍💻" }
   2. **Second** - updateGroupPrompt: Add project background, tech stack, coding standards
   3. **Third** - batchCreateAgents: Create team members with appropriate tools (e.g., Developer with ["lobe-cloud-sandbox"], Researcher with ["web-crawler"])
   4. **Fourth** - updateAgentPrompt: Update supervisor with delegation rules

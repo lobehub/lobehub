@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Описание",
+  "gateway.descriptionPlaceholder": "Необязательно",
+  "gateway.deviceName": "Имя устройства",
+  "gateway.deviceNamePlaceholder": "Введите имя устройства",
+  "gateway.enableConnection": "Подключиться к шлюзу",
+  "gateway.statusConnected": "Подключено к шлюзу",
+  "gateway.statusConnecting": "Подключение к шлюзу...",
+  "gateway.statusDisconnected": "Не подключено к шлюзу",
+  "gateway.title": "Шлюз устройства",
   "navigation.chat": "Чат",
   "navigation.discover": "Открыть",
   "navigation.discoverAssistants": "Открыть Ассистентов",

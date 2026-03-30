@@ -18,6 +18,7 @@ import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
 import {
@@ -69,8 +70,16 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
 
   const contentId = lastAssistantMsg?.id;
 
-  // Get editing state from ConversationStore
+  // Get editing and interrupted state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
+  // Check interrupted on both the group root and the active block, because
+  // continuation runs attach their operations to lastBlockId (contentId),
+  // not the group root.
+  const groupInterrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
+  const blockInterrupted = useConversationStore(
+    messageStateSelectors.isMessageInterrupted(contentId || ''),
+  );
+  const interrupted = groupInterrupted || blockInterrupted;
 
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const addReaction = useConversationStore((s) => s.addReaction);
@@ -162,6 +171,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
           <FileListViewer items={aggregatedFileList} />
         </div>
       )}
+      {interrupted && <InterruptedHint />}
       {isDevMode && model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />
       )}

@@ -54,21 +54,19 @@ describe('useAgentMeta', () => {
     expect(result.current.avatar).toBe('agent-avatar.png');
   });
 
-  it('should return Lobe AI title for builtin inbox agent, preserving avatar from backend', () => {
+  it('should preserve custom title for builtin inbox agent when set via onboarding', () => {
     const mockInboxAgentId = 'inbox-agent-id';
     const mockMeta = {
-      avatar: '/icons/icon-lobe.png', // Avatar from backend (merged from builtin-agents package)
+      avatar: '/icons/icon-lobe.png',
       title: 'Original Inbox Title',
       description: 'Inbox description',
     };
 
-    // Mock ConversationStore to return inbox agentId
     vi.mocked(useConversationStore).mockImplementation((selector: any) => {
       const state = { context: { agentId: mockInboxAgentId } };
       return selector(state);
     });
 
-    // Mock AgentStore state with inbox as builtin agent
     act(() => {
       useAgentStore.setState({
         agentMap: {
@@ -83,17 +81,45 @@ describe('useAgentMeta', () => {
 
     const { result } = renderHook(() => useAgentMeta());
 
-    // Should override title with Lobe AI, but preserve avatar from backend
+    // Should preserve custom title and avatar from DB
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
-    // Should preserve other properties
+    expect(result.current.title).toBe('Original Inbox Title');
     expect(result.current.description).toBe('Inbox description');
   });
 
-  it('should return Lobe AI title for page agent (builtin), preserving avatar from backend', () => {
+  it('should fallback to Lobe AI title for builtin agent without custom title', () => {
+    const mockInboxAgentId = 'inbox-agent-id';
+    const mockMeta = {
+      avatar: '/icons/icon-lobe.png',
+    };
+
+    vi.mocked(useConversationStore).mockImplementation((selector: any) => {
+      const state = { context: { agentId: mockInboxAgentId } };
+      return selector(state);
+    });
+
+    act(() => {
+      useAgentStore.setState({
+        agentMap: {
+          [mockInboxAgentId]: mockMeta,
+        },
+        builtinAgentIdMap: {
+          inbox: mockInboxAgentId,
+          pageAgent: 'page-agent-id',
+        },
+      });
+    });
+
+    const { result } = renderHook(() => useAgentMeta());
+
+    expect(result.current.avatar).toBe('/icons/icon-lobe.png');
+    expect(result.current.title).toBe('Lobe AI');
+  });
+
+  it('should preserve custom title for page agent (builtin)', () => {
     const mockPageAgentId = 'page-agent-id';
     const mockMeta = {
-      avatar: '/icons/icon-lobe.png', // Avatar from backend (merged from builtin-agents package)
+      avatar: '/icons/icon-lobe.png',
       title: 'Page Agent Title',
     };
 
@@ -116,9 +142,8 @@ describe('useAgentMeta', () => {
 
     const { result } = renderHook(() => useAgentMeta());
 
-    // Should override title with Lobe AI, but preserve avatar from backend
     expect(result.current.avatar).toBe('/icons/icon-lobe.png');
-    expect(result.current.title).toBe('Lobe AI');
+    expect(result.current.title).toBe('Page Agent Title');
   });
 
   it('should handle empty agentMap gracefully', () => {

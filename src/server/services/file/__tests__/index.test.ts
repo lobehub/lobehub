@@ -29,6 +29,7 @@ vi.mock('../impls', () => ({
     uploadContent: vi.fn(),
     getFullFileUrl: vi.fn(),
     getKeyFromFullUrl: vi.fn(),
+    uploadBuffer: vi.fn(),
     uploadMedia: vi.fn(),
   }),
 }));
@@ -40,6 +41,11 @@ vi.mock('@/server/utils/tempFileManager');
 vi.mock('@/utils/uuid', () => ({
   nanoid: () => 'test-id',
 }));
+
+vi.mock('@lobechat/utils', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return { ...actual, uuid: () => 'test-uuid' };
+});
 
 describe('FileService', () => {
   let service: FileService;
@@ -253,6 +259,62 @@ describe('FileService', () => {
 
     expect(service['impl'].uploadMedia).toHaveBeenCalledWith(testKey, testBuffer);
     expect(result).toBe(expectedResult);
+  });
+
+  describe('uploadFromBuffer', () => {
+    beforeEach(() => {
+      mockFileModel.checkHash = vi.fn().mockResolvedValue({ isExist: false });
+      mockFileModel.create = vi.fn().mockResolvedValue({ id: 'new-file-id' });
+      vi.mocked(service['impl'].uploadBuffer).mockResolvedValue({
+        key: 'files/test-user/abc/file.pdf',
+      });
+    });
+
+    it('should upload buffer with explicit content type', async () => {
+      const content = Buffer.from('hello world');
+
+      const result = await service.uploadFromBuffer(
+        content,
+        'application/pdf',
+        'files/test-user/abc/report.pdf',
+      );
+
+      expect(result.fileId).toBe('new-file-id');
+      // Must use uploadBuffer (explicit content type), not uploadMedia (infers from extension)
+      expect(service['impl'].uploadBuffer).toHaveBeenCalledWith(
+        'files/test-user/abc/report.pdf',
+        content,
+        'application/pdf',
+      );
+    });
+
+    it('should write metadata compatible with UI upload path', async () => {
+      const content = Buffer.from('test content');
+
+      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileHash: expect.any(String),
+          metadata: expect.objectContaining({
+            dirname: 'files/test-user/abc',
+            filename: 'test.txt',
+            path: 'files/test-user/abc/test.txt',
+          }),
+        }),
+        expect.any(Boolean),
+      );
+    });
+
+    it('should compute hash for deduplication', async () => {
+      const content = Buffer.from('test content');
+
+      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
+
+      expect(mockFileModel.checkHash).toHaveBeenCalled();
+      const createdRecord = mockFileModel.create.mock.calls[0][0];
+      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
+    });
   });
 
   describe('createFileRecord', () => {

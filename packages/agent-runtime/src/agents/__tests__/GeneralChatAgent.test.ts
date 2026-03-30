@@ -978,6 +978,9 @@ describe('GeneralChatAgent', () => {
 
       const state = createMockState({
         status: 'running', // Normal running state
+        toolManifestMap: {
+          'lobe-web-browsing': { identifier: 'lobe-web-browsing' },
+        },
       });
 
       const context = createMockContext('llm_result', {

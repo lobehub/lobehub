@@ -368,12 +368,16 @@ describe('resolveAgentConfig', () => {
         targetAgentConfig: targetAgentConfig as any,
       });
 
-      expect(getAgentRuntimeConfigSpy).toHaveBeenCalledWith('agent-builder', {
-        documentContent: 'some document content',
-        model: 'gpt-4-turbo',
-        plugins: ['input-plugin'],
-        targetAgentConfig,
-      });
+      expect(getAgentRuntimeConfigSpy).toHaveBeenCalledWith(
+        'agent-builder',
+        expect.objectContaining({
+          documentContent: 'some document content',
+          model: 'gpt-4-turbo',
+          plugins: ['input-plugin'],
+          targetAgentConfig,
+          userLocale: expect.any(String),
+        }),
+      );
     });
 
     it('should merge runtime chatConfig with base chatConfig', () => {
