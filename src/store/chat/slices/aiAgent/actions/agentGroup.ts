@@ -173,13 +173,16 @@ export class ChatGroupChatActionImpl {
       let currentStreamConnection: AbortController | undefined;
       let reconnectInFlight = false;
       let streamClosedByClient = false;
+      let streamReconciled = false;
 
       const completeStreamOperations = () => {
+        streamReconciled = true;
         this.#get().completeOperation(result.operationId);
         this.#get().completeOperation(execOperationId);
       };
 
       const failStreamOperations = (message: string) => {
+        streamReconciled = true;
         this.#get().failOperation(result.operationId, {
           message,
           type: 'AgentStreamDisconnected',
@@ -191,7 +194,7 @@ export class ChatGroupChatActionImpl {
       };
 
       const reconcileUnexpectedStreamClose = async (error?: Error) => {
-        if (reconnectInFlight) return;
+        if (reconnectInFlight || streamReconciled) return;
         reconnectInFlight = true;
 
         try {
