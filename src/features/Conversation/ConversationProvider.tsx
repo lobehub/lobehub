@@ -92,10 +92,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     );
 
     return (
-      <Provider
-        createStore={() => createStore({ context, hooks, initialMessages: messages, skipFetch })}
-        key={contextKey}
-      >
+      <Provider createStore={() => createStore({ context, hooks, skipFetch })}>
         <StoreUpdater
           actionsBar={actionsBar}
           context={context}
