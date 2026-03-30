@@ -72,7 +72,14 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
 
   // Get editing and interrupted state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
-  const interrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
+  // Check interrupted on both the group root and the active block, because
+  // continuation runs attach their operations to lastBlockId (contentId),
+  // not the group root.
+  const groupInterrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
+  const blockInterrupted = useConversationStore(
+    messageStateSelectors.isMessageInterrupted(contentId || ''),
+  );
+  const interrupted = groupInterrupted || blockInterrupted;
 
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const addReaction = useConversationStore((s) => s.addReaction);
