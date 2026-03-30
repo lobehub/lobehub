@@ -2,7 +2,7 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -72,12 +72,17 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // When external messages are provided, mark as initialized
     useStoreUpdater('messagesInit', skipFetch ? true : (hasInitMessages ?? false));
 
-    // Clear stale messages before paint when context changes
-    // This prevents old interventions from persisting during topic transitions
-    useLayoutEffect(() => {
+    // Synchronously reset store when context changes (React "setState during render" pattern).
+    // React will bail out and re-render this component before rendering siblings,
+    // ensuring ChatList/ChatInput read fresh state — no stale data flash.
+    const [prevContextKey, setPrevContextKey] = useState(contextKey);
+    if (prevContextKey !== contextKey) {
+      setPrevContextKey(contextKey);
       prevMessagesRef.current = undefined;
-      storeApi.getState().replaceMessages(messages ?? []);
-    }, [contextKey]); // eslint-disable-line react-hooks/exhaustive-deps
+      const store = storeApi.getState();
+      store.replaceMessages(messages ?? []);
+      storeApi.setState({ messagesInit: !!messages });
+    }
 
     // Sync external messages into store
     useEffect(() => {
