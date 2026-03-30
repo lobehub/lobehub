@@ -12,6 +12,7 @@ import { agentDocumentsRuntime } from './agentDocuments';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
+import { credsRuntime } from './creds';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { notebookRuntime } from './notebook';
@@ -53,6 +54,7 @@ registerRuntimes([
   briefRuntime,
   taskRuntime,
   topicReferenceRuntime,
+  credsRuntime,
 ]);
 
 // ==================== Registry API ====================
