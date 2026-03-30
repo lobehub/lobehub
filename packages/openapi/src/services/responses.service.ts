@@ -1,5 +1,4 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import { MessageModel } from '@lobechat/database';
 
 import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 import type {
@@ -73,23 +72,12 @@ export class ResponsesService extends BaseService {
   }
 
   /**
-   * Write function_call_output items as tool messages in the database
+   * Build a prompt from function_call_output items for the resume flow.
+   * Encodes tool results so the LLM can continue the conversation.
    */
-  private async writeToolResultMessages(
-    topicId: string,
-    outputs: FunctionCallOutputItem[],
-    agentId: string,
-  ): Promise<void> {
-    const messageModel = new MessageModel(this.db, this.userId);
-    for (const output of outputs) {
-      await messageModel.create({
-        agentId,
-        content: output.output,
-        role: 'tool',
-        tool_call_id: output.call_id,
-        topicId,
-      } as any);
-    }
+  private buildToolResultPrompt(outputs: FunctionCallOutputItem[]): string {
+    const parts = outputs.map((o) => `Tool call ${o.call_id} returned: ${o.output}`);
+    return parts.join('\n');
   }
 
   /**
@@ -273,11 +261,9 @@ export class ResponsesService extends BaseService {
       const functionCallOutputs = this.extractFunctionCallOutputs(params.input);
       const isResumeFlow = functionCallOutputs.length > 0 && previousTopicId;
 
-      if (isResumeFlow) {
-        await this.writeToolResultMessages(previousTopicId, functionCallOutputs, model);
-      }
-
-      const prompt = isResumeFlow ? '' : this.extractPrompt(params.input);
+      const prompt = isResumeFlow
+        ? this.buildToolResultPrompt(functionCallOutputs)
+        : this.extractPrompt(params.input);
 
       this.log('info', 'Creating response via execAgent', {
         hasInstructions: !!instructions,
@@ -381,11 +367,9 @@ export class ResponsesService extends BaseService {
       const functionCallOutputs = this.extractFunctionCallOutputs(params.input);
       const isResumeFlow = functionCallOutputs.length > 0 && previousTopicId;
 
-      if (isResumeFlow) {
-        await this.writeToolResultMessages(previousTopicId, functionCallOutputs, model);
-      }
-
-      const prompt = isResumeFlow ? '' : this.extractPrompt(params.input);
+      const prompt = isResumeFlow
+        ? this.buildToolResultPrompt(functionCallOutputs)
+        : this.extractPrompt(params.input);
 
       // 1. Create agent operation (before generating responseId so we have topicId)
       // model field is used as agentId
