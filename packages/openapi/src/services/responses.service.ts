@@ -16,6 +16,7 @@ import type {
   ResponseObject,
   ResponseStreamEvent,
   ResponseUsage,
+  Tool,
 } from '../types/responses.type';
 
 /**
@@ -27,6 +28,14 @@ import type {
  * with executeSync used when synchronous results are needed.
  */
 export class ResponsesService extends BaseService {
+  /**
+   * Extract hosted builtin tool identifiers from tools array
+   */
+  private extractHostedToolIds(tools?: Tool[]): string[] {
+    if (!tools) return [];
+    return tools.filter((t) => t.type !== 'function').map((t) => t.type);
+  }
+
   /**
    * Extract a prompt string from OpenResponses input
    */
@@ -209,8 +218,10 @@ export class ResponsesService extends BaseService {
 
       // 1. Create agent operation without auto-start
       // model field is used as agentId
+      const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
@@ -289,8 +300,10 @@ export class ResponsesService extends BaseService {
 
       // 1. Create agent operation (before generating responseId so we have topicId)
       // model field is used as agentId
+      const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
+        additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,

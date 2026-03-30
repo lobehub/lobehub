@@ -114,7 +114,12 @@ export const FunctionToolSchema = z.object({
 });
 export type FunctionTool = z.infer<typeof FunctionToolSchema>;
 
-export const ToolSchema = FunctionToolSchema;
+export const HostedToolSchema = z.object({
+  type: z.string().startsWith('lobe-'),
+});
+export type HostedTool = z.infer<typeof HostedToolSchema>;
+
+export const ToolSchema = z.union([FunctionToolSchema, HostedToolSchema]);
 export type Tool = z.infer<typeof ToolSchema>;
 
 // ==================== Usage Types ====================
