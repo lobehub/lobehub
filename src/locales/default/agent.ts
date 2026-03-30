@@ -124,6 +124,8 @@ export default {
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
+  'channel.historyLimit': 'History Message Limit',
+  'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
   'channel.userId': 'Your Platform User ID',
   'channel.userIdHint':
     'Your user ID on this platform. The AI can use it to send you direct messages.',

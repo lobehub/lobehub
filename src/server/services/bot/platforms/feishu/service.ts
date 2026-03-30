@@ -36,6 +36,7 @@ import type {
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
 import type { LarkApiClient } from '@lobechat/chat-adapter-feishu';
+import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
@@ -91,7 +92,7 @@ export class FeishuMessageService implements MessageRuntimeService {
     const result = await this.api.listMessages(params.channelId, {
       // Feishu uses Unix second timestamps for startTime/endTime
       endTime: params.before,
-      pageSize: Math.min(params.limit ?? 50, 50),
+      pageSize: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, 50),
       startTime: params.after,
     });
     const messages = result.items.map(toMessageItem);

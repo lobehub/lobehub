@@ -1,3 +1,4 @@
+export * from './bot';
 export * from './currency';
 export * from './desktop';
 export * from './discover';

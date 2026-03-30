@@ -3,6 +3,7 @@ import type { MessageRuntimeService } from '@lobechat/builtin-tool-message/execu
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -82,7 +83,11 @@ const createServiceForBot = (provider: DecryptedBotProvider): MessageRuntimeServ
 const resolveBot = async (
   model: AgentBotProviderModel,
   botId: string,
-): Promise<{ platform: MessagePlatformType; service: MessageRuntimeService }> => {
+): Promise<{
+  platform: MessagePlatformType;
+  service: MessageRuntimeService;
+  settings: Record<string, unknown>;
+}> => {
   const provider = await model.findById(botId);
   if (!provider) {
     throw new TRPCError({ code: 'NOT_FOUND', message: `Bot not found: ${botId}` });
@@ -91,8 +96,9 @@ const resolveBot = async (
     throw new TRPCError({ code: 'BAD_REQUEST', message: `Bot is disabled: ${botId}` });
   }
   return {
-    service: createServiceForBot(provider),
     platform: provider.platform as MessagePlatformType,
+    service: createServiceForBot(provider),
+    settings: (provider.settings as Record<string, unknown>) ?? {},
   };
 };
 
@@ -158,12 +164,16 @@ export const botMessageRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { service, platform } = await resolveBot(ctx.agentBotProviderModel, input.botId);
+      const { service, platform, settings } = await resolveBot(
+        ctx.agentBotProviderModel,
+        input.botId,
+      );
+      const defaultLimit = (settings.historyLimit as number) || DEFAULT_BOT_HISTORY_LIMIT;
       return service.readMessages({
         after: input.after,
         before: input.before,
         channelId: input.channelId,
-        limit: input.limit,
+        limit: input.limit ?? defaultLimit,
         platform,
       });
     }),

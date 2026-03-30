@@ -1,4 +1,5 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
+import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
 import { Chat, ConsoleLogger, type Message, type MessageContext } from 'chat';
 import debug from 'debug';
 
@@ -20,7 +21,6 @@ import {
   type PlatformDefinition,
   platformRegistry,
 } from './platforms';
-import { DEFAULT_DEBOUNCE_MS } from './platforms/const';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -229,7 +229,7 @@ export class BotMessageRouter {
     const commands = this.buildCommands(serverDB, { agentId, platform, userId });
 
     const concurrencyStrategy = (settings.concurrency as string) || 'debounce';
-    const debounceMs = (settings.debounceMs as number) || DEFAULT_DEBOUNCE_MS;
+    const debounceMs = (settings.debounceMs as number) || DEFAULT_BOT_DEBOUNCE_MS;
     const chatBot = this.createChatBot(
       adapters,
       `agent-${agentId}`,

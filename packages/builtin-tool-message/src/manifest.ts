@@ -1,3 +1,4 @@
+import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
@@ -89,8 +90,8 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'string',
           },
           limit: {
-            default: 50,
-            description: 'Maximum number of messages to fetch (default: 50, max: 100)',
+            default: DEFAULT_BOT_HISTORY_LIMIT,
+            description: `Maximum number of messages to fetch (default: ${DEFAULT_BOT_HISTORY_LIMIT}, max: 100)`,
             maximum: 100,
             minimum: 1,
             type: 'integer',

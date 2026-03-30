@@ -118,7 +118,7 @@ export interface ReadMessagesParams {
   before?: string;
   /** Channel / conversation / room ID */
   channelId: string;
-  /** Max number of messages to fetch (default: 50, max: 100) */
+  /** Max number of messages to fetch (default: 20, max: 100) */
   limit?: number;
   /** Platform to read from */
   platform: MessagePlatformType;
