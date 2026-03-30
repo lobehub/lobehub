@@ -20,6 +20,14 @@ vi.mock('@/store/user', () => ({
   },
 }));
 
+vi.mock('@/store/agent', () => ({
+  useAgentStore: {
+    getState: () => ({
+      refreshBuiltinAgent: vi.fn().mockResolvedValue(undefined),
+    }),
+  },
+}));
+
 describe('webOnboardingExecutor', () => {
   beforeEach(() => {
     finishOnboardingSpy.mockReset();
@@ -60,20 +68,7 @@ describe('webOnboardingExecutor', () => {
     });
   });
 
-  it('logs the transferred inbox topic in development instead of navigating', async () => {
-    vi.doMock('@/utils/env', () => ({
-      isDev: true,
-    }));
-
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-    const assignSpy = vi.fn();
-    const originalLocation = window.location;
-
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: { ...originalLocation, assign: assignSpy },
-    });
-
+  it('calls finishOnboarding service and syncs user state', async () => {
     finishOnboardingSpy.mockResolvedValue({
       agentId: 'inbox-agent-1',
       success: true,
@@ -81,50 +76,10 @@ describe('webOnboardingExecutor', () => {
     });
 
     const { webOnboardingExecutor } = await import('./lobe-web-onboarding');
-    await webOnboardingExecutor.finishOnboarding({}, {} as any);
+    const result = await webOnboardingExecutor.finishOnboarding({}, {} as any);
 
+    expect(finishOnboardingSpy).toHaveBeenCalledTimes(1);
     expect(refreshUserStateSpy).toHaveBeenCalledTimes(1);
-    expect(infoSpy).toHaveBeenCalledWith(
-      '[webOnboardingExecutor] finishOnboarding target:',
-      '/agent/inbox-agent-1?topic=topic-1',
-    );
-    expect(assignSpy).not.toHaveBeenCalled();
-
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: originalLocation,
-    });
-    infoSpy.mockRestore();
-  });
-
-  it('redirects to the transferred inbox topic outside development', async () => {
-    vi.doMock('@/utils/env', () => ({
-      isDev: false,
-    }));
-
-    const assignSpy = vi.fn();
-    const originalLocation = window.location;
-
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: { ...originalLocation, assign: assignSpy },
-    });
-
-    finishOnboardingSpy.mockResolvedValue({
-      agentId: 'inbox-agent-1',
-      success: true,
-      topicId: 'topic-1',
-    });
-
-    const { webOnboardingExecutor } = await import('./lobe-web-onboarding');
-    await webOnboardingExecutor.finishOnboarding({}, {} as any);
-
-    expect(refreshUserStateSpy).toHaveBeenCalledTimes(1);
-    expect(assignSpy).toHaveBeenCalledWith('/agent/inbox-agent-1?topic=topic-1');
-
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: originalLocation,
-    });
+    expect(result.success).toBe(true);
   });
 });

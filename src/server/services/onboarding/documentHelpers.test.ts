@@ -1,6 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildIdentityDocument, buildSoulDocument } from './documentHelpers';
+
+vi.mock('@lobechat/agent-templates', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    SOUL_DOCUMENT: {
+      ...actual.SOUL_DOCUMENT,
+      content: '# SOUL.md - Who You Are\n\n## Core Truths\n\nYou are becoming someone.',
+    },
+  };
+});
 
 describe('buildIdentityDocument', () => {
   it('should render all identity fields', () => {

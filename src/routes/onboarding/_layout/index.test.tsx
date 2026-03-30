@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import OnBoardingContainer from './index';
@@ -18,9 +19,11 @@ vi.mock('@/hooks/useIsDark', () => ({
 describe('OnBoardingContainer', () => {
   it('renders onboarding content without footer copyright', () => {
     render(
-      <OnBoardingContainer>
-        <div>Onboarding Content</div>
-      </OnBoardingContainer>,
+      <MemoryRouter>
+        <OnBoardingContainer>
+          <div>Onboarding Content</div>
+        </OnBoardingContainer>
+      </MemoryRouter>,
     );
 
     expect(screen.getByText('Lang Button')).toBeInTheDocument();
