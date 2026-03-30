@@ -71,7 +71,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - Supports send, edit, delete, read messages, reply to messages, and reactions
 - No pins, channel listing, or polls
 - Uses appId and appSecret for authentication
-- \`readMessages\` pagination: \`before\`/\`after\` accept **Unix second timestamps** (not message IDs). For example, use \`after: "1711900800"\` for messages after 2024-04-01.
+- \`readMessages\`: use \`startTime\`/\`endTime\` (Unix second timestamps) instead of \`before\`/\`after\` (message IDs). Use \`cursor\` from the response's \`nextCursor\` to paginate through pages.
 
 **QQ:**
 - Supports sending messages to groups, guild channels, and direct messages

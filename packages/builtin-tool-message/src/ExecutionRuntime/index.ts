@@ -205,8 +205,13 @@ export class MessageExecutionRuntime {
         ?.map((m) => `[${m.timestamp}] ${m.author.name}: ${m.content}`)
         .join('\n');
 
+      const paginationHint =
+        result.hasMore && result.nextCursor
+          ? `\n\n[More messages available — pass cursor: "${result.nextCursor}" to fetch next page]`
+          : '';
+
       return {
-        content: `Fetched ${count} messages from ${params.platform}:${params.channelId}\n\n${formatted ?? '(no messages)'}`,
+        content: `Fetched ${count} messages from ${params.platform}:${params.channelId}\n\n${formatted ?? '(no messages)'}${paginationHint}`,
         state: result,
         success: true,
       };

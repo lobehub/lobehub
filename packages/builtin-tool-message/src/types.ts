@@ -118,15 +118,25 @@ export interface ReadMessagesParams {
   before?: string;
   /** Channel / conversation / room ID */
   channelId: string;
+  /** Pagination cursor from a previous response (Feishu/Lark pageToken) */
+  cursor?: string;
+  /** End time as Unix second timestamp (Feishu/Lark only) */
+  endTime?: string;
   /** Max number of messages to fetch (default: 20, max: 100) */
   limit?: number;
   /** Platform to read from */
   platform: MessagePlatformType;
+  /** Start time as Unix second timestamp (Feishu/Lark only) */
+  startTime?: string;
 }
 
 export interface ReadMessagesState {
   channelId?: string;
+  /** Whether more messages are available */
+  hasMore?: boolean;
   messages?: MessageItem[];
+  /** Cursor for fetching the next page */
+  nextCursor?: string;
   platform?: string;
   totalFetched?: number;
 }

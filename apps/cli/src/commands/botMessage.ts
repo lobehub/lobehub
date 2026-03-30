@@ -54,6 +54,9 @@ export function registerBotMessageCommands(bot: Command) {
     .option('--limit <n>', 'Max messages to fetch', String(DEFAULT_BOT_HISTORY_LIMIT))
     .option('--before <messageId>', 'Read messages before this ID')
     .option('--after <messageId>', 'Read messages after this ID')
+    .option('--start-time <timestamp>', 'Start time as Unix seconds (Feishu/Lark)')
+    .option('--end-time <timestamp>', 'End time as Unix seconds (Feishu/Lark)')
+    .option('--cursor <token>', 'Pagination cursor from a previous response (Feishu/Lark)')
     .option('--json', 'Output JSON')
     .action(
       async (
@@ -61,8 +64,11 @@ export function registerBotMessageCommands(bot: Command) {
         options: {
           after?: string;
           before?: string;
+          cursor?: string;
+          endTime?: string;
           json?: boolean;
           limit?: string;
+          startTime?: string;
           target: string;
         },
       ) => {
@@ -72,7 +78,10 @@ export function registerBotMessageCommands(bot: Command) {
           before: options.before,
           botId,
           channelId: options.target,
+          cursor: options.cursor,
+          endTime: options.endTime,
           limit: options.limit ? Number.parseInt(options.limit, 10) : undefined,
+          startTime: options.startTime,
         });
 
         if (options.json) {
@@ -94,6 +103,13 @@ export function registerBotMessageCommands(bot: Command) {
         ]);
 
         printTable(rows, ['ID', 'AUTHOR', 'CONTENT', 'TIME']);
+
+        const r = result as any;
+        if (r.hasMore && r.nextCursor) {
+          console.log(
+            `\nMore messages available. Use ${pc.dim(`--cursor ${r.nextCursor}`)} to fetch next page.`,
+          );
+        }
       },
     );
 

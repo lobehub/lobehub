@@ -92,6 +92,16 @@ export const MessageManifest: BuiltinToolManifest = {
             description: 'Channel / conversation / room ID to read from',
             type: 'string',
           },
+          cursor: {
+            description:
+              'Pagination cursor from a previous readMessages response (nextCursor). When provided, fetches the next page. Used by Feishu/Lark.',
+            type: 'string',
+          },
+          endTime: {
+            description:
+              'End time as Unix second timestamp. Used by Feishu/Lark to filter messages before this time.',
+            type: 'string',
+          },
           limit: {
             default: DEFAULT_BOT_HISTORY_LIMIT,
             description: `Maximum number of messages to fetch (default: ${DEFAULT_BOT_HISTORY_LIMIT}, max: ${MAX_BOT_HISTORY_LIMIT})`,
@@ -102,6 +112,11 @@ export const MessageManifest: BuiltinToolManifest = {
           platform: {
             description: 'Target messaging platform',
             enum: platformEnum,
+            type: 'string',
+          },
+          startTime: {
+            description:
+              'Start time as Unix second timestamp. Used by Feishu/Lark to filter messages after this time.',
             type: 'string',
           },
         },

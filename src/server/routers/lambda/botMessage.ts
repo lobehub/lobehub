@@ -170,7 +170,10 @@ export const botMessageRouter = router({
           .transform((v) => v || undefined),
         botId: z.string(),
         channelId: z.string(),
+        cursor: z.string().optional(),
+        endTime: z.string().optional(),
         limit: z.number().min(MIN_BOT_HISTORY_LIMIT).max(MAX_BOT_HISTORY_LIMIT).optional(),
+        startTime: z.string().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -183,8 +186,11 @@ export const botMessageRouter = router({
         after: input.after,
         before: input.before,
         channelId: input.channelId,
+        cursor: input.cursor,
+        endTime: input.endTime,
         limit: input.limit ?? defaultLimit,
         platform,
+        startTime: input.startTime,
       });
     }),
 

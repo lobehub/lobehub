@@ -90,19 +90,19 @@ export class FeishuMessageService implements MessageRuntimeService {
     };
   };
 
-  // Feishu compatibility: the unified interface uses message IDs for `before`/`after`,
-  // but the Feishu API uses Unix second timestamps (`start_time`/`end_time`).
-  // Callers should pass Unix second timestamps for Feishu instead of message IDs.
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
     const result = await this.api.listMessages(params.channelId, {
-      endTime: params.before,
+      endTime: params.endTime,
       pageSize: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, MAX_FEISHU_HISTORY_LIMIT),
-      startTime: params.after,
+      pageToken: params.cursor,
+      startTime: params.startTime,
     });
     const messages = result.items.map(toMessageItem);
     return {
       channelId: params.channelId,
+      hasMore: result.hasMore,
       messages,
+      nextCursor: result.pageToken,
       platform: this.platformName,
       totalFetched: messages.length,
     };
