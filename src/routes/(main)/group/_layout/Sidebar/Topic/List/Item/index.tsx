@@ -43,6 +43,16 @@ const styles = createStaticStyles(({ css }) => ({
 
     transition: width 0.2s ${cssVar.motionEaseOut};
   `,
+  neonDot: css`
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorSuccess};
+    box-shadow:
+      0 0 3px ${cssVar.colorSuccess},
+      0 0 6px ${cssVar.colorSuccess};
+  `,
 }));
 
 interface TopicItemProps {
@@ -135,6 +145,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
             }}
           >
             <m.span
+              className={styles.neonDot}
               initial={false}
               animate={{
                 scale: [1, 1.3, 1],
@@ -144,13 +155,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
                   `0 0 5px ${successColor}, 0 0 8px color-mix(in srgb, ${successColor} 60%, transparent)`,
                   `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
                 ],
-              }}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: successColor,
-                boxShadow: `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
               }}
               transition={{
                 duration: 1.2,
