@@ -1,3 +1,5 @@
+import { parse } from '@lobechat/conversation-flow';
+import { type UIChatMessage } from '@lobechat/types';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { type ConversationContext, type ConversationHooks } from '../types';
@@ -37,6 +39,7 @@ export type ConversationStore = Store;
 export interface CreateStoreParams {
   context: ConversationContext;
   hooks?: ConversationHooks;
+  initialMessages?: UIChatMessage[];
   skipFetch?: boolean;
 }
 
@@ -45,18 +48,27 @@ type CreateStore = (
 ) => StateCreator<Store, [['zustand/devtools', never]]>;
 
 export const createStoreAction: CreateStore =
-  ({ context, hooks = {}, skipFetch }) =>
-  (...params) => ({
-    ...initialState,
-    context,
-    hooks,
-    skipFetch,
-    // ===== Slices =====
-    ...dataSlice(...params),
-    ...generationSlice(...params),
-    ...inputSlice(...params),
-    ...messageSlice(...params),
-    ...messageEditingSlice(...params),
-    ...toolSlice(...params),
-    ...virtuaListSlice(...params),
-  });
+  ({ context, hooks = {}, skipFetch, initialMessages }) =>
+  (...params) => {
+    // Seed store with initial messages to avoid stale data flash on topic switch
+    const dbMessages = initialMessages ?? [];
+    const { flatList } = parse(dbMessages);
+
+    return {
+      ...initialState,
+      context,
+      dbMessages,
+      displayMessages: flatList,
+      hooks,
+      messagesInit: dbMessages.length > 0,
+      skipFetch,
+      // ===== Slices =====
+      ...dataSlice(...params),
+      ...generationSlice(...params),
+      ...inputSlice(...params),
+      ...messageSlice(...params),
+      ...messageEditingSlice(...params),
+      ...toolSlice(...params),
+      ...virtuaListSlice(...params),
+    };
+  };
