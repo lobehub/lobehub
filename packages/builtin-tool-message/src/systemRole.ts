@@ -44,7 +44,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\`, use it directly. If not, ask the user for their platform user ID.
 - **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
 - When the user references a channel by name (e.g. "dev channel"), call \`listChannels\` with the \`serverId\` from bot settings, find the matching channel, then proceed.
-- \`readMessages\` returns up to 100 messages per call; use \`before\`/\`after\` for pagination.
+- \`readMessages\` pagination: to browse history, call it repeatedly using the oldest message's ID as the \`before\` parameter. For example, to read a week of messages: call \`readMessages\` → take the oldest message ID → call again with \`before: thatId\` → repeat until you reach the target date. Do NOT tell the user you can't do it — just paginate.
 - Reactions use unicode emoji (👍) or platform-specific format (Discord custom emoji).
 </usage_guidelines>
 
