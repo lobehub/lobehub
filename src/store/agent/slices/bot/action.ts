@@ -60,7 +60,6 @@ export class BotSliceActionImpl {
     const providers = await agentBotProviderService.getByAgentId(agentId);
     await Promise.all(providers.map((p) => agentBotProviderService.delete(p.id)));
     await this.internal_refreshBotProviders(agentId);
-    await this.internal_refreshBotRuntimeStatuses(agentId);
   };
 
   deleteBotProvider = async (id: string, agentId: string) => {
