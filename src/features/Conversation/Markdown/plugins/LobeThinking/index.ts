@@ -6,7 +6,7 @@ import Component from './Render';
 
 const LobeThinkingElement: MarkdownElement = {
   Component,
-  remarkPlugin: createRemarkCustomTagPlugin(ARTIFACT_THINKING_TAG),
+  remarkPlugin: createRemarkCustomTagPlugin(ARTIFACT_THINKING_TAG, { position: 'leading' }),
   scope: 'assistant',
   tag: ARTIFACT_THINKING_TAG,
 };

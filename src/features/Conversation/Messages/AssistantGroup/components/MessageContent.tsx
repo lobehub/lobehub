@@ -26,7 +26,7 @@ interface ContentBlockProps {
 const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id, isFirstBlock }) => {
   const markdownProps = useMarkdown(id);
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
-  const message = processWithArtifact(content);
+  const message = processWithArtifact(content, generating);
 
   if (!content && !hasTools) return <ContentLoading id={id} />;
 

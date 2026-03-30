@@ -2,6 +2,17 @@ import { SKIP, visit } from 'unist-util-visit';
 
 import { ARTIFACT_TAG } from '@/const/plugin';
 
+const nodeToText = (node: any): string => {
+  if (!node || typeof node !== 'object') return '';
+  if (node.type === 'raw' || node.type === 'text') return String(node.value || '');
+  if (!Array.isArray(node.children)) return '';
+
+  return node.children.map(nodeToText).join('');
+};
+
+const isLeadingNodePosition = (parent: any, index: number) =>
+  nodeToText({ children: parent.children.slice(0, index), type: 'root' }).trim() === '';
+
 function rehypeAntArtifact() {
   return (tree: any) => {
     visit(tree, (node, index, parent) => {
@@ -55,6 +66,8 @@ function rehypeAntArtifact() {
       //     '<lobeArtifact identifier="ai-new-interpretation" type="image/svg+xml" title="New AI Interpretation">',
       // }
       else if (node.type === 'raw' && node.value.startsWith(`<${ARTIFACT_TAG}`)) {
+        if (!parent || index === undefined || !isLeadingNodePosition(parent, index)) return;
+
         // Create new lobeArtifact node
         const newNode = {
           children: [],

@@ -5,11 +5,14 @@ import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
 import { HtmlPreviewAction } from '@/components/HtmlPreview';
+import { useAgentStore } from '@/store/agent';
+import { agentChatConfigSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { markdownElements } from '../../Markdown/plugins';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import { getActiveAssistantMarkdownElements } from '../../utils/markdown';
 
 const isHtmlCode = (content: string, language: string) => {
   return (
@@ -21,29 +24,41 @@ const isHtmlCode = (content: string, language: string) => {
 
 export const useMarkdown = (id: string): Partial<MarkdownProps> => {
   const item = useConversationStore(dataSelectors.getDbMessageById(id), isEqual)!;
-  const { role, search } = item || {};
+  const { content, search, tools } = item || {};
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
+  const isLocalSystemEnabled = useAgentStore(agentChatConfigSelectors.isLocalSystemEnabled);
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const animated = transitionMode === 'fadeIn' && generating;
+  const activeMarkdownElements = useMemo(
+    () =>
+      getActiveAssistantMarkdownElements(markdownElements, {
+        content,
+        hasImageSearchResults: !!search?.imageResults?.length,
+        isGenerating: generating,
+        isLocalSystemEnabled,
+        tools,
+      }),
+    [content, generating, isLocalSystemEnabled, search?.imageResults?.length, tools],
+  );
 
   const components = useMemo(
     () =>
       Object.fromEntries(
-        markdownElements.map((element) => {
+        activeMarkdownElements.map((element) => {
           const Component = element.Component;
           return [element.tag, (props: any) => <Component {...props} id={id} />];
         }),
       ),
-    [id],
+    [activeMarkdownElements, id],
   );
 
   const rehypePlugins = useMemo(
-    () => markdownElements.map((element) => element.rehypePlugin).filter(Boolean),
-    [],
+    () => activeMarkdownElements.map((element) => element.rehypePlugin).filter(Boolean),
+    [activeMarkdownElements],
   );
   const remarkPlugins = useMemo(
-    () => markdownElements.map((element) => element.remarkPlugin).filter(Boolean),
-    [],
+    () => activeMarkdownElements.map((element) => element.remarkPlugin).filter(Boolean),
+    [activeMarkdownElements],
   );
 
   return useMemo(
@@ -76,6 +91,6 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
           // if the citations's url and title are all the same, we should not show the citations
           search?.citations.every((item) => item.title !== item.url),
       }) satisfies Partial<MarkdownProps>,
-    [animated, components, rehypePlugins, remarkPlugins, role, search],
+    [animated, components, rehypePlugins, remarkPlugins, search],
   );
 };
