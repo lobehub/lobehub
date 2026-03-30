@@ -231,7 +231,7 @@ export const useSignIn = () => {
             fetchOptions,
             providerId: normalizedProvider,
           });
-      if (result && 'error' in result) throw result.error;
+      if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
       message.error(t('betterAuth.signin.socialError'));
