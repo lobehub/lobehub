@@ -1,7 +1,7 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import { z } from 'zod';
 
 import type {
-  AskUserQuestionArgs,
   CancelUserResponseArgs,
   GetInteractionStateArgs,
   InteractionState,
@@ -9,11 +9,54 @@ import type {
   SubmitUserResponseArgs,
 } from '../types';
 
+const interactionFieldOptionSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+
+const interactionFieldSchema = z.object({
+  key: z.string(),
+  kind: z.enum(['multiselect', 'select', 'text', 'textarea']),
+  label: z.string(),
+  options: z.array(interactionFieldOptionSchema).optional(),
+  placeholder: z.string().optional(),
+  required: z.boolean().optional(),
+  value: z.union([z.string(), z.array(z.string())]).optional(),
+});
+
+const questionSchema = z
+  .object({
+    description: z.string().optional(),
+    fields: z.array(interactionFieldSchema).optional(),
+    id: z.string(),
+    metadata: z.record(z.unknown()).optional(),
+    mode: z.enum(['form', 'freeform']),
+    prompt: z.string(),
+  })
+  .strict()
+  .refine((q) => q.mode !== 'form' || (q.fields && q.fields.length > 0), {
+    message:
+      'Mode "form" requires a non-empty "fields" array. Use "freeform" mode for open-ended input, or provide "fields" for structured form input.',
+  });
+
+const askUserQuestionArgsSchema = z.object({
+  question: questionSchema,
+});
+
 export class UserInteractionExecutionRuntime {
   private interactions: Map<string, InteractionState> = new Map();
 
-  async askUserQuestion(args: AskUserQuestionArgs): Promise<BuiltinServerRuntimeOutput> {
-    const { question } = args;
+  async askUserQuestion(args: unknown): Promise<BuiltinServerRuntimeOutput> {
+    const parsed = askUserQuestionArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+      return {
+        content: `Invalid askUserQuestion args:\n${issues.join('\n')}\nPlease regenerate the tool call with the correct schema.`,
+        success: false,
+      };
+    }
+
+    const { question } = parsed.data;
     const requestId = question.id;
 
     const state: InteractionState = {

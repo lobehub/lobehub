@@ -20,7 +20,12 @@ describe('UserInteractionExecutionRuntime', () => {
   it('marks interaction as submitted with response', async () => {
     const runtime = new UserInteractionExecutionRuntime();
     await runtime.askUserQuestion({
-      question: { id: 'q2', mode: 'form', prompt: 'Fill this form' },
+      question: {
+        fields: [{ key: 'name', kind: 'text' as const, label: 'Name', required: true }],
+        id: 'q2',
+        mode: 'form' as const,
+        prompt: 'Fill this form',
+      },
     });
 
     const result = await runtime.submitUserResponse({

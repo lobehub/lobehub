@@ -96,6 +96,8 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         } else {
           await onInteractionAction({ payload: formData, type: 'submit' });
         }
+      } catch (error) {
+        console.error(error);
       } finally {
         setSubmitting(false);
       }
