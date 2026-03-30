@@ -584,6 +584,20 @@ describe('promoteDisplayOnlyLatex', () => {
     expect(promoteDisplayOnlyLatex(input)).toEqual(input);
   });
 
+  it('should return plain text without math delimiters unchanged', () => {
+    const input = 'Hello, this is a normal message with no math at all.';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(input);
+  });
+
+  it('should handle empty string input', () => {
+    expect(promoteDisplayOnlyLatex('')).toEqual('');
+  });
+
+  it('should handle undefined input', () => {
+    expect(promoteDisplayOnlyLatex(undefined as unknown as string)).toEqual('');
+  });
+
   it('should be idempotent', () => {
     const input =
       'Before $\\hat{\\sigma}\\tag{1}$ after and $$\\begin{align}a&=b\\\\c&=d\\end{align}$$';

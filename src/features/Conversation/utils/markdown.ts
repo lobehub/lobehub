@@ -48,14 +48,17 @@ const withProtectedMarkdownSegments = (input: string, transformer: (content: str
   );
 };
 
-export const promoteDisplayOnlyLatex = (input: string = '') =>
-  withProtectedMarkdownSegments(input, (content) =>
+export const promoteDisplayOnlyLatex = (input: string = '') => {
+  if (!input.includes('$') && !input.includes('\\(')) return input;
+
+  return withProtectedMarkdownSegments(input, (content) =>
     content.replaceAll(INLINE_LATEX_PATTERN, (match, parenFormula, dollarFormula) => {
       const formula = parenFormula || dollarFormula;
 
       return shouldPromoteInlineLatex(formula) ? toDisplayMathBlock(formula) : match;
     }),
   );
+};
 
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
