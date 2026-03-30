@@ -22,6 +22,7 @@ import {
   LocalSystemRenders,
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
+import { MessageManifest, MessageRenders } from '@lobechat/builtin-tool-message/client';
 import { NotebookManifest, NotebookRenders } from '@lobechat/builtin-tool-notebook/client';
 import { SkillStoreManifest, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsManifest, SkillsRenders } from '@lobechat/builtin-tool-skills/client';
@@ -45,6 +46,7 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
   [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
+  [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
   [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
   [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,

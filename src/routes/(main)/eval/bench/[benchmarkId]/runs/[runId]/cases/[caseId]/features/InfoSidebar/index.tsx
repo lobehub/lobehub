@@ -4,14 +4,14 @@ import type { EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { Collapse, Divider, Progress, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    border-inline-start: 1px solid ${token.colorBorderSecondary};
-    background: ${token.colorBgContainer};
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+    background: ${cssVar.colorBgContainer};
   `,
   infoItem: css`
     display: flex;
@@ -23,12 +23,12 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   infoLabel: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   infoValue: css`
     font-family: monospace;
     font-size: 13px;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   rubricItem: css`
     padding-block: 8px;
@@ -41,19 +41,19 @@ const useStyles = createStyles(({ css, token }) => ({
   rubricReason: css`
     font-size: 12px;
     line-height: 1.5;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   rubricScore: css`
     font-family: monospace;
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   sectionTitle: css`
     margin: 0;
 
     font-size: 12px;
     font-weight: 600;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-transform: uppercase;
     letter-spacing: 0.5px;
   `,
@@ -105,8 +105,6 @@ const isDeterministicMode = (rubricId: string): boolean => {
 
 const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, score }) => {
   const { t } = useTranslation('eval');
-  const { styles } = useStyles();
-
   const rubricScores = evalResult?.rubricScores;
   const hasRubricScores = rubricScores && rubricScores.length > 0;
 

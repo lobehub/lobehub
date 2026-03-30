@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "برای فعال کردن شارژ خودکار به یک طرح پولی اشتراک بگیرید",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "موجودی هدف باید بیشتر از آستانه باشد",
   "credits.packages.auto": "خودکار",
+  "credits.packages.charged": "شارژ شده ${{amount}}",
   "credits.packages.expired": "منقضی شده",
   "credits.packages.expiresIn": "منقضی در {{days}} روز",
   "credits.packages.expiresToday": "امروز منقضی می‌شود",

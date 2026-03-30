@@ -28,8 +28,9 @@ const prefixCls = 'ant';
 
 const styles = createStaticStyles(({ css }) => ({
   form: css`
-    .${prefixCls}-form-item-control:has(.${prefixCls}-input, .${prefixCls}-select, .${prefixCls}-input-number) {
-      flex: none;
+    .${prefixCls}-form-item-control {
+      flex: 0 0 50% !important;
+      width: 50%;
     }
   `,
 }));
@@ -206,6 +207,7 @@ interface BodyProps {
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    settings?: Record<string, unknown> | null;
   };
   form: FormInstance<ChannelFormValues>;
   hasConfig?: boolean;

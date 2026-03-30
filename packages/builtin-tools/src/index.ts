@@ -12,6 +12,7 @@ import { GTDManifest } from '@lobechat/builtin-tool-gtd';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -19,7 +20,9 @@ import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
+import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
+import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
@@ -173,6 +176,11 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    identifier: MessageManifest.identifier,
+    manifest: MessageManifest,
+    type: 'builtin',
+  },
+  {
     hidden: true,
     identifier: RemoteDeviceManifest.identifier,
     manifest: RemoteDeviceManifest,
@@ -183,6 +191,20 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: TopicReferenceManifest.identifier,
     manifest: TopicReferenceManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: WebOnboardingManifest.identifier,
+    manifest: WebOnboardingManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: UserInteractionManifest.identifier,
+    manifest: UserInteractionManifest,
     type: 'builtin',
   },
   {

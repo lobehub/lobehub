@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Abbonati a un piano a pagamento per abilitare la ricarica automatica",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Il saldo obiettivo deve essere maggiore della soglia",
   "credits.packages.auto": "Automatico",
+  "credits.packages.charged": "Addebitato ${{amount}}",
   "credits.packages.expired": "Scaduto",
   "credits.packages.expiresIn": "Scade tra {{days}} giorni",
   "credits.packages.expiresToday": "Scade oggi",

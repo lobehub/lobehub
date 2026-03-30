@@ -43,6 +43,40 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('currentResponseLanguage', () => {
+    it('should prefer the saved response language', () => {
+      const s: UserState = merge(initialState, {
+        settings: {
+          general: { responseLanguage: 'zh-CN' },
+        },
+      });
+
+      const result = userGeneralSettingsSelectors.currentResponseLanguage(s as UserStore);
+
+      expect(result).toBe('zh-CN');
+    });
+
+    it('should fallback to the normalized browser language', () => {
+      const originalLanguage = navigator.language;
+      Object.defineProperty(window.navigator, 'language', { configurable: true, value: 'fr' });
+
+      const s: UserState = merge(initialState, {
+        settings: {
+          general: {},
+        },
+      });
+
+      const result = userGeneralSettingsSelectors.currentResponseLanguage(s as UserStore);
+
+      expect(result).toBe('fr-FR');
+
+      Object.defineProperty(window.navigator, 'language', {
+        configurable: true,
+        value: originalLanguage,
+      });
+    });
+  });
+
   describe('neutralColor', () => {
     it('should return undefined if general settings not exists', () => {
       const s: UserState = merge(initialState, {

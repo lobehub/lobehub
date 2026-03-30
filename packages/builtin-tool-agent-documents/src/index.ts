@@ -10,7 +10,11 @@ export {
   type CreateDocumentState,
   type EditDocumentArgs,
   type EditDocumentState,
+  type ListDocumentsArgs,
+  type ListDocumentsState,
   type ReadDocumentArgs,
+  type ReadDocumentByFilenameArgs,
+  type ReadDocumentByFilenameState,
   type ReadDocumentState,
   type RemoveDocumentArgs,
   type RemoveDocumentState,
@@ -18,4 +22,6 @@ export {
   type RenameDocumentState,
   type UpdateLoadRuleArgs,
   type UpdateLoadRuleState,
+  type UpsertDocumentByFilenameArgs,
+  type UpsertDocumentByFilenameState,
 } from './types';

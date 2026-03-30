@@ -6,7 +6,7 @@ import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as EnvsAuthModule from '@/envs/auth';
-import { LOBE_CHAT_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
+import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { POST } from './route';
@@ -45,7 +45,6 @@ beforeEach(() => {
   request = new Request(new URL('https://test.com'), {
     headers: {
       [LOBE_CHAT_AUTH_HEADER]: 'Bearer some-valid-token',
-      [OAUTH_AUTHORIZED]: 'true',
     },
     method: 'POST',
     body: JSON.stringify({ model: 'test-model' }),

@@ -3,6 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
+import { LOADING_FLAT } from '@/const/message';
 import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -29,9 +30,18 @@ interface GroupChildrenProps {
   messageIndex: number;
 }
 
+const isEmptyBlock = (block: AssistantContentBlock) =>
+  (!block.content || block.content === LOADING_FLAT) &&
+  (!block.tools || block.tools.length === 0) &&
+  !block.error &&
+  !block.reasoning;
+
 const Group = memo<GroupChildrenProps>(
   ({ blocks, contentId, disableEditing, messageIndex, id, content }) => {
-    const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
+    const [isCollapsed, isGenerating] = useConversationStore((s) => [
+      messageStateSelectors.isMessageCollapsed(id)(s),
+      messageStateSelectors.isMessageGenerating(id)(s),
+    ]);
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
 
     if (isCollapsed) {
@@ -47,6 +57,8 @@ const Group = memo<GroupChildrenProps>(
       <MessageAggregationContext value={contextValue}>
         <Flexbox className={styles.container} gap={8}>
           {blocks.map((item, index) => {
+            if (!isGenerating && isEmptyBlock(item)) return null;
+
             return (
               <GroupItem
                 {...item}

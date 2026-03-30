@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "ファイル処理中...",
   "uploadDock.body.item.restTime": "残り {{time}}",
   "uploadDock.fileQueueInfo": "最初の {{count}} 件のファイルをアップロード中、残りの {{remaining}} 件は順番待ちです",
+  "uploadDock.header.cancelAll": "すべてキャンセル",
   "uploadDock.totalCount": "合計 {{count}} 件",
   "uploadDock.uploadStatus.cancelled": "アップロードがキャンセルされました",
   "uploadDock.uploadStatus.error": "アップロードエラー",

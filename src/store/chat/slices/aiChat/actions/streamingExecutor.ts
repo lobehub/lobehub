@@ -27,7 +27,7 @@ import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
-import { type ChatStore } from '@/store/chat/store';
+import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
@@ -42,6 +42,7 @@ import {
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '../../message/selectors/dbMessage';
+import { mergeQueuedMessages } from '../../operation/types';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -184,15 +185,18 @@ export class StreamingExecutorActionImpl {
       { model: agentConfigData.model, provider: agentConfigData.provider! },
       effectivePluginIds,
     );
-    // When skillActivateMode is 'manual', exclude only discovery tools (lobe-activator, lobe-skill-store)
-    // so that externally enabled tools (sandbox, web browsing, etc.) remain available
+    // When skillActivateMode is 'manual':
+    // - Builtin agents: skip all default tools (they define their own precise tool set)
+    // - Regular agents: exclude only discovery tools so externally enabled tools remain available
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+    const shouldSkipDefaultForBuiltin = isManualMode && agentConfig.isBuiltinAgent;
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
+      excludeDefaultToolIds:
+        isManualMode && !agentConfig.isBuiltinAgent ? manualModeExcludeToolIds : undefined,
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools,
+      skipDefaultTools: disableTools || shouldSkipDefaultForBuiltin || undefined,
       toolIds: mergedToolIds,
     });
 
@@ -486,6 +490,9 @@ export class StreamingExecutorActionImpl {
       nextContext.phase,
     );
 
+    // Compute contextKey for message queue (per-context, not per-operation)
+    const contextKey = messageKey;
+
     // Execute the agent runtime loop
     let stepCount = 0;
     while (state.status !== 'done' && state.status !== 'error') {
@@ -516,7 +523,13 @@ export class StreamingExecutorActionImpl {
       const activatedToolIds = selectActivatedToolIdsFromMessages(currentDBMessages);
       // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
-      const stepContext = computeStepContext({ activatedSkills, activatedToolIds, todos });
+      const hasQueuedMessages = (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
+      const stepContext = computeStepContext({
+        activatedSkills,
+        activatedToolIds,
+        hasQueuedMessages,
+        todos,
+      });
 
       // If page agent is enabled, get the latest XML for stepPageEditor
       if (nextContext.initialContext?.pageEditor) {
@@ -656,6 +669,46 @@ export class StreamingExecutorActionImpl {
       }
 
       log('[internal_execAgentRuntime] afterCompletion callbacks executed');
+    }
+
+    // If completed successfully and queue has messages, drain and trigger new sendMessage.
+    // Only drain on success — on error the queue is left intact so messages aren't lost.
+    if (state.status === 'done') {
+      const remainingQueued = this.#get().drainQueuedMessages(contextKey);
+      if (remainingQueued.length > 0) {
+        const merged = mergeQueuedMessages(remainingQueued);
+        log(
+          '[internal_execAgentRuntime] %d queued messages after completion, triggering new sendMessage',
+          remainingQueued.length,
+        );
+
+        this.#get().completeOperation(operationId);
+
+        const completedOp = this.#get().operations[operationId];
+        if (completedOp?.context.agentId) {
+          this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+        }
+
+        const execContext = { ...context };
+        const mergedContent = merged.content;
+        // Convert file id strings — sendMessage only reads f.id from each item
+        const mergedFiles =
+          merged.files.length > 0 ? merged.files.map((id) => ({ id }) as any) : undefined;
+
+        setTimeout(() => {
+          useChatStore
+            .getState()
+            .sendMessage({ message: mergedContent, files: mergedFiles, context: execContext })
+            .catch((e: unknown) => {
+              console.error(
+                '[internal_execAgentRuntime] sendMessage for queued content failed:',
+                e,
+              );
+            });
+        }, 100);
+
+        return; // Skip the normal completion below
+      }
     }
 
     // Complete operation based on final state

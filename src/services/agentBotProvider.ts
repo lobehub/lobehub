@@ -11,10 +11,6 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
   };
 
-  listRuntimeStatuses = async (agentId: string): Promise<BotRuntimeStatusSnapshot[]> => {
-    return lambdaClient.agentBotProvider.listRuntimeStatuses.query({ agentId });
-  };
-
   getRuntimeStatus = async (params: {
     applicationId: string;
     platform: string;

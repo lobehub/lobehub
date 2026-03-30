@@ -101,7 +101,13 @@ describe('createCommonSlice', () => {
 
       // 验证状态是否正确更新
       expect(useUserStore.getState().user?.avatar).toBe(mockUserState.avatar);
-      expect(useUserStore.getState().settings).toEqual(mockUserState.settings);
+      expect(userGeneralSettingsSelectors.config(useUserStore.getState() as any)).toEqual(
+        expect.objectContaining({
+          fontSize: 14,
+          responseLanguage: expect.any(String),
+          timezone: 'America/New_York',
+        }),
+      );
       expect(useUserStore.getState().user?.email).toEqual(mockUserState.email);
       expect(successCallback).toHaveBeenCalledWith(mockUserState);
     });
@@ -194,9 +200,9 @@ describe('createCommonSlice', () => {
         expect(result.current.isUserStateInit).toBeTruthy();
         // 验证状态未被错误更新
         expect(result.current.user?.avatar).toEqual('abc');
-        // When settings is null, auto-detect timezone will set it
+        // When settings is null, auto-detect general settings will set them
         expect(result.current.settings).toEqual({
-          general: { timezone: expect.any(String) },
+          general: { responseLanguage: expect.any(String), timezone: expect.any(String) },
         });
       });
     });

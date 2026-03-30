@@ -32,6 +32,7 @@ import {
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryInspectors, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
+import { MessageInspectors, MessageManifest } from '@lobechat/builtin-tool-message/client';
 import { NotebookInspectors, NotebookManifest } from '@lobechat/builtin-tool-notebook/client';
 import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
 import {
@@ -71,6 +72,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
+  [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
   [NotebookManifest.identifier]: NotebookInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
   [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,

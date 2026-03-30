@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "订阅付费计划以启用自动充值",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "目标余额必须大于触发阈值",
   "credits.packages.auto": "自动",
+  "credits.packages.charged": "已扣费 ${{amount}}",
   "credits.packages.expired": "已过期",
   "credits.packages.expiresIn": "{{days}} 天后过期",
   "credits.packages.expiresToday": "今日过期",

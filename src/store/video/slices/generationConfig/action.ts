@@ -5,29 +5,14 @@ import {
   type RuntimeVideoGenParamsValue,
   type VideoModelParamsSchema,
 } from 'model-bank';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
+import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 import type { VideoStore } from '../../store';
-
-export interface GenerationConfigAction {
-  initializeVideoConfig: (
-    isLogin?: boolean,
-    lastSelectedVideoModel?: string,
-    lastSelectedVideoProvider?: string,
-  ) => void;
-
-  setModelAndProviderOnSelect: (model: string, provider: string) => void;
-
-  setParamOnInput: <K extends RuntimeVideoGenParamsKeys>(
-    paramName: K,
-    value: RuntimeVideoGenParamsValue,
-  ) => void;
-}
 
 export function getVideoModelAndDefaults(model: string, provider: string) {
   const enabledVideoModelList = aiProviderSelectors.enabledVideoModelList(getAiInfraStoreState());
@@ -54,13 +39,25 @@ export function getVideoModelAndDefaults(model: string, provider: string) {
   return { activeModel, defaultValues, parametersSchema };
 }
 
-export const createGenerationConfigSlice: StateCreator<
-  VideoStore,
-  [['zustand/devtools', never]],
-  [],
-  GenerationConfigAction
-> = (set) => ({
-  initializeVideoConfig: (isLogin, lastSelectedVideoModel, lastSelectedVideoProvider) => {
+type Setter = StoreSetter<VideoStore>;
+
+export const createGenerationConfigSlice = (set: Setter, get: () => VideoStore, _api?: unknown) =>
+  new GenerationConfigActionImpl(set, get, _api);
+
+export class GenerationConfigActionImpl {
+  readonly #set: Setter;
+
+  constructor(set: Setter, _get: () => VideoStore, _api?: unknown) {
+    void _get;
+    void _api;
+    this.#set = set;
+  }
+
+  initializeVideoConfig = (
+    isLogin?: boolean,
+    lastSelectedVideoModel?: string,
+    lastSelectedVideoProvider?: string,
+  ): void => {
     if (isLogin && lastSelectedVideoModel && lastSelectedVideoProvider) {
       try {
         const { defaultValues, parametersSchema } = getVideoModelAndDefaults(
@@ -68,7 +65,7 @@ export const createGenerationConfigSlice: StateCreator<
           lastSelectedVideoProvider,
         );
 
-        set(
+        this.#set(
           {
             isInit: true,
             model: lastSelectedVideoModel,
@@ -80,17 +77,17 @@ export const createGenerationConfigSlice: StateCreator<
           `initializeVideoConfig/${lastSelectedVideoModel}/${lastSelectedVideoProvider}`,
         );
       } catch {
-        set({ isInit: true }, false, 'initializeVideoConfig/default');
+        this.#set({ isInit: true }, false, 'initializeVideoConfig/default');
       }
     } else {
-      set({ isInit: true }, false, 'initializeVideoConfig/default');
+      this.#set({ isInit: true }, false, 'initializeVideoConfig/default');
     }
-  },
+  };
 
-  setModelAndProviderOnSelect: (model, provider) => {
+  setModelAndProviderOnSelect = (model: string, provider: string): void => {
     const { defaultValues, parametersSchema } = getVideoModelAndDefaults(model, provider);
 
-    set(
+    this.#set(
       {
         model,
         parameters: defaultValues,
@@ -108,10 +105,13 @@ export const createGenerationConfigSlice: StateCreator<
         lastSelectedVideoProvider: provider,
       });
     }
-  },
+  };
 
-  setParamOnInput: (paramName, value) => {
-    set(
+  setParamOnInput = <K extends RuntimeVideoGenParamsKeys>(
+    paramName: K,
+    value: RuntimeVideoGenParamsValue,
+  ): void => {
+    this.#set(
       (state) => {
         const { parameters } = state;
         return { parameters: { ...parameters, [paramName]: value } };
@@ -119,5 +119,10 @@ export const createGenerationConfigSlice: StateCreator<
       false,
       `setParamOnInput/${paramName}`,
     );
-  },
-});
+  };
+}
+
+export type GenerationConfigAction = Pick<
+  GenerationConfigActionImpl,
+  keyof GenerationConfigActionImpl
+>;

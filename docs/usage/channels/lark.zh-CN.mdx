@@ -10,11 +10,6 @@ tags:
 
 # 将 LobeHub 连接到 Lark
 
-<Callout type={'info'}>
-  此功能目前正在开发中，可能尚未完全稳定。您可以通过在 **设置** → **高级设置** → **开发者模式**
-  中启用 **开发者模式** 来使用此功能。
-</Callout>
-
 通过将 Lark 渠道连接到您的 LobeHub 代理，团队成员可以直接在 Lark 的私聊和群组对话中与 AI 助手互动。
 
 > 如果您使用的是中国版（飞书），请参阅[飞书设置指南](/docs/usage/channels/feishu)。
@@ -35,6 +30,8 @@ tags:
 
   点击 **Create Enterprise App**。填写应用名称（例如 "LobeHub Assistant"）、描述和图标，然后提交表单。
 
+  ![](/blog/assetsa8003533498461272ea15a19407db9f4.webp)
+
   ### 复制应用凭证
 
   进入 **Credentials & Basic Info**，复制以下内容：
@@ -43,6 +40,8 @@ tags:
   - **App Secret**
 
   > **重要提示：** 请妥善保管您的 App Secret。切勿公开分享。
+
+  ![](/blog/assetscb1c097430e064f8f99de85e5f078784.webp)
 </Steps>
 
 ## 第二步：配置应用权限和机器人功能
@@ -80,6 +79,8 @@ tags:
     以上权限码已针对 Lark（国际版）进行调整。部分飞书特有的权限码（如 `aily:*`、`corehr:*`、`im:chat.access_event.bot_p2p_chat:read`）在 Lark 上不可用，已被排除。
   </Callout>
 
+  ![](/blog/assets1aaca5d65761b58564e3f196a91cde3e.webp)
+
   ### 启用机器人功能
 
   进入 **App Capability** → **Bot**。开启机器人功能并设置您喜欢的机器人名称。
@@ -104,6 +105,8 @@ tags:
   ### 保存并复制 Webhook URL
 
   点击 **Save Configuration**。保存后，将显示一个 **Event Subscription URL**。复制此 URL —— 您将在下一步中需要它。
+
+  ![](/blog/assets0a25d3ffb02d35f6f28cdfa9da2dccd8.webp)
 </Steps>
 
 ## 第四步：在 Lark 中设置事件订阅
@@ -125,6 +128,8 @@ tags:
 
   这将使您的应用能够接收消息并将其转发到 LobeHub。
 
+  ![](/blog/assets313dfd5108d6fade542c846a87e2aa5a.webp)
+
   ### （推荐）填写 Verification Token 和 Encrypt Key
 
   配置事件订阅后，您可以在事件订阅页面顶部的 **Encryption Strategy** 中找到 **Verification Token** 和 **Encrypt Key**。
@@ -135,6 +140,8 @@ tags:
   - **Encrypt Key**（可选）— 用于解密加密事件负载
 
   再次点击 **Save Configuration** 以应用。
+
+  ![](/blog/assetscfcdfc63bc4f8defc06accef81339a5b.webp)
 </Steps>
 
 ## 第五步：发布应用
@@ -147,6 +154,8 @@ tags:
   ### 提交审核
 
   提交版本进行审核并发布。对于企业自管理应用，通常会自动批准。
+
+  ![](/blog/assets39788a720a65b89f84b2d0d844c4791d.webp)
 </Steps>
 
 ## 第六步：测试连接

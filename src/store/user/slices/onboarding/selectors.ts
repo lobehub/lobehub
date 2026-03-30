@@ -2,6 +2,7 @@ import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 
 import { type UserStore } from '../../store';
+import { agentOnboardingSelectors } from '../agentOnboarding/selectors';
 
 /**
  * Returns the current step for UI display.
@@ -22,7 +23,9 @@ const isFinished = (s: UserStore) => !!s.onboarding?.finishedAt;
 /**
  * Check if user needs to go through onboarding.
  */
-const needsOnboarding = (s: Pick<UserStore, 'onboarding'>) => {
+const needsOnboarding = (s: Pick<UserStore, 'agentOnboarding' | 'onboarding'>) => {
+  if (agentOnboardingSelectors.isFinished(s)) return false;
+
   return (
     !s.onboarding?.finishedAt ||
     (s.onboarding?.version && s.onboarding.version < CURRENT_ONBOARDING_VERSION)

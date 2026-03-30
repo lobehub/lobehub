@@ -1,6 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
+import { Icon, useAppElement } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { FileText, FolderIcon } from 'lucide-react';
@@ -51,16 +51,20 @@ interface DragState {
   type: 'file' | 'folder';
 }
 
-const DragStateContext = createContext<{
-  currentDrag: DragState | null;
+const CurrentDragContext = createContext<DragState | null>(null);
+const SetCurrentDragContext = createContext<((_state: DragState | null) => void) | null>(null);
 
-  setCurrentDrag: (_state: DragState | null) => void;
-}>({
-  currentDrag: null,
-  setCurrentDrag: () => {},
-});
+export const useCurrentDrag = () => use(CurrentDragContext);
 
-export const useDragState = () => use(DragStateContext);
+export const useSetCurrentDrag = () => {
+  const setCurrentDrag = use(SetCurrentDragContext);
+
+  if (!setCurrentDrag) {
+    throw new Error('useSetCurrentDrag must be used within DndContextWrapper');
+  }
+
+  return setCurrentDrag;
+};
 
 /**
  * Pragmatic DnD wrapper for resource drag-and-drop
@@ -71,10 +75,11 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
   const { message } = App.useApp();
   const [currentDrag, setCurrentDrag] = useState<DragState | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const moveResource = useFileStore((s) => s.moveResource);
-  const resourceList = useFileStore((s) => s.resourceList);
-  const selectedFileIds = useResourceManagerStore((s) => s.selectedFileIds);
-  const setSelectedFileIds = useResourceManagerStore((s) => s.setSelectedFileIds);
+  const [moveResource, resourceList] = useFileStore((s) => [s.moveResource, s.resourceList]);
+  const [selectedFileIds, setSelectedFileIds] = useResourceManagerStore((s) => [
+    s.selectedFileIds,
+    s.setSelectedFileIds,
+  ]);
   const libraryId = useResourceManagerStore((s) => s.libraryId);
 
   // Track mouse position and handle drag events
@@ -145,10 +150,6 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
 
         await Promise.all(pools);
 
-        // Refetch resources to update the view (items should disappear from current folder)
-        const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
-        await revalidateResources();
-
         // Clear and reload all expanded folders in Tree's module-level cache
         if (libraryId) {
           await clearTreeFolderCache(libraryId);
@@ -205,6 +206,8 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
     libraryId,
   ]);
 
+  const appElement = useAppElement();
+
   // Change cursor to grabbing during drag
   useEffect(() => {
     let styleElement: HTMLStyleElement | null = null;
@@ -237,93 +240,95 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
 
   return (
     <DragActiveContext value={currentDrag !== null}>
-      <DragStateContext value={{ currentDrag, setCurrentDrag }}>
-        {children}
-        {typeof document !== 'undefined' &&
-          createPortal(
-            currentDrag ? (
-              <div
-                ref={overlayRef}
-                style={{
-                  alignItems: 'center',
-                  background: cssVar.colorBgElevated,
-                  border: `1px solid ${cssVar.colorPrimaryBorder}`,
-                  borderRadius: cssVar.borderRadiusLG,
-                  boxShadow: cssVar.boxShadow,
-                  display: 'flex',
-                  gap: 12,
-                  height: 44,
-                  left: '-999px',
-                  maxWidth: 320,
-                  minWidth: 200,
-                  padding: '0 12px',
-                  pointerEvents: 'none',
-                  position: 'fixed',
-                  top: '-999px',
-                  transform: 'translate3d(0, 0, 0)',
-                  willChange: 'transform',
-                  zIndex: 9999,
-                }}
-              >
+      <CurrentDragContext value={currentDrag}>
+        <SetCurrentDragContext value={setCurrentDrag}>
+          {children}
+          {typeof document !== 'undefined' &&
+            createPortal(
+              currentDrag ? (
                 <div
+                  ref={overlayRef}
                   style={{
                     alignItems: 'center',
-                    color: cssVar.colorPrimary,
+                    background: cssVar.colorBgElevated,
+                    border: `1px solid ${cssVar.colorPrimaryBorder}`,
+                    borderRadius: cssVar.borderRadiusLG,
+                    boxShadow: cssVar.boxShadow,
                     display: 'flex',
-                    flexShrink: 0,
-                    justifyContent: 'center',
+                    gap: 12,
+                    height: 44,
+                    left: '-999px',
+                    maxWidth: 320,
+                    minWidth: 200,
+                    padding: '0 12px',
+                    pointerEvents: 'none',
+                    position: 'fixed',
+                    top: '-999px',
+                    transform: 'translate3d(0, 0, 0)',
+                    willChange: 'transform',
+                    zIndex: 9999,
                   }}
                 >
-                  {currentDrag.data.fileType === 'custom/folder' ? (
-                    <Icon icon={FolderIcon} size={20} />
-                  ) : currentDrag.data.fileType === 'custom/document' ? (
-                    <Icon icon={FileText} size={20} />
-                  ) : (
-                    <FileIcon
-                      fileName={currentDrag.data.name}
-                      fileType={currentDrag.data.fileType}
-                      size={20}
-                    />
-                  )}
-                </div>
-                <span
-                  style={{
-                    color: cssVar.colorText,
-                    flex: 1,
-                    fontSize: cssVar.fontSize,
-                    fontWeight: 500,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {currentDrag.data.name}
-                </span>
-                {selectedFileIds.includes(currentDrag.id) && selectedFileIds.length > 1 && (
                   <div
                     style={{
                       alignItems: 'center',
-                      background: cssVar.colorPrimary,
-                      borderRadius: cssVar.borderRadiusSM,
-                      color: cssVar.colorTextLightSolid,
+                      color: cssVar.colorPrimary,
                       display: 'flex',
                       flexShrink: 0,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      height: 22,
                       justifyContent: 'center',
-                      minWidth: 22,
-                      padding: '0 6px',
                     }}
                   >
-                    {selectedFileIds.length}
+                    {currentDrag.data.fileType === 'custom/folder' ? (
+                      <Icon icon={FolderIcon} size={20} />
+                    ) : currentDrag.data.fileType === 'custom/document' ? (
+                      <Icon icon={FileText} size={20} />
+                    ) : (
+                      <FileIcon
+                        fileName={currentDrag.data.name}
+                        fileType={currentDrag.data.fileType}
+                        size={20}
+                      />
+                    )}
                   </div>
-                )}
-              </div>
-            ) : null,
-            document.body,
-          )}
-      </DragStateContext>
+                  <span
+                    style={{
+                      color: cssVar.colorText,
+                      flex: 1,
+                      fontSize: cssVar.fontSize,
+                      fontWeight: 500,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {currentDrag.data.name}
+                  </span>
+                  {selectedFileIds.includes(currentDrag.id) && selectedFileIds.length > 1 && (
+                    <div
+                      style={{
+                        alignItems: 'center',
+                        background: cssVar.colorPrimary,
+                        borderRadius: cssVar.borderRadiusSM,
+                        color: cssVar.colorTextLightSolid,
+                        display: 'flex',
+                        flexShrink: 0,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        height: 22,
+                        justifyContent: 'center',
+                        minWidth: 22,
+                        padding: '0 6px',
+                      }}
+                    >
+                      {selectedFileIds.length}
+                    </div>
+                  )}
+                </div>
+              ) : null,
+              appElement ?? document.body,
+            )}
+        </SetCurrentDragContext>
+      </CurrentDragContext>
     </DragActiveContext>
   );
 });

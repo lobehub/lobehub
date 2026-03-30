@@ -47,6 +47,7 @@ lobehub/
 - Git commit messages should prefix with gitmoji
 - Git branch name format: `feat/feature-name`
 - Use `.github/PULL_REQUEST_TEMPLATE.md` for PR descriptions
+- **Protection of local changes**: Never use `git restore`, `git checkout --`, `git reset --hard`, or any other command or workflow that can forcibly overwrite, discard, or silently replace user-owned uncommitted changes. Before any revert or restoration affecting existing files, inspect the working tree carefully and obtain explicit user confirmation.
 
 ### Package Management
 
@@ -89,7 +90,8 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 
 - **`src/routes/`** holds only page segments (`_layout/index.tsx`, `index.tsx`, `[id]/index.tsx`). Keep route files **thin** — import from `@/features/*` and compose, no business logic.
 - **`src/features/`** holds business components by **domain** (e.g. `Pages`, `PageEditor`, `Home`). Layout pieces, hooks, and domain UI go here.
-- See the **spa-routes** skill for the full convention and file-division rules.
+- **Desktop router parity:** When changing the main SPA route tree, update **both** `src/spa/router/desktopRouter.config.tsx` (dynamic imports) and `src/spa/router/desktopRouter.config.desktop.tsx` (sync imports) so paths and nesting match. Changing only one can leave routes unregistered and cause **blank screens**.
+- See the **spa-routes** skill (`.agents/skills/spa-routes/SKILL.md`) for the full convention and file-division rules.
 
 ## Skills (Auto-loaded)
 

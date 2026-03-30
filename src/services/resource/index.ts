@@ -1,4 +1,4 @@
-import { type FileListItem } from '@/types/files';
+import { type FileListItem, type KnowledgeItemStatus } from '@/types/files';
 import {
   type CreateResourceParams,
   type ResourceItem,
@@ -58,6 +58,29 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
   };
 };
 
+type ResourceStatusItem = Pick<
+  ResourceItem,
+  | 'chunkCount'
+  | 'chunkingError'
+  | 'chunkingStatus'
+  | 'embeddingError'
+  | 'embeddingStatus'
+  | 'finishEmbedding'
+  | 'id'
+>;
+
+const mapStatusToResourceItem = (item: KnowledgeItemStatus): ResourceStatusItem => {
+  return {
+    chunkCount: item.chunkCount,
+    chunkingError: item.chunkingError,
+    chunkingStatus: item.chunkingStatus,
+    embeddingError: item.embeddingError,
+    embeddingStatus: item.embeddingStatus,
+    finishEmbedding: item.finishEmbedding,
+    id: item.id,
+  };
+};
+
 /**
  * ResourceService - Unified service for both files and documents
  * Provides a thin wrapper over FileService and DocumentService
@@ -89,12 +112,43 @@ export class ResourceService {
     };
   }
 
+  async resolveSelectionIds(
+    params: ResourceQueryParams,
+  ): Promise<{ ids: string[]; total: number }> {
+    const backendParams = {
+      ...params,
+      knowledgeBaseId: params.libraryId,
+      libraryId: undefined,
+    };
+
+    return fileService.resolveKnowledgeItemIds(backendParams);
+  }
+
+  async deleteResourcesByQuery(params: ResourceQueryParams): Promise<{ count: number }> {
+    const backendParams = {
+      ...params,
+      knowledgeBaseId: params.libraryId,
+      libraryId: undefined,
+    };
+
+    return fileService.deleteKnowledgeItemsByQuery(backendParams);
+  }
+
   /**
    * Get a single resource by ID
    */
   async getResource(id: string): Promise<ResourceItem | undefined> {
     const item = await fileService.getKnowledgeItem(id);
     return item ? mapToResourceItem(item) : undefined;
+  }
+
+  async getKnowledgeItemStatusesByIds(ids: string[]): Promise<ResourceStatusItem[]> {
+    const items = await fileService.getKnowledgeItemStatusesByIds(ids);
+    return items.map(mapStatusToResourceItem);
+  }
+
+  async getResourceStatusesByIds(ids: string[]): Promise<ResourceStatusItem[]> {
+    return this.getKnowledgeItemStatusesByIds(ids);
   }
 
   /**

@@ -4,6 +4,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { type State } from '../../initialState';
+import { getPendingInterventions } from './pendingInterventions';
 
 const displayMessages = (s: State) => s.displayMessages;
 const displayMessageIds = (s: State) => s.displayMessages.map((m) => m.id);
@@ -119,6 +120,8 @@ const currentTopicSummary = () => {
   return topicSelectors.currentActiveTopicSummary(chatState);
 };
 
+const pendingInterventions = (s: State) => getPendingInterventions(s.displayMessages);
+
 export const dataSelectors = {
   currentTopicSummary,
   dbMessages,
@@ -130,5 +133,6 @@ export const dataSelectors = {
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
   messagesInit,
+  pendingInterventions,
   skipFetch,
 };

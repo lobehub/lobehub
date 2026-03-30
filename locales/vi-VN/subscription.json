@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Đăng ký gói trả phí để bật tự động nạp tiền",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Số dư mục tiêu phải lớn hơn ngưỡng",
   "credits.packages.auto": "Tự động",
+  "credits.packages.charged": "Đã tính phí ${{amount}}",
   "credits.packages.expired": "Đã hết hạn",
   "credits.packages.expiresIn": "Hết hạn sau {{days}} ngày",
   "credits.packages.expiresToday": "Hết hạn hôm nay",

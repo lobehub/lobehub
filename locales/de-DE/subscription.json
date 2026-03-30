@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Abonnieren Sie einen kostenpflichtigen Plan, um die automatische Aufladung zu aktivieren",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Das Zielguthaben muss größer als der Schwellenwert sein",
   "credits.packages.auto": "Automatisch",
+  "credits.packages.charged": "Berechnet ${{amount}}",
   "credits.packages.expired": "Abgelaufen",
   "credits.packages.expiresIn": "Läuft in {{days}} Tagen ab",
   "credits.packages.expiresToday": "Läuft heute ab",

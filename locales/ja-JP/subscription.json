@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "有料プランに加入して自動チャージを有効にしてください",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "目標残高はしきい値を上回る必要があります",
   "credits.packages.auto": "自動",
+  "credits.packages.charged": "${{amount}}が請求されました",
   "credits.packages.expired": "期限切れ",
   "credits.packages.expiresIn": "{{days}}日後に期限切れ",
   "credits.packages.expiresToday": "本日期限切れ",

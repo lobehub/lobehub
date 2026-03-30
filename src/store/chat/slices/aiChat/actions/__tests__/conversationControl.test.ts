@@ -418,7 +418,7 @@ describe('ConversationControl actions', () => {
 
       // Mock internal methods
       const optimisticUpdatePluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdatePlugin')
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
         .mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
@@ -492,7 +492,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Mock internal methods
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
         .mockReturnValue({
@@ -553,6 +553,223 @@ describe('ConversationControl actions', () => {
     });
   });
 
+  describe('submitToolInteraction', () => {
+    it('should create a user message and resume runtime from that user message', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'global-agent';
+      const topicId = 'global-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const response = {
+        primaryUseCase: 'Writing documents',
+        tone: 'Professional',
+      };
+
+      const toolMessage = createMockMessage({
+        groupId: 'group-1',
+        id: 'tool-msg-1',
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-user-interaction',
+          type: 'default',
+        },
+        role: 'tool',
+      });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: {
+            [chatKey]: [toolMessage],
+          },
+          messagesMap: {
+            [chatKey]: [toolMessage],
+          },
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+
+      const userMessageId = 'submitted-user-msg';
+      const optimisticCreateMessageSpy = vi
+        .spyOn(result.current, 'optimisticCreateMessage')
+        .mockImplementation(async (message) => {
+          const userMessage = createMockMessage({
+            content: message.content,
+            groupId: message.groupId,
+            id: userMessageId,
+            role: 'user',
+            topicId,
+          });
+
+          useChatStore.setState({
+            dbMessagesMap: {
+              [chatKey]: [toolMessage, userMessage],
+            },
+            messagesMap: {
+              [chatKey]: [toolMessage, userMessage],
+            },
+          });
+
+          return { id: userMessageId, messages: [toolMessage, userMessage] };
+        });
+
+      const initialContext = { phase: 'init' } as any;
+      const internal_createAgentStateSpy = vi
+        .spyOn(result.current, 'internal_createAgentState')
+        .mockReturnValue({
+          agentConfig: createMockResolvedAgentConfig(),
+          context: initialContext,
+          state: {} as any,
+        });
+      const internal_execAgentRuntimeSpy = vi
+        .spyOn(result.current, 'internal_execAgentRuntime')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.submitToolInteraction('tool-msg-1', response);
+      });
+
+      expect(optimisticCreateMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Writing documents, Professional',
+          groupId: 'group-1',
+          role: 'user',
+        }),
+        expect.objectContaining({ operationId: expect.any(String) }),
+      );
+
+      expect(internal_createAgentStateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+            expect.objectContaining({ id: userMessageId, role: 'user' }),
+          ]),
+          parentMessageId: userMessageId,
+        }),
+      );
+
+      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext,
+          parentMessageId: userMessageId,
+          parentMessageType: 'user',
+        }),
+      );
+    });
+  });
+
+  describe('skipToolInteraction', () => {
+    it('should create a user message and resume runtime from that user message', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'global-agent';
+      const topicId = 'global-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const reason = 'Need to decide later';
+
+      const toolMessage = createMockMessage({
+        groupId: 'group-1',
+        id: 'tool-msg-1',
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-user-interaction',
+          type: 'default',
+        },
+        role: 'tool',
+      });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: {
+            [chatKey]: [toolMessage],
+          },
+          messagesMap: {
+            [chatKey]: [toolMessage],
+          },
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+
+      const userMessageId = 'skipped-user-msg';
+      const optimisticCreateMessageSpy = vi
+        .spyOn(result.current, 'optimisticCreateMessage')
+        .mockImplementation(async (message) => {
+          const userMessage = createMockMessage({
+            content: message.content,
+            groupId: message.groupId,
+            id: userMessageId,
+            role: 'user',
+            topicId,
+          });
+
+          useChatStore.setState({
+            dbMessagesMap: {
+              [chatKey]: [toolMessage, userMessage],
+            },
+            messagesMap: {
+              [chatKey]: [toolMessage, userMessage],
+            },
+          });
+
+          return { id: userMessageId, messages: [toolMessage, userMessage] };
+        });
+
+      const initialContext = { phase: 'init' } as any;
+      const internal_createAgentStateSpy = vi
+        .spyOn(result.current, 'internal_createAgentState')
+        .mockReturnValue({
+          agentConfig: createMockResolvedAgentConfig(),
+          context: initialContext,
+          state: {} as any,
+        });
+      const internal_execAgentRuntimeSpy = vi
+        .spyOn(result.current, 'internal_execAgentRuntime')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.skipToolInteraction('tool-msg-1', reason);
+      });
+
+      expect(optimisticCreateMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: `I'll skip this. ${reason}`,
+          groupId: 'group-1',
+          role: 'user',
+        }),
+        expect.objectContaining({ operationId: expect.any(String) }),
+      );
+
+      expect(internal_createAgentStateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+            expect.objectContaining({ id: userMessageId, role: 'user' }),
+          ]),
+          parentMessageId: userMessageId,
+        }),
+      );
+
+      expect(internal_execAgentRuntimeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext,
+          parentMessageId: userMessageId,
+          parentMessageType: 'user',
+        }),
+      );
+    });
+  });
+
   describe('rejectAndContinueToolCalling', () => {
     it('should use provided context instead of global state', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -591,7 +808,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Mock internal methods
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
@@ -665,7 +882,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Mock internal methods
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')

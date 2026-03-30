@@ -535,7 +535,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
               </Text>
             </Divider>
 
-            {/* Self-host 选项 */}
+            {/* Self-host option */}
             {renderSelfhostContent()}
           </>
         )}

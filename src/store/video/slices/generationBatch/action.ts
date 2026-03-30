@@ -1,12 +1,12 @@
 import { isEqual } from 'es-toolkit/compat';
 import { useRef } from 'react';
 import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
+import { type StoreSetter } from '@/store/types';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 import { setNamespace } from '@/utils/storeDebug';
@@ -21,44 +21,28 @@ const n = setNamespace('generationBatch');
 const SWR_USE_FETCH_GENERATION_BATCHES = 'SWR_USE_FETCH_VIDEO_GENERATION_BATCHES';
 const SWR_USE_CHECK_GENERATION_STATUS = 'SWR_USE_CHECK_VIDEO_GENERATION_STATUS';
 
-// ====== action interface ====== //
+type Setter = StoreSetter<VideoStore>;
 
-export interface GenerationBatchAction {
-  internal_deleteGeneration: (generationId: string) => Promise<void>;
-  internal_deleteGenerationBatch: (batchId: string, topicId: string) => Promise<void>;
-  internal_dispatchGenerationBatch: (
-    topicId: string,
-    payload: GenerationBatchDispatch,
-    action?: string,
-  ) => void;
-  refreshGenerationBatches: () => Promise<void>;
-  removeGeneration: (generationId: string) => Promise<void>;
-  removeGenerationBatch: (batchId: string, topicId: string) => Promise<void>;
-  setTopicBatchLoaded: (topicId: string) => void;
-  useCheckGenerationStatus: (
-    generationId: string,
-    asyncTaskId: string,
-    topicId: string,
-    enable?: boolean,
-  ) => SWRResponse<GetGenerationStatusResult>;
-  useFetchGenerationBatches: (topicId?: string | null) => SWRResponse<GenerationBatch[]>;
-}
+export const createGenerationBatchSlice = (set: Setter, get: () => VideoStore, _api?: unknown) =>
+  new GenerationBatchActionImpl(set, get, _api);
 
-// ====== action implementation ====== //
+export class GenerationBatchActionImpl {
+  readonly #get: () => VideoStore;
+  readonly #set: Setter;
 
-export const createGenerationBatchSlice: StateCreator<
-  VideoStore,
-  [['zustand/devtools', never]],
-  [],
-  GenerationBatchAction
-> = (set, get) => ({
-  internal_deleteGeneration: async (generationId: string) => {
+  constructor(set: Setter, get: () => VideoStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  internal_deleteGeneration = async (generationId: string): Promise<void> => {
     const { activeGenerationTopicId, refreshGenerationBatches, internal_dispatchGenerationBatch } =
-      get();
+      this.#get();
 
     if (!activeGenerationTopicId) return;
 
-    const currentBatches = get().generationBatchesMap[activeGenerationTopicId] || [];
+    const currentBatches = this.#get().generationBatchesMap[activeGenerationTopicId] || [];
     const targetBatch = currentBatches.find((batch) =>
       batch.generations.some((gen) => gen.id === generationId),
     );
@@ -74,10 +58,10 @@ export const createGenerationBatchSlice: StateCreator<
 
     await generationService.deleteGeneration(generationId);
     await refreshGenerationBatches();
-  },
+  };
 
-  internal_deleteGenerationBatch: async (batchId: string, topicId: string) => {
-    const { internal_dispatchGenerationBatch, refreshGenerationBatches } = get();
+  internal_deleteGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
+    const { internal_dispatchGenerationBatch, refreshGenerationBatches } = this.#get();
 
     // Optimistic update
     internal_dispatchGenerationBatch(
@@ -88,75 +72,84 @@ export const createGenerationBatchSlice: StateCreator<
 
     await generationBatchService.deleteGenerationBatch(batchId);
     await refreshGenerationBatches();
-  },
+  };
 
-  internal_dispatchGenerationBatch: (topicId, payload, action) => {
-    const currentBatches = get().generationBatchesMap[topicId] || [];
+  internal_dispatchGenerationBatch = (
+    topicId: string,
+    payload: GenerationBatchDispatch,
+    action?: string,
+  ): void => {
+    const currentBatches = this.#get().generationBatchesMap[topicId] || [];
     const nextBatches = generationBatchReducer(currentBatches, payload);
 
     const nextMap = {
-      ...get().generationBatchesMap,
+      ...this.#get().generationBatchesMap,
       [topicId]: nextBatches,
     };
 
-    if (isEqual(nextMap, get().generationBatchesMap)) return;
+    if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
 
-    set(
+    this.#set(
       {
         generationBatchesMap: nextMap,
       },
       false,
       action ?? n(`dispatchGenerationBatch/${payload.type}`),
     );
-  },
+  };
 
-  refreshGenerationBatches: async () => {
-    const { activeGenerationTopicId } = get();
+  refreshGenerationBatches = async (): Promise<void> => {
+    const { activeGenerationTopicId } = this.#get();
     if (activeGenerationTopicId) {
       await mutate([SWR_USE_FETCH_GENERATION_BATCHES, activeGenerationTopicId]);
     }
-  },
+  };
 
-  removeGeneration: async (generationId: string) => {
+  removeGeneration = async (generationId: string): Promise<void> => {
     const { internal_deleteGeneration, activeGenerationTopicId, internal_deleteGenerationBatch } =
-      get();
+      this.#get();
 
     await internal_deleteGeneration(generationId);
 
     // Video batch has only 1 generation, so delete the batch directly
     if (activeGenerationTopicId) {
-      const updatedBatches = get().generationBatchesMap[activeGenerationTopicId] || [];
+      const updatedBatches = this.#get().generationBatchesMap[activeGenerationTopicId] || [];
       const emptyBatches = updatedBatches.filter((batch) => batch.generations.length === 0);
 
       for (const emptyBatch of emptyBatches) {
         await internal_deleteGenerationBatch(emptyBatch.id, activeGenerationTopicId);
       }
     }
-  },
+  };
 
-  removeGenerationBatch: async (batchId: string, topicId: string) => {
-    const { internal_deleteGenerationBatch } = get();
+  removeGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
+    const { internal_deleteGenerationBatch } = this.#get();
     await internal_deleteGenerationBatch(batchId, topicId);
-  },
+  };
 
-  setTopicBatchLoaded: (topicId: string) => {
+  setTopicBatchLoaded = (topicId: string): void => {
     const nextMap = {
-      ...get().generationBatchesMap,
+      ...this.#get().generationBatchesMap,
       [topicId]: [],
     };
 
-    if (isEqual(nextMap, get().generationBatchesMap)) return;
+    if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
 
-    set(
+    this.#set(
       {
         generationBatchesMap: nextMap,
       },
       false,
       n('setTopicBatchLoaded'),
     );
-  },
+  };
 
-  useCheckGenerationStatus: (generationId, asyncTaskId, topicId, enable = true) => {
+  useCheckGenerationStatus = (
+    generationId: string,
+    asyncTaskId: string,
+    topicId: string,
+    enable = true,
+  ): SWRResponse<GetGenerationStatusResult> => {
     const requestCountRef = useRef(0);
     const isErrorRef = useRef(false);
 
@@ -178,7 +171,7 @@ export const createGenerationBatchSlice: StateCreator<
 
           isErrorRef.current = false;
 
-          const currentBatches = get().generationBatchesMap[topicId] || [];
+          const currentBatches = this.#get().generationBatchesMap[topicId] || [];
           const targetBatch = currentBatches.find((batch) =>
             batch.generations.some((gen) => gen.id === generationId),
           );
@@ -190,7 +183,7 @@ export const createGenerationBatchSlice: StateCreator<
             requestCountRef.current = 0;
 
             if (data.generation) {
-              get().internal_dispatchGenerationBatch(
+              this.#get().internal_dispatchGenerationBatch(
                 topicId,
                 {
                   batchId: targetBatch.id,
@@ -205,11 +198,12 @@ export const createGenerationBatchSlice: StateCreator<
 
               // Update topic cover if generation succeeds and has a thumbnail
               if (data.status === AsyncTaskStatus.Success && data.generation.asset?.thumbnailUrl) {
-                const currentTopic =
-                  generationTopicSelectors.getGenerationTopicById(topicId)(get());
+                const currentTopic = generationTopicSelectors.getGenerationTopicById(topicId)(
+                  this.#get(),
+                );
 
                 if (currentTopic && !currentTopic.coverUrl) {
-                  await get().updateGenerationTopicCover(
+                  await this.#get().updateGenerationTopicCover(
                     topicId,
                     data.generation.asset.thumbnailUrl,
                   );
@@ -217,7 +211,7 @@ export const createGenerationBatchSlice: StateCreator<
               }
             }
 
-            await get().refreshGenerationBatches();
+            await this.#get().refreshGenerationBatches();
           }
         },
         refreshInterval: (data: GetGenerationStatusResult | undefined) => {
@@ -244,9 +238,9 @@ export const createGenerationBatchSlice: StateCreator<
         refreshWhenHidden: false,
       },
     );
-  },
+  };
 
-  useFetchGenerationBatches: (topicId) =>
+  useFetchGenerationBatches = (topicId?: string | null): SWRResponse<GenerationBatch[]> =>
     useClientDataSWR<GenerationBatch[]>(
       topicId ? [SWR_USE_FETCH_GENERATION_BATCHES, topicId] : null,
       async ([, topicId]: [string, string]) => {
@@ -255,13 +249,13 @@ export const createGenerationBatchSlice: StateCreator<
       {
         onSuccess: (data) => {
           const nextMap = {
-            ...get().generationBatchesMap,
+            ...this.#get().generationBatchesMap,
             [topicId!]: data,
           };
 
-          if (isEqual(nextMap, get().generationBatchesMap)) return;
+          if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
 
-          set(
+          this.#set(
             {
               generationBatchesMap: nextMap,
             },
@@ -270,5 +264,10 @@ export const createGenerationBatchSlice: StateCreator<
           );
         },
       },
-    ),
-});
+    );
+}
+
+export type GenerationBatchAction = Pick<
+  GenerationBatchActionImpl,
+  keyof GenerationBatchActionImpl
+>;

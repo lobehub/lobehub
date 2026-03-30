@@ -118,6 +118,7 @@ const Tool = memo<GroupToolProps>(
     return (
       <AccordionItem
         expand={isToolDetailExpand}
+        hideIndicator={isAlwaysExpand}
         itemKey={id}
         paddingBlock={4}
         paddingInline={4}

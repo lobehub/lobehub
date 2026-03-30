@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "اشترك في خطة مدفوعة لتفعيل الشحن التلقائي",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "يجب أن يكون الرصيد المستهدف أكبر من الحد الأدنى",
   "credits.packages.auto": "تلقائي",
+  "credits.packages.charged": "تم خصم ${{amount}}",
   "credits.packages.expired": "منتهية",
   "credits.packages.expiresIn": "تنتهي خلال {{days}} يومًا",
   "credits.packages.expiresToday": "تنتهي اليوم",

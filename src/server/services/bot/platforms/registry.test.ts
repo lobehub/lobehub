@@ -84,7 +84,7 @@ describe('PlatformRegistry', () => {
       const result = await registry.validateCredentials('test', { token: 'abc' });
 
       expect(result).toEqual({ valid: true });
-      expect(mockValidate).toHaveBeenCalledWith({ token: 'abc' }, undefined, undefined);
+      expect(mockValidate).toHaveBeenCalledWith({ token: 'abc' }, undefined, undefined, 'test');
     });
 
     it('should return error for unknown platform', async () => {

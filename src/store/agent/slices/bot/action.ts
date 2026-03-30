@@ -5,15 +5,10 @@ import type { SerializedPlatformDefinition } from '@/server/services/bot/platfor
 import { agentBotProviderService } from '@/services/agentBotProvider';
 import { type StoreSetter } from '@/store/types';
 
-import {
-  BOT_RUNTIME_STATUSES,
-  type BotRuntimeStatusSnapshot,
-} from '../../../../types/botRuntimeStatus';
 import { type AgentStore } from '../../store';
 
 const FETCH_BOT_PROVIDERS_KEY = 'agentBotProviders';
 const FETCH_PLATFORM_DEFINITIONS_KEY = 'platformDefinitions';
-const FETCH_BOT_RUNTIME_STATUSES_KEY = 'agentBotRuntimeStatuses';
 
 export interface BotProviderItem {
   applicationId: string;
@@ -21,6 +16,7 @@ export interface BotProviderItem {
   enabled: boolean;
   id: string;
   platform: string;
+  settings?: Record<string, unknown> | null;
 }
 
 type Setter = StoreSetter<AgentStore>;
@@ -46,14 +42,13 @@ export class BotSliceActionImpl {
   }) => {
     const result = await agentBotProviderService.create(params);
     await this.internal_refreshBotProviders(params.agentId);
-    await this.internal_refreshBotRuntimeStatuses(params.agentId);
     return result;
   };
 
   connectBot = async (params: { agentId?: string; applicationId: string; platform: string }) => {
     const { agentId, ...runtimeParams } = params;
     const result = await agentBotProviderService.connectBot(runtimeParams);
-    await this.internal_refreshBotRuntimeStatuses(agentId);
+    await this.internal_refreshBotProviders(agentId);
     return result;
   };
 
@@ -61,22 +56,21 @@ export class BotSliceActionImpl {
     return agentBotProviderService.testConnection(params);
   };
 
+  deleteAllBotProviders = async (agentId: string) => {
+    const providers = await agentBotProviderService.getByAgentId(agentId);
+    await Promise.all(providers.map((p) => agentBotProviderService.delete(p.id)));
+    await this.internal_refreshBotProviders(agentId);
+  };
+
   deleteBotProvider = async (id: string, agentId: string) => {
     await agentBotProviderService.delete(id);
     await this.internal_refreshBotProviders(agentId);
-    await this.internal_refreshBotRuntimeStatuses(agentId);
   };
 
   internal_refreshBotProviders = async (agentId?: string) => {
     const id = agentId || this.#get().activeAgentId;
     if (!id) return;
     await mutate([FETCH_BOT_PROVIDERS_KEY, id]);
-  };
-
-  internal_refreshBotRuntimeStatuses = async (agentId?: string) => {
-    const id = agentId || this.#get().activeAgentId;
-    if (!id) return;
-    await mutate([FETCH_BOT_RUNTIME_STATUSES_KEY, id]);
   };
 
   updateBotProvider = async (
@@ -91,7 +85,6 @@ export class BotSliceActionImpl {
   ) => {
     await agentBotProviderService.update(id, params);
     await this.internal_refreshBotProviders(agentId);
-    await this.internal_refreshBotRuntimeStatuses(agentId);
   };
 
   useFetchBotProviders = (agentId?: string): SWRResponse<BotProviderItem[]> => {
@@ -99,26 +92,6 @@ export class BotSliceActionImpl {
       agentId ? [FETCH_BOT_PROVIDERS_KEY, agentId] : null,
       async ([, id]: [string, string]) => agentBotProviderService.getByAgentId(id),
       { fallbackData: [], revalidateOnFocus: false },
-    );
-  };
-
-  useFetchBotRuntimeStatuses = (agentId?: string): SWRResponse<BotRuntimeStatusSnapshot[]> => {
-    return useClientDataSWR<BotRuntimeStatusSnapshot[]>(
-      agentId ? [FETCH_BOT_RUNTIME_STATUSES_KEY, agentId] : null,
-      async ([, id]: [string, string]) => agentBotProviderService.listRuntimeStatuses(id),
-      {
-        fallbackData: [],
-        refreshInterval: (data?: BotRuntimeStatusSnapshot[]) => {
-          const hasPendingRuntime =
-            data?.some(
-              (item) =>
-                item.status === BOT_RUNTIME_STATUSES.queued ||
-                item.status === BOT_RUNTIME_STATUSES.starting,
-            ) ?? false;
-          return hasPendingRuntime ? 2000 : 0;
-        },
-        revalidateOnFocus: false,
-      },
     );
   };
 

@@ -98,13 +98,13 @@ const PluginRender = memo<PluginRenderProps>(
 
     return (
       <SafeBoundary
+        key={boundaryKey}
+        variant="alert"
         alertTitle={
           identifier
             ? `${identifier}${payload?.apiName ? ` / ${payload.apiName}` : ''}`
             : 'Tool Render Error'
         }
-        key={boundaryKey}
-        variant="alert"
       >
         {renderContent()}
       </SafeBoundary>

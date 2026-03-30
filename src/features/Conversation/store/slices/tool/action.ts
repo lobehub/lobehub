@@ -16,6 +16,8 @@ export interface ToolAction {
    */
   approveToolCall: (toolMessageId: string, assistantGroupId: string) => Promise<void>;
 
+  cancelToolInteraction: (toolMessageId: string) => Promise<void>;
+
   /**
    * Reject a tool call and continue the conversation
    */
@@ -25,6 +27,13 @@ export interface ToolAction {
    * Reject a tool call
    */
   rejectToolCall: (toolMessageId: string, reason?: string) => Promise<void>;
+
+  skipToolInteraction: (toolMessageId: string, reason?: string) => Promise<void>;
+
+  submitToolInteraction: (
+    toolMessageId: string,
+    response: Record<string, unknown>,
+  ) => Promise<void>;
 }
 
 export const toolSlice: StateCreator<
@@ -54,6 +63,12 @@ export const toolSlice: StateCreator<
     if (hooks.onToolCallComplete) {
       hooks.onToolCallComplete(toolMessageId, undefined);
     }
+  },
+
+  cancelToolInteraction: async (toolMessageId: string) => {
+    const { context } = get();
+    const chatStore = useChatStore.getState();
+    await chatStore.cancelToolInteraction(toolMessageId, context);
   },
 
   rejectAndContinueToolCall: async (toolMessageId: string, reason?: string) => {
@@ -100,5 +115,17 @@ export const toolSlice: StateCreator<
       : 'User reject this tool calling without reason';
 
     await updateMessageContent(toolMessageId, toolContent);
+  },
+
+  skipToolInteraction: async (toolMessageId: string, reason?: string) => {
+    const { context } = get();
+    const chatStore = useChatStore.getState();
+    await chatStore.skipToolInteraction(toolMessageId, reason, context);
+  },
+
+  submitToolInteraction: async (toolMessageId: string, response: Record<string, unknown>) => {
+    const { context } = get();
+    const chatStore = useChatStore.getState();
+    await chatStore.submitToolInteraction(toolMessageId, response, context);
   },
 });

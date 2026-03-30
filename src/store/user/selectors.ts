@@ -1,3 +1,4 @@
+export { agentOnboardingSelectors } from './slices/agentOnboarding/selectors';
 export { authSelectors, userProfileSelectors } from './slices/auth/selectors';
 export { onboardingSelectors } from './slices/onboarding/selectors';
 export { labPreferSelectors, preferenceSelectors } from './slices/preference/selectors';

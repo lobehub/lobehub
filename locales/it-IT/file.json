@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Elaborazione file...",
   "uploadDock.body.item.restTime": "Tempo rimanente {{time}}",
   "uploadDock.fileQueueInfo": "Caricamento dei primi {{count}} file, {{remaining}} in coda",
+  "uploadDock.header.cancelAll": "Annulla tutto",
   "uploadDock.totalCount": "Totale {{count}} elementi",
   "uploadDock.uploadStatus.cancelled": "Caricamento annullato",
   "uploadDock.uploadStatus.error": "Errore di caricamento",

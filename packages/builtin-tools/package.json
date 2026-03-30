@@ -28,6 +28,7 @@
     "@lobechat/builtin-tool-knowledge-base": "workspace:*",
     "@lobechat/builtin-tool-local-system": "workspace:*",
     "@lobechat/builtin-tool-memory": "workspace:*",
+    "@lobechat/builtin-tool-message": "workspace:*",
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-page-agent": "workspace:*",
     "@lobechat/builtin-tool-remote-device": "workspace:*",
@@ -35,7 +36,9 @@
     "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/builtin-tool-topic-reference": "workspace:*",
+    "@lobechat/builtin-tool-user-interaction": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
+    "@lobechat/builtin-tool-web-onboarding": "workspace:*",
     "@lobechat/const": "workspace:*"
   },
   "devDependencies": {

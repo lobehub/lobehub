@@ -111,6 +111,50 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'List all agent documents. Returns document id, filename, and title for each document.',
+      name: AgentDocumentsApiName.listDocuments,
+      parameters: {
+        properties: {},
+        required: [],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Read an existing agent document by its filename (similar intent to cat by filename). Use when you know the filename but not the id.',
+      name: AgentDocumentsApiName.readDocumentByFilename,
+      parameters: {
+        properties: {
+          filename: {
+            description: 'Target document filename.',
+            type: 'string',
+          },
+        },
+        required: ['filename'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create or update an agent document by filename. If a document with the given filename exists, its content is updated; otherwise a new document is created.',
+      name: AgentDocumentsApiName.upsertDocumentByFilename,
+      parameters: {
+        properties: {
+          content: {
+            description: 'Document content in markdown or plain text.',
+            type: 'string',
+          },
+          filename: {
+            description: 'Target document filename.',
+            type: 'string',
+          },
+        },
+        required: ['filename', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Update agent-document load rules. Use this to control how documents are loaded into runtime context.',
       name: AgentDocumentsApiName.updateLoadRule,
       parameters: {
@@ -145,7 +189,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🗂️',
     description:
-      'Manage agent-scoped documents (create/read/edit/remove/rename/copy) and load rules',
+      'Manage agent-scoped documents (list/create/read/edit/remove/rename/copy/upsert) and load rules',
     title: 'Documents',
   },
   systemRole: systemPrompt,

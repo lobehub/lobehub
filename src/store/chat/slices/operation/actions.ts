@@ -17,6 +17,7 @@ import {
   type OperationMetadata,
   type OperationStatus,
   type OperationType,
+  type QueuedMessage,
 } from './types';
 
 const n = setNamespace('operation');
@@ -159,11 +160,7 @@ export class OperationActionsImpl {
 
         // Update context index (if agentId exists)
         if (context.agentId) {
-          const contextKey = messageMapKey({
-            agentId: context.agentId,
-            groupId: context.groupId,
-            topicId: context.topicId !== undefined ? context.topicId : null,
-          });
+          const contextKey = messageMapKey(context as MessageMapKeyInput);
           if (!state.operationsByContext[contextKey]) {
             state.operationsByContext[contextKey] = [];
           }
@@ -275,7 +272,12 @@ export class OperationActionsImpl {
         if (!operation) return;
 
         const now = Date.now();
-        operation.status = 'completed';
+
+        // Don't override cancelled status - preserve user interruption state
+        if (operation.status !== 'cancelled') {
+          operation.status = 'completed';
+        }
+
         operation.metadata.endTime = now;
         operation.metadata.duration = now - operation.metadata.startTime;
 
@@ -581,11 +583,7 @@ export class OperationActionsImpl {
 
           // Remove from context index
           if (op.context.agentId) {
-            const contextKey = messageMapKey({
-              agentId: op.context.agentId,
-              groupId: op.context.groupId,
-              topicId: op.context.topicId !== undefined ? op.context.topicId : null,
-            });
+            const contextKey = messageMapKey(op.context as MessageMapKeyInput);
             const contextIndex = state.operationsByContext[contextKey];
             if (contextIndex) {
               state.operationsByContext[contextKey] = contextIndex.filter(
@@ -687,6 +685,87 @@ export class OperationActionsImpl {
       }),
       false,
       n(`clearUnreadCompleted/topic/${topicId}`),
+    );
+  };
+  // ━━━ Message Queue Actions ━━━
+
+  /**
+   * Enqueue a message for a conversation context.
+   * If a hard interrupt, also cancel the running operation.
+   */
+  enqueueMessage = (
+    contextKey: string,
+    message: QueuedMessage,
+    runningOperationId?: string,
+  ): void => {
+    log(
+      '[enqueueMessage] contextKey=%s, messageId=%s, mode=%s',
+      contextKey,
+      message.id,
+      message.interruptMode,
+    );
+
+    this.#set(
+      produce((state: ChatStore) => {
+        const queue = state.queuedMessages[contextKey] ?? [];
+        queue.push(message);
+        state.queuedMessages[contextKey] = queue;
+      }),
+      false,
+      n(`enqueueMessage/${contextKey}`),
+    );
+
+    // Hard interrupt: cancel the running operation
+    if (message.interruptMode === 'hard' && runningOperationId) {
+      const op = this.#get().operations[runningOperationId];
+      if (op?.status === 'running') {
+        log('[enqueueMessage] Hard interrupt, cancelling operation %s', runningOperationId);
+        this.#get().cancelOperation(runningOperationId, 'hard_interrupt');
+      }
+    }
+  };
+
+  /**
+   * Drain all queued messages for a context (atomic take-all).
+   */
+  drainQueuedMessages = (contextKey: string): QueuedMessage[] => {
+    const queue = this.#get().queuedMessages[contextKey];
+    if (!queue || queue.length === 0) return [];
+
+    const messages = [...queue];
+
+    this.#set(
+      produce((state: ChatStore) => {
+        state.queuedMessages[contextKey] = [];
+      }),
+      false,
+      n(`drainQueuedMessages/${contextKey}`),
+    );
+
+    log('[drainQueuedMessages] contextKey=%s, drained %d', contextKey, messages.length);
+    return messages;
+  };
+
+  removeQueuedMessage = (contextKey: string, messageId: string): void => {
+    this.#set(
+      produce((state: ChatStore) => {
+        const queue = state.queuedMessages[contextKey];
+        if (!queue) return;
+        const idx = queue.findIndex((m) => m.id === messageId);
+        if (idx >= 0) queue.splice(idx, 1);
+      }),
+      false,
+      n(`removeQueuedMessage/${contextKey}/${messageId}`),
+    );
+  };
+
+  clearMessageQueue = (contextKey: string): void => {
+    this.#set(
+      produce((state: ChatStore) => {
+        delete state.queuedMessages[contextKey];
+      }),
+      false,
+      n(`clearMessageQueue/${contextKey}`),
     );
   };
 }

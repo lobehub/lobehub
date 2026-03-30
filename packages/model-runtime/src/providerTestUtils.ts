@@ -40,7 +40,7 @@ export const testProvider = ({
   beforeEach(() => {
     instance = new Runtime({ apiKey: 'test' });
 
-    // 使用 vi.spyOn 来模拟 chat.completions.create 方法或 responses.create 方法
+    // Use vi.spyOn to mock the chat.completions.create method or responses.create method
     vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
       new ReadableStream() as any,
     );
@@ -310,16 +310,16 @@ export const testProvider = ({
       describe('DEBUG', () => {
         it(`should call debugStream and return StreamingTextResponse when ${chatDebugEnv} is 1`, async () => {
           // Arrange
-          const mockProdStream = new ReadableStream() as any; // 模拟的 prod 流
+          const mockProdStream = new ReadableStream() as any; // Mocked prod stream
           const mockDebugStream = new ReadableStream({
             start(controller) {
               controller.enqueue('Debug stream content');
               controller.close();
             },
           }) as any;
-          mockDebugStream.toReadableStream = () => mockDebugStream; // 添加 toReadableStream 方法
+          mockDebugStream.toReadableStream = () => mockDebugStream; // Add toReadableStream method
 
-          // 模拟 chat.completions.create 返回值，包括模拟的 tee 方法
+          // Mock the chat.completions.create return value, including the mocked tee method
           const createMethod = test?.useResponsesAPI
             ? instance['client'].responses.create
             : instance['client'].chat.completions.create;
@@ -330,15 +330,15 @@ export const testProvider = ({
           const debugEnv = test?.useResponsesAPI
             ? (responseDebugEnv ?? chatDebugEnv)
             : chatDebugEnv;
-          // 保存原始环境变量值
+          // Save the original environment variable value
           const originalDebugValue = process.env[debugEnv];
-          // 模拟环境变量
+          // Mock the environment variable
           process.env[debugEnv] = '1';
           vi.spyOn(debugStreamModule, 'debugStream').mockImplementation(() => Promise.resolve());
 
-          // 执行测试
-          // 运行你的测试函数，确保它会在条件满足时调用 debugStream
-          // 假设的测试函数调用，你可能需要根据实际情况调整
+          // Execute the test
+          // Run your test function, ensuring it calls debugStream when the condition is met
+          // This is a hypothetical test function call; adjust according to actual usage
           await instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
             model: chatModel,
@@ -346,9 +346,9 @@ export const testProvider = ({
             temperature: 0,
           });
 
-          // 验证 debugStream 被调用
+          // Verify that debugStream was called
           expect(debugStreamModule.debugStream).toHaveBeenCalled();
-          // 恢复原始环境变量值
+          // Restore the original environment variable value
           process.env[debugEnv] = originalDebugValue;
         });
       });

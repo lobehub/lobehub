@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 
 import MenuItem from './MenuItem';
-import { useStyles } from './style';
+import { styles } from './style';
 import { isCategoryEntry } from './types';
 
 interface HomeViewProps {
@@ -14,8 +14,6 @@ interface HomeViewProps {
 }
 
 const HomeView = memo<HomeViewProps>(({ visibleItems, activeKey, onSelectItem, dividerIndex }) => {
-  const { styles } = useStyles();
-
   return (
     <div className={styles.scrollArea}>
       {visibleItems.map((item, idx) => {

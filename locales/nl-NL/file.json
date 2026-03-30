@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Bestand verwerken...",
   "uploadDock.body.item.restTime": "Resterend: {{time}}",
   "uploadDock.fileQueueInfo": "Eerste {{count}} bestanden worden geüpload, {{remaining}} in wachtrij",
+  "uploadDock.header.cancelAll": "Alles annuleren",
   "uploadDock.totalCount": "Totaal {{count}} items",
   "uploadDock.uploadStatus.cancelled": "Upload geannuleerd",
   "uploadDock.uploadStatus.error": "Uploadfout",

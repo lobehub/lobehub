@@ -54,6 +54,7 @@
   "credits.autoTopUp.upgradeHint": "Абонирайте се за платен план, за да активирате автоматичното презареждане",
   "credits.autoTopUp.validation.targetMustExceedThreshold": "Целевият баланс трябва да бъде по-голям от прага",
   "credits.packages.auto": "Автоматично",
+  "credits.packages.charged": "Таксувани ${{amount}}",
   "credits.packages.expired": "Изтекъл",
   "credits.packages.expiresIn": "Изтича след {{days}} дни",
   "credits.packages.expiresToday": "Изтича днес",

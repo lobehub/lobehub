@@ -1,5 +1,15 @@
-/** Default debounce window (ms) for message batching. */
-export const DEFAULT_DEBOUNCE_MS = 2000;
+import type { FieldSchema } from './types';
 
-/** Maximum debounce window (ms) allowed across all platforms. */
-export const MAX_DEBOUNCE_MS = 30_000;
+export const serverIdField: FieldSchema = {
+  key: 'serverId',
+  description: 'channel.serverIdHint',
+  label: 'channel.serverId',
+  type: 'string',
+};
+
+export const userIdField: FieldSchema = {
+  key: 'userId',
+  description: 'channel.userIdHint',
+  label: 'channel.userId',
+  type: 'string',
+};

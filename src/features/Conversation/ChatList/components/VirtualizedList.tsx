@@ -32,8 +32,14 @@ interface VirtualizedListProps {
 const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { isSpacerMessage, listData, spacerHeight, spacerActive } =
-    useConversationSpacer(dataSource);
+  const {
+    handleScrollOffset,
+    isSpacerMessage,
+    listData,
+    scrollShrinking,
+    spacerHeight,
+    spacerActive,
+  } = useConversationSpacer(dataSource);
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
   // Store actions
@@ -69,6 +75,12 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
 
     setScrollState({ isScrolling: true });
 
+    // Shrink spacer on scroll up when not streaming
+    const ref = virtuaRef.current;
+    if (ref) {
+      handleScrollOffset(ref.scrollOffset);
+    }
+
     // Check if at bottom
     const isAtBottom = checkAtBottom();
     setScrollState({ atBottom: isAtBottom });
@@ -82,7 +94,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     scrollEndTimerRef.current = setTimeout(() => {
       setScrollState({ isScrolling: false });
     }, 150);
-  }, [activeIndex, checkAtBottom, setActiveIndex, setScrollState]);
+  }, [activeIndex, checkAtBottom, handleScrollOffset, setActiveIndex, setScrollState]);
 
   const handleScrollEnd = useCallback(() => {
     setScrollState({ isScrolling: false });
@@ -136,6 +148,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     dataSourceLength: dataSource.length,
     isSecondLastMessageFromUser,
     scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
+    spacerActive,
   });
 
   // Scroll to bottom on initial render
@@ -169,7 +182,9 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
                   style={{
                     height: spacerHeight,
                     pointerEvents: 'none',
-                    transition: `height ${CONVERSATION_SPACER_TRANSITION_MS}ms ease`,
+                    transition: scrollShrinking
+                      ? 'none'
+                      : `height ${CONVERSATION_SPACER_TRANSITION_MS}ms ease`,
                     width: '100%',
                   }}
                 />

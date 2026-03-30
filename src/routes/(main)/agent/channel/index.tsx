@@ -34,7 +34,6 @@ const ChannelPage = memo(() => {
   const { data: providers, isLoading: providersLoading } = useAgentStore((s) =>
     s.useFetchBotProviders(aid),
   );
-  const { data: runtimeStatuses } = useAgentStore((s) => s.useFetchBotRuntimeStatuses(aid));
 
   const isLoading = platformsLoading || providersLoading;
 
@@ -46,17 +45,13 @@ const ChannelPage = memo(() => {
       new Map<string, BotRuntimeStatus>(
         (providers ?? [])
           .filter((provider) => provider.enabled)
-          .map((provider) => {
-            const runtimeStatus = runtimeStatuses?.find(
-              (item) =>
-                item.platform === provider.platform &&
-                item.applicationId === provider.applicationId,
-            );
-
-            return [provider.platform, runtimeStatus?.status ?? BOT_RUNTIME_STATUSES.disconnected];
-          }),
+          .map((provider) => [
+            provider.platform,
+            ((provider as any).runtimeStatus as BotRuntimeStatus) ??
+              BOT_RUNTIME_STATUSES.disconnected,
+          ]),
       ),
-    [providers, runtimeStatuses],
+    [providers],
   );
 
   const activePlatformDef = useMemo(
@@ -81,7 +76,9 @@ const ChannelPage = memo(() => {
           <div className={styles.container}>
             <PlatformList
               activeId={effectiveActiveId}
+              agentId={aid}
               platforms={platforms}
+              providers={providers}
               runtimeStatuses={platformRuntimeStatuses}
               onSelect={setActiveProviderId}
             />

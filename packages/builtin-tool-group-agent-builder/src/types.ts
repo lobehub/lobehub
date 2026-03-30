@@ -1,5 +1,5 @@
 import type { UpdateAgentConfigParams } from '@lobechat/builtin-tool-agent-builder';
-import type { MetaData } from '@lobechat/types';
+import type { LobeAgentConfig, MetaData } from '@lobechat/types';
 
 /**
  * Group Agent Builder Tool Identifier
@@ -13,6 +13,7 @@ export const GroupAgentBuilderApiName = {
   // Group member management operations
   batchCreateAgents: 'batchCreateAgents',
   createAgent: 'createAgent',
+  createGroup: 'createGroup',
 
   // Agent info
   getAgentInfo: 'getAgentInfo',
@@ -83,6 +84,97 @@ export interface CreateAgentParams {
    * Use the same identifiers as shown in official_tools context.
    */
   tools?: string[];
+}
+
+export interface CreateGroupParams {
+  /**
+   * An emoji or image URL for the group's avatar
+   */
+  avatar?: string;
+  /**
+   * Background color for the group avatar
+   */
+  backgroundColor?: string;
+  /**
+   * A brief description of the group
+   */
+  description?: string;
+  /**
+   * Opening message shown when starting a new conversation with the group
+   */
+  openingMessage?: string;
+  /**
+   * Suggested opening questions for the group
+   */
+  openingQuestions?: string[];
+  /**
+   * Shared prompt/content for the group
+   */
+  prompt?: string;
+  /**
+   * Initial supervisor configuration to apply after group creation
+   */
+  supervisor?: {
+    /**
+     * Supervisor avatar
+     */
+    avatar?: string;
+    /**
+     * Background color for the supervisor avatar
+     */
+    backgroundColor?: string;
+    /**
+     * Supervisor description
+     */
+    description?: string;
+    /**
+     * AI model for the supervisor
+     */
+    model?: string;
+    /**
+     * Model parameters for the supervisor
+     */
+    params?: Partial<LobeAgentConfig['params']>;
+    /**
+     * AI provider for the supervisor
+     */
+    provider?: string;
+    /**
+     * Supervisor system prompt
+     */
+    systemRole?: string;
+    /**
+     * Supervisor tags
+     */
+    tags?: string[];
+    /**
+     * Supervisor display name/title
+     */
+    title?: string;
+  };
+  /**
+   * The display name for the new group
+   */
+  title: string;
+}
+
+export interface CreateGroupState {
+  /**
+   * The created group's ID
+   */
+  groupId: string;
+  /**
+   * Whether the operation was successful
+   */
+  success: boolean;
+  /**
+   * The created supervisor agent's ID
+   */
+  supervisorAgentId: string;
+  /**
+   * The created group's title
+   */
+  title: string;
 }
 
 export interface InviteAgentParams {
@@ -157,6 +249,10 @@ export interface UpdateGroupParams {
     openingQuestions?: string[];
   };
   /**
+   * The group ID to update. If not provided, updates the current active group.
+   */
+  groupId?: string;
+  /**
    * Partial metadata to update for the group
    */
   meta?: Partial<Pick<MetaData, 'avatar' | 'backgroundColor' | 'description' | 'tags' | 'title'>>;
@@ -183,6 +279,10 @@ export interface UpdateGroupState {
 }
 
 export interface UpdateGroupPromptParams {
+  /**
+   * The group ID to update. If not provided, updates the current active group.
+   */
+  groupId?: string;
   /**
    * The new shared prompt/content for the group (markdown format)
    */

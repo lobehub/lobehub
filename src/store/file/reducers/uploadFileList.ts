@@ -30,6 +30,12 @@ interface UpdateFileStatus {
   type: 'updateFileStatus';
 }
 
+interface UpdateFileStatuses {
+  ids: string[];
+  status: FileUploadStatus;
+  type: 'updateFileStatuses';
+}
+
 interface UpdateFileUploadState {
   id: string;
   type: 'updateFileUploadState';
@@ -49,6 +55,7 @@ interface RemoveFiles {
 export type UploadFileListDispatch =
   | AddFile
   | UpdateFileStatus
+  | UpdateFileStatuses
   | UpdateFileUploadState
   | RemoveFile
   | AddFiles
@@ -102,6 +109,19 @@ export const uploadFileListReducer = (
         }
       });
     }
+
+    case 'updateFileStatuses': {
+      return produce(state, (draftState) => {
+        const ids = new Set(action.ids);
+
+        for (const file of draftState) {
+          if (ids.has(file.id)) {
+            file.status = action.status;
+          }
+        }
+      });
+    }
+
     case 'updateFileUploadState': {
       return produce(state, (draftState) => {
         const file = draftState.find((f) => f.id === action.id);

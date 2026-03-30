@@ -7,7 +7,7 @@ import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type Locales } from '@/locales/resources';
+import type { Locales } from '@/locales/resources';
 import { localeOptions, normalizeLocale } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
@@ -16,7 +16,7 @@ import LobeMessage from '../components/LobeMessage';
 
 interface ResponseLanguageStepProps {
   onBack: () => void;
-  onNext: () => void;
+  onNext: () => Promise<void> | void;
 }
 
 const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }) => {
@@ -24,16 +24,16 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
   const switchLocale = useGlobalStore((s) => s.switchLocale);
   const setSettings = useUserStore((s) => s.setSettings);
 
-  const [value, setValue] = useState<Locales | ''>(normalizeLocale(navigator.language));
+  const [value, setValue] = useState<Locales | ''>(() => normalizeLocale(navigator.language));
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
     setIsNavigating(true);
-    setSettings({ general: { responseLanguage: value || '' } });
-    onNext();
+    await setSettings({ general: { responseLanguage: value || '' } });
+    await onNext();
   }, [value, setSettings, onNext]);
 
   const handleBack = useCallback(() => {
@@ -54,7 +54,7 @@ const ResponseLanguageStep = memo<ResponseLanguageStepProps>(({ onBack, onNext }
         ]}
       />
     ),
-    [t, value],
+    [t],
   );
 
   return (

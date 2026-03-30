@@ -80,6 +80,7 @@ export class UserModel {
     const result = await this.db
       .select({
         avatar: users.avatar,
+        agentOnboarding: users.agentOnboarding,
         email: users.email,
         firstName: users.firstName,
         fullName: users.fullName,
@@ -138,6 +139,7 @@ export class UserModel {
 
     return {
       avatar: state.avatar || undefined,
+      agentOnboarding: state.agentOnboarding || undefined,
       email: state.email || undefined,
       firstName: state.firstName || undefined,
       fullName: state.fullName || undefined,

@@ -10,11 +10,6 @@ tags:
 
 # 将 LobeHub 连接到飞书
 
-<Callout type={'info'}>
-  此功能目前正在开发中，可能尚未完全稳定。您可以通过在 **设置** → **高级设置** → **开发者模式**
-  中启用 **开发者模式** 来使用此功能。
-</Callout>
-
 通过将飞书渠道连接到您的 LobeHub 代理，团队成员可以直接在飞书的私聊和群组对话中与 AI 助手互动。
 
 > 如果您使用的是国际版（Lark），请参阅 [Lark 设置指南](/docs/usage/channels/lark)。
@@ -35,6 +30,8 @@ tags:
 
   点击 **创建企业应用**。填写应用名称（例如 "LobeHub 助手"）、描述和图标，然后提交表单。
 
+  ![](/blog/assets086849ced67ad95fc3f0d1f509add1bf.webp)
+
   ### 复制应用凭证
 
   进入 **凭证与基本信息**，复制以下内容：
@@ -43,6 +40,8 @@ tags:
   - **应用密钥**
 
   > **重要提示：** 请妥善保管您的应用密钥。切勿公开分享。
+
+  ![](/blog/assetsf811b07c10e4a887248fc3f53d085241.webp)
 </Steps>
 
 ## 第二步：配置应用权限和机器人功能
@@ -84,9 +83,13 @@ tags:
   }
   ```
 
+  ![](/blog/assets03aba6c4b7a39ed9b1be75ecd8f335dc.webp)
+
   ### 启用机器人功能
 
   进入 **应用能力** → **机器人**。开启机器人功能并设置您喜欢的机器人名称。
+
+  ![](/blog/assetsb74a9fc9aecbaa74529cf0fb0da37bca.webp)
 </Steps>
 
 ## 第三步：在 LobeHub 中配置飞书
@@ -108,6 +111,8 @@ tags:
   ### 保存并复制 Webhook URL
 
   点击 **保存配置**。保存后，将显示一个 **事件订阅 URL**。复制此 URL—— 您将在下一步中需要它。
+
+  ![](/blog/assetsbc6a72dc53430bbbbeafcc7d921396f4.webp)
 </Steps>
 
 ## 第四步：在飞书中设置事件订阅
@@ -129,9 +134,13 @@ tags:
 
   这将使您的应用能够接收消息并将其转发到 LobeHub。
 
+  ![](/blog/assetsb6f4b163825de58e2b6fe4dba8ef1b26.webp)
+
   ### （推荐）填写 Verification Token 和 Encrypt Key
 
   配置事件订阅后，您可以在事件订阅页面顶部的 **加密策略** 中找到 **Verification Token** 和 **Encrypt Key**。
+
+  ![](/blog/assets05b5684db0f7035e8f0609f6b1b8d85c.webp)
 
   返回 LobeHub 的渠道设置，填写：
 
@@ -139,6 +148,8 @@ tags:
   - **Encrypt Key**（可选）— 用于解密加密事件负载
 
   再次点击 **保存配置** 以应用。
+
+  ![](/blog/assets3fcf2ee44ffb6be5c3148667f0c1696e.webp)
 </Steps>
 
 ## 第五步：发布应用
@@ -147,6 +158,8 @@ tags:
   ### 创建版本
 
   在您的应用设置中，进入 **版本管理与发布**。创建一个新版本并填写发布说明。
+
+  ![](/blog/assetsbd0ac93d1d3bba86d5da86b9569a6fb1.webp)
 
   ### 提交审核
 
