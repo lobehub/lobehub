@@ -15,6 +15,7 @@ import type {
 
 interface AgentDocumentRecord {
   content?: string;
+  filename?: string;
   id: string;
   title?: string;
 }
@@ -97,7 +98,11 @@ export class AgentDocumentsExecutionRuntime {
     }
 
     const docs = await this.service.listDocuments({ agentId });
-    const list = docs.map((d) => ({ filename: d.title, id: d.id, title: d.title }));
+    const list = docs.map((d) => ({
+      filename: d.filename ?? d.title ?? '',
+      id: d.id,
+      title: d.title,
+    }));
 
     return {
       content: JSON.stringify(list),
