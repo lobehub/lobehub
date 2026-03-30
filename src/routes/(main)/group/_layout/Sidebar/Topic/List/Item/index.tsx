@@ -151,9 +151,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
                 scale: [1, 1.3, 1],
                 opacity: [1, 0.9, 1],
                 boxShadow: [
-                  `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
-                  `0 0 5px ${successColor}, 0 0 8px color-mix(in srgb, ${successColor} 60%, transparent)`,
-                  `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
+                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
+                  `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
+                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
                 ],
               }}
               transition={{
