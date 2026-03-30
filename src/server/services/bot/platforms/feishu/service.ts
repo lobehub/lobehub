@@ -41,6 +41,8 @@ import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
+import { MAX_FEISHU_HISTORY_LIMIT } from './const';
+
 /**
  * Normalize a Feishu/Lark message object to MessageItem.
  */
@@ -92,7 +94,7 @@ export class FeishuMessageService implements MessageRuntimeService {
     const result = await this.api.listMessages(params.channelId, {
       // Feishu uses Unix second timestamps for startTime/endTime
       endTime: params.before,
-      pageSize: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, 50),
+      pageSize: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, MAX_FEISHU_HISTORY_LIMIT),
       startTime: params.after,
     });
     const messages = result.items.map(toMessageItem);

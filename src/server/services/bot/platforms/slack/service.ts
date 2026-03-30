@@ -35,12 +35,13 @@ import type {
   UnpinMessageParams,
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
-import { DEFAULT_BOT_HISTORY_LIMIT, MAX_BOT_HISTORY_LIMIT } from '@lobechat/const';
+import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
 import type { SlackApi } from './api';
+import { MAX_SLACK_HISTORY_LIMIT } from './const';
 
 /**
  * Normalize a Slack message object to MessageItem.
@@ -67,7 +68,7 @@ export class SlackMessageService implements MessageRuntimeService {
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
     const result = await this.api.getHistory(params.channelId, {
       latest: params.before,
-      limit: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, MAX_BOT_HISTORY_LIMIT),
+      limit: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, MAX_SLACK_HISTORY_LIMIT),
       oldest: params.after,
     });
     const messages = result.messages.map(toMessageItem);

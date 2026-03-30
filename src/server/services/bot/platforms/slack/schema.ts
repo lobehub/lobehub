@@ -1,7 +1,13 @@
-import { DEFAULT_BOT_DEBOUNCE_MS, MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
+import {
+  DEFAULT_BOT_DEBOUNCE_MS,
+  DEFAULT_BOT_HISTORY_LIMIT,
+  MAX_BOT_DEBOUNCE_MS,
+  MIN_BOT_HISTORY_LIMIT,
+} from '@lobechat/const';
 
-import { historyLimitField, serverIdField, userIdField } from '../const';
+import { serverIdField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
+import { MAX_SLACK_HISTORY_LIMIT } from './const';
 
 export const schema: FieldSchema[] = [
   {
@@ -71,7 +77,15 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
-      historyLimitField,
+      {
+        key: 'historyLimit',
+        default: DEFAULT_BOT_HISTORY_LIMIT,
+        description: 'channel.historyLimitHint',
+        label: 'channel.historyLimit',
+        maximum: MAX_SLACK_HISTORY_LIMIT,
+        minimum: MIN_BOT_HISTORY_LIMIT,
+        type: 'number',
+      },
       serverIdField,
       userIdField,
       // TODO: DM schema - not implemented yet

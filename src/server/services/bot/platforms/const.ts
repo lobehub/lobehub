@@ -1,20 +1,4 @@
-import {
-  DEFAULT_BOT_HISTORY_LIMIT,
-  MAX_BOT_HISTORY_LIMIT,
-  MIN_BOT_HISTORY_LIMIT,
-} from '@lobechat/const';
-
 import type { FieldSchema } from './types';
-
-export const historyLimitField: FieldSchema = {
-  key: 'historyLimit',
-  default: DEFAULT_BOT_HISTORY_LIMIT,
-  description: 'channel.historyLimitHint',
-  label: 'channel.historyLimit',
-  maximum: MAX_BOT_HISTORY_LIMIT,
-  minimum: MIN_BOT_HISTORY_LIMIT,
-  type: 'number',
-};
 
 export const serverIdField: FieldSchema = {
   key: 'serverId',
