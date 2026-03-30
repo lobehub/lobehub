@@ -1,3 +1,4 @@
+import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -50,7 +51,7 @@ export function registerBotMessageCommands(bot: Command) {
     .command('read <botId>')
     .description('Read messages from a channel')
     .requiredOption('--target <channelId>', 'Target channel / conversation ID')
-    .option('--limit <n>', 'Max messages to fetch', '20')
+    .option('--limit <n>', 'Max messages to fetch', String(DEFAULT_BOT_HISTORY_LIMIT))
     .option('--before <messageId>', 'Read messages before this ID')
     .option('--after <messageId>', 'Read messages after this ID')
     .option('--json', 'Output JSON')
