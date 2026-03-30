@@ -3,7 +3,11 @@ import type { MessageRuntimeService } from '@lobechat/builtin-tool-message/execu
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
-import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
+import {
+  DEFAULT_BOT_HISTORY_LIMIT,
+  MAX_BOT_HISTORY_LIMIT,
+  MIN_BOT_HISTORY_LIMIT,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -156,11 +160,17 @@ export const botMessageRouter = router({
   readMessages: botMessageProcedure
     .input(
       z.object({
-        after: z.string().optional(),
-        before: z.string().optional(),
+        after: z
+          .string()
+          .optional()
+          .transform((v) => v || undefined),
+        before: z
+          .string()
+          .optional()
+          .transform((v) => v || undefined),
         botId: z.string(),
         channelId: z.string(),
-        limit: z.number().min(1).max(100).optional(),
+        limit: z.number().min(MIN_BOT_HISTORY_LIMIT).max(MAX_BOT_HISTORY_LIMIT).optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -220,7 +230,7 @@ export const botMessageRouter = router({
         authorId: z.string().optional(),
         botId: z.string(),
         channelId: z.string(),
-        limit: z.number().min(1).max(100).optional(),
+        limit: z.number().min(MIN_BOT_HISTORY_LIMIT).max(MAX_BOT_HISTORY_LIMIT).optional(),
         query: z.string(),
       }),
     )

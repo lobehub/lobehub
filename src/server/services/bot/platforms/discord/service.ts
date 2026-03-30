@@ -35,7 +35,7 @@ import type {
   UnpinMessageParams,
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
-import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
+import { DEFAULT_BOT_HISTORY_LIMIT, MAX_BOT_HISTORY_LIMIT } from '@lobechat/const';
 
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 
@@ -76,9 +76,9 @@ export class DiscordMessageService implements MessageRuntimeService {
 
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
     const messages = await this.api.getMessages(params.channelId, {
-      after: params.after || undefined,
-      before: params.before || undefined,
-      limit: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, 100),
+      after: params.after,
+      before: params.before,
+      limit: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, MAX_BOT_HISTORY_LIMIT),
     });
     const items = messages.map(toMessageItem);
     return {
