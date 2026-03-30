@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import DefaultAgentForm from './features/DefaultAgentForm';
 import SystemAgentForm from './features/SystemAgentForm';
 
 const Page = () => {
@@ -15,7 +14,6 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.agent')} />
-      <DefaultAgentForm />
       <SystemAgentForm systemAgentKey="topic" />
       <SystemAgentForm systemAgentKey="generationTopic" />
       <SystemAgentForm systemAgentKey="translation" />

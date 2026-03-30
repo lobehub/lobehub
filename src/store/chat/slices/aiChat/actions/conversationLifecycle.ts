@@ -206,6 +206,30 @@ export class ConversationLifecycleActionImpl {
     // if message is empty or no files, then stop
     if (!message && !hasFile) return;
 
+    // ━━━ Message Queue: enqueue if agent is currently running ━━━
+    // Check if there's a running execAgentRuntime operation in the current context.
+    // If so, enqueue the message instead of starting a new operation.
+    const currentContextKey = messageMapKey(operationContext);
+    const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
+    const runningAgentOp = contextOpIds
+      .map((id) => this.#get().operations[id])
+      .find((op) => op && op.type === 'execAgentRuntime' && op.status === 'running');
+
+    if (runningAgentOp) {
+      this.#get().enqueueMessage(
+        currentContextKey,
+        {
+          id: nanoid(),
+          content: message,
+          files: fileIdList,
+          interruptMode: 'soft',
+          createdAt: Date.now(),
+        },
+        runningAgentOp.id,
+      );
+      return;
+    }
+
     if (onlyAddUserMessage) {
       await this.#get().addUserMessage({ message, fileList: fileIdList });
 

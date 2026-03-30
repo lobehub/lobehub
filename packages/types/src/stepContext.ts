@@ -131,6 +131,12 @@ export interface RuntimeStepContext {
    */
   activatedToolIds?: string[];
   /**
+   * Whether there are queued user messages waiting to be processed.
+   * When true after tool completion, the agent should finish early
+   * so the queued messages can be sent as a new operation.
+   */
+  hasQueuedMessages?: boolean;
+  /**
    * Page Editor context for current step
    * Contains the latest XML structure fetched at each step
    */

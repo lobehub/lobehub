@@ -15,11 +15,13 @@ import {
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import QueueTray from './QueueTray';
 
 export interface ChatInputProps {
   /**
@@ -107,6 +109,7 @@ const ChatInput = memo<ChatInputProps>(
     const { t } = useTranslation('chat');
 
     // ConversationStore state
+    const context = useConversationStore((s) => s.context);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
       s.context.agentId,
       s.inputMessage,
@@ -142,9 +145,15 @@ const ChatInput = memo<ChatInputProps>(
     const contextList = useFileStore(fileChatSelectors.chatContextSelections);
     const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
 
+    // Queue state
+    const hasQueuedMessages = useChatStore(
+      (s) => operationSelectors.queuedMessageCount(context)(s) > 0,
+    );
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const disabled = isInputEmpty || isUploadingFiles || isInputLoading;
+    // Input stays enabled during agent execution — messages are queued
+    const disabled = isInputEmpty || isUploadingFiles;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
@@ -155,7 +164,7 @@ const ChatInput = memo<ChatInputProps>(
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
 
-        if (currentIsUploading || isInputLoading) return;
+        if (currentIsUploading) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
@@ -181,7 +190,7 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [isInputLoading, sendMessage],
+      [sendMessage],
     );
 
     const sendButtonProps: SendButtonProps = {
@@ -192,7 +201,9 @@ const ChatInput = memo<ChatInputProps>(
     };
 
     const defaultContent = (
-      <WideScreenContainer style={skipScrollMarginWithList ? { marginTop: -12 } : undefined}>
+      <WideScreenContainer
+        style={skipScrollMarginWithList ? { marginTop: -12, position: 'relative' } : undefined}
+      >
         {hasPendingInterventions ? (
           <InterventionBar interventions={pendingInterventions} />
         ) : (
@@ -205,6 +216,20 @@ const ChatInput = memo<ChatInputProps>(
                   type={'secondary'}
                   onClose={clearSendMessageError}
                 />
+              </Flexbox>
+            )}
+            {hasQueuedMessages && (
+              <Flexbox
+                paddingInline={12}
+                style={{
+                  position: 'absolute',
+                  zIndex: 10,
+                  bottom: '100%',
+                  left: 12,
+                  right: 12,
+                }}
+              >
+                <QueueTray />
               </Flexbox>
             )}
             <DesktopChatInput

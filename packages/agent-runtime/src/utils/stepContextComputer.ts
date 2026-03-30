@@ -14,6 +14,10 @@ export interface ComputeStepContextParams {
    */
   activatedToolIds?: string[];
   /**
+   * Whether there are queued user messages waiting to be processed
+   */
+  hasQueuedMessages?: boolean;
+  /**
    * Pre-computed todos state from message selector
    * Should be computed using selectTodosFromMessages in chat store selectors
    */
@@ -36,11 +40,13 @@ export interface ComputeStepContextParams {
 export const computeStepContext = ({
   activatedSkills,
   activatedToolIds,
+  hasQueuedMessages,
   todos,
 }: ComputeStepContextParams): RuntimeStepContext => {
   return {
     ...(activatedSkills?.length && { activatedSkills }),
     ...(activatedToolIds?.length && { activatedToolIds }),
+    ...(hasQueuedMessages && { hasQueuedMessages }),
     ...(todos && { todos }),
   };
 };
