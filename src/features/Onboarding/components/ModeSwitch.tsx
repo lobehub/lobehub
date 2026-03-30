@@ -7,6 +7,8 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { AGENT_ONBOARDING_ENABLED } from '@/routes/onboarding/config';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   anchor: css`
     position: fixed;
@@ -56,31 +58,35 @@ const ModeSwitch = memo<ModeSwitchProps>(({ actions, className, showLabel = fals
     return location.pathname.startsWith('/onboarding/agent') ? 'agent' : 'classic';
   }, [location.pathname]);
 
-  const options = useMemo(
-    () => [
+  const options = useMemo(() => {
+    if (!AGENT_ONBOARDING_ENABLED) return [];
+
+    return [
       { label: t('agent.modeSwitch.agent'), value: 'agent' as const },
       { label: t('agent.modeSwitch.classic'), value: 'classic' as const },
-    ],
-    [t],
-  );
+    ];
+  }, [t]);
 
-  const segmented = (
-    <Segmented
-      options={options}
-      size={'small'}
-      value={mode}
-      onChange={(value) => {
-        navigate(value === 'agent' ? '/onboarding/agent' : '/onboarding/classic');
-      }}
-    />
-  );
+  const segmented =
+    options.length > 0 ? (
+      <Segmented
+        options={options}
+        size={'small'}
+        value={mode}
+        onChange={(value) => {
+          navigate(value === 'agent' ? '/onboarding/agent' : '/onboarding/classic');
+        }}
+      />
+    ) : null;
+
+  if (!segmented && !actions) return null;
 
   return (
     <Flexbox
       className={cx(styles.anchor, showLabel && styles.anchorWithLabel, className)}
       style={style}
     >
-      {showLabel && (
+      {showLabel && segmented && (
         <Text style={{ paddingInline: 4 }} type={'secondary'}>
           {t('agent.modeSwitch.label')}
         </Text>

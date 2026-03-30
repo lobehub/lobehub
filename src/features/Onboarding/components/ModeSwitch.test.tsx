@@ -1,8 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
-
-import ModeSwitch from './ModeSwitch';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -15,38 +14,61 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-describe('ModeSwitch', () => {
-  it('renders a floating Segmented without an extra pill wrapper', () => {
-    render(
-      <MemoryRouter initialEntries={['/onboarding/agent']}>
-        <ModeSwitch />
-      </MemoryRouter>,
-    );
+const renderModeSwitch = async ({
+  actions,
+  enabled,
+  entry = '/onboarding/agent',
+  showLabel,
+}: {
+  actions?: ReactNode;
+  enabled: boolean;
+  entry?: string;
+  showLabel?: boolean;
+}) => {
+  vi.resetModules();
+  vi.doMock('@/routes/onboarding/config', () => ({
+    AGENT_ONBOARDING_ENABLED: enabled,
+  }));
 
-    expect(screen.queryByText('Choose your onboarding mode')).not.toBeInTheDocument();
+  const { default: ModeSwitch } = await import('./ModeSwitch');
+
+  render(
+    <MemoryRouter initialEntries={[entry]}>
+      <ModeSwitch actions={actions} showLabel={showLabel} />
+    </MemoryRouter>,
+  );
+};
+
+afterEach(() => {
+  cleanup();
+  vi.doUnmock('@/routes/onboarding/config');
+});
+
+describe('ModeSwitch', () => {
+  it('renders both onboarding variants when agent onboarding is enabled', async () => {
+    await renderModeSwitch({ enabled: true, showLabel: true });
+
+    expect(screen.getByText('Choose your onboarding mode')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Conversational' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Classic' })).not.toBeChecked();
   });
 
-  it('wraps actions and Segmented in a pill when actions are provided', () => {
-    render(
-      <MemoryRouter initialEntries={['/onboarding/agent']}>
-        <ModeSwitch actions={<button type="button">Restart</button>} />
-      </MemoryRouter>,
-    );
+  it('hides the onboarding switch entirely when agent onboarding is disabled', async () => {
+    await renderModeSwitch({ enabled: false });
 
-    expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Conversational' })).toBeChecked();
+    expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Choose your onboarding mode')).not.toBeInTheDocument();
   });
 
-  it('can show the mode switch label', () => {
-    render(
-      <MemoryRouter initialEntries={['/onboarding/classic']}>
-        <ModeSwitch showLabel />
-      </MemoryRouter>,
-    );
+  it('keeps action buttons visible when agent onboarding is disabled', async () => {
+    await renderModeSwitch({
+      actions: <button type="button">Restart</button>,
+      enabled: false,
+    });
 
-    expect(screen.getByText('Choose your onboarding mode')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Classic' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Conversational' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Classic' })).not.toBeInTheDocument();
   });
 });
