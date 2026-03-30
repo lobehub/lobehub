@@ -1,4 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { isDev } from '@lobechat/utils';
 import {
   ChartNetworkIcon,
   CodeXmlIcon,
@@ -15,7 +16,7 @@ export type DefaultOnboardingEntryVariant = 'agent' | 'classic';
 
 export const DEFAULT_ONBOARDING_ENTRY_VARIANT: DefaultOnboardingEntryVariant = 'classic';
 
-export const AGENT_ONBOARDING_ENABLED = ENABLE_BUSINESS_FEATURES;
+export const AGENT_ONBOARDING_ENABLED = ENABLE_BUSINESS_FEATURES || isDev;
 
 const resolveDefaultOnboardingPath = (variant: DefaultOnboardingEntryVariant) =>
   variant === 'agent' && AGENT_ONBOARDING_ENABLED ? '/onboarding/agent' : '/onboarding/classic';
