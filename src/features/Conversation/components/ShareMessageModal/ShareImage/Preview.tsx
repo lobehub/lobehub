@@ -36,7 +36,7 @@ const Preview = memo<PreviewProps>(
     const isBuiltinAgent = useIsBuiltinAgent();
 
     // Process message content for proper rendering
-    const processedContent = normalizeThinkTags(processWithArtifact(message.content));
+    const processedContent = normalizeThinkTags(processWithArtifact(message.content), false);
 
     const { t } = useTranslation('chat');
 

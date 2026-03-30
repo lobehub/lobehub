@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { processWithArtifact } from './markdown';
+import { normalizeThinkTags, processWithArtifact, shouldProcessThinkTags } from './markdown';
 
 describe('processWithArtifact', () => {
   it('should removeLineBreaks with closed tag', () => {
@@ -321,6 +321,34 @@ Content 2 still going`;
 <lobeArtifact identifier="done" type="text/markdown" title="Done">Content 1</lobeArtifact>
 
 <lobeArtifact identifier="generating" type="text/markdown" title="Generating">Content 2 still going`);
+  });
+});
+
+describe('think tag helpers', () => {
+  describe('shouldProcessThinkTags', () => {
+    it('should only enable think tags for leading completed think blocks', () => {
+      expect(shouldProcessThinkTags('<think>thinking</think>\n\nanswer')).toBe(true);
+      expect(shouldProcessThinkTags('Answer with <think>literal</think> text')).toBe(false);
+    });
+
+    it('should only enable unfinished think blocks while generating', () => {
+      expect(shouldProcessThinkTags('<think>thinking', false)).toBe(false);
+      expect(shouldProcessThinkTags('<think>thinking', true)).toBe(true);
+    });
+  });
+
+  describe('normalizeThinkTags', () => {
+    it('should normalize leading think tags for reasoning blocks', () => {
+      expect(normalizeThinkTags('<think>思考</think>回答')).toEqual(
+        '<think>\n\n思考\n\n</think>\n\n回答',
+      );
+    });
+
+    it('should leave literal think tags in regular content unchanged', () => {
+      const input = '模型会输出<think>这样的标签来举例说明';
+
+      expect(normalizeThinkTags(input)).toEqual(input);
+    });
   });
 });
 

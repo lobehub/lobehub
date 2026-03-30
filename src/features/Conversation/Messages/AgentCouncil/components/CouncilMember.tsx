@@ -50,7 +50,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const errorContent = useErrorContent(error);
-  const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
+  const message = !editing ? normalizeThinkTags(processWithArtifact(content), generating) : content;
 
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
   const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();

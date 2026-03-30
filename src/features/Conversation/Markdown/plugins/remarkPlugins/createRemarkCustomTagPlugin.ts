@@ -1,12 +1,26 @@
+import type { Parent } from 'unist';
 import { SKIP, visit } from 'unist-util-visit';
 
 import { treeNodeToString } from './getNodeContent';
 
-export const createRemarkCustomTagPlugin = (tag: string) => () => {
-  return (tree: any) => {
-    visit(tree, 'html', (node, index, parent) => {
-      if (node.value === `<${tag}>`) {
+interface CreateRemarkCustomTagPluginOptions {
+  position?: 'any' | 'leading';
+}
+
+const isLeadingTagPosition = (parent: Parent, startIndex: number) =>
+  treeNodeToString(parent.children.slice(0, startIndex) as Parent[]).trim() === '';
+
+export const createRemarkCustomTagPlugin =
+  (tag: string, { position = 'any' }: CreateRemarkCustomTagPluginOptions = {}) =>
+  () => {
+    return (tree: any) => {
+      visit(tree, 'html', (node, index, parent) => {
+        if (!parent || index === undefined || index === null || node.value !== `<${tag}>`) return;
+
         const startIndex = index as number;
+
+        if (position === 'leading' && !isLeadingTagPosition(parent as Parent, startIndex)) return;
+
         let endIndex = startIndex + 1;
         let hasCloseTag = false;
 
@@ -31,11 +45,8 @@ export const createRemarkCustomTagPlugin = (tag: string) => () => {
           hasCloseTag ? endIndex : undefined,
         );
 
-        // Convert to Markdown string
-
         const content = treeNodeToString(contentNodes);
 
-        // Create custom node
         const customNode = {
           data: {
             hChildren: [{ type: 'text', value: content }],
@@ -45,12 +56,9 @@ export const createRemarkCustomTagPlugin = (tag: string) => () => {
           type: `${tag}Block`,
         };
 
-        // Replace the original nodes
         parent.children.splice(startIndex, deleteCount, customNode);
 
-        // Skip already-processed nodes
         return [SKIP, startIndex + 1];
-      }
-    });
+      });
+    };
   };
-};
