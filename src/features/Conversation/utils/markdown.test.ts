@@ -377,6 +377,14 @@ describe('assistant markdown activation helpers', () => {
     ).toBe(true);
   });
 
+  it('should keep artifact parsing enabled for truncated responses after generation stops', () => {
+    const truncated =
+      'Intro\n\n<lobeArtifact identifier="demo" type="text/html" title="Test">\n<html>partial';
+
+    expect(shouldProcessArtifactTags(truncated, false)).toBe(true);
+    expect(shouldProcessArtifactTags(truncated, true)).toBe(true);
+  });
+
   it('should only process lobeThinking when it is tied to artifact flow', () => {
     expect(
       shouldProcessArtifactThinkingTags(
