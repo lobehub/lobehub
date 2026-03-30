@@ -78,6 +78,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  itemWithCategoryExtra: css`
+    padding-inline-end: 6px;
+  `,
   itemActive: css`
     background: ${cssVar.colorFillSecondary};
   `,

@@ -1,9 +1,9 @@
 import type { IEditor, SlashOptions } from '@lobehub/editor';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
-import { SkillsIcon } from '@lobehub/ui/icons';
-import { type FC, createElement, useCallback } from 'react';
+import { createElement, type FC, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -28,7 +28,12 @@ const COMMAND_ICONS: Record<string, any> = {
   newTopic: MessageSquarePlusIcon,
 };
 
-const isUrl = (str: string) => str.startsWith('http://') || str.startsWith('https://');
+/** Remote/object URLs and data-URI images (plugin/skill avatars); not plain text. */
+const shouldRenderIconAsImage = (str: string) =>
+  str.startsWith('http://') ||
+  str.startsWith('https://') ||
+  str.startsWith('blob:') ||
+  /^data:image\//i.test(str);
 
 const iconCache = new Map<string, FC>();
 
@@ -40,8 +45,15 @@ const getIconComponent = (avatar: string | undefined): any => {
 
   let IconComp: FC;
 
-  if (isUrl(avatar)) {
-    IconComp = () => createElement('img', { alt: '', height: 16, src: avatar, width: 16 });
+  if (shouldRenderIconAsImage(avatar)) {
+    IconComp = () =>
+      createElement('img', {
+        alt: '',
+        height: 16,
+        src: avatar,
+        style: { flexShrink: 0, objectFit: 'contain' },
+        width: 16,
+      });
   } else {
     IconComp = () => createElement('span', { style: { fontSize: 16, lineHeight: 1 } }, avatar);
   }

@@ -20,7 +20,11 @@ const MenuItem = memo<MenuItemProps>(({ item, active, extra, onClick }) => {
   return (
     <div
       aria-selected={active}
-      className={cx(styles.item, active && styles.itemActive)}
+      className={cx(
+        styles.item,
+        active && styles.itemActive,
+        extra && styles.itemWithCategoryExtra,
+      )}
       data-key={item.key}
       id={`mention-item-${item.key}`}
       role="option"
