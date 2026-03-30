@@ -46,7 +46,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
   const errorContent = useErrorContent(error);
 
   // remove line breaks in artifact tag to make the ast transform easier
-  const message = !editing ? processWithArtifact(content) : content;
+  const message = !editing ? processWithArtifact(content, generating) : content;
 
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
@@ -58,7 +58,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
     } else {
       openChatSettings();
     }
-  }, [isInbox]);
+  }, [isInbox, openChatSettings, toggleSystemRole]);
 
   const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
 

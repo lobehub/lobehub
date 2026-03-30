@@ -30,7 +30,7 @@ const DisplayContent = memo<{
     id,
     isGenerating,
   }) => {
-    const message = processWithArtifact(content);
+    const message = processWithArtifact(content, isGenerating);
     if (isToolCallGenerating) return;
 
     if ((!content && !hasImages) || content === LOADING_FLAT) return <ContentLoading id={id} />;
