@@ -2,18 +2,18 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css }) => ({
   
-  // 内容容器
+  // Content container
 contentContainer: css`
     min-height: 100%;
   `,
 
   
-  // 主容器
+  // Main container
 mainContainer: css`
     overflow-y: auto;
   `,
 
-  // 占位符
+  // Placeholder
   spacer: css`
     flex: 1;
   `,
