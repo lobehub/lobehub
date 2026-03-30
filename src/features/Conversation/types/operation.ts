@@ -26,6 +26,11 @@ export interface MessageOperationState {
   isInReasoning: boolean;
 
   /**
+   * Message generation was interrupted by user
+   */
+  isInterrupted: boolean;
+
+  /**
    * Message has any operation in progress
    */
   isProcessing: boolean;
@@ -106,6 +111,7 @@ export const DEFAULT_MESSAGE_OPERATION_STATE: MessageOperationState = {
   isCreating: false,
   isGenerating: false,
   isInReasoning: false,
+  isInterrupted: false,
   isProcessing: false,
   isRegenerating: false,
 };

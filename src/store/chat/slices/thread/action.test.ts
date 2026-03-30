@@ -80,7 +80,7 @@ vi.mock('@/store/user/selectors', () => ({
     thread: vi.fn(() => ({})),
   },
   userGeneralSettingsSelectors: {
-    responseLanguage: vi.fn(() => undefined),
+    currentResponseLanguage: vi.fn(() => 'en-US'),
   },
   userProfileSelectors: {
     userAvatar: vi.fn(() => 'avatar-url'),

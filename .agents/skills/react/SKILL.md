@@ -7,7 +7,10 @@ description: React component development guide. Use when working with React comp
 
 - Use antd-style for complex styles; for simple cases, use inline `style` attribute
 - Use `Flexbox` and `Center` from `@lobehub/ui` for layouts (see `references/layout-kit.md`)
-- Component priority: `src/components` > installed packages > `@lobehub/ui` > antd
+- Component priority: `src/components` > `@lobehub/ui/base-ui` > `@lobehub/ui` > custom implementation
+  - Always prefer `@lobehub/ui/base-ui` primitives (Select, Modal, DropdownMenu, Popover, Switch, ScrollArea…) over antd equivalents
+  - Fall back to `@lobehub/ui` higher-level components when base-ui has no match
+  - Only implement a custom component as a last resort — never reach for antd directly
 - Use selectors to access zustand store data
 
 ## @lobehub/ui Components
@@ -29,9 +32,9 @@ Reference: `node_modules/@lobehub/ui/es/index.mjs` for all available components.
 
 Hybrid routing: Next.js App Router (static pages) + React Router DOM (main SPA).
 
-| Route Type         | Use Case                          | Implementation               |
-| ------------------ | --------------------------------- | ---------------------------- |
-| Next.js App Router | Auth pages (login, signup, oauth) | `src/app/[variants]/(auth)/` |
+| Route Type         | Use Case                          | Implementation                                                               |
+| ------------------ | --------------------------------- | ---------------------------------------------------------------------------- |
+| Next.js App Router | Auth pages (login, signup, oauth) | `src/app/[variants]/(auth)/`                                                 |
 | React Router DOM   | Main SPA (chat, settings)         | `desktopRouter.config.tsx` + `desktopRouter.config.desktop.tsx` (must match) |
 
 ### Key Files
@@ -47,9 +50,9 @@ Hybrid routing: Next.js App Router (static pages) + React Router DOM (main SPA).
 
 Known pairs that must stay in sync:
 
-| Base file (web, dynamic imports) | Desktop file (Electron, sync imports) |
-| --- | --- |
-| `src/spa/router/desktopRouter.config.tsx` | `src/spa/router/desktopRouter.config.desktop.tsx` |
+| Base file (web, dynamic imports)                      | Desktop file (Electron, sync imports)                         |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| `src/spa/router/desktopRouter.config.tsx`             | `src/spa/router/desktopRouter.config.desktop.tsx`             |
 | `src/routes/(main)/settings/features/componentMap.ts` | `src/routes/(main)/settings/features/componentMap.desktop.ts` |
 
 **How to check**: After editing any `.ts` / `.tsx` file, run `Glob` for `<filename>.desktop.{ts,tsx}` in the same directory. If a match exists, update it with the equivalent sync-import change.

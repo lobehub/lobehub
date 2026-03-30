@@ -57,7 +57,7 @@ const Head = memo<{ id: string }>(({ id }) => {
     (libraryId: string) => {
       setLibraryId(libraryId);
       setMode('explorer');
-      // 使用 setTimeout 确保在下一个事件循环中执行 navigate
+      // Use setTimeout to ensure navigate is called in the next event loop
       setTimeout(() => {
         navigate(`/resource/library/${libraryId}`);
       }, 0);

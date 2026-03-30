@@ -8,7 +8,7 @@ import { getXorPayload } from '@lobechat/utils/server';
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
-import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
+import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -53,7 +53,6 @@ export const checkAuth =
     try {
       // get Authorization from header
       const authorization = req.headers.get(LOBE_CHAT_AUTH_HEADER);
-      const oauthAuthorized = !!req.headers.get(OAUTH_AUTHORIZED);
 
       // better auth handler
       const session = await auth.api.getSession({
@@ -83,7 +82,6 @@ export const checkAuth =
         checkAuthMethod({
           apiKey: jwtPayload.apiKey,
           betterAuthAuthorized,
-          nextAuthAuthorized: oauthAuthorized,
         });
     } catch (e) {
       const params = await options.params;

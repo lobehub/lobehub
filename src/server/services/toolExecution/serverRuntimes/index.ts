@@ -12,6 +12,7 @@ import { agentDocumentsRuntime } from './agentDocuments';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
+import { credsRuntime } from './creds';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { notebookRuntime } from './notebook';
@@ -21,6 +22,7 @@ import { skillStoreRuntime } from './skillStore';
 import { taskRuntime } from './task';
 import { topicReferenceRuntime } from './topicReference';
 import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
+import { userInteractionRuntime } from './userInteraction';
 import { webBrowsingRuntime } from './webBrowsing';
 
 /**
@@ -53,6 +55,8 @@ registerRuntimes([
   briefRuntime,
   taskRuntime,
   topicReferenceRuntime,
+  userInteractionRuntime,
+  credsRuntime,
 ]);
 
 // ==================== Registry API ====================

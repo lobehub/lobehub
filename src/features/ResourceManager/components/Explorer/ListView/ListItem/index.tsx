@@ -1,5 +1,5 @@
 import { Center, Checkbox, ContextMenuTrigger, Flexbox } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { isEqual } from 'es-toolkit';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,15 +13,98 @@ import { formatSize } from '@/utils/format';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
-import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './constants';
 import FileListItemActions from './FileListItemActions';
 import FileListItemName from './FileListItemName';
-import { styles } from './styles';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
 import { useFileListItemRename } from './useFileListItemRename';
 
-export { FILE_DATE_WIDTH, FILE_SIZE_WIDTH };
+export const FILE_DATE_WIDTH = 160;
+export const FILE_SIZE_WIDTH = 140;
+
+const styles = createStaticStyles(({ css }) => {
+  return {
+    container: css`
+      cursor: pointer;
+      min-width: 800px;
+      transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
+
+      &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
+    `,
+
+    dragOver: css`
+      outline: 1px dashed ${cssVar.colorPrimaryBorder};
+      outline-offset: -2px;
+
+      &,
+      &:hover {
+        background: ${cssVar.colorPrimaryBg};
+      }
+    `,
+
+    dragging: css`
+      will-change: transform;
+      opacity: 0.5;
+    `,
+
+    evenRow: css`
+      background: ${cssVar.colorFillQuaternary};
+
+      /* Hover effect overrides zebra striping on the hovered row only */
+      &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
+
+      /* Hide zebra striping when any row is hovered */
+      .any-row-hovered & {
+        background: transparent;
+      }
+
+      /* But keep hover effect on the actual hovered row */
+      .any-row-hovered &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
+    `,
+
+    hover: css`
+      opacity: 0;
+
+      &[data-popup-open],
+      .file-list-item-group:hover & {
+        opacity: 1;
+      }
+    `,
+    item: css`
+      padding-block: 0;
+      padding-inline: 0 24px;
+      color: ${cssVar.colorTextSecondary};
+    `,
+    name: css`
+      overflow: hidden;
+      flex: 1;
+
+      min-width: 0;
+      margin-inline-start: 12px;
+
+      color: ${cssVar.colorText};
+      white-space: nowrap;
+    `,
+    nameContainer: css`
+      overflow: hidden;
+      flex: 1;
+      min-width: 0;
+    `,
+    selected: css`
+      background: ${cssVar.colorFillTertiary};
+
+      &:hover {
+        background: ${cssVar.colorFillSecondary};
+      }
+    `,
+  };
+});
 
 interface FileListItemProps extends FileListItemType {
   columnWidths: {

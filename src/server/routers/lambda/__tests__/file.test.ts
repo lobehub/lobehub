@@ -535,10 +535,7 @@ describe('fileRouter', () => {
 
   describe('removeAllFiles', () => {
     it('should include knowledge-base files when clearing all user files', async () => {
-      mockFileModelQuery.mockResolvedValue([
-        { id: 'file-1' },
-        { id: 'file-2' },
-      ]);
+      mockFileModelQuery.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }]);
       mockFileModelDeleteMany.mockResolvedValue([]);
 
       await caller.removeAllFiles();

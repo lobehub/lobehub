@@ -7,7 +7,6 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
-import { globalHelpers } from '@/store/global/helpers';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -108,8 +107,7 @@ export class GenerationTopicActionImpl {
         chainSummaryGenerationTitle(
           prompts,
           'image',
-          userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()) ||
-            globalHelpers.getCurrentLanguage(),
+          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
         ),
       ),
       onError: async () => {

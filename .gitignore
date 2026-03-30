@@ -135,3 +135,6 @@ i18n-unused-keys-report.json
 pnpm-lock.yaml
 .turbo
 spaHtmlTemplates.ts
+
+.superpowers/
+docs/superpowers

@@ -3,6 +3,7 @@ export { GroupAgentBuilderInspectors } from './Inspector';
 export {
   BatchCreateAgentsInspector,
   CreateAgentInspector,
+  CreateGroupInspector,
   InviteAgentInspector,
   RemoveAgentInspector,
   SearchAgentInspector,

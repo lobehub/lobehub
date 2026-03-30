@@ -19,7 +19,13 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       createDocument: ({ agentId, content, title }) =>
         service.createDocument(agentId, title, content),
       editDocument: ({ agentId, content, id }) => service.editDocumentById(id, content, agentId),
+      listDocuments: async ({ agentId }) => {
+        const docs = await service.listDocuments(agentId);
+        return docs.map((d) => ({ filename: d.filename, id: d.id, title: d.title }));
+      },
       readDocument: ({ agentId, id }) => service.getDocumentById(id, agentId),
+      readDocumentByFilename: ({ agentId, filename }) =>
+        service.getDocumentByFilename(agentId, filename),
       removeDocument: ({ agentId, id }) => service.removeDocumentById(id, agentId),
       renameDocument: ({ agentId, id, newTitle }) =>
         service.renameDocumentById(id, newTitle, agentId),
@@ -29,6 +35,8 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
           agentId,
         ),
+      upsertDocumentByFilename: ({ agentId, content, filename }) =>
+        service.upsertDocumentByFilename({ agentId, content, filename }),
     });
   },
   identifier: AgentDocumentsIdentifier,

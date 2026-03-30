@@ -135,7 +135,7 @@ export class ConversationControlActionImpl {
     const optimisticContext = { operationId };
 
     // 2. Update intervention status to approved
-    await this.#get().optimisticUpdatePlugin(
+    await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
       { intervention: { status: 'approved' } },
       optimisticContext,
@@ -190,6 +190,259 @@ export class ConversationControlActionImpl {
     }
   };
 
+  submitToolInteraction = async (
+    toolMessageId: string,
+    response: Record<string, unknown>,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    const { agentId, topicId, threadId, scope } = effectiveContext;
+
+    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+    if (!toolMessage) return;
+
+    const { operationId } = startOperation({
+      type: 'submitToolInteraction',
+      context: {
+        agentId,
+        topicId: topicId ?? undefined,
+        threadId: threadId ?? undefined,
+        scope,
+        messageId: toolMessageId,
+      },
+    });
+
+    const optimisticContext: OptimisticUpdateContext = { operationId };
+
+    // 1. Mark intervention as approved and set tool result to user's response
+    await this.#get().optimisticUpdateMessagePlugin(
+      toolMessageId,
+      { intervention: { status: 'approved' } },
+      optimisticContext,
+    );
+
+    const toolContent = `User submitted: ${JSON.stringify(response)}`;
+    await this.#get().optimisticUpdateMessageContent(
+      toolMessageId,
+      toolContent,
+      undefined,
+      optimisticContext,
+    );
+
+    // 2. Create a user message summarizing the response (makes conversation natural)
+    const userMessageContent = Object.values(response).join(', ');
+    const groupId = toolMessage.groupId;
+    const userMsg = await this.#get().optimisticCreateMessage(
+      {
+        agentId: agentId!,
+        content: userMessageContent,
+        groupId: groupId ?? undefined,
+        role: 'user',
+        threadId: threadId ?? undefined,
+        topicId: topicId ?? undefined,
+      },
+      optimisticContext,
+    );
+
+    if (!userMsg) {
+      this.#get().failOperation(operationId, {
+        type: 'submitToolInteraction',
+        message: 'Failed to create user message',
+      });
+      return;
+    }
+
+    // 3. Resume agent from user message (not tool re-execution)
+    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
+    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+
+    const { state, context: initialContext } = this.#get().internal_createAgentState({
+      messages: currentMessages,
+      parentMessageId: userMsg.id,
+      agentId,
+      topicId,
+      threadId: threadId ?? undefined,
+      operationId,
+    });
+
+    try {
+      await internal_execAgentRuntime({
+        context: effectiveContext,
+        messages: currentMessages,
+        parentMessageId: userMsg.id,
+        parentMessageType: 'user',
+        initialState: state,
+        initialContext,
+        parentOperationId: operationId,
+      });
+      completeOperation(operationId);
+    } catch (error) {
+      const err = error as Error;
+      console.error('[submitToolInteraction] Error executing agent runtime:', err);
+      this.#get().failOperation(operationId, {
+        type: 'submitToolInteraction',
+        message: err.message || 'Unknown error',
+      });
+    }
+  };
+
+  skipToolInteraction = async (
+    toolMessageId: string,
+    reason?: string,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const { internal_execAgentRuntime, startOperation, completeOperation } = this.#get();
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    const { agentId, topicId, threadId, scope } = effectiveContext;
+
+    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+    if (!toolMessage) return;
+
+    const { operationId } = startOperation({
+      type: 'skipToolInteraction',
+      context: {
+        agentId,
+        topicId: topicId ?? undefined,
+        threadId: threadId ?? undefined,
+        scope,
+        messageId: toolMessageId,
+      },
+    });
+
+    const optimisticContext: OptimisticUpdateContext = { operationId };
+
+    // 1. Mark intervention as rejected (skipped) with reason
+    await this.#get().optimisticUpdateMessagePlugin(
+      toolMessageId,
+      { intervention: { rejectedReason: reason, status: 'rejected' } },
+      optimisticContext,
+    );
+
+    const toolContent = reason ? `User skipped: ${reason}` : 'User skipped this question.';
+    await this.#get().optimisticUpdateMessageContent(
+      toolMessageId,
+      toolContent,
+      undefined,
+      optimisticContext,
+    );
+
+    // 2. Create a user message indicating the skip
+    const userMessageContent = reason ? `I'll skip this. ${reason}` : "I'll skip this.";
+    const groupId = toolMessage.groupId;
+    const userMsg = await this.#get().optimisticCreateMessage(
+      {
+        agentId: agentId!,
+        content: userMessageContent,
+        groupId: groupId ?? undefined,
+        role: 'user',
+        threadId: threadId ?? undefined,
+        topicId: topicId ?? undefined,
+      },
+      optimisticContext,
+    );
+
+    if (!userMsg) {
+      this.#get().failOperation(operationId, {
+        type: 'skipToolInteraction',
+        message: 'Failed to create user message',
+      });
+      return;
+    }
+
+    // 3. Resume agent from user message
+    const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
+    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+
+    const { state, context: initialContext } = this.#get().internal_createAgentState({
+      messages: currentMessages,
+      parentMessageId: userMsg.id,
+      agentId,
+      topicId,
+      threadId: threadId ?? undefined,
+      operationId,
+    });
+
+    try {
+      await internal_execAgentRuntime({
+        context: effectiveContext,
+        messages: currentMessages,
+        parentMessageId: userMsg.id,
+        parentMessageType: 'user',
+        initialState: state,
+        initialContext,
+        parentOperationId: operationId,
+      });
+      completeOperation(operationId);
+    } catch (error) {
+      const err = error as Error;
+      console.error('[skipToolInteraction] Error executing agent runtime:', err);
+      this.#get().failOperation(operationId, {
+        type: 'skipToolInteraction',
+        message: err.message || 'Unknown error',
+      });
+    }
+  };
+
+  cancelToolInteraction = async (
+    toolMessageId: string,
+    context?: ConversationContext,
+  ): Promise<void> => {
+    const { startOperation, completeOperation } = this.#get();
+
+    const effectiveContext: ConversationContext = context ?? {
+      agentId: this.#get().activeAgentId,
+      topicId: this.#get().activeTopicId,
+      threadId: this.#get().activeThreadId,
+    };
+
+    const { agentId, topicId, threadId, scope } = effectiveContext;
+
+    const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
+    if (!toolMessage) return;
+
+    const { operationId } = startOperation({
+      type: 'cancelToolInteraction',
+      context: {
+        agentId,
+        topicId: topicId ?? undefined,
+        threadId: threadId ?? undefined,
+        scope,
+        messageId: toolMessageId,
+      },
+    });
+
+    const optimisticContext = { operationId };
+
+    await this.#get().optimisticUpdateMessagePlugin(
+      toolMessageId,
+      { intervention: { rejectedReason: 'User cancelled interaction', status: 'rejected' } },
+      optimisticContext,
+    );
+
+    const toolContent = 'User cancelled this interaction.';
+    await this.#get().optimisticUpdateMessageContent(
+      toolMessageId,
+      toolContent,
+      undefined,
+      optimisticContext,
+    );
+
+    completeOperation(operationId);
+  };
+
   rejectToolCalling = async (
     messageId: string,
     reason?: string,
@@ -228,7 +481,11 @@ export class ConversationControlActionImpl {
       rejectedReason: reason,
       status: 'rejected',
     } as const;
-    await this.#get().optimisticUpdatePlugin(toolMessage.id, { intervention }, optimisticContext);
+    await this.#get().optimisticUpdateMessagePlugin(
+      toolMessage.id,
+      { intervention },
+      optimisticContext,
+    );
 
     const toolContent = !!reason
       ? `User reject this tool calling with reason: ${reason}`

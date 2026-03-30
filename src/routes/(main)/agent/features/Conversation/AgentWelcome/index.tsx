@@ -34,7 +34,8 @@ const InboxWelcome = memo(() => {
     return agentSystemRoleMsg;
   }, [openingMessage, agentSystemRoleMsg, meta.description]);
 
-  const displayTitle = isInbox ? 'Lobe AI' : meta.title || t('defaultSession', { ns: 'common' });
+  const inboxTitle = meta.title || 'Lobe AI';
+  const displayTitle = isInbox ? inboxTitle : meta.title || t('defaultSession', { ns: 'common' });
 
   return (
     <>
@@ -47,7 +48,7 @@ const InboxWelcome = memo(() => {
         }}
       >
         <Avatar
-          avatar={isInbox ? DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
+          avatar={isInbox ? meta.avatar || DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
           background={meta.backgroundColor}
           shape={'square'}
           size={78}
@@ -57,7 +58,7 @@ const InboxWelcome = memo(() => {
         </Text>
         <Flexbox width={'min(100%, 640px)'}>
           <Markdown fontSize={fontSize} variant={'chat'}>
-            {isInbox ? t('guide.defaultMessageWithoutCreate', { appName: 'Lobe AI' }) : message}
+            {isInbox ? t('guide.defaultMessageWithoutCreate', { appName: inboxTitle }) : message}
           </Markdown>
         </Flexbox>
         {openingQuestions.length > 0 && (

@@ -321,6 +321,32 @@ export class AgentDocumentsService {
     }
   }
 
+  async listDocuments(agentId: string) {
+    const docs = await this.agentDocumentModel.findByAgent(agentId);
+    return docs.map((d) => ({
+      filename: d.filename,
+      id: d.id,
+      loadPosition: d.policy?.context?.position,
+      title: d.title,
+    }));
+  }
+
+  async getDocumentByFilename(agentId: string, filename: string) {
+    return this.agentDocumentModel.findByFilename(agentId, filename);
+  }
+
+  async upsertDocumentByFilename({
+    agentId,
+    filename,
+    content,
+  }: {
+    agentId: string;
+    content: string;
+    filename: string;
+  }) {
+    return this.agentDocumentModel.upsert(agentId, filename, content);
+  }
+
   async editDocumentById(documentId: string, content: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;

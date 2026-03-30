@@ -278,10 +278,11 @@ describe('StreamingExecutor actions', () => {
       // Verify only one LLM call was made (no tool execution happened)
       expect(streamCallCount).toBe(1);
 
-      // Verify the agent runtime completed (not just cancelled mid-flight)
+      // Verify the operation preserves cancelled status (user intentionally stopped it)
+      // even though tools were gracefully resolved after cancellation
       const operations = Object.values(result.current.operations);
       const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
-      expect(execOperation?.status).toBe('completed');
+      expect(execOperation?.status).toBe('cancelled');
 
       streamSpy.mockRestore();
     });

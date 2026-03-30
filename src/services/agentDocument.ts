@@ -15,6 +15,22 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.initializeFromTemplate.mutate(params);
   };
 
+  listDocuments = async (params: { agentId: string }) => {
+    return lambdaClient.agentDocument.listDocuments.query(params);
+  };
+
+  readDocumentByFilename = async (params: { agentId: string; filename: string }) => {
+    return lambdaClient.agentDocument.readDocumentByFilename.query(params);
+  };
+
+  upsertDocumentByFilename = async (params: {
+    agentId: string;
+    content: string;
+    filename: string;
+  }) => {
+    return lambdaClient.agentDocument.upsertDocumentByFilename.mutate(params);
+  };
+
   createDocument = async (params: { agentId: string; content: string; title: string }) => {
     return lambdaClient.agentDocument.createDocument.mutate(params);
   };

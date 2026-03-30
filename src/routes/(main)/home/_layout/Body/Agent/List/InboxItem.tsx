@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
@@ -19,9 +19,11 @@ interface InboxItemProps {
 
 const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId!));
 
   const isLoading = useChatStore(operationSelectors.isAgentRuntimeRunning);
-  const inboxAgentTitle = 'Lobe AI';
+  const inboxAgentTitle = inboxMeta.title || 'Lobe AI';
+  const inboxAgentAvatar = inboxMeta.avatar || DEFAULT_INBOX_AVATAR;
 
   return (
     <Link aria-label={inboxAgentTitle} to={SESSION_CHAT_URL(inboxAgentId, false)}>
@@ -31,12 +33,7 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
         style={style}
         title={inboxAgentTitle}
         icon={
-          <Avatar
-            emojiScaleWithBackground
-            avatar={DEFAULT_INBOX_AVATAR}
-            shape={'square'}
-            size={24}
-          />
+          <Avatar emojiScaleWithBackground avatar={inboxAgentAvatar} shape={'square'} size={24} />
         }
       />
     </Link>

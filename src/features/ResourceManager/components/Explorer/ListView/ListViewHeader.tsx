@@ -27,17 +27,11 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
   const { t } = useTranslation(['components', 'file']);
   const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
   const { handleSelectAll, handleSelectAllResources } = useExplorerSelectionActions(data);
-  const {
-    allSelected,
-    indeterminate,
-    selectAllState,
-    selectedCount,
-    showSelectAllHint,
-    total,
-  } = useExplorerSelectionSummary({
-    data,
-    hasMore,
-  });
+  const { allSelected, indeterminate, selectAllState, selectedCount, showSelectAllHint, total } =
+    useExplorerSelectionSummary({
+      data,
+      hasMore,
+    });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
   const selectedLabelKey =
     selectAllState === 'all'
@@ -61,7 +55,11 @@ const ListViewHeader = ({ columnWidths, data, hasMore }: ListViewHeaderProps) =>
         }}
       >
         <Center height={40} style={{ paddingInline: 4 }}>
-          <Checkbox checked={allSelected} indeterminate={indeterminate} onChange={handleSelectAll} />
+          <Checkbox
+            checked={allSelected}
+            indeterminate={indeterminate}
+            onChange={handleSelectAll}
+          />
         </Center>
         <Flexbox
           className={styles.headerItem}
