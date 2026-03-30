@@ -350,7 +350,7 @@ describe('messageRuntime', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.content).toContain('No message adapter configured');
+      expect(result.content).toContain('No message service configured for platform');
     });
   });
 });
