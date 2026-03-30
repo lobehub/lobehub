@@ -36,7 +36,7 @@ export function defineConfig(config: CustomNextConfig) {
         ...(buildWithDocker
           ? [
               // Exclude SPA/desktop/mobile build artifacts from serverless functions
-              'public/spa/**',
+              'public/_spa/**',
               'dist/desktop/**',
               'dist/mobile/**',
 

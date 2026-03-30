@@ -52,6 +52,7 @@ bun.lockb
 
 # Build outputs
 dist/
+public/_spa/
 public/spa/
 es/
 lib/
