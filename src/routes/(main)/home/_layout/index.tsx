@@ -34,7 +34,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
     if (isHomeRoute) setHasActivated(true);
   }, [isHomeRoute]);
 
-  // CSS 变量用于动态背景色（colorBgContainerSecondary 不在 cssVar 中）
+  // CSS variable for dynamic background color (colorBgContainerSecondary is not in cssVar)
   const cssVariables = useMemo<Record<string, string>>(
     () => ({
       '--content-bg-secondary': theme.colorBgContainerSecondary,

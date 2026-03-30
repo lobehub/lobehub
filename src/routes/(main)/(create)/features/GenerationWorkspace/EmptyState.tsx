@@ -5,7 +5,7 @@ import type { ComponentType } from 'react';
 import { memo } from 'react';
 
 interface EmptyStateProps {
-  /** 为 false 时由页面级输入框渲染，此处只显示占位 */
+  /** When false, rendered by the page-level input box; only a placeholder is displayed here */
   embedInput?: boolean;
   /** Prompt input component to show when embedInput is true */
   PromptInput: ComponentType<{ disableAnimation?: boolean; showTitle?: boolean }>;

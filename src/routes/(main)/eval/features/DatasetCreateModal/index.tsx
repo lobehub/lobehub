@@ -95,7 +95,7 @@ const DatasetCreateModal = memo<DatasetCreateModalProps>(
     const presetsByCategory = getPresetsByCategory();
     const currentPreset = DATASET_PRESETS[selectedPreset];
 
-    // 构建分组选项
+    // Build grouped options
     const selectOptions = Object.entries(presetsByCategory)
       .filter(([_, presets]) => presets.length > 0)
       .map(([category, presets]) => ({

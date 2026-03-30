@@ -1,7 +1,7 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Header 容器
+  // Header container
   headerContainer: css`
     position: relative;
     z-index: 10;

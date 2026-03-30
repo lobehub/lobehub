@@ -55,7 +55,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
         <Text as={'p'}>{t('screen4.description')}</Text>
       </Flexbox>
       <Flexbox gap={16} style={{ width: '100%' }}>
-        {/* 共享数据选项 */}
+        {/* Shared data option */}
         <Block
           clickable
           flex={1}
@@ -92,7 +92,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           </Flexbox>
         </Block>
 
-        {/* 隐私模式选项 */}
+        {/* Privacy mode option */}
         <Block
           clickable
           flex={1}

@@ -15,7 +15,7 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
 
-  // CSS 变量用于动态样式
+  // CSS variables for dynamic styling
   const outerCssVariables = useMemo<Record<string, string>>(
     () => ({
       '--container-padding-left': expand ? '0px' : '8px',
