@@ -299,7 +299,7 @@ describe('OnboardingService', () => {
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 4 user messages total, baseline was 3 → only 1 discovery exchange (< MIN=2)
+    // 4 user messages total, baseline was 3 → only 1 discovery exchange (< MIN_DISCOVERY_USER_MESSAGES=5)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(async () => [{ count: 4 }]),
@@ -311,7 +311,8 @@ describe('OnboardingService', () => {
 
     expect(context.phase).toBe('discovery');
     expect(context.discoveryUserMessageCount).toBe(1);
-    expect(context.remainingDiscoveryExchanges).toBe(3);
+    // remaining = RECOMMENDED_DISCOVERY_USER_MESSAGES(8) - 1 = 7
+    expect(context.remainingDiscoveryExchanges).toBe(7);
   });
 
   it('advances to summary when discovery exchanges reach minimum threshold', async () => {
@@ -329,10 +330,10 @@ describe('OnboardingService', () => {
       version: CURRENT_ONBOARDING_VERSION,
     };
 
-    // 5 user messages total, baseline was 3 → 2 discovery exchanges (= MIN)
+    // 8 user messages total, baseline was 3 → 5 discovery exchanges (= MIN_DISCOVERY_USER_MESSAGES)
     mockDb.select.mockReturnValue({
       from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 5 }]),
+        where: vi.fn(async () => [{ count: 8 }]),
       })),
     });
 
