@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { LOADING_FLAT } from '@/const/message';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 
-import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import { processWithArtifact } from '../../utils/markdown';
 import ContentLoading from './ContentLoading';
 import { RichContentRenderer } from './RichContentRenderer';
 
@@ -30,7 +30,7 @@ const DisplayContent = memo<{
     id,
     isGenerating,
   }) => {
-    const message = normalizeThinkTags(processWithArtifact(content), isGenerating);
+    const message = processWithArtifact(content);
     if (isToolCallGenerating) return;
 
     if ((!content && !hasImages) || content === LOADING_FLAT) return <ContentLoading id={id} />;

@@ -9,7 +9,7 @@ import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPorta
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
 import { AssistantMessageExtra } from '@/features/Conversation/Messages/Assistant/Extra';
-import { normalizeThinkTags, processWithArtifact } from '@/features/Conversation/utils/markdown';
+import { processWithArtifact } from '@/features/Conversation/utils/markdown';
 import { type UIChatMessage } from '@/types/index';
 
 import { useAgentMeta } from '../../../hooks';
@@ -50,7 +50,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const errorContent = useErrorContent(error);
-  const message = !editing ? normalizeThinkTags(processWithArtifact(content), generating) : content;
+  const message = !editing ? processWithArtifact(content) : content;
 
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
   const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
