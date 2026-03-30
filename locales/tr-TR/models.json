@@ -795,6 +795,7 @@
   "jamba-large.description": "Karmaşık kurumsal görevler için tasarlanmış, en güçlü ve gelişmiş modelimizdir; olağanüstü performans sunar.",
   "jamba-mini.description": "Sınıfındaki en verimli modeldir; hız ve kalite arasında denge sağlar, daha küçük bir kaynak kullanımı sunar.",
   "jina-deepsearch-v1.description": "DeepSearch, web araması, okuma ve akıl yürütmeyi birleştirerek derinlemesine araştırmalar yapar. Araştırma görevinizi alır, çoklu yinelemelerle geniş aramalar yapar ve ardından bir yanıt üretir. Süreç, sürekli araştırma, akıl yürütme ve çok yönlü problem çözmeyi içerir; bu, önceden eğitilmiş verilerden yanıt veren standart LLM'lerden veya tek seferlik yüzeysel aramaya dayanan geleneksel RAG sistemlerinden temelde farklıdır.",
+  "k2p5.description": "Kimi K2.5, hem görsel hem de metin girdilerini destekleyen yerel çok modlu mimarisi, 'düşünen' ve 'düşünmeyen' modları ile hem sohbet hem de ajan görevlerini içeren Kimi'nin bugüne kadarki en çok yönlü modelidir.",
   "kimi-k2-0711-preview.description": "kimi-k2, güçlü kodlama ve ajan yeteneklerine sahip bir MoE temel modelidir (toplam 1T parametre, 32B aktif); akıl yürütme, programlama, matematik ve ajan testlerinde diğer yaygın açık modelleri geride bırakır.",
   "kimi-k2-0905-preview.description": "kimi-k2-0905-preview, 256k bağlam penceresi, daha güçlü ajan kodlaması, daha iyi ön yüz kod kalitesi ve gelişmiş bağlam anlama sunar.",
   "kimi-k2-instruct.description": "Kimi K2 Instruct, Kimi'nin resmi akıl yürütme modelidir; kod, soru-cevap ve daha fazlası için uzun bağlam desteği sunar.",

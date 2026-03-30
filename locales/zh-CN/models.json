@@ -795,6 +795,7 @@
   "jamba-large.description": "我们最强大、最先进的模型，专为复杂企业任务设计，性能卓越。",
   "jamba-mini.description": "同类中效率最高的模型，在速度与质量之间实现平衡，占用资源更少。",
   "jina-deepsearch-v1.description": "DeepSearch 结合了网页搜索、阅读与推理，适用于深入研究任务。它就像一个智能代理，接收你的研究任务后，进行多轮广泛搜索，最终才生成答案。整个过程包含持续的信息检索、逻辑推理和多角度问题解决，区别于仅依赖预训练数据的传统大模型或一次性检索的RAG系统。",
+  "k2p5.description": "Kimi K2.5 是 Kimi 至今为止最为多功能的型号，采用原生多模态架构，支持视觉和文本输入，具备“思考”和“非思考”模式，并能够执行对话和代理任务。",
   "kimi-k2-0711-preview.description": "kimi-k2 是一款具备强大编程与智能体能力的 MoE 基础模型（总参数量 1T，活跃参数 32B），在推理、编程、数学与智能体基准测试中超越主流开源模型。",
   "kimi-k2-0905-preview.description": "kimi-k2-0905-preview 提供 256k 上下文窗口，具备更强的智能体编程能力、更优的前端代码质量与更好的上下文理解能力。",
   "kimi-k2-instruct.description": "Kimi K2 Instruct 是 Kimi 官方推出的推理模型，支持长上下文，适用于代码、问答等任务。",

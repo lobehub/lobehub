@@ -795,6 +795,7 @@
   "jamba-large.description": "Our most powerful, advanced model, designed for complex enterprise tasks with outstanding performance.",
   "jamba-mini.description": "The most efficient model in its class, balancing speed and quality with a smaller footprint.",
   "jina-deepsearch-v1.description": "DeepSearch combines web search, reading, and reasoning for thorough investigations. Think of it as an agent that takes your research task, performs broad searches with multiple iterations, and only then produces an answer. The process involves continuous research, reasoning, and multi-angle problem solving, fundamentally different from standard LLMs that answer from pretraining data or traditional RAG systems that rely on one-shot surface search.",
+  "k2p5.description": "Kimi K2.5 is Kimi's most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, 'thinking' and 'non-thinking' modes, and both conversational and agent tasks.",
   "kimi-k2-0711-preview.description": "kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.",
   "kimi-k2-0905-preview.description": "kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.",
   "kimi-k2-instruct.description": "Kimi K2 Instruct is Kimi’s official reasoning model with long context for code, QA, and more.",
