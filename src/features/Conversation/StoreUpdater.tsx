@@ -81,9 +81,10 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         prevContextKeyRef.current = contextKey;
         prevMessagesRef.current = undefined;
 
-        // Atomically reset all stale data so ChatList shows skeleton (messagesInit=false)
-        // instead of old topic messages during the transition
+        // Update context first so replaceMessages uses the correct context
+        // when calling onMessagesChange (otherwise writes to the old topic key)
         storeApi.setState({
+          context,
           dbMessages: messages ?? [],
           displayMessages: [],
           messagesInit: false,
