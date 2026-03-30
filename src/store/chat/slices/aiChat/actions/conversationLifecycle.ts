@@ -536,10 +536,15 @@ export class ConversationLifecycleActionImpl {
             content: 'User bypassed this interaction by sending a message directly.',
           },
         });
-        messageService.updateMessagePlugin(
+        void messageService.updateMessagePlugin(
           msgId,
           { intervention: { status: 'aborted' } },
-          this.#get().internal_getConversationContext(),
+          {
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            threadId: execContext.threadId,
+            topicId: execContext.topicId,
+          },
         );
       }
     }

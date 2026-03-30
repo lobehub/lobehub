@@ -46,6 +46,7 @@ class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
     await Promise.all([
       syncUserOnboardingState(),
       useAgentStore.getState().refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
+      useAgentStore.getState().refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox),
     ]);
 
     return createWebOnboardingToolResult(result);
