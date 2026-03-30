@@ -21,6 +21,7 @@ describe('agentDocumentsRuntime', () => {
 
       const runtime = agentDocumentsRuntime.factory({
         serverDB: {} as never,
+        toolManifestMap: {},
         userId: 'user-1',
       });
       const result = await runtime.listDocuments({}, { agentId: 'agent-1' });

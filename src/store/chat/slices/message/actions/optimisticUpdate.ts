@@ -247,7 +247,7 @@ export class MessageOptimisticUpdateActionImpl {
           id: toolMessage.parentId,
           type: 'updateMessageTools',
           tool_call_id: toolMessage.tool_call_id,
-          value,
+          value: value as Partial<ChatToolPayload>,
         },
         context,
       );
