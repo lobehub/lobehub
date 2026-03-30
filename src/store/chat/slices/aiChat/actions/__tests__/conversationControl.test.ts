@@ -418,7 +418,7 @@ describe('ConversationControl actions', () => {
 
       // Mock internal methods
       const optimisticUpdatePluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdatePlugin')
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
         .mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
@@ -492,7 +492,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Mock internal methods
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
         .mockReturnValue({
@@ -591,7 +591,7 @@ describe('ConversationControl actions', () => {
         });
       });
 
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
 
       const userMessageId = 'submitted-user-msg';
@@ -698,7 +698,7 @@ describe('ConversationControl actions', () => {
         });
       });
 
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
 
       const userMessageId = 'skipped-user-msg';
@@ -808,7 +808,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Mock internal methods
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')
@@ -882,7 +882,7 @@ describe('ConversationControl actions', () => {
       });
 
       // Mock internal methods
-      vi.spyOn(result.current, 'optimisticUpdatePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       const internal_createAgentStateSpy = vi
         .spyOn(result.current, 'internal_createAgentState')

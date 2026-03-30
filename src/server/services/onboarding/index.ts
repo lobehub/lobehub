@@ -485,7 +485,15 @@ export class OnboardingService {
         if (agentName) agentPatch.title = agentName;
         if (agentEmoji) agentPatch.avatar = agentEmoji;
 
-        await this.agentModel.update(inboxAgentId, agentPatch);
+        // Update both inbox and web-onboarding agents so the current conversation reflects the change
+        const webOnboardingAgent = await this.agentModel.getBuiltinAgent(
+          BUILTIN_AGENT_SLUGS.webOnboarding,
+        );
+
+        await Promise.all([
+          this.agentModel.update(inboxAgentId, agentPatch),
+          webOnboardingAgent?.id && this.agentModel.update(webOnboardingAgent.id, agentPatch),
+        ]);
 
         if (agentName) savedFields.push('agentName');
         if (agentEmoji) savedFields.push('agentEmoji');

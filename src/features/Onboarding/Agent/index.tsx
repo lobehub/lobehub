@@ -28,6 +28,7 @@ import OnboardingConversationProvider from './OnboardingConversationProvider';
 const AgentOnboardingPage = memo(() => {
   const { t } = useTranslation('onboarding');
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
+  const refreshBuiltinAgent = useAgentStore((s) => s.refreshBuiltinAgent);
   const onboardingAgentId = useAgentStore(
     builtinAgentSelectors.getBuiltinAgentId(BUILTIN_AGENT_SLUGS.webOnboarding),
   );
@@ -140,7 +141,10 @@ const AgentOnboardingPage = memo(() => {
                 : {
                     onAfterSendMessage: async () => {
                       await syncOnboardingContext();
-                      await refreshUserState();
+                      await Promise.all([
+                        refreshUserState(),
+                        refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
+                      ]);
                     },
                   }
             }

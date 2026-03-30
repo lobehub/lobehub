@@ -135,7 +135,7 @@ export class ConversationControlActionImpl {
     const optimisticContext = { operationId };
 
     // 2. Update intervention status to approved
-    await this.#get().optimisticUpdatePlugin(
+    await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
       { intervention: { status: 'approved' } },
       optimisticContext,
@@ -222,7 +222,7 @@ export class ConversationControlActionImpl {
     const optimisticContext: OptimisticUpdateContext = { operationId };
 
     // 1. Mark intervention as approved and set tool result to user's response
-    await this.#get().optimisticUpdatePlugin(
+    await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
       { intervention: { status: 'approved' } },
       optimisticContext,
@@ -325,7 +325,7 @@ export class ConversationControlActionImpl {
     const optimisticContext: OptimisticUpdateContext = { operationId };
 
     // 1. Mark intervention as rejected (skipped) with reason
-    await this.#get().optimisticUpdatePlugin(
+    await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
       { intervention: { rejectedReason: reason, status: 'rejected' } },
       optimisticContext,
@@ -426,7 +426,7 @@ export class ConversationControlActionImpl {
 
     const optimisticContext = { operationId };
 
-    await this.#get().optimisticUpdatePlugin(
+    await this.#get().optimisticUpdateMessagePlugin(
       toolMessageId,
       { intervention: { rejectedReason: 'User cancelled interaction', status: 'rejected' } },
       optimisticContext,
@@ -481,7 +481,11 @@ export class ConversationControlActionImpl {
       rejectedReason: reason,
       status: 'rejected',
     } as const;
-    await this.#get().optimisticUpdatePlugin(toolMessage.id, { intervention }, optimisticContext);
+    await this.#get().optimisticUpdateMessagePlugin(
+      toolMessage.id,
+      { intervention },
+      optimisticContext,
+    );
 
     const toolContent = !!reason
       ? `User reject this tool calling with reason: ${reason}`

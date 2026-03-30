@@ -24,7 +24,9 @@ const Agent = memo<PropsWithChildren>(() => {
     agentSelectors.currentAgentBackgroundColor(s),
   ]);
 
-  const displayTitle = isInbox ? 'Lobe AI' : title || t('defaultSession', { ns: 'common' });
+  const displayTitle = isInbox
+    ? title || 'Lobe AI'
+    : title || t('defaultSession', { ns: 'common' });
 
   if (isLoading) return <SkeletonItem height={32} padding={0} />;
 
@@ -43,7 +45,7 @@ const Agent = memo<PropsWithChildren>(() => {
         }}
       >
         <Avatar
-          avatar={isInbox ? DEFAULT_INBOX_AVATAR : avatar || DEFAULT_AVATAR}
+          avatar={isInbox ? avatar || DEFAULT_INBOX_AVATAR : avatar || DEFAULT_AVATAR}
           background={backgroundColor || undefined}
           shape={'square'}
           size={28}

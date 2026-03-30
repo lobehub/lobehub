@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
@@ -6,6 +7,7 @@ import { type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types
 import { BaseExecutor } from '@lobechat/types';
 
 import { userService } from '@/services/user';
+import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 
 import {
@@ -41,7 +43,10 @@ class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
     _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const result = await userService.saveUserQuestion(params);
-    await syncUserOnboardingState();
+    await Promise.all([
+      syncUserOnboardingState(),
+      useAgentStore.getState().refreshBuiltinAgent(BUILTIN_AGENT_SLUGS.webOnboarding),
+    ]);
 
     return createWebOnboardingToolResult(result);
   };

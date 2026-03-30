@@ -81,9 +81,9 @@ export class AgentService {
     const mergedConfig = this.mergeDefaultConfig(agent, defaultAgentConfig);
     if (!mergedConfig) return null;
 
-    // Merge avatar from builtin-agents package definition
+    // Use builtin avatar as fallback only when DB has no custom avatar
     const builtinAgent = BUILTIN_AGENTS[slug as BuiltinAgentSlug];
-    if (builtinAgent?.avatar) {
+    if (builtinAgent?.avatar && !mergedConfig.avatar) {
       return { ...mergedConfig, avatar: builtinAgent.avatar };
     }
 
