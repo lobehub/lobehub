@@ -18,6 +18,7 @@ import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
 import {
@@ -69,8 +70,9 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
 
   const contentId = lastAssistantMsg?.id;
 
-  // Get editing state from ConversationStore
+  // Get editing and interrupted state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
+  const interrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
 
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const addReaction = useConversationStore((s) => s.addReaction);
@@ -162,6 +164,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
           <FileListViewer items={aggregatedFileList} />
         </div>
       )}
+      {interrupted && <InterruptedHint />}
       {isDevMode && model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />
       )}

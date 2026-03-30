@@ -175,6 +175,8 @@
   "messageAction.delAndRegenerate": "Delete and Regenerate",
   "messageAction.deleteDisabledByThreads": "This message has a subtopic and can’t be deleted",
   "messageAction.expand": "Expand Message",
+  "messageAction.interrupted": "Interrupted",
+  "messageAction.interruptedHint": "What should I do instead?",
   "messageAction.reaction": "Add Reaction",
   "messageAction.regenerate": "Regenerate",
   "messages.dm.sentTo": "Visible only to {{name}}",

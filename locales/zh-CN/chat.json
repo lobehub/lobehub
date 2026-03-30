@@ -175,6 +175,8 @@
   "messageAction.delAndRegenerate": "删除并重新生成",
   "messageAction.deleteDisabledByThreads": "该消息有子话题，无法删除",
   "messageAction.expand": "展开消息",
+  "messageAction.interrupted": "已中断",
+  "messageAction.interruptedHint": "接下来需要做什么？",
   "messageAction.reaction": "添加表情",
   "messageAction.regenerate": "重新生成",
   "messages.dm.sentTo": "仅对 {{name}} 可见",

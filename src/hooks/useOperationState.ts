@@ -73,14 +73,23 @@ export const useOperationState = (context: ConversationContext): OperationState 
         const messageOps = operationIds.map((id) => operations[id]).filter(Boolean);
         const runningOps = messageOps.filter((op) => op.status === 'running');
 
+        const isGenerating = runningOps.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type));
+
+        // A message is interrupted if it has cancelled AI runtime ops but no running ones
+        const isInterrupted =
+          !isGenerating &&
+          messageOps.some(
+            (op) => op.status === 'cancelled' && AI_RUNTIME_OPERATION_TYPES.includes(op.type),
+          );
+
         return {
           isContinuing: runningOps.some((op) => op.type === 'continue'),
           isCreating: runningOps.some(
             (op) => op.type === 'sendMessage' || op.type === 'createAssistantMessage',
           ),
-          // Check AI runtime operations (client-side and server-side)
-          isGenerating: runningOps.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type)),
+          isGenerating,
           isInReasoning: runningOps.some((op) => op.type === 'reasoning'),
+          isInterrupted,
           isProcessing: operationSelectors.isMessageProcessing(messageId)(state),
           isRegenerating: runningOps.some((op) => op.type === 'regenerate'),
         };

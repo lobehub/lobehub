@@ -19,6 +19,7 @@ import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
+import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
 import { AssistantMessageExtra } from './Extra';
 
@@ -55,9 +56,10 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
 
   const avatar = useAgentMeta(agentId);
 
-  // Get editing and generating state from ConversationStore
+  // Get editing, generating, and interrupted state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const interrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
 
   const errorContent = useErrorContent(error);
 
@@ -116,16 +118,19 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
           : undefined
       }
       messageExtra={
-        <AssistantMessageExtra
-          content={content}
-          extra={extra}
-          id={id}
-          model={model!}
-          performance={performance! || metadata}
-          provider={provider!}
-          tools={tools}
-          usage={usage! || metadata}
-        />
+        <>
+          {interrupted && <InterruptedHint />}
+          <AssistantMessageExtra
+            content={content}
+            extra={extra}
+            id={id}
+            model={model!}
+            performance={performance! || metadata}
+            provider={provider!}
+            tools={tools}
+            usage={usage! || metadata}
+          />
+        </>
       }
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}

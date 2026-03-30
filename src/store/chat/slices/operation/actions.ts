@@ -272,7 +272,12 @@ export class OperationActionsImpl {
         if (!operation) return;
 
         const now = Date.now();
-        operation.status = 'completed';
+
+        // Don't override cancelled status - preserve user interruption state
+        if (operation.status !== 'cancelled') {
+          operation.status = 'completed';
+        }
+
         operation.metadata.endTime = now;
         operation.metadata.duration = now - operation.metadata.startTime;
 

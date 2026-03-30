@@ -76,6 +76,12 @@ const isMessageContinuing = (id: string) => (s: State) =>
   s.operationState.getMessageOperationState(id).isContinuing;
 
 /**
+ * Check if a message generation was interrupted by user
+ */
+const isMessageInterrupted = (id: string) => (s: State) =>
+  s.operationState.getMessageOperationState(id).isInterrupted;
+
+/**
  * Check if a message is in reasoning state
  */
 const isMessageInReasoning = (id: string) => (s: State) =>
@@ -150,6 +156,7 @@ export const messageStateSelectors = {
   isMessageEditing,
   isMessageGenerating,
   isMessageInReasoning,
+  isMessageInterrupted,
   isMessageLoading,
   isMessageProcessing,
   isMessageRegenerating,
