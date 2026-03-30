@@ -2,7 +2,7 @@ import type { IEditor, SlashOptions } from '@lobehub/editor';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { ArchiveIcon, MessageSquarePlusIcon, WrenchIcon } from 'lucide-react';
-import { useCallback } from 'react';
+import { type FC, createElement, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -25,6 +25,28 @@ interface SlashMenuOption {
 const COMMAND_ICONS: Record<string, any> = {
   compact: ArchiveIcon,
   newTopic: MessageSquarePlusIcon,
+};
+
+const isUrl = (str: string) => str.startsWith('http://') || str.startsWith('https://');
+
+const iconCache = new Map<string, FC>();
+
+const getIconComponent = (avatar: string | undefined): any => {
+  if (!avatar) return WrenchIcon;
+
+  const cached = iconCache.get(avatar);
+  if (cached) return cached;
+
+  let IconComp: FC;
+
+  if (isUrl(avatar)) {
+    IconComp = () => createElement('img', { alt: '', height: 16, src: avatar, width: 16 });
+  } else {
+    IconComp = () => createElement('span', { style: { fontSize: 16, lineHeight: 1 } }, avatar);
+  }
+
+  iconCache.set(avatar, IconComp);
+  return IconComp;
 };
 
 export const useSlashActionItems = (): SlashOptions['items'] => {
@@ -55,7 +77,7 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
       });
 
       const makeActionItem = (item: ActionTagData): SlashMenuOption => ({
-        icon: WrenchIcon,
+        icon: getIconComponent(item.icon),
         key: `${item.category}-${item.type}`,
         label: item.label,
         metadata: { category: item.category, type: item.type },
