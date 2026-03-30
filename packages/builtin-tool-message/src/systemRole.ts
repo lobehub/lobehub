@@ -40,6 +40,7 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 
 <usage_guidelines>
 - When the user asks about bots or messaging from the web UI, call \`listBots\` first to discover configured bots (one call returns all). When you are already inside a platform conversation (e.g. replying in a Discord channel), you already have the context — skip \`listBots\` and use the current channel directly.
+- **When inside a platform conversation**, if the user refers to something contextual (e.g. "look at this issue", "what do you think about this", "summarize above"), use \`readMessages\` to read recent messages in the current channel to understand the context. Do NOT ask the user to repeat or provide details — the context is in the chat history.
 - If no bots are configured, use \`listPlatforms\` to show available platforms and guide the user to set one up via \`createBot\`
 - When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\`, use it directly. If not, ask the user for their platform user ID.
 - **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
