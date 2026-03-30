@@ -203,6 +203,59 @@ EVALEOF
 agent-browser --cdp 9222 eval "JSON.stringify(window.__CAPTURED_ERRORS)"
 ```
 
+## Screen Recording
+
+Record automated demos by combining `ffmpeg` screen capture with `agent-browser` automation. The script `.agents/skills/electron-testing/record-electron-demo.sh` handles the full lifecycle.
+
+### Usage
+
+```bash
+# Run the built-in demo (queue-edit feature)
+./.agents/skills/electron-testing/record-electron-demo.sh
+
+# Run a custom automation script
+./.agents/skills/electron-testing/record-electron-demo.sh ./my-demo.sh /tmp/my-demo.mp4
+```
+
+The script automatically:
+
+1. Starts Electron with CDP and waits for SPA to load
+2. Detects the window position, screen, and Retina scale via Swift/CGWindowList
+3. Records only the Electron window region using `ffmpeg -f avfoundation` with crop
+4. Runs the demo (built-in or custom script receiving CDP port as `$1`)
+5. Stops recording and cleans up
+
+### Writing Custom Demo Scripts
+
+Create a shell script that receives the CDP port as `$1`:
+
+```bash
+#!/usr/bin/env bash
+# my-demo.sh — Custom demo script
+PORT=$1
+
+# Navigate
+agent-browser --cdp "$PORT" snapshot -i 2>&1 | grep 'link "Lobe AI"'
+agent-browser --cdp "$PORT" click @e34
+sleep 3
+
+# Find input and type
+INPUT=$(agent-browser --cdp "$PORT" snapshot -i -C 2>&1 \
+  | grep "editable" | grep -oE 'ref=e[0-9]+' | head -1 | sed 's/ref=//')
+agent-browser --cdp "$PORT" click "@$INPUT"
+agent-browser --cdp "$PORT" type "@$INPUT" "Hello world"
+agent-browser --cdp "$PORT" press Enter
+sleep 5
+```
+
+### Key Details
+
+- **Multi-monitor support**: Uses Swift to find which screen the Electron window is on and calculates relative crop coordinates
+- **Retina aware**: Scales crop coordinates by the display's `backingScaleFactor`
+- **No window resize**: Records the window at its current position/size to avoid triggering SPA reload
+- **SPA load polling**: Waits for interactive elements to appear before starting the demo
+- **Prerequisites**: `ffmpeg` (`brew install ffmpeg`), `agent-browser`
+
 ## Gotchas
 
 - **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently
@@ -213,3 +266,5 @@ agent-browser --cdp 9222 eval "JSON.stringify(window.__CAPTURED_ERRORS)"
 - **`fill` doesn't work on contenteditable** — use `type` for the chat input
 - **Screenshots go to `~/.agent-browser/tmp/screenshots/`** — read them with the `Read` tool
 - **Store is at `window.__LOBE_STORES`** not `window.__ZUSTAND_STORES__` — use `.chat()` to get current state
+- **Don't resize the Electron window after load** — resizing triggers a full SPA reload (splash screen), which can take 30+ seconds or get stuck. Record at the window's current size instead
+- **`screencapture -V -l<windowid>`** doesn't work reliably for video — use `ffmpeg -f avfoundation` with crop instead (see Screen Recording section)
