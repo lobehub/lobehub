@@ -27,7 +27,12 @@ const ARTIFACT_THINKING_BLOCK_REGEX = new RegExp(
 const OUTER_ARTIFACT_CODE_BLOCK_REGEX =
   /^([\s\S]*?)\s*```[^\n]*\n((?:<lobeThinking>[\s\S]*?<\/lobeThinking>[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*)?<lobeArtifact[\s\S]*?<\/lobeArtifact>\s*)\n```\s*([\s\S]*)$/;
 /* eslint-enable regexp/no-super-linear-backtracking */
-const UNTERMINATED_ARTIFACT_REGEX = /<lobeArtifact\b(?:(?!<\/lobeArtifact>|\/?>)[\s\S])*$/;
+// Matches any <lobeArtifact ...> (complete or incomplete opening tag) that is never closed.
+// Used for detection in shouldProcessArtifactTags.
+const UNTERMINATED_ARTIFACT_REGEX = /<lobeArtifact\b(?:(?!<\/lobeArtifact>|\/>)[\s\S])*$/;
+// Matches an incomplete opening tag (no closing `>` yet), e.g. `<lobeArtifact identifier="x" titl`.
+// Used only for the placeholder replacement in processWithArtifact.
+const INCOMPLETE_OPENING_TAG_REGEX = /<lobeArtifact\b(?:(?!\/?>)[\s\S])*$/;
 
 interface AssistantMarkdownElementContext {
   content?: string;
@@ -164,9 +169,9 @@ export const processWithArtifact = (input: string = '', isGenerating = false) =>
       output = output.replace(ARTIFACT_TAG_REGEX, (match) => match.replaceAll(/\r?\n|\r/g, ''));
     }
 
-    // if not match, check if it's start with <lobeArtifact but not closed
-    if (UNTERMINATED_ARTIFACT_REGEX.test(output)) {
-      output = output.replace(UNTERMINATED_ARTIFACT_REGEX, '<lobeArtifact>');
+    // if not match, check if it's start with <lobeArtifact but the opening tag itself is incomplete
+    if (INCOMPLETE_OPENING_TAG_REGEX.test(output)) {
+      output = output.replace(INCOMPLETE_OPENING_TAG_REGEX, '<lobeArtifact>');
     }
   }
 
