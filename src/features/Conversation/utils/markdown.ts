@@ -27,7 +27,7 @@ const ARTIFACT_THINKING_BLOCK_REGEX = new RegExp(
 const OUTER_ARTIFACT_CODE_BLOCK_REGEX =
   /^([\s\S]*?)\s*```[^\n]*\n((?:<lobeThinking>[\s\S]*?<\/lobeThinking>[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*)?<lobeArtifact[\s\S]*?<\/lobeArtifact>\s*)\n```\s*([\s\S]*)$/;
 /* eslint-enable regexp/no-super-linear-backtracking */
-const UNTERMINATED_ARTIFACT_REGEX = /<lobeArtifact\b(?:(?!\/?>)[\s\S])*$/;
+const UNTERMINATED_ARTIFACT_REGEX = /<lobeArtifact\b(?:(?!<\/lobeArtifact>|\/?>)[\s\S])*$/;
 
 interface AssistantMarkdownElementContext {
   content?: string;
