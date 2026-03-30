@@ -1,3 +1,4 @@
+export { CredsExecutionRuntime, type ICredsService } from './ExecutionRuntime';
 export {
   checkCredsSatisfied,
   type CredRequirement,
@@ -15,6 +16,7 @@ export {
   type CredSummaryForContext,
   type GetPlaintextCredParams,
   type GetPlaintextCredState,
+  type InitiateOAuthConnectParams,
   type InjectCredsToSandboxParams,
   type InjectCredsToSandboxState,
   type SaveCredsParams,
