@@ -397,7 +397,6 @@
   "sync.status.unconnected": "연결 실패",
   "sync.title": "동기화 상태",
   "sync.unconnected.tip": "시그널링 서버 연결 실패로 P2P 통신 채널을 생성할 수 없습니다. 네트워크를 확인한 후 다시 시도하세요",
-  "tab.aiImage": "그림",
   "tab.audio": "오디오",
   "tab.chat": "채팅",
   "tab.community": "커뮤니티",
@@ -405,6 +404,7 @@
   "tab.eval": "평가 연구소",
   "tab.files": "파일",
   "tab.home": "홈",
+  "tab.image": "이미지",
   "tab.knowledgeBase": "자료실",
   "tab.marketplace": "마켓플레이스",
   "tab.me": "내 정보",
@@ -432,6 +432,7 @@
   "userPanel.billing": "청구 관리",
   "userPanel.cloud": "{{name}} 체험하기",
   "userPanel.community": "커뮤니티 버전",
+  "userPanel.credits": "크레딧 관리",
   "userPanel.data": "데이터 저장소",
   "userPanel.defaultNickname": "커뮤니티 사용자",
   "userPanel.discord": "커뮤니티 지원",
@@ -443,6 +444,7 @@
   "userPanel.plans": "구독 플랜",
   "userPanel.profile": "계정 관리",
   "userPanel.setting": "앱 설정",
+  "userPanel.upgradePlan": "플랜 업그레이드",
   "userPanel.usages": "사용량 통계",
   "version": "버전"
 }

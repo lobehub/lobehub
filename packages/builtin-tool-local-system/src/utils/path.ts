@@ -44,6 +44,42 @@ export const resolvePathWithScope = (
  * Resolve a `scope`-bearing args object, filling the target path field from scope.
  * Returns a shallow copy only if the path field was actually changed.
  */
+/**
+ * System paths that are always allowed (e.g. /tmp for temporary files)
+ */
+const ALWAYS_ALLOWED_PATHS = ['/tmp'];
+
+/**
+ * Check if a path is within the working directory or an always-allowed path.
+ * When `resolveAgainstScope` is provided, relative `targetPath` is resolved against it.
+ */
+export const isPathWithinScope = (
+  targetPath: string,
+  workingDirectory: string,
+  resolveAgainstScope?: string,
+): boolean => {
+  const resolvedTarget =
+    resolvePathWithScope(targetPath, resolveAgainstScope ?? workingDirectory) ?? targetPath;
+  const normalizedTarget = normalizePathForScope(resolvedTarget);
+  const normalizedWorkingDir = normalizePathForScope(workingDirectory);
+
+  // Allow if within working directory
+  if (
+    normalizedTarget === normalizedWorkingDir ||
+    normalizedTarget.startsWith(normalizedWorkingDir + '/')
+  ) {
+    return true;
+  }
+
+  // Allow system temp directories
+  return ALWAYS_ALLOWED_PATHS.some((allowed) => {
+    const normalizedAllowed = normalizePathForScope(allowed);
+    return (
+      normalizedTarget === normalizedAllowed || normalizedTarget.startsWith(normalizedAllowed + '/')
+    );
+  });
+};
+
 export const resolveArgsWithScope = <T extends { scope?: string }>(
   args: T,
   pathField: string,

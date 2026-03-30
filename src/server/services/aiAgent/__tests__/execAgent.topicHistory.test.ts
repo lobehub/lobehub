@@ -174,6 +174,7 @@ describe('AiAgentService.execAgent - topic history loading', () => {
       // Verify messageModel.query was called to load history for the topic
       expect(mockMessageQuery).toHaveBeenCalledWith(
         expect.objectContaining({ topicId: 'topic-existing' }),
+        expect.objectContaining({ postProcessUrl: expect.any(Function) }),
       );
 
       // Verify createOperation received all history messages + the new user message

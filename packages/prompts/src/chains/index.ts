@@ -10,4 +10,5 @@ export * from './summaryGenerationTitle';
 export * from './summaryHistory';
 export * from './summaryTags';
 export * from './summaryTitle';
+export * from './taskTopicHandoff';
 export * from './translate';

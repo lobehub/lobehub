@@ -2,6 +2,13 @@ import { createQQAdapter, QQApiClient } from '@lobechat/chat-adapter-qq';
 import debug from 'debug';
 
 import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+
+import { stripMarkdown } from '../stripMarkdown';
+import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
@@ -66,17 +73,43 @@ class QQWebhookClient implements PlatformClient {
 
   async start(): Promise<void> {
     log('Starting QQBot appId=%s', this.applicationId);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
 
-    // Verify credentials by fetching an access token
-    const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
-    await api.getAccessToken();
+    try {
+      // Verify credentials by fetching an access token
+      const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
+      await api.getAccessToken();
 
-    log('QQBot appId=%s credentials verified', this.applicationId);
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.connected,
+      });
+
+      log('QQBot appId=%s credentials verified', this.applicationId);
+    } catch (error) {
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        errorMessage: getRuntimeStatusErrorMessage(error),
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.failed,
+      });
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
     log('Stopping QQBot appId=%s', this.applicationId);
     // No cleanup needed — webhook is configured in QQ Open Platform
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.disconnected,
+    });
   }
 
   // --- Runtime Operations ---
@@ -107,6 +140,10 @@ class QQWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
+  }
+
+  formatMarkdown(markdown: string): string {
+    return stripMarkdown(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {

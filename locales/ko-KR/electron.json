@@ -1,4 +1,13 @@
 {
+  "gateway.description": "설명",
+  "gateway.descriptionPlaceholder": "선택 사항",
+  "gateway.deviceName": "장치 이름",
+  "gateway.deviceNamePlaceholder": "장치 이름을 입력하세요",
+  "gateway.enableConnection": "게이트웨이에 연결",
+  "gateway.statusConnected": "게이트웨이에 연결됨",
+  "gateway.statusConnecting": "게이트웨이에 연결 중...",
+  "gateway.statusDisconnected": "게이트웨이에 연결되지 않음",
+  "gateway.title": "장치 게이트웨이",
   "navigation.chat": "채팅",
   "navigation.discover": "발견",
   "navigation.discoverAssistants": "어시스턴트 발견",

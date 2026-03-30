@@ -23,7 +23,7 @@ interface ClientProps {
 }
 
 /**
- * 获取 Scope 的描述
+ * Get the description for a scope
  */
 function getScopeDescription(scope: string, t: any): string {
   return t(`consent.scope.${scope.replace(':', '-')}`, scope);

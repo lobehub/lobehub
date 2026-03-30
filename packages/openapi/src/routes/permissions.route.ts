@@ -17,7 +17,7 @@ const PermissionsRoutes = new Hono();
 
 /**
  * Get permission list
- * GET /api/v1/permissions 获取权限列表
+ * GET /api/v1/permissions - Get permission list
  */
 PermissionsRoutes.get(
   '/',
@@ -36,7 +36,7 @@ PermissionsRoutes.get(
 
 /**
  * Get permission detail by ID
- * GET /api/v1/permissions/:id 获取权限详情
+ * GET /api/v1/permissions/:id - Get permission detail
  */
 PermissionsRoutes.get(
   '/:id',
@@ -55,7 +55,7 @@ PermissionsRoutes.get(
 
 /**
  * Create a new permission
- * POST /api/v1/permissions 创建新的权限
+ * POST /api/v1/permissions - Create a new permission
  */
 PermissionsRoutes.post(
   '/',
@@ -74,7 +74,7 @@ PermissionsRoutes.post(
 
 /**
  * Update permission by ID
- * PATCH /api/v1/permissions/:id 更新权限信息
+ * PATCH /api/v1/permissions/:id - Update permission info
  */
 PermissionsRoutes.patch(
   '/:id',
@@ -94,7 +94,7 @@ PermissionsRoutes.patch(
 
 /**
  * Delete permission by ID
- * DELETE /api/v1/permissions/:id 删除权限
+ * DELETE /api/v1/permissions/:id - Delete permission
  */
 PermissionsRoutes.delete(
   '/:id',

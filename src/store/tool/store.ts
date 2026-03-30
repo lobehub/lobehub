@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { initialState, type ToolStoreState } from './initialState';
 import { type AgentSkillsAction, createAgentSkillsSlice } from './slices/agentSkills';
@@ -59,5 +60,7 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('tools');
 
 export const useToolStore = createWithEqualityFn<ToolStore>()(devtools(createStore), shallow);
+
+expose('tool', useToolStore);
 
 export const getToolStoreState = () => useToolStore.getState();

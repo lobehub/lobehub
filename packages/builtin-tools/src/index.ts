@@ -1,8 +1,11 @@
+import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
@@ -14,7 +17,7 @@ import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { SkillsManifest } from '@lobechat/builtin-tool-skills';
-import { LobeToolsManifest } from '@lobechat/builtin-tool-tools';
+import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
@@ -25,7 +28,7 @@ import { type LobeBuiltinTool } from '@lobechat/types';
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
  */
 export const defaultToolIds = [
-  LobeToolsManifest.identifier,
+  LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
@@ -34,20 +37,35 @@ export const defaultToolIds = [
   LocalSystemManifest.identifier,
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
+  AgentDocumentsManifest.identifier,
 ];
 
 /**
  * Tool IDs that are always enabled regardless of user selection.
  * These are core system tools that the agent needs to function properly.
  */
-export const alwaysOnToolIds = [LobeToolsManifest.identifier, SkillsManifest.identifier];
+export const alwaysOnToolIds = [
+  LobeActivatorManifest.identifier,
+  SkillsManifest.identifier,
+  SkillStoreManifest.identifier,
+];
+
+/**
+ * Tool IDs to exclude from defaults when in manual skill-activate mode.
+ * These are the tool/skill discovery tools that should be disabled when user wants precise control.
+ * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
+ */
+export const manualModeExcludeToolIds = [
+  LobeActivatorManifest.identifier,
+  SkillStoreManifest.identifier,
+];
 
 export const builtinTools: LobeBuiltinTool[] = [
   {
     discoverable: false,
     hidden: true,
-    identifier: LobeToolsManifest.identifier,
-    manifest: LobeToolsManifest,
+    identifier: LobeActivatorManifest.identifier,
+    manifest: LobeActivatorManifest,
     type: 'builtin',
   },
   {
@@ -58,7 +76,6 @@ export const builtinTools: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
     hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
@@ -87,6 +104,11 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: CredsManifest.identifier,
+    manifest: CredsManifest,
     type: 'builtin',
   },
   {
@@ -161,6 +183,20 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: TopicReferenceManifest.identifier,
     manifest: TopicReferenceManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: TaskManifest.identifier,
+    manifest: TaskManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: BriefManifest.identifier,
+    manifest: BriefManifest,
     type: 'builtin',
   },
 ];

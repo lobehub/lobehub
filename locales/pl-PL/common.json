@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Nie udało się połączyć",
   "sync.title": "Status synchronizacji",
   "sync.unconnected.tip": "Nie udało się połączyć z serwerem sygnalizacyjnym, nie można ustanowić kanału komunikacji peer-to-peer. Sprawdź połączenie sieciowe i spróbuj ponownie.",
-  "tab.aiImage": "Grafika",
   "tab.audio": "Audio",
   "tab.chat": "Czat",
   "tab.community": "Społeczność",
@@ -405,6 +404,7 @@
   "tab.eval": "Laboratorium Ewaluacji",
   "tab.files": "Pliki",
   "tab.home": "Strona główna",
+  "tab.image": "Obraz",
   "tab.knowledgeBase": "Biblioteka",
   "tab.marketplace": "Rynek",
   "tab.me": "Ja",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Zarządzanie płatnościami",
   "userPanel.cloud": "Uruchom {{name}}",
   "userPanel.community": "Społeczność",
+  "userPanel.credits": "Zarządzanie kredytami",
   "userPanel.data": "Przechowywanie danych",
   "userPanel.defaultNickname": "Użytkownik społeczności",
   "userPanel.discord": "Wsparcie społeczności",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Plany subskrypcji",
   "userPanel.profile": "Konto",
   "userPanel.setting": "Ustawienia",
+  "userPanel.upgradePlan": "Ulepsz plan",
   "userPanel.usages": "Statystyki użycia",
   "version": "Wersja"
 }

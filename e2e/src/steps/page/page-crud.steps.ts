@@ -166,7 +166,7 @@ async function clickNewPageButton(world: CustomWorld): Promise<void> {
 // Given Steps
 // ============================================
 
-Given('用户在 Page 页面', async function (this: CustomWorld) {
+Given('用户在 Page 页面', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 导航到 Page 页面...');
   await this.page.goto('/page');
   await this.page.waitForLoadState('networkidle', { timeout: 15_000 });

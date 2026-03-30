@@ -23,7 +23,7 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
   const handleNext = () => {
-    // 默认启用 telemetry
+    // Enable telemetry by default
     updateGeneralConfig({ telemetry: true });
     onNext();
   };

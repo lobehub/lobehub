@@ -397,7 +397,6 @@
   "sync.status.unconnected": "接続失敗",
   "sync.title": "同期ステータス",
   "sync.unconnected.tip": "シグナリングサーバーへの接続に失敗しました。P2P 通信チャンネルを確立できません。ネットワークを確認して再試行してください",
-  "tab.aiImage": "ペインティング",
   "tab.audio": "オーディオ",
   "tab.chat": "チャット",
   "tab.community": "コミュニティ",
@@ -405,6 +404,7 @@
   "tab.eval": "評価ラボ",
   "tab.files": "ファイル",
   "tab.home": "ホーム",
+  "tab.image": "画像",
   "tab.knowledgeBase": "ライブラリ",
   "tab.marketplace": "マーケットプレイス",
   "tab.me": "自分",
@@ -432,6 +432,7 @@
   "userPanel.billing": "請求管理",
   "userPanel.cloud": "{{name}} を体験",
   "userPanel.community": "コミュニティ版",
+  "userPanel.credits": "クレジット管理",
   "userPanel.data": "データ保存",
   "userPanel.defaultNickname": "コミュニティユーザー",
   "userPanel.discord": "コミュニティサポート",
@@ -443,6 +444,7 @@
   "userPanel.plans": "サブスクリプションプラン",
   "userPanel.profile": "アカウント管理",
   "userPanel.setting": "アプリ設定",
+  "userPanel.upgradePlan": "プランをアップグレード",
   "userPanel.usages": "使用統計",
   "version": "バージョン"
 }

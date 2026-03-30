@@ -22,6 +22,12 @@ export const componentMap = {
   [SettingsTabs.Memory]: dynamic(() => import('../memory'), {
     loading: loading('Settings > Memory'),
   }),
+  [SettingsTabs.Notification]: dynamic(
+    () => import('@/business/client/BusinessSettingPages/Notification'),
+    {
+      loading: loading('Settings > Notification'),
+    },
+  ),
   [SettingsTabs.About]: dynamic(() => import('../about'), {
     loading: loading('Settings > About'),
   }),
@@ -49,6 +55,9 @@ export const componentMap = {
   }),
   [SettingsTabs.APIKey]: dynamic(() => import('../apikey'), {
     loading: loading('Settings > APIKey'),
+  }),
+  [SettingsTabs.Creds]: dynamic(() => import('../creds'), {
+    loading: loading('Settings > Creds'),
   }),
   [SettingsTabs.Security]: dynamic(() => import('../security'), {
     loading: loading('Settings > Security'),

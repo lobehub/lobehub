@@ -4,6 +4,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { initialState, type VideoStoreState } from './initialState';
 import { createCreateVideoSlice, type CreateVideoAction } from './slices/createVideo/action';
 import {
@@ -45,5 +46,7 @@ export const useVideoStore = createWithEqualityFn<VideoStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+expose('video', useVideoStore);
 
 export const getVideoStoreState = () => useVideoStore.getState();

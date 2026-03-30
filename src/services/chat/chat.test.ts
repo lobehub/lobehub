@@ -9,8 +9,10 @@ import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra';
 import { useToolStore } from '@/store/tool';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { chatService } from './index';
+import * as mechaModule from './mecha';
 import { type ResolvedAgentConfig } from './mecha';
 
 // Helper to compute expected date content from SystemDateProvider
@@ -1354,6 +1356,74 @@ describe('ChatService', () => {
             enabledSearch: undefined,
           }),
           expect.anything(),
+        );
+      });
+    });
+
+    describe('memory enablement priority', () => {
+      it('should respect agent-level memory disabled even when user-level memory is enabled', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        // user-level memory is enabled
+        vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(true);
+
+        const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          resolvedAgentConfig: createMockResolvedConfig({
+            chatConfig: { memory: { enabled: false } },
+          }),
+        });
+
+        // agent-level off takes priority over user-level on
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ enableUserMemories: false }),
+        );
+      });
+
+      it('should enable memory when agent-level is on even if user-level memory is disabled', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        // user-level memory is disabled
+        vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(false);
+
+        const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          resolvedAgentConfig: createMockResolvedConfig({
+            chatConfig: { memory: { enabled: true } },
+          }),
+        });
+
+        // agent-level on takes priority over user-level off
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ enableUserMemories: true }),
+        );
+      });
+
+      it('should fall back to user-level setting when agent-level memory is not configured', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        // user-level memory is disabled
+        vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(false);
+
+        const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          resolvedAgentConfig: createMockResolvedConfig({
+            chatConfig: {},
+          }),
+        });
+
+        // no agent-level config, fallback to user-level off
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ enableUserMemories: false }),
         );
       });
     });

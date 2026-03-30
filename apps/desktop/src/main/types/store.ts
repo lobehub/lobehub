@@ -12,6 +12,11 @@ export interface ElectronMainStore {
     lastRefreshAt?: number;
     refreshToken?: string;
   };
+  gatewayDeviceDescription: string;
+  gatewayDeviceId: string;
+  gatewayDeviceName: string;
+  gatewayEnabled: boolean;
+  gatewayUrl: string;
   locale: string;
   networkProxy: NetworkProxySettings;
   shortcuts: Record<string, string>;

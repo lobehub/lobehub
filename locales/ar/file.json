@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "جارٍ معالجة الملف...",
   "uploadDock.body.item.restTime": "المتبقي {{time}}",
   "uploadDock.fileQueueInfo": "يتم تحميل أول {{count}} ملف، {{remaining}} في الانتظار",
+  "uploadDock.header.cancelAll": "إلغاء الكل",
   "uploadDock.totalCount": "إجمالي {{count}} عنصر",
   "uploadDock.uploadStatus.cancelled": "تم إلغاء التحميل",
   "uploadDock.uploadStatus.error": "خطأ في التحميل",

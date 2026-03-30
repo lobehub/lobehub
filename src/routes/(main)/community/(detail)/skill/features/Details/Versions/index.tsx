@@ -22,6 +22,9 @@ const Versions = memo(() => {
       <Title>{t('skills.details.versions.title')}</Title>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={versions}
+          rowKey={'version'}
+          size={'middle'}
           columns={[
             {
               dataIndex: 'version',
@@ -35,7 +38,7 @@ const Versions = memo(() => {
                     url: pathname,
                   })}
                 >
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <code style={{ fontSize: 14 }}>{record.version}</code>
                     {record.isLatest && (
                       <Tag color={'info'}>{t('skills.details.versions.table.isLatest')}</Tag>
@@ -52,9 +55,6 @@ const Versions = memo(() => {
               title: t('skills.details.versions.table.publishAt'),
             },
           ]}
-          dataSource={versions}
-          rowKey={'version'}
-          size={'middle'}
         />
       </Block>
     </Flexbox>

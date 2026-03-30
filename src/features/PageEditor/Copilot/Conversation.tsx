@@ -102,6 +102,7 @@ const Conversation = memo(() => {
           leftContent={leftContent}
           sendAreaPrefix={modelSelector}
           sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
+          showRuntimeConfig={false}
         />
       </Flexbox>
     </DragUploadZone>

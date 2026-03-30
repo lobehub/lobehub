@@ -1,6 +1,15 @@
+import { createCipheriv } from 'node:crypto';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_BASE_URL, fetchQrCode, pollQrStatus, WechatApiClient } from './api';
+import {
+  CDN_BASE_URL,
+  DEFAULT_BASE_URL,
+  fetchQrCode,
+  pollQrStatus,
+  resolveAesKey,
+  WechatApiClient,
+} from './api';
 import { WECHAT_RET_CODES } from './types';
 
 // ---- helpers ----
@@ -169,6 +178,76 @@ describe('WechatApiClient', () => {
 
   // ---------- getConfig ----------
 
+  describe('downloadCdnMedia', () => {
+    // Helper: encrypt plaintext with AES-128-ECB for test fixtures
+    function encryptAesEcb(plaintext: Buffer, key: Buffer): Buffer {
+      const cipher = createCipheriv('aes-128-ecb', key, null);
+      return Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    }
+
+    it('should download from CDN and decrypt with AES-128-ECB', async () => {
+      const aesKeyHex = '00112233445566778899aabbccddeeff';
+      const aesKey = Buffer.from(aesKeyHex, 'hex');
+      const plaintext = Buffer.from('hello image data');
+      const ciphertext = encryptAesEcb(plaintext, aesKey);
+
+      mockFetch.mockResolvedValueOnce(new Response(new Uint8Array(ciphertext), { status: 200 }));
+
+      const result = await client.downloadCdnMedia(
+        { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+        aesKeyHex,
+      );
+
+      expect(result).toEqual(plaintext);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${CDN_BASE_URL}/download?encrypted_query_param=AAFFtest`,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('should throw on CDN HTTP error', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('Not Found', { status: 404 }));
+
+      await expect(
+        client.downloadCdnMedia({ aes_key: 'x', encrypt_query_param: 'AAFFtest' }),
+      ).rejects.toThrow('CDN download failed: 404');
+    });
+
+    it('should throw when encrypt_query_param is missing', async () => {
+      await expect(
+        client.downloadCdnMedia({ aes_key: 'x', encrypt_query_param: '' }),
+      ).rejects.toThrow('Missing encrypt_query_param');
+    });
+
+    it('should return raw bytes when no valid AES key is available', async () => {
+      const rawBytes = Buffer.from('plaintext image data');
+      mockFetch.mockResolvedValueOnce(new Response(new Uint8Array(rawBytes), { status: 200 }));
+
+      const result = await client.downloadCdnMedia({
+        aes_key: '',
+        encrypt_query_param: 'AAFFtest',
+      });
+
+      expect(result).toEqual(rawBytes);
+    });
+
+    it('should throw when AES key is valid but ciphertext is corrupt', async () => {
+      const aesKeyHex = '00112233445566778899aabbccddeeff';
+      // Not valid AES-128-ECB ciphertext (wrong length / padding)
+      const corruptCiphertext = Buffer.from('not valid ciphertext!');
+      mockFetch.mockResolvedValueOnce(
+        new Response(new Uint8Array(corruptCiphertext), { status: 200 }),
+      );
+
+      await expect(
+        client.downloadCdnMedia(
+          { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+          aesKeyHex,
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
   describe('getConfig', () => {
     it('should return config with typing_ticket', async () => {
       mockFetch.mockResolvedValueOnce(jsonResponse({ ret: 0, typing_ticket: 'ticket_abc' }));
@@ -242,5 +321,33 @@ describe('pollQrStatus', () => {
     mockFetch.mockResolvedValueOnce(new Response('error', { status: 500 }));
 
     await expect(pollQrStatus('qr')).rejects.toThrow('iLink get_qrcode_status failed');
+  });
+});
+
+// ---- resolveAesKey ----
+
+describe('resolveAesKey', () => {
+  it('should prefer image_item.aeskey (hex string)', () => {
+    const key = resolveAesKey('00112233445566778899aabbccddeeff', 'ABEiM0RVZneImaq7zN3u/w==');
+    expect(key).toEqual(Buffer.from('00112233445566778899aabbccddeeff', 'hex'));
+  });
+
+  it('should handle Format A: base64(raw 16 bytes)', () => {
+    // base64 of raw bytes [0x00, 0x11, 0x22, ..., 0xff]
+    const key = resolveAesKey(undefined, 'ABEiM0RVZneImaq7zN3u/w==');
+    expect(key).toEqual(Buffer.from('00112233445566778899aabbccddeeff', 'hex'));
+    expect(key.length).toBe(16);
+  });
+
+  it('should handle Format B: base64(hex string)', () => {
+    // base64 of ASCII "00112233445566778899aabbccddeeff"
+    const key = resolveAesKey(undefined, 'MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY=');
+    expect(key).toEqual(Buffer.from('00112233445566778899aabbccddeeff', 'hex'));
+    expect(key.length).toBe(16);
+  });
+
+  it('should throw when no valid key is found', () => {
+    expect(() => resolveAesKey(undefined, undefined)).toThrow('No valid AES key');
+    expect(() => resolveAesKey('tooshort', undefined)).toThrow('No valid AES key');
   });
 });

@@ -4,7 +4,7 @@ export default {
   'config.aspectRatio.unlock': 'Unlock Aspect Ratio',
   'config.cfg.label': 'Guidance Intensity',
   'config.header.desc': 'Brief description, create instantly',
-  'config.header.title': 'Painting',
+  'config.header.title': 'Image',
   'config.height.label': 'Height',
   'config.imageNum.label': 'Number of Images',
   'config.imageUrl.label': 'Reference Image',
@@ -64,6 +64,6 @@ export default {
   'topic.deleteConfirmDesc':
     'You are about to delete this generation topic. This action cannot be undone, please proceed with caution.',
   'topic.empty': 'No generation topics',
-  'topic.title': 'Painting Theme',
+  'topic.title': 'Image Topic',
   'topic.untitled': 'Default Topic',
 };

@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Неуспешна връзка",
   "sync.title": "Статус на синхронизация",
   "sync.unconnected.tip": "Неуспешна връзка със сървъра за сигнализация, не може да се установи P2P комуникация. Моля, проверете мрежата и опитайте отново.",
-  "tab.aiImage": "Изкуство",
   "tab.audio": "Аудио",
   "tab.chat": "Чат",
   "tab.community": "Общност",
@@ -405,6 +404,7 @@
   "tab.eval": "Оценителна лаборатория",
   "tab.files": "Файлове",
   "tab.home": "Начало",
+  "tab.image": "Изображение",
   "tab.knowledgeBase": "Библиотека",
   "tab.marketplace": "Пазар",
   "tab.me": "Аз",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Управление на плащания",
   "userPanel.cloud": "Стартирай {{name}}",
   "userPanel.community": "Общност",
+  "userPanel.credits": "Управление на кредити",
   "userPanel.data": "Съхранение на данни",
   "userPanel.defaultNickname": "Потребител от общността",
   "userPanel.discord": "Поддръжка в общността",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Абонаментни планове",
   "userPanel.profile": "Акаунт",
   "userPanel.setting": "Настройки",
+  "userPanel.upgradePlan": "Надграждане на плана",
   "userPanel.usages": "Статистика на използване",
   "version": "Версия"
 }

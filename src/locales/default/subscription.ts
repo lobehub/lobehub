@@ -92,6 +92,7 @@ export default {
   'credits.packages.filter.gift': 'Gift',
   'credits.packages.filter.manual': 'Manual',
   'credits.packages.noPackages': 'No credit packages',
+  'credits.packages.charged': 'Charged ${{amount}}',
   'credits.packages.purchaseFirst': 'Purchase your first credit package',
   'credits.packages.purchasedOn': 'Purchased on {{date}}',
   'credits.packages.sort.amountAsc': 'Amount: Low to High',
@@ -211,8 +212,9 @@ export default {
   'payment.success.actions.viewBill': 'View Billing History',
   'payment.success.desc': 'Your subscription plan has been activated successfully',
   'payment.success.title': 'Subscription Successful',
-  'payment.switchSuccess.desc': 'Your subscription plan will automatically switch on {{switchAt}}',
-  'payment.switchSuccess.title': 'Switch Successful',
+  'payment.switchSuccess.desc':
+    'Your subscription will automatically downgrade from <bold>{{from}}</bold> to <bold>{{to}}</bold> on {{switchAt}}',
+  'payment.switchSuccess.title': 'Downgrade Scheduled',
   'payment.upgradeFailed.alert.reason.bank3DS':
     'Your bank requires 3DS verification, please confirm again',
   'payment.upgradeFailed.alert.reason.inefficient': 'Insufficient card balance',
@@ -245,7 +247,11 @@ export default {
   'plans.current': 'Current Plan',
   'plans.downgradePlan': 'Target Downgrade Plan',
   'plans.downgradeTip':
-    'You have already switched subscription. You cannot perform other operations until the switch is complete',
+    'Your subscription has been canceled. You cannot perform other operations until the cancellation is complete',
+  'plans.downgradeWillCancel': 'This action will cancel your scheduled plan downgrade',
+  'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
+  'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
+  'plans.pendingDowngrade': 'Pending Downgrade',
   'plans.embeddingStorage.embeddings': 'entries',
   'plans.embeddingStorage.title': 'Vector Storage',
   'plans.embeddingStorage.tooltip':
@@ -285,9 +291,14 @@ export default {
   'plans.payonce.cancel': 'Cancel',
   'plans.payonce.ok': 'Confirm Selection',
   'plans.payonce.popconfirm':
-    'After one-time payment, you must wait until subscription expires to switch plans or change billing cycle. Please confirm your selection.',
+    'After one-time payment, you can upgrade anytime but downgrade requires waiting for expiration. Please confirm your selection.',
   'plans.payonce.tooltip':
-    'One-time payment requires waiting until subscription expires to switch plans or change billing cycle',
+    'One-time payment only supports upgrading to a higher tier or longer duration',
+  'plans.payonce.upgradeOk': 'Confirm Upgrade',
+  'plans.payonce.upgradePopconfirm':
+    'Remaining value from your current plan will be applied as a discount to the new plan.',
+  'plans.payonce.upgradePopconfirmNoProration':
+    'You will be charged the full price of the new plan. Your current plan will be replaced immediately.',
   'plans.plan.enterprise.contactSales': 'Contact Sales',
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
@@ -422,19 +433,20 @@ export default {
   'summary.title': 'Billing Summary',
   'summary.usageThisMonth': 'View your usage this month.',
   'summary.viewBillingHistory': 'View Payment History',
-  'switchPlan': 'Switch Plan',
+  'switchDowngradeTarget': 'Switch Downgrade Target',
+  'switchPlan': 'Downgrade',
   'switchToMonthly.desc':
     'After switching, monthly billing will take effect after the current yearly plan expires.',
   'switchToMonthly.title': 'Switch to Monthly Billing',
   'switchToYearly.desc':
     'After switching, yearly billing will take effect immediately after paying the difference. Start date inherits from previous plan.',
   'switchToYearly.title': 'Switch to Yearly Billing',
-  'tab.billing': 'Billing Management',
-  'tab.credits': 'Credits Management',
+  'tab.billing': 'Billing',
+  'tab.credits': 'Credits',
   'tab.plans': 'Plans',
   'tab.referral': 'Referral Rewards',
   'tab.spend': 'Credits Details',
-  'tab.usage': 'Usage Statistics',
+  'tab.usage': 'Usage',
   'upgrade': 'Upgrade',
   'upgradeNow': 'Upgrade Now',
   'upgradePlan': 'Upgrade Plan',

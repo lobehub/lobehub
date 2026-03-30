@@ -1,5 +1,8 @@
+import { createDecipheriv } from 'node:crypto';
+
 import type {
   BaseInfo,
+  CDNMedia,
   MessageItem,
   WechatGetConfigResponse,
   WechatGetUpdatesResponse,
@@ -8,6 +11,7 @@ import type {
 import { MessageItemType, MessageState, MessageType, WECHAT_RET_CODES } from './types';
 
 export const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
+export const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c';
 
 /** Strip trailing slashes without regex (avoids ReDoS on untrusted input). */
 function stripTrailingSlashes(url: string): string {
@@ -183,6 +187,44 @@ export class WechatApiClient {
   }
 
   /**
+   * Download and decrypt media from WeChat CDN.
+   *
+   * Flow per protocol-spec §8.3:
+   *   GET CDN_BASE_URL/download?encrypted_query_param=... → AES-128-ECB decrypt
+   *
+   * Per §8.5: when AES key is missing, try downloading as plaintext.
+   *
+   * @param media  CDNMedia reference from the message item
+   * @param imageAeskey  Optional hex AES key from image_item.aeskey (takes priority)
+   */
+  async downloadCdnMedia(media: CDNMedia, imageAeskey?: string): Promise<Buffer> {
+    if (!media.encrypt_query_param) {
+      throw new Error('Missing encrypt_query_param in CDNMedia');
+    }
+
+    const url = `${CDN_BASE_URL}/download?encrypted_query_param=${encodeURIComponent(media.encrypt_query_param)}`;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      throw new Error(`CDN download failed: ${response.status} ${response.statusText}`);
+    }
+
+    const raw = Buffer.from(await response.arrayBuffer());
+
+    // Per protocol-spec §8.5: when AES key is missing, return as plaintext
+    let key: Buffer;
+    try {
+      key = resolveAesKey(imageAeskey, media.aes_key);
+    } catch {
+      // No valid AES key — return plaintext per spec
+      return raw;
+    }
+    return decryptAesEcb(raw, key);
+  }
+
+  /**
    * Get bot configuration (including typing_ticket).
    * Requires userId and contextToken per reference implementation.
    */
@@ -269,4 +311,50 @@ function chunkText(text: string, limit: number): string[] {
     remaining = remaining.slice(limit);
   }
   return chunks;
+}
+
+// ============================================================================
+// CDN Media Crypto (protocol-spec §8.3–8.4)
+// ============================================================================
+
+/**
+ * AES-128-ECB decrypt.
+ */
+function decryptAesEcb(ciphertext: Buffer, key: Buffer): Buffer {
+  const decipher = createDecipheriv('aes-128-ecb', key, null);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+/**
+ * Resolve the 16-byte AES key from the two possible sources and encodings.
+ *
+ * Priority per protocol-spec §8.4:
+ *  1. `image_item.aeskey` — 32-char hex string → hex decode to 16 bytes
+ *  2. `media.aes_key` — base64 encoded, two possible formats:
+ *     - Format A: base64(raw 16 bytes) → decoded length = 16
+ *     - Format B: base64(hex string)   → decoded length = 32, hex decode to 16
+ */
+export function resolveAesKey(imageAeskey?: string, mediaAesKey?: string): Buffer {
+  // Priority 1: image_item.aeskey (hex string, 32 chars)
+  if (imageAeskey && /^[\da-f]{32}$/i.test(imageAeskey)) {
+    return Buffer.from(imageAeskey, 'hex');
+  }
+
+  // Priority 2: media.aes_key (base64 encoded)
+  if (mediaAesKey) {
+    const decoded = Buffer.from(mediaAesKey, 'base64');
+
+    if (decoded.length === 16) {
+      return decoded; // Format A: base64(raw 16 bytes)
+    }
+
+    if (decoded.length === 32) {
+      const hexStr = decoded.toString('ascii');
+      if (/^[\da-f]{32}$/i.test(hexStr)) {
+        return Buffer.from(hexStr, 'hex'); // Format B: base64(hex string)
+      }
+    }
+  }
+
+  throw new Error('No valid AES key found for CDN media decryption');
 }

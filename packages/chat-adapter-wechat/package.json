@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "chat": "^4.14.0"
+    "chat": "^4.23.0",
+    "mime": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

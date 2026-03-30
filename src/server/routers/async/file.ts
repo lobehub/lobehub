@@ -18,6 +18,7 @@ import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
+import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { type IAsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
@@ -32,6 +33,7 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
       chunkService: new ChunkService(ctx.serverDB, ctx.userId),
+      documentService: new DocumentService(ctx.serverDB, ctx.userId),
       embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
       fileService: new FileService(ctx.serverDB, ctx.userId),
@@ -202,6 +204,17 @@ export const fileRouter = router({
           const chunkService = ctx.chunkService;
           // update the task status to processing
           await ctx.asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
+
+          // parse file to document record first (for detailed content viewing)
+          try {
+            await ctx.documentService.parseFile(input.fileId);
+          } catch (e) {
+            // document parsing failure should not block chunking
+            console.warn(
+              '[parseFileToChunks] document parsing failed, continuing with chunking:',
+              e,
+            );
+          }
 
           // partition file to chunks
           const chunkResult = await chunkService.chunkContent({

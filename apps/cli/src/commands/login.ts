@@ -4,9 +4,11 @@ import path from 'node:path';
 
 import type { Command } from 'commander';
 
+import { getUserIdFromApiKey } from '../auth/apiKey';
 import { saveCredentials } from '../auth/credentials';
+import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_SERVER_URL } from '../constants/urls';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { log } from '../utils/logger';
 
 const CLIENT_ID = 'lobehub-cli';
@@ -51,12 +53,42 @@ async function parseJsonResponse<T>(res: Response, endpoint: string): Promise<T>
 export function registerLoginCommand(program: Command) {
   program
     .command('login')
-    .description('Log in to LobeHub via browser (Device Code Flow)')
+    .description('Log in to LobeHub via browser (Device Code Flow) or configure API key server')
     .option('--server <url>', 'LobeHub server URL', OFFICIAL_SERVER_URL)
     .action(async (options: LoginOptions) => {
-      const serverUrl = options.server.replace(/\/$/, '');
+      const serverUrl = normalizeUrl(options.server) || OFFICIAL_SERVER_URL;
 
       log.info('Starting login...');
+
+      const apiKey = process.env[CLI_API_KEY_ENV];
+      if (apiKey) {
+        try {
+          await getUserIdFromApiKey(apiKey, serverUrl);
+
+          const existingSettings = loadSettings();
+          const shouldPreserveGateway = existingSettings?.serverUrl === serverUrl;
+
+          saveSettings(
+            shouldPreserveGateway
+              ? {
+                  gatewayUrl: existingSettings.gatewayUrl,
+                  serverUrl,
+                }
+              : {
+                  // Gateway auth is tied to the login server's token issuer/JWKS.
+                  // When server changes, clear old gateway to avoid stale cross-environment config.
+                  serverUrl,
+                },
+          );
+          log.info('Login successful! Credentials saved.');
+          return;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          log.error(`API key validation failed: ${message}`);
+          process.exit(1);
+          return;
+        }
+      }
 
       // Step 1: Request device code
       let deviceAuth: DeviceAuthResponse;
@@ -164,6 +196,7 @@ export function registerLoginCommand(program: Command) {
                 : undefined,
               refreshToken: body.refresh_token,
             });
+
             const existingSettings = loadSettings();
             const shouldPreserveGateway = existingSettings?.serverUrl === serverUrl;
 

@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Échec de la connexion",
   "sync.title": "État de la synchronisation",
   "sync.unconnected.tip": "La connexion au serveur de signalement a échoué, et le canal de communication pair-à-pair ne peut pas être établi. Veuillez vérifier votre réseau et réessayer.",
-  "tab.aiImage": "Illustration",
   "tab.audio": "Audio",
   "tab.chat": "Discussion",
   "tab.community": "Communauté",
@@ -405,6 +404,7 @@
   "tab.eval": "Laboratoire d'évaluation",
   "tab.files": "Fichiers",
   "tab.home": "Accueil",
+  "tab.image": "Image",
   "tab.knowledgeBase": "Bibliothèque",
   "tab.marketplace": "Place de marché",
   "tab.me": "Moi",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Gestion de la facturation",
   "userPanel.cloud": "Lancer {{name}}",
   "userPanel.community": "Communauté",
+  "userPanel.credits": "Gestion des crédits",
   "userPanel.data": "Stockage des données",
   "userPanel.defaultNickname": "Utilisateur de la communauté",
   "userPanel.discord": "Support communautaire",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Formules d'abonnement",
   "userPanel.profile": "Compte",
   "userPanel.setting": "Paramètres",
+  "userPanel.upgradePlan": "Mettre à niveau le plan",
   "userPanel.usages": "Statistiques d'utilisation",
   "version": "Version"
 }

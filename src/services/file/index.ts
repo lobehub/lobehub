@@ -3,6 +3,7 @@ import {
   type CheckFileHashResult,
   type FileItem,
   type FileListItem,
+  type KnowledgeItemStatus,
   type QueryFileListParams,
   type QueryFileListSchemaType,
   type UploadFileParams,
@@ -56,6 +57,18 @@ export class FileService {
   // V2.0 Migrate from getFiles to getKnowledgeItems
   getKnowledgeItems = async (params: QueryFileListParams) => {
     return lambdaClient.file.getKnowledgeItems.query(params as QueryFileListSchemaType);
+  };
+
+  getKnowledgeItemStatusesByIds = async (ids: string[]): Promise<KnowledgeItemStatus[]> => {
+    return lambdaClient.file.getKnowledgeItemStatusesByIds.query({ ids });
+  };
+
+  resolveKnowledgeItemIds = async (params: QueryFileListParams) => {
+    return lambdaClient.file.resolveKnowledgeItemIds.query(params as QueryFileListSchemaType);
+  };
+
+  deleteKnowledgeItemsByQuery = async (params: QueryFileListParams) => {
+    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(params as QueryFileListSchemaType);
   };
 
   // V2.0 Migrate from getFileItem to getKnowledgeItem

@@ -1,8 +1,9 @@
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
-import { LobeToolIdentifier } from '@lobechat/builtin-tool-tools';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type {
   AgentBuilderContext,
@@ -17,7 +18,11 @@ import type {
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
-import { AGENT_DOCUMENT_INJECTION_POSITIONS, MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
+import {
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+  MessagesEngine,
+  resolveTopicReferences,
+} from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import type {
   OpenAIChatMessage,
@@ -29,6 +34,7 @@ import debug from 'debug';
 
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
+import { lambdaClient } from '@/libs/trpc/client';
 import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
@@ -48,7 +54,7 @@ import {
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
-import { createSkillEngine } from './skillEngineering';
+import { resolveClientSkills } from './skillEngineering';
 import { stripActionTagsFromText } from './skillPreload';
 
 const log = debug('context-engine:contextEngineering');
@@ -423,6 +429,30 @@ export const contextEngineering = async ({
     }
   }
 
+  // Resolve user credentials context for creds tool
+  // Creds tool must be enabled to fetch credentials
+  const isCredsEnabled = tools?.includes(CredsIdentifier) ?? false;
+  let credsList: CredSummary[] | undefined;
+
+  if (isCredsEnabled) {
+    try {
+      const credsResult = await lambdaClient.market.creds.list.query();
+      const userCreds = (credsResult as any)?.data ?? [];
+      credsList = userCreds.map(
+        (cred: any): CredSummary => ({
+          description: cred.description,
+          key: cred.key,
+          name: cred.name,
+          type: cred.type,
+        }),
+      );
+      log('Creds context resolved: count=%d', credsList?.length ?? 0);
+    } catch (error) {
+      // Silently fail - creds context is optional
+      log('Failed to resolve creds context:', error);
+    }
+  }
+
   const userMemoryConfig =
     enableUserMemories && userMemoryData
       ? {
@@ -431,9 +461,9 @@ export const contextEngineering = async ({
         }
       : undefined;
 
-  // Build tool discovery config if lobe-tools is enabled
+  // Build tool discovery config if lobe-activator is enabled
   const enabledToolSet = new Set(tools || []);
-  const isLobeToolsEnabled = enabledToolSet.has(LobeToolIdentifier);
+  const isLobeToolsEnabled = enabledToolSet.has(LobeActivatorIdentifier);
 
   let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
   if (isLobeToolsEnabled) {
@@ -614,7 +644,7 @@ export const contextEngineering = async ({
 
     // Skills configuration — expose all installed skills so the AI can discover and activate them
     skillsConfig: {
-      enabledSkills: plugins ? createSkillEngine().getAllSkills() : undefined,
+      enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
     },
 
     // Tool Discovery configuration
@@ -632,6 +662,8 @@ export const contextEngineering = async ({
     // Variable generators
     variableGenerators: {
       ...VARIABLE_GENERATORS,
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts
+      CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
     },

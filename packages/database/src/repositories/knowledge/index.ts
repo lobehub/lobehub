@@ -11,8 +11,10 @@ export interface KnowledgeItem {
   chunkTaskId?: string | null;
   content?: string | null;
   createdAt: Date;
+  documentId?: string | null;
   editorData?: Record<string, any> | null;
   embeddingTaskId?: string | null;
+  fileId?: string | null;
   fileType: string;
   id: string;
   metadata?: Record<string, any> | null;
@@ -136,8 +138,10 @@ export class KnowledgeRepo {
         chunkTaskId: row.chunk_task_id,
         content: row.content,
         createdAt: new Date(row.created_at),
+        documentId: row.document_id,
         editorData,
         embeddingTaskId: row.embedding_task_id,
+        fileId: row.file_id,
         fileType: row.file_type,
         id: row.id,
         metadata,
@@ -161,6 +165,8 @@ export class KnowledgeRepo {
     const fileQuery = sql`
       SELECT
         COALESCE(d.id, f.id) as id,
+        f.id as file_id,
+        d.id as document_id,
         f.name,
         f.file_type,
         f.size,
@@ -187,6 +193,8 @@ export class KnowledgeRepo {
     const documentQuery = sql`
       SELECT
         id,
+        file_id,
+        id as document_id,
         COALESCE(title, filename, 'Untitled') as name,
         file_type,
         total_char_count as size,
@@ -243,8 +251,10 @@ export class KnowledgeRepo {
         chunkTaskId: row.chunk_task_id,
         content: row.content,
         createdAt: new Date(row.created_at),
+        documentId: row.document_id,
         editorData,
         embeddingTaskId: row.embedding_task_id,
+        fileId: row.file_id,
         fileType: row.file_type,
         id: row.id,
         metadata,
@@ -369,6 +379,8 @@ export class KnowledgeRepo {
       return sql`
         SELECT
           COALESCE(d.id, f.id) as id,
+          f.id as file_id,
+          d.id as document_id,
           f.name,
           f.file_type,
           f.size,
@@ -407,6 +419,8 @@ export class KnowledgeRepo {
     return sql`
       SELECT
         COALESCE(d.id, f.id) as id,
+        f.id as file_id,
+        d.id as document_id,
         f.name,
         f.file_type,
         f.size,
@@ -475,6 +489,8 @@ export class KnowledgeRepo {
         return sql`
           SELECT
             NULL::varchar(30) as id,
+            NULL::varchar(30) as file_id,
+            NULL::varchar(30) as document_id,
             NULL::text as name,
             NULL::varchar(255) as file_type,
             NULL::integer as size,
@@ -536,6 +552,8 @@ export class KnowledgeRepo {
           return sql`
             SELECT
               NULL::varchar(30) as id,
+              NULL::varchar(30) as file_id,
+              NULL::varchar(30) as document_id,
               NULL::text as name,
               NULL::varchar(255) as file_type,
               NULL::integer as size,
@@ -562,6 +580,8 @@ export class KnowledgeRepo {
       return sql`
         SELECT
           d.id,
+          d.file_id,
+          d.id as document_id,
           COALESCE(d.title, d.filename, 'Untitled') as name,
           d.file_type,
           d.total_char_count as size,
@@ -583,6 +603,8 @@ export class KnowledgeRepo {
     return sql`
       SELECT
         id,
+        file_id,
+        id as document_id,
         COALESCE(title, filename, 'Untitled') as name,
         file_type,
         total_char_count as size,

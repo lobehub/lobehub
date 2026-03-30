@@ -79,7 +79,7 @@ const ToolTitle = memo<ToolTitleProps>(
 
     const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier), isEqual);
     const isBuiltinPlugin = builtinToolIdentifiers.includes(identifier);
-    const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? t('unknownPlugin');
+    const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? identifier;
 
     const params = useMemo(() => {
       const argsToUse = args || partialArgs || {};

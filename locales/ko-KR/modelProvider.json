@@ -231,6 +231,8 @@
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Gemini 3 이미지 생성 모델용; 생성된 이미지의 해상도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Gemini 3.1 Flash Image 모델용; 생성된 이미지의 해상도를 제어합니다 (512px 지원).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Claude, Qwen3 등과 유사한 모델용; 추론에 사용할 토큰 예산을 제어합니다.",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5 및 GLM-4.7용; 추론을 위한 토큰 예산을 제어합니다(최대 32k).",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3 시리즈용; 추론을 위한 토큰 예산을 제어합니다(최대 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "OpenAI 및 기타 추론 가능한 모델용; 추론 노력의 정도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "GPT-5+ 시리즈용; 출력의 상세 정도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "일부 Doubao 모델용; 모델이 깊이 사고할지 여부를 스스로 결정하도록 허용합니다.",

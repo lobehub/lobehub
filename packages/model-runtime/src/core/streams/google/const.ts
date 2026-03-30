@@ -1,17 +1,13 @@
 export const GOOGLE_AI_BLOCK_REASON = {
-  BLOCKLIST:
-    'Your content contains prohibited terms. Please review and modify your input, then try again.',
+  BLOCKLIST: 'The content includes blocked terms. Please rephrase and try again.',
   IMAGE_SAFETY:
-    'The generated image was blocked for safety reasons. Please try modifying your image request.',
-  LANGUAGE:
-    'The language you are using is not supported. Please try again in English or another supported language.',
-  OTHER: 'The content was blocked for an unknown reason. Please try rephrasing your request.',
-  PROHIBITED_CONTENT:
-    'Your request may contain prohibited content. Please adjust your request to comply with the usage guidelines.',
+    'The generated image was blocked for safety reasons. Please try modifying your request.',
+  LANGUAGE: "The requested language isn't supported. Please try again in a supported language.",
+  OTHER: 'The content was blocked for an unknown reason. Please rephrase and try again.',
+  PROHIBITED_CONTENT: 'The content may contain prohibited content. Please adjust it and try again.',
   RECITATION:
-    'Your content was blocked due to potential copyright concerns. Please try using original content or rephrase your request.',
-  SAFETY:
-    'Your content was blocked for safety policy reasons. Please adjust your request to avoid potentially harmful or inappropriate content.',
-  SPII: 'Your content may contain sensitive personally identifiable information (PII). To protect privacy, please remove any sensitive details and try again.',
-  default: 'Content blocked: {{blockReason}}. Please adjust your request and try again.',
+    'The content was blocked due to recitation risk. Please use more original wording and try again.',
+  SAFETY: 'The content was blocked for safety reasons. Please adjust it and try again.',
+  SPII: 'The content may include sensitive personal information (SPII). Please remove sensitive details and try again.',
+  default: 'The content was blocked ({{blockReason}}). Please adjust it and try again.',
 } as const;

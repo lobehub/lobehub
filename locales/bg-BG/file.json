@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "Обработка на файл...",
   "uploadDock.body.item.restTime": "Оставащо време: {{time}}",
   "uploadDock.fileQueueInfo": "Качват се първите {{count}} файла, {{remaining}} остават в опашката",
+  "uploadDock.header.cancelAll": "Отказ на всички",
   "uploadDock.totalCount": "Общо {{count}} елемента",
   "uploadDock.uploadStatus.cancelled": "Качването е отменено",
   "uploadDock.uploadStatus.error": "Грешка при качване",

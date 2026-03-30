@@ -17,13 +17,15 @@ const Layout = () => {
           className={styles.contentContainer}
           gap={16}
           minWidth={MAX_WIDTH}
-          paddingBlock={16}
+          style={{ paddingBottom: 56, paddingTop: 16 }}
           wrapperStyle={{
             minHeight: '100%',
             position: 'relative',
           }}
         >
-          <Outlet />
+          <Flexbox gap={16} style={{ paddingBlockEnd: 40 }} width={'100%'}>
+            <Outlet />
+          </Flexbox>
           <div className={styles.spacer} />
           <Footer />
         </WideScreenContainer>

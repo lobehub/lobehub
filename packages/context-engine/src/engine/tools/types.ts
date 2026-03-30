@@ -68,6 +68,12 @@ export type FunctionCallChecker = (model: string, provider: string) => boolean;
 export interface GenerateToolsParams {
   /** Additional context information */
   context?: ToolsGenerationContext;
+  /**
+   * Tool IDs to exclude from the default tools list.
+   * These IDs will be filtered out from defaultToolIds before merging.
+   * Useful for manual skill mode where only discovery tools should be excluded.
+   */
+  excludeDefaultToolIds?: string[];
   /** Model name */
   model: string;
   /** Provider name */

@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Verbindung fehlgeschlagen",
   "sync.title": "Synchronisationsstatus",
   "sync.unconnected.tip": "Verbindung zum Signalisierungsserver fehlgeschlagen, Peer-to-Peer-Kommunikationskanal kann nicht aufgebaut werden. Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut.",
-  "tab.aiImage": "Kunstwerk",
   "tab.audio": "Audio",
   "tab.chat": "Chat",
   "tab.community": "Community",
@@ -405,6 +404,7 @@
   "tab.eval": "Bewertungslabor",
   "tab.files": "Dateien",
   "tab.home": "Startseite",
+  "tab.image": "Bild",
   "tab.knowledgeBase": "Bibliothek",
   "tab.marketplace": "Marktplatz",
   "tab.me": "Ich",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Abrechnungsverwaltung",
   "userPanel.cloud": "{{name}} starten",
   "userPanel.community": "Community",
+  "userPanel.credits": "Kreditverwaltung",
   "userPanel.data": "Datenspeicherung",
   "userPanel.defaultNickname": "Community-Benutzer",
   "userPanel.discord": "Community-Support",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Abonnementpläne",
   "userPanel.profile": "Konto",
   "userPanel.setting": "Einstellungen",
+  "userPanel.upgradePlan": "Plan upgraden",
   "userPanel.usages": "Nutzungsstatistiken",
   "version": "Version"
 }

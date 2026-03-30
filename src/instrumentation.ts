@@ -5,7 +5,7 @@ export async function register() {
   }
 
   // Auto-start GatewayManager for non-Vercel environments so that
-  // persistent bots (e.g. Discord WebSocket) reconnect after server restart.
+  // persistent bots (e.g. Discord gateway, WeChat long-polling) reconnect after server restart.
   if (
     process.env.NEXT_RUNTIME === 'nodejs' &&
     !process.env.VERCEL_ENV &&

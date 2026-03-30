@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "總共有 {{count}} 個參數",
   "arguments.title": "參數清單",
+  "builtins.lobe-activator.apiName.activateTools": "啟用工具",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "取得可用模型",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "取得可用工具",
   "builtins.lobe-agent-builder.apiName.getConfig": "取得設定",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "執行指令",
   "builtins.lobe-skills.apiName.searchSkill": "搜尋技能",
   "builtins.lobe-skills.title": "技能",
-  "builtins.lobe-tools.apiName.activateTools": "啟用工具",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "取得話題上下文",
   "builtins.lobe-topic-reference.title": "話題引用",
   "builtins.lobe-user-memory.apiName.addContextMemory": "新增情境記憶",

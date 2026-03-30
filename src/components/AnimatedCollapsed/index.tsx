@@ -1,4 +1,4 @@
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -25,7 +25,7 @@ const AnimatedCollapsed = memo<AnimatedCollapsedProps>(
     return (
       <AnimatePresence initial={false}>
         {open && (
-          <motion.div
+          <m.div
             animate="open"
             exit="collapsed"
             initial="collapsed"
@@ -50,7 +50,7 @@ const AnimatedCollapsed = memo<AnimatedCollapsedProps>(
             }}
           >
             {children}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     );

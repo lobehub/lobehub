@@ -1,5 +1,25 @@
 import { dirname, join, resolve } from 'node:path';
+
+import tsconfigPaths from 'vite-tsconfig-paths';
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
+
+const alias = {
+  '@emoji-mart/data': resolve(__dirname, './tests/mocks/emojiMartData.ts'),
+  '@emoji-mart/react': resolve(__dirname, './tests/mocks/emojiMartReact.tsx'),
+  '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),
+  '@/utils/client/switchLang': resolve(__dirname, './src/utils/client/switchLang'),
+  '@/const/locale': resolve(__dirname, './src/const/locale'),
+  // TODO: after refactor the errorResponse, we can remove it
+  '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
+  '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
+  '@/utils/server': resolve(__dirname, './src/utils/server'),
+  '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
+  '@/utils/electron': resolve(__dirname, './src/utils/electron'),
+  '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
+  '@/utils/sanitizeFileName': resolve(__dirname, './src/utils/sanitizeFileName'),
+  '~test-utils': resolve(__dirname, './tests/utils.tsx'),
+  'lru_map': resolve(__dirname, './tests/mocks/lru_map'),
+};
 
 export default defineConfig({
   optimizeDeps: {
@@ -7,6 +27,16 @@ export default defineConfig({
     include: ['@lobehub/tts'],
   },
   plugins: [
+    tsconfigPaths({ projects: ['.'] }),
+    // Let `.md` imports resolve to their raw text content so Rollup/Vitest
+    // doesn't try to parse Markdown as JavaScript.
+    {
+      name: 'raw-md',
+      transform(_, id) {
+        if (id.endsWith('.md'))
+          return { code: 'export default ""', map: null };
+      },
+    },
     /**
      * @lobehub/fluent-emoji@4.0.0 ships `es/FluentEmoji/style.js` but its `es/FluentEmoji/index.js`
      * imports `./style/index.js` which doesn't exist.
@@ -38,28 +68,11 @@ export default defineConfig({
       },
     },
   ],
+  resolve: {
+    alias,
+  },
   test: {
-    alias: {
-      '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),
-      '@/database': resolve(__dirname, './packages/database/src'),
-      '@/utils/client/switchLang': resolve(__dirname, './src/utils/client/switchLang'),
-      '@/const/locale': resolve(__dirname, './src/const/locale'),
-      // TODO: after refactor the errorResponse, we can remove it
-      '@/utils/errorResponse': resolve(__dirname, './src/utils/errorResponse'),
-      '@/utils/unzipFile': resolve(__dirname, './src/utils/unzipFile'),
-      '@/utils/server': resolve(__dirname, './src/utils/server'),
-      '@/utils/identifier': resolve(__dirname, './src/utils/identifier'),
-      '@/utils/electron': resolve(__dirname, './src/utils/electron'),
-      '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
-      '@/utils/sanitizeFileName': resolve(__dirname, './src/utils/sanitizeFileName'),
-      '@/utils': resolve(__dirname, './packages/utils/src'),
-      '@/types': resolve(__dirname, './packages/types/src'),
-      '@/const': resolve(__dirname, './packages/const/src'),
-      '@': resolve(__dirname, './src'),
-      '~test-utils': resolve(__dirname, './tests/utils.tsx'),
-      'lru_map': resolve(__dirname, './tests/mocks/lru_map'),
-
-    },
+    alias,
     coverage: {
       all: false,
       exclude: [
@@ -99,6 +112,7 @@ export default defineConfig({
       deps: {
         inline: [
           'vitest-canvas-mock',
+          /@emoji-mart/,
           '@lobehub/ui',
           '@lobehub/fluent-emoji',
           '@pierre/diffs',

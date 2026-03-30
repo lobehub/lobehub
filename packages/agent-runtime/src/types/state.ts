@@ -1,4 +1,9 @@
-import type { ActivatedStepTool, OperationToolSet, ToolSource } from '@lobechat/context-engine';
+import type {
+  ActivatedStepSkill,
+  ActivatedStepTool,
+  OperationToolSet,
+  ToolSource,
+} from '@lobechat/context-engine';
 import type {
   ChatToolPayload,
   SecurityBlacklistConfig,
@@ -12,6 +17,8 @@ import type { Cost, CostLimit, Usage } from './usage';
  * This is the "passport" that can be persisted and transferred.
  */
 export interface AgentState {
+  /** Cumulative record of skills activated at step level */
+  activatedStepSkills?: ActivatedStepSkill[];
   /** Cumulative record of tools activated at step level */
   activatedStepTools?: ActivatedStepTool[];
   /**

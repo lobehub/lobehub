@@ -276,6 +276,10 @@ export default {
     'For Gemini 3.1 Flash Image models; controls resolution of generated images (supports 512px).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
     'For Claude, Qwen3 and similar; controls token budget for reasoning.',
+  'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint':
+    'For GLM-5 and GLM-4.7; controls token budget for reasoning (max 32k).',
+  'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint':
+    'For Qwen3 series; controls token budget for reasoning (max 80k).',
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
     'For OpenAI and other reasoning-capable models; controls reasoning effort.',
   'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':

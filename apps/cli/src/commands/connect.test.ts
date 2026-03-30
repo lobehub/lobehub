@@ -2,10 +2,16 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../auth/resolveToken', () => ({
-  resolveToken: vi.fn().mockResolvedValue({ token: 'test-token', userId: 'test-user' }),
+  resolveToken: vi.fn().mockResolvedValue({
+    serverUrl: 'https://app.lobehub.com',
+    token: 'test-token',
+    tokenType: 'jwt',
+    userId: 'test-user',
+  }),
 }));
 vi.mock('../settings', () => ({
   loadSettings: vi.fn().mockReturnValue(null),
+  normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
   saveSettings: vi.fn(),
 }));
 
@@ -161,6 +167,12 @@ describe('connect command', () => {
       serverUrl: 'https://self-hosted.example.com',
     });
   });
+  it('should pass the resolved serverUrl to GatewayClient', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    expect(clientOptions.serverUrl).toBe('https://app.lobehub.com');
+  });
 
   it('should handle tool call requests', async () => {
     const program = createProgram();
@@ -208,7 +220,12 @@ describe('connect command', () => {
   });
 
   it('should handle auth_expired', async () => {
-    vi.mocked(resolveToken).mockResolvedValueOnce({ token: 'new-tok', userId: 'user' });
+    vi.mocked(resolveToken).mockResolvedValueOnce({
+      serverUrl: 'https://app.lobehub.com',
+      token: 'new-tok',
+      tokenType: 'jwt',
+      userId: 'user',
+    });
 
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);
@@ -218,6 +235,24 @@ describe('connect command', () => {
     expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expired'));
     expect(cleanupAllProcesses).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('should ignore auth_expired for api key auth', async () => {
+    vi.mocked(resolveToken).mockResolvedValueOnce({
+      serverUrl: 'https://self-hosted.example.com',
+      token: 'test-api-key',
+      tokenType: 'apiKey',
+      userId: 'user',
+    });
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    await clientEventHandlers['auth_expired']?.();
+
+    expect(log.error).not.toHaveBeenCalled();
+    expect(cleanupAllProcesses).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should handle error event', async () => {

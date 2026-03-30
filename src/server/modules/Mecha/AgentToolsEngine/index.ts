@@ -9,6 +9,7 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -94,6 +95,7 @@ export const createServerAgentToolsEngine = (
     agentConfig,
     deviceContext,
     globalMemoryEnabled = false,
+    hasAgentDocuments = false,
     hasEnabledKnowledgeBases = false,
     model,
     provider,
@@ -135,10 +137,12 @@ export const createServerAgentToolsEngine = (
         [LocalSystemManifest.identifier]:
           runtimeMode === 'local' &&
           !!deviceContext?.gatewayConfigured &&
-          !!deviceContext?.deviceOnline,
+          !!deviceContext?.deviceOnline &&
+          !!deviceContext?.autoActivated,
         [MemoryManifest.identifier]: globalMemoryEnabled,
         [RemoteDeviceManifest.identifier]:
           !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
+        [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },
     }),

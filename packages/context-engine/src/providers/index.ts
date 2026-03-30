@@ -1,7 +1,15 @@
 // Context Provider exports
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
-export { AGENT_DOCUMENT_INJECTION_POSITIONS, AgentDocumentInjector } from './AgentDocumentInjector';
+export {
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+  AgentDocumentBeforeSystemInjector,
+  AgentDocumentContextInjector,
+  AgentDocumentMessageInjector,
+  AgentDocumentSystemAppendInjector,
+  AgentDocumentSystemReplaceInjector,
+} from './AgentDocumentInjector';
 export { AgentManagementContextInjector } from './AgentManagementContextInjector';
+export { BotPlatformContextInjector } from './BotPlatformContextInjector';
 export { DiscordContextProvider } from './DiscordContextProvider';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
@@ -30,10 +38,14 @@ export type {
 } from './AgentBuilderContextInjector';
 export type {
   AgentContextDocument,
+  AgentDocumentBeforeSystemInjectorConfig,
+  AgentDocumentContextInjectorConfig,
   AgentDocumentInjectionPosition,
-  AgentDocumentInjectorConfig,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
+  AgentDocumentMessageInjectorConfig,
+  AgentDocumentSystemAppendInjectorConfig,
+  AgentDocumentSystemReplaceInjectorConfig,
 } from './AgentDocumentInjector';
 export type {
   AgentManagementContext,
@@ -42,6 +54,10 @@ export type {
   AvailablePluginInfo,
   AvailableProviderInfo,
 } from './AgentManagementContextInjector';
+export type {
+  BotPlatformContext,
+  BotPlatformContextInjectorConfig,
+} from './BotPlatformContextInjector';
 export type { DiscordContext, DiscordContextProviderConfig } from './DiscordContextProvider';
 export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
 export type { ForceFinishSummaryInjectorConfig } from './ForceFinishSummaryInjector';

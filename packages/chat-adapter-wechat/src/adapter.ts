@@ -1,6 +1,7 @@
 import type {
   Adapter,
   AdapterPostableMessage,
+  Attachment,
   Author,
   ChatInstance,
   EmojiValue,
@@ -13,6 +14,7 @@ import type {
   WebhookOptions,
 } from 'chat';
 import { Message, parseMarkdown } from 'chat';
+import mime from 'mime';
 
 import { WechatApiClient } from './api';
 import { WechatFormatConverter } from './format-converter';
@@ -31,11 +33,12 @@ function extractText(msg: WechatRawMessage): string {
         break;
       }
       case MessageItemType.IMAGE: {
-        parts.push('[image]');
+        // Image content is conveyed via attachments, no text placeholder needed
         break;
       }
       case MessageItemType.VOICE: {
-        parts.push(item.voice_item?.text || '[voice]');
+        // Only include transcription text, skip placeholder
+        if (item.voice_item?.text) parts.push(item.voice_item.text);
         break;
       }
       case MessageItemType.FILE: {
@@ -43,12 +46,43 @@ function extractText(msg: WechatRawMessage): string {
         break;
       }
       case MessageItemType.VIDEO: {
-        parts.push('[video]');
+        // Video content is conveyed via attachments, no text placeholder needed
         break;
       }
     }
   }
   return parts.join('\n');
+}
+
+function parseOptionalNumber(value: number | string | undefined): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== 'string' || value.trim() === '') return undefined;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * Check whether a message item carries CDN media that can be downloaded.
+ */
+function hasCdnMedia(item: WechatRawMessage['item_list'][number]): boolean {
+  switch (item.type) {
+    case MessageItemType.IMAGE: {
+      return !!item.image_item?.media?.encrypt_query_param;
+    }
+    case MessageItemType.FILE: {
+      return !!item.file_item?.media?.encrypt_query_param;
+    }
+    case MessageItemType.VOICE: {
+      return !!item.voice_item?.media?.encrypt_query_param;
+    }
+    case MessageItemType.VIDEO: {
+      return !!item.video_item?.media?.encrypt_query_param;
+    }
+    default: {
+      return false;
+    }
+  }
 }
 
 /**
@@ -118,7 +152,14 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     }
 
     const text = extractText(msg);
-    if (!text.trim()) {
+    const hasMedia = msg.item_list.some(
+      (item) =>
+        item.type === MessageItemType.IMAGE ||
+        item.type === MessageItemType.VIDEO ||
+        item.type === MessageItemType.VOICE ||
+        item.type === MessageItemType.FILE,
+    );
+    if (!text.trim() && !hasMedia) {
       return Response.json({ ok: true });
     }
 
@@ -202,6 +243,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     const formatted = parseMarkdown(text);
     const threadId = this.encodeThreadId({ id: raw.from_user_id, type: 'single' });
 
+    // parseMessage is synchronous — CDN download happens in parseRawEvent instead.
     return new Message({
       attachments: [],
       author: {
@@ -230,6 +272,9 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
   ): Promise<Message<WechatRawMessage>> {
     const formatted = parseMarkdown(text);
 
+    // Download and decrypt media from WeChat CDN (protocol-spec §8.3).
+    const attachments = await this.downloadMediaAttachments(msg);
+
     const author: Author = {
       fullName: msg.from_user_id,
       isBot: false,
@@ -239,7 +284,7 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
     };
 
     return new Message({
-      attachments: [],
+      attachments,
       author,
       formatted,
       id: String(msg.message_id || 0),
@@ -251,6 +296,166 @@ export class WechatAdapter implements Adapter<WechatThreadId, WechatRawMessage> 
       text,
       threadId,
     });
+  }
+
+  /**
+   * Download media items and return attachments.
+   *
+   * Strategy per item type:
+   *   1. If CDN media is available, download + AES decrypt (protocol-spec §8.3).
+   *   2. For images: fall back to `image_item.url` if CDN is unavailable or fails.
+   *
+   * When uploadMedia is configured, files are uploaded directly to S3 and the
+   * attachment carries a `fileId` so execAgent can skip re-uploading.
+   */
+  private async downloadMediaAttachments(msg: WechatRawMessage): Promise<Attachment[]> {
+    const attachments: Attachment[] = [];
+
+    for (const item of msg.item_list) {
+      try {
+        switch (item.type) {
+          case MessageItemType.IMAGE: {
+            const attachment = await this.downloadImageItem(item);
+            if (attachment) attachments.push(attachment);
+            break;
+          }
+          case MessageItemType.VOICE: {
+            if (!hasCdnMedia(item) || !item.voice_item?.media) break;
+            const voiceBuf = await this.api.downloadCdnMedia(item.voice_item.media);
+            const voice = this.normalizeMedia(voiceBuf, 'audio/silk');
+            attachments.push({
+              buffer: voice.buffer,
+              mimeType: voice.mimeType,
+              type: 'audio',
+              url: voice.url,
+            } as Attachment);
+            break;
+          }
+          case MessageItemType.FILE: {
+            if (!hasCdnMedia(item) || !item.file_item?.media) break;
+            const fileBuf = await this.api.downloadCdnMedia(item.file_item.media);
+            const fileName = item.file_item?.file_name;
+            const fileMimeType = (fileName && mime.getType(fileName)) || 'application/octet-stream';
+            const file = this.normalizeMedia(fileBuf, fileMimeType);
+            attachments.push({
+              buffer: file.buffer,
+              mimeType: file.mimeType,
+              name: fileName,
+              size: parseOptionalNumber(item.file_item?.len),
+              type: 'file',
+              url: file.url,
+            } as Attachment);
+            break;
+          }
+          case MessageItemType.VIDEO: {
+            if (!hasCdnMedia(item) || !item.video_item?.media) break;
+            const videoBuf = await this.api.downloadCdnMedia(item.video_item.media);
+            const video = this.normalizeMedia(videoBuf, 'video/mp4');
+            attachments.push({
+              buffer: video.buffer,
+              mimeType: video.mimeType,
+              size: parseOptionalNumber(item.video_item?.video_size),
+              type: 'video',
+              url: video.url,
+            } as Attachment);
+            break;
+          }
+        }
+      } catch (error) {
+        this.logger.warn(
+          'Failed to download %s media from CDN: %s',
+          MessageItemType[item.type],
+          error,
+        );
+      }
+    }
+
+    return attachments;
+  }
+
+  /**
+   * Download an image item with cascading fallback:
+   *   1. CDN main media (image_item.media)
+   *   2. CDN thumbnail (image_item.thumb_media)
+   *   3. Direct URL (image_item.url)
+   */
+  private async downloadImageItem(
+    item: WechatRawMessage['item_list'][number],
+  ): Promise<Attachment | undefined> {
+    const imageItem = item.image_item;
+    if (!imageItem) return undefined;
+
+    // 1. Try CDN download from main media
+    if (imageItem.media?.encrypt_query_param) {
+      try {
+        const buf = await this.api.downloadCdnMedia(imageItem.media, imageItem.aeskey);
+        const img = this.normalizeMedia(buf, 'image/jpeg');
+        return {
+          buffer: img.buffer,
+          mimeType: img.mimeType,
+          name: 'image.jpg',
+          type: 'image',
+          url: img.url,
+        } as Attachment;
+      } catch (error) {
+        this.logger.warn('CDN image download failed: %s', error);
+      }
+    }
+
+    // 2. Try CDN thumbnail as fallback
+    if (imageItem.thumb_media?.encrypt_query_param) {
+      try {
+        const buf = await this.api.downloadCdnMedia(imageItem.thumb_media, imageItem.aeskey);
+        const img = this.normalizeMedia(buf, 'image/jpeg');
+        return {
+          buffer: img.buffer,
+          mimeType: img.mimeType,
+          name: 'image.jpg',
+          type: 'image',
+          url: img.url,
+        } as Attachment;
+      } catch (error) {
+        this.logger.warn('CDN thumbnail download failed: %s', error);
+      }
+    }
+
+    // 3. Fall back to direct url field
+    if (imageItem.url) {
+      try {
+        const response = await fetch(imageItem.url, {
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (response.ok) {
+          const buf = Buffer.from(await response.arrayBuffer());
+          const contentType = response.headers.get('content-type') || 'image/jpeg';
+          const img = this.normalizeMedia(buf, contentType);
+          return {
+            buffer: img.buffer,
+            mimeType: img.mimeType,
+            name: 'image.jpg',
+            type: 'image',
+            url: img.url,
+          } as Attachment;
+        }
+        this.logger.warn('Image url fallback failed: HTTP %d', response.status);
+      } catch (error) {
+        this.logger.warn('Image url fallback failed: %s', error);
+      }
+    }
+
+    this.logger.warn('No image source available (no CDN media, no thumb, no url)');
+    return undefined;
+  }
+
+  /**
+   * Wrap raw buffer into the shape expected by attachment objects.
+   * Server-side ingestAttachment handles compression, upload, and record creation.
+   */
+  private normalizeMedia(
+    buffer: Buffer,
+    mimeType: string,
+  ): { buffer: Buffer; mimeType: string; url: string } {
+    return { buffer, mimeType, url: '' };
   }
 
   // ------------------------------------------------------------------

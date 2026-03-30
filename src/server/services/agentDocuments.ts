@@ -1,19 +1,19 @@
+import {
+  type AgentDocumentPolicy,
+  type DOCUMENT_TEMPLATES,
+  DocumentLoadPosition,
+  type DocumentLoadRules,
+  type DocumentTemplateSet,
+  getDocumentTemplate,
+} from '@lobechat/agent-templates';
 import type { LobeChatDatabase } from '@lobechat/database';
 
 import {
   AgentDocumentModel,
-  type AgentDocumentPolicy,
   type AgentDocumentWithRules,
-  DocumentLoadPosition,
-  type DocumentLoadRules,
   type ToolUpdateLoadRule,
 } from '@/database/models/agentDocuments';
 import { buildDocumentFilename } from '@/database/models/agentDocuments';
-import type {
-  DOCUMENT_TEMPLATES,
-  DocumentTemplateSet,
-} from '@/database/models/agentDocuments/templates';
-import { getDocumentTemplate } from '@/database/models/agentDocuments/templates';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 

@@ -1,21 +1,28 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.12",
+  "version": "0.0.1-canary.14",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
     "lobe": "./dist/index.js",
     "lobehub": "./dist/index.js"
   },
+  "man": [
+    "./man/man1/lh.1",
+    "./man/man1/lobe.1",
+    "./man/man1/lobehub.1"
+  ],
   "files": [
-    "dist"
+    "dist",
+    "man"
   ],
   "scripts": {
     "build": "tsdown",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
     "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",
-    "prepublishOnly": "npm run build",
+    "man:generate": "bun src/man/generate.ts",
+    "prepublishOnly": "npm run build && npm run man:generate",
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"

@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "إجمالي {{count}} من المعاملات",
   "arguments.title": "المعلمات",
+  "builtins.lobe-activator.apiName.activateTools": "تفعيل الأدوات",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "الحصول على النماذج المتاحة",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "الحصول على المهارات المتاحة",
   "builtins.lobe-agent-builder.apiName.getConfig": "الحصول على الإعدادات",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "تشغيل الأمر",
   "builtins.lobe-skills.apiName.searchSkill": "البحث عن المهارات",
   "builtins.lobe-skills.title": "المهارات",
-  "builtins.lobe-tools.apiName.activateTools": "تفعيل الأدوات",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "الحصول على سياق الموضوع",
   "builtins.lobe-topic-reference.title": "مرجع الموضوع",
   "builtins.lobe-user-memory.apiName.addContextMemory": "إضافة ذاكرة السياق",

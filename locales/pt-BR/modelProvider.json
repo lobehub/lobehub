@@ -231,6 +231,8 @@
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Para modelos de geração de imagem Gemini 3; controla a resolução das imagens geradas.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Para modelos Gemini 3.1 Flash Image; controla a resolução das imagens geradas (suporta 512px).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Para Claude, Qwen3 e similares; controla o orçamento de tokens para raciocínio.",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Para GLM-5 e GLM-4.7; controla o orçamento de tokens para raciocínio (máximo de 32k).",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Para a série Qwen3; controla o orçamento de tokens para raciocínio (máximo de 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "Para modelos da OpenAI e outros com capacidade de raciocínio; controla o esforço de raciocínio.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "Para a série GPT-5+; controla a verbosidade da saída.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "Para alguns modelos Doubao; permite que o modelo decida se deve pensar profundamente.",

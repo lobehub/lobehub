@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Verbinding mislukt",
   "sync.title": "Synchronisatiestatus",
   "sync.unconnected.tip": "Verbinding met signaalserver mislukt, peer-to-peer communicatiekanaal kan niet worden opgezet. Controleer je netwerk en probeer het opnieuw.",
-  "tab.aiImage": "Kunstwerk",
   "tab.audio": "Audio",
   "tab.chat": "Chat",
   "tab.community": "Community",
@@ -405,6 +404,7 @@
   "tab.eval": "Evaluatie Lab",
   "tab.files": "Bestanden",
   "tab.home": "Home",
+  "tab.image": "Afbeelding",
   "tab.knowledgeBase": "Bibliotheek",
   "tab.marketplace": "Marktplaats",
   "tab.me": "Ik",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Facturatiebeheer",
   "userPanel.cloud": "Start {{name}}",
   "userPanel.community": "Community",
+  "userPanel.credits": "Credits Beheer",
   "userPanel.data": "Gegevensopslag",
   "userPanel.defaultNickname": "Communitygebruiker",
   "userPanel.discord": "Communityondersteuning",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Abonnementen",
   "userPanel.profile": "Account",
   "userPanel.setting": "Instellingen",
+  "userPanel.upgradePlan": "Abonnement upgraden",
   "userPanel.usages": "Gebruiksstatistieken",
   "version": "Versie"
 }

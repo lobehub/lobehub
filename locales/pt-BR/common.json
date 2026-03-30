@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Falha na Conexão",
   "sync.title": "Status da Sincronização",
   "sync.unconnected.tip": "Falha na conexão com o servidor de sinalização, não foi possível estabelecer o canal de comunicação ponto a ponto. Verifique sua rede e tente novamente.",
-  "tab.aiImage": "Arte",
   "tab.audio": "Áudio",
   "tab.chat": "Chat",
   "tab.community": "Comunidade",
@@ -405,6 +404,7 @@
   "tab.eval": "Laboratório de Avaliação",
   "tab.files": "Arquivos",
   "tab.home": "Início",
+  "tab.image": "Imagem",
   "tab.knowledgeBase": "Biblioteca",
   "tab.marketplace": "Mercado",
   "tab.me": "Perfil",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Gerenciamento de Pagamentos",
   "userPanel.cloud": "Iniciar {{name}}",
   "userPanel.community": "Comunidade",
+  "userPanel.credits": "Gerenciamento de Créditos",
   "userPanel.data": "Armazenamento de Dados",
   "userPanel.defaultNickname": "Usuário da Comunidade",
   "userPanel.discord": "Suporte da Comunidade",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Planos de Assinatura",
   "userPanel.profile": "Conta",
   "userPanel.setting": "Configurações",
+  "userPanel.upgradePlan": "Atualizar Plano",
   "userPanel.usages": "Estatísticas de Uso",
   "version": "Versão"
 }

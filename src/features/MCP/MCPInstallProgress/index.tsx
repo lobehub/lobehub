@@ -2,7 +2,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,7 +30,7 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
   return (
     <>
       {installProgress && !hasError && !needsDependencies && (
-        <motion.div
+        <m.div
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           initial={{ height: 0, opacity: 0 }}
@@ -54,11 +54,11 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
               </Text>
             )}
           </Flexbox>
-        </motion.div>
+        </m.div>
       )}
 
       {hasError && errorInfo && (
-        <motion.div
+        <m.div
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           initial={{ height: 0, opacity: 0 }}
@@ -71,11 +71,11 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
           <Flexbox paddingBlock={8}>
             <InstallError errorInfo={errorInfo} identifier={identifier} />
           </Flexbox>
-        </motion.div>
+        </m.div>
       )}
 
       {needsDependencies && installProgress?.systemDependencies && (
-        <motion.div
+        <m.div
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           initial={{ height: 0, opacity: 0 }}
@@ -91,11 +91,11 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
               systemDependencies={installProgress.systemDependencies}
             />
           </Flexbox>
-        </motion.div>
+        </m.div>
       )}
 
       {needsConfig && installProgress && (
-        <motion.div
+        <m.div
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           initial={{ height: 0, opacity: 0 }}
@@ -106,7 +106,7 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
           }}
         >
           <MCPConfigForm configSchema={installProgress.configSchema} identifier={identifier} />
-        </motion.div>
+        </m.div>
       )}
     </>
   );

@@ -12,6 +12,7 @@ export const qq: PlatformDefinition = {
   },
   schema,
   showWebhookUrl: true,
+  supportsMarkdown: false,
   supportsMessageEdit: false,
   clientFactory: new QQClientFactory(),
 };

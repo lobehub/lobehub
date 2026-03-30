@@ -1,4 +1,3 @@
-
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -100,6 +99,7 @@ const mockApp = {
     }
     return null;
   }),
+  getService: vi.fn(() => null),
 } as unknown as App;
 
 describe('AuthCtr', () => {

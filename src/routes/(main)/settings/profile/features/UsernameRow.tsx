@@ -104,12 +104,12 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
         )}
         {dirty && !saving && (
           <Button
+            size="small"
+            variant="outlined"
             onMouseDown={(e) => {
               e.preventDefault();
               handleCancel();
             }}
-            size="small"
-            variant="outlined"
           >
             {t('profile.cancel')}
           </Button>
@@ -125,13 +125,13 @@ const UsernameRow = ({ mobile }: UsernameRowProps) => {
           variant="filled"
           onBlur={handleSave}
           onChange={handleChange}
+          onPressEnter={handleSave}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.preventDefault();
               handleCancel();
             }
           }}
-          onPressEnter={handleSave}
         />
       </Flexbox>
     </Flexbox>

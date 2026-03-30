@@ -192,6 +192,10 @@ export function renderError(errorMessage: string): string {
   return `**Agent Execution Failed**\n\`\`\`\n${errorMessage}\n\`\`\``;
 }
 
+export function renderStopped(message = 'Execution stopped.'): string {
+  return message;
+}
+
 // ==================== Dispatcher ====================
 
 /**

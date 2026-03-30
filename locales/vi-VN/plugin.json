@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "Tổng cộng có {{count}} tham số",
   "arguments.title": "Tham số",
+  "builtins.lobe-activator.apiName.activateTools": "Kích hoạt Công cụ",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Lấy mô hình khả dụng",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Lấy Kỹ năng khả dụng",
   "builtins.lobe-agent-builder.apiName.getConfig": "Lấy cấu hình",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "Chạy Lệnh",
   "builtins.lobe-skills.apiName.searchSkill": "Tìm kiếm Kỹ năng",
   "builtins.lobe-skills.title": "Kỹ năng",
-  "builtins.lobe-tools.apiName.activateTools": "Kích hoạt Công cụ",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "Lấy ngữ cảnh chủ đề",
   "builtins.lobe-topic-reference.title": "Tham chiếu chủ đề",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Thêm trí nhớ ngữ cảnh",

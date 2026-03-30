@@ -8,7 +8,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import getBusinessMenuItems from '@/business/client/features/User/getBusinessMenuItems';
+import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
@@ -54,7 +54,7 @@ export const useMenu = () => {
     authSelectors.isLoginWithAuth(s),
   ]);
   const { userPanel } = useNavLayout();
-  const businessMenuItems = getBusinessMenuItems(isLogin);
+  const businessMenuItems = useBusinessMenuItems(isLogin);
   const { isIOS, isAndroid } = usePlatform();
 
   const downloadUrl = useMemo(() => {

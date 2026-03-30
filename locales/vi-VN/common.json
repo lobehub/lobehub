@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Kết nối thất bại",
   "sync.title": "Trạng thái đồng bộ",
   "sync.unconnected.tip": "Kết nối với máy chủ tín hiệu thất bại, không thể thiết lập kênh giao tiếp ngang hàng. Vui lòng kiểm tra mạng và thử lại.",
-  "tab.aiImage": "Tác phẩm",
   "tab.audio": "Âm thanh",
   "tab.chat": "Trò chuyện",
   "tab.community": "Cộng đồng",
@@ -405,6 +404,7 @@
   "tab.eval": "Phòng Thí Nghiệm Đánh Giá",
   "tab.files": "Tệp",
   "tab.home": "Trang chủ",
+  "tab.image": "Hình ảnh",
   "tab.knowledgeBase": "Thư viện",
   "tab.marketplace": "Chợ",
   "tab.me": "Tôi",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Quản lý thanh toán",
   "userPanel.cloud": "Khởi chạy {{name}}",
   "userPanel.community": "Cộng đồng",
+  "userPanel.credits": "Quản lý Tín dụng",
   "userPanel.data": "Lưu trữ dữ liệu",
   "userPanel.defaultNickname": "Người dùng cộng đồng",
   "userPanel.discord": "Hỗ trợ cộng đồng",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Gói đăng ký",
   "userPanel.profile": "Tài khoản",
   "userPanel.setting": "Cài đặt",
+  "userPanel.upgradePlan": "Nâng cấp gói",
   "userPanel.usages": "Thống kê sử dụng",
   "version": "Phiên bản"
 }

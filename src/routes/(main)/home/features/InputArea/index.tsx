@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
@@ -126,7 +126,7 @@ const InputArea = () => {
       </div>
       <AnimatePresence mode="popLayout">
         {showSuggestQuestions && (
-          <motion.div
+          <m.div
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 8 }}
             initial={{ opacity: 0, scale: 0.98, y: 8 }}
@@ -141,7 +141,7 @@ const InputArea = () => {
               <SuggestQuestions mode={inputActiveMode} />
               <CommunityRecommend mode={inputActiveMode} />
             </Flexbox>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </Flexbox>

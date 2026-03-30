@@ -40,8 +40,8 @@ export interface BaseInfo {
 }
 
 export interface CDNMedia {
-  aes_key: string;
-  encrypt_query_param: string;
+  aes_key?: string;
+  encrypt_query_param?: string;
   encrypt_type?: 0 | 1;
 }
 
@@ -51,13 +51,14 @@ export interface TextItem {
 
 export interface ImageItem {
   aeskey?: string;
-  media: CDNMedia;
+  media?: CDNMedia;
+  thumb_media?: CDNMedia;
   url?: string;
 }
 
 export interface VoiceItem {
   encode_type?: number;
-  media: CDNMedia;
+  media?: CDNMedia;
   playtime?: number;
   text?: string;
 }
@@ -66,11 +67,11 @@ export interface FileItem {
   file_name?: string;
   len?: string;
   md5?: string;
-  media: CDNMedia;
+  media?: CDNMedia;
 }
 
 export interface VideoItem {
-  media: CDNMedia;
+  media?: CDNMedia;
   play_length?: number;
   thumb_media?: CDNMedia;
   video_size?: string | number;

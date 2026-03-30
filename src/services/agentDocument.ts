@@ -1,4 +1,5 @@
-import type { DocumentLoadFormat, DocumentLoadRule } from '@/database/models/agentDocuments';
+import type { DocumentLoadFormat, DocumentLoadRule } from '@lobechat/agent-templates';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 class AgentDocumentService {

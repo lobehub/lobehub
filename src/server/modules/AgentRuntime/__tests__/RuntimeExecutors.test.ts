@@ -2089,6 +2089,42 @@ describe('RuntimeExecutors', () => {
         }),
       );
     });
+
+    it('should pass agentId from runtime metadata to executeTool', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        metadata: {
+          agentId: 'agent-docs-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'createDocument',
+              arguments: '{"title":"Test","content":"Hello"}',
+              id: 'tool-call-1',
+              identifier: 'lobe-agent-documents',
+              type: 'builtin' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          agentId: 'agent-docs-123',
+        }),
+      );
+    });
   });
 
   describe('resolve_aborted_tools executor', () => {

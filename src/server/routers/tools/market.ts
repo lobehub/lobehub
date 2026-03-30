@@ -525,7 +525,7 @@ export const marketRouter = router({
   /**
    * List all user connections
    */
-  connectListConnections: lobehubSkillAuthProcedure.query(async ({ ctx }) => {
+  connectListConnections: lobehubSkillBaseProcedure.query(async ({ ctx }) => {
     log('connectListConnections');
 
     try {

@@ -32,5 +32,5 @@ export const resolveMaxTokens = async ({
 
   const hasSmallContextWindow = smallContextWindowPatterns.some((pattern) => pattern.test(model));
 
-  return hasSmallContextWindow ? 4096 : 8192;
+  return hasSmallContextWindow ? 4096 : 64_000;
 };

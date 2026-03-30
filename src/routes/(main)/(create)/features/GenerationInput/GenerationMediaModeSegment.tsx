@@ -42,7 +42,7 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
           label: (
             <Flexbox horizontal align="center" gap={8}>
               {!isHero && <Icon icon={ImageIcon} />}
-              <span className={isHero ? styles.heroText : undefined}>{t('tab.aiImage')}</span>
+              <span className={isHero ? styles.heroText : undefined}>{t('tab.image')}</span>
             </Flexbox>
           ),
           value: 'image',
@@ -64,7 +64,7 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
       (props: any) => {
         const v = String((props as { value?: string }).value ?? '');
         const isVideo = v === 'video';
-        const text = isVideo ? t('tab.video') : t('tab.aiImage');
+        const text = isVideo ? t('tab.video') : t('tab.image');
         if (isHero) {
           return (
             <span

@@ -220,17 +220,21 @@ describe('WechatAdapter', () => {
       expect(message.author.isBot).toBe(true);
     });
 
-    it('should extract image placeholder', () => {
+    it('should extract image placeholder text (parseMessage is sync, no CDN download)', () => {
       const raw = makeRawMessage({
         item_list: [
           {
-            image_item: { media: { aes_key: '', encrypt_query_param: '' } },
+            image_item: {
+              media: { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+            },
             type: MessageItemType.IMAGE,
           },
         ],
       });
       const message = adapter.parseMessage(raw);
-      expect(message.text).toBe('[image]');
+      expect(message.text).toBe('');
+      // parseMessage is sync — CDN download only happens in parseRawEvent
+      expect(message.attachments).toEqual([]);
     });
 
     it('should extract voice text or placeholder', () => {
@@ -272,7 +276,7 @@ describe('WechatAdapter', () => {
         ],
       });
       const message = adapter.parseMessage(raw);
-      expect(message.text).toBe('[video]');
+      expect(message.text).toBe('');
     });
 
     it('should join multiple items with newline', () => {
@@ -284,6 +288,147 @@ describe('WechatAdapter', () => {
       });
       const message = adapter.parseMessage(raw);
       expect(message.text).toBe('line1\nline2');
+    });
+
+    it('should download image from CDN and return raw buffer', async () => {
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+      vi.spyOn((adapter as any).api, 'downloadCdnMedia').mockResolvedValueOnce(imageBytes);
+
+      const raw = makeRawMessage({
+        item_list: [
+          {
+            image_item: {
+              aeskey: '00112233445566778899aabbccddeeff',
+              media: { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+            },
+            type: MessageItemType.IMAGE,
+          },
+        ],
+      });
+
+      await adapter.handleWebhook(makeRequest(raw));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments).toEqual([
+        {
+          buffer: imageBytes,
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          type: 'image',
+          url: '',
+        },
+      ]);
+      expect(message?.text).toBe('');
+    });
+
+    it('should return empty attachments when CDN download fails', async () => {
+      vi.spyOn((adapter as any).api, 'downloadCdnMedia').mockRejectedValueOnce(
+        new Error('CDN download failed: 500'),
+      );
+
+      const raw = makeRawMessage({
+        item_list: [
+          {
+            image_item: {
+              media: { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+            },
+            type: MessageItemType.IMAGE,
+          },
+        ],
+      });
+
+      await adapter.handleWebhook(makeRequest(raw));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments).toEqual([]);
+    });
+
+    it('should infer MIME type from filename for file attachments', async () => {
+      const fileBytes = Buffer.from([0x25, 0x50, 0x44, 0x46]); // %PDF magic bytes
+      vi.spyOn((adapter as any).api, 'downloadCdnMedia').mockResolvedValueOnce(fileBytes);
+
+      const raw = makeRawMessage({
+        item_list: [
+          {
+            file_item: {
+              file_name: 'report.pdf',
+              len: '4',
+              media: { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+            },
+            type: MessageItemType.FILE,
+          },
+        ],
+      });
+
+      await adapter.handleWebhook(makeRequest(raw));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments).toEqual([
+        {
+          buffer: fileBytes,
+          mimeType: 'application/pdf',
+          name: 'report.pdf',
+          size: 4,
+          type: 'file',
+          url: '',
+        },
+      ]);
+    });
+
+    it('should infer MIME type for xlsx files', async () => {
+      const fileBytes = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+      vi.spyOn((adapter as any).api, 'downloadCdnMedia').mockResolvedValueOnce(fileBytes);
+
+      const raw = makeRawMessage({
+        item_list: [
+          {
+            file_item: {
+              file_name: 'data.xlsx',
+              media: { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+            },
+            type: MessageItemType.FILE,
+          },
+        ],
+      });
+
+      await adapter.handleWebhook(makeRequest(raw));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments?.[0]?.mimeType).toBe(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+    });
+
+    it('should fall back to application/octet-stream for unknown file extensions', async () => {
+      const fileBytes = Buffer.from([0x00, 0x01, 0x02]);
+      vi.spyOn((adapter as any).api, 'downloadCdnMedia').mockResolvedValueOnce(fileBytes);
+
+      const raw = makeRawMessage({
+        item_list: [
+          {
+            file_item: {
+              file_name: 'data.xyz123',
+              media: { aes_key: 'ABEiM0RVZneImaq7zN3u/w==', encrypt_query_param: 'AAFFtest' },
+            },
+            type: MessageItemType.FILE,
+          },
+        ],
+      });
+
+      await adapter.handleWebhook(makeRequest(raw));
+
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      const message = await factory?.();
+
+      expect(message?.attachments?.[0]?.mimeType).toBe('application/octet-stream');
     });
   });
 

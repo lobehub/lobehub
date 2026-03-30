@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "合計で{{count}}個のパラメーターがあります",
   "arguments.title": "パラメーター一覧",
+  "builtins.lobe-activator.apiName.activateTools": "ツールをアクティブ化",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "利用可能なモデルを取得",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "利用可能なツールを取得",
   "builtins.lobe-agent-builder.apiName.getConfig": "設定を取得",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "コマンドを実行",
   "builtins.lobe-skills.apiName.searchSkill": "スキルを検索",
   "builtins.lobe-skills.title": "スキル",
-  "builtins.lobe-tools.apiName.activateTools": "ツールをアクティブ化",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "トピックコンテキストを取得",
   "builtins.lobe-topic-reference.title": "トピック参照",
   "builtins.lobe-user-memory.apiName.addContextMemory": "コンテキスト記憶を追加",

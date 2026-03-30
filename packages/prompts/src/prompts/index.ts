@@ -1,5 +1,6 @@
 export * from './agentBuilder';
 export * from './agentGroup';
+export * from './botPlatformContext';
 export * from './chatMessages';
 export * from './compressContext';
 export * from './discordContext';
@@ -15,5 +16,6 @@ export * from './search';
 export * from './skills';
 export * from './speaker';
 export * from './systemRole';
+export * from './task';
 export * from './toolDiscovery';
 export * from './userMemory';

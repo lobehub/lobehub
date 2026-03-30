@@ -462,3 +462,10 @@ desktopRoutes.push({
   errorElement: <ErrorBoundary resetPath="/" />,
   path: '/desktop-onboarding',
 });
+
+// Web onboarding aliases redirect to the desktop-specific onboarding flow.
+desktopRoutes.push({
+  element: redirectElement('/desktop-onboarding'),
+  errorElement: <ErrorBoundary resetPath="/" />,
+  path: '/onboarding',
+});

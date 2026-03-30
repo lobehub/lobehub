@@ -8,29 +8,29 @@ import { PaginationQuerySchema } from './common.type';
 // ==================== File Upload Types ====================
 
 /**
- * 文件上传请求类型
+ * File upload request type
  */
 export interface FileUploadRequest {
-  /** Agent ID（可选，优先于 sessionId） */
+  /** Agent ID (optional, takes priority over sessionId) */
   agentId?: string;
-  /** 文件目录（可选） */
+  /** File directory (optional) */
   directory?: string;
-  /** 文件对象 */
+  /** File object */
   file: File;
-  /** 知识库ID（可选） */
+  /** Knowledge base ID (optional) */
   knowledgeBaseId?: string;
-  /** 自定义路径（可选） */
+  /** Custom path (optional) */
   pathname?: string;
-  /** 会话ID（可选） */
+  /** Session ID (optional) */
   sessionId?: string;
-  /** 是否跳过文件类型检查 */
+  /** Whether to skip file type check */
   skipCheckFileType?: boolean;
-  /** 是否跳过去重检查 */
+  /** Whether to skip deduplication check */
   skipDeduplication?: boolean;
 }
 
 /**
- * 文件详情类型
+ * File detail response type
  */
 export interface FileDetailResponse {
   file: FileListItem;
@@ -38,40 +38,40 @@ export interface FileDetailResponse {
 }
 
 /**
- * 公共文件上传请求类型
+ * Public file upload request type
  */
 export interface PublicFileUploadRequest {
-  /** Agent ID（可选，优先于 sessionId） */
+  /** Agent ID (optional, takes priority over sessionId) */
   agentId?: string;
-  /** 文件目录（可选） */
+  /** File directory (optional) */
   directory?: string;
-  /** 知识库ID（可选） */
+  /** Knowledge base ID (optional) */
   knowledgeBaseId?: string;
-  /** 会话ID（可选） */
+  /** Session ID (optional) */
   sessionId?: string;
-  /** 是否跳过文件类型检查 */
+  /** Whether to skip file type check */
   skipCheckFileType?: boolean;
-  /** 是否跳过去重检查 */
+  /** Whether to skip deduplication check */
   skipDeduplication?: boolean;
 }
 
 // ==================== File Management Types ====================
 
 /**
- * 文件列表查询参数
+ * File list query parameters
  */
 export interface FileListQuery extends IPaginationQuery {
-  /** 文件类型过滤 */
+  /** File type filter */
   fileType?: string;
-  /** 知识库ID过滤 */
+  /** Knowledge base ID filter */
   knowledgeBaseId?: string;
-  /** 是否查询全量数据（需要 ALL 权限） */
+  /** Whether to query all data (requires ALL permission) */
   queryAll?: boolean;
-  /** 更新时间结束 */
+  /** Updated time end */
   updatedAtEnd?: string;
-  /** 更新时间起始 */
+  /** Updated time start */
   updatedAtStart?: string;
-  /** 用户ID */
+  /** User ID */
   userId?: string;
 }
 
@@ -89,22 +89,22 @@ export const FileListQuerySchema = PaginationQuerySchema.extend({
 });
 
 /**
- * 文件列表响应类型
+ * File list response type
  */
 export type FileListResponse = PaginationQueryResponse<{
-  /** 文件列表 */
+  /** File list */
   files: FileDetailResponse['file'][];
-  /** 文件总大小 */
+  /** Total file size */
   totalSize?: string;
 }>;
 
 // ==================== File URL Types ====================
 
 /**
- * 获取文件URL请求类型
+ * File URL request type
  */
 export interface FileUrlRequest {
-  /** 过期时间（秒），默认为系统配置值 */
+  /** Expiry time (seconds), defaults to system configured value */
   expiresIn?: number;
 }
 
@@ -117,53 +117,53 @@ export const FileUrlRequestSchema = z.object({
 });
 
 /**
- * 获取文件URL响应类型
+ * File URL response type
  */
 export interface FileUrlResponse {
-  /** URL过期时间戳 */
+  /** URL expiry timestamp */
   expiresAt: string;
-  /** URL过期时间（秒） */
+  /** URL expiry time (seconds) */
   expiresIn: number;
-  /** 文件ID */
+  /** File ID */
   fileId: string;
-  /** 文件名 */
+  /** Filename */
   name: string;
-  /** 预签名访问URL */
+  /** Pre-signed access URL */
   url: string;
 }
 
 // ==================== Batch Operations ====================
 
 /**
- * 批量文件上传请求类型
+ * Batch file upload request type
  */
 export interface BatchFileUploadRequest {
-  /** Agent ID（可选，优先于 sessionId） */
+  /** Agent ID (optional, takes priority over sessionId) */
   agentId?: string;
-  /** 上传目录（可选） */
+  /** Upload directory (optional) */
   directory?: string;
-  /** 文件列表 */
+  /** File list */
   files: File[];
-  /** 知识库ID（可选） */
+  /** Knowledge base ID (optional) */
   knowledgeBaseId?: string;
-  /** 会话ID（可选） */
+  /** Session ID (optional) */
   sessionId?: string;
-  /** 是否跳过文件类型检查 */
+  /** Whether to skip file type check */
   skipCheckFileType?: boolean;
 }
 
 /**
- * 批量文件上传响应类型
+ * Batch file upload response type
  */
 export interface BatchFileUploadResponse {
-  /** 失败的文件及错误信息 */
+  /** Failed files and error messages */
   failed: Array<{
     error: string;
     name: string;
   }>;
-  /** 成功上传的文件 */
+  /** Successfully uploaded files */
   successful: FileDetailResponse[];
-  /** 总计数量 */
+  /** Total count */
   summary: {
     failed: number;
     successful: number;
@@ -172,10 +172,10 @@ export interface BatchFileUploadResponse {
 }
 
 /**
- * 批量获取文件请求类型
+ * Batch get files request type
  */
 export interface BatchGetFilesRequest {
-  /** 文件ID列表 */
+  /** File ID list */
   fileIds: string[];
 }
 
@@ -184,31 +184,31 @@ export const BatchGetFilesRequestSchema = z.object({
 });
 
 /**
- * 批量获取文件响应类型
+ * Batch get files response type
  */
 export interface BatchGetFilesResponse {
-  /** 失败的文件及错误信息 */
+  /** Failed files and error messages */
   failed: Array<{
     error: string;
     fileId: string;
   }>;
-  /** 文件列表 */
+  /** File list */
   files: Array<FileDetailResponse>;
-  /** 成功获取的文件数 */
+  /** Number of successfully retrieved files */
   success: number;
-  /** 请求总数 */
+  /** Total number of requests */
   total: number;
 }
 
 // ==================== File Parsing Types ====================
 
 /**
- * 文件解析请求类型
+ * File parse request type
  */
 export interface FileParseRequest {
-  /** 文件ID */
+  /** File ID */
   fileId: string;
-  /** 是否跳过已存在的解析结果 */
+  /** Whether to skip existing parse results */
   skipExist?: boolean;
 }
 
@@ -221,45 +221,45 @@ export const FileParseRequestSchema = z.object({
 });
 
 /**
- * 文件解析响应类型
+ * File parse response type
  */
 export interface FileParseResponse {
-  /** 解析后的文本内容 */
+  /** Parsed text content */
   content?: string;
-  /** 解析错误信息 */
+  /** Parse error message */
   error?: string;
-  /** 文件ID */
+  /** File ID */
   fileId: string;
-  /** 文件类型 */
+  /** File type */
   fileType: string;
-  /** 文档元数据 */
+  /** Document metadata */
   metadata?: {
-    /** 页数 */
+    /** Number of pages */
     pages?: number;
-    /** 文档标题 */
+    /** Document title */
     title?: string;
-    /** 字符总数 */
+    /** Total character count */
     totalCharCount?: number;
-    /** 行总数 */
+    /** Total line count */
     totalLineCount?: number;
   };
-  /** 文件名 */
+  /** Filename */
   name: string;
-  /** 解析时间 */
+  /** Parse time */
   parsedAt?: string;
-  /** 解析状态 */
+  /** Parse status */
   parseStatus: 'completed' | 'failed';
 }
 
 // ==================== File Chunking Types ====================
 
 /**
- * 文件分块任务请求
+ * File chunking task request
  */
 export interface FileChunkRequest {
-  /** 是否在分块成功后自动触发嵌入任务（可覆盖服务端默认开关） */
+  /** Whether to automatically trigger embedding task after chunking succeeds (can override server default) */
   autoEmbedding?: boolean;
-  /** 是否跳过已存在分块任务（或已存在的分块结果） */
+  /** Whether to skip existing chunking tasks (or existing chunked results) */
   skipExist?: boolean;
 }
 
@@ -269,21 +269,21 @@ export const FileChunkRequestSchema = z.object({
 });
 
 /**
- * 文件分块任务响应
+ * File chunking task response
  */
 export interface FileChunkResponse {
-  /** 分块异步任务ID */
+  /** Chunk async task ID */
   chunkTaskId?: string | null;
-  /** 嵌入异步任务ID（仅当 autoEmbedding=true 时存在） */
+  /** Embedding async task ID (only present when autoEmbedding=true) */
   embeddingTaskId?: string | null;
   fileId: string;
   message?: string;
-  /** 是否已触发 */
+  /** Whether it has been triggered */
   success: boolean;
 }
 
 /**
- * 文件关联用户信息
+ * File associated user info
  */
 export interface FileUserItem {
   avatar?: string | null;
@@ -294,62 +294,62 @@ export interface FileUserItem {
 }
 
 /**
- * 文件列表项（包含可选的分块状态信息）
+ * File list item (includes optional chunking status info)
  */
 export interface FileListItem extends Partial<FileItem> {
-  /** 分块任务信息（包含基础异步任务信息与分块数量） */
+  /** Chunking task info (includes basic async task info and chunk count) */
   chunking?: FileAsyncTaskResponse | null;
-  /** 嵌入任务信息（包含基础异步任务信息） */
+  /** Embedding task info (includes basic async task info) */
   embedding?: FileAsyncTaskResponse | null;
-  /** 关联的知识库列表 */
+  /** Associated knowledge base list */
   knowledgeBases?: Array<KnowledgeBaseItem>;
-  /** 关联的用户列表（相同 fileHash 的所有用户） */
+  /** Associated user list (all users with the same fileHash) */
   users?: Array<FileUserItem>;
 }
 
 /**
- * 异步任务错误信息
+ * Async task error info
  */
 export interface AsyncTaskErrorResponse {
-  /** 错误详情 */
+  /** Error details */
   body: {
     detail: string;
   };
-  /** 错误名称 */
+  /** Error name */
   name: string;
 }
 
 /**
- * 文件相关异步任务基础信息（用于列表中的 chunking/embedding 字段）
+ * File async task basic info (used for chunking/embedding fields in the list)
  */
 export interface FileAsyncTaskResponse {
-  /** 分块数量（仅 chunking 任务会返回） */
+  /** Chunk count (only returned by chunking tasks) */
   count?: number | null;
-  /** 异步任务错误信息 */
+  /** Async task error info */
   error?: AsyncTaskErrorResponse | null;
-  /** 异步任务 ID */
+  /** Async task ID */
   id?: string;
-  /** 异步任务状态 */
+  /** Async task status */
   status?: 'pending' | 'processing' | 'success' | 'error' | null;
-  /** 异步任务类型 */
+  /** Async task type */
   type?: 'chunk' | 'embedding' | 'image_generation';
 }
 
 /**
- * 文件分块状态响应
+ * File chunking status response
  */
 export interface FileChunkStatusResponse {
-  /** 分块数量 */
+  /** Chunk count */
   chunkCount: number | null;
-  /** 分块任务错误信息 */
+  /** Chunking task error info */
   chunkingError?: AsyncTaskErrorResponse | null;
-  /** 分块任务状态 */
+  /** Chunking task status */
   chunkingStatus?: 'pending' | 'processing' | 'success' | 'error' | null;
-  /** 嵌入任务错误信息 */
+  /** Embedding task error info */
   embeddingError?: AsyncTaskErrorResponse | null;
-  /** 嵌入任务状态 */
+  /** Embedding task status */
   embeddingStatus?: 'pending' | 'processing' | 'success' | 'error' | null;
-  /** 嵌入任务是否已完成 */
+  /** Whether the embedding task has completed */
   finishEmbedding?: boolean;
 }
 
@@ -362,10 +362,10 @@ export const FileIdParamSchema = z.object({
 // ==================== File Update Types ====================
 
 /**
- * 文件更新请求类型
+ * File update request type
  */
 export interface UpdateFileRequest {
-  /** 知识库ID（可选） */
+  /** Knowledge base ID (optional) */
   knowledgeBaseId?: string | null;
 }
 

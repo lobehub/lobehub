@@ -14,8 +14,15 @@ const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
 const SETTINGS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
 const SETTINGS_FILE = path.join(SETTINGS_DIR, 'settings.json');
 
-function normalizeUrl(url: string | undefined): string | undefined {
+export function normalizeUrl(url: string | undefined): string | undefined {
   return url ? url.replace(/\/$/, '') : undefined;
+}
+
+export function resolveServerUrl(): string {
+  const envServerUrl = normalizeUrl(process.env.LOBEHUB_SERVER);
+  const settingsServerUrl = normalizeUrl(loadSettings()?.serverUrl);
+
+  return envServerUrl || settingsServerUrl || OFFICIAL_SERVER_URL;
 }
 
 export function saveSettings(settings: StoredSettings): void {

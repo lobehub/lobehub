@@ -7,6 +7,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ResolvedPageData } from '@/features/Electron/titlebar/RecentlyViewed/types';
+import { electronStylish } from '@/styles/electron';
 
 import { useStyles } from './styles';
 
@@ -86,7 +87,7 @@ const TabItem = memo<TabItemProps>(
         <Flexbox
           horizontal
           align="center"
-          className={cx(styles.tab, isActive && styles.tabActive)}
+          className={cx(electronStylish.nodrag, styles.tab, isActive && styles.tabActive)}
           gap={6}
           onClick={handleClick}
         >

@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Ошибка подключения",
   "sync.title": "Статус синхронизации",
   "sync.unconnected.tip": "Не удалось подключиться к сигнальному серверу, невозможно установить P2P-соединение. Проверьте сеть и попробуйте снова.",
-  "tab.aiImage": "Иллюстрации",
   "tab.audio": "Аудио",
   "tab.chat": "Чат",
   "tab.community": "Сообщество",
@@ -405,6 +404,7 @@
   "tab.eval": "Лаборатория оценки",
   "tab.files": "Файлы",
   "tab.home": "Главная",
+  "tab.image": "Изображение",
   "tab.knowledgeBase": "Библиотека",
   "tab.marketplace": "Торговая площадка",
   "tab.me": "Профиль",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Управление оплатой",
   "userPanel.cloud": "Запустить {{name}}",
   "userPanel.community": "Сообщество",
+  "userPanel.credits": "Управление кредитами",
   "userPanel.data": "Хранилище данных",
   "userPanel.defaultNickname": "Пользователь сообщества",
   "userPanel.discord": "Поддержка сообщества",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Тарифные планы",
   "userPanel.profile": "Аккаунт",
   "userPanel.setting": "Настройки",
+  "userPanel.upgradePlan": "Обновить план",
   "userPanel.usages": "Статистика использования",
   "version": "Версия"
 }

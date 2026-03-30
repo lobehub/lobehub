@@ -11,6 +11,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
+import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import {
   appendLog,
@@ -23,7 +24,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -174,7 +175,7 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const auth = await resolveToken(options);
   const settings = loadSettings();
-  const gatewayUrl = options.gateway?.replace(/\/$/, '') || settings?.gatewayUrl;
+  const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
 
   if (!gatewayUrl && settings?.serverUrl) {
     log.error(
@@ -194,7 +195,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     deviceId: options.deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
+    serverUrl: auth.serverUrl,
     token: auth.token,
+    tokenType: auth.tokenType,
     userId: auth.userId,
   });
 
@@ -214,7 +217,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
   info(`  Gateway   : ${resolvedGatewayUrl}`);
-  info(`  Auth      : jwt`);
+  info(`  Auth      : ${auth.tokenType}`);
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
 
@@ -285,13 +288,19 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Handle auth failed
   client.on('auth_failed', (reason) => {
     error(`Authentication failed: ${reason}`);
-    error("Run 'lh login' to re-authenticate.");
+    error(
+      `Run 'lh login', or set ${CLI_API_KEY_ENV} and run 'lh login --server <url>' to configure API key authentication.`,
+    );
     cleanup();
     process.exit(1);
   });
 
   // Handle auth expired
   client.on('auth_expired', async () => {
+    if (auth.tokenType === 'apiKey') {
+      return;
+    }
+
     error('Authentication expired. Attempting to refresh...');
     const refreshed = await resolveToken({});
     if (refreshed) {

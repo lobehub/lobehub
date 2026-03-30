@@ -11,8 +11,9 @@ import {
   stopPropagation,
   Tag,
 } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { App, Space } from 'antd';
-import { DownloadIcon, MoreHorizontalIcon, Plus, PuzzleIcon, Trash2 } from 'lucide-react';
+import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -57,7 +58,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
     ? t(`tools.builtins.${skill.identifier}.title`, { defaultValue: skill.name })
     : skill.name;
 
-  const avatar = isBuiltin ? skill.avatar : '🧩';
+  const avatar = isBuiltin ? skill.avatar : undefined;
 
   // ===== Handlers =====
 
@@ -218,7 +219,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             onClick={handleOpenDetail}
           >
             <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
-              <Avatar avatar={avatar} size={32} />
+              {avatar ? <Avatar avatar={avatar} size={32} /> : <Icon icon={SkillsIcon} size={28} />}
             </div>
             <Flexbox gap={4} style={{ overflow: 'hidden' }}>
               <Flexbox horizontal align="center" gap={8}>
@@ -227,7 +228,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
                 >
                   {title}
                 </span>
-                {!isBuiltin && <Tag icon={<Icon icon={PuzzleIcon} />} size={'small'} />}
+                {!isBuiltin && <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />}
                 <SkillSourceTag source={skill.source} />
               </Flexbox>
               {showDisconnected && renderStatus()}

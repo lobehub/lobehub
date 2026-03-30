@@ -61,13 +61,15 @@ export const exportFileApi: LobeChatPluginApi = {
 };
 
 export const runCommandApi: LobeChatPluginApi = {
-  description: 'Execute a shell command. Returns the command output, stderr, and exit code.',
+  description:
+    'Execute a shell command. Returns the command output, stderr, and exit code. Note: Default shell is /bin/sh (dash/ash), not bash. The `source` command may not work; use `bash -c "source file && cmd"` if needed.',
   humanIntervention: 'required',
   name: SkillsApiName.runCommand,
   parameters: {
     properties: {
       command: {
-        description: 'The shell command to execute.',
+        description:
+          'The shell command to execute. Note: Default shell is /bin/sh, not bash. Use `bash -c "..."` for bash-specific features.',
         type: 'string',
       },
       description: {
@@ -83,7 +85,8 @@ export const runCommandApi: LobeChatPluginApi = {
 
 export const execScriptBaseParams = {
   command: {
-    description: 'The shell command to execute.',
+    description:
+      'The shell command to execute. Note: Default shell is /bin/sh, not bash. Use `bash -c "..."` for bash-specific features like `source`.',
     type: 'string' as const,
   },
   description: {

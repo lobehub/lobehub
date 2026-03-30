@@ -116,6 +116,87 @@ describe('SkillContextProvider', () => {
     expect(systemMessage!.content).toMatchSnapshot();
   });
 
+  it('should directly inject content for activated skills', async () => {
+    const skills: SkillMeta[] = [
+      {
+        activated: true,
+        content: '<task_guides>\nUse `lh task` to manage tasks.\n</task_guides>',
+        description: 'Task management via CLI',
+        identifier: 'task',
+        name: 'Task',
+      },
+      {
+        description: 'Generate interactive UI components',
+        identifier: 'artifacts',
+        name: 'Artifacts',
+      },
+    ];
+    const provider = new SkillContextProvider({ enabledSkills: skills });
+
+    const messages = [{ content: 'Hello', id: 'u1', role: 'user' }];
+    const ctx = createContext(messages);
+    const result = await provider.process(ctx);
+
+    const systemMessage = result.messages.find((msg) => msg.role === 'system');
+    expect(systemMessage!.content).toMatchSnapshot();
+
+    // Activated skill should NOT appear in <available_skills> list
+    expect(systemMessage!.content).not.toContain('<skill name="Task">');
+
+    expect(result.metadata.skillContext).toEqual({
+      injected: true,
+      skillsCount: 2,
+    });
+  });
+
+  it('should handle all skills activated (no available_skills list)', async () => {
+    const skills: SkillMeta[] = [
+      {
+        activated: true,
+        content: 'Task skill content here',
+        description: 'Task management',
+        identifier: 'task',
+        name: 'Task',
+      },
+    ];
+    const provider = new SkillContextProvider({ enabledSkills: skills });
+
+    const messages = [{ content: 'Hello', id: 'u1', role: 'user' }];
+    const ctx = createContext(messages);
+    const result = await provider.process(ctx);
+
+    const systemMessage = result.messages.find((msg) => msg.role === 'system');
+    expect(systemMessage!.content).toMatchSnapshot();
+    expect(systemMessage!.content).not.toContain('<available_skills>');
+  });
+
+  it('should skip activated skill without content', async () => {
+    const skills: SkillMeta[] = [
+      {
+        activated: true,
+        // no content provided
+        description: 'Broken skill',
+        identifier: 'broken',
+        name: 'Broken',
+      },
+      {
+        description: 'Working skill',
+        identifier: 'working',
+        name: 'Working',
+      },
+    ];
+    const provider = new SkillContextProvider({ enabledSkills: skills });
+
+    const messages = [{ content: 'Hello', id: 'u1', role: 'user' }];
+    const ctx = createContext(messages);
+    const result = await provider.process(ctx);
+
+    const systemMessage = result.messages.find((msg) => msg.role === 'system');
+    // Broken skill (activated but no content) should fall through to available list
+    expect(systemMessage!.content).toContain('<available_skills>');
+    expect(systemMessage!.content).toContain('Working');
+  });
+
   it('should only inject lightweight metadata without content field', async () => {
     const skills: SkillMeta[] = [
       {

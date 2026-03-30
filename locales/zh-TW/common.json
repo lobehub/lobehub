@@ -397,7 +397,6 @@
   "sync.status.unconnected": "連接失敗",
   "sync.title": "同步狀態",
   "sync.unconnected.tip": "信令伺服器連接失敗，將無法建立點對點通訊頻道，請檢查網路後重試",
-  "tab.aiImage": "繪圖",
   "tab.audio": "音訊",
   "tab.chat": "對話",
   "tab.community": "社群",
@@ -405,6 +404,7 @@
   "tab.eval": "評估實驗室",
   "tab.files": "檔案",
   "tab.home": "首頁",
+  "tab.image": "圖片",
   "tab.knowledgeBase": "資源庫",
   "tab.marketplace": "市場",
   "tab.me": "我",
@@ -432,6 +432,7 @@
   "userPanel.billing": "帳單管理",
   "userPanel.cloud": "體驗 {{name}}",
   "userPanel.community": "社區版",
+  "userPanel.credits": "點數管理",
   "userPanel.data": "資料儲存",
   "userPanel.defaultNickname": "社群版使用者",
   "userPanel.discord": "社區支援",
@@ -443,6 +444,7 @@
   "userPanel.plans": "訂閱方案",
   "userPanel.profile": "帳戶管理",
   "userPanel.setting": "應用設定",
+  "userPanel.upgradePlan": "升級方案",
   "userPanel.usages": "用量統計",
   "version": "版本"
 }

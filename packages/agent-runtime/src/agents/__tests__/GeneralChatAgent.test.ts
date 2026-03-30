@@ -1456,7 +1456,7 @@ describe('GeneralChatAgent', () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
         dynamicInterventionAudits: {
-          pathScopeAudit: (toolArgs, metadata) => {
+          pathScopeAudit: async (toolArgs, metadata) => {
             const workingDirectory = metadata?.workingDirectory as string | undefined;
             if (!workingDirectory) return false;
             const path = toolArgs.path as string;
@@ -1517,7 +1517,7 @@ describe('GeneralChatAgent', () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
         dynamicInterventionAudits: {
-          pathScopeAudit: (toolArgs, metadata) => {
+          pathScopeAudit: async (toolArgs, metadata) => {
             const workingDirectory = metadata?.workingDirectory as string | undefined;
             if (!workingDirectory) return false;
             const path = toolArgs.path as string;
@@ -1572,6 +1572,68 @@ describe('GeneralChatAgent', () => {
             parentMessageId: 'msg-1',
             toolCalling: toolCall,
           },
+        },
+      ]);
+    });
+
+    it('should await async dynamic intervention resolvers', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        dynamicInterventionAudits: {
+          pathScopeAudit: async (toolArgs, metadata) => {
+            const workingDirectory = metadata?.workingDirectory as string | undefined;
+            if (!workingDirectory) return false;
+
+            const path = toolArgs.path as string;
+            return !path.startsWith(workingDirectory);
+          },
+        },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'local-system',
+        apiName: 'readLocalFile',
+        arguments: '{"path":"/etc/passwd"}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        metadata: { workingDirectory: '/workspace' },
+        toolManifestMap: {
+          'local-system': {
+            identifier: 'local-system',
+            api: [
+              {
+                name: 'readLocalFile',
+                humanIntervention: {
+                  dynamic: {
+                    default: 'never',
+                    policy: 'required',
+                    type: 'pathScopeAudit',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      expect(result).toEqual([
+        {
+          type: 'request_human_approve',
+          pendingToolsCalling: [toolCall],
+          reason: 'human_intervention_required',
         },
       ]);
     });
@@ -2028,7 +2090,7 @@ describe('GeneralChatAgent', () => {
       const customResolver: GlobalInterventionAuditConfig = {
         type: 'customBlocker',
         policy: 'always',
-        resolver: (toolArgs) => toolArgs.dangerous === true,
+        resolver: async (toolArgs) => toolArgs.dangerous === true,
       };
 
       const agent = new GeneralChatAgent({
@@ -2073,7 +2135,7 @@ describe('GeneralChatAgent', () => {
       const customResolver: GlobalInterventionAuditConfig = {
         type: 'customBlocker',
         policy: 'always',
-        resolver: (toolArgs) => toolArgs.dangerous === true,
+        resolver: async (toolArgs) => toolArgs.dangerous === true,
       };
 
       const agent = new GeneralChatAgent({
@@ -2118,7 +2180,7 @@ describe('GeneralChatAgent', () => {
       const customResolver: GlobalInterventionAuditConfig = {
         type: 'customBlocker',
         policy: 'always',
-        resolver: (toolArgs) => toolArgs.blocked === true,
+        resolver: async (toolArgs) => toolArgs.blocked === true,
       };
 
       const agent = new GeneralChatAgent({
@@ -2159,7 +2221,7 @@ describe('GeneralChatAgent', () => {
       const customResolver: GlobalInterventionAuditConfig = {
         type: 'softBlocker',
         policy: 'required',
-        resolver: () => true, // always triggers
+        resolver: async () => true, // always triggers
       };
 
       const agent = new GeneralChatAgent({
@@ -2205,7 +2267,7 @@ describe('GeneralChatAgent', () => {
       const customResolver: GlobalInterventionAuditConfig = {
         type: 'softBlocker',
         policy: 'required',
-        resolver: () => true,
+        resolver: async () => true,
       };
 
       const agent = new GeneralChatAgent({
@@ -2252,7 +2314,7 @@ describe('GeneralChatAgent', () => {
       const spyResolver: GlobalInterventionAuditConfig = {
         type: 'spy',
         policy: 'always',
-        resolver: (_toolArgs, metadata) => {
+        resolver: async (_toolArgs, metadata) => {
           capturedMetadata = metadata;
           return false;
         },
@@ -2302,7 +2364,7 @@ describe('GeneralChatAgent', () => {
       const resolver1: GlobalInterventionAuditConfig = {
         type: 'first',
         policy: 'always',
-        resolver: () => {
+        resolver: async () => {
           callOrder.push('first');
           return true; // matches
         },
@@ -2311,7 +2373,7 @@ describe('GeneralChatAgent', () => {
       const resolver2: GlobalInterventionAuditConfig = {
         type: 'second',
         policy: 'required',
-        resolver: () => {
+        resolver: async () => {
           callOrder.push('second');
           return true;
         },

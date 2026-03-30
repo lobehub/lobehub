@@ -2,7 +2,7 @@ import type { ChatTopic } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { groupTopicsByTime } from './topic';
+import { groupTopicsByTime, groupTopicsByUpdatedTime } from './topic';
 
 // Mock current date to ensure consistent test results
 const NOW = '2024-01-15T12:00:00Z';
@@ -137,5 +137,80 @@ describe('groupTopicsByTime', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('today');
     expect(result[0].children.map((t) => t.title)).toEqual(['Afternoon', 'Midday', 'Morning']);
+  });
+});
+
+describe('groupTopicsByUpdatedTime', () => {
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  const createTopic = (
+    createdAt: number,
+    updatedAt: number,
+    title: string = 'Test Topic',
+  ): ChatTopic => ({
+    id: `${createdAt}-${updatedAt}`,
+    title,
+    createdAt,
+    updatedAt,
+  });
+
+  it('should return empty array for empty input', () => {
+    expect(groupTopicsByUpdatedTime([])).toEqual([]);
+  });
+
+  it('should group topics by updatedAt instead of createdAt', () => {
+    const lastYear = dayjs().subtract(1, 'year').valueOf();
+    const today = dayjs().valueOf();
+
+    // Topic created last year but updated today
+    const topics = [createTopic(lastYear, today, 'Old but recently updated')];
+
+    const result = groupTopicsByUpdatedTime(topics);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('today');
+    expect(result[0].children[0].title).toBe('Old but recently updated');
+  });
+
+  it('should sort topics within groups by updatedAt in descending order', () => {
+    const createdAt = dayjs().subtract(1, 'month').valueOf();
+    const updatedAt1 = dayjs().hour(9).valueOf();
+    const updatedAt2 = dayjs().hour(10).valueOf();
+    const updatedAt3 = dayjs().hour(11).valueOf();
+
+    const topics = [
+      createTopic(createdAt, updatedAt1, 'Morning update'),
+      createTopic(createdAt, updatedAt2, 'Midday update'),
+      createTopic(createdAt, updatedAt3, 'Afternoon update'),
+    ];
+
+    const result = groupTopicsByUpdatedTime(topics);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('today');
+    expect(result[0].children.map((t) => t.title)).toEqual([
+      'Afternoon update',
+      'Midday update',
+      'Morning update',
+    ]);
+  });
+
+  it('should produce different grouping than groupTopicsByTime when updatedAt differs from createdAt', () => {
+    const lastYear = dayjs().subtract(1, 'year').valueOf();
+    const yesterday = dayjs().subtract(1, 'day').valueOf();
+
+    // Created last year, updated yesterday
+    const topics = [createTopic(lastYear, yesterday, 'Migrated topic')];
+
+    const byCreated = groupTopicsByTime(topics);
+    const byUpdated = groupTopicsByUpdatedTime(topics);
+
+    // By createdAt: grouped under last year
+    expect(byCreated[0].id).toBe(dayjs(lastYear).year().toString());
+
+    // By updatedAt: grouped under yesterday
+    expect(byUpdated[0].id).toBe('yesterday');
   });
 });

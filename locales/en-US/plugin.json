@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "{{count}} params in total",
   "arguments.title": "Arguments",
+  "builtins.lobe-activator.apiName.activateTools": "Activate Tools",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Get available models",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Get available Skills",
   "builtins.lobe-agent-builder.apiName.getConfig": "Get config",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "Run Command",
   "builtins.lobe-skills.apiName.searchSkill": "Search Skills",
   "builtins.lobe-skills.title": "Skills",
-  "builtins.lobe-tools.apiName.activateTools": "Activate Tools",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "Get Topic Context",
   "builtins.lobe-topic-reference.title": "Topic Reference",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Add context memory",

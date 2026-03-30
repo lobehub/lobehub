@@ -397,7 +397,6 @@
   "sync.status.unconnected": "فشل الاتصال",
   "sync.title": "حالة المزامنة",
   "sync.unconnected.tip": "فشل الاتصال بخادم الإشارة، ولا يمكن إنشاء قناة اتصال من نظير إلى نظير. يرجى التحقق من الشبكة والمحاولة مرة أخرى.",
-  "tab.aiImage": "الرسومات",
   "tab.audio": "الصوت",
   "tab.chat": "الدردشة",
   "tab.community": "المجتمع",
@@ -405,6 +404,7 @@
   "tab.eval": "مختبر التقييم",
   "tab.files": "الملفات",
   "tab.home": "الرئيسية",
+  "tab.image": "صورة",
   "tab.knowledgeBase": "المكتبة",
   "tab.marketplace": "السوق",
   "tab.me": "أنا",
@@ -432,6 +432,7 @@
   "userPanel.billing": "إدارة الفوترة",
   "userPanel.cloud": "تشغيل {{name}}",
   "userPanel.community": "المجتمع",
+  "userPanel.credits": "إدارة الرصيد",
   "userPanel.data": "تخزين البيانات",
   "userPanel.defaultNickname": "مستخدم المجتمع",
   "userPanel.discord": "دعم المجتمع",
@@ -443,6 +444,7 @@
   "userPanel.plans": "خطط الاشتراك",
   "userPanel.profile": "الحساب",
   "userPanel.setting": "الإعدادات",
+  "userPanel.upgradePlan": "ترقية الخطة",
   "userPanel.usages": "إحصائيات الاستخدام",
   "version": "الإصدار"
 }

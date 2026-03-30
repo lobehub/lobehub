@@ -4,7 +4,7 @@
   "config.aspectRatio.unlock": "解锁宽高比",
   "config.cfg.label": "引导强度",
   "config.header.desc": "简单描述，即刻创作",
-  "config.header.title": "绘画",
+  "config.header.title": "图片",
   "config.height.label": "高度",
   "config.imageNum.label": "图片数量",
   "config.imageUrl.label": "参考图",
@@ -58,6 +58,6 @@
   "topic.deleteConfirm": "删除生成主题",
   "topic.deleteConfirmDesc": "确认删除该生成主题吗？删除后无法恢复",
   "topic.empty": "暂无生成主题",
-  "topic.title": "绘画主题",
+  "topic.title": "图片主题",
   "topic.untitled": "默认主题"
 }

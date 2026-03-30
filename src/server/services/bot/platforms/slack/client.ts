@@ -2,6 +2,12 @@ import { createSlackAdapter } from '@chat-adapter/slack';
 import debug from 'debug';
 
 import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+
+import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
@@ -12,6 +18,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { SLACK_API_BASE, SlackApi } from './api';
+import { markdownToSlackMrkdwn } from './markdownToMrkdwn';
 
 const log = debug('bot-platform:slack:bot');
 
@@ -41,14 +48,40 @@ class SlackWebhookClient implements PlatformClient {
 
   async start(): Promise<void> {
     log('Starting SlackBot appId=%s', this.applicationId);
-    // Slack uses Events API with webhook — no explicit registration needed.
-    // The webhook URL is configured manually in Slack App settings.
-    log('SlackBot appId=%s started', this.applicationId);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
+
+    try {
+      // Slack uses Events API with webhook — no explicit registration needed.
+      // The webhook URL is configured manually in Slack App settings.
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.connected,
+      });
+      log('SlackBot appId=%s started', this.applicationId);
+    } catch (error) {
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        errorMessage: getRuntimeStatusErrorMessage(error),
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.failed,
+      });
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
     log('Stopping SlackBot appId=%s', this.applicationId);
     // No cleanup needed for webhook mode
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.disconnected,
+    });
   }
 
   // --- Runtime Operations ---
@@ -80,6 +113,10 @@ class SlackWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  formatMarkdown(markdown: string): string {
+    return markdownToSlackMrkdwn(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {

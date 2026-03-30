@@ -2,6 +2,14 @@ import { resolve } from 'node:path';
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  plugins: [
+    {
+      name: 'raw-md',
+      transform(_, id) {
+        if (id.endsWith('.md')) return { code: 'export default ""', map: null };
+      },
+    },
+  ],
   test: {
     alias: {
       '@/const': resolve(__dirname, '../const/src'),

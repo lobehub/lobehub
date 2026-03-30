@@ -37,6 +37,7 @@ const mockInitialize = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockOnNewMention = vi.hoisted(() => vi.fn());
 const mockOnSubscribedMessage = vi.hoisted(() => vi.fn());
 const mockOnNewMessage = vi.hoisted(() => vi.fn());
+const mockOnSlashCommand = vi.hoisted(() => vi.fn());
 
 vi.mock('chat', () => ({
   BaseFormatConverter: class {},
@@ -44,10 +45,17 @@ vi.mock('chat', () => ({
     initialize: mockInitialize,
     onNewMention: mockOnNewMention,
     onNewMessage: mockOnNewMessage,
+    onSlashCommand: mockOnSlashCommand,
     onSubscribedMessage: mockOnSubscribedMessage,
     webhooks: {},
   })),
   ConsoleLogger: vi.fn(),
+}));
+
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation(() => ({
+    interruptTask: vi.fn().mockResolvedValue({ success: true }),
+  })),
 }));
 
 vi.mock('../AgentBridgeService', () => ({
@@ -60,6 +68,9 @@ vi.mock('../AgentBridgeService', () => ({
 // Mock platform entries
 const mockCreateAdapter = vi.hoisted(() =>
   vi.fn().mockReturnValue({ testplatform: { type: 'mock-adapter' } }),
+);
+const mockMergeWithDefaults = vi.hoisted(() =>
+  vi.fn((_: unknown, settings?: Record<string, unknown>) => settings ?? {}),
 );
 
 const mockGetPlatform = vi.hoisted(() =>
@@ -92,6 +103,7 @@ const mockGetPlatform = vi.hoisted(() =>
 
 vi.mock('../platforms', () => ({
   buildRuntimeKey: (platform: string, appId: string) => `${platform}:${appId}`,
+  mergeWithDefaults: mockMergeWithDefaults,
   platformRegistry: {
     getPlatform: mockGetPlatform,
   },
@@ -242,10 +254,11 @@ describe('BotMessageRouter', () => {
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await handler(req);
 
-      expect(mockOnNewMessage).toHaveBeenCalled();
+      // Called twice: once for text-based slash commands, once for DM catch-all
+      expect(mockOnNewMessage).toHaveBeenCalledTimes(2);
     });
 
-    it('should NOT register onNewMessage when dm is not enabled', async () => {
+    it('should NOT register DM onNewMessage when dm is not enabled', async () => {
       mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-123' })]);
 
       const router = new BotMessageRouter();
@@ -254,7 +267,8 @@ describe('BotMessageRouter', () => {
       const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
       await handler(req);
 
-      expect(mockOnNewMessage).not.toHaveBeenCalled();
+      // Called once for text-based slash commands only, no DM catch-all
+      expect(mockOnNewMessage).toHaveBeenCalledTimes(1);
     });
   });
 });

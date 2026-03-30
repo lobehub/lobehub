@@ -1,3 +1,5 @@
+import type { Chat } from 'chat';
+
 // ============================================================================
 // Bot Platform Core Types
 // ============================================================================
@@ -85,11 +87,27 @@ export interface UsageStats {
  */
 export interface PlatformClient {
   readonly applicationId: string;
+  /**
+   * Apply platform-specific Chat SDK compatibility patches after bot initialization.
+   * Useful for adapter quirks that should stay encapsulated within the platform client.
+   */
+  applyChatPatches?: (chatBot: Chat<any>) => void;
+
   /** Create a Chat SDK adapter config for inbound message handling. */
   createAdapter: () => Record<string, any>;
 
   /** Extract the chat/channel ID from a composite platformThreadId. */
   extractChatId: (platformThreadId: string) => string;
+
+  /**
+   * Transform outbound Markdown content into a format the platform can render.
+   * Called before `formatReply` and `splitMessage`.
+   *
+   * Platforms that don't support Markdown (e.g. WeChat, QQ) should strip
+   * formatting to plain text. Platforms with native Markdown support can
+   * omit this method — the content is passed through as-is.
+   */
+  formatMarkdown?: (markdown: string) => string;
 
   /**
    * Format the final outbound reply from body content and optional usage stats.
@@ -108,6 +126,15 @@ export interface PlatformClient {
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;
+
+  /**
+   * Register bot commands with the platform (e.g., Telegram setMyCommands).
+   * Called once during bot initialization with the list of available commands.
+   * Optional — platforms that don't support command menus can omit this.
+   */
+  registerBotCommands?: (
+    commands: Array<{ command: string; description: string }>,
+  ) => Promise<void>;
 
   /**
    * Resolve the correct thread ID for reaction API calls.
@@ -224,23 +251,16 @@ export abstract class ClientFactory {
  * Contains metadata, factory, and validation. All runtime operations go through PlatformClient.
  */
 export interface PlatformDefinition {
-  /**
-   * Authentication flow for obtaining credentials.
-   * - 'qrcode': QR code scan flow (e.g. WeChat iLink)
-   * When set, the frontend renders a QR code auth UI instead of manual credential inputs.
-   */
-  authFlow?: 'qrcode';
-
   /** Factory for creating PlatformClient instances and validating credentials/settings. */
   clientFactory: ClientFactory;
 
   /**
    * Connection mode: how the platform communicates with the server.
    * - 'webhook': stateless HTTP callbacks (can run in serverless)
-   * - 'websocket': persistent connection (requires long-running process)
+   * - 'persistent': requires a long-running client (e.g. websocket or long-polling)
    * Defaults to 'webhook'.
    */
-  connectionMode?: 'webhook' | 'websocket';
+  connectionMode?: 'persistent' | 'webhook';
 
   /** The description of the platform. */
   description?: string;
@@ -259,6 +279,14 @@ export interface PlatformDefinition {
 
   /** Whether to show webhook URL for manual configuration. When true, the UI displays the webhook endpoint for the user to copy. */
   showWebhookUrl?: boolean;
+
+  /**
+   * Whether the platform supports rendering Markdown in messages.
+   * When false, outbound markdown is converted to plain text before sending,
+   * and the AI is instructed to avoid markdown formatting.
+   * Defaults to true.
+   */
+  supportsMarkdown?: boolean;
 
   /**
    * Whether the platform supports editing sent messages.

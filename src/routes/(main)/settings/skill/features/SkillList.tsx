@@ -12,10 +12,10 @@ import {
 } from '@lobechat/const';
 import { type BuiltinSkill, type LobeBuiltinTool } from '@lobechat/types';
 import { Center, Empty } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { BlocksIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -291,7 +291,7 @@ const SkillList = memo(() => {
   if (!hasAnySkills) {
     return (
       <Center className={styles.container} paddingBlock={48}>
-        <Empty description={t('tab.skillDesc')} icon={BlocksIcon} title={t('tab.skillEmpty')} />
+        <Empty description={t('tab.skillDesc')} icon={SkillsIcon} title={t('tab.skillEmpty')} />
         <AddSkillButton />
       </Center>
     );

@@ -397,7 +397,6 @@
   "sync.status.unconnected": "اتصال ناموفق بود",
   "sync.title": "وضعیت همگام‌سازی",
   "sync.unconnected.tip": "اتصال به سرور سیگنال‌دهی ناموفق بود و کانال ارتباطی همتا به همتا برقرار نشد. لطفاً اتصال شبکه را بررسی کرده و دوباره تلاش کنید.",
-  "tab.aiImage": "آثار هنری",
   "tab.audio": "صوت",
   "tab.chat": "گفت‌وگو",
   "tab.community": "جامعه",
@@ -405,6 +404,7 @@
   "tab.eval": "آزمایشگاه ارزیابی",
   "tab.files": "فایل‌ها",
   "tab.home": "خانه",
+  "tab.image": "تصویر",
   "tab.knowledgeBase": "کتابخانه",
   "tab.marketplace": "بازار",
   "tab.me": "من",
@@ -432,6 +432,7 @@
   "userPanel.billing": "مدیریت صورتحساب",
   "userPanel.cloud": "اجرای {{name}}",
   "userPanel.community": "جامعه",
+  "userPanel.credits": "مدیریت اعتبار",
   "userPanel.data": "ذخیره‌سازی داده",
   "userPanel.defaultNickname": "کاربر جامعه",
   "userPanel.discord": "پشتیبانی جامعه",
@@ -443,6 +444,7 @@
   "userPanel.plans": "طرح‌های اشتراک",
   "userPanel.profile": "حساب کاربری",
   "userPanel.setting": "تنظیمات",
+  "userPanel.upgradePlan": "ارتقاء طرح",
   "userPanel.usages": "آمار استفاده",
   "version": "نسخه"
 }

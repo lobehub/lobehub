@@ -1,6 +1,12 @@
-import { SkillsApiName, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import {
+  CredsIdentifier,
+  type CredSummary,
+  injectCredsContext,
+  type UserCredsContext,
+} from '@lobechat/builtin-tool-creds';
 import { resourcesTreePrompt } from '@lobechat/prompts';
-import type { RuntimeSelectedSkill, SendPreloadMessage } from '@lobechat/types';
+import type { RuntimeSelectedSkill, SendPreloadMessage, UserCredSummary } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { agentSkillService } from '@/services/skill';
@@ -15,6 +21,10 @@ interface PreloadedSkill {
 interface PrepareSelectedSkillPreloadParams {
   message: string;
   selectedSkills?: RuntimeSelectedSkill[];
+  /**
+   * User credentials for creds skill injection
+   */
+  userCreds?: UserCredSummary[];
 }
 
 const ACTION_TAG_REGEX = /<action\b([^>]*)\/>/g;
@@ -69,8 +79,27 @@ const resolveSelectedSkills = (
   }, []);
 };
 
+/**
+ * Convert UserCredSummary to CredSummary for injection
+ */
+const mapToCredSummary = (cred: UserCredSummary): CredSummary => ({
+  description: cred.description,
+  key: cred.key,
+  name: cred.name,
+  type: cred.type,
+});
+
+/**
+ * Build creds context for injection
+ */
+const buildCredsContext = (userCreds?: UserCredSummary[]): UserCredsContext => ({
+  creds: (userCreds || []).map(mapToCredSummary),
+  settingsUrl: '/settings/creds',
+});
+
 const loadSkillContent = async (
   selectedSkill: RuntimeSelectedSkill,
+  userCreds?: UserCredSummary[],
 ): Promise<PreloadedSkill | undefined> => {
   const toolState = getToolStoreState();
 
@@ -79,8 +108,16 @@ const loadSkillContent = async (
   );
 
   if (builtinSkill) {
+    let content = builtinSkill.content;
+
+    // Inject creds context for the creds skill
+    if (builtinSkill.identifier === CredsIdentifier) {
+      const credsContext = buildCredsContext(userCreds);
+      content = injectCredsContext(content, credsContext);
+    }
+
     return {
-      content: builtinSkill.content,
+      content,
       identifier: builtinSkill.identifier,
       name: builtinSkill.name,
     };
@@ -120,10 +157,10 @@ const buildPersistedPreloadMessages = (skills: PreloadedSkill[]): SendPreloadMes
         role: 'assistant',
         tools: [
           {
-            apiName: SkillsApiName.activateSkill,
+            apiName: ActivatorApiName.activateSkill,
             arguments: args,
             id: toolCallId,
-            identifier: SkillsIdentifier,
+            identifier: LobeActivatorIdentifier,
             type: 'builtin',
           },
         ],
@@ -131,9 +168,9 @@ const buildPersistedPreloadMessages = (skills: PreloadedSkill[]): SendPreloadMes
       {
         content: skill.content,
         plugin: {
-          apiName: SkillsApiName.activateSkill,
+          apiName: ActivatorApiName.activateSkill,
           arguments: args,
-          identifier: SkillsIdentifier,
+          identifier: LobeActivatorIdentifier,
           type: 'builtin',
         },
         role: 'tool',
@@ -145,6 +182,7 @@ const buildPersistedPreloadMessages = (skills: PreloadedSkill[]): SendPreloadMes
 export const prepareSelectedSkillPreload = async ({
   message,
   selectedSkills,
+  userCreds,
 }: PrepareSelectedSkillPreloadParams): Promise<SendPreloadMessage[]> => {
   const resolvedSelectedSkills = resolveSelectedSkills(message, selectedSkills);
 
@@ -154,7 +192,7 @@ export const prepareSelectedSkillPreload = async ({
 
   const resolvedSkills = (
     await Promise.all(
-      resolvedSelectedSkills.map((selectedSkill) => loadSkillContent(selectedSkill)),
+      resolvedSelectedSkills.map((selectedSkill) => loadSkillContent(selectedSkill, userCreds)),
     )
   ).filter((skill): skill is PreloadedSkill => !!skill);
 

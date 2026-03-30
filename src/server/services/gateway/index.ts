@@ -1,8 +1,9 @@
 import debug from 'debug';
 
 import { platformRegistry } from '../bot/platforms';
-import { BotConnectQueue } from './botConnectQueue';
+import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
+import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
 
 const log = debug('lobe-server:service:gateway');
 
@@ -39,11 +40,21 @@ export class GatewayService {
       const definition = platformRegistry.getPlatform(platform);
       const connectionMode = definition?.connectionMode || 'webhook';
 
-      if (connectionMode === 'websocket') {
-        // Persistent platforms (e.g. Discord WebSocket) cannot run in a
+      if (connectionMode === 'persistent') {
+        // Persistent platforms (e.g. Discord gateway or WeChat long-polling) cannot run in a
         // serverless function — queue for the long-running cron gateway.
         const queue = new BotConnectQueue();
         await queue.push(platform, applicationId, userId);
+        await updateBotRuntimeStatus(
+          {
+            applicationId,
+            platform,
+            status: BOT_RUNTIME_STATUSES.queued,
+          },
+          {
+            ttlMs: BOT_CONNECT_QUEUE_EXPIRE_MS,
+          },
+        );
         log('Queued connect %s:%s', platform, applicationId);
         return 'queued';
       }
@@ -69,10 +80,25 @@ export class GatewayService {
   }
 
   async stopClient(platform: string, applicationId: string): Promise<void> {
-    const manager = getGatewayManager();
-    if (!manager?.isRunning) return;
+    if (isVercel) {
+      const definition = platformRegistry.getPlatform(platform);
+      const connectionMode = definition?.connectionMode || 'webhook';
+      if (connectionMode === 'persistent') {
+        const queue = new BotConnectQueue();
+        await queue.remove(platform, applicationId);
+      }
+    }
 
-    await manager.stopClient(platform, applicationId);
-    log('Stopped client %s:%s', platform, applicationId);
+    const manager = getGatewayManager();
+    if (manager?.isRunning) {
+      await manager.stopClient(platform, applicationId);
+      log('Stopped client %s:%s', platform, applicationId);
+    }
+
+    await updateBotRuntimeStatus({
+      applicationId,
+      platform,
+      status: BOT_RUNTIME_STATUSES.disconnected,
+    });
   }
 }

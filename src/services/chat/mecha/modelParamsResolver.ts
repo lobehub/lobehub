@@ -60,8 +60,17 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
   // Reasoning configuration
   if (modelExtendParams.includes('enableReasoning')) {
     if (chatConfig.enableReasoning) {
+      // Determine which budget field to use based on model support
+      let budgetTokens: number | undefined;
+      if (modelExtendParams.includes('reasoningBudgetToken32k')) {
+        budgetTokens = chatConfig.reasoningBudgetToken32k || 1024;
+      } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
+        budgetTokens = chatConfig.reasoningBudgetToken80k || 1024;
+      } else {
+        budgetTokens = chatConfig.reasoningBudgetToken || 1024;
+      }
       extendParams.thinking = {
-        budget_tokens: chatConfig.reasoningBudgetToken || 1024,
+        budget_tokens: budgetTokens,
         type: 'enabled',
       };
     } else {
@@ -70,6 +79,18 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
         type: 'disabled',
       };
     }
+  } else if (modelExtendParams.includes('reasoningBudgetToken32k')) {
+    // For models that only have reasoningBudgetToken32k without enableReasoning
+    extendParams.thinking = {
+      budget_tokens: chatConfig.reasoningBudgetToken32k || 1024,
+      type: 'enabled',
+    };
+  } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
+    // For models that only have reasoningBudgetToken80k without enableReasoning
+    extendParams.thinking = {
+      budget_tokens: chatConfig.reasoningBudgetToken80k || 1024,
+      type: 'enabled',
+    };
   } else if (modelExtendParams.includes('reasoningBudgetToken')) {
     // For models that only have reasoningBudgetToken without enableReasoning
     extendParams.thinking = {

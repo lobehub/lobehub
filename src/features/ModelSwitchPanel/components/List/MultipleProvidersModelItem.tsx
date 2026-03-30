@@ -28,6 +28,7 @@ import ModelDetailPanel from '../ModelDetailPanel';
 interface MultipleProvidersModelItemProps {
   activeKey: string;
   data: ModelWithProviders;
+  defaultProviderId?: string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
   onClose: () => void;
@@ -105,7 +106,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                 </DropdownMenuGroupLabel>
                 {data.providers.map((p) => {
                   const key = menuKey(p.id, data.model.id);
-                  const isProviderActive = activeKey === key;
+                  const isProviderActive = isActive ? activeKey === key : p.id === 'lobehub';
                   const providerRestricted = isModelRestricted?.(data.model.id, p.id);
 
                   return (

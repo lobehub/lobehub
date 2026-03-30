@@ -1,5 +1,19 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`SkillContextProvider > should directly inject content for activated skills 1`] = `
+"<task_guides>
+Use \`lh task\` to manage tasks.
+</task_guides>
+
+<available_skills>
+  <skill name="Artifacts">Generate interactive UI components</skill>
+</available_skills>
+
+Use the runSkill tool to activate a skill when needed."
+`;
+
+exports[`SkillContextProvider > should handle all skills activated (no available_skills list) 1`] = `"Task skill content here"`;
+
 exports[`SkillContextProvider > should inject skill metadata when skills are provided 1`] = `
 "<available_skills>
   <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>

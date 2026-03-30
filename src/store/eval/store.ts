@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { type EvalStoreState, initialState } from './initialState';
 import { type BenchmarkAction, createBenchmarkSlice } from './slices/benchmark/action';
 import { createDatasetSlice, type DatasetAction } from './slices/dataset/action';
@@ -26,3 +27,5 @@ const createStore: StateCreator<EvalStore, [['zustand/devtools', never]]> = (set
 const devtools = createDevtools('eval');
 
 export const useEvalStore = createWithEqualityFn<EvalStore>()(devtools(createStore), shallow);
+
+expose('eval', useEvalStore);

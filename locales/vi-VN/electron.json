@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Mô tả",
+  "gateway.descriptionPlaceholder": "Không bắt buộc",
+  "gateway.deviceName": "Tên thiết bị",
+  "gateway.deviceNamePlaceholder": "Nhập tên thiết bị",
+  "gateway.enableConnection": "Kết nối với Gateway",
+  "gateway.statusConnected": "Đã kết nối với Gateway",
+  "gateway.statusConnecting": "Đang kết nối với Gateway...",
+  "gateway.statusDisconnected": "Chưa kết nối với Gateway",
+  "gateway.title": "Cổng thiết bị",
   "navigation.chat": "Trò chuyện",
   "navigation.discover": "Khám phá",
   "navigation.discoverAssistants": "Khám phá Trợ lý",

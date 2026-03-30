@@ -8,6 +8,8 @@ import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-pag
 import { type PublicState } from './store';
 import { usePageEditorStore, useStoreApi } from './store';
 
+type PageAgentEditor = NonNullable<Parameters<typeof pageAgentRuntime.setEditor>[0]>;
+
 export interface StoreUpdaterProps extends Partial<PublicState> {
   pageId?: string;
 }
@@ -37,6 +39,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
+    const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
 
     // Update store with props
     useStoreUpdater('documentId', pageId);
@@ -56,13 +59,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     // Connect editor to page agent runtime
     useEffect(() => {
-      if (editor) {
-        pageAgentRuntime.setEditor(editor);
+      if (pageAgentEditor) {
+        pageAgentRuntime.setEditor(pageAgentEditor);
       }
       return () => {
         pageAgentRuntime.setEditor(null);
       };
-    }, [editor]);
+    }, [pageAgentEditor]);
 
     // Connect title handlers and document ID to page agent runtime
     useEffect(() => {

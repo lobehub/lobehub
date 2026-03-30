@@ -2,6 +2,12 @@ import { createTelegramAdapter } from '@chat-adapter/telegram';
 import debug from 'debug';
 
 import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+
+import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
@@ -13,6 +19,7 @@ import {
 import { formatUsageStats } from '../utils';
 import { TELEGRAM_API_BASE, TelegramApi } from './api';
 import { extractBotId, setTelegramWebhook } from './helpers';
+import { markdownToTelegramHTML } from './markdownToHTML';
 
 const log = debug('bot-platform:telegram:bot');
 
@@ -42,18 +49,39 @@ class TelegramWebhookClient implements PlatformClient {
 
   async start(): Promise<void> {
     log('Starting TelegramBot appId=%s', this.applicationId);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
 
-    const baseUrl = (this.config.credentials.webhookProxyUrl || this.context.appUrl || '')
-      .trim()
-      .replace(/\/$/, '');
-    const webhookUrl = `${baseUrl}/api/agent/webhooks/telegram/${this.applicationId}`;
-    await setTelegramWebhook(
-      this.config.credentials.botToken,
-      webhookUrl,
-      this.config.credentials.secretToken || undefined,
-    );
+    try {
+      const baseUrl = (this.config.credentials.webhookProxyUrl || this.context.appUrl || '')
+        .trim()
+        .replace(/\/$/, '');
+      const webhookUrl = `${baseUrl}/api/agent/webhooks/telegram/${this.applicationId}`;
+      await setTelegramWebhook(
+        this.config.credentials.botToken,
+        webhookUrl,
+        this.config.credentials.secretToken || undefined,
+      );
 
-    log('TelegramBot appId=%s started, webhook=%s', this.applicationId, webhookUrl);
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.connected,
+      });
+
+      log('TelegramBot appId=%s started, webhook=%s', this.applicationId, webhookUrl);
+    } catch (error) {
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        errorMessage: getRuntimeStatusErrorMessage(error),
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.failed,
+      });
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
@@ -70,6 +98,12 @@ class TelegramWebhookClient implements PlatformClient {
       log('TelegramBot appId=%s webhook deleted', this.applicationId);
     } catch (error) {
       log('Failed to delete webhook for appId=%s: %O', this.applicationId, error);
+    } finally {
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.disconnected,
+      });
     }
   }
 
@@ -99,6 +133,18 @@ class TelegramWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
+  }
+
+  async registerBotCommands(
+    commands: Array<{ command: string; description: string }>,
+  ): Promise<void> {
+    const telegram = new TelegramApi(this.config.credentials.botToken);
+    await telegram.setMyCommands(commands);
+    log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
+  }
+
+  formatMarkdown(markdown: string): string {
+    return markdownToTelegramHTML(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {

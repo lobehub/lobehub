@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Fallo de conexión",
   "sync.title": "Estado de sincronización",
   "sync.unconnected.tip": "Fallo en la conexión con el servidor de señalización, no se puede establecer el canal de comunicación entre pares. Verifica tu red e inténtalo de nuevo.",
-  "tab.aiImage": "Arte",
   "tab.audio": "Audio",
   "tab.chat": "Chat",
   "tab.community": "Comunidad",
@@ -405,6 +404,7 @@
   "tab.eval": "Laboratorio de Evaluación",
   "tab.files": "Archivos",
   "tab.home": "Inicio",
+  "tab.image": "Imagen",
   "tab.knowledgeBase": "Biblioteca",
   "tab.marketplace": "Mercado",
   "tab.me": "Yo",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Gestión de facturación",
   "userPanel.cloud": "Lanzar {{name}}",
   "userPanel.community": "Comunidad",
+  "userPanel.credits": "Gestión de Créditos",
   "userPanel.data": "Almacenamiento de datos",
   "userPanel.defaultNickname": "Usuario de la comunidad",
   "userPanel.discord": "Soporte comunitario",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Planes de suscripción",
   "userPanel.profile": "Cuenta",
   "userPanel.setting": "Configuración",
+  "userPanel.upgradePlan": "Actualizar Plan",
   "userPanel.usages": "Estadísticas de uso",
   "version": "Versión"
 }

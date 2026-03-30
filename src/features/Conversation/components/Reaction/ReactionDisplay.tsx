@@ -2,14 +2,14 @@
 
 import type { EmojiReaction } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import ReactionPicker from './ReactionPicker';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   container: css`
     display: flex;
@@ -18,7 +18,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   count: css`
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   reactionTag: css`
     cursor: pointer;
@@ -35,12 +35,12 @@ const useStyles = createStyles(({ css, token }) => ({
     font-size: 14px;
     line-height: 1;
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
 
     transition: all 0.2s;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
@@ -66,8 +66,6 @@ interface ReactionDisplayProps {
 
 const ReactionDisplay = memo<ReactionDisplayProps>(
   ({ reactions, onReactionClick, messageId, isActive }) => {
-    const { styles, cx } = useStyles();
-
     if (reactions.length === 0) return null;
 
     return (

@@ -231,6 +231,8 @@
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Gemini 3画像生成モデル向け；生成される画像の解像度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Gemini 3.1 Flash Imageモデル用; 生成される画像の解像度を制御します（512pxをサポート）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Claude、Qwen3などのモデル向け；推論に使用するトークンの予算を制御します。",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5およびGLM-4.7用；推論のためのトークン予算を制御します（最大32k）。",
+  "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3シリーズ用；推論のためのトークン予算を制御します（最大80k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "OpenAIなどの推論対応モデル向け；推論の努力度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "GPT-5+シリーズ向け；出力の詳細度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "一部のDoubaoモデル向け；モデルが深く思考するかどうかを判断させます。",

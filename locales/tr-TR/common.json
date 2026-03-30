@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Bağlantı Başarısız",
   "sync.title": "Senkronizasyon Durumu",
   "sync.unconnected.tip": "Sinyal sunucusuna bağlantı başarısız oldu ve eşler arası iletişim kanalı kurulamadı. Lütfen ağı kontrol edip tekrar deneyin.",
-  "tab.aiImage": "Sanat Eseri",
   "tab.audio": "Ses",
   "tab.chat": "Sohbet",
   "tab.community": "Topluluk",
@@ -405,6 +404,7 @@
   "tab.eval": "Değerlendirme Laboratuvarı",
   "tab.files": "Dosyalar",
   "tab.home": "Ana Sayfa",
+  "tab.image": "Görsel",
   "tab.knowledgeBase": "Kütüphane",
   "tab.marketplace": "Pazar Yeri",
   "tab.me": "Ben",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Faturalandırma Yönetimi",
   "userPanel.cloud": "{{name}}'i Başlat",
   "userPanel.community": "Topluluk",
+  "userPanel.credits": "Kredi Yönetimi",
   "userPanel.data": "Veri Depolama",
   "userPanel.defaultNickname": "Topluluk Kullanıcısı",
   "userPanel.discord": "Topluluk Desteği",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Abonelik Planları",
   "userPanel.profile": "Hesap",
   "userPanel.setting": "Ayarlar",
+  "userPanel.upgradePlan": "Planı Yükselt",
   "userPanel.usages": "Kullanım İstatistikleri",
   "version": "Sürüm"
 }

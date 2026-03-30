@@ -1,6 +1,7 @@
 {
   "arguments.moreParams": "Toplam {{count}} parametre",
   "arguments.title": "Argümanlar",
+  "builtins.lobe-activator.apiName.activateTools": "Araçları Etkinleştir",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Mevcut modelleri al",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Mevcut Yetenekleri al",
   "builtins.lobe-agent-builder.apiName.getConfig": "Yapılandırmayı al",
@@ -209,7 +210,6 @@
   "builtins.lobe-skills.apiName.runCommand": "Komut Çalıştır",
   "builtins.lobe-skills.apiName.searchSkill": "Becerileri Ara",
   "builtins.lobe-skills.title": "Beceriler",
-  "builtins.lobe-tools.apiName.activateTools": "Araçları Etkinleştir",
   "builtins.lobe-topic-reference.apiName.getTopicContext": "Konu bağlamını al",
   "builtins.lobe-topic-reference.title": "Konu referansı",
   "builtins.lobe-user-memory.apiName.addContextMemory": "Bağlam hafızası ekle",

@@ -70,7 +70,7 @@ const FileCopilot = memo(() => {
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <ChatList />
           </Flexbox>
-          <ChatInput leftActions={actions} />
+          <ChatInput leftActions={actions} showRuntimeConfig={false} />
         </Flexbox>
       </DragUploadZone>
     </RightPanel>

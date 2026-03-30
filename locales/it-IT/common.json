@@ -397,7 +397,6 @@
   "sync.status.unconnected": "Connessione fallita",
   "sync.title": "Stato sincronizzazione",
   "sync.unconnected.tip": "Connessione al server di segnalazione fallita, impossibile stabilire il canale di comunicazione peer-to-peer. Controlla la rete e riprova.",
-  "tab.aiImage": "Illustrazioni",
   "tab.audio": "Audio",
   "tab.chat": "Chat",
   "tab.community": "Comunità",
@@ -405,6 +404,7 @@
   "tab.eval": "Laboratorio di Valutazione",
   "tab.files": "File",
   "tab.home": "Home",
+  "tab.image": "Immagine",
   "tab.knowledgeBase": "Libreria",
   "tab.marketplace": "Mercato",
   "tab.me": "Profilo",
@@ -432,6 +432,7 @@
   "userPanel.billing": "Gestione fatturazione",
   "userPanel.cloud": "Avvia {{name}}",
   "userPanel.community": "Comunità",
+  "userPanel.credits": "Gestione Crediti",
   "userPanel.data": "Archiviazione dati",
   "userPanel.defaultNickname": "Utente della comunità",
   "userPanel.discord": "Supporto comunità",
@@ -443,6 +444,7 @@
   "userPanel.plans": "Piani di abbonamento",
   "userPanel.profile": "Account",
   "userPanel.setting": "Impostazioni",
+  "userPanel.upgradePlan": "Aggiorna piano",
   "userPanel.usages": "Statistiche di utilizzo",
   "version": "Versione"
 }

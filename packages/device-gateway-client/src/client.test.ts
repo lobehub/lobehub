@@ -50,7 +50,9 @@ describe('GatewayClient', () => {
       autoReconnect: false,
       deviceId: 'test-device-id',
       gatewayUrl: 'https://gateway.test.com',
+      serverUrl: 'https://app.test.com',
       token: 'test-token',
+      tokenType: 'apiKey',
       userId: 'test-user',
     });
   });
@@ -88,6 +90,16 @@ describe('GatewayClient', () => {
       expect(client.connectionStatus).toBe('authenticating');
       expect(statusChanges).toContain('connecting');
       expect(statusChanges).toContain('authenticating');
+
+      const ws = (client as any).ws;
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          serverUrl: 'https://app.test.com',
+          token: 'test-token',
+          tokenType: 'apiKey',
+          type: 'auth',
+        }),
+      );
     });
 
     it('should not reconnect if already connected', async () => {

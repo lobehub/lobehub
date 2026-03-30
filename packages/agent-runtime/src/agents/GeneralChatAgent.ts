@@ -102,18 +102,19 @@ export class GeneralChatAgent implements Agent {
     config: ExtendedHumanInterventionConfig | undefined,
     toolArgs: Record<string, any>,
     metadata?: Record<string, any>,
-  ): HumanInterventionPolicy | undefined {
+  ): Promise<HumanInterventionPolicy | undefined> {
     if (!this.isDynamicInterventionConfig(config)) {
-      return undefined;
+      return Promise.resolve(undefined);
     }
 
     const { dynamic } = config;
     const resolver = this.config.dynamicInterventionAudits?.[dynamic.type];
 
-    if (!resolver) return dynamic.default ?? 'never';
+    if (!resolver) return Promise.resolve(dynamic.default ?? 'never');
 
-    const shouldIntervene = resolver(toolArgs, metadata);
-    return shouldIntervene ? (dynamic.policy ?? 'always') : (dynamic.default ?? 'never');
+    return Promise.resolve(resolver(toolArgs, metadata)).then((shouldIntervene) =>
+      shouldIntervene ? (dynamic.policy ?? 'always') : (dynamic.default ?? 'never'),
+    );
   }
 
   /**
@@ -121,10 +122,10 @@ export class GeneralChatAgent implements Agent {
    * Combines user's global config with tool's own config
    * Returns [toolsNeedingIntervention, toolsToExecute]
    */
-  private checkInterventionNeeded(
+  private async checkInterventionNeeded(
     toolsCalling: ChatToolPayload[],
     state: AgentState,
-  ): [ChatToolPayload[], ChatToolPayload[]] {
+  ): Promise<[ChatToolPayload[], ChatToolPayload[]]> {
     const toolsNeedingIntervention: ChatToolPayload[] = [];
     const toolsToExecute: ChatToolPayload[] = [];
 
@@ -158,7 +159,7 @@ export class GeneralChatAgent implements Agent {
       let globalPolicy: HumanInterventionPolicy = 'always';
 
       for (const globalResolver of globalResolvers) {
-        if (globalResolver.resolver(toolArgs, resolverMetadata)) {
+        if (await globalResolver.resolver(toolArgs, resolverMetadata)) {
           globalBlocked = true;
           globalPolicy = globalResolver.policy ?? 'always';
           break;
@@ -185,7 +186,7 @@ export class GeneralChatAgent implements Agent {
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
       const isDynamicConfig = this.isDynamicInterventionConfig(config);
-      const dynamicPolicy = this.resolveDynamicPolicy(config, toolArgs, state.metadata);
+      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, state.metadata);
       const staticConfig = isDynamicConfig
         ? undefined
         : (config as HumanInterventionConfig | undefined);
@@ -420,7 +421,7 @@ export class GeneralChatAgent implements Agent {
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
           // Check which tools need human intervention
-          const [toolsNeedingIntervention, toolsToExecute] = this.checkInterventionNeeded(
+          const [toolsNeedingIntervention, toolsToExecute] = await this.checkInterventionNeeded(
             toolsCalling,
             state,
           );
@@ -546,6 +547,10 @@ export class GeneralChatAgent implements Agent {
           };
         }
 
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
+
         // No pending tools, continue to call LLM with tool results
         return this.toLLMCall({
           messages: state.messages,
@@ -576,6 +581,12 @@ export class GeneralChatAgent implements Agent {
           };
         }
 
+        // If there are queued user messages, finish early so the queue
+        // can be processed as a new operation with full context
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
+
         // No pending tools, continue to call LLM with tool results
         return this.toLLMCall({
           messages: state.messages,
@@ -603,6 +614,10 @@ export class GeneralChatAgent implements Agent {
       case 'tasks_batch_result': {
         // Async tasks batch completed, continue to call LLM with results
         const { parentMessageId } = context.payload as TasksBatchResultPayload;
+
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
 
         // Inject a virtual user message to force the model to summarize or continue
         // This fixes an issue where some models (e.g., Kimi K2) return empty content

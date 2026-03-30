@@ -7,7 +7,7 @@ import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 // ==================== User Base Types ====================
 
 /**
- * 获取用户列表请求参数（可选分页）
+ * Get user list request parameters (optional pagination)
  */
 export interface GetUsersRequest {
   page?: number;
@@ -15,7 +15,7 @@ export interface GetUsersRequest {
 }
 
 /**
- * 扩展的用户信息类型，包含角色信息
+ * Extended user info type including role information
  */
 export type UserWithRoles = UserItem & {
   messageCount?: number;
@@ -25,7 +25,7 @@ export type UserWithRoles = UserItem & {
 // ==================== User CRUD Types ====================
 
 /**
- * 创建用户请求参数
+ * Create user request parameters
  */
 export interface CreateUserRequest {
   avatar?: string;
@@ -52,7 +52,7 @@ export const CreateUserRequestSchema = z.object({
 });
 
 /**
- * 更新用户请求参数
+ * Update user request parameters
  */
 export interface UpdateUserRequest {
   avatar?: string;
@@ -68,7 +68,7 @@ export interface UpdateUserRequest {
 }
 
 /**
- * 更新用户请求验证Schema
+ * Update user request validation schema
  */
 export const UpdateUserRequestSchema = z.object({
   avatar: z.string().nullish(),
@@ -96,10 +96,10 @@ export type UserListResponse = PaginationQueryResponse<{
 // ==================== User Role Management Types ====================
 
 /**
- * 单个添加角色的请求
+ * Request for adding a single role
  */
 export interface AddRoleRequest {
-  expiresAt?: string; // ISO 8601 格式的过期时间
+  expiresAt?: string; // Expiry time in ISO 8601 format
   roleId: string;
 }
 
@@ -109,11 +109,11 @@ export const AddRoleRequestSchema = z.object({
 });
 
 /**
- * 更新用户角色的请求参数
+ * Update user roles request parameters
  */
 export interface UpdateUserRolesRequest {
-  addRoles?: AddRoleRequest[]; // 要添加的角色
-  removeRoles?: string[]; // 要移除的角色ID
+  addRoles?: AddRoleRequest[]; // Roles to add
+  removeRoles?: string[]; // Role IDs to remove
 }
 
 export const UpdateUserRolesRequestSchema = z
@@ -123,7 +123,7 @@ export const UpdateUserRolesRequestSchema = z
   })
   .refine(
     (data) => {
-      // 至少要有一个操作（添加或移除）
+      // At least one operation (add or remove) must be specified
       return (
         (data.addRoles && data.addRoles.length > 0) ||
         (data.removeRoles && data.removeRoles.length > 0)
@@ -135,7 +135,7 @@ export const UpdateUserRolesRequestSchema = z
   )
   .refine(
     (data) => {
-      // 检查添加和移除的角色之间不能有重复
+      // Check that there are no overlapping roles between add and remove lists
       if (!data.addRoles || !data.removeRoles) return true;
 
       const addRoleIds = data.addRoles.map((r) => r.roleId);
@@ -150,14 +150,14 @@ export const UpdateUserRolesRequestSchema = z
   );
 
 /**
- * 用户角色详情，包含角色信息和关联信息
+ * User role detail, including role info and association info
  */
 export interface UserRoleDetail extends UserRoleItem {
   role: RoleItem;
 }
 
 /**
- * 用户角色操作响应
+ * User role operation response
  */
 export type UserRolesResponse = {
   expiresAt?: Date | null;
@@ -167,7 +167,7 @@ export type UserRolesResponse = {
 }[];
 
 /**
- * 用户角色操作结果
+ * User role operation result
  */
 export interface UserRoleOperationResult {
   added: number;

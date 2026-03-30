@@ -6,12 +6,11 @@ import {
 } from '@lobechat/const';
 import { type ItemType } from '@lobehub/ui';
 import { Avatar, Icon } from '@lobehub/ui';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
-import { ToyBrick } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
@@ -235,13 +234,10 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const builtinAgentSkillItems = useMemo(
     () =>
       installedBuiltinSkills.map((skill) => ({
-        icon: (
-          <Avatar
-            avatar={skill.avatar || '🧩'}
-            shape={'square'}
-            size={SKILL_ICON_SIZE}
-            style={{ flex: 'none' }}
-          />
+        icon: skill.avatar ? (
+          <Avatar avatar={skill.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
         ),
         key: skill.identifier,
         label: (
@@ -264,9 +260,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const marketAgentSkillItems = useMemo(
     () =>
       marketAgentSkills.map((skill) => ({
-        icon: (
-          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
-        ),
+        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
         key: skill.identifier,
         label: (
           <ToolItem
@@ -288,9 +282,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const userAgentSkillItems = useMemo(
     () =>
       userAgentSkills.map((skill) => ({
-        icon: (
-          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
-        ),
+        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
         key: skill.identifier,
         label: (
           <ToolItem
@@ -331,11 +323,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
 
   // Function to map plugins to list items
   const mapPluginToItem = (item: (typeof list)[0]) => ({
-    icon: item?.avatar ? (
-      <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-    ) : (
-      <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-    ),
+    icon:
+      item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+        <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+      ) : (
+        <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+      ),
     key: item.identifier,
     label: (
       <ToolItem
@@ -458,13 +451,10 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledBuiltinAgentSkillItems = installedBuiltinSkills
       .filter((skill) => checked.includes(skill.identifier))
       .map((skill) => ({
-        icon: (
-          <Avatar
-            avatar={skill.avatar || '🧩'}
-            shape={'square'}
-            size={SKILL_ICON_SIZE}
-            style={{ flex: 'none' }}
-          />
+        icon: skill.avatar ? (
+          <Avatar avatar={skill.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
         ),
         key: skill.identifier,
         label: (
@@ -508,11 +498,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledCommunityPlugins = communityPlugins
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
-        icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-        ) : (
-          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-        ),
+        icon:
+          item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+          ) : (
+            <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+          ),
         key: item.identifier,
         label: (
           <ToolItem
@@ -532,11 +523,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledCustomPlugins = customPlugins
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
-        icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-        ) : (
-          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-        ),
+        icon:
+          item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+          ) : (
+            <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+          ),
         key: item.identifier,
         label: (
           <ToolItem
@@ -556,9 +548,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledMarketAgentSkillItems = marketAgentSkills
       .filter((skill) => checked.includes(skill.identifier))
       .map((skill) => ({
-        icon: (
-          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
-        ),
+        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
         key: skill.identifier,
         label: (
           <ToolItem
@@ -589,9 +579,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledUserAgentSkillItems = userAgentSkills
       .filter((skill) => checked.includes(skill.identifier))
       .map((skill) => ({
-        icon: (
-          <Avatar avatar={'🧩'} shape={'square'} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
-        ),
+        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
         key: skill.identifier,
         label: (
           <ToolItem

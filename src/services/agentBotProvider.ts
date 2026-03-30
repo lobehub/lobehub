@@ -1,5 +1,7 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
+import type { BotRuntimeStatusSnapshot } from '../types/botRuntimeStatus';
+
 class AgentBotProviderService {
   listPlatforms = async () => {
     return lambdaClient.agentBotProvider.listPlatforms.query();
@@ -7,6 +9,17 @@ class AgentBotProviderService {
 
   getByAgentId = async (agentId: string) => {
     return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
+  };
+
+  listRuntimeStatuses = async (agentId: string): Promise<BotRuntimeStatusSnapshot[]> => {
+    return lambdaClient.agentBotProvider.listRuntimeStatuses.query({ agentId });
+  };
+
+  getRuntimeStatus = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<BotRuntimeStatusSnapshot> => {
+    return lambdaClient.agentBotProvider.getRuntimeStatus.query(params);
   };
 
   create = async (params: {
@@ -37,7 +50,10 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.delete.mutate({ id });
   };
 
-  connectBot = async (params: { applicationId: string; platform: string }) => {
+  connectBot = async (params: {
+    applicationId: string;
+    platform: string;
+  }): Promise<{ status: 'queued' | 'started' }> => {
     return lambdaClient.agentBotProvider.connectBot.mutate(params);
   };
 

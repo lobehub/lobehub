@@ -1,4 +1,4 @@
-import { DEFAULT_DEBOUNCE_MS, MAX_DEBOUNCE_MS } from '../const';
+import { MAX_DEBOUNCE_MS } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -37,13 +37,23 @@ export const schema: FieldSchema[] = [
         type: 'number',
       },
       {
+        key: 'concurrency',
+        default: 'debounce',
+        description: 'channel.concurrencyHint',
+        enum: ['queue', 'debounce'],
+        enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
+        label: 'channel.concurrency',
+        type: 'string',
+      },
+      {
         key: 'debounceMs',
-        default: DEFAULT_DEBOUNCE_MS,
+        default: 5000,
         description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
         maximum: MAX_DEBOUNCE_MS,
-        minimum: 0,
+        minimum: 100,
         type: 'number',
+        visibleWhen: { field: 'concurrency', value: 'debounce' },
       },
       {
         key: 'showUsageStats',

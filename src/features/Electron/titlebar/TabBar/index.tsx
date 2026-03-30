@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { useElectronStore } from '@/store/electron';
-import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
 import { useStyles } from './styles';
@@ -121,7 +120,7 @@ const TabBar = () => {
 
   return (
     <ScrollArea
-      className={`${electronStylish.nodrag} ${styles.container}`}
+      className={styles.container}
       viewportProps={{ ref: viewportRef }}
       contentProps={{
         style: { alignItems: 'center', flexDirection: 'row', gap: TAB_GAP },

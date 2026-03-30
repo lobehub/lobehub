@@ -532,6 +532,38 @@ const isTopicUnreadCompleted =
     return s.unreadCompletedTopicIds.has(topicId);
   };
 
+// ━━━ Message Queue Selectors ━━━
+
+/**
+ * Get queued messages count for a context
+ */
+const queuedMessageCount =
+  (context: { agentId?: string; groupId?: string; topicId?: string | null }) =>
+  (s: ChatStoreState): number => {
+    if (!context.agentId) return 0;
+    const contextKey = messageMapKey({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      topicId: context.topicId,
+    });
+    return s.queuedMessages[contextKey]?.length ?? 0;
+  };
+
+/**
+ * Get all queued messages for a context
+ */
+const getQueuedMessages =
+  (context: { agentId?: string; groupId?: string; topicId?: string | null }) =>
+  (s: ChatStoreState) => {
+    if (!context.agentId) return [];
+    const contextKey = messageMapKey({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      topicId: context.topicId,
+    });
+    return s.queuedMessages[contextKey] ?? [];
+  };
+
 /**
  * Operation Selectors
  */
@@ -578,4 +610,8 @@ export const operationSelectors = {
   isRegenerating,
   isSendingMessage,
   isTopicUnreadCompleted,
+
+  // Message Queue
+  getQueuedMessages,
+  queuedMessageCount,
 };

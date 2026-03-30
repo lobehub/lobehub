@@ -1,4 +1,4 @@
-export { pathScopeAudit } from './interventionAudit';
+export { createPathScopeAudit, pathScopeAudit } from './interventionAudit';
 export { LocalSystemManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {

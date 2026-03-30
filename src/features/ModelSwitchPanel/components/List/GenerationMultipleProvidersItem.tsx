@@ -48,6 +48,11 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
           <DropdownMenuSubmenuTrigger
             className={cx(menuSharedStyles.item, isActive && modelSwitchPanelStyles.menuItemActive)}
             style={{ paddingBlock: 8, paddingInline: 8 }}
+            onClick={() => {
+              setSubOpen(false);
+              onModelChange(item.data.model.id, (activeProvider ?? item.data.providers[0]).id);
+              onClose();
+            }}
           >
             <ModelItemComponent
               {...item.data.model}
@@ -76,7 +81,7 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
                   </Flexbox>
                   {item.data.providers.map((p) => {
                     const pKey = menuKey(p.id, item.data.model.id);
-                    const isProviderActive = activeKey === pKey;
+                    const isProviderActive = isActive ? activeKey === pKey : p.id === 'lobehub';
                     return (
                       <Flexbox
                         horizontal

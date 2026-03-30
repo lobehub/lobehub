@@ -19,6 +19,7 @@ export class TelegramApi {
     log('sendMessage: chatId=%s', chatId);
     const data = await this.call('sendMessage', {
       chat_id: chatId,
+      parse_mode: 'HTML',
       text: this.truncateText(text),
     });
     return { message_id: data.result.message_id };
@@ -30,6 +31,7 @@ export class TelegramApi {
       await this.call('editMessageText', {
         chat_id: chatId,
         message_id: messageId,
+        parse_mode: 'HTML',
         text: this.truncateText(text),
       });
     } catch (error: any) {
@@ -69,6 +71,11 @@ export class TelegramApi {
       message_id: messageId,
       reaction: [],
     });
+  }
+
+  async setMyCommands(commands: Array<{ command: string; description: string }>): Promise<void> {
+    log('setMyCommands: %d commands', commands.length);
+    await this.call('setMyCommands', { commands });
   }
 
   // ------------------------------------------------------------------

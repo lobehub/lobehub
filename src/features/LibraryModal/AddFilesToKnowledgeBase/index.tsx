@@ -9,28 +9,46 @@ interface AddFilesToKnowledgeBaseModalProps {
   fileIds: string[];
   knowledgeBaseId?: string;
   onClose?: () => void;
+  resolveFileIds?: () => Promise<string[]>;
+  selectedCount?: number;
 }
 
 interface ModalContentProps {
   fileIds: string[];
   knowledgeBaseId?: string;
+  resolveFileIds?: () => Promise<string[]>;
+  selectedCount?: number;
 }
 
-const ModalContent = memo<ModalContentProps>(({ fileIds, knowledgeBaseId }) => {
-  const { t } = useTranslation('knowledgeBase');
-  const { close } = useModalContext();
-  return (
-    <>
-      <Flexbox horizontal gap={8} paddingBlock={16} paddingInline={16} style={{ paddingBottom: 0 }}>
-        <Icon icon={BookUp2Icon} />
-        {t('addToKnowledgeBase.title')}
-      </Flexbox>
-      <Flexbox padding={16} style={{ paddingTop: 0 }}>
-        <SelectForm fileIds={fileIds} knowledgeBaseId={knowledgeBaseId} onClose={close} />
-      </Flexbox>
-    </>
-  );
-});
+const ModalContent = memo<ModalContentProps>(
+  ({ fileIds, knowledgeBaseId, resolveFileIds, selectedCount }) => {
+    const { t } = useTranslation('knowledgeBase');
+    const { close } = useModalContext();
+    return (
+      <>
+        <Flexbox
+          horizontal
+          gap={8}
+          paddingBlock={16}
+          paddingInline={16}
+          style={{ paddingBottom: 0 }}
+        >
+          <Icon icon={BookUp2Icon} />
+          {t('addToKnowledgeBase.title')}
+        </Flexbox>
+        <Flexbox padding={16} style={{ paddingTop: 0 }}>
+          <SelectForm
+            fileIds={fileIds}
+            knowledgeBaseId={knowledgeBaseId}
+            resolveFileIds={resolveFileIds}
+            selectedCount={selectedCount}
+            onClose={close}
+          />
+        </Flexbox>
+      </>
+    );
+  },
+);
 
 ModalContent.displayName = 'AddFilesToKnowledgeBaseModalContent';
 
@@ -40,7 +58,12 @@ export const useAddFilesToKnowledgeBaseModal = () => {
       afterClose: params?.onClose,
       children: (
         <Suspense fallback={<div style={{ minHeight: 200 }} />}>
-          <ModalContent fileIds={params?.fileIds || []} knowledgeBaseId={params?.knowledgeBaseId} />
+          <ModalContent
+            fileIds={params?.fileIds || []}
+            knowledgeBaseId={params?.knowledgeBaseId}
+            resolveFileIds={params?.resolveFileIds}
+            selectedCount={params?.selectedCount}
+          />
         </Suspense>
       ),
       footer: null,

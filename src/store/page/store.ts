@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type PageState } from './initialState';
 import { initialState } from './initialState';
@@ -37,5 +38,7 @@ const createStore: StateCreator<PageStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('page');
 
 export const usePageStore = createWithEqualityFn<PageStore>()(devtools(createStore), shallow);
+
+expose('page', usePageStore);
 
 export const getPageStoreState = () => usePageStore.getState();

@@ -113,7 +113,7 @@ export default {
   'cmdk.aiModeEmptyState': 'Type your question above to start chatting with AI',
   'cmdk.aiModeHint': 'Press Enter to ask',
   'cmdk.aiModePlaceholder': 'Ask AI anything...',
-  'cmdk.aiPainting': 'AI Art',
+  'cmdk.aiPainting': 'AI Image',
   'cmdk.askAI': 'Ask Agent',
   'cmdk.askAIHeading': 'Use the following features for {{query}}',
   'cmdk.askAIHeadingEmpty': 'Choose an AI feature',
@@ -129,7 +129,7 @@ export default {
   'cmdk.context.group': 'Group',
   'cmdk.context.memory': 'Memory',
   'cmdk.context.page': 'Page',
-  'cmdk.context.painting': 'Painting',
+  'cmdk.context.painting': 'Image',
   'cmdk.context.resource': 'Resource',
   'cmdk.context.settings': 'Settings',
   'cmdk.discover': 'Discover',
@@ -210,7 +210,7 @@ export default {
 
   'cmdk.pages': 'Pages',
 
-  'cmdk.painting': 'Painting',
+  'cmdk.painting': 'Image',
 
   'cmdk.resource': 'Resources',
 
@@ -476,7 +476,7 @@ export default {
   'sync.title': 'Sync Status',
   'sync.unconnected.tip':
     'Signaling server connection failed, and peer-to-peer communication channel cannot be established. Please check the network and try again.',
-  'tab.aiImage': 'Artwork',
+  'tab.image': 'Image',
   'tab.audio': 'Audio',
   'tab.chat': 'Chat',
   'tab.community': 'Community',
@@ -509,9 +509,10 @@ export default {
   'upgradeVersion.newVersion': 'Update available: {{version}}',
   'upgradeVersion.serverVersion': 'Server: {{version}}',
   'userPanel.anonymousNickName': 'Anonymous User',
-  'userPanel.billing': 'Billing Management',
+  'userPanel.billing': 'Billing',
   'userPanel.cloud': 'Launch {{name}}',
   'userPanel.community': 'Community',
+  'userPanel.credits': 'Credits',
   'userPanel.data': 'Data Storage',
   'userPanel.defaultNickname': 'Community User',
   'userPanel.discord': 'Discord',
@@ -523,6 +524,7 @@ export default {
   'userPanel.plans': 'Subscription Plans',
   'userPanel.profile': 'Account',
   'userPanel.setting': 'Settings',
-  'userPanel.usages': 'Usage Statistics',
+  'userPanel.upgradePlan': 'Upgrade Plan',
+  'userPanel.usages': 'Usage',
   'version': 'Version',
 };

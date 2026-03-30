@@ -31,9 +31,10 @@ const mockSearchManifest: LobeToolManifest = {
 
 describe('buildStepToolDelta', () => {
   describe('device activation', () => {
-    it('should activate local-system when device is active and not in operation set', () => {
+    it('should activate local-system when device is active and not in enabled tools', () => {
       const delta = buildStepToolDelta({
         activeDeviceId: 'device-123',
+        enabledToolIds: ['web-search'],
         localSystemManifest: mockLocalSystemManifest,
         operationManifestMap: {},
       });
@@ -46,9 +47,29 @@ describe('buildStepToolDelta', () => {
       });
     });
 
-    it('should not activate local-system when already in operation set', () => {
+    it('should activate local-system even when manifest exists in manifestMap but not enabled', () => {
+      // Regression: manifestMap contains all registered manifests (including inactive ones).
+      // The old check used operationManifestMap to deduplicate, which incorrectly skipped
+      // injection when the tool was registered but not enabled.
       const delta = buildStepToolDelta({
         activeDeviceId: 'device-123',
+        enabledToolIds: ['web-search', 'remote-device'],
+        localSystemManifest: mockLocalSystemManifest,
+        operationManifestMap: { 'local-system': mockLocalSystemManifest },
+      });
+
+      expect(delta.activatedTools).toHaveLength(1);
+      expect(delta.activatedTools[0]).toEqual({
+        id: 'local-system',
+        manifest: mockLocalSystemManifest,
+        source: 'device',
+      });
+    });
+
+    it('should not activate local-system when already in enabled tools', () => {
+      const delta = buildStepToolDelta({
+        activeDeviceId: 'device-123',
+        enabledToolIds: ['local-system', 'web-search'],
         localSystemManifest: mockLocalSystemManifest,
         operationManifestMap: { 'local-system': mockLocalSystemManifest },
       });
@@ -58,6 +79,7 @@ describe('buildStepToolDelta', () => {
 
     it('should not activate when no activeDeviceId', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: [],
         localSystemManifest: mockLocalSystemManifest,
         operationManifestMap: {},
       });
@@ -68,6 +90,7 @@ describe('buildStepToolDelta', () => {
     it('should not activate when no localSystemManifest', () => {
       const delta = buildStepToolDelta({
         activeDeviceId: 'device-123',
+        enabledToolIds: [],
         operationManifestMap: {},
       });
 
@@ -76,8 +99,9 @@ describe('buildStepToolDelta', () => {
   });
 
   describe('mentioned tools', () => {
-    it('should add mentioned tools not in operation set', () => {
+    it('should add mentioned tools not in enabled tools', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: [],
         mentionedToolIds: ['tool-a', 'tool-b'],
         operationManifestMap: {},
       });
@@ -87,8 +111,9 @@ describe('buildStepToolDelta', () => {
       expect(delta.activatedTools[1]).toEqual({ id: 'tool-b', source: 'mention' });
     });
 
-    it('should skip mentioned tools already in operation set', () => {
+    it('should skip mentioned tools already in enabled tools', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: ['web-search'],
         mentionedToolIds: ['web-search', 'tool-a'],
         operationManifestMap: { 'web-search': mockSearchManifest },
       });
@@ -99,6 +124,7 @@ describe('buildStepToolDelta', () => {
 
     it('should handle empty mentionedToolIds', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: [],
         mentionedToolIds: [],
         operationManifestMap: {},
       });
@@ -110,6 +136,7 @@ describe('buildStepToolDelta', () => {
   describe('forceFinish', () => {
     it('should set deactivatedToolIds to wildcard when forceFinish is true', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: [],
         forceFinish: true,
         operationManifestMap: {},
       });
@@ -119,6 +146,7 @@ describe('buildStepToolDelta', () => {
 
     it('should not set deactivatedToolIds when forceFinish is false', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: [],
         forceFinish: false,
         operationManifestMap: {},
       });
@@ -131,6 +159,7 @@ describe('buildStepToolDelta', () => {
     it('should handle device + mentions + forceFinish together', () => {
       const delta = buildStepToolDelta({
         activeDeviceId: 'device-123',
+        enabledToolIds: [],
         forceFinish: true,
         localSystemManifest: mockLocalSystemManifest,
         mentionedToolIds: ['tool-a'],
@@ -143,6 +172,7 @@ describe('buildStepToolDelta', () => {
 
     it('should return empty delta when no signals', () => {
       const delta = buildStepToolDelta({
+        enabledToolIds: [],
         operationManifestMap: {},
       });
 

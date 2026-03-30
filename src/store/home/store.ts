@@ -6,6 +6,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type HomeStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -61,5 +62,7 @@ export const useHomeStore = createWithEqualityFn<HomeStore>()(
   ),
   shallow,
 );
+
+expose('home', useHomeStore);
 
 export const getHomeStoreState = () => useHomeStore.getState();

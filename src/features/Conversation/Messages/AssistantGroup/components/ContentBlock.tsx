@@ -1,6 +1,7 @@
 import { Flexbox, Highlighter } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
+import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 import { useErrorContent } from '@/features/Conversation/Error';
 import { type AssistantContentBlock } from '@/types/index';
@@ -15,9 +16,20 @@ import MessageContent from './MessageContent';
 interface ContentBlockProps extends AssistantContentBlock {
   assistantId: string;
   disableEditing?: boolean;
+  isFirstBlock?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({ id, tools, content, imageList, reasoning, error, assistantId, disableEditing }) => {
+  ({
+    id,
+    tools,
+    content,
+    imageList,
+    reasoning,
+    error,
+    assistantId,
+    disableEditing,
+    isFirstBlock,
+  }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -62,16 +74,32 @@ const ContentBlock = memo<ContentBlockProps>(
 
     return (
       <Flexbox gap={8} id={id}>
-        {showReasoning && <Reasoning {...reasoning} id={id} />}
+        {showReasoning && (
+          <SafeBoundary>
+            <Reasoning {...reasoning} id={id} />
+          </SafeBoundary>
+        )}
 
-        {/* Content - markdown text */}
-        <MessageContent content={content} hasTools={hasTools} id={id} />
+        <SafeBoundary variant="alert">
+          <MessageContent
+            content={content}
+            hasTools={hasTools}
+            id={id}
+            isFirstBlock={isFirstBlock}
+          />
+        </SafeBoundary>
 
-        {/* Image files */}
-        {showImageItems && <ImageFileListViewer items={imageList} />}
+        {showImageItems && (
+          <SafeBoundary>
+            <ImageFileListViewer items={imageList} />
+          </SafeBoundary>
+        )}
 
-        {/* Tools */}
-        {hasTools && <Tools disableEditing={disableEditing} messageId={id} tools={tools} />}
+        {hasTools && (
+          <SafeBoundary>
+            <Tools disableEditing={disableEditing} messageId={id} tools={tools} />
+          </SafeBoundary>
+        )}
       </Flexbox>
     );
   },

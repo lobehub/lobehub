@@ -65,11 +65,11 @@ export const createAnthropicGenerateObject = async (
   }
 
   try {
-    log('calling Anthropic API with max_tokens: %d', 8192);
+    log('calling Anthropic API with max_tokens: %d', 64_000);
 
     const response = await client.messages.create(
       {
-        max_tokens: 8192,
+        max_tokens: 64_000,
         messages: anthropicMessages,
         model,
         system: systemPrompts,
