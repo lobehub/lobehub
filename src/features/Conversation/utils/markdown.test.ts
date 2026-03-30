@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { processWithArtifact } from './markdown';
+import { normalizeThinkTags, processWithArtifact, shouldProcessThinkTags } from './markdown';
 
 describe('processWithArtifact', () => {
   it('should removeLineBreaks with closed tag', () => {
@@ -274,6 +274,34 @@ This code provides a basic calculator that can perform addition, subtraction, mu
 <lobeArtifact identifier="web-calculator" type="text/html" title="Web Calculator"><!DOCTYPE html><html lang="en"><head>    <meta charset="UTF-8">    <title>Simple Calculator</title></head><body>    <div>Calculator</div></body></html></lobeArtifact>
 
 This code provides a basic calculator that can perform addition, subtraction, multiplication, and division.`);
+  });
+});
+
+describe('think tag helpers', () => {
+  describe('shouldProcessThinkTags', () => {
+    it('should only enable think tags for leading completed think blocks', () => {
+      expect(shouldProcessThinkTags('<think>thinking</think>\n\nanswer')).toBe(true);
+      expect(shouldProcessThinkTags('Answer with <think>literal</think> text')).toBe(false);
+    });
+
+    it('should only enable unfinished think blocks while generating', () => {
+      expect(shouldProcessThinkTags('<think>thinking', false)).toBe(false);
+      expect(shouldProcessThinkTags('<think>thinking', true)).toBe(true);
+    });
+  });
+
+  describe('normalizeThinkTags', () => {
+    it('should normalize leading think tags for reasoning blocks', () => {
+      expect(normalizeThinkTags('<think>思考</think>回答')).toEqual(
+        '<think>\n\n思考\n\n</think>\n\n回答',
+      );
+    });
+
+    it('should leave literal think tags in regular content unchanged', () => {
+      const input = '模型会输出<think>这样的标签来举例说明';
+
+      expect(normalizeThinkTags(input)).toEqual(input);
+    });
   });
 });
 

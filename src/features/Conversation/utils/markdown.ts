@@ -1,5 +1,8 @@
 import { ARTIFACT_TAG_REGEX, ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
+const THINK_CLOSE_TAG = '</think>';
+const THINK_OPEN_TAG = '<think>';
+
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
@@ -61,8 +64,18 @@ export const processWithArtifact = (input: string = '') => {
   return output;
 };
 
+export const shouldProcessThinkTags = (input: string = '', isGenerating = false) => {
+  const trimmedInput = input.trimStart();
+
+  if (!trimmedInput.startsWith(THINK_OPEN_TAG)) return false;
+
+  return trimmedInput.includes(THINK_CLOSE_TAG) || isGenerating;
+};
+
 // Preprocessing function: ensure two newlines before and after think tags
-export const normalizeThinkTags = (input: string) => {
+export const normalizeThinkTags = (input: string, isGenerating = false) => {
+  if (!shouldProcessThinkTags(input, isGenerating)) return input;
+
   return (
     input
       // Ensure two newlines before and after <think> tags

@@ -6,7 +6,7 @@ import Component from './Render';
 
 const ThinkingElement: MarkdownElement = {
   Component,
-  remarkPlugin: createRemarkCustomTagPlugin(THINKING_TAG),
+  remarkPlugin: createRemarkCustomTagPlugin(THINKING_TAG, { position: 'leading' }),
   scope: 'assistant',
   tag: THINKING_TAG,
 };

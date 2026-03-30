@@ -46,7 +46,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
   const errorContent = useErrorContent(error);
 
   // remove line breaks in artifact tag to make the ast transform easier
-  const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
+  const message = !editing ? normalizeThinkTags(processWithArtifact(content), generating) : content;
 
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);

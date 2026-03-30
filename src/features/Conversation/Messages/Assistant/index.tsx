@@ -70,7 +70,7 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
     );
 
   // remove line breaks in artifact tag to make the ast transform easier
-  const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
+  const message = !editing ? normalizeThinkTags(processWithArtifact(content), generating) : content;
 
   const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();

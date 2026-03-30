@@ -1,25 +1,28 @@
 import { type MarkdownProps } from '@lobehub/ui';
 import { useMemo } from 'react';
 
+import { THINKING_TAG } from '@/const/plugin';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { type MarkdownElement } from '../../Markdown/plugins';
 import { markdownElements } from '../../Markdown/plugins';
-import { messageStateSelectors, useConversationStore } from '../../store';
-
-const rehypePlugins = markdownElements
-  .map((element: MarkdownElement) => element.rehypePlugin)
-  .filter(Boolean);
-const remarkPlugins = markdownElements
-  .map((element: MarkdownElement) => element.remarkPlugin)
-  .filter(Boolean);
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import { shouldProcessThinkTags } from '../../utils/markdown';
 
 export const useMarkdown = (id: string): Partial<MarkdownProps> => {
+  const item = useConversationStore(dataSelectors.getDbMessageById(id));
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
 
   const animated = transitionMode === 'fadeIn' && generating;
+  const shouldEnableThinkTag = shouldProcessThinkTags(item?.content, generating);
+
+  const activeMarkdownElements = useMemo(
+    () =>
+      markdownElements.filter((element) => element.tag !== THINKING_TAG || shouldEnableThinkTag),
+    [shouldEnableThinkTag],
+  );
 
   const components = useMemo(
     () =>
@@ -32,6 +35,16 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
       ),
     [id],
   );
+
+  const rehypePlugins = useMemo(
+    () => activeMarkdownElements.map((element) => element.rehypePlugin).filter(Boolean),
+    [activeMarkdownElements],
+  );
+  const remarkPlugins = useMemo(
+    () => activeMarkdownElements.map((element) => element.remarkPlugin).filter(Boolean),
+    [activeMarkdownElements],
+  );
+
   return useMemo(
     () =>
       ({
@@ -42,6 +55,6 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
         rehypePlugins,
         remarkPlugins,
       }) satisfies Partial<MarkdownProps>,
-    [animated, components],
+    [animated, components, rehypePlugins, remarkPlugins],
   );
 };
