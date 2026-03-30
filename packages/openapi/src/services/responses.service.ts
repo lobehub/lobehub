@@ -31,7 +31,7 @@ export class ResponsesService extends BaseService {
   /**
    * Extract hosted builtin tool identifiers from tools array
    */
-  private extractHostedToolIds(tools?: Tool[]): string[] {
+  private extractHostedToolIds(tools?: Tool[] | null): string[] {
     if (!tools) return [];
     return tools.filter((t) => t.type !== 'function').map((t) => t.type);
   }
