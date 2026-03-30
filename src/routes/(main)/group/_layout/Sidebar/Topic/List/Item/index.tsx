@@ -48,10 +48,10 @@ const styles = createStaticStyles(({ css }) => ({
     height: 6px;
     border-radius: 50%;
 
-    background: ${cssVar.colorSuccess};
+    background: ${cssVar.colorInfo};
     box-shadow:
-      0 0 3px ${cssVar.colorSuccess},
-      0 0 6px ${cssVar.colorSuccess};
+      0 0 3px ${cssVar.colorInfo},
+      0 0 6px ${cssVar.colorInfo};
   `,
 }));
 
@@ -127,7 +127,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   });
 
   const hasUnread = id && isUnreadCompleted;
-  const successColor = cssVar.colorSuccess;
+  const infoColor = cssVar.colorInfo;
   const unreadNode = (
     <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
       <AnimatePresence mode="popLayout">
