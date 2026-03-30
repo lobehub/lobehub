@@ -185,6 +185,48 @@ export const agentDocumentRouter = router({
     }),
 
   /**
+   * Tool-oriented: list documents for an agent
+   */
+  listDocuments: agentDocumentProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.listDocuments(input.agentId);
+    }),
+
+  /**
+   * Tool-oriented: read document by filename
+   */
+  readDocumentByFilename: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        filename: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.getDocumentByFilename(input.agentId, input.filename);
+    }),
+
+  /**
+   * Tool-oriented: upsert document by filename
+   */
+  upsertDocumentByFilename: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        content: z.string(),
+        filename: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.upsertDocumentByFilename({
+        agentId: input.agentId,
+        content: input.content,
+        filename: input.filename,
+      });
+    }),
+
+  /**
    * Tool-oriented: create document
    */
   createDocument: agentDocumentProcedure

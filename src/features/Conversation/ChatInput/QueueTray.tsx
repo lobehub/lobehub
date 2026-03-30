@@ -2,8 +2,8 @@
 
 import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ListEnd, Trash2 } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { ListEnd, Pencil, Trash2 } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -54,6 +54,16 @@ const QueueTray = memo(() => {
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
   const removeQueuedMessage = useChatStore((s) => s.removeQueuedMessage);
+  const editor = useConversationStore((s) => s.editor);
+
+  const handleEdit = useCallback(
+    (msgId: string, content: string) => {
+      removeQueuedMessage(contextKey, msgId);
+      editor?.setDocument('markdown', content);
+      editor?.focus();
+    },
+    [contextKey, editor, removeQueuedMessage],
+  );
 
   if (queuedMessages.length === 0) return null;
 
@@ -71,6 +81,7 @@ const QueueTray = memo(() => {
           <Flexbox className={styles.text} flex={1}>
             {msg.content}
           </Flexbox>
+          <ActionIcon icon={Pencil} size="small" onClick={() => handleEdit(msg.id, msg.content)} />
           <ActionIcon
             icon={Trash2}
             size="small"

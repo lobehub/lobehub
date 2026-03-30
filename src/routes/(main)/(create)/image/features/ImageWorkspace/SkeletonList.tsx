@@ -6,7 +6,7 @@ import { memo } from 'react';
 import PromptInput from '@/routes/(main)/(create)/image/features/PromptInput';
 
 interface SkeletonListProps {
-  /** 为 false 时由页面级输入框渲染，此处不渲染输入框（避免切换 topic 时双输入框闪现） */
+  /** When false, rendered by the page-level input box; the input box is not rendered here (avoids double input flickering when switching topics) */
   embedInput?: boolean;
 }
 

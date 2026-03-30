@@ -13,8 +13,8 @@ interface ListViewDropZoneProps {
 
 const localStyles = createStaticStyles(({ css }) => ({
   container: css`
-    overflow: hidden;
     position: relative;
+    overflow: hidden;
   `,
 }));
 

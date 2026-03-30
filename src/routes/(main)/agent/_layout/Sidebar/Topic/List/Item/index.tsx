@@ -45,6 +45,16 @@ const styles = createStaticStyles(({ css }) => ({
 
     transition: width 0.2s ${cssVar.motionEaseOut};
   `,
+  neonDot: css`
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorInfo};
+    box-shadow:
+      0 0 3px ${cssVar.colorInfo},
+      0 0 6px ${cssVar.colorInfo};
+  `,
 }));
 
 interface TopicItemProps {
@@ -119,7 +129,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const hasUnread = id && isUnreadCompleted;
-  const successColor = cssVar.colorSuccess;
+  const infoColor = cssVar.colorInfo;
   const unreadNode = (
     <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
       <AnimatePresence mode="popLayout">
@@ -137,22 +147,16 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             }}
           >
             <m.span
+              className={styles.neonDot}
               initial={false}
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [1, 0.9, 1],
                 boxShadow: [
-                  `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
-                  `0 0 5px ${successColor}, 0 0 8px color-mix(in srgb, ${successColor} 60%, transparent)`,
-                  `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
+                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
+                  `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
+                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
                 ],
-              }}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: successColor,
-                boxShadow: `0 0 3px ${successColor}, 0 0 6px ${successColor}`,
               }}
               transition={{
                 duration: 1.2,

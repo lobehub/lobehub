@@ -3,7 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import { isDesktop } from '@/const/version';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // 内层容器
+  // Inner container
   innerContainer: css`
     position: relative;
 
@@ -19,7 +19,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgContainer};
   `,
 
-  // 外层容器
+  // Outer container
   outerContainer: css`
     position: relative;
 

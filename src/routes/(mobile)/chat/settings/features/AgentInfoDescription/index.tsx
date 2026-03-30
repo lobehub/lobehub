@@ -70,7 +70,7 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
     ttsConfig,
   }) => {
     const { t } = useTranslation('setting');
-    // 转换远程数据格式
+    // Convert remote data format
     const getProcessedData = () => {
       if (!isRemote || !meta) {
         return {
@@ -87,7 +87,7 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
         };
       }
 
-      // 远程数据格式转换
+      // Remote data format conversion
       const remoteData = meta;
       const config = remoteData.config || {};
 
@@ -129,14 +129,14 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
     const renderAvatar = (avatar: string | undefined) => {
       if (!avatar) return unsetText;
 
-      // 如果是 http 或 https 链接，显示图片
+      // If it's an http or https link, display the image
       if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
         return (
           <Image alt="avatar" height={40} src={avatar} style={{ borderRadius: '50%' }} width={40} />
         );
       }
 
-      // 否则直接显示字符（emoji）
+      // Otherwise, display the character directly (emoji)
       return (
         <div
           style={{
@@ -155,7 +155,7 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
     return (
       <div style={{ height: '500px', overflow: 'auto' }}>
         <Flexbox gap={16}>
-          {/* 基础信息 */}
+          {/* Basic information */}
           <ProDescriptions
             bordered
             column={2}
@@ -203,7 +203,7 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
             }}
           />
 
-          {/* 角色设定 */}
+          {/* Role settings */}
           <ProDescriptions
             bordered
             column={1}
@@ -231,7 +231,7 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
             }
           />
 
-          {/* 模型设置 */}
+          {/* Model settings */}
           <ProDescriptions
             bordered
             column={2}
@@ -274,7 +274,7 @@ const AgentInfoDescription = memo<AgentInfoDescriptionProps>(
             }}
           />
 
-          {/* 聊天偏好 */}
+          {/* Chat preferences */}
           <ProDescriptions
             bordered
             column={2}

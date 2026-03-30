@@ -1,3 +1,4 @@
+import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
@@ -84,6 +85,37 @@ const Intervention = memo<InterventionProps>(
 
     const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
 
+    const isCustomInteraction = identifier === UserInteractionIdentifier;
+
+    const submitToolInteraction = useConversationStore((s) => s.submitToolInteraction);
+    const skipToolInteraction = useConversationStore((s) => s.skipToolInteraction);
+    const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
+
+    const handleInteractionAction = useCallback(
+      async (
+        action:
+          | { type: 'submit'; payload: Record<string, unknown> }
+          | { type: 'skip'; reason?: string }
+          | { type: 'cancel' },
+      ) => {
+        switch (action.type) {
+          case 'submit': {
+            await submitToolInteraction(id, action.payload);
+            break;
+          }
+          case 'skip': {
+            await skipToolInteraction(id, action.reason);
+            break;
+          }
+          case 'cancel': {
+            await cancelToolInteraction(id);
+            break;
+          }
+        }
+      },
+      [id, submitToolInteraction, skipToolInteraction, cancelToolInteraction],
+    );
+
     const BuiltinToolInterventionRender = getBuiltinIntervention(identifier, apiName);
 
     if (BuiltinToolInterventionRender) {
@@ -97,6 +129,23 @@ const Intervention = memo<InterventionProps>(
             />
           </Suspense>
         );
+
+      if (isCustomInteraction) {
+        return (
+          <Flexbox gap={12}>
+            <BuiltinToolInterventionRender
+              apiName={apiName}
+              args={parsedArgs}
+              identifier={identifier}
+              interactionMode="custom"
+              messageId={id}
+              registerBeforeApprove={registerBeforeApprove}
+              onArgsChange={handleArgsChange}
+              onInteractionAction={handleInteractionAction}
+            />
+          </Flexbox>
+        );
+      }
 
       return (
         <Flexbox gap={12}>

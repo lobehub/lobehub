@@ -2,20 +2,21 @@ import { createStaticStyles, cssVar } from 'antd-style';
 
 export const styles = createStaticStyles(({ css }) => ({
   container: css`
-    position: relative;
     cursor: pointer;
+    position: relative;
     min-width: 800px;
 
     &::after {
+      pointer-events: none;
       content: '';
 
       position: absolute;
       z-index: 0;
       inset: 0;
 
-      background-color: ${cssVar.colorFillTertiary};
       opacity: 0;
-      pointer-events: none;
+      background-color: ${cssVar.colorFillTertiary};
+
       transition:
         opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut},
         background-color ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
@@ -37,16 +38,16 @@ export const styles = createStaticStyles(({ css }) => ({
     outline: 1px dashed ${cssVar.colorPrimaryBorder};
     outline-offset: -2px;
 
+    &::before {
+      opacity: 0;
+    }
+
     &,
     &:hover {
       &::after {
-        background-color: ${cssVar.colorPrimaryBg};
         opacity: 1;
+        background-color: ${cssVar.colorPrimaryBg};
       }
-    }
-
-    &::before {
-      opacity: 0;
     }
   `,
 
@@ -57,16 +58,16 @@ export const styles = createStaticStyles(({ css }) => ({
 
   evenRow: css`
     &::before {
+      pointer-events: none;
       content: '';
 
       position: absolute;
       z-index: 0;
       inset: 0;
 
-      background-color: ${cssVar.colorFillQuaternary};
-      pointer-events: none;
-
       opacity: 1;
+      background-color: ${cssVar.colorFillQuaternary};
+
       transition: opacity 300ms ${cssVar.motionEaseInOut};
     }
 
@@ -121,8 +122,8 @@ export const styles = createStaticStyles(({ css }) => ({
     }
 
     &::after {
-      background-color: ${cssVar.colorFillTertiary};
       opacity: 1;
+      background-color: ${cssVar.colorFillTertiary};
     }
 
     &:hover {

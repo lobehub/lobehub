@@ -499,14 +499,58 @@ export class ConversationLifecycleActionImpl {
     // execAgentRuntime is a separate operation (child) that handles AI response generation
     this.#get().completeOperation(operationId);
 
+    const execContext = {
+      ...operationContext,
+      topicId: data.topicId ?? operationContext.topicId,
+      threadId: data.createdThreadId ?? operationContext.threadId,
+    };
+
+    // ── Auto-dismiss pending tool interventions ──
+    // Uses direct dispatch (updateMessage) instead of optimisticUpdatePlugin because
+    // agent runtime checks pluginIntervention.status, not plugin.intervention.status.
+    {
+      const msgs = displayMessageSelectors.getDisplayMessagesByKey(messageMapKey(execContext))(
+        this.#get(),
+      );
+
+      const pendingToolMsgIds = msgs.flatMap((m) => {
+        const ids: string[] = [];
+        if (m.role === 'tool' && m.pluginIntervention?.status === 'pending') ids.push(m.id);
+
+        const childIds =
+          m.children?.flatMap((child) =>
+            (child.tools ?? [])
+              .filter((t) => t.intervention?.status === 'pending' && t.result_msg_id)
+              .map((t) => t.result_msg_id!),
+          ) ?? [];
+
+        return [...ids, ...childIds];
+      });
+
+      for (const msgId of pendingToolMsgIds) {
+        this.#get().internal_dispatchMessage({
+          id: msgId,
+          type: 'updateMessage',
+          value: {
+            pluginIntervention: { status: 'aborted' },
+            content: 'User bypassed this interaction by sending a message directly.',
+          },
+        });
+        void messageService.updateMessagePlugin(
+          msgId,
+          { intervention: { status: 'aborted' } },
+          {
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            threadId: execContext.threadId,
+            topicId: execContext.topicId,
+          },
+        );
+      }
+    }
+
     // ── AI execution ──
     {
-      const execContext = {
-        ...operationContext,
-        topicId: data.topicId ?? operationContext.topicId,
-        threadId: data.createdThreadId ?? operationContext.threadId,
-      };
-
       const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
         messageMapKey(execContext),
       )(this.#get());

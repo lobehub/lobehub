@@ -36,6 +36,9 @@ export type OperationType =
   // === Tool intervention ===
   | 'approveToolCalling' // Approve tool intervention
   | 'rejectToolCalling' // Reject tool intervention
+  | 'submitToolInteraction' // Submit user interaction response
+  | 'skipToolInteraction' // Skip user interaction
+  | 'cancelToolInteraction' // Cancel user interaction
   // === (sub-operations of executeToolCall) ===
   | 'pluginApi' // Plugin API call
   | 'builtinToolSearch' // Builtin tool: search

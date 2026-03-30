@@ -19,7 +19,8 @@ import { operationSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
-import { messageStateSelectors, useConversationStore } from '../store';
+import InterventionBar from '../InterventionBar';
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
 import QueueTray from './QueueTray';
 
 export interface ChatInputProps {
@@ -101,8 +102,8 @@ const ChatInput = memo<ChatInputProps>(
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
+    showRuntimeConfig = true,
     onEditorReady,
-    showRuntimeConfig,
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
@@ -120,6 +121,20 @@ const ChatInput = memo<ChatInputProps>(
 
     // Loading state from ConversationStore (bridged from ChatStore)
     const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
+
+    // Pending interventions — use custom equality to prevent infinite re-render loop.
+    // The selector creates new array/object refs each call; without equality check,
+    // any store update → new ref → re-render → Intervention's store writes → loop.
+    const pendingInterventions = useConversationStore(
+      dataSelectors.pendingInterventions,
+      (a, b) => {
+        if (a.length !== b.length) return false;
+        return a.every(
+          (item, i) => item.toolCallId === b[i].toolCallId && item.requestArgs === b[i].requestArgs,
+        );
+      },
+    );
+    const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
@@ -189,38 +204,44 @@ const ChatInput = memo<ChatInputProps>(
       <WideScreenContainer
         style={skipScrollMarginWithList ? { marginTop: -12, position: 'relative' } : undefined}
       >
-        {sendMessageErrorMsg && (
-          <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-            <Alert
-              closable
-              title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
-              type={'secondary'}
-              onClose={clearSendMessageError}
+        {hasPendingInterventions ? (
+          <InterventionBar interventions={pendingInterventions} />
+        ) : (
+          <>
+            {sendMessageErrorMsg && (
+              <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
+                <Alert
+                  closable
+                  title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+                  type={'secondary'}
+                  onClose={clearSendMessageError}
+                />
+              </Flexbox>
+            )}
+            {hasQueuedMessages && (
+              <Flexbox
+                paddingInline={12}
+                style={{
+                  position: 'absolute',
+                  zIndex: 10,
+                  bottom: '100%',
+                  left: 12,
+                  right: 12,
+                }}
+              >
+                <QueueTray />
+              </Flexbox>
+            )}
+            <DesktopChatInput
+              actionBarStyle={actionBarStyle}
+              borderRadius={12}
+              extraActionItems={extraActionItems}
+              leftContent={leftContent}
+              sendAreaPrefix={sendAreaPrefix}
+              showRuntimeConfig={showRuntimeConfig}
             />
-          </Flexbox>
+          </>
         )}
-        {hasQueuedMessages && (
-          <Flexbox
-            paddingInline={12}
-            style={{
-              position: 'absolute',
-              zIndex: 10,
-              bottom: '100%',
-              left: 12,
-              right: 12,
-            }}
-          >
-            <QueueTray />
-          </Flexbox>
-        )}
-        <DesktopChatInput
-          actionBarStyle={actionBarStyle}
-          borderRadius={12}
-          extraActionItems={extraActionItems}
-          leftContent={leftContent}
-          sendAreaPrefix={sendAreaPrefix}
-          showRuntimeConfig={showRuntimeConfig}
-        />
       </WideScreenContainer>
     );
 

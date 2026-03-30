@@ -13,10 +13,6 @@ tags:
 
 # Connect LobeHub to Lark
 
-<Callout type={'info'}>
-  This feature is currently in development and may not be fully stable. You can enable it by turning on **Developer Mode** in **Settings** → **Advanced Settings** → **Developer Mode**.
-</Callout>
-
 By connecting a Lark channel to your LobeHub agent, team members can interact with the AI assistant directly in Lark private chats and group conversations.
 
 > If you are using the Chinese version (飞书), please refer to the [Feishu setup guide](/docs/usage/channels/feishu).
@@ -37,6 +33,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
 
   Click **Create Enterprise App**. Fill in the app name (e.g., "LobeHub Assistant"), description, and icon, then submit the form.
 
+  ![](/blog/assetsa8003533498461272ea15a19407db9f4.webp)
+
   ### Copy App Credentials
 
   Go to **Credentials & Basic Info** and copy:
@@ -45,6 +43,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
   - **App Secret**
 
   > **Important:** Keep your App Secret confidential. Never share it publicly.
+
+  ![](/blog/assetscb1c097430e064f8f99de85e5f078784.webp)
 </Steps>
 
 ## Step 2: Configure App Permissions and Bot
@@ -82,6 +82,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
     The scopes above are tailored for Lark (international). Some Feishu-specific scopes (e.g. `aily:*`, `corehr:*`, `im:chat.access_event.bot_p2p_chat:read`) are not available on Lark and have been excluded.
   </Callout>
 
+  ![](/blog/assets1aaca5d65761b58564e3f196a91cde3e.webp)
+
   ### Enable Bot Capability
 
   Go to **App Capability** → **Bot**. Toggle the bot capability on and set your preferred bot name.
@@ -106,6 +108,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
   ### Save and Copy the Webhook URL
 
   Click **Save Configuration**. After saving, an **Event Subscription URL** will be displayed. Copy this URL — you will need it in the next step.
+
+  ![](/blog/assets0a25d3ffb02d35f6f28cdfa9da2dccd8.webp)
 </Steps>
 
 ## Step 4: Set Up Event Subscription in Lark
@@ -127,6 +131,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
 
   This allows your app to receive messages and forward them to LobeHub.
 
+  ![](/blog/assets313dfd5108d6fade542c846a87e2aa5a.webp)
+
   ### (Recommended) Fill in Verification Token and Encrypt Key
 
   After configuring Event Subscription, you can find the **Verification Token** and **Encrypt Key** at the top of the Event Subscription page under **Encryption Strategy**.
@@ -137,6 +143,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
   - **Encrypt Key** (optional) — Used to decrypt encrypted event payloads
 
   Click **Save Configuration** again to apply.
+
+  ![](/blog/assetscfcdfc63bc4f8defc06accef81339a5b.webp)
 </Steps>
 
 ## Step 5: Publish the App
@@ -149,6 +157,8 @@ By connecting a Lark channel to your LobeHub agent, team members can interact wi
   ### Submit for Review
 
   Submit the version for review and publish. For enterprise self-managed apps, approval is typically automatic.
+
+  ![](/blog/assets39788a720a65b89f84b2d0d844c4791d.webp)
 </Steps>
 
 ## Step 6: Test the Connection

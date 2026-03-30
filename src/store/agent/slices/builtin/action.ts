@@ -35,6 +35,13 @@ export class BuiltinAgentSliceActionImpl {
     this.#get = get;
   }
 
+  refreshBuiltinAgent = async (slug: string): Promise<void> => {
+    const data = await agentService.getBuiltinAgent(slug);
+    if (data?.id) {
+      this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+    }
+  };
+
   useInitBuiltinAgent = (
     slug: string,
     context?: UseInitBuiltinAgentContext,

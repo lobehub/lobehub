@@ -4,10 +4,13 @@ export const AgentDocumentsApiName = {
   createDocument: 'createDocument',
   copyDocument: 'copyDocument',
   editDocument: 'editDocument',
+  listDocuments: 'listDocuments',
   readDocument: 'readDocument',
+  readDocumentByFilename: 'readDocumentByFilename',
   removeDocument: 'removeDocument',
   renameDocument: 'renameDocument',
   updateLoadRule: 'updateLoadRule',
+  upsertDocumentByFilename: 'upsertDocumentByFilename',
 } as const;
 
 export interface CreateDocumentArgs {
@@ -102,4 +105,32 @@ export interface LoadRuleScope {
 export interface AgentDocumentReference {
   id: string;
   title?: string;
+}
+
+export interface ListDocumentsArgs {}
+
+export interface ListDocumentsState {
+  documents: { filename: string; id: string; title?: string }[];
+}
+
+export interface ReadDocumentByFilenameArgs {
+  filename: string;
+}
+
+export interface ReadDocumentByFilenameState {
+  content?: string;
+  filename: string;
+  id: string;
+  title?: string;
+}
+
+export interface UpsertDocumentByFilenameArgs {
+  content: string;
+  filename: string;
+}
+
+export interface UpsertDocumentByFilenameState {
+  created: boolean;
+  filename: string;
+  id: string;
 }

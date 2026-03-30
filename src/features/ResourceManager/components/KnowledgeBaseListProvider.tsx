@@ -14,11 +14,7 @@ export const KnowledgeBaseListProvider = memo<PropsWithChildren>(({ children }) 
 
   const knowledgeBases = useMemo(() => data ?? [], [data]);
 
-  return (
-    <KnowledgeBaseListContext value={knowledgeBases}>
-      {children}
-    </KnowledgeBaseListContext>
-  );
+  return <KnowledgeBaseListContext value={knowledgeBases}>{children}</KnowledgeBaseListContext>;
 });
 
 KnowledgeBaseListProvider.displayName = 'KnowledgeBaseListProvider';

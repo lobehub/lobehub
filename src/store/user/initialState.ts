@@ -1,3 +1,5 @@
+import { type AgentOnboardingState } from './slices/agentOnboarding/initialState';
+import { initialAgentOnboardingState } from './slices/agentOnboarding/initialState';
 import { type UserAuthState } from './slices/auth/initialState';
 import { initialAuthState } from './slices/auth/initialState';
 import { type CommonState } from './slices/common/initialState';
@@ -13,6 +15,7 @@ export type UserState = UserSettingsState &
   UserPreferenceState &
   UserAuthState &
   CommonState &
+  AgentOnboardingState &
   OnboardingState;
 
 export const initialState: UserState = {
@@ -20,5 +23,6 @@ export const initialState: UserState = {
   ...initialPreferenceState,
   ...initialAuthState,
   ...initialCommonState,
+  ...initialAgentOnboardingState,
   ...initialOnboardingState,
 };

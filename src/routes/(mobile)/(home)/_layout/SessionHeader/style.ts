@@ -1,7 +1,7 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css }) => ({
-  // 左侧容器
+  // Left container
   leftContainer: css`
     margin-inline-start: 8px;
   `,

@@ -1015,6 +1015,71 @@ describe('chatMessage actions', () => {
       });
     });
 
+    it('should sync mirrored tool state into the parent assistant tools array', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const assistantMessage = {
+        id: 'assistant-id',
+        role: 'assistant',
+        content: 'assistant',
+        tools: [
+          {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            id: 'tool-call-id',
+            identifier: 'lobe-user-interaction',
+            intervention: { status: 'pending' },
+          },
+        ],
+      } as UIChatMessage;
+      const toolMessage = {
+        id: 'tool-message-id',
+        role: 'tool',
+        content: '',
+        parentId: assistantMessage.id,
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-user-interaction',
+          intervention: { status: 'pending' },
+        },
+        tool_call_id: 'tool-call-id',
+      } as UIChatMessage;
+      const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+
+      act(() => {
+        useChatStore.setState({
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id', topicId: 'topic-id' })]: [
+              assistantMessage,
+              toolMessage,
+            ],
+          },
+          dbMessagesMap: {
+            [messageMapKey({ agentId: 'session-id', topicId: 'topic-id' })]: [
+              assistantMessage,
+              toolMessage,
+            ],
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.optimisticUpdateMessagePlugin(toolMessage.id, {
+          intervention: { status: 'approved' },
+        });
+      });
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        {
+          id: assistantMessage.id,
+          tool_call_id: 'tool-call-id',
+          type: 'updateMessageTools',
+          value: { intervention: { status: 'approved' } },
+        },
+        undefined,
+      );
+    });
+
     it('should use context operationId when provided', async () => {
       const { result } = renderHook(() => useChatStore());
       const messageId = 'message-id';

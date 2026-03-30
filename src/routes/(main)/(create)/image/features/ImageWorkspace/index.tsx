@@ -9,7 +9,7 @@ import PromptInput from '../PromptInput';
 import SkeletonList from './SkeletonList';
 
 interface ImageWorkspaceProps {
-  /** 为 false 时由页面级固定底部输入框渲染，不在此处嵌入（与 agent 布局一致） */
+  /** When false, rendered by the page-level fixed bottom input box, not embedded here (consistent with agent layout) */
   embedInput?: boolean;
 }
 

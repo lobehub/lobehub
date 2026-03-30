@@ -135,12 +135,18 @@ const MasonryView = memo(function MasonryView({
     isValidating: effectiveIsValidating,
     viewMode,
   });
-  const { handleSelectAll, handleSelectAllResources, selectAllState, selectedFileIds, toggleItemSelection } =
-    useExplorerSelectionActions(data);
-  const { allSelected, indeterminate, selectedCount, showSelectAllHint } = useExplorerSelectionSummary({
-    data,
-    hasMore,
-  });
+  const {
+    handleSelectAll,
+    handleSelectAllResources,
+    selectAllState,
+    selectedFileIds,
+    toggleItemSelection,
+  } = useExplorerSelectionActions(data);
+  const { allSelected, indeterminate, selectedCount, showSelectAllHint } =
+    useExplorerSelectionSummary({
+      data,
+      hasMore,
+    });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
 
   // Handle automatic load more when scrolling to bottom
@@ -203,7 +209,11 @@ const MasonryView = memo(function MasonryView({
     >
       <div style={{ paddingBlockEnd: 24, paddingBlockStart: 12, paddingInline: 24 }}>
         <Flexbox horizontal align={'center'} className={styles.toolbar} gap={8}>
-          <Checkbox checked={allSelected} indeterminate={indeterminate} onChange={handleSelectAll} />
+          <Checkbox
+            checked={allSelected}
+            indeterminate={indeterminate}
+            onChange={handleSelectAll}
+          />
           <span>
             {selectedCount > 0 || selectAllState === 'all'
               ? t(

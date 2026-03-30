@@ -15,6 +15,9 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { isDev } from '@/utils/env';
 
 const log = debug('mecha:agentConfigResolver');
 
@@ -186,10 +189,10 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       ctx.groupId,
       group
         ? {
-          groupId: group.id,
-          supervisorAgentId: group.supervisorAgentId,
-          title: group.title,
-        }
+            groupId: group.id,
+            supervisorAgentId: group.supervisorAgentId,
+            title: group.title,
+          }
         : null,
       agentId,
     );
@@ -292,11 +295,11 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       ctx.groupId,
       group
         ? {
-          agentsCount: group.agents?.length,
-          groupId: group.id,
-          supervisorAgentId: group.supervisorAgentId,
-          title: group.title,
-        }
+            agentsCount: group.agents?.length,
+            groupId: group.id,
+            supervisorAgentId: group.supervisorAgentId,
+            title: group.title,
+          }
         : null,
     );
 
@@ -331,9 +334,11 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const runtimeConfig = getAgentRuntimeConfig(slug, {
     documentContent,
     groupSupervisorContext,
+    isDev,
     model,
     plugins: plugins || basePlugins,
     targetAgentConfig,
+    userLocale: userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
   });
 
   // Merge runtime systemRole into agent config

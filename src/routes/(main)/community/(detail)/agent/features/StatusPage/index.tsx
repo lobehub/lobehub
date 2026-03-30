@@ -19,7 +19,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
     navigate('/community/agent');
   };
 
-  // 审核中状态
+  // Under review status
   if (status === 'unpublished') {
     return (
       <div
@@ -60,7 +60,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
     );
   }
 
-  // 归档/拒绝状态
+  // Archived/rejected status
   const isArchived = status === 'archived';
   const statusKey = isArchived ? 'archived' : 'deprecated';
   const statusIcon = isArchived ? (

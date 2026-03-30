@@ -6,9 +6,9 @@ export type PresetCategory = 'qa' | 'research' | 'tool-use' | 'memory' | 'refere
 export interface DatasetPreset {
   category: PresetCategory;
   description: string;
-  // 示例文件
+  // Example file
   exampleFileUrl?: string;
-  // 自动推断配置
+  // Auto-infer configuration
   fieldInference: {
     input: string[];
     expected: string[];
@@ -16,7 +16,7 @@ export interface DatasetPreset {
     category: string[];
     sortOrder?: string[];
   };
-  // 格式说明
+  // Format description
   formatDescription: string;
 
   icon: LucideIcon;
@@ -27,7 +27,7 @@ export interface DatasetPreset {
 
   requiredFields: string[];
 
-  // 验证规则
+  // Validation rules
   validation?: {
     requireExpected?: boolean;
     requireChoices?: boolean;
@@ -272,7 +272,7 @@ export const getPresetById = (id?: string): DatasetPreset => {
   return DATASET_PRESETS[id || 'custom'] || DATASET_PRESETS.custom;
 };
 
-// 按 category 分组获取 Presets
+// Get Presets grouped by category
 export const getPresetsByCategory = (): Record<PresetCategory, DatasetPreset[]> => {
   const grouped: Record<string, DatasetPreset[]> = {
     'research': [],

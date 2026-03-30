@@ -183,6 +183,14 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
+      // Phase 2.5: Unknown tool guard — if no manifest found, require intervention
+      // This prevents auto-executing tools the LLM hallucinated or whose name was corrupted
+      const manifest = state.toolManifestMap?.[identifier];
+      if (!manifest) {
+        toolsNeedingIntervention.push(toolCalling);
+        continue;
+      }
+
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
       const isDynamicConfig = this.isDynamicInterventionConfig(config);

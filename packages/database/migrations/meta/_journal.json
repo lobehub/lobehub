@@ -679,6 +679,13 @@
       "when": 1774514478074,
       "tag": "0096_add_notification_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1774548140282,
+      "tag": "0097_add_agent_onboarding",
+      "breakpoints": true
     }
   ],
   "version": "6"
