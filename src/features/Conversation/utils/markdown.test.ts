@@ -553,6 +553,12 @@ describe('promoteDisplayOnlyLatex', () => {
     expect(promoteDisplayOnlyLatex(input)).toEqual(input);
   });
 
+  it('should not rewrite formulas inside multi-backtick inline code spans', () => {
+    const input = 'Use ``$\\hat{\\sigma}\\tag{1}$`` for display-only math';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(input);
+  });
+
   it('should not rewrite formulas inside lobeArtifact content', () => {
     const input =
       'Before $\\hat{\\sigma}\\tag{1}$ after\n\n<lobeArtifact identifier="demo" type="text/html" title="Demo"><script>const raw = "$\\\\tag{artifact}$";</script></lobeArtifact>';

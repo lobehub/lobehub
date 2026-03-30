@@ -14,7 +14,7 @@ const DISPLAY_ONLY_LATEX_ENVIRONMENTS = [
   'split',
 ] as const;
 const PROTECTED_MARKDOWN_SEGMENT_PATTERN =
-  /(```[\s\S]*?```|`[^\n`]*`|(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|\\\[[\s\S]*?(?<!\\)\\\]|<lobeArtifact\b[^>]*>[\s\S]*?(?:<\/lobeArtifact>|$))/g;
+  /(```[\s\S]*?```|(`{2,})[\s\S]*?\2|`[^\n`]*`|(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|\\\[[\s\S]*?(?<!\\)\\\]|<lobeArtifact\b[^>]*>[\s\S]*?(?:<\/lobeArtifact>|$))/g;
 
 const escapeRegExp = (value: string) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const DISPLAY_ONLY_LATEX_ENVIRONMENT_PATTERN = new RegExp(
