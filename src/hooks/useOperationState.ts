@@ -75,12 +75,14 @@ export const useOperationState = (context: ConversationContext): OperationState 
 
         const isGenerating = runningOps.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type));
 
-        // A message is interrupted if it has cancelled AI runtime ops but no running ones
+        // A message is interrupted only if the latest AI runtime operation was cancelled.
+        // Using .some() would incorrectly flag messages where a stale cancelled op
+        // precedes a successful retry (stop-then-continue flow).
+        const latestRuntimeOp = [...messageOps]
+          .reverse()
+          .find((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type));
         const isInterrupted =
-          !isGenerating &&
-          messageOps.some(
-            (op) => op.status === 'cancelled' && AI_RUNTIME_OPERATION_TYPES.includes(op.type),
-          );
+          !isGenerating && !!latestRuntimeOp && latestRuntimeOp.status === 'cancelled';
 
         return {
           isContinuing: runningOps.some((op) => op.type === 'continue'),
