@@ -72,6 +72,15 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // When external messages are provided, mark as initialized
     useStoreUpdater('messagesInit', skipFetch ? true : (hasInitMessages ?? false));
 
+    // Clear stale messages immediately when context changes
+    // This prevents old interventions from persisting during topic transitions
+    const prevContextKeyRef = useRef(contextKey);
+    if (prevContextKeyRef.current !== contextKey) {
+      prevContextKeyRef.current = contextKey;
+      prevMessagesRef.current = undefined;
+      storeApi.getState().replaceMessages(messages ?? []);
+    }
+
     // Sync external messages into store
     useEffect(() => {
       if (messages) {

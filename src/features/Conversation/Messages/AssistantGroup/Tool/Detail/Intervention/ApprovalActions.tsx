@@ -7,12 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 
 import { useConversationStore } from '../../../../../store';
-import { useMessageAggregationContext } from '../../../../Contexts/MessageAggregationContext';
 import { type ApprovalMode } from './index';
 
 interface ApprovalActionsProps {
   apiName: string;
   approvalMode: ApprovalMode;
+  assistantGroupId?: string;
   identifier: string;
   messageId: string;
   /**
@@ -24,7 +24,7 @@ interface ApprovalActionsProps {
 }
 
 const ApprovalActions = memo<ApprovalActionsProps>(
-  ({ approvalMode, messageId, identifier, apiName, onBeforeApprove }) => {
+  ({ approvalMode, messageId, identifier, apiName, onBeforeApprove, assistantGroupId }) => {
     const { t } = useTranslation(['chat', 'common']);
     const [rejectReason, setRejectReason] = useState('');
     const [rejectPopoverOpen, setRejectPopoverOpen] = useState(false);
@@ -34,7 +34,6 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     // Disable actions while message is still being created (temp ID)
     const isMessageCreating = messageId.startsWith('tmp_');
 
-    const { assistantGroupId } = useMessageAggregationContext();
     const [approveToolCall, rejectToolCall, rejectAndContinueToolCall] = useConversationStore(
       (s) => [s.approveToolCall, s.rejectToolCall, s.rejectAndContinueToolCall],
     );
@@ -49,7 +48,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
         }
 
         // 1. Update intervention status
-        await approveToolCall(messageId, assistantGroupId);
+        await approveToolCall(messageId, assistantGroupId ?? '');
 
         // 2. If remembered, add to allowList
         if (remember) {
