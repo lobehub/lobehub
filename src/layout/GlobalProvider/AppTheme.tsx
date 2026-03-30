@@ -8,7 +8,7 @@ import { ConfigProvider, FontLoader, ThemeProvider } from '@lobehub/ui';
 import { message as antdMessage } from 'antd';
 import { AppConfigContext } from 'antd/es/app/context';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
@@ -176,7 +176,7 @@ const AppTheme = memo<AppThemeProps>(
           <AntdStaticMethods />
           <ConfigProvider
             locale={uiLocale}
-            motion={motion}
+            motion={m}
             resources={uiResources}
             config={{
               aAs: Link,

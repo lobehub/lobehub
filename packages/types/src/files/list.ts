@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import type { AsyncTaskStatus } from '../asyncTask';
+import type { AsyncTaskStatus, FileParsingTask } from '../asyncTask';
+
+export interface KnowledgeItemStatus extends FileParsingTask {
+  id: string;
+}
 
 export interface FileListItem {
   chunkCount: number | null;

@@ -1,3 +1,5 @@
+import { merge } from '@lobechat/utils';
+
 import type { FieldSchema, UsageStats } from './types';
 
 // --------------- Settings defaults ---------------
@@ -21,9 +23,6 @@ function extractFieldDefault(field: FieldSchema): unknown {
  * Extract defaults from a FieldSchema array.
  *
  * Recursively walks the fields and collects all `default` values.
- * Use this to merge with user-provided settings at runtime:
- *
- *   const settings = { ...extractDefaults(definition.settings), ...provider.settings };
  */
 export function extractDefaults(fields?: FieldSchema[]): Record<string, unknown> {
   if (!fields) return {};
@@ -33,6 +32,22 @@ export function extractDefaults(fields?: FieldSchema[]): Record<string, unknown>
     if (value !== undefined) result[field.key] = value;
   }
   return result;
+}
+
+/**
+ * Merge platform schema defaults with user-provided settings.
+ * Extracts defaults from the schema, then deep-merges with user overrides.
+ *
+ *   const settings = mergeWithDefaults(entry.schema, provider.settings);
+ */
+export function mergeWithDefaults(
+  schema: FieldSchema[],
+  userSettings?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const settingsSchema = schema.find((f) => f.key === 'settings')?.properties;
+  const defaults = extractDefaults(settingsSchema);
+  if (!userSettings) return defaults;
+  return merge(defaults, userSettings) as Record<string, unknown>;
 }
 
 // --------------- Runtime key helpers ---------------

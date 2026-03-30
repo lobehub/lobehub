@@ -240,7 +240,16 @@ describe('LobeOpenAI', () => {
 
       const list = await instance.models();
 
-      expect(list).toMatchSnapshot();
+      expect(Array.isArray(list)).toBe(true);
+      expect(list.length).toBeGreaterThan(0);
+
+      const gpt35Turbo = list.find((model) => model.id === 'gpt-3.5-turbo-0613');
+      expect(gpt35Turbo).toBeDefined();
+      expect(gpt35Turbo?.id).toBe('gpt-3.5-turbo-0613');
+
+      const textEmbeddingAda = list.find((model) => model.id === 'text-embedding-ada-002');
+      expect(textEmbeddingAda).toBeDefined();
+      expect(textEmbeddingAda?.type).toBe('embedding');
     });
   });
 

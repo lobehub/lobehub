@@ -137,6 +137,7 @@
   "uploadDock.body.item.processing": "파일 처리 중...",
   "uploadDock.body.item.restTime": "남은 시간 {{time}}",
   "uploadDock.fileQueueInfo": "{{count}}개 파일을 업로드 중이며, 나머지 {{remaining}}개 파일은 대기 중입니다",
+  "uploadDock.header.cancelAll": "모두 취소",
   "uploadDock.totalCount": "총 {{count}}개 항목",
   "uploadDock.uploadStatus.cancelled": "업로드가 취소되었습니다",
   "uploadDock.uploadStatus.error": "업로드 오류",

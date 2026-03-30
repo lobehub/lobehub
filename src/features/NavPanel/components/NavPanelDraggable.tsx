@@ -2,7 +2,7 @@
 
 import { DraggablePanel, Freeze } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { AnimatePresence, motion, useIsPresent } from 'motion/react';
+import { AnimatePresence, m, useIsPresent } from 'motion/react';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useLayoutEffect, useMemo, useRef } from 'react';
 
@@ -227,7 +227,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
       <div className={draggableStyles.inner}>
         {shouldUseMotion ? (
           <AnimatePresence custom={motionDirection} initial={false} mode="sync">
-            <motion.div
+            <m.div
               animate="animate"
               className={draggableStyles.layer}
               custom={motionDirection}
@@ -238,7 +238,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
               variants={motionVariants}
             >
               <ExitingFrozenContent>{activeContent.node}</ExitingFrozenContent>
-            </motion.div>
+            </m.div>
           </AnimatePresence>
         ) : (
           <div className={draggableStyles.layer} key={activeContent.key}>

@@ -1,4 +1,13 @@
 {
+  "gateway.description": "توضیحات",
+  "gateway.descriptionPlaceholder": "اختیاری",
+  "gateway.deviceName": "نام دستگاه",
+  "gateway.deviceNamePlaceholder": "نام دستگاه را وارد کنید",
+  "gateway.enableConnection": "اتصال به درگاه",
+  "gateway.statusConnected": "متصل به درگاه",
+  "gateway.statusConnecting": "در حال اتصال به درگاه...",
+  "gateway.statusDisconnected": "به درگاه متصل نیست",
+  "gateway.title": "درگاه دستگاه",
   "navigation.chat": "چت",
   "navigation.discover": "کشف",
   "navigation.discoverAssistants": "کشف دستیاران",

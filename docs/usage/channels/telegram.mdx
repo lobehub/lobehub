@@ -82,6 +82,10 @@ To use the bot in Telegram groups:
 2. By default, the bot responds when mentioned with `@your_bot_username`
 3. Send a message mentioning the bot to start interacting
 
+<Callout type={'warning'}>
+  **About Group Privacy Mode:** Telegram bots have privacy mode enabled by default, which means they only receive messages that @mention the bot, reply to the bot, or contain /commands. If you change the privacy mode setting after creating the bot, you **must remove and re-add the bot to the group** for the new setting to take effect in that group.
+</Callout>
+
 ## Configuration Reference
 
 | Field                    | Required | Description                                    |
@@ -94,4 +98,4 @@ To use the bot in Telegram groups:
 
 - **Bot not responding:** Verify the bot token is correct and the configuration is saved. Click **Test Connection** to diagnose.
 - **Webhook registration failed:** Ensure your LobeHub subscription is active. Telegram requires HTTPS endpoints for webhooks, which LobeHub provides automatically.
-- **Group chat issues:** Make sure the bot has been added to the group and has permission to read messages. Mention the bot with `@username` to trigger a response.
+- **Group chat issues:** Make sure the bot has been added to the group and has permission to read messages. Mention the bot with `@username` to trigger a response. If the bot doesn't respond in a group, try removing the bot from the group and re-adding it — Telegram's privacy mode changes require re-joining the group to take effect.

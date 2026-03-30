@@ -1,7 +1,15 @@
 'use client';
 
 import { Flexbox, Form, FormGroup, FormItem, Tag } from '@lobehub/ui';
-import { Button, type FormInstance, InputNumber, Popconfirm, Select, Switch } from 'antd';
+import {
+  Button,
+  Form as AntdForm,
+  type FormInstance,
+  InputNumber,
+  Popconfirm,
+  Select,
+  Switch,
+} from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { RotateCcw } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -13,18 +21,12 @@ import type {
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
 
+import { platformCredentialBodyMap } from '../platform/registry';
 import type { ChannelFormValues } from './index';
-import QrCodeAuth from './QrCodeAuth';
 
 const prefixCls = 'ant';
 
 const styles = createStaticStyles(({ css }) => ({
-  connectedInfoHeader: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-block-end: 16px;
-  `,
   form: css`
     .${prefixCls}-form-item-control:has(.${prefixCls}-input, .${prefixCls}-select, .${prefixCls}-input-number) {
       flex: none;
@@ -72,6 +74,12 @@ interface SchemaFieldProps {
 const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
+
+  // Conditional visibility: watch the sibling field specified by visibleWhen
+  const watchedValue = AntdForm.useWatch(
+    field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
+  );
+  if (field.visibleWhen && watchedValue !== field.visibleWhen.value) return null;
 
   const label = field.devOnly ? (
     <Flexbox horizontal align="center" gap={8}>
@@ -165,30 +173,6 @@ const ApplicationIdField = memo<{ field: FieldSchema }>(({ field }) => {
   );
 });
 
-const ReadOnlyField = memo<{
-  description?: string;
-  divider?: boolean;
-  label: string;
-  password?: boolean;
-  tag: string;
-  value?: string;
-}>(({ description, divider, label, password, tag, value }) => {
-  const InputComponent = password ? FormPassword : FormInput;
-
-  return (
-    <FormItem
-      desc={description}
-      divider={divider}
-      label={label}
-      minWidth={'max(50%, 400px)'}
-      tag={tag}
-      variant="borderless"
-    >
-      <InputComponent readOnly value={value || ''} />
-    </FormItem>
-  );
-});
-
 // --------------- Helper: flatten fields from schema ---------------
 
 function getFields(schema: FieldSchema[], sectionKey: string): FieldSchema[] {
@@ -222,118 +206,70 @@ interface BodyProps {
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    settings?: Record<string, unknown> | null;
   };
   form: FormInstance<ChannelFormValues>;
   hasConfig?: boolean;
-  onQrAuthenticated?: (credentials: { botId: string; botToken: string; userId: string }) => void;
+  onAuthenticated?: (params: {
+    applicationId: string;
+    credentials: Record<string, string>;
+  }) => void;
   platformDef: SerializedPlatformDefinition;
 }
 
-const Body = memo<BodyProps>(
-  ({ platformDef, form, hasConfig, currentConfig, onQrAuthenticated }) => {
-    const { t: _t } = useTranslation('agent');
-    const t = _t as (key: string) => string;
+const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onAuthenticated }) => {
+  const { t: _t } = useTranslation('agent');
+  const t = _t as (key: string) => string;
 
-    const applicationIdField = useMemo(
-      () => platformDef.schema.find((f) => f.key === 'applicationId'),
-      [platformDef.schema],
-    );
+  const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
 
-    const credentialFields = useMemo(
-      () => getFields(platformDef.schema, 'credentials'),
-      [platformDef.schema],
-    );
+  const applicationIdField = useMemo(
+    () => platformDef.schema.find((f) => f.key === 'applicationId'),
+    [platformDef.schema],
+  );
 
-    const settingsFields = useMemo(
-      () => getFields(platformDef.schema, 'settings'),
-      [platformDef.schema],
-    );
+  const credentialFields = useMemo(
+    () => getFields(platformDef.schema, 'credentials'),
+    [platformDef.schema],
+  );
 
-    const [settingsActive, setSettingsActive] = useState(false);
-    const shouldShowWechatApplicationId =
-      !!currentConfig?.applicationId &&
-      currentConfig.applicationId !== currentConfig.credentials.botId;
+  const settingsFields = useMemo(
+    () => getFields(platformDef.schema, 'settings'),
+    [platformDef.schema],
+  );
 
-    const handleResetSettings = useCallback(() => {
-      const defaults: Record<string, any> = {};
-      for (const field of settingsFields) {
-        if (field.default !== undefined) {
-          defaults[field.key] = field.default;
-        }
+  const [settingsActive, setSettingsActive] = useState(false);
+
+  const handleResetSettings = useCallback(() => {
+    const defaults: Record<string, any> = {};
+    for (const field of settingsFields) {
+      if (field.default !== undefined) {
+        defaults[field.key] = field.default;
       }
-      form.setFieldsValue({ settings: defaults });
-    }, [form, settingsFields]);
+    }
+    form.setFieldsValue({ settings: defaults });
+  }, [form, settingsFields]);
 
-    return (
-      <Form
-        className={styles.form}
-        form={form}
-        gap={0}
-        itemMinWidth={'max(50%, 400px)'}
-        requiredMark={false}
-        style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
-        variant={'borderless'}
-      >
-        {platformDef.authFlow === 'qrcode' && hasConfig && currentConfig && (
-          <>
-            <div className={styles.connectedInfoHeader}>
-              <Flexbox gap={4}>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>
-                  {t('channel.wechatConnectedInfo')}
-                </div>
-                <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
-                  {t('channel.wechatManagedCredentials')}
-                </div>
-              </Flexbox>
-              {onQrAuthenticated && (
-                <QrCodeAuth
-                  buttonLabel={t('channel.wechatRebind')}
-                  buttonType="default"
-                  showTips={false}
-                  onAuthenticated={onQrAuthenticated}
-                />
-              )}
-            </div>
-            {shouldShowWechatApplicationId && (
-              <ReadOnlyField
-                description={t('channel.applicationIdHint')}
-                label={t('channel.applicationId')}
-                tag="applicationId"
-                value={currentConfig.applicationId}
-              />
-            )}
-            <ReadOnlyField
-              description={t('channel.wechatBotIdHint')}
-              divider={shouldShowWechatApplicationId}
-              label={t('channel.wechatBotId')}
-              tag="botId"
-              value={currentConfig.credentials.botId}
-            />
-            <ReadOnlyField
-              divider
-              password
-              description={t('channel.botTokenEncryptedHint')}
-              label={t('channel.botToken')}
-              tag="botToken"
-              value={currentConfig.credentials.botToken}
-            />
-            <ReadOnlyField
-              divider
-              description={t('channel.wechatUserIdHint')}
-              label={t('channel.wechatUserId')}
-              tag="userId"
-              value={currentConfig.credentials.userId}
-            />
-          </>
-        )}
-        {platformDef.authFlow === 'qrcode' && onQrAuthenticated && !hasConfig && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
-            <QrCodeAuth onAuthenticated={onQrAuthenticated} />
-          </div>
-        )}
-        {applicationIdField && <ApplicationIdField field={applicationIdField} />}
-        {!platformDef.authFlow &&
-          credentialFields.map((field, i) => (
+  return (
+    <Form
+      className={styles.form}
+      form={form}
+      gap={0}
+      itemMinWidth={'max(50%, 400px)'}
+      requiredMark={false}
+      style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
+      variant={'borderless'}
+    >
+      {CustomCredentialBody ? (
+        <CustomCredentialBody
+          currentConfig={currentConfig}
+          hasConfig={hasConfig}
+          onAuthenticated={onAuthenticated}
+        />
+      ) : (
+        <>
+          {applicationIdField && <ApplicationIdField field={applicationIdField} />}
+          {credentialFields.map((field, i) => (
             <SchemaField
               divider={applicationIdField ? true : i !== 0}
               field={field}
@@ -341,36 +277,34 @@ const Body = memo<BodyProps>(
               parentKey="credentials"
             />
           ))}
-        {settingsFields.length > 0 && (
-          <FormGroup
-            collapsible
-            defaultActive={false}
-            keyValue={`settings-${platformDef.id}`}
-            style={{ marginBlockStart: 16 }}
-            title={<SettingsTitle schema={platformDef.schema} />}
-            variant="borderless"
-            extra={
-              settingsActive ? (
-                <Popconfirm
-                  title={t('channel.settingsResetConfirm')}
-                  onConfirm={handleResetSettings}
-                >
-                  <Button icon={<RotateCcw size={14} />} size="small" type="default">
-                    {t('channel.settingsResetDefault')}
-                  </Button>
-                </Popconfirm>
-              ) : undefined
-            }
-            onCollapse={setSettingsActive}
-          >
-            {settingsFields.map((field, i) => (
-              <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
-            ))}
-          </FormGroup>
-        )}
-      </Form>
-    );
-  },
-);
+        </>
+      )}
+      {settingsFields.length > 0 && (
+        <FormGroup
+          collapsible
+          defaultActive={false}
+          keyValue={`settings-${platformDef.id}`}
+          style={{ marginBlockStart: 16 }}
+          title={<SettingsTitle schema={platformDef.schema} />}
+          variant="borderless"
+          extra={
+            settingsActive ? (
+              <Popconfirm title={t('channel.settingsResetConfirm')} onConfirm={handleResetSettings}>
+                <Button icon={<RotateCcw size={14} />} size="small" type="default">
+                  {t('channel.settingsResetDefault')}
+                </Button>
+              </Popconfirm>
+            ) : undefined
+          }
+          onCollapse={setSettingsActive}
+        >
+          {settingsFields.map((field, i) => (
+            <SchemaField divider={i !== 0} field={field} key={field.key} parentKey="settings" />
+          ))}
+        </FormGroup>
+      )}
+    </Form>
+  );
+});
 
 export default Body;

@@ -21,6 +21,7 @@ export interface BotProviderItem {
   enabled: boolean;
   id: string;
   platform: string;
+  settings?: Record<string, unknown> | null;
 }
 
 type Setter = StoreSetter<AgentStore>;
@@ -59,6 +60,13 @@ export class BotSliceActionImpl {
 
   testConnection = async (params: { applicationId: string; platform: string }) => {
     return agentBotProviderService.testConnection(params);
+  };
+
+  deleteAllBotProviders = async (agentId: string) => {
+    const providers = await agentBotProviderService.getByAgentId(agentId);
+    await Promise.all(providers.map((p) => agentBotProviderService.delete(p.id)));
+    await this.internal_refreshBotProviders(agentId);
+    await this.internal_refreshBotRuntimeStatuses(agentId);
   };
 
   deleteBotProvider = async (id: string, agentId: string) => {

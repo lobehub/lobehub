@@ -1155,11 +1155,19 @@ export default {
 
   'user.noForkedAgents': 'No forked Agents yet',
 
+  'user.noPlugins': "This user hasn't published any Plugins yet",
+
+  'user.noSkills': "This user hasn't published any Skills yet",
+
+  'user.plugins': 'Plugins',
+
   'user.publishedAgents': 'Created Agents',
 
   'user.publishedGroups': 'Created Groups',
 
   'user.searchPlaceholder': 'Search by name or description...',
+
+  'user.skills': 'Skills',
 
   'user.statusFilter.all': 'All',
   'user.statusFilter.archived': 'Archived',
@@ -1181,4 +1189,17 @@ export default {
   'user.unfavoriteSuccess': 'Unsaved',
   'user.unfollow': 'Unfollow',
   'user.website': 'Website',
+
+  'user.cancel': 'Cancel',
+  'user.githubUrl': 'GitHub Repository URL',
+  'user.githubUrlInvalid': 'Please enter a valid GitHub repository URL',
+  'user.githubUrlRequired': 'Please enter a GitHub repository URL',
+  'user.submit': 'Submit',
+  'user.submitRepo': 'Submit Repo',
+  'user.submitRepoDescription':
+    'Submit your GitHub repository to import your Skills or MCPs to the community.',
+  'user.submitRepoError': 'Failed to submit repository. Please try again.',
+  'user.submitRepoHint': 'The repository will be reviewed before being published.',
+  'user.submitRepoSuccess': 'Repository submitted successfully! It will be reviewed shortly.',
+  'user.submitRepoTitle': 'Submit Your Repository',
 };

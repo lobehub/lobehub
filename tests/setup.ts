@@ -5,7 +5,7 @@ import 'fake-indexeddb/auto';
 
 import { theme } from 'antd';
 import i18n from 'i18next';
-import { enableMapSet } from 'immer';
+import { enableMapSet, enablePatches } from 'immer';
 import React from 'react';
 import { vi } from 'vitest';
 
@@ -16,6 +16,7 @@ import home from '@/locales/default/home';
 import oauth from '@/locales/default/oauth';
 
 // Enable Immer MapSet plugin so store code using Map/Set in produce() works in tests
+enablePatches();
 enableMapSet();
 
 // Global mock for @lobehub/analytics/react to avoid AnalyticsProvider dependency

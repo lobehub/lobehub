@@ -1,4 +1,13 @@
 {
+  "gateway.description": "説明",
+  "gateway.descriptionPlaceholder": "任意",
+  "gateway.deviceName": "デバイス名",
+  "gateway.deviceNamePlaceholder": "デバイス名を入力してください",
+  "gateway.enableConnection": "ゲートウェイに接続",
+  "gateway.statusConnected": "ゲートウェイに接続済み",
+  "gateway.statusConnecting": "ゲートウェイに接続中...",
+  "gateway.statusDisconnected": "ゲートウェイに接続されていません",
+  "gateway.title": "デバイスゲートウェイ",
   "navigation.chat": "チャット",
   "navigation.discover": "発見",
   "navigation.discoverAssistants": "アシスタントを発見",

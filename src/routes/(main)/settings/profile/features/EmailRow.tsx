@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Input, Text } from '@lobehub/ui';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -66,7 +66,7 @@ const EmailRow = ({ mobile }: EmailRowProps) => {
   }, [editValue, t]);
 
   const editingContent = (
-    <motion.div
+    <m.div
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       initial={{ opacity: 0, y: -10 }}
@@ -100,11 +100,11 @@ const EmailRow = ({ mobile }: EmailRowProps) => {
           </Button>
         </Flexbox>
       </Flexbox>
-    </motion.div>
+    </m.div>
   );
 
   const displayContent = (
-    <motion.div
+    <m.div
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       initial={{ opacity: 0 }}
@@ -121,7 +121,7 @@ const EmailRow = ({ mobile }: EmailRowProps) => {
           </Text>
         </Flexbox>
       )}
-    </motion.div>
+    </m.div>
   );
 
   if (mobile) {

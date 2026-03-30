@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Описание",
+  "gateway.descriptionPlaceholder": "По избор",
+  "gateway.deviceName": "Име на устройството",
+  "gateway.deviceNamePlaceholder": "Въведете име на устройството",
+  "gateway.enableConnection": "Свързване с шлюза",
+  "gateway.statusConnected": "Свързан с шлюза",
+  "gateway.statusConnecting": "Свързване с шлюза...",
+  "gateway.statusDisconnected": "Не е свързан с шлюза",
+  "gateway.title": "Шлюз на устройството",
   "navigation.chat": "Чат",
   "navigation.discover": "Откриване",
   "navigation.discoverAssistants": "Откриване на Асистенти",

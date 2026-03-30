@@ -5,8 +5,6 @@ const mockExecAgent = vi.hoisted(() => vi.fn());
 const mockFormatPrompt = vi.hoisted(() => vi.fn());
 const mockGetPlatform = vi.hoisted(() => vi.fn());
 const mockIsQueueAgentRuntimeEnabled = vi.hoisted(() => vi.fn());
-const mockStartTypingKeepAlive = vi.hoisted(() => vi.fn());
-const mockStopTypingKeepAlive = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(),
@@ -47,11 +45,6 @@ vi.mock('@/server/services/bot/platforms', () => ({
   platformRegistry: {
     getPlatform: mockGetPlatform,
   },
-}));
-
-vi.mock('@/server/services/bot/typingKeepAlive', () => ({
-  startTypingKeepAlive: mockStartTypingKeepAlive,
-  stopTypingKeepAlive: mockStopTypingKeepAlive,
 }));
 
 const { AgentBridgeService } = await import('../AgentBridgeService');
@@ -119,7 +112,7 @@ describe('AgentBridgeService', () => {
     mockIsQueueAgentRuntimeEnabled.mockReturnValue(true);
   });
 
-  it('cleans up keepalive and received reaction when queue-mode mention setup fails before callback handoff', async () => {
+  it('cleans up received reaction when queue-mode mention setup fails before callback handoff', async () => {
     const service = new AgentBridgeService(FAKE_DB, USER_ID);
     const thread = createThread();
     const message = createMessage();
@@ -129,11 +122,8 @@ describe('AgentBridgeService', () => {
       agentId: 'agent-1',
       botContext: { platformThreadId: THREAD_ID } as any,
       client,
-      debounceMs: 0,
     });
 
-    expect(mockStartTypingKeepAlive).toHaveBeenCalledWith(THREAD_ID, expect.any(Function));
-    expect(mockStopTypingKeepAlive).toHaveBeenCalledWith(THREAD_ID);
     const [mentionReactionThreadId, mentionReactionMessageId, mentionReactionEmoji] =
       thread.adapter.removeReaction.mock.calls[0];
     expect(mentionReactionThreadId).toBe(THREAD_ID);
@@ -142,7 +132,7 @@ describe('AgentBridgeService', () => {
     expect(mockExecAgent).not.toHaveBeenCalled();
   });
 
-  it('cleans up keepalive and received reaction when queue-mode subscribed-message setup fails before callback handoff', async () => {
+  it('cleans up received reaction when queue-mode subscribed-message setup fails before callback handoff', async () => {
     const service = new AgentBridgeService(FAKE_DB, USER_ID);
     const thread = createThread({ topicId: 'topic-1' });
     const message = createMessage();
@@ -152,11 +142,8 @@ describe('AgentBridgeService', () => {
       agentId: 'agent-1',
       botContext: { platformThreadId: THREAD_ID } as any,
       client,
-      debounceMs: 0,
     });
 
-    expect(mockStartTypingKeepAlive).toHaveBeenCalledWith(THREAD_ID, expect.any(Function));
-    expect(mockStopTypingKeepAlive).toHaveBeenCalledWith(THREAD_ID);
     const [replyReactionThreadId, replyReactionMessageId, replyReactionEmoji] =
       thread.adapter.removeReaction.mock.calls[0];
     expect(replyReactionThreadId).toBe(THREAD_ID);

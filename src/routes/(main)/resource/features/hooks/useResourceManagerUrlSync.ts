@@ -11,10 +11,9 @@ import { SortType } from '@/types/files';
 export const useResourceManagerUrlSync = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [sorter, sortType, viewMode, setSorter, setSortType] = useResourceManagerStore((s) => [
+  const [sorter, sortType, setSorter, setSortType] = useResourceManagerStore((s) => [
     s.sorter,
     s.sortType,
-    s.viewMode,
     s.setSorter,
     s.setSortType,
   ]);
@@ -51,16 +50,9 @@ export const useResourceManagerUrlSync = () => {
           newParams.set('sortType', sortType);
         }
 
-        // View mode (clear if default)
-        if (viewMode === 'list') {
-          newParams.delete('view');
-        } else {
-          newParams.set('view', viewMode);
-        }
-
         return newParams;
       },
       { replace: true },
     ); // Use replace to avoid polluting history
-  }, [sorter, sortType, viewMode, setSearchParams]);
+  }, [sorter, sortType, setSearchParams]);
 };

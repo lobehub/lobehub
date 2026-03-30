@@ -1,7 +1,7 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -124,7 +124,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
       <AnimatePresence mode="popLayout">
         {hasUnread && (
-          <motion.div
+          <m.div
             className={styles.neonDotWrapper}
             initial={{ scale: 0, opacity: 0 }}
             animate={{
@@ -136,7 +136,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
               opacity: 0,
             }}
           >
-            <motion.span
+            <m.span
               initial={false}
               animate={{
                 scale: [1, 1.3, 1],
@@ -160,7 +160,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
                 ease: 'easeInOut',
               }}
             />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </span>

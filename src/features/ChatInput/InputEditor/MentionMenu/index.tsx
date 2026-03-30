@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import CategoryView from './CategoryView';
 import HomeView from './HomeView';
 import SearchView from './SearchView';
-import { useStyles } from './style';
+import { styles } from './style';
 import type { MentionCategory, MentionCategoryId, MentionMenuState } from './types';
 import { CATEGORY_KEY_PREFIX, getCategoryIdFromKey, isCategoryEntry } from './types';
 import { useKeyboardNav } from './useKeyboardNav';
@@ -50,7 +50,6 @@ export const createMentionMenu = (
 ): FC<MenuRenderProps> => {
   const MentionMenu: FC<MenuRenderProps> = memo(
     ({ activeKey, onSelect, open, options, setActiveKey }) => {
-      const { styles } = useStyles();
       const menuRef = useRef<HTMLDivElement>(null);
       const [viewMode, setViewMode] = useState<'home' | 'category'>('home');
       const [selectedCategoryId, setSelectedCategoryId] = useState<MentionCategoryId | null>(null);

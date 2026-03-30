@@ -19,7 +19,7 @@ const RolesRoutes = new Hono();
 
 /**
  * Get all roles in the system
- * GET /api/v1/roles 获取系统中所有角色列表
+ * GET /api/v1/roles - Get all roles in the system
  * Requires role read permission (specific scopes)
  */
 RolesRoutes.get(
@@ -39,7 +39,7 @@ RolesRoutes.get(
 
 /**
  * Create a new role
- * POST /api/v1/roles 创建角色
+ * POST /api/v1/roles - Create a new role
  */
 RolesRoutes.post(
   '/',
@@ -55,7 +55,7 @@ RolesRoutes.post(
 
 /**
  * Get role by ID
- * GET /api/v1/roles/:id 获取指定角色详情
+ * GET /api/v1/roles/:id - Get role details
  * Requires role read permission (specific scopes)
  */
 RolesRoutes.get(
@@ -75,7 +75,7 @@ RolesRoutes.get(
 
 /**
  * Get role permissions mapping
- * GET /api/v1/roles/:id/permissions 获取指定角色权限映射
+ * GET /api/v1/roles/:id/permissions - Get role permissions mapping
  */
 RolesRoutes.get(
   '/:id/permissions',
@@ -95,7 +95,7 @@ RolesRoutes.get(
 
 /**
  * Update role permissions
- * PATCH /api/v1/roles/:id/permissions 更新角色的权限列表
+ * PATCH /api/v1/roles/:id/permissions - Update role permissions list
  */
 RolesRoutes.patch(
   '/:id/permissions',
@@ -112,7 +112,7 @@ RolesRoutes.patch(
 
 /**
  * Clear role permissions mapping
- * DELETE /api/v1/roles/:id/permissions 清空角色的权限列表
+ * DELETE /api/v1/roles/:id/permissions - Clear role permissions list
  */
 RolesRoutes.delete(
   '/:id/permissions',
@@ -131,7 +131,7 @@ RolesRoutes.delete(
 
 /**
  * Update role information
- * PATCH /api/v1/roles/:id 更新角色信息
+ * PATCH /api/v1/roles/:id - Update role information
  * Requires role update permission (admin only)
  */
 RolesRoutes.patch(
@@ -149,7 +149,7 @@ RolesRoutes.patch(
 
 /**
  * Delete role by ID
- * DELETE /api/v1/roles/:id 删除角色
+ * DELETE /api/v1/roles/:id - Delete role
  */
 RolesRoutes.delete(
   '/:id',

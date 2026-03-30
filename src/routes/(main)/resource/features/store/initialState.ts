@@ -2,6 +2,7 @@ import { type ResourceManagerMode } from '@/features/ResourceManager';
 import { FilesTabs, SortType } from '@/types/files';
 
 export type ViewMode = 'list' | 'masonry';
+export type SelectAllState = 'all' | 'loaded' | 'none';
 
 export interface State {
   /**
@@ -9,29 +10,9 @@ export interface State {
    */
   category: FilesTabs;
   /**
-   * Current folder ID for navigation
-   */
-  currentFolderId?: string | null;
-  /**
    * Current view item ID (document ID or file ID)
    */
   currentViewItemId?: string;
-  /**
-   * Whether there are more files to load (pagination)
-   */
-  fileListHasMore: boolean;
-  /**
-   * Current pagination offset
-   */
-  fileListOffset: number;
-  /**
-   * Masonry view ready state
-   */
-  isMasonryReady: boolean;
-  /**
-   * View transition state
-   */
-  isTransitioning: boolean;
   /**
    * Current library ID
    */
@@ -49,7 +30,12 @@ export interface State {
    */
   searchQuery: string | null;
   /**
-   * Selected file IDs in the file explorer
+   * Current select-all mode shared across explorer views
+   */
+  selectAllState: SelectAllState;
+  /**
+   * Selected file IDs in the file explorer.
+   * When selectAllState === 'all', this stores excluded IDs instead.
    */
   selectedFileIds: string[];
   /**
@@ -68,16 +54,12 @@ export interface State {
 
 export const initialState: State = {
   category: FilesTabs.All,
-  currentFolderId: undefined,
   currentViewItemId: undefined,
-  fileListHasMore: false,
-  fileListOffset: 0,
-  isMasonryReady: false,
-  isTransitioning: false,
   libraryId: undefined,
   mode: 'explorer',
   pendingRenameItemId: null,
   searchQuery: null,
+  selectAllState: 'none',
   selectedFileIds: [],
   sortType: SortType.Desc,
   sorter: 'createdAt',

@@ -547,6 +547,10 @@ export class GeneralChatAgent implements Agent {
           };
         }
 
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
+
         // No pending tools, continue to call LLM with tool results
         return this.toLLMCall({
           messages: state.messages,
@@ -577,6 +581,12 @@ export class GeneralChatAgent implements Agent {
           };
         }
 
+        // If there are queued user messages, finish early so the queue
+        // can be processed as a new operation with full context
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
+
         // No pending tools, continue to call LLM with tool results
         return this.toLLMCall({
           messages: state.messages,
@@ -604,6 +614,10 @@ export class GeneralChatAgent implements Agent {
       case 'tasks_batch_result': {
         // Async tasks batch completed, continue to call LLM with results
         const { parentMessageId } = context.payload as TasksBatchResultPayload;
+
+        if (context.stepContext?.hasQueuedMessages) {
+          return { reason: 'queued_message_interrupt', type: 'finish' };
+        }
 
         // Inject a virtual user message to force the model to summarize or continue
         // This fixes an issue where some models (e.g., Kimi K2) return empty content

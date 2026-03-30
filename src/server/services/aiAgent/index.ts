@@ -54,6 +54,8 @@ import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
 
+import { ingestAttachment } from './ingestAttachment';
+
 const log = debug('lobe-server:ai-agent-service');
 
 /**
@@ -105,12 +107,15 @@ interface InternalExecAgentParams extends ExecAgentParams {
   discordContext?: any;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
-  /** External file URLs to download, upload to S3, and attach to the user message */
+  /** External files to upload to S3 and attach to the user message */
   files?: Array<{
+    /** Pre-downloaded buffer (from adapter/platform layer) */
+    buffer?: Buffer;
     mimeType?: string;
     name?: string;
     size?: number;
-    url: string;
+    /** External URL — fetched if no buffer provided */
+    url?: string;
   }>;
   /** External lifecycle hooks (auto-adapt to local/production mode) */
   hooks?: AgentHook[];
@@ -745,31 +750,19 @@ export class AiAgentService {
       for (const file of files) {
         await throwIfExecutionAborted('file upload');
 
-        const ext = file.name?.split('.').pop() || 'bin';
-        const pathname = `files/${this.userId}/${nanoid()}/${file.name || `file.${ext}`}`;
-
         try {
-          const result = await fileService.uploadFromUrl(file.url, pathname);
+          const result = await ingestAttachment(file, fileService, this.userId);
           fileIds.push(result.fileId);
 
-          // Build imageList for vision-capable models.
-          // Use getFullFileUrl to resolve S3 key to a publicly accessible URL
-          // (presigned or public domain), matching the frontend postProcessUrl pattern.
-          const mimeType = file.mimeType || '';
-          if (mimeType.startsWith('image/')) {
-            const resolvedUrl = await fileService.getFullFileUrl(result.key);
-            imageList.push({ alt: file.name || 'image', id: result.fileId, url: resolvedUrl });
+          if (result.isImage) {
+            imageList.push({
+              alt: file.name || 'image',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
           }
         } catch (error) {
-          log('execAgent: failed to upload file %s: %O', file.url, error);
-
-          // Fallback: if S3 upload failed but the file is an inline data URL image,
-          // pass it directly to the LLM (vision models support data: URLs).
-          const mimeType = file.mimeType || '';
-          if (mimeType.startsWith('image/') && file.url.startsWith('data:')) {
-            imageList.push({ alt: file.name || 'image', id: `inline_${nanoid()}`, url: file.url });
-            log('execAgent: using inline data URL fallback for image');
-          }
+          log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
         }
       }
 

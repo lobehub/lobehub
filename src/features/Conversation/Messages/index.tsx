@@ -8,6 +8,7 @@ import { type MouseEvent, type ReactNode } from 'react';
 import { memo, Suspense, useCallback } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
+import SafeBoundary from '@/components/ErrorBoundary';
 
 import History from '../components/History';
 import { useChatItemContextMenu } from '../hooks/useChatItemContextMenu';
@@ -191,7 +192,9 @@ const MessageItem = memo<MessageItemProps>(
           data-index={index}
           onContextMenu={onContextMenu}
         >
-          <Suspense fallback={<BubblesLoading />}>{renderContent()}</Suspense>
+          <SafeBoundary variant="alert">
+            <Suspense fallback={<BubblesLoading />}>{renderContent()}</Suspense>
+          </SafeBoundary>
           {endRender}
         </Flexbox>
       </>

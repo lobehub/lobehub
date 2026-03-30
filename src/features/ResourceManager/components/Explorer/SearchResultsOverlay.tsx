@@ -77,8 +77,15 @@ const SearchResultsOverlay = memo(() => {
   const masonryContext = useMemo(
     () => ({
       knowledgeBaseId: libraryId ?? undefined,
+      onSelectedChange: (id: string, checked: boolean) => {
+        if (checked) {
+          setSelectedFileIds((prev) => [...prev, id]);
+        } else {
+          setSelectedFileIds((prev) => prev.filter((fid) => fid !== id));
+        }
+      },
+      selectAllState: 'loaded' as const,
       selectFileIds: selectedFileIds,
-      setSelectedFileIds,
     }),
     [libraryId, selectedFileIds],
   );
@@ -181,10 +188,8 @@ const SearchResultsOverlay = memo(() => {
                     <FileListItemComponent
                       columnWidths={columnWidths}
                       index={index}
-                      isAnyRowHovered={false}
                       key={item.id}
                       selected={selectedFileIds.includes(item.id)}
-                      onHoverChange={() => {}}
                       onSelectedChange={(id, checked) => {
                         if (checked) {
                           setSelectedFileIds((prev) => [...prev, id]);

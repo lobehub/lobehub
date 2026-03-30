@@ -3,7 +3,6 @@ import { WechatClientFactory } from './client';
 import { schema } from './schema';
 
 export const wechat: PlatformDefinition = {
-  authFlow: 'qrcode',
   id: 'wechat',
   name: 'WeChat',
   connectionMode: 'persistent',

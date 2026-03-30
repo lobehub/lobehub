@@ -20,7 +20,7 @@ import type {
 } from '../types/provider.type';
 
 /**
- * Provider 服务实现类，负责处理 AI Provider 的业务逻辑
+ * Provider service implementation class, responsible for handling AI Provider business logic
  */
 export class ProviderService extends BaseService {
   private gateKeeperPromise: Promise<KeyVaultsGateKeeper> | null = null;

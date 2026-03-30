@@ -17,6 +17,8 @@ export default {
     'You are about to delete this file. Once deleted, it cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmDeleteFolder':
     'You are about to delete this folder and all of its contents. This action cannot be undone. Please confirm your decision.',
+  'FileManager.actions.confirmDeleteAllFiles':
+    'You are about to delete all results in the current view. Once deleted, they cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmDeleteMultiFiles':
     'You are about to delete the selected {{count}} files. Once deleted, they cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmRemoveFromLibrary':
@@ -57,7 +59,12 @@ export default {
   'FileManager.title.createdAt': 'Created At',
   'FileManager.title.size': 'Size',
   'FileManager.title.title': 'File',
+  'FileManager.total.allSelectedCount': 'All {{count}} items are selected.',
+  'FileManager.total.allSelectedFallback': 'All results are selected.',
   'FileManager.total.fileCount': 'Total {{count}} items',
+  'FileManager.total.loadedSelectedCount': 'Selected {{count}} loaded items.',
+  'FileManager.total.selectAll': 'Select all {{count}} items',
+  'FileManager.total.selectAllFallback': 'Select all items',
   'FileManager.total.selectedCount': 'Selected {{count}} items',
   'FileManager.view.list': 'List View',
   'FileManager.view.masonry': 'Grid View',
