@@ -555,8 +555,11 @@ export class MessageExecutionRuntime {
             `enabled: ${b.enabled}`,
             `status: ${b.runtimeStatus ?? 'unknown'}`,
           ];
+          if (b.serverId) {
+            parts.push(`serverId: ${b.serverId}`);
+          }
           if (b.userId) {
-            parts.push(`ownerUserId: ${b.userId}`);
+            parts.push(`userId: ${b.userId}`);
           }
           return `- ${b.platform} (${parts.join(', ')})`;
         })

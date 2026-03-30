@@ -400,6 +400,8 @@ export interface ConfiguredBotInfo {
   id: string;
   platform: string;
   runtimeStatus?: string;
+  /** Default server/guild/workspace ID (for listing channels) */
+  serverId?: string;
   /** Owner's user ID on the platform (for sending DMs) */
   userId?: string;
 }

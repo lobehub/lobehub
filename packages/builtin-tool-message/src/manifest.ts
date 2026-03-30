@@ -71,8 +71,7 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Read recent messages from a channel or conversation. Returns messages in chronological order.',
+      description: `Read recent messages from a channel or conversation. Returns messages in chronological order. Default limit is ${DEFAULT_BOT_HISTORY_LIMIT}. Only pass a different limit if the user explicitly asks for more or fewer messages.`,
       name: MessageApiName.readMessages,
       parameters: {
         additionalProperties: false,

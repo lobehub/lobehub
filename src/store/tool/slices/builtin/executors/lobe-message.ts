@@ -58,8 +58,11 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
           `enabled: ${b.enabled}`,
           `status: ${b.runtimeStatus ?? 'unknown'}`,
         ];
+        if (b.settings?.serverId) {
+          parts.push(`serverId: ${b.settings.serverId}`);
+        }
         if (b.settings?.userId) {
-          parts.push(`ownerUserId: ${b.settings.userId}`);
+          parts.push(`userId: ${b.settings.userId}`);
         }
         return `- ${b.platform} (${parts.join(', ')})`;
       });

@@ -42,11 +42,10 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - **Always call \`listBots\` once (without platform filter)** to discover all configured bots for the current agent. Do NOT call it multiple times per platform — one call returns all bots.
 - If no bots are configured, use \`listPlatforms\` to show available platforms and guide the user to set one up via \`createBot\`
 - When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\`, use it directly. If not, ask the user for their platform user ID.
-- Every messaging API call requires a \`platform\` parameter
-- Channel and message IDs are platform-specific; use \`listChannels\` or \`readMessages\` to discover IDs
-- \`readMessages\` returns up to 100 messages per call; use \`before\`/\`after\` for pagination
-- Thread support varies: Discord has full thread channels; Slack uses reply chains; Telegram has topic threads
-- Reactions use unicode emoji (👍) or platform-specific format (Discord custom emoji)
+- **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
+- When the user references a channel by name (e.g. "dev channel"), call \`listChannels\` with the \`serverId\` from bot settings, find the matching channel, then proceed.
+- \`readMessages\` returns up to 100 messages per call; use \`before\`/\`after\` for pagination.
+- Reactions use unicode emoji (👍) or platform-specific format (Discord custom emoji).
 </usage_guidelines>
 
 <platform_notes>

@@ -80,6 +80,8 @@
   "channel.secretToken": "Webhook Secret Token",
   "channel.secretTokenHint": "Optional. Used to verify webhook requests from Telegram.",
   "channel.secretTokenPlaceholder": "Optional secret for webhook verification",
+  "channel.serverId": "Default Server / Guild ID",
+  "channel.serverIdHint": "Your default server or guild ID on this platform. The AI uses it to list channels without asking.",
   "channel.settings": "Advanced Settings",
   "channel.settingsResetConfirm": "Are you sure you want to reset advanced settings to default?",
   "channel.settingsResetDefault": "Reset to Default",

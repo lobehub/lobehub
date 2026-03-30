@@ -12,6 +12,13 @@ export const historyLimitField: FieldSchema = {
   type: 'number',
 };
 
+export const serverIdField: FieldSchema = {
+  key: 'serverId',
+  description: 'channel.serverIdHint',
+  label: 'channel.serverId',
+  type: 'string',
+};
+
 export const userIdField: FieldSchema = {
   key: 'userId',
   description: 'channel.userIdHint',

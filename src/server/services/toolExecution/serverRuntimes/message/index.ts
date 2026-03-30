@@ -134,6 +134,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           applicationId: p.applicationId,
           enabled: p.enabled,
           id: p.id,
+          serverId: (p.settings as any)?.serverId as string | undefined,
           userId: (p.settings as any)?.userId as string | undefined,
           platform: p.platform,
           runtimeStatus: statuses[i].status,
