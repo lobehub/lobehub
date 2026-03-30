@@ -142,7 +142,7 @@ export class ResponsesService extends BaseService {
             output.push({
               arguments: toolCall.function?.arguments ?? '{}',
               call_id: toolCall.id ?? `call_${itemCounter}`,
-              id: `fc_${responseId.slice(5)}_${itemCounter++}`,
+              id: `fc_${responseId}_${itemCounter++}`,
               name: toolCall.function?.name ?? '',
               status: 'completed' as const,
               type: 'function_call' as const,
@@ -159,7 +159,7 @@ export class ResponsesService extends BaseService {
               content: [
                 { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
               ],
-              id: `msg_${responseId.slice(5)}_${itemCounter++}`,
+              id: `msg_${responseId}_${itemCounter++}`,
               role: 'assistant' as const,
               status: 'completed' as const,
               type: 'message' as const,
@@ -169,7 +169,7 @@ export class ResponsesService extends BaseService {
       } else if (msg.role === 'tool') {
         output.push({
           call_id: msg.tool_call_id ?? '',
-          id: `fco_${responseId.slice(5)}_${itemCounter++}`,
+          id: `fco_${responseId}_${itemCounter++}`,
           output: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
           status: 'completed' as const,
           type: 'function_call_output' as const,
@@ -395,7 +395,7 @@ export class ResponsesService extends BaseService {
       const startTextMessage = function* (seq: { n: number }) {
         if (textMessageStarted) return;
         textMessageStarted = true;
-        currentTextItemId = `msg_${responseId.slice(5)}_${itemCounter++}`;
+        currentTextItemId = `msg_${responseId}_${itemCounter++}`;
         const item: OutputItem = {
           content: [{ annotations: [], logprobs: [], text: '', type: 'output_text' as const }],
           id: currentTextItemId,
@@ -488,7 +488,7 @@ export class ResponsesService extends BaseService {
 
               // Emit function_call output items for each tool call
               for (const toolCall of chunk.toolsCalling) {
-                const fcItemId = `fc_${responseId.slice(5)}_${itemCounter++}`;
+                const fcItemId = `fc_${responseId}_${itemCounter++}`;
                 yield {
                   item: {
                     arguments: toolCall.arguments ?? '{}',
@@ -541,7 +541,7 @@ export class ResponsesService extends BaseService {
               payload: { toolCalling: { id: string } };
               result: { content: string };
             };
-            const fcoItemId = `fco_${responseId.slice(5)}_${itemCounter++}`;
+            const fcoItemId = `fco_${responseId}_${itemCounter++}`;
 
             yield {
               item: {
@@ -638,38 +638,27 @@ export class ResponsesService extends BaseService {
   }
 
   /**
-   * Generate a response ID that encodes the topicId for multi-turn support.
-   * Format: resp_{topicId}_{8-char-random-suffix}
-   * When no topicId is available, generates a plain random ID.
+   * Generate a response ID.
+   * Uses topicId directly as the response ID for multi-turn support.
+   * When no topicId is available, generates a random ID.
    */
   private generateResponseId(topicId?: string): string {
+    if (topicId) return topicId;
+
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let suffix = '';
-    for (let i = 0; i < 8; i++) {
-      suffix += chars[Math.floor(Math.random() * chars.length)];
-    }
-    if (topicId) {
-      return `resp_${topicId}_${suffix}`;
-    }
-    // Fallback: plain 24-char random ID
     let id = '';
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 24; i++) {
       id += chars[Math.floor(Math.random() * chars.length)];
     }
-    return `resp_${id}_${suffix}`;
+    return id;
   }
 
   /**
    * Extract topicId from a response ID (previous_response_id).
-   * Reverses the encoding from generateResponseId.
+   * Since response ID is the topicId itself, just return it directly.
    */
   private extractTopicIdFromResponseId(responseId: string): string | null {
-    if (!responseId.startsWith('resp_')) return null;
-    const withoutPrefix = responseId.slice(5); // remove "resp_"
-    const lastUnderscore = withoutPrefix.lastIndexOf('_');
-    if (lastUnderscore === -1) return null;
-    const topicId = withoutPrefix.slice(0, lastUnderscore);
-    return topicId || null;
+    return responseId || null;
   }
 
   private buildResponseObject(opts: {
