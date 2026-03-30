@@ -533,6 +533,15 @@ describe('promoteDisplayOnlyLatex', () => {
     );
   });
 
+  it('should promote flalign and multline environments used inside inline math', () => {
+    const input =
+      '$\\begin{flalign}a&=b\\\\c&=d\\end{flalign}$ $\\begin{flalign*}a&=b\\end{flalign*}$ $\\begin{multline}a\\\\b\\end{multline}$ $\\begin{multline*}a\\\\b\\end{multline*}$';
+
+    expect(promoteDisplayOnlyLatex(input)).toEqual(
+      '\n$$\n\\begin{flalign}a&=b\\\\c&=d\\end{flalign}\n$$\n \n$$\n\\begin{flalign*}a&=b\\end{flalign*}\n$$\n \n$$\n\\begin{multline}a\\\\b\\end{multline}\n$$\n \n$$\n\\begin{multline*}a\\\\b\\end{multline*}\n$$\n',
+    );
+  });
+
   it('should keep inline-safe environments unchanged', () => {
     const input =
       '$\\begin{aligned}a&=b\\end{aligned}$ $\\begin{alignedat}{2}a&=b\\end{alignedat}$ $\\begin{gathered}a\\\\b\\end{gathered}$ and $x^2$';

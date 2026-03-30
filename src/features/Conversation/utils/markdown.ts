@@ -9,8 +9,12 @@ const DISPLAY_ONLY_LATEX_ENVIRONMENTS = [
   'CD',
   'equation',
   'equation*',
+  'flalign',
+  'flalign*',
   'gather',
   'gather*',
+  'multline',
+  'multline*',
   'split',
 ] as const;
 const PROTECTED_MARKDOWN_SEGMENT_PATTERN =
