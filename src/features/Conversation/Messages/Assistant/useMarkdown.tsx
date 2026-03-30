@@ -41,6 +41,11 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
     [content, generating, isLocalSystemEnabled, search?.imageResults?.length, tools],
   );
 
+  // Derive a stable key from the set of active tags so that plugins/components
+  // only get recreated when the *set* of enabled elements changes, not on every
+  // content token during streaming.
+  const activeTagsKey = activeMarkdownElements.map((e) => e.tag).join(',');
+
   const components = useMemo(
     () =>
       Object.fromEntries(
@@ -49,16 +54,19 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
           return [element.tag, (props: any) => <Component {...props} id={id} />];
         }),
       ),
-    [activeMarkdownElements, id],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTagsKey, id],
   );
 
   const rehypePlugins = useMemo(
     () => activeMarkdownElements.map((element) => element.rehypePlugin).filter(Boolean),
-    [activeMarkdownElements],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTagsKey],
   );
   const remarkPlugins = useMemo(
     () => activeMarkdownElements.map((element) => element.remarkPlugin).filter(Boolean),
-    [activeMarkdownElements],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTagsKey],
   );
 
   return useMemo(
