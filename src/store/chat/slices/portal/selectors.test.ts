@@ -308,6 +308,43 @@ ${htmlContent}
       expect(chatPortalSelectors.artifactCode('test-id', 'second')(state)).toBe(content2);
     });
 
+    it('should return empty string for non-existent identifier', () => {
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: `<lobeArtifact identifier="real" type="text">Real content</lobeArtifact>`,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.artifactCode('test-id', 'nonexistent')(state)).toBe('');
+    });
+
+    it('should extract content from unclosed artifact by identifier', () => {
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: `<lobeArtifact identifier="done" type="text">Done</lobeArtifact>\n\n<lobeArtifact identifier="wip" type="text">Still generating...`,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.artifactCode('test-id', 'done')(state)).toBe('Done');
+      expect(chatPortalSelectors.artifactCode('test-id', 'wip')(state)).toBe('Still generating...');
+    });
+
     it('should return first artifact content when no identifier provided (backward compat)', () => {
       const content1 = 'First';
       const state = createState({
@@ -381,6 +418,44 @@ ${htmlContent}
         },
       });
       expect(chatPortalSelectors.isArtifactTagClosed('test-id')(state)).toBe(false);
+    });
+
+    it('should check specific artifact by identifier when both artifacts are closed', () => {
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content:
+                '<lobeArtifact identifier="a" type="text">A</lobeArtifact>\n\n<lobeArtifact identifier="b" type="text">B</lobeArtifact>',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id', 'a')(state)).toBe(true);
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id', 'b')(state)).toBe(true);
+    });
+
+    it('should return false for non-existent identifier', () => {
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: '<lobeArtifact identifier="exists" type="text">Content</lobeArtifact>',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id', 'nonexistent')(state)).toBe(false);
     });
 
     it('should check specific artifact by identifier when first is closed but second is not', () => {
