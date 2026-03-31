@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: check-inactive
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'check-inactive'
           token: ${{ secrets.GH_TOKEN }}
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: need reproduce
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'close-issues'
           token: ${{ secrets.GH_TOKEN }}
@@ -40,7 +40,7 @@ jobs:
             <br/>
             Since the issue was labeled with `✅ Fixed`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
       - name: need reproduce
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'close-issues'
           token: ${{ secrets.GH_TOKEN }}
@@ -51,7 +51,7 @@ jobs:
             <br/>
             Since the issue was labeled with `🤔 Need Reproduce`, but no response in 3 days. This issue will be closed. If you have any questions, you can comment and reply.
       - name: need reproduce
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'close-issues'
           token: ${{ secrets.GH_TOKEN }}

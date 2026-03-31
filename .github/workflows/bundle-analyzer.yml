@@ -26,12 +26,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4
 
       - name: Install dependencies
         run: pnpm i
@@ -83,7 +83,7 @@ jobs:
           echo "" >> bundle-report/README.md
           echo "**Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> bundle-report/README.md
           echo "**Commit:** ${{ github.sha }}" >> bundle-report/README.md
-          echo "**Branch:** ${{ github.ref_name }}" >> bundle-report/README.md
+          echo "**Branch:** ${REF_NAME}" >> bundle-report/README.md
           echo "" >> bundle-report/README.md
           echo "## How to view" >> bundle-report/README.md
           echo "" >> bundle-report/README.md
@@ -97,6 +97,8 @@ jobs:
           echo "- \`server.html\` - Server-side bundle analysis" >> bundle-report/README.md
           echo "- \`pnpm-lock.yaml\` - pnpm lockfile (for reproducible builds)" >> bundle-report/README.md
 
+        env:
+          REF_NAME: ${{ github.ref_name }}
       - name: Upload bundle analyzer reports
         uses: actions/upload-artifact@v6
         with:

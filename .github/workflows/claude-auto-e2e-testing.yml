@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -81,7 +81,7 @@ jobs:
           cp e2e/CLAUDE.md /tmp/claude-prompts/e2e-guide.md
 
       - name: Run Claude Code for Auto E2E Testing
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@3ac52d0da9f8ec9ca7b4dc23bb477e36ef9c77a9 # v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}
           allowed_non_write_users: '*'

@@ -83,7 +83,7 @@ jobs:
 
       - name: Install bun
         if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
@@ -209,7 +209,7 @@ jobs:
 
       - name: Create GitHub Release
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           tag_name: v${{ env.VERSION }}
           name: 🚀 Release v${{ env.VERSION }}

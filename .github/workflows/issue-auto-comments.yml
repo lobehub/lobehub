@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Auto Comment on Issues Closed
-        uses: wow-actions/auto-comment@v1
+        uses: wow-actions/auto-comment@2fc064c21cfb2505de3c5c10e1473b8eb7beca1a # v1
         with:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN}}
           issuesClosed: |
@@ -29,7 +29,7 @@ jobs:
 
             This issue is closed, If you have any questions, you can comment and reply.
       - name: Auto Comment on Pull Request Merged
-        uses: actions-cool/pr-welcome@main
+        uses: actions-cool/pr-welcome@4bd317d60ef3b40a3ccda39c22f66c3358010f92 # main
         if: github.event.pull_request.merged == true
         with:
           token: ${{ secrets.GH_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
           pr-emoji: '+1, heart'
       - name: Remove inactive
         if: github.event.issue.state == 'open' && github.actor == github.event.issue.user.login
-        uses: actions-cool/issues-helper@v3
+        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3
         with:
           actions: 'remove-labels'
           token: ${{ secrets.GH_TOKEN }}

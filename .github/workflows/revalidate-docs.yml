@@ -17,9 +17,12 @@ jobs:
     steps:
       - name: Trigger docs revalidation
         run: |
-          response=$(curl "${{ secrets.DOCS_REVALIDATE_URL }}" --silent --show-error)
+          response=$(curl "${DOCS_REVALIDATE_URL}" --silent --show-error)
           echo "Response: $response"
           if [ "$response" != '{"success":true}' ]; then
             echo "Error: Unexpected response"
             exit 1
           fi
+
+        env:
+          DOCS_REVALIDATE_URL: ${{ secrets.DOCS_REVALIDATE_URL }}
