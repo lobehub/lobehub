@@ -498,7 +498,16 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       return result.length > 0 ? result : undefined;
     }
 
-    // For older models, search tools cannot be used with FunctionCall simultaneously
+    // For older models, search tools cannot be used with FunctionCall simultaneously.
+    // If tool_calls already exist in conversation, prioritize function declarations
+    // to maintain multi-turn tool-calling sessions.
+    const hasToolCalls = payload?.messages?.some((m) => m.tool_calls?.length);
+    const hasFunctionTools = tools && tools.length > 0;
+
+    if (hasToolCalls && hasFunctionTools) {
+      return buildGoogleTools(tools);
+    }
+
     if (hasUrlContext && hasSearch) {
       return [{ urlContext: {} }, googleSearchTool!];
     }
