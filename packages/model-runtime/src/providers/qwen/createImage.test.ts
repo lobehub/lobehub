@@ -696,6 +696,67 @@ describe('createQwenImage', () => {
   });
 
   describe('kling model', () => {
+    it('should poll task status when image-generation returns pending task', async () => {
+      const mockTaskId = 'task-kling-pending';
+      const mockImageUrl = 'https://p4-fdl.klingai.com/xxx.png?xxx';
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              task_id: mockTaskId,
+              task_status: 'PENDING',
+            },
+            request_id: 'req-kling-pending-create',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            output: {
+              choices: [
+                {
+                  message: {
+                    content: [
+                      {
+                        image: mockImageUrl,
+                        type: 'image',
+                      },
+                    ],
+                  },
+                },
+              ],
+              task_id: mockTaskId,
+              task_status: 'SUCCEEDED',
+            },
+            request_id: 'req-kling-pending-status',
+          }),
+        });
+
+      const payload: CreateImagePayload = {
+        model: 'kling/kling-v3-image-generation',
+        params: {
+          prompt: 'A cinematic robot portrait',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch).toHaveBeenNthCalledWith(
+        2,
+        `https://dashscope.aliyuncs.com/api/v1/tasks/${mockTaskId}`,
+        {
+          headers: {
+            Authorization: 'Bearer test-api-key',
+          },
+        },
+      );
+    });
+
     it('should use image-generation endpoint for kling model', async () => {
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/kling-image.jpg';
 

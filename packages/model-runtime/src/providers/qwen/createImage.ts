@@ -31,10 +31,11 @@ function matchesModel(model: string, patterns: Array<string | RegExp>): boolean 
 
 interface QwenImageTaskResponse {
   output: {
-    choices: Array<{
+    choices?: Array<{
       message: {
         content: Array<{
-          image: string;
+          image?: string;
+          type?: string;
         }>;
       };
     }>;
@@ -42,10 +43,33 @@ interface QwenImageTaskResponse {
     results?: Array<{
       url: string;
     }>;
-    task_id: string;
-    task_status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+    task_id?: string;
+    task_status?: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
   };
   request_id: string;
+}
+
+function parseImageFromTaskOutput(
+  output: QwenImageTaskResponse['output'],
+  model: string,
+): CreateImageResponse {
+  if (!output.choices || output.choices.length === 0) {
+    throw new Error(`No image choices returned from API for model ${model}`);
+  }
+
+  const choice = output.choices[0];
+  if (!choice.message.content || choice.message.content.length === 0) {
+    throw new Error(`No image content returned from API for model ${model}`);
+  }
+
+  const imageContent = choice.message.content.find((content) => typeof content.image === 'string');
+  if (!imageContent?.image) {
+    throw new Error(`No image found in response content for model ${model}`);
+  }
+
+  log('Image generated successfully: %s', imageContent.image);
+
+  return { imageUrl: imageContent.image };
 }
 
 /**
@@ -122,6 +146,9 @@ async function createQwenImageLegacyTask(
   }
 
   const data: QwenImageTaskResponse = await response.json();
+  if (!data.output.task_id) {
+    throw new Error(`No task_id returned when creating ${endpoint} task for model ${model}`);
+  }
   log('Task created with ID: %s', data.output.task_id);
 
   return data.output.task_id;
@@ -129,7 +156,8 @@ async function createQwenImageLegacyTask(
 
 /**
  * Create image with Qwen image/multimodal-generation API
- * This is a synchronous API that returns the result directly
+ * For image-generation endpoint, this may return a pending task that requires polling.
+ * For multimodal-generation endpoint, this returns the result directly.
  * Supports both text-to-image (t2i) and image-to-image (i2i) workflows
  */
 async function createQwenImageTask(
@@ -204,24 +232,53 @@ async function createQwenImageTask(
 
   const data: QwenImageTaskResponse = await response.json();
 
-  if (!data.output.choices || data.output.choices.length === 0) {
-    throw new Error(`No image choices returned from API for model ${model}`);
+  if (data.output.task_status === 'FAILED') {
+    const errorMessage = data.output.error_message || 'Task failed without error message';
+    throw new Error(`Image generation failed for model ${model}: ${errorMessage}`);
   }
 
-  const choice = data.output.choices[0];
-  if (!choice.message.content || choice.message.content.length === 0) {
-    throw new Error(`No image content returned from API for model ${model}`);
+  if (data.output.task_id && !(data.output.choices && data.output.choices.length > 0)) {
+    const taskId = data.output.task_id;
+    log('Image generation task created, start polling task: %s', taskId);
+
+    return asyncifyPolling<QwenImageTaskResponse, CreateImageResponse>({
+      checkStatus: (taskStatus: QwenImageTaskResponse): TaskResult<CreateImageResponse> => {
+        log('Task %s status: %s', taskId, taskStatus.output.task_status);
+
+        if (taskStatus.output.task_status === 'SUCCEEDED') {
+          try {
+            return {
+              data: parseImageFromTaskOutput(taskStatus.output, model),
+              status: 'success',
+            };
+          } catch (error) {
+            return {
+              error: error as Error,
+              status: 'failed',
+            };
+          }
+        }
+
+        if (taskStatus.output.task_status === 'FAILED') {
+          const errorMessage =
+            taskStatus.output.error_message || 'Task failed without error message';
+          return {
+            error: new Error(`Image generation failed for model ${model}: ${errorMessage}`),
+            status: 'failed',
+          };
+        }
+
+        return { status: 'pending' };
+      },
+      logger: {
+        debug: (message: any, ...args: any[]) => log(message, ...args),
+        error: (message: any, ...args: any[]) => log(message, ...args),
+      },
+      pollingQuery: () => queryTaskStatus(taskId, apiKey, baseUrl),
+    });
   }
 
-  const imageContent = choice.message.content.find((content) => 'image' in content);
-  if (!imageContent) {
-    throw new Error(`No image found in response content for model ${model}`);
-  }
-
-  const resultImageUrl = imageContent.image;
-  log('Image edit generated successfully: %s', resultImageUrl);
-
-  return { imageUrl: resultImageUrl };
+  return parseImageFromTaskOutput(data.output, model);
 }
 
 /**
@@ -338,7 +395,7 @@ export async function createQwenImage(
 
     const endpoint = isImageGeneration ? 'image-generation' : 'multimodal-generation';
     log('Using %s API for model: %s', endpoint, model);
-    return await createQwenImageTask(payload, apiKey, endpoint, provider, dashscopeURL);
+    return await createQwenImageTask(payload, apiKey, endpoint, dashscopeURL, provider);
   } catch (error) {
     log('Error in createQwenImage: %O', error);
 
