@@ -66,7 +66,7 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
   const [isGenerating, isArtifactTagClosed, openArtifact, closeArtifact] = useChatStore((s) => {
     return [
       messageStateSelectors.isMessageGenerating(id)(s),
-      chatPortalSelectors.isArtifactTagClosed(id)(s),
+      chatPortalSelectors.isArtifactTagClosed(id, identifier)(s),
       s.openArtifact,
       s.closeArtifact,
     ];
@@ -88,10 +88,10 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
       gap={16}
       width={'100%'}
       onClick={() => {
-        const currentArtifactMessageId = chatPortalSelectors.artifactMessageId(
-          useChatStore.getState(),
-        );
-        if (currentArtifactMessageId === id) {
+        const state = useChatStore.getState();
+        const currentArtifactMessageId = chatPortalSelectors.artifactMessageId(state);
+        const currentArtifactIdentifier = chatPortalSelectors.artifactIdentifier(state);
+        if (currentArtifactMessageId === id && currentArtifactIdentifier === identifier) {
           closeArtifact();
         } else {
           openArtifactUI();

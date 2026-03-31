@@ -68,10 +68,16 @@ const artifactMessageContent = (id: string) => (s: ChatStoreState) => {
   return message?.content || '';
 };
 
-const artifactCode = (id: string) => (s: ChatStoreState) => {
+const artifactCode = (id: string, identifier?: string) => (s: ChatStoreState) => {
   const messageContent = artifactMessageContent(id)(s);
-  const result = messageContent.match(ARTIFACT_TAG_REGEX);
 
+  const regex = identifier
+    ? new RegExp(
+        `<lobeArtifact\\b[^>]*identifier="${identifier}"[^>]*>(?<content>[\\S\\s]*?)(?:<\\/lobeArtifact>|$)`,
+      )
+    : ARTIFACT_TAG_REGEX;
+
+  const result = messageContent.match(regex);
   let content = result?.groups?.content || '';
 
   // Remove markdown code block if content is wrapped
@@ -80,8 +86,16 @@ const artifactCode = (id: string) => (s: ChatStoreState) => {
   return content;
 };
 
-const isArtifactTagClosed = (id: string) => (s: ChatStoreState) => {
+const isArtifactTagClosed = (id: string, identifier?: string) => (s: ChatStoreState) => {
   const content = artifactMessageContent(id)(s);
+
+  if (identifier) {
+    // Check if the specific artifact (by identifier) is closed
+    const regex = new RegExp(
+      `<lobeArtifact\\b[^>]*identifier="${identifier}"[^>]*>[\\S\\s]*?<\\/lobeArtifact>`,
+    );
+    return regex.test(content || '');
+  }
 
   return ARTIFACT_TAG_CLOSED_REGEX.test(content || '');
 };

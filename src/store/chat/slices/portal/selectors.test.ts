@@ -286,6 +286,46 @@ ${htmlContent}
       });
       expect(chatPortalSelectors.artifactCode('test-id')(state)).toBe(htmlContent);
     });
+
+    it('should extract specific artifact content by identifier', () => {
+      const content1 = 'First artifact content';
+      const content2 = 'Second artifact content';
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: `<lobeArtifact identifier="first" type="text">${content1}</lobeArtifact>\n\n<lobeArtifact identifier="second" type="text">${content2}</lobeArtifact>`,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.artifactCode('test-id', 'first')(state)).toBe(content1);
+      expect(chatPortalSelectors.artifactCode('test-id', 'second')(state)).toBe(content2);
+    });
+
+    it('should return first artifact content when no identifier provided (backward compat)', () => {
+      const content1 = 'First';
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: `<lobeArtifact identifier="a" type="text">${content1}</lobeArtifact>\n\n<lobeArtifact identifier="b" type="text">Second</lobeArtifact>`,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.artifactCode('test-id')(state)).toBe(content1);
+    });
   });
 
   describe('isArtifactTagClosed', () => {
@@ -341,6 +381,29 @@ ${htmlContent}
         },
       });
       expect(chatPortalSelectors.isArtifactTagClosed('test-id')(state)).toBe(false);
+    });
+
+    it('should check specific artifact by identifier when first is closed but second is not', () => {
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content:
+                '<lobeArtifact identifier="done" type="text">Content 1</lobeArtifact>\n\n<lobeArtifact identifier="generating" type="text">Content 2 still going',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      // Without identifier, returns true because first artifact is closed
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id')(state)).toBe(true);
+      // With identifier, correctly distinguishes between closed and unclosed
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id', 'done')(state)).toBe(true);
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id', 'generating')(state)).toBe(false);
     });
   });
 });
