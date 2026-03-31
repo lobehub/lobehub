@@ -751,6 +751,100 @@ describe('buildGoogleToolsWithSearch', () => {
     const config = callArgs[0].config as any;
     expect(config.tools).toEqual([{ googleSearch: {} }]);
   });
+
+  it('should combine search tools with function declarations for Gemini 3+ models', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.1-pro-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.1-pro-preview',
+      temperature: 0,
+      enabledSearch: true,
+      urlContext: true,
+      tools: [
+        { type: 'function', function: { name: 'test_tool', description: 'A test tool' } },
+      ],
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toEqual([
+      { urlContext: {} },
+      { googleSearch: {} },
+      {
+        functionDeclarations: [
+          {
+            name: 'test_tool',
+            description: 'A test tool',
+            parameters: {
+              description: undefined,
+              properties: { dummy: { type: 'string' } },
+              required: undefined,
+              type: 'OBJECT',
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('should exclude function declarations when search is enabled for pre-Gemini 3 models', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-2.5-pro',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-2.5-pro',
+      temperature: 0,
+      enabledSearch: true,
+      urlContext: true,
+      tools: [
+        { type: 'function', function: { name: 'test_tool', description: 'A test tool' } },
+      ],
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    // Pre-Gemini 3 models should only have search tools, no functionDeclarations
+    expect(config.tools).toEqual([{ urlContext: {} }, { googleSearch: {} }]);
+  });
 });
 
 describe('models', () => {
