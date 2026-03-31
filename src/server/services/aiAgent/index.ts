@@ -2,6 +2,7 @@ import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import {
   type DeviceAttachment,
   generateSystemPrompt,
@@ -443,6 +444,10 @@ export class AiAgentService {
       // Agent documents check is non-critical
     }
 
+    // Auto-enable message tool when request comes from a bot conversation (e.g., Discord, Slack, Telegram)
+    const isBotConversation = !!(botContext || discordContext);
+    log('execAgent: isBotConversation=%s', isBotConversation);
+
     // Build device context for ToolsEngine enableChecker
     const gatewayConfigured = deviceProxy.isConfigured;
     const boundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
@@ -468,6 +473,7 @@ export class AiAgentService {
       ...(agentConfig?.plugins ?? []),
       ...(additionalPluginIds || []),
       ...(hasTopicReference ? ['lobe-topic-reference'] : []),
+      ...(isBotConversation ? [MessageToolIdentifier] : []),
     ];
 
     // Derive activeDeviceId from device context:
@@ -498,6 +504,7 @@ export class AiAgentService {
       globalMemoryEnabled,
       hasAgentDocuments,
       hasEnabledKnowledgeBases,
+      isBotConversation,
       model,
       provider,
     });
@@ -509,6 +516,7 @@ export class AiAgentService {
       ...(additionalPluginIds || []),
       LocalSystemManifest.identifier,
       RemoteDeviceManifest.identifier,
+      ...(isBotConversation ? [MessageToolIdentifier] : []),
     ];
     log('execAgent: agent configured plugins: %O', pluginIds);
 
