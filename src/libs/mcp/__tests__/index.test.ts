@@ -1,6 +1,14 @@
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { MCPClient } from '../index';
+
+const require = createRequire(import.meta.url);
+const mcpHelloWorldRoot = dirname(require.resolve('mcp-hello-world/package.json'));
+/** Local stdio entry (see mcp-hello-world `bin`); avoids `npx` so npm never reads this repo's overrides. */
+const mcpHelloWorldStdio = join(mcpHelloWorldRoot, 'build', 'stdio.js');
 
 describe('MCPClient', () => {
   // --- Updated Stdio Transport tests ---
@@ -11,9 +19,8 @@ describe('MCPClient', () => {
       id: 'mcp-hello-world',
       name: 'Stdio SDK Test Connection',
       type: 'stdio' as const,
-      command: 'npx', // Use node to run the compiled mock server
-      // Ensure non-interactive execution to avoid hanging on install confirmation in CI.
-      args: ['--yes', 'mcp-hello-world@1.1.2'],
+      command: process.execPath,
+      args: [mcpHelloWorldStdio],
     };
 
     beforeEach(async () => {
