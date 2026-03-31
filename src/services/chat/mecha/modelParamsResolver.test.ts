@@ -498,7 +498,7 @@ describe('resolveModelExtendParams', () => {
           chatConfig: {
             thinkingLevel2: 'low',
           } as any,
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3.1-pro-preview',
           provider: 'google',
         });
 
@@ -508,19 +508,7 @@ describe('resolveModelExtendParams', () => {
       it('should not set thinkingLevel when thinkingLevel2 is not configured', () => {
         const result = resolveModelExtendParams({
           chatConfig: {} as any,
-          model: 'gemini-3-pro-preview',
-          provider: 'google',
-        });
-
-        expect(result.thinkingLevel).toBeUndefined();
-      });
-
-      it('should not read from thinkingLevel config key', () => {
-        const result = resolveModelExtendParams({
-          chatConfig: {
-            thinkingLevel: 'high',
-          } as any,
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3.1-pro-preview',
           provider: 'google',
         });
 
@@ -559,17 +547,28 @@ describe('resolveModelExtendParams', () => {
 
         expect(result.thinkingLevel).toBeUndefined();
       });
+    });
 
-      it('should not read from thinkingLevel config key', () => {
+    describe('thinkingLevel selection order', () => {
+      it('should use the first configured thinkingLevel* extend param in modelExtendParams order', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel',
+          'thinkingLevel3',
+        ]);
+
         const result = resolveModelExtendParams({
           chatConfig: {
             thinkingLevel: 'high',
+            thinkingLevel3: 'medium',
           } as any,
           model: 'gemini-3.1-pro-preview',
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
       });
     });
   });

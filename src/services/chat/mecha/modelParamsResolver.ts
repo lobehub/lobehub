@@ -1,4 +1,5 @@
-import { type LobeAgentChatConfig } from '@lobechat/types';
+import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { ExtendParamsType } from 'model-bank';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
@@ -168,24 +169,24 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingBudget = chatConfig.thinkingBudget;
   }
 
-  if (modelExtendParams.includes('thinkingLevel') && chatConfig.thinkingLevel) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel;
-  }
+  const thinkingLevelParamToConfigKey: Partial<Record<ExtendParamsType, keyof LobeAgentChatConfig>> =
+    {
+      thinkingLevel: 'thinkingLevel',
+      thinkingLevel2: 'thinkingLevel2',
+      thinkingLevel3: 'thinkingLevel3',
+      thinkingLevel4: 'thinkingLevel4',
+      thinkingLevel5: 'thinkingLevel5',
+    };
 
-  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
-  }
+  for (const extendParam of modelExtendParams) {
+    const configKey = thinkingLevelParamToConfigKey[extendParam];
+    if (!configKey) continue;
 
-  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel4;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel5') && chatConfig.thinkingLevel5) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel5;
+    const value = chatConfig[configKey];
+    if (typeof value === 'string') {
+      extendParams.thinkingLevel = value;
+      break;
+    }
   }
 
   // URL context
