@@ -545,7 +545,7 @@ export class AiAgentService {
     }
 
     // Inject client function tools from Response API
-    const CLIENT_FN_IDENTIFIER = '__fn__';
+    const CLIENT_FN_IDENTIFIER = 'lobe-client-fn';
     if (functionTools?.length) {
       for (const ft of functionTools) {
         tools?.push({

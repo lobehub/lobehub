@@ -183,10 +183,10 @@ export class ResponsesService extends BaseService {
         // Handle tool_calls from assistant
         if (hasToolCalls) {
           for (const toolCall of msg.tool_calls) {
-            // Convert internal tool names: __fn____get_weather → get_weather
+            // Convert internal tool names: lobe-client-fn____get_weather → get_weather
             let fnName = toolCall.function?.name ?? '';
-            if (fnName.startsWith('__fn______')) {
-              fnName = fnName.slice('__fn______'.length);
+            if (fnName.startsWith('lobe-client-fn____')) {
+              fnName = fnName.slice('lobe-client-fn____'.length);
             }
             output.push({
               arguments: toolCall.function?.arguments ?? '{}',
@@ -567,7 +567,7 @@ export class ResponsesService extends BaseService {
               for (const toolCall of chunk.toolsCalling) {
                 const fcItemId = `fc_${responseId}_${itemCounter++}`;
                 // Client function tools use original name; hosted tools use identifier/apiName
-                const isClientTool = toolCall.identifier === '__fn__';
+                const isClientTool = toolCall.identifier === 'lobe-client-fn';
                 const toolDisplayName = isClientTool
                   ? toolCall.apiName
                   : `${toolCall.identifier}/${toolCall.apiName}`;
