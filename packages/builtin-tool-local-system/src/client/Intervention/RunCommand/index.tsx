@@ -8,18 +8,18 @@ const formatTimeout = (ms?: number) => {
 
   const seconds = ms / 1000;
 
-  // >= 60s 显示分钟
+  // >= 60s show minutes
   if (seconds >= 60) {
     const minutes = seconds / 60;
     return `${minutes.toFixed(1)}min`;
   }
 
-  // >= 1s 显示秒
+  // >= 1s show seconds
   if (seconds >= 1) {
     return `${seconds.toFixed(1)}s`;
   }
 
-  // < 1s 显示毫秒
+  // < 1s show milliseconds
   return `${ms}ms`;
 };
 

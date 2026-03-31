@@ -294,7 +294,7 @@ async function main() {
     }
 
     state = result.newState;
-    nextContext = result.nextContext; // 使用返回的 nextContext
+    nextContext = result.nextContext; // use the returned nextContext
   }
 
   console.log(`\n📊 总共执行了 ${state.stepCount} 个步骤`);
