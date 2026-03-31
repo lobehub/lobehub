@@ -117,14 +117,14 @@
   "guide.groupActivities.writing.studyGroup.prompt": "讓我們組成一個學習小組。你能協助我們理解這些概念並一起解決問題嗎？",
   "guide.groupActivities.writing.studyGroup.title": "學習小組",
   "guide.groupMessage": "歡迎使用群聊！與多位 AI 助手在共享對話空間中協作。",
-  "guide.groupTemplates.analysis.description": "數據驅動洞察，深入研究分析",
+  "guide.groupTemplates.analysis.description": "資料驅動洞察，深入研究分析",
   "guide.groupTemplates.analysis.members": [
     {
       "avatar": "📊",
       "backgroundColor": "#E8F8F5",
       "plugins": ["steam"],
-      "systemRole": "你擅長處理與解讀數據，透過圖表與統計分析揭示數據背後的規律與趨勢。",
-      "title": "數據分析師"
+      "systemRole": "你擅長處理與解讀資料，透過圖表與統計分析揭示資料背後的規律與趨勢。",
+      "title": "資料分析師"
     },
     {
       "avatar": "🧑‍🔬",
@@ -135,7 +135,7 @@
     {
       "avatar": "📈",
       "backgroundColor": "#FFF7E8",
-      "systemRole": "你是統計專家，精通各種統計方法與模型，能從數據中提取有價值的商業洞察。",
+      "systemRole": "你是統計專家，精通各種統計方法與模型，能從資料中提取有價值的商業洞察。",
       "title": "統計專家"
     },
     {
@@ -196,7 +196,7 @@
     }
   ],
   "guide.groupTemplates.game.title": "遊戲廳",
-  "guide.groupTemplates.planning.description": "策略規劃與專案管理，統籌全局",
+  "guide.groupTemplates.planning.description": "策略規劃與專案管理，統籌全域",
   "guide.groupTemplates.planning.members": [
     {
       "avatar": "📋",
@@ -256,12 +256,12 @@
     }
   ],
   "guide.groupTemplates.writing.title": "寫作圈",
-  "guide.questions.moreBtn": "了解更多",
+  "guide.questions.moreBtn": "瞭解更多",
   "guide.questions.title": "試著問問：",
-  "guide.welcome.afternoon": "下午好",
+  "guide.welcome.afternoon": "午安",
   "guide.welcome.morning": "早安",
   "guide.welcome.night": "晚安",
-  "guide.welcome.noon": "中午好",
+  "guide.welcome.noon": "午安",
   "header": "歡迎使用",
   "pickAgent": "或從下列助手模板中選擇",
   "skip": "跳過建立",
@@ -284,7 +284,7 @@
     "13": "開始行動吧 ✅",
     "14": "帶著新問題來了吧？",
     "15": "今天也辛苦了！",
-    "16": "靈感加載中",
+    "16": "靈感載入中",
     "17": "一上線就滿電 ⚡",
     "18": "出發！🚀",
     "19": "我的思緒已跟上節奏。",
@@ -295,8 +295,8 @@
     "24": "準備迎接挑戰",
     "25": "新思路正在生成中",
     "26": "前路清晰，啟程！",
-    "27": "系統在線，隨時為你服務 💡",
-    "28": "努力加載好心情",
+    "27": "系統上線，隨時為你服務 💡",
+    "28": "努力載入好心情",
     "29": "掌握節奏，從現在開始 🎵",
     "30": "效率提升中 …",
     "31": "今日目標，穩步達成 🎯",
