@@ -1,4 +1,6 @@
-import { type LobeAgentChatConfig } from '@lobechat/types';
+import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { ExtendParamsType } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
@@ -168,24 +170,67 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingBudget = chatConfig.thinkingBudget;
   }
 
-  if (modelExtendParams.includes('thinkingLevel') && chatConfig.thinkingLevel) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel;
+  const thinkingLevelVariants: readonly {
+    allowedLevels: readonly string[];
+    configKey: keyof LobeAgentChatConfig;
+    extendParam: ExtendParamsType;
+  }[] = [
+    {
+      allowedLevels: ['minimal', 'low', 'medium', 'high'],
+      configKey: 'thinkingLevel5',
+      extendParam: 'thinkingLevel5',
+    },
+    {
+      allowedLevels: ['minimal', 'high'],
+      configKey: 'thinkingLevel4',
+      extendParam: 'thinkingLevel4',
+    },
+    {
+      allowedLevels: ['low', 'medium', 'high'],
+      configKey: 'thinkingLevel3',
+      extendParam: 'thinkingLevel3',
+    },
+    { allowedLevels: ['low', 'high'], configKey: 'thinkingLevel2', extendParam: 'thinkingLevel2' },
+  ];
+
+  const resolveThinkingLevelFromVariant = (
+    variantKey: keyof LobeAgentChatConfig,
+    allowedLevels: readonly string[],
+  ) => {
+    const value = chatConfig[variantKey];
+    if (typeof value === 'string' && allowedLevels.includes(value)) return value;
+    return undefined;
+  };
+
+  // Prefer explicit variant keys when present and configured.
+  for (const { configKey, extendParam, allowedLevels } of thinkingLevelVariants) {
+    if (!modelExtendParams.includes(extendParam)) continue;
+    const resolved = resolveThinkingLevelFromVariant(configKey, allowedLevels);
+    if (resolved) {
+      extendParams.thinkingLevel = resolved;
+      break;
+    }
   }
 
-  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
+  // Next, use base thinkingLevel when supported.
+  if (!extendParams.thinkingLevel) {
+    const baseValue = chatConfig.thinkingLevel;
+    if (modelExtendParams.includes('thinkingLevel') && typeof baseValue === 'string') {
+      extendParams.thinkingLevel = baseValue;
+    }
   }
 
-  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel4;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel5') && chatConfig.thinkingLevel5) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel5;
+  // Finally, backward-compatible fallback: previous UI versions wrote to `thinkingLevel`
+  // even when the model expected `thinkingLevel2/3/4/5`.
+  if (!extendParams.thinkingLevel) {
+    const baseValue = chatConfig.thinkingLevel;
+    for (const { extendParam, allowedLevels } of thinkingLevelVariants) {
+      if (!modelExtendParams.includes(extendParam)) continue;
+      if (typeof baseValue === 'string' && allowedLevels.includes(baseValue)) {
+        extendParams.thinkingLevel = baseValue;
+        break;
+      }
+    }
   }
 
   // URL context
