@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "查看",
   "tool.intervention.toolAbort": "你已取消本次技能调用",
   "tool.intervention.toolRejected": "本次技能调用已被拒绝",
+  "tool.intervention.viewParameters": "查看参数 ({{count}})",
   "toolAuth.authorize": "授权",
   "toolAuth.authorizing": "授权中…",
   "toolAuth.hint": "未授权或未配置时，相关技能无法使用。这可能导致助理能力受限或报错",
