@@ -163,11 +163,9 @@ export interface EvalRunTopicResult {
   cost?: number;
   tokens?: number;
   duration?: number;
-  externalRetryCount?: number;
   steps?: number;
   llmCalls?: number;
   toolCalls?: number;
-  retryDelayExpression?: string;
 
   /** K-thread cumulative totals (only present when K > 1) */
   totalCost?: number;
@@ -199,11 +197,9 @@ export interface EvalThreadResult {
   cost?: number;
   duration?: number;
   error?: string;
-  externalRetryCount?: number;
   llmCalls?: number;
   operationId?: string;
   passed?: boolean;
-  retryDelayExpression?: string;
   rubricScores?: EvalRubricScore[];
   score?: number;
   status?: 'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout' | 'completed';
@@ -221,9 +217,7 @@ export interface EvalThreadMetadata {
   cost?: number;
   duration?: number;
   error?: string;
-  externalRetryCount?: number;
   passed?: boolean;
-  retryDelayExpression?: string;
   rubricScores?: EvalRubricScore[];
   score?: number;
   testCaseId: string;

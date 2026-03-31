@@ -1715,7 +1715,6 @@ export class AgentRuntimeService {
         duration,
         errorDetail: state?.error,
         errorMessage: this.extractErrorMessage?.(state?.error) || String(state?.error || ''),
-        externalRetryCount: metadata?.externalRetryCount,
         // Full state available in local mode only (not serialized to webhooks)
         finalState: state,
         lastAssistantContent,
@@ -1727,7 +1726,6 @@ export class AgentRuntimeService {
         toolCalls: state?.usage?.tools?.totalCalls,
         topicId: metadata?.topicId,
         totalTokens: state?.usage?.llm?.tokens?.total,
-        retryDelayExpression: metadata?.queueRetryDelay,
         userId: metadata?.userId || this.userId,
       };
 
@@ -1785,12 +1783,10 @@ export class AgentRuntimeService {
         duration,
         errorDetail: state.error,
         errorMessage: this.extractErrorMessage(state.error),
-        externalRetryCount: state.metadata?.externalRetryCount,
         lastAssistantContent,
         llmCalls: state.usage?.llm?.apiCalls,
         operationId,
         reason,
-        retryDelayExpression: state.metadata?.queueRetryDelay,
         status: state.status,
         steps: state.stepCount,
         toolCalls: state.usage?.tools?.totalCalls,

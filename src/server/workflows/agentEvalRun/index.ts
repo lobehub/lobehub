@@ -55,11 +55,9 @@ export interface OnTrajectoryCompletePayload {
   duration?: number;
   errorDetail?: unknown;
   errorMessage?: string;
-  externalRetryCount?: number;
   llmCalls?: number;
   operationId: string;
   reason: string;
-  retryDelayExpression?: string;
   runId: string;
   status: string;
   steps?: number;
@@ -81,11 +79,9 @@ export interface OnThreadCompletePayload {
   cost?: number;
   duration?: number;
   errorMessage?: string;
-  externalRetryCount?: number;
   llmCalls?: number;
   operationId: string;
   reason: string;
-  retryDelayExpression?: string;
   runId: string;
   status: string;
   steps?: number;
