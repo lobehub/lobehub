@@ -22,11 +22,12 @@
 #
 # Examples:
 #   ./scripts/test-qq-bot.sh "TestBot" "Hello"
-#   ./scripts/test-qq-bot.sh "测试群" "Hello bot" 30
+#   ./scripts/test-qq-bot.sh "bot-testing" "Hello bot" 30
 #   ./scripts/test-qq-bot.sh "MyBot" "/help" 15 /tmp/my-test.png
 #
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONTACT="${1:?Usage: test-qq-bot.sh <contact> <message> [wait_seconds] [screenshot_path]}"
 MESSAGE="${2:?Usage: test-qq-bot.sh <contact> <message> [wait_seconds] [screenshot_path]}"
 WAIT="${3:-10}"
@@ -71,5 +72,5 @@ echo "[$APP] Waiting ${WAIT}s for bot response..."
 sleep "$WAIT"
 
 echo "[$APP] Capturing screenshot..."
-screencapture -x "$SCREENSHOT"
+"$SCRIPT_DIR/capture-app-window.sh" "$APP" "$SCREENSHOT"
 echo "[$APP] Done! Screenshot saved to $SCREENSHOT"

@@ -25,6 +25,7 @@
 #
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BOT="${1:?Usage: test-telegram-bot.sh <bot_or_chat> <message> [wait_seconds] [screenshot_path]}"
 MESSAGE="${2:?Usage: test-telegram-bot.sh <bot_or_chat> <message> [wait_seconds] [screenshot_path]}"
 WAIT="${3:-10}"
@@ -74,5 +75,5 @@ echo "[$APP] Waiting ${WAIT}s for bot response..."
 sleep "$WAIT"
 
 echo "[$APP] Capturing screenshot..."
-screencapture -x "$SCREENSHOT"
+"$SCRIPT_DIR/capture-app-window.sh" "$APP" "$SCREENSHOT"
 echo "[$APP] Done! Screenshot saved to $SCREENSHOT"

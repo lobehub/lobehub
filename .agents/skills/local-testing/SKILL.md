@@ -358,7 +358,7 @@ sleep 1
 # Open Quick Switcher (Cmd+K) to navigate to a channel
 osascript -e 'tell application "System Events" to keystroke "k" using command down'
 sleep 0.5
-osascript -e 'tell application "System Events" to keystroke "test-bot-channel"'
+osascript -e 'tell application "System Events" to keystroke "bot-testing"'
 sleep 1
 osascript -e 'tell application "System Events" to key code 36' # Enter
 sleep 2
@@ -449,7 +449,7 @@ sleep 1
 # Quick Switcher (Cmd+K)
 osascript -e 'tell application "System Events" to keystroke "k" using command down'
 sleep 0.5
-osascript -e 'tell application "System Events" to keystroke "bot-test-channel"'
+osascript -e 'tell application "System Events" to keystroke "bot-testing"'
 sleep 1
 osascript -e 'tell application "System Events" to key code 36' # Enter
 sleep 2
@@ -666,7 +666,7 @@ sleep 1
 osascript -e 'tell application "System Events" to keystroke "k" using command down'
 sleep 0.5
 osascript -e '
-set the clipboard to "bot-test-group"
+set the clipboard to "bot-testing"
 tell application "System Events"
     keystroke "v" using command down
     delay 1.5
@@ -722,7 +722,7 @@ tell application "System Events"
 end tell
 '
 osascript -e '
-set the clipboard to "测试群"
+set the clipboard to "bot-testing"
 tell application "System Events"
     keystroke "v" using command down
     delay 1.5
@@ -766,7 +766,7 @@ Regardless of platform, the pattern is:
 
 ```bash
 APP_NAME="Discord" # or "Slack", "Telegram", "微信"
-CHANNEL="bot-test"
+CHANNEL="bot-testing"
 MESSAGE="Hello bot!"
 WAIT_SECONDS=10
 
@@ -817,6 +817,7 @@ Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 
 | Script                    | Usage                                         |
 | ------------------------- | --------------------------------------------- |
+| `capture-app-window.sh`   | Capture screenshot of a specific app window   |
 | `record-electron-demo.sh` | Record Electron app demo with ffmpeg          |
 | `test-discord-bot.sh`     | Send message to Discord bot via osascript     |
 | `test-slack-bot.sh`       | Send message to Slack bot via osascript       |
@@ -824,6 +825,19 @@ Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 | `test-wechat-bot.sh`      | Send message to WeChat bot via osascript      |
 | `test-lark-bot.sh`        | Send message to Lark / 飞书 bot via osascript |
 | `test-qq-bot.sh`          | Send message to QQ bot via osascript          |
+
+### Window Screenshot Utility
+
+`capture-app-window.sh` captures a screenshot of a specific app window using `screencapture -l <windowID>`. It uses Swift + CGWindowList to find the window by process name, so screenshots work correctly even when the window is on an external monitor or behind other windows.
+
+```bash
+# Standalone usage
+./.agents/skills/local-testing/scripts/capture-app-window.sh "Discord" /tmp/discord.png
+./.agents/skills/local-testing/scripts/capture-app-window.sh "Slack" /tmp/slack.png
+./.agents/skills/local-testing/scripts/capture-app-window.sh "WeChat" /tmp/wechat.png
+```
+
+All bot test scripts use this utility automatically for their screenshots.
 
 ### Bot Test Scripts
 
@@ -840,9 +854,9 @@ Examples:
 ./.agents/skills/local-testing/scripts/test-discord-bot.sh "bot-testing" "!ping"
 ./.agents/skills/local-testing/scripts/test-discord-bot.sh "bot-testing" "/ask Tell me a joke" 30
 
-# Slack — test a bot in #bot-test channel
-./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-test" "@mybot hello"
-./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-test" "/ask What is 2+2?" 20
+# Slack — test a bot in #bot-testing channel
+./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-testing" "@mybot hello"
+./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-testing" "/ask What is 2+2?" 20
 
 # Telegram — test a bot by username
 ./.agents/skills/local-testing/scripts/test-telegram-bot.sh "MyTestBot" "/start"
@@ -854,10 +868,10 @@ Examples:
 
 # Lark/飞书 — test a bot in a group chat
 ./.agents/skills/local-testing/scripts/test-lark-bot.sh "bot-testing" "@MyBot hello"
-./.agents/skills/local-testing/scripts/test-lark-bot.sh "测试群" "Help me with this" 30
+./.agents/skills/local-testing/scripts/test-lark-bot.sh "bot-testing" "Help me with this" 30
 
 # QQ — test a bot in a group or direct chat
-./.agents/skills/local-testing/scripts/test-qq-bot.sh "测试群" "Hello bot" 15
+./.agents/skills/local-testing/scripts/test-qq-bot.sh "bot-testing" "Hello bot" 15
 ./.agents/skills/local-testing/scripts/test-qq-bot.sh "MyBot" "/help" 10
 ```
 
