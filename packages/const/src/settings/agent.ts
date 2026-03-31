@@ -1,9 +1,9 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import {
-  type LobeAgentChatConfig,
-  type LobeAgentConfig,
-  type LobeAgentTTSConfig,
-  type UserDefaultAgent,
+import type {
+  LobeAgentChatConfig,
+  LobeAgentConfig,
+  LobeAgentTTSConfig,
+  UserDefaultAgent,
 } from '@lobechat/types';
 
 import { DEFAULT_AGENT_META } from '../meta';
@@ -35,6 +35,11 @@ export const DEFAULT_AGENT_CHAT_CONFIG: LobeAgentChatConfig = {
   reasoningBudgetToken: 1024,
   searchFCModel: DEFAULT_AGENT_SEARCH_FC_MODEL,
   searchMode: 'auto',
+  thinkingLevel: 'high',
+  thinkingLevel2: 'high',
+  thinkingLevel3: 'high',
+  thinkingLevel4: 'high',
+  thinkingLevel5: 'minimal',
 };
 
 export const DEFAULT_AGENT_CONFIG: LobeAgentConfig = {
