@@ -144,6 +144,7 @@ async function createQwenImageLegacyTask(
   apiKey: string,
   endpoint: 'image-generation' | 'multimodal-generation',
   baseUrl: string,
+  provider: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
   const url = `${baseUrl}/api/v1/services/aigc/${endpoint}/generation`;
@@ -156,7 +157,7 @@ async function createQwenImageLegacyTask(
     throw AgentRuntimeError.createImage({
       error: new Error(`imageUrl or imageUrls is required for model ${model}`),
       errorType: 'ProviderBizError',
-      provider: 'qwen',
+      provider,
     });
   }
 
@@ -337,7 +338,7 @@ export async function createQwenImage(
 
     const endpoint = isImageGeneration ? 'image-generation' : 'multimodal-generation';
     log('Using %s API for model: %s', endpoint, model);
-    return await createQwenImageLegacyTask(payload, apiKey, endpoint, dashscopeURL);
+    return await createQwenImageLegacyTask(payload, apiKey, endpoint, provider, dashscopeURL);
   } catch (error) {
     log('Error in createQwenImage: %O', error);
 
