@@ -142,7 +142,8 @@ export const createServerAgentToolsEngine = (
           !!deviceContext?.deviceOnline &&
           !!deviceContext?.autoActivated,
         [MemoryManifest.identifier]: globalMemoryEnabled,
-        [MessageManifest.identifier]: isBotConversation,
+        // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
+        ...(isBotConversation && { [MessageManifest.identifier]: true }),
         [RemoteDeviceManifest.identifier]:
           !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
