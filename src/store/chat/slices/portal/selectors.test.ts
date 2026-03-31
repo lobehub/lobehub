@@ -345,6 +345,27 @@ ${htmlContent}
       expect(chatPortalSelectors.artifactCode('test-id', 'wip')(state)).toBe('Still generating...');
     });
 
+    it('should handle identifiers with regex special characters', () => {
+      const state = createState({
+        dbMessagesMap: {
+          'test-id_null': [
+            {
+              id: 'test-id',
+              content: `<lobeArtifact identifier="test+id(1)[2]" type="text">Special content</lobeArtifact>`,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              role: 'user',
+              sessionId: 'test-id',
+            } as UIChatMessage,
+          ],
+        },
+      });
+      expect(chatPortalSelectors.artifactCode('test-id', 'test+id(1)[2]')(state)).toBe(
+        'Special content',
+      );
+      expect(chatPortalSelectors.isArtifactTagClosed('test-id', 'test+id(1)[2]')(state)).toBe(true);
+    });
+
     it('should return first artifact content when no identifier provided (backward compat)', () => {
       const content1 = 'First';
       const state = createState({

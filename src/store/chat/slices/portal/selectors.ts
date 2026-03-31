@@ -63,6 +63,9 @@ const artifactMessageId = (s: ChatStoreState) => currentArtifact(s)?.id;
 const artifactType = (s: ChatStoreState) => currentArtifact(s)?.type;
 const artifactCodeLanguage = (s: ChatStoreState) => currentArtifact(s)?.language;
 
+// Escape special regex characters in a string
+const escapeRegExp = (str: string) => str.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+
 const artifactMessageContent = (id: string) => (s: ChatStoreState) => {
   const message = dbMessageSelectors.getDbMessageById(id)(s);
   return message?.content || '';
@@ -73,7 +76,7 @@ const artifactCode = (id: string, identifier?: string) => (s: ChatStoreState) =>
 
   const regex = identifier
     ? new RegExp(
-        `<lobeArtifact\\b[^>]*identifier="${identifier}"[^>]*>(?<content>[\\S\\s]*?)(?:<\\/lobeArtifact>|$)`,
+        `<lobeArtifact\\b[^>]*identifier="${escapeRegExp(identifier)}"[^>]*>(?<content>[\\S\\s]*?)(?:<\\/lobeArtifact>|$)`,
       )
     : ARTIFACT_TAG_REGEX;
 
@@ -92,7 +95,7 @@ const isArtifactTagClosed = (id: string, identifier?: string) => (s: ChatStoreSt
   if (identifier) {
     // Check if the specific artifact (by identifier) is closed
     const regex = new RegExp(
-      `<lobeArtifact\\b[^>]*identifier="${identifier}"[^>]*>[\\S\\s]*?<\\/lobeArtifact>`,
+      `<lobeArtifact\\b[^>]*identifier="${escapeRegExp(identifier)}"[^>]*>[\\S\\s]*?<\\/lobeArtifact>`,
     );
     return regex.test(content || '');
   }
