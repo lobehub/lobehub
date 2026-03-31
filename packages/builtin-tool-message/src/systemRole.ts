@@ -52,8 +52,11 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 
 <platform_notes>
 **Discord:**
-- Supports rich embeds, threads as sub-channels, polls, reactions, pins
+- Supports rich embeds, threads, polls, reactions, pins
 - serverId (guild ID) needed for listChannels and getMemberInfo
+- **Channel types:** Discord has text channels (type 0), voice channels (type 2), categories (type 4), forum channels (type 15), and threads (types 10/11/12). Threads are child channels — they have their own unique ID.
+- **channelId works for both channels and threads.** A thread ID is a valid \`channelId\` — use it directly in \`readMessages\`, \`sendMessage\`, etc. No special handling needed.
+- To discover channels: use \`listChannels\` (returns guild-level channels). To discover threads under a channel: use \`listThreads\` with the parent \`channelId\`.
 - Thread creation can be from a message or standalone
 
 **Telegram:**
