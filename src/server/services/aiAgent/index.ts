@@ -104,6 +104,8 @@ interface InternalExecAgentParams extends ExecAgentParams {
   };
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
+  /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
+  disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
   /** Eval context for injecting environment prompts into system message */
@@ -513,47 +515,59 @@ export class AiAgentService {
     });
 
     // Generate tools and manifest map
-    // Include device tool IDs so ToolsEngine can process them via enableChecker
-    const pluginIds = [
-      ...(agentConfig.plugins || []),
-      ...(additionalPluginIds || []),
-      LocalSystemManifest.identifier,
-      RemoteDeviceManifest.identifier,
-      ...(isBotConversation ? [MessageToolIdentifier] : []),
-    ];
-    log('execAgent: agent configured plugins: %O', pluginIds);
-
-    // When skillActivateMode is 'manual', exclude only discovery tools (lobe-activator, lobe-skill-store)
-    // so that externally enabled tools (sandbox, web browsing, etc.) remain available
-    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-
-    const toolsResult = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
-      model,
-      provider,
-      toolIds: pluginIds,
-    });
-
-    const tools = toolsResult.tools;
-
-    log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
-
-    // Get manifest map and convert from Map to Record
-    const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
+    // When disableTools is set, skip all tool resolution (for eval/benchmark scenarios)
+    let tools: any[] | undefined;
+    let toolsResult: { enabledToolIds: string[]; tools: any[] | undefined } = {
+      enabledToolIds: [],
+      tools: undefined,
+    };
     const toolManifestMap: Record<string, any> = {};
-    manifestMap.forEach((manifest, id) => {
-      toolManifestMap[id] = manifest;
-    });
-
-    // Build toolSourceMap for routing tool execution
     const toolSourceMap: Record<string, ToolSource> = {};
-    // Mark lobehub skills
-    for (const manifest of lobehubSkillManifests) {
-      toolSourceMap[manifest.identifier] = 'lobehubSkill';
-    }
-    // Mark klavis tools
-    for (const manifest of klavisManifests) {
-      toolSourceMap[manifest.identifier] = 'klavis';
+
+    if (params.disableTools) {
+      tools = undefined;
+      log('execAgent: tools disabled by disableTools flag');
+    } else {
+      // Include device tool IDs so ToolsEngine can process them via enableChecker
+      const pluginIds = [
+        ...(agentConfig.plugins || []),
+        ...(additionalPluginIds || []),
+        LocalSystemManifest.identifier,
+        RemoteDeviceManifest.identifier,
+        ...(isBotConversation ? [MessageToolIdentifier] : []),
+      ];
+      log('execAgent: agent configured plugins: %O', pluginIds);
+
+      // When skillActivateMode is 'manual', exclude only discovery tools (lobe-activator, lobe-skill-store)
+      // so that externally enabled tools (sandbox, web browsing, etc.) remain available
+      const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+
+      toolsResult = toolsEngine.generateToolsDetailed({
+        excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
+        model,
+        provider,
+        toolIds: pluginIds,
+      });
+
+      tools = toolsResult.tools;
+
+      log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
+
+      // Get manifest map and convert from Map to Record
+      const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
+      manifestMap.forEach((manifest, id) => {
+        toolManifestMap[id] = manifest;
+      });
+
+      // Build toolSourceMap for routing tool execution
+      // Mark lobehub skills
+      for (const manifest of lobehubSkillManifests) {
+        toolSourceMap[manifest.identifier] = 'lobehubSkill';
+      }
+      // Mark klavis tools
+      for (const manifest of klavisManifests) {
+        toolSourceMap[manifest.identifier] = 'klavis';
+      }
     }
 
     // Inject client function tools from Response API
@@ -584,9 +598,8 @@ export class AiAgentService {
     }
 
     log(
-      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills, %d klavis tools, %d client function tools',
+      'execAgent: generated %d tools, %d lobehub skills, %d klavis tools, %d client function tools',
       tools?.length ?? 0,
-      pluginIds.length,
       lobehubSkillManifests.length,
       klavisManifests.length,
       functionTools?.length ?? 0,
