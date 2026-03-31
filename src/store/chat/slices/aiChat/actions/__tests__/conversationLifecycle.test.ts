@@ -1,13 +1,17 @@
 import { act, renderHook } from '@testing-library/react';
+import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatService } from '@/services/aiChat';
+import { chatService } from '@/services/chat';
+import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getSessionStoreState } from '@/store/session';
+import * as toolStoreModule from '@/store/tool';
 
 import { useChatStore } from '../../../../store';
-import { createMockMessage,TEST_CONTENT, TEST_IDS } from './fixtures';
+import { createMockMessage, TEST_CONTENT, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
 // Keep zustand mock as it's needed globally
@@ -36,6 +40,7 @@ beforeEach(() => {
       refreshMessages: vi.fn(),
       refreshTopic: vi.fn(),
       internal_execAgentRuntime: vi.fn(),
+      mainInputEditor: null,
     });
   });
 });
@@ -96,6 +101,104 @@ describe('ConversationLifecycle actions', () => {
     });
 
     describe('message creation', () => {
+      it('should render pending compressedGroup immediately for /compact', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const topicId = TEST_IDS.TOPIC_ID;
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId });
+        const existingMessages = [
+          createMockMessage({ id: 'user-1', role: 'user', topicId }),
+          createMockMessage({ id: 'assistant-1', role: 'assistant', topicId }),
+        ];
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [key]: existingMessages },
+            messagesMap: { [key]: existingMessages },
+          });
+        });
+
+        const createCompressionGroupSpy = vi
+          .spyOn(messageService, 'createCompressionGroup')
+          .mockResolvedValue({
+            messageGroupId: 'group-1',
+            messages: [
+              {
+                id: 'group-1',
+                content: '...',
+                role: 'compressedGroup',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              } as any,
+            ],
+            messagesToSummarize: existingMessages,
+          });
+        vi.spyOn(chatService, 'fetchPresetTaskResult').mockResolvedValue(undefined);
+        vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({
+          messages: [
+            {
+              id: 'group-1',
+              content: 'summary',
+              role: 'compressedGroup',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            } as any,
+          ],
+        });
+
+        const optimisticCreateTmpMessageSpy = vi.spyOn(
+          result.current,
+          'optimisticCreateTmpMessage',
+        );
+        const internalDispatchMessageSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, topicId, threadId: null },
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        actionCategory: 'command',
+                        actionLabel: 'Compact context',
+                        actionType: 'compact',
+                        type: 'action-tag',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message: '',
+          });
+        });
+
+        expect(optimisticCreateTmpMessageSpy).not.toHaveBeenCalled();
+        expect(internalDispatchMessageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: expect.stringMatching(/^tmp_compress_/),
+            type: 'createMessage',
+            value: expect.objectContaining({
+              compressedMessages: [],
+              content: '...',
+              role: 'compressedGroup',
+            }),
+          }),
+          expect.any(Object),
+        );
+        expect(createCompressionGroupSpy).toHaveBeenCalledWith({
+          agentId,
+          messageIds: ['user-1', 'assistant-1'],
+          topicId,
+        });
+      });
+
       it('should not process AI when onlyAddUserMessage is true', async () => {
         const { result } = renderHook(() => useChatStore());
 
@@ -114,6 +217,58 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
+      });
+
+      it('should restore the pre-send editor snapshot when server send fails', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const inputEditorState = {
+          root: {
+            children: [
+              {
+                children: [{ text: 'Restored rich text', type: 'text', version: 1 }],
+                type: 'paragraph',
+                version: 1,
+              },
+            ],
+            type: 'root',
+            version: 1,
+          },
+        };
+        const clearedEditorState = {
+          root: { children: [], type: 'root', version: 1 },
+        };
+        const setDocument = vi.fn();
+        const setJSONState = vi.fn();
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockRejectedValue(
+          new TRPCClientError('restore failed'),
+        );
+
+        act(() => {
+          useChatStore.setState({
+            mainInputEditor: {
+              getJSONState: vi.fn().mockReturnValue(clearedEditorState),
+              setDocument,
+              setJSONState,
+            } as any,
+          });
+        });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: inputEditorState as any,
+            message: 'Restored rich text',
+          });
+        });
+
+        const sendMessageOperation = Object.values(result.current.operations).find(
+          (operation) => operation.type === 'sendMessage',
+        );
+
+        expect(sendMessageOperation?.metadata.inputEditorTempState).toEqual(inputEditorState);
+        expect(setJSONState).toHaveBeenCalledWith(inputEditorState);
+        expect(setDocument).not.toHaveBeenCalled();
       });
 
       it('should create user message and trigger AI processing', async () => {
@@ -136,6 +291,143 @@ describe('ConversationLifecycle actions', () => {
         });
 
         expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+      });
+
+      it('should persist selected slash skills as preload messages before sending', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: [],
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+        vi.spyOn(toolStoreModule, 'getToolStoreState').mockReturnValue({
+          agentSkillDetailMap: {},
+          agentSkills: [],
+          builtinSkills: [
+            {
+              content: 'Use the user memory skill content.',
+              description: 'Load user memory',
+              identifier: 'user_memory',
+              name: 'User Memory',
+              source: 'builtin',
+            },
+            {
+              content: 'Use the instruction skill content.',
+              description: 'Load instruction',
+              identifier: 'instruction',
+              name: 'Instruction',
+              source: 'builtin',
+            },
+          ],
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        actionCategory: 'skill',
+                        actionLabel: 'User Memory',
+                        actionType: 'user_memory',
+                        type: 'action-tag',
+                      },
+                      {
+                        actionCategory: 'skill',
+                        actionLabel: 'Instruction',
+                        actionType: 'instruction',
+                        type: 'action-tag',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message: '<action type="user_memory" category="skill" /> ' + TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newUserMessage: expect.objectContaining({
+              content:
+                '<action type="user_memory" category="skill" /> ' + TEST_CONTENT.USER_MESSAGE,
+              editorData: expect.objectContaining({
+                root: expect.any(Object),
+              }),
+            }),
+            preloadMessages: [
+              expect.objectContaining({
+                content: '',
+                role: 'assistant',
+                tools: [
+                  expect.objectContaining({
+                    apiName: 'activateSkill',
+                    arguments: JSON.stringify({ name: 'User Memory' }),
+                    identifier: 'lobe-activator',
+                  }),
+                ],
+              }),
+              expect.objectContaining({
+                content: 'Use the user memory skill content.',
+                role: 'tool',
+              }),
+              expect.objectContaining({
+                content: '',
+                role: 'assistant',
+                tools: [
+                  expect.objectContaining({
+                    apiName: 'activateSkill',
+                    arguments: JSON.stringify({ name: 'Instruction' }),
+                    identifier: 'lobe-activator',
+                  }),
+                ],
+              }),
+              expect.objectContaining({
+                content: 'Use the instruction skill content.',
+                role: 'tool',
+              }),
+            ],
+          }),
+          expect.any(AbortController),
+        );
+        expect(
+          sendMessageInServerSpy.mock.calls[0]?.[0].newUserMessage.editorData?.root.children[0]
+            .children,
+        ).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              actionCategory: 'skill',
+              actionType: 'user_memory',
+              type: 'action-tag',
+            }),
+          ]),
+        );
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            initialContext: expect.objectContaining({
+              initialContext: {
+                selectedSkills: [
+                  { identifier: 'user_memory', name: 'User Memory' },
+                  { identifier: 'instruction', name: 'Instruction' },
+                ],
+              },
+              phase: 'init',
+            }),
+          }),
+        );
       });
 
       it('should work when sending from home page (activeAgentId is empty but context.agentId exists)', async () => {
@@ -181,6 +473,65 @@ describe('ConversationLifecycle actions', () => {
           expect.any(AbortController),
         );
         expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+      });
+
+      it('should pass selected tool tags into runtime initialContext', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topics: [],
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: createTestContext(),
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        actionCategory: 'tool',
+                        actionLabel: 'Notebook',
+                        actionType: 'lobe-notebook',
+                        type: 'action-tag',
+                      },
+                      {
+                        actionCategory: 'tool',
+                        actionLabel: 'Artifacts',
+                        actionType: 'lobe-artifacts',
+                        type: 'action-tag',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message: TEST_CONTENT.USER_MESSAGE,
+          });
+        });
+
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            initialContext: expect.objectContaining({
+              initialContext: {
+                selectedTools: [
+                  { identifier: 'lobe-notebook', name: 'Notebook' },
+                  { identifier: 'lobe-artifacts', name: 'Artifacts' },
+                ],
+              },
+              phase: 'init',
+            }),
+          }),
+        );
       });
     });
 
@@ -351,6 +702,403 @@ describe('ConversationLifecycle actions', () => {
             }),
           }),
           expect.any(AbortController),
+        );
+      });
+    });
+
+    describe('optimistic topic updatedAt', () => {
+      it('should optimistically update topic updatedAt when sending message to existing topic', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const topicId = TEST_IDS.TOPIC_ID;
+
+        const dispatchTopicSpy = vi.spyOn(result.current, 'internal_dispatchTopic');
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', topicId }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant', topicId }),
+          ],
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: { agentId: TEST_IDS.SESSION_ID, topicId, threadId: null },
+          });
+        });
+
+        // Should call internal_dispatchTopic with updateTopic to touch updatedAt
+        expect(dispatchTopicSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'updateTopic',
+            id: topicId,
+            value: { updatedAt: expect.any(Number) },
+          }),
+        );
+      });
+
+      it('should NOT optimistically update topic updatedAt when server returns topics (new topic)', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const dispatchTopicSpy = vi.spyOn(result.current, 'internal_dispatchTopic');
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topics: { items: [{ id: 'new-topic', title: 'New Topic' }], total: 1 },
+          topicId: 'new-topic',
+          isCreateNewTopic: true,
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        // Should NOT call internal_dispatchTopic with updateTopic for updatedAt
+        const updateTopicCalls = dispatchTopicSpy.mock.calls.filter(
+          ([payload]) => payload.type === 'updateTopic' && 'updatedAt' in (payload.value || {}),
+        );
+        expect(updateTopicCalls).toHaveLength(0);
+      });
+    });
+
+    describe('@agent mention delegation', () => {
+      it('should NOT set isSupervisor on assistant message when @agent is mentioned in non-group chat', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: [],
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: '@Agent A hello',
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'Agent A',
+                        metadata: { id: 'agent-a', type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' hello', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            // Non-group context: no groupId
+            context: createTestContext(),
+          });
+        });
+
+        // Assistant message metadata should NOT contain isSupervisor
+        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            newAssistantMessage: expect.objectContaining({
+              metadata: undefined,
+            }),
+          }),
+          expect.any(AbortController),
+        );
+
+        // But runtime should receive mentionedAgents in initialContext
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            initialContext: expect.objectContaining({
+              initialContext: expect.objectContaining({
+                mentionedAgents: [{ id: 'agent-a', name: 'Agent A' }],
+              }),
+            }),
+          }),
+        );
+      });
+
+      it('should NOT inject mentionedAgents into initialContext when in group chat', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        // Mock group store so groupId resolves
+        vi.spyOn(agentGroupStore, 'getChatGroupStoreState').mockReturnValue({
+          groupMap: {
+            'test-group': {
+              id: 'test-group',
+              supervisorAgentId: 'supervisor-id',
+            },
+          },
+        } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topics: [],
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: '@Agent A in group',
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        label: 'Agent A',
+                        metadata: { id: 'agent-a', type: 'agent' },
+                        type: 'mention',
+                      },
+                      { text: ' in group', type: 'text' },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            // Group context
+            context: {
+              agentId: 'sub-agent-id',
+              groupId: 'test-group',
+              topicId: null,
+              threadId: null,
+            },
+          });
+        });
+
+        // Runtime should NOT receive mentionedAgents in group context
+        const execCall = (result.current.internal_execAgentRuntime as any).mock.calls[0]?.[0];
+        const initialCtx = execCall?.initialContext?.initialContext;
+        expect(initialCtx?.mentionedAgents).toBeUndefined();
+      });
+    });
+
+    describe('auto-dismiss pending tool interventions', () => {
+      it('should abort pending flat tool messages when user sends a new message', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId: null });
+
+        const pendingToolMsg = createMockMessage({
+          id: 'tool-pending-1',
+          role: 'tool',
+          content: '',
+          pluginIntervention: { status: 'pending' },
+          topicId: undefined,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: { [key]: [pendingToolMsg] },
+            dbMessagesMap: { [key]: [pendingToolMsg] },
+          });
+        });
+
+        const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+        const updatePluginSpy = vi
+          .spyOn(messageService, 'updateMessagePlugin')
+          .mockResolvedValue({ success: true } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            pendingToolMsg,
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: undefined }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: undefined }),
+          ],
+          topics: [],
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: 'override pending interaction',
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // Should dispatch a single merged update for pluginIntervention + content
+        const abortCalls = dispatchSpy.mock.calls.filter(
+          ([payload]) =>
+            payload.type === 'updateMessage' &&
+            (payload as any).value?.pluginIntervention?.status === 'aborted',
+        );
+        expect(abortCalls).toHaveLength(1);
+        expect(abortCalls[0][0]).toEqual(
+          expect.objectContaining({
+            id: 'tool-pending-1',
+            type: 'updateMessage',
+            value: expect.objectContaining({
+              pluginIntervention: { status: 'aborted' },
+              content: 'User bypassed this interaction by sending a message directly.',
+            }),
+          }),
+        );
+
+        // Should persist intervention status to server
+        expect(updatePluginSpy).toHaveBeenCalledWith(
+          'tool-pending-1',
+          { intervention: { status: 'aborted' } },
+          expect.any(Object),
+        );
+      });
+
+      it('should abort pending interventions in group message children', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId: null });
+
+        const groupMsg = createMockMessage({
+          id: 'group-1',
+          role: 'assistant',
+          topicId: undefined,
+          children: [
+            {
+              id: 'child-1',
+              content: '',
+              tools: [
+                {
+                  apiName: 'askUserQuestion',
+                  arguments: '{}',
+                  id: 'tool-call-1',
+                  identifier: 'lobe-user-interaction',
+                  intervention: { status: 'pending' },
+                  result_msg_id: 'tool-result-1',
+                },
+              ],
+            },
+          ] as any,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: { [key]: [groupMsg] },
+            dbMessagesMap: { [key]: [groupMsg] },
+          });
+        });
+
+        const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+        vi.spyOn(messageService, 'updateMessagePlugin').mockResolvedValue({
+          success: true,
+        } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            groupMsg,
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: undefined }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: undefined }),
+          ],
+          topics: [],
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: 'override group interaction',
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // Should dispatch abort for the tool result message found in children
+        const abortCalls = dispatchSpy.mock.calls.filter(
+          ([payload]) =>
+            payload.type === 'updateMessage' &&
+            (payload as any).value?.pluginIntervention?.status === 'aborted',
+        );
+        expect(abortCalls).toHaveLength(1);
+        expect(abortCalls[0][0]).toEqual(
+          expect.objectContaining({
+            id: 'tool-result-1',
+            type: 'updateMessage',
+            value: expect.objectContaining({
+              pluginIntervention: { status: 'aborted' },
+            }),
+          }),
+        );
+      });
+
+      it('should not dispatch if no pending interventions exist', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId: null });
+
+        const normalMsg = createMockMessage({
+          id: 'normal-1',
+          role: 'assistant',
+          topicId: undefined,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: { [key]: [normalMsg] },
+            dbMessagesMap: { [key]: [normalMsg] },
+          });
+        });
+
+        const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+        const updatePluginSpy = vi
+          .spyOn(messageService, 'updateMessagePlugin')
+          .mockResolvedValue({ success: true } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            normalMsg,
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: undefined }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: undefined }),
+          ],
+          topics: [],
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: 'normal message',
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // No updateMessage dispatch for intervention abort
+        const abortDispatches = dispatchSpy.mock.calls.filter(
+          ([payload]) =>
+            payload.type === 'updateMessage' &&
+            (payload as any).value?.pluginIntervention?.status === 'aborted',
+        );
+        expect(abortDispatches).toHaveLength(0);
+        expect(updatePluginSpy).not.toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ intervention: { status: 'aborted' } }),
+          expect.any(Object),
         );
       });
     });

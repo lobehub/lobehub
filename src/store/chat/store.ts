@@ -5,6 +5,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ChatStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -76,8 +77,6 @@ export const useChatStore = createWithEqualityFn<ChatStore>()(
   shallow,
 );
 
-if (typeof window !== 'undefined') {
-  window.__CHAT_STORE__ = useChatStore;
-}
+expose('chat', useChatStore);
 
 export const getChatStoreState = () => useChatStore.getState();

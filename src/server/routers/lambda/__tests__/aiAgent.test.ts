@@ -46,6 +46,13 @@ vi.mock('@/server/services/aiChat', () => ({
   })),
 }));
 
+// Mock FileService to avoid S3 dependency
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({
+    getFullFileUrl: vi.fn((path: string | null) => path),
+  })),
+}));
+
 // Mock model-bank with dynamic import to preserve other exports
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();

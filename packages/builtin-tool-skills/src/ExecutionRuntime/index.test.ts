@@ -153,4 +153,33 @@ describe('SkillsExecutionRuntime', () => {
       });
     });
   });
+
+  describe('readReference', () => {
+    it('should expose fullPath in state when provided by the service', async () => {
+      const service = createMockService({
+        findByName: vi.fn().mockResolvedValue({ id: 'skill-1', name: 'demo-skill' }),
+        readResource: vi.fn().mockResolvedValue({
+          content: 'print("hello")',
+          encoding: 'utf8',
+          fileHash: 'hash-1',
+          fileType: 'text/x-python',
+          fullPath: '/Users/test/lobehub/file-storage/skills/extracted/hash-1/bazi.py',
+          path: 'bazi.py',
+          size: 14,
+        }),
+      });
+      const runtime = new SkillsExecutionRuntime({ service });
+
+      const result = await runtime.readReference({ id: 'demo-skill', path: 'bazi.py' });
+
+      expect(result.success).toBe(true);
+      expect(result.state).toEqual({
+        encoding: 'utf8',
+        fileType: 'text/x-python',
+        fullPath: '/Users/test/lobehub/file-storage/skills/extracted/hash-1/bazi.py',
+        path: 'bazi.py',
+        size: 14,
+      });
+    });
+  });
 });

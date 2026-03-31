@@ -183,4 +183,85 @@ describe('ToolArgumentsRepairer', () => {
       expect(result).toEqual({});
     });
   });
+
+  describe('parse - partial JSON recovery (stream interruption)', () => {
+    it('should recover fields from incomplete JSON when stream is interrupted', () => {
+      const repairer = new ToolArgumentsRepairer();
+
+      // Simulates stream dropping after title, description, type were sent but before content
+      const incompleteArgs =
+        '{"title": "My Document", "description": "A brief summary", "type": "report"';
+
+      const result = repairer.parse('createDocument', incompleteArgs);
+
+      expect(result).toEqual({
+        title: 'My Document',
+        description: 'A brief summary',
+        type: 'report',
+      });
+    });
+
+    it('should recover fields when stream drops mid-value', () => {
+      const repairer = new ToolArgumentsRepairer();
+
+      // Stream drops in the middle of the content value
+      const incompleteArgs = '{"title": "My Document", "content": "This is the beginning of';
+
+      const result = repairer.parse('createDocument', incompleteArgs);
+
+      expect(result.title).toBe('My Document');
+      expect(result.content).toBe('This is the beginning of');
+    });
+
+    it('should recover when stream drops after first field', () => {
+      const repairer = new ToolArgumentsRepairer();
+
+      const incompleteArgs = '{"title": "My Document"';
+
+      const result = repairer.parse('createDocument', incompleteArgs);
+
+      expect(result).toEqual({ title: 'My Document' });
+    });
+
+    it('should return empty object when stream drops before any field value', () => {
+      const repairer = new ToolArgumentsRepairer();
+
+      const result = repairer.parse('createDocument', '{');
+
+      expect(result).toEqual({});
+    });
+
+    it('should recover partial JSON and still apply repair if needed', () => {
+      const manifest: LobeToolManifest = {
+        identifier: 'lobe-notebook',
+        api: [
+          {
+            name: 'createDocument',
+            description: 'Create a document',
+            parameters: {
+              type: 'object',
+              required: ['title', 'description', 'content'],
+              properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                content: { type: 'string' },
+              },
+            },
+          },
+        ],
+        type: 'builtin',
+      } as unknown as LobeToolManifest;
+
+      const repairer = new ToolArgumentsRepairer(manifest);
+
+      // Stream interrupted - has title and description but no content
+      const incompleteArgs = '{"title": "Test", "description": "Summary"';
+
+      const result = repairer.parse('createDocument', incompleteArgs);
+
+      // Should recover available fields instead of returning {}
+      expect(result.title).toBe('Test');
+      expect(result.description).toBe('Summary');
+    });
+  });
 });

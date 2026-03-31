@@ -51,34 +51,34 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
 exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AGENT_CONFIG and s.settings.systemAgent correctly 1`] = `
 {
   "agentMeta": {
-    "model": "claude-sonnet-4-5-20250929",
+    "model": "claude-sonnet-4-6",
     "provider": "anthropic",
   },
   "enableAutoReply": true,
   "generationTopic": {
-    "model": "gpt-5-mini",
+    "model": "gpt-5.4-mini",
     "provider": "openai",
   },
   "historyCompress": {
-    "model": "claude-sonnet-4-5-20250929",
+    "model": "claude-sonnet-4-6",
     "provider": "anthropic",
   },
   "queryRewrite": {
     "enabled": true,
-    "model": "gpt-5-mini",
+    "model": "gpt-5.4-mini",
     "provider": "openai",
   },
   "replyMessage": "Custom auto reply",
   "thread": {
-    "model": "claude-sonnet-4-5-20250929",
+    "model": "claude-sonnet-4-6",
     "provider": "anthropic",
   },
   "topic": {
-    "model": "gpt-5-mini",
+    "model": "gpt-5.4-mini",
     "provider": "openai",
   },
   "translation": {
-    "model": "gpt-5-mini",
+    "model": "gpt-5.4-mini",
     "provider": "openai",
   },
 }
@@ -103,13 +103,13 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "enableAutoCreateTopic": true,
       "enableCompressHistory": true,
       "enableContextCompression": true,
-      "enableHistoryCount": true,
+      "enableHistoryCount": false,
       "enableReasoning": false,
       "enableStreaming": true,
       "historyCount": 20,
       "reasoningBudgetToken": 1024,
       "searchFCModel": {
-        "model": "claude-sonnet-4-5-20250929",
+        "model": "claude-sonnet-4-6",
         "provider": "anthropic",
       },
       "searchMode": "auto",
@@ -148,13 +148,13 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "enableAutoCreateTopic": true,
     "enableCompressHistory": true,
     "enableContextCompression": true,
-    "enableHistoryCount": true,
+    "enableHistoryCount": false,
     "enableReasoning": false,
     "enableStreaming": true,
     "historyCount": 20,
     "reasoningBudgetToken": 1024,
     "searchFCModel": {
-      "model": "claude-sonnet-4-5-20250929",
+      "model": "claude-sonnet-4-6",
       "provider": "anthropic",
     },
     "searchMode": "auto",

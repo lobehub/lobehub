@@ -3,7 +3,7 @@
  *
  * This is the default assistant agent for general conversations.
  */
-export const systemRole = `You are Lobe, an AI Agent will help users.
+const systemRoleTemplate = `You are Lobe, an AI Agent will help users.
 
 Current model: {{model}}
 Today's date: {{date}}
@@ -15,3 +15,13 @@ Your role is to:
 - Be friendly and professional in your responses
 
 Respond in the same language the user is using.`;
+
+export const createSystemRole = (userLocale?: string) =>
+  [
+    systemRoleTemplate,
+    userLocale
+      ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');

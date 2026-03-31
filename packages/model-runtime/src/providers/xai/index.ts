@@ -9,31 +9,38 @@ export interface XAIModelCard {
   id: string;
 }
 
-export const GrokReasoningModels = new Set(['grok-3-mini', 'grok-4', 'grok-code']);
+// Only these legacy non-reasoning models support presencePenalty/frequencyPenalty/stop.
+// All newer models reject these params, so default to stripping.
+const xaiPenaltySupportedModels = new Set([
+  'grok-3',
+  'grok-4-fast-non-reasoning',
+  'grok-4-1-fast-non-reasoning',
+]);
 
-export const isGrokReasoningModel = (model: string) =>
-  Array.from(GrokReasoningModels).some((id) => model.includes(id));
+const pruneUnsupportedReasoningParameters = (payload: ChatStreamPayload) => {
+  if (xaiPenaltySupportedModels.has(payload.model)) return payload;
+
+  return {
+    ...payload,
+    // xAI reasoning models reject these parameters:
+    // https://docs.x.ai/developers/model-capabilities/text/reasoning
+    frequency_penalty: undefined,
+    presence_penalty: undefined,
+    stop: undefined,
+  } as ChatStreamPayload;
+};
 
 export const LobeXAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.x.ai/v1',
-  createImage: createXAIImage,
   chatCompletion: {
-    handlePayload: (payload) => {
-      const { enabledSearch, frequency_penalty, model, presence_penalty, ...rest } = payload;
-
-      if (enabledSearch) {
-        return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
-      }
-
-      return {
-        ...rest,
-        frequency_penalty: isGrokReasoningModel(model) ? undefined : frequency_penalty,
-        model,
-        presence_penalty: isGrokReasoningModel(model) ? undefined : presence_penalty,
-        stream: true,
-      } as any;
-    },
+    handlePayload: (payload) =>
+      ({
+        ...pruneUnsupportedReasoningParameters(payload),
+        stream: payload.stream ?? true,
+      }) as any,
+    useResponse: true,
   },
+  createImage: createXAIImage,
   debug: {
     chatCompletion: () => process.env.DEBUG_XAI_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_XAI_RESPONSES === '1',
@@ -47,7 +54,7 @@ export const LobeXAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.XAI,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, tools, ...rest } = payload;
+      const { enabledSearch, tools, ...rest } = pruneUnsupportedReasoningParameters(payload);
 
       const xaiTools = enabledSearch
         ? [...(tools || []), { type: 'web_search' }, { type: 'x_search' }]
@@ -55,8 +62,8 @@ export const LobeXAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
-        stream: payload.stream ?? true,
         tools: xaiTools,
+        include: ['reasoning.encrypted_content'],
       } as any;
     },
   },

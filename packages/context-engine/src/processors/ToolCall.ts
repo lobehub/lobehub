@@ -3,6 +3,15 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { MessageToolCall, PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    supportTools?: boolean;
+    toolCallProcessed?: number;
+    toolCallsConverted?: number;
+    toolMessagesConverted?: number;
+  }
+}
+
 const log = debug('context-engine:processor:ToolCallProcessor');
 
 export interface ToolCallConfig {

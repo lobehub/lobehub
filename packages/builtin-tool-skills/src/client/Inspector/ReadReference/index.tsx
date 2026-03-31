@@ -11,11 +11,11 @@ import type { ReadReferenceParams, ReadReferenceState } from '../../../types';
 
 export const ReadReferenceInspector = memo<
   BuiltinInspectorProps<ReadReferenceParams, ReadReferenceState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
 
   const path = args?.path || partialArgs?.path || '';
-  const resolvedPath = pluginState?.path || path;
+  const resolvedPath = path;
 
   if (isArgumentsStreaming) {
     if (!path)
@@ -27,7 +27,7 @@ export const ReadReferenceInspector = memo<
 
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-skills.apiName.readReference')}: </span>
+        <span>{t('builtins.lobe-skills.apiName.readReference')}:</span>
         <span>{path}</span>
       </div>
     );
@@ -35,8 +35,8 @@ export const ReadReferenceInspector = memo<
 
   return (
     <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-      <span>
-        <span>{t('builtins.lobe-skills.apiName.readReference')}: </span>
+      <span className={inspectorTextStyles.root}>
+        <span>{t('builtins.lobe-skills.apiName.readReference')}:</span>
         <span className={highlightTextStyles.primary}>{resolvedPath}</span>
       </span>
     </div>

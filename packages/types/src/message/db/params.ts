@@ -91,6 +91,7 @@ export interface NewMessage {
 
 export interface UpdateMessageParams {
   content?: string;
+  editorData?: Record<string, any> | null;
   error?: ChatMessageError | null;
   imageList?: ChatImageItem[];
   metadata?: MessageMetadata;
@@ -117,6 +118,7 @@ export interface NewMessageQueryParams {
 export const UpdateMessageParamsSchema = z
   .object({
     content: z.string().optional(),
+    editorData: z.record(z.any()).nullable().optional(),
     error: ChatMessageErrorSchema.nullable().optional(),
     imageList: z.array(ChatImageItemSchema).optional(),
     metadata: MessageMetadataSchema.optional(),

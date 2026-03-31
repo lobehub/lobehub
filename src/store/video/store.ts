@@ -4,6 +4,8 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
+import { flattenActions } from '../utils/flattenActions';
 import { initialState, type VideoStoreState } from './initialState';
 import { createCreateVideoSlice, type CreateVideoAction } from './slices/createVideo/action';
 import {
@@ -21,20 +23,23 @@ import {
 
 //  ===============  aggregate createStoreFn ============ //
 
-export interface VideoStore
-  extends
-    GenerationConfigAction,
-    GenerationTopicAction,
-    GenerationBatchAction,
-    CreateVideoAction,
-    VideoStoreState {}
+type VideoStoreAction = GenerationConfigAction &
+  GenerationTopicAction &
+  GenerationBatchAction &
+  CreateVideoAction;
 
-const createStore: StateCreator<VideoStore, [['zustand/devtools', never]]> = (...parameters) => ({
+export interface VideoStore extends VideoStoreAction, VideoStoreState {}
+
+const createStore: StateCreator<VideoStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<VideoStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createGenerationConfigSlice(...parameters),
-  ...createGenerationTopicSlice(...parameters),
-  ...createGenerationBatchSlice(...parameters),
-  ...createCreateVideoSlice(...parameters),
+  ...flattenActions<VideoStoreAction>([
+    createGenerationConfigSlice(...parameters),
+    createGenerationTopicSlice(...parameters),
+    createGenerationBatchSlice(...parameters),
+    createCreateVideoSlice(...parameters),
+  ]),
 });
 
 //  ===============  implement useStore ============ //
@@ -45,5 +50,7 @@ export const useVideoStore = createWithEqualityFn<VideoStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+expose('video', useVideoStore);
 
 export const getVideoStoreState = () => useVideoStore.getState();

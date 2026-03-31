@@ -396,6 +396,31 @@ describe('Operation Actions', () => {
       expect(result.current.operations[op2!].status).toBe('cancelled');
       expect(result.current.operations[op3!].status).toBe('running'); // Not cancelled
     });
+
+    it('should treat null and undefined topicId as the same context when cancelling', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', topicId: undefined },
+        }).operationId;
+      });
+
+      act(() => {
+        const cancelled = result.current.cancelOperations({
+          agentId: 'session1',
+          status: 'running',
+          topicId: null,
+          type: ['sendMessage', 'execAgentRuntime', 'execServerAgentRuntime'],
+        });
+        expect(cancelled).toContain(operationId!);
+      });
+
+      expect(result.current.operations[operationId!].status).toBe('cancelled');
+    });
   });
 
   describe('cleanupCompletedOperations', () => {

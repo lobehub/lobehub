@@ -13,12 +13,14 @@ import { z } from 'zod';
 
 import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
 import { TopicModel } from '@/database/models/topic';
-import {   UserMemoryActivityModel,
+import {
+  UserMemoryActivityModel,
   UserMemoryContextModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
-UserMemoryModel,
-  UserMemoryPreferenceModel } from '@/database/models/userMemory';
+  UserMemoryModel,
+  UserMemoryPreferenceModel,
+} from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -95,6 +97,12 @@ export const userMemoryRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.activityModel.delete(input.id);
     }),
+
+  deleteAll: userMemoryProcedure.mutation(async ({ ctx }) => {
+    await ctx.userMemoryModel.deleteAll();
+
+    return { success: true };
+  }),
 
   // ============ Context CRUD ============
   deleteContext: userMemoryProcedure

@@ -14,33 +14,33 @@ export const agentSkills = pgTable(
       .$defaultFn(() => idGenerator('agentSkills'))
       .primaryKey(),
 
-    // 核心标识
+    // Core identifiers
     name: text('name').notNull(),
     description: text('description').notNull(),
     identifier: text('identifier').notNull(),
 
-    // 来源控制
+    // Source control
     source: text('source', { enum: ['builtin', 'market', 'user'] }).notNull(),
 
-    // Manifest (version, author, repository 等)
+    // Manifest (version, author, repository, etc.)
     manifest: jsonb('manifest')
       .$type<SkillManifest>()
       .notNull()
       .default({} as SkillManifest),
 
-    // 内容与编辑器状态
+    // Content and editor state
     content: text('content'),
     editorData: jsonb('editor_data').$type<Record<string, any>>(),
 
-    // 资源映射: Record<VirtualPath, SkillResourceMeta>
+    // Resource mapping: Record<VirtualPath, SkillResourceMeta>
     resources: jsonb('resources').$type<Record<string, SkillResourceMeta>>().default({}),
 
-    // 原始分发包 (CAS)
+    // Raw distribution package (CAS)
     zipFileHash: varchar('zip_file_hash', { length: 64 }).references(() => globalFiles.hashId, {
       onDelete: 'set null',
     }),
 
-    // 归属
+    // Ownership
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),

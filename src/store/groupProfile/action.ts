@@ -3,6 +3,7 @@ import { type StateCreator } from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
 import { type StoreSetter } from '@/store/types';
+import { flattenActions } from '@/store/utils/flattenActions';
 
 import { type SaveState, type SaveStatus, type State } from './initialState';
 import { initialState } from './initialState';
@@ -179,7 +180,7 @@ export class ActionImpl {
   };
 }
 
-export const store: StateCreator<Store> = (set, get, _api) => ({
+export const store: StateCreator<Store> = (...parameters: Parameters<StateCreator<Store>>) => ({
   ...initialState,
-  ...new ActionImpl(set, get, _api),
+  ...flattenActions<Action>([new ActionImpl(...parameters)]),
 });

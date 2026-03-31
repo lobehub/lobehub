@@ -5,6 +5,7 @@ import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
+import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
   type OperationCreationParams,
@@ -93,7 +94,7 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
 });
 
 vi.mock('@lobechat/agent-runtime', () => ({
-  AgentRuntime: vi.fn().mockImplementation((agent, options) => ({
+  AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
     step: vi.fn(),
   })),
 }));
@@ -180,6 +181,7 @@ describe('AgentRuntimeService', () => {
 
   afterEach(() => {
     delete process.env.AGENT_RUNTIME_BASE_URL;
+    hookDispatcher.unregister('test-operation-1');
   });
 
   describe('constructor', () => {
@@ -211,7 +213,7 @@ describe('AgentRuntimeService', () => {
       appContext: {},
       agentConfig: { name: 'test-agent' },
       modelRuntimeConfig: { model: 'gpt-4' },
-      toolManifestMap: {},
+      toolSet: { manifestMap: {} },
       userId: 'user-123',
       autoStart: true,
       initialMessages: [],
@@ -309,6 +311,52 @@ describe('AgentRuntimeService', () => {
           }),
         }),
       );
+    });
+
+    it('should abort before creating operation when signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort(new Error('startup aborted'));
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          signal: controller.signal,
+        }),
+      ).rejects.toMatchObject({
+        message: 'startup aborted',
+        name: 'AbortError',
+      });
+
+      expect(mockCoordinator.createAgentOperation).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('should cleanup partially created operation when aborted before scheduling', async () => {
+      const controller = new AbortController();
+      const originalCreateAgentOperation =
+        mockCoordinator.createAgentOperation.getMockImplementation();
+
+      mockCoordinator.createAgentOperation.mockImplementationOnce(async (...args: any[]) => {
+        await originalCreateAgentOperation?.(...args);
+        controller.abort(new Error('startup aborted'));
+      });
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          hooks: [{ handler: vi.fn(), id: 'hook-1', type: 'onComplete' }],
+          signal: controller.signal,
+          stepCallbacks: { onComplete: vi.fn() },
+        }),
+      ).rejects.toMatchObject({
+        message: 'startup aborted',
+        name: 'AbortError',
+      });
+
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+      expect(mockCoordinator.deleteAgentOperation).toHaveBeenCalledWith('test-operation-1');
+      expect(service.getStepCallbacks('test-operation-1')).toBeUndefined();
+      expect(hookDispatcher.hasHooks('test-operation-1')).toBe(false);
     });
   });
 
@@ -419,6 +467,7 @@ describe('AgentRuntimeService', () => {
           stepIndex: 1,
           phase: 'step_execution',
           error: 'Runtime error',
+          errorType: '500',
         },
       });
     });
@@ -689,7 +738,7 @@ describe('AgentRuntimeService', () => {
                 data: { items: [1, 2, 3] },
                 executionTime: 200,
                 isSuccess: true,
-                toolCall: { identifier: 'lobe-skills', apiName: 'runSkill', id: 'tc-2' },
+                toolCall: { identifier: 'lobe-skills', apiName: 'activateSkill', id: 'tc-2' },
                 toolCallId: 'tc-2',
               },
             ],
@@ -718,7 +767,7 @@ describe('AgentRuntimeService', () => {
               output: 'Result from tool A',
             }),
             expect.objectContaining({
-              apiName: 'runSkill',
+              apiName: 'activateSkill',
               identifier: 'lobe-skills',
               output: JSON.stringify({ items: [1, 2, 3] }),
             }),

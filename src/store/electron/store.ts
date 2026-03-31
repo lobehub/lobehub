@@ -3,9 +3,12 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ElectronAppAction } from './actions/app';
 import { createElectronAppSlice } from './actions/app';
+import { type ElectronGatewayAction } from './actions/gateway';
+import { gatewaySlice } from './actions/gateway';
 import { type NavigationHistoryAction } from './actions/navigationHistory';
 import { createNavigationHistorySlice } from './actions/navigationHistory';
 import { type RecentPagesAction } from './actions/recentPages';
@@ -14,6 +17,8 @@ import { type ElectronSettingsAction } from './actions/settings';
 import { settingsSlice } from './actions/settings';
 import { type ElectronRemoteServerAction } from './actions/sync';
 import { remoteSyncSlice } from './actions/sync';
+import { type TabPagesAction } from './actions/tabPages';
+import { createTabPagesSlice } from './actions/tabPages';
 import { type ElectronState } from './initialState';
 import { initialState } from './initialState';
 
@@ -24,17 +29,21 @@ export interface ElectronStore
     ElectronState,
     ElectronRemoteServerAction,
     ElectronAppAction,
+    ElectronGatewayAction,
     ElectronSettingsAction,
     NavigationHistoryAction,
-    RecentPagesAction {
+    RecentPagesAction,
+    TabPagesAction {
   /* empty */
 }
 
 type ElectronStoreAction = ElectronRemoteServerAction &
   ElectronAppAction &
+  ElectronGatewayAction &
   ElectronSettingsAction &
   NavigationHistoryAction &
-  RecentPagesAction;
+  RecentPagesAction &
+  TabPagesAction;
 
 const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<ElectronStore, [['zustand/devtools', never]]>>
@@ -43,9 +52,11 @@ const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = 
   ...flattenActions<ElectronStoreAction>([
     remoteSyncSlice(...parameters),
     createElectronAppSlice(...parameters),
+    gatewaySlice(...parameters),
     settingsSlice(...parameters),
     createNavigationHistorySlice(...parameters),
     createRecentPagesSlice(...parameters),
+    createTabPagesSlice(...parameters),
   ]),
 });
 
@@ -57,5 +68,7 @@ export const useElectronStore = createWithEqualityFn<ElectronStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('electron', useElectronStore);
 
 export const getElectronStoreState = () => useElectronStore.getState();

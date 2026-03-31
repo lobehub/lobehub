@@ -207,11 +207,11 @@ describe('AiAgentService.execSubAgentTask', () => {
           topicId: 'topic-1',
         },
         autoStart: true,
+        hooks: expect.arrayContaining([
+          expect.objectContaining({ id: 'thread-metadata-update', type: 'afterStep' }),
+          expect.objectContaining({ id: 'thread-completion', type: 'onComplete' }),
+        ]),
         prompt: 'Test instruction',
-        stepCallbacks: expect.objectContaining({
-          onAfterStep: expect.any(Function),
-          onComplete: expect.any(Function),
-        }),
         userInterventionConfig: {
           approvalMode: 'headless',
         },
@@ -447,20 +447,21 @@ describe('AiAgentService.execSubAgentTask', () => {
         topicId: 'topic-1',
       });
 
-      // Verify that stepCallbacks was passed with onComplete
+      // Verify that hooks were passed with onComplete
       expect(execAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          stepCallbacks: expect.objectContaining({
-            onComplete: expect.any(Function),
-          }),
+          hooks: expect.arrayContaining([
+            expect.objectContaining({ id: 'thread-completion', type: 'onComplete' }),
+          ]),
         }),
       );
 
-      // Get the onComplete callback
+      // Get the onComplete hook handler
       const callArgs = execAgentSpy.mock.calls[0][0];
-      const onComplete = callArgs.stepCallbacks?.onComplete;
+      const onCompleteHook = callArgs.hooks?.find((h: any) => h.id === 'thread-completion');
 
-      expect(onComplete).toBeDefined();
+      expect(onCompleteHook).toBeDefined();
+      expect(onCompleteHook!.handler).toBeInstanceOf(Function);
     });
   });
 });

@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiLinear, SiX } from '@icons-pack/react-simple-icons';
+import { SiGithub, SiLinear, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**
@@ -45,6 +45,18 @@ export interface LobehubSkillProviderType {
  * - Add new providers here when Market adds support
  */
 export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
+      'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.',
+    icon: SiGithub,
+    id: 'github',
+    label: 'GitHub',
+    readme:
+      'Connect to GitHub to access your repositories, create and manage issues, review pull requests, and collaborate on code—all through natural conversation with your AI assistant.',
+  },
   {
     author: 'LobeHub',
     authorUrl: 'https://lobehub.com',

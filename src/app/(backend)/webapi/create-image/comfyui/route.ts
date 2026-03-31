@@ -5,7 +5,6 @@ import { getServerDBConfig } from '@/config/db';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { lambdaRouter } from '@/server/routers/lambda';
 
-export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const serverDBEnv = getServerDBConfig();

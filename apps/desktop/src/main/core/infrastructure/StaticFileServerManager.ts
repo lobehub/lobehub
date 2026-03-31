@@ -1,5 +1,6 @@
-import { getPort } from 'get-port-please';
 import { createServer } from 'node:http';
+
+import { getPort } from 'get-port-please';
 
 import { LOCAL_STORAGE_URL_PREFIX } from '@/const/dir';
 import FileService from '@/services/fileSrv';

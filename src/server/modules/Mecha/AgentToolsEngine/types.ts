@@ -1,5 +1,5 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
-import { type LobeTool } from '@lobechat/types';
+import { type LobeTool, type RuntimeEnvConfig } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -36,13 +36,26 @@ export interface ServerCreateAgentToolsEngineParams {
   additionalManifests?: LobeToolManifest[];
   /** Agent configuration containing plugins array */
   agentConfig: {
-    /** Optional agent chat config with searchMode */
+    /** Optional agent chat config */
     chatConfig?: {
+      runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
     };
     /** Plugin IDs enabled for this agent */
     plugins?: string[];
   };
+  /** Device gateway context for remote tool calling */
+  deviceContext?: {
+    /** When true, a device has been auto-activated — Remote Device tool is unnecessary */
+    autoActivated?: boolean;
+    boundDeviceId?: string;
+    deviceOnline?: boolean;
+    gatewayConfigured: boolean;
+  };
+  /** Whether the user's global memory setting is enabled */
+  globalMemoryEnabled?: boolean;
+  /** Whether agent has agent documents */
+  hasAgentDocuments?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
   /** Model name for function calling compatibility check */

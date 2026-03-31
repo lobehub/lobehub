@@ -6,3 +6,5 @@ out
 *.log*
 standalone
 release
+
+bin

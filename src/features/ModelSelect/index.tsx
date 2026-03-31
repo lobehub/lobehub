@@ -1,6 +1,6 @@
 import { TooltipGroup } from '@lobehub/ui';
 import { Select, type SelectProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles, createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
@@ -10,18 +10,10 @@ import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
 const prefixCls = 'ant';
 
-const useStyles = createStyles(({ css }, { popupWidth }: { popupWidth?: number | string }) => ({
-  popup: css`
-    width: ${popupWidth
-      ? typeof popupWidth === 'number'
-        ? `${popupWidth}px`
-        : popupWidth
-      : 'max(360px, var(--anchor-width))'};
-  `,
-}));
-
 const styles = createStaticStyles(({ css }) => ({
   popup: css`
+    width: max(360px, var(--anchor-width));
+
     &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
       padding-inline-start: 12px;
     }
@@ -47,7 +39,7 @@ interface ModelSelectProps extends Pick<SelectProps, 'loading' | 'size' | 'style
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
   onChange?: (props: { model: string; provider: string }) => void;
-  popupWidth?: number | string;
+  popupWidth?: number;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
   value?: { model: string; provider?: string };
@@ -66,7 +58,6 @@ const ModelSelect = memo<ModelSelectProps>(
     initialWidth = false,
     popupWidth,
   }) => {
-    const { styles: dynamicStyles } = useStyles({ popupWidth });
     const enabledList = useEnabledChatModels();
 
     const options = useMemo<SelectProps['options']>(() => {
@@ -119,8 +110,8 @@ const ModelSelect = memo<ModelSelectProps>(
           defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
           options={options}
-          popupClassName={popupWidth ? `${styles.popup} ${dynamicStyles.popup}` : styles.popup}
-          popupMatchSelectWidth={false}
+          popupClassName={styles.popup}
+          popupMatchSelectWidth={popupWidth === undefined ? false : popupWidth}
           size={size}
           value={`${value?.provider}/${value?.model}`}
           variant={variant}
@@ -128,7 +119,7 @@ const ModelSelect = memo<ModelSelectProps>(
             <ModelItemRender
               {...(option as ModelOption)}
               {...(option as ModelOption).abilities}
-              showInfoTag
+              showInfoTag={false}
             />
           )}
           style={{

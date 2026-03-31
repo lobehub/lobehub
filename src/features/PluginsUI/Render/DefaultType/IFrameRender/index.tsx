@@ -16,7 +16,7 @@ const IFrameRender = memo<IFrameRenderProps>(({ url, width = 800, height = 300, 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loading, setLoading] = useState(true);
 
-  // 当 props 发生变化时，主动向 iframe 发送数据
+  // When props change, proactively send data to the iframe
   useOnPluginReadyForInteraction(() => {
     const iframeWin = iframeRef.current?.contentWindow;
 
@@ -46,7 +46,7 @@ const IFrameRender = memo<IFrameRenderProps>(({ url, width = 800, height = 300, 
         width={width}
         style={{
           border: 0,
-          // iframe 在 color-scheme:dark 模式下无法透明
+          // iframe cannot be transparent in color-scheme:dark mode
           // refs: https://www.jianshu.com/p/bc5a37bb6a7b
           colorScheme: 'light',
           maxWidth: '100%',

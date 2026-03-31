@@ -11,8 +11,8 @@ import {
   type KnowledgeItem,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
-  type LocalSystemConfig,
   type MetaData,
+  type RuntimeEnvConfig,
 } from '@lobechat/types';
 import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
@@ -248,17 +248,17 @@ const currentAgentMode = (s: AgentStoreState): AgentMode | undefined => {
 const isAgentModeEnabled = (s: AgentStoreState): boolean => currentAgentMode(s) !== undefined;
 
 /**
- * Get current agent's local system config
- * Now reads from chatConfig.localSystem
+ * Get current agent's runtime env config
+ * Now reads from chatConfig.runtimeEnv
  */
-const currentAgentLocalSystemConfig = (s: AgentStoreState): LocalSystemConfig | undefined =>
-  currentAgentConfig(s)?.chatConfig?.localSystem;
+const currentAgentRuntimeEnvConfig = (s: AgentStoreState): RuntimeEnvConfig | undefined =>
+  currentAgentConfig(s)?.chatConfig?.runtimeEnv;
 
 /**
  * Get current agent's working directory
  */
 const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
-  currentAgentLocalSystemConfig(s)?.workingDirectory;
+  currentAgentRuntimeEnvConfig(s)?.workingDirectory;
 
 const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
 
@@ -269,7 +269,7 @@ export const agentSelectors = {
   currentAgentDescription,
   currentAgentFiles,
   currentAgentKnowledgeBases,
-  currentAgentLocalSystemConfig,
+  currentAgentRuntimeEnvConfig,
   currentAgentMeta,
   currentAgentMode,
   currentAgentModel,

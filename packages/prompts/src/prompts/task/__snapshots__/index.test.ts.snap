@@ -1,0 +1,243 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildTaskRunPrompt > should build prompt with only task instruction 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 帮我写一本 AI Agent 技术书籍
+
+Review: (not configured)
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should build prompt with task description + instruction 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 帮我写一本 AI Agent 技术书籍，目标 8 章
+Description: 面向开发者的技术书籍
+
+Review: (not configured)
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should handle empty activities gracefully 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Review: (not configured)
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should handle full scenario with all sections 1`] = `
+"<high_priority_instruction>
+这次直接开始写第1章
+</high_priority_instruction>
+
+<user_feedback>
+<comment time="3h ago">第5章后移，增加评测章节</comment>
+</user_feedback>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写一本 AI Agent 书，目标 8 章
+Description: 面向开发者的 AI Agent 技术书籍
+Topics: 1
+
+Review: (not configured)
+
+Activities:
+  💬 19h ago Topic #1 制定大纲 ✓ completed  tpc_001
+  📋 18h ago Brief [decision] 大纲完成 ✅ approve  brief_001
+  💭 3h ago 👤 user 第5章后移，增加评测章节
+  💭 2h ago 🤖 agent 已调整大纲
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should include activity history with topics and briefs in CLI style 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+Topics: 2
+
+Review: (not configured)
+
+Activities:
+  💬 19h ago Topic #1 制定大纲 ✓ completed  tpc_aaa
+  📋 18h ago Brief [decision] 大纲完成 [urgent] ✅ approve  brief_abc123
+  💬 18h ago Topic #2 修订大纲 ✓ completed  tpc_bbb
+  📋 18h ago Brief [decision] 建议拆分第4章 [normal]  brief_def456
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should include agent comments with author label and time 1`] = `
+"<user_feedback>
+<comment time="2h ago">确认，开始写</comment>
+</user_feedback>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Review: (not configured)
+
+Activities:
+  💭 3h ago 🤖 agent 大纲已完成，请确认
+  💭 2h ago 👤 user 确认，开始写
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should include parentTask context for subtasks 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-4 第2章 核心架构
+Status: ● running     Priority: -
+Instruction: 撰写第2章
+Parent: TASK-1
+
+Review: (not configured)
+
+<parentTask identifier="TASK-1" name="写一本书">
+  Instruction: 写一本 AI Agent 书，目标 8 章
+  Subtasks (3):
+    TASK-2 ✓ completed 第1章 概述
+    TASK-4 ● running 第2章 核心架构 ← blocks: TASK-2 ◀ current
+    TASK-6 ○ backlog 第3章 手写 Agent ← blocks: TASK-4
+</parentTask>
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should include subtasks in task section 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Subtasks:
+  TASK-2 ✓ completed 第1章 Agent 概述
+  TASK-3 ○ backlog 第2章 快速上手 ← blocks: TASK-2
+
+Review: (not configured)
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should include subtasks in task tag when provided 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写一本 AI Agent 书，目标 8 章
+
+Subtasks:
+  TASK-2 ● running 第1章 AI Agent 概述
+  TASK-3 ○ backlog 第2章 核心架构
+  TASK-4 ○ backlog 第3章 手写 Agent
+
+Review: (not configured)
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should only include user comments in user_feedback, not agent comments 1`] = `
+"<user_feedback>
+<comment time="2h ago">用户反馈</comment>
+</user_feedback>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Review: (not configured)
+
+Activities:
+  💭 2h ago 👤 user 用户反馈
+  💭 1h ago 🤖 agent Agent 回复
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should place high_priority_instruction first, then feedback 1`] = `
+"<high_priority_instruction>
+这次重点关注第3章
+</high_priority_instruction>
+
+<user_feedback>
+<comment time="1h ago">用户反馈</comment>
+</user_feedback>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Review: (not configured)
+
+Activities:
+  💭 1h ago 👤 user 用户反馈
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should prioritize user feedback at the top 1`] = `
+"<user_feedback>
+<comment time="2h ago">第2章改为先上手再讲原理</comment>
+<comment time="1h ago">增加评测章节</comment>
+</user_feedback>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Review: (not configured)
+
+Activities:
+  💭 2h ago 👤 user 第2章改为先上手再讲原理
+  💭 1h ago 👤 user 增加评测章节
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should show resolved action and comment on briefs 1`] = `
+"<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-2 第2章
+Status: ● running     Priority: -
+Instruction: 写第2章
+
+Review: (not configured)
+
+Activities:
+  ✅ 19h ago Brief [result] 第2章完成 ✏️ 第2章需要更多实例
+</task>"
+`;
+
+exports[`buildTaskRunPrompt > should truncate comments to 80 chars in activities but keep full in user_feedback 1`] = `
+"<user_feedback>
+<comment time="1h ago">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA — this part should be truncated in activities</comment>
+</user_feedback>
+
+<task>
+<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>
+TASK-1 写一本书
+Status: ● running     Priority: -
+Instruction: 写书
+
+Review: (not configured)
+
+Activities:
+  💭 1h ago 👤 user AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...
+</task>"
+`;

@@ -1,6 +1,6 @@
 # 本地更新测试指南
 
-本目录包含用于在本地测试 Desktop 应用更新功能的工具和脚本。
+本目录包含用于在本地测试 Desktop 应用更新功能的工具和脚本，支持 stable/nightly/canary 三渠道切换测试。
 
 ## 目录结构
 
@@ -8,25 +8,42 @@
 scripts/update-test/
 ├── README.md                    # 本文档
 ├── setup.sh                     # 一键设置脚本
+├── run-test.sh                  # 一键启动测试（推荐）
 ├── start-server.sh              # 启动本地更新服务器
 ├── stop-server.sh               # 停止本地更新服务器
 ├── generate-manifest.sh         # 生成 manifest 和目录结构
 ├── dev-app-update.local.yml     # 本地测试用的更新配置模板
 └── server/                      # 本地服务器文件目录 (自动生成)
     ├── stable/                  # stable 渠道
-    │   ├── latest-mac.yml
+    │   ├── stable-mac.yml
     │   └── {version}/
     │       ├── xxx.dmg
     │       └── xxx.zip
-    ├── beta/                    # beta 渠道
-    │   └── ...
-    └── nightly/                 # nightly 渠道
-        └── ...
+    ├── nightly/                 # nightly 渠道
+    │   ├── nightly-mac.yml
+    │   └── {version}/
+    │       └── ...
+    └── canary/                  # canary 渠道
+        ├── canary-mac.yml
+        └── {version}/
+            └── ...
 ```
 
 ## 快速开始
 
-### 1. 首次设置
+### 一键测试（推荐）
+
+```bash
+cd apps/desktop/scripts/update-test
+chmod +x *.sh
+./run-test.sh
+```
+
+此脚本会自动：为三个渠道生成不同版本号的 manifest → 启动本地服务器 → 配置应用 → 启动应用。
+
+### 手动步骤
+
+#### 1. 首次设置
 
 ```bash
 cd apps/desktop/scripts/update-test
@@ -34,72 +51,52 @@ chmod +x *.sh
 ./setup.sh
 ```
 
-### 2. 构建测试包
+#### 2. 构建测试包
 
 ```bash
-# 回到 desktop 目录
 cd ../..
-
-# 构建未签名的本地测试包
-bun run build:main
-bun run package:local
+# 构建 DMG + ZIP (macOS 自动更新需要 ZIP)
+bun run package:mac:local
 ```
 
-如果需要模拟 CI 的渠道构建（Nightly / Beta / Stable），可以使用根目录脚本：
+> **注意**: 不要使用 `package:local`，它只输出目录结构不产出 DMG/ZIP 安装包。
 
-```bash
-# 回到仓库根目录
-cd ../../..
-
-# 指定渠道与版本号
-npm run desktop:build-channel -- nightly 2.1.0-nightly.1
-npm run desktop:build-channel -- beta 2.1.0-beta.1
-npm run desktop:build-channel -- stable 2.1.0
-
-# 保留 package.json 与 icon 变更
-npm run desktop:build-channel -- stable 2.1.0 --keep-changes
-```
-
-### 3. 生成更新文件
+#### 3. 生成更新文件
 
 ```bash
 cd scripts/update-test
 
-# 从 release 目录自动检测并生成 (默认 stable 渠道)
-./generate-manifest.sh --from-release
+# 为所有渠道生成（推荐，会自动分配不同版本号）
+./generate-manifest.sh --from-release --all-channels
 
-# 指定版本号 (用于模拟更新)
-./generate-manifest.sh --from-release -v 0.0.1
-
-# 指定渠道
-./generate-manifest.sh --from-release -c beta -v 2.1.0-beta.1
+# 或指定单个渠道
+./generate-manifest.sh --from-release -c nightly -v 2.1.0-nightly.1
 ```
 
-### 4. 启动本地服务器
+#### 4. 启动本地服务器
 
 ```bash
 ./start-server.sh
 # 服务器默认在 http://localhost:8787 启动
 ```
 
-### 5. 配置应用使用本地服务器
-
-```bash
-# 复制本地测试配置到 desktop 根目录
-cp dev-app-update.local.yml ../../dev-app-update.yml
-
-# 或者直接编辑 dev-app-update.yml，确保 URL 指向正确的渠道:
-# url: http://localhost:8787/stable
-```
-
-### 6. 运行应用测试
+#### 5. 启动应用
 
 ```bash
 cd ../..
-bun run dev
+UPDATE_SERVER_URL=http://localhost:8787 bun run dev
 ```
 
-### 7. 测试完成后
+**重要**: 必须设置 `UPDATE_SERVER_URL` 环境变量，否则 channel 切换时 `configureUpdateProvider()` 会回退到 GitHub。
+
+#### 6. 测试 Channel 切换
+
+1. 进入 **设置 > Beta**
+2. 在 **Update Channel** 下拉框中选择不同渠道
+3. 切换后应用会自动检查对应渠道的更新
+4. 查看日志确认 feed URL 切换正确：`tail -f ~/Library/Logs/lobehub-desktop-dev/main.log`
+
+#### 7. 测试完成后
 
 ```bash
 cd scripts/update-test
@@ -119,7 +116,8 @@ git checkout dev-app-update.yml
 
 选项:
   -v, --version VERSION    指定版本号 (例如: 2.0.1)
-  -c, --channel CHANNEL    指定渠道 (stable|beta|nightly, 默认: stable)
+  -c, --channel CHANNEL    指定渠道 (stable|nightly|canary, 默认: stable)
+  -a, --all-channels       为所有渠道生成 manifest (stable/nightly/canary)
   -d, --dmg FILE           指定 DMG 文件名
   -z, --zip FILE           指定 ZIP 文件名
   -n, --notes TEXT         指定 release notes
@@ -127,80 +125,79 @@ git checkout dev-app-update.yml
   -h, --help               显示帮助信息
 
 示例:
-  ./generate-manifest.sh --from-release
+  ./generate-manifest.sh --from-release --all-channels
   ./generate-manifest.sh -v 2.0.1 -c stable --from-release
-  ./generate-manifest.sh -v 2.1.0-beta.1 -c beta --from-release
+  ./generate-manifest.sh -v 2.1.0-nightly.1 -c nightly --from-release
 ```
 
 ---
 
-## 详细说明
+## 测试场景
 
-### 关于 macOS 签名验证
+| 场景                 | 操作                                                    |
+| -------------------- | ------------------------------------------------------- |
+| 有新版本可用         | manifest 中 `version` 大于当前应用版本                  |
+| 无新版本             | `version` 小于或等于当前版本                            |
+| Channel 切换（升级） | 从 Stable 切到 Nightly/Canary，应检测到更高版本         |
+| Channel 切换（降级） | 从 Canary 切到 Stable，`allowDowngrade` 应自动设为 true |
+| 下载失败             | 删除 server/{channel}/{version}/ 中的 DMG 文件          |
+| 网络错误             | 停止本地服务器                                          |
+| Manifest 不存在      | 删除对应的 {channel}-mac.yml                            |
+
+---
+
+## 关于 macOS 签名验证
+
+### Gatekeeper
 
 本地测试的包未经签名和公证，macOS 会阻止运行。解决方法：
 
-#### 方法 1：临时禁用 Gatekeeper（推荐）
-
 ```bash
-# 禁用
+# 临时禁用 Gatekeeper（推荐，测试完成后务必重新启用）
 sudo spctl --master-disable
 
-# 测试完成后务必重新启用！
+# 测试完成后
 sudo spctl --master-enable
 ```
 
-#### 方法 2：手动移除隔离属性
+或手动移除隔离属性：
 
 ```bash
-# 对下载的 DMG 或解压后的 .app 执行
 xattr -cr /path/to/YourApp.app
 ```
 
-#### 方法 3：系统偏好设置
+### Squirrel.Mac 更新安装限制
 
-1. 打开「系统偏好设置」→「安全性与隐私」→「通用」
-2. 点击「仍要打开」允许未签名的应用
+**本地未签名构建无法完成更新的安装步骤。** Squirrel.Mac 要求更新包的签名与当前运行 app 的 designated requirement 匹配。ad-hoc 签名的 DR 包含 `cdhash`（二进制哈希），不同构建的哈希必定不同，因此校验必然失败。
 
-### 自定义 Release Notes
+这意味着本地测试能验证到 **下载完成** 为止，但无法安装。CI 中有真实 Apple Developer 证书，不存在此问题。
 
-编辑 `server/{channel}/latest-mac.yml` 中的 `releaseNotes` 字段：
-
-```yaml
-releaseNotes: |
-  ## 🎉 v2.0.1 测试版本
-
-  ### ✨ 新功能
-  - 功能 A
-  - 功能 B
-
-  ### 🐛 修复
-  - 修复问题 X
-```
-
-### 测试不同场景
-
-| 场景         | 操作                                                  |
-| ------------ | ----------------------------------------------------- |
-| 有新版本可用 | 设置 manifest 中的 `version` 大于当前应用版本 (0.0.0) |
-| 无新版本     | 设置 `version` 小于或等于当前版本                     |
-| 下载失败     | 删除 server/{channel}/{version}/ 中的 DMG 文件        |
-| 网络错误     | 停止本地服务器                                        |
-| 测试不同渠道 | 修改 dev-app-update.yml 中的 URL 指向不同渠道         |
-
-### 环境变量
-
-也可以通过环境变量指定更新服务器：
+**可验证的部分（通过日志）：**
 
 ```bash
-UPDATE_SERVER_URL=http://localhost:8787/stable bun run dev
+tail -f ~/Library/Logs/lobehub-desktop-dev/main.log | grep -E 'Switching|Configuring|channel|checking'
 ```
+
+- Channel 切换: `Switching update channel: stable -> canary`
+- Feed URL 切换: `Configuring generic provider for canary channel`
+- Manifest 匹配: `Channel set to: canary (will look for canary-mac.yml)`
+- 更新检测: `Update available: x.y.z` 或 `Update not available`
 
 ---
 
 ## 故障排除
 
-### 1. 服务器启动失败
+### 1. Channel 切换后仍请求旧渠道
+
+- 确认启动应用时设置了 `UPDATE_SERVER_URL=http://localhost:8787`
+- 查看日志确认 `configureUpdateProvider` 被调用：`grep 'Configuring generic' ~/Library/Logs/lobehub-desktop-dev/main.log`
+
+### 2. 更新检测不到
+
+- 确认对应渠道的 manifest 存在：`curl http://localhost:8787/stable/stable-mac.yml`
+- 确认 manifest 中的版本号大于当前版本
+
+### 3. 服务器启动失败
 
 ```bash
 # 检查端口是否被占用
@@ -209,22 +206,6 @@ lsof -i :8787
 # 使用其他端口
 PORT=9000 ./start-server.sh
 ```
-
-### 2. 更新检测不到
-
-- 确认 `dev-app-update.yml` 中的 URL 包含渠道路径 (如 `/stable`)
-- 确认 manifest 中的版本号大于当前版本 (0.0.0)
-- 查看日志：`tail -f ~/Library/Logs/lobehub-desktop-dev/main.log`
-
-### 3. 请求了错误的 yml 文件
-
-- 如果请求的是 `stable-mac.yml` 而不是 `latest-mac.yml`，说明代码中设置了 channel
-- 确保在 dev 模式下运行，代码不会设置 `autoUpdater.channel`
-
-### 4. 下载后无法安装
-
-- 确认已禁用 Gatekeeper 或移除隔离属性
-- 确认 DMG 文件完整
 
 ---
 

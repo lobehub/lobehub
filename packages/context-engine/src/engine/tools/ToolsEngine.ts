@@ -97,12 +97,23 @@ export class ToolsEngine {
    * @returns Detailed tools generation result
    */
   generateToolsDetailed(params: GenerateToolsParams): ToolsGenerationResult {
-    const { toolIds = [], model, provider, context, skipDefaultTools } = params;
+    const {
+      toolIds = [],
+      model,
+      provider,
+      context,
+      skipDefaultTools,
+      excludeDefaultToolIds,
+    } = params;
 
     // Merge user-provided tool IDs with default tool IDs and deduplicate (unless skipDefaultTools is true)
+    const effectiveDefaultToolIds = excludeDefaultToolIds
+      ? this.defaultToolIds.filter((id) => !excludeDefaultToolIds.includes(id))
+      : this.defaultToolIds;
+
     const allToolIds = skipDefaultTools
       ? toolIds
-      : [...new Set([...toolIds, ...this.defaultToolIds])];
+      : [...new Set([...toolIds, ...effectiveDefaultToolIds])];
 
     log(
       'Generating detailed tools for model=%s, provider=%s, pluginIds=%o (skipDefaultTools=%s, includes %d default tools)',

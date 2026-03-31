@@ -193,8 +193,9 @@ export class SkillImporter {
     log('importFromGitHub: identifier=%s', identifier);
 
     // 5. Check for existing skill with same zipHash (deduplication)
+    // Also re-import if content is missing (e.g. from a previous buggy import)
     const existing = await this.skillModel.findByIdentifier(identifier);
-    if (existing && existing.zipFileHash === zipHash) {
+    if (existing && existing.zipFileHash === zipHash && existing.content != null) {
       log(
         'importFromGitHub: skill unchanged (same zipHash=%s), skipping update id=%s',
         zipHash,
@@ -280,7 +281,10 @@ export class SkillImporter {
    * @param input - URL to SKILL.md file
    * @returns SkillImportResult with status: 'created' | 'updated' | 'unchanged'
    */
-  async importFromUrl(input: ImportUrlInput): Promise<SkillImportResult> {
+  async importFromUrl(
+    input: ImportUrlInput,
+    options?: { identifier?: string; source?: 'market' | 'user' },
+  ): Promise<SkillImportResult> {
     log('importFromUrl: starting with url=%s', input.url);
 
     // 1. Validate URL
@@ -289,6 +293,18 @@ export class SkillImporter {
       url = new URL(input.url);
     } catch {
       throw new SkillImportError('Invalid URL format', 'INVALID_URL');
+    }
+
+    // 1.5. Detect GitHub repo/tree/blob URLs and delegate to importFromGitHub for full directory support
+    // Only delegate URLs that parseRepoUrl can handle (owner/repo, tree, blob patterns).
+    // Let direct download URLs (e.g. /archive/*.zip, /releases/download/*) fall through
+    // to the generic fetch logic below which handles ZIP files correctly.
+    if (
+      url.hostname === 'github.com' &&
+      /^\/[^/]+\/[^/]+(?:\/(?:tree|blob)\/.+)?$/.test(url.pathname.replace(/\/+$/, ''))
+    ) {
+      log('importFromUrl: detected GitHub repo URL, delegating to importFromGitHub');
+      return this.importFromGitHub({ gitUrl: input.url });
     }
 
     // 2. Fetch content (auto-detect SKILL.md or ZIP)
@@ -368,7 +384,7 @@ export class SkillImporter {
       .replace(/^\//, '') // Remove leading slash
       .replace(/\.md$/i, '') // Remove .md extension
       .replaceAll('/', '.'); // Replace slashes with dots
-    const identifier = `url.${url.host}.${pathPart || 'skill'}`;
+    const identifier = options?.identifier || `url.${url.host}.${pathPart || 'skill'}`;
     log('importFromUrl: identifier=%s', identifier);
 
     // 5. Check for existing skill
@@ -446,7 +462,7 @@ export class SkillImporter {
       manifest: fullManifest,
       name: manifest.name,
       ...(resourceMap && { resources: resourceMap }),
-      source: 'market', // URL source marked as market
+      source: options?.source || 'market', // URL source defaults to market
       ...(zipFileHash && { zipFileHash }),
     });
     log('importFromUrl: created skill id=%s', skill.id);

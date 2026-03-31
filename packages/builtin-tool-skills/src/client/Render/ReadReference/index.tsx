@@ -52,9 +52,11 @@ const formatSize = (bytes: number): string => {
 
 const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReferenceState>>(
   ({ content, pluginState }) => {
-    const { encoding, path, size } = pluginState || {};
+    const { encoding, fullPath, path, size } = pluginState || {};
 
     if (!path || !content) return null;
+
+    const displayPath = fullPath || path;
 
     const ext = getFileExtension(path);
     const isMarkdown = ext === 'md' || ext === 'markdown';
@@ -66,10 +68,10 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
       <Flexbox className={styles.container} gap={8}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Text code ellipsis as={'span'} fontSize={12}>
-            {path}
+            {displayPath}
           </Text>
           {sizeText && (
-            <Text code as={'span'} fontSize={12} type={'secondary'}>
+            <Text code noWrap as={'span'} fontSize={12} type={'secondary'}>
               {sizeText}
             </Text>
           )}
@@ -88,7 +90,7 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
             </Markdown>
           </Block>
         ) : (
-          <Block padding={0} variant={'outlined'}>
+          <Block padding={8} variant={'outlined'}>
             <Highlighter
               showLanguage
               wrap

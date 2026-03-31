@@ -143,7 +143,7 @@ describe('agentChatConfigSelectors', () => {
   });
 
   describe('enableHistoryCount', () => {
-    it('should return false when context caching enabled and model supports it', () => {
+    it('should return enableHistoryCount value even when context caching is enabled', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {
@@ -154,10 +154,10 @@ describe('agentChatConfigSelectors', () => {
         },
       });
 
-      expect(agentChatConfigSelectors.enableHistoryCount(state)).toBe(false);
+      expect(agentChatConfigSelectors.enableHistoryCount(state)).toBe(true);
     });
 
-    it('should return false when search enabled and model is claude-3-7-sonnet', () => {
+    it('should return enableHistoryCount value even when search is enabled', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {
@@ -172,10 +172,10 @@ describe('agentChatConfigSelectors', () => {
         },
       });
 
-      expect(agentChatConfigSelectors.enableHistoryCount(state)).toBe(false);
+      expect(agentChatConfigSelectors.enableHistoryCount(state)).toBe(true);
     });
 
-    it('should return enableHistoryCount value when no special cases apply', () => {
+    it('should return enableHistoryCount value directly from config', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: {

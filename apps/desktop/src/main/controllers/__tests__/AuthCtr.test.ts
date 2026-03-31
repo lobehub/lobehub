@@ -1,6 +1,5 @@
-import { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
-import crypto from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -100,6 +99,7 @@ const mockApp = {
     }
     return null;
   }),
+  getService: vi.fn(() => null),
 } as unknown as App;
 
 describe('AuthCtr', () => {

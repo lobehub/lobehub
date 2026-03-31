@@ -10,7 +10,7 @@ import { Rnd } from 'react-rnd';
 import { isDesktop } from '@/const/version';
 import { usePathname } from '@/libs/next/navigation';
 
-// 定义样式
+// Define styles
 const styles = createStaticStyles(({ css }) => {
   return {
     collapsed: css`
@@ -108,7 +108,7 @@ const CollapsibleFloatPanel = memo<CollapsibleFloatPanelProps>(({ items }) => {
   return (
     <>
       {
-        // desktop devtools 下隐藏
+        // Hide under desktop devtools
         pathname !== '/desktop/devtools' && isDesktop && (
           <div
             className={styles.debugButton}

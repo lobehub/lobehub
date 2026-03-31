@@ -4,6 +4,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import { viteEmotionSpeedy } from './emotionSpeedy';
+import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
 
@@ -123,6 +124,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
   const defaultTsconfigPaths = options.tsconfigPaths ?? true;
   return [
     viteEmotionSpeedy(),
+    viteMarkdownImport(),
     nodePolyfills({ include: ['buffer'] }),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
@@ -146,6 +148,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 
   return {
     '__CI__': process.env.CI === 'true' ? 'true' : 'false',
+    '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
     ...nextPublicDefine,
@@ -171,21 +174,26 @@ export const sharedOptimizeDeps = {
     'i18next',
     'react-i18next',
     'dayjs',
+    'dayjs/esm/locale/ar',
+    'dayjs/esm/locale/bg',
+    'dayjs/esm/locale/de',
+    'dayjs/esm/locale/en',
+    'dayjs/esm/locale/es',
+    'dayjs/esm/locale/fa',
+    'dayjs/esm/locale/fr',
+    'dayjs/esm/locale/it',
+    'dayjs/esm/locale/ja',
+    'dayjs/esm/locale/ko',
+    'dayjs/esm/locale/nl',
+    'dayjs/esm/locale/pl',
+    'dayjs/esm/locale/pt-br',
+    'dayjs/esm/locale/ru',
+    'dayjs/esm/locale/tr',
+    'dayjs/esm/locale/vi',
+    'dayjs/esm/locale/zh-cn',
+    'dayjs/esm/locale/zh-tw',
 
     'ahooks',
     'motion/react',
-
-    // monorepo packages — pre-bundle to reduce request count
-    '@lobechat/model-runtime',
-    'model-bank',
-    '@lobechat/types',
-    '@lobechat/prompts',
-    '@lobechat/context-engine',
-    '@lobechat/utils',
-    '@lobechat/const',
-    '@lobechat/agent-runtime',
-    '@lobechat/electron-client-ipc',
-    '@lobechat/conversation-flow',
-    '@lobechat/builtin-agents',
   ],
 };

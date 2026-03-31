@@ -1,7 +1,7 @@
 import { Button, Flexbox, Form, Markdown } from '@lobehub/ui';
 import { Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -71,13 +71,13 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
   };
 
   return (
-    <motion.div
+    <m.div
       animate={{ y: 0 }}
       className={styles.container}
       initial={{ y: 8 }}
       transition={{ delay: 0.1, duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
-      <motion.div
+      <m.div
         animate={{ opacity: 1, y: 0 }}
         initial={{ opacity: 0, y: 4 }}
         transition={{ delay: 0.15, duration: 0.2 }}
@@ -88,9 +88,9 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
             {t('mcpInstall.configurationDescription')}
           </span>
         </Flexbox>
-      </motion.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         animate={{ opacity: 1, y: 0 }}
         initial={{ opacity: 0, y: 4 }}
         transition={{ delay: 0.2, duration: 0.2 }}
@@ -127,9 +127,9 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
             }))}
           onFinish={handleSubmit}
         />
-      </motion.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         animate={{ opacity: 1, y: 0 }}
         className={styles.footer}
         initial={{ opacity: 0, y: 4 }}
@@ -141,8 +141,8 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
         <Button loading={loading} size="small" type="primary" onClick={() => form.submit()}>
           {t('mcpInstall.continueInstall')}
         </Button>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 });
 

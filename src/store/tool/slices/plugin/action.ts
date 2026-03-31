@@ -8,7 +8,6 @@ import { type StoreSetter } from '@/store/types';
 import { merge } from '@/utils/merge';
 
 import { type ToolStore } from '../../store';
-import { pluginStoreSelectors } from '../oldStore/selectors';
 import { pluginSelectors } from './selectors';
 
 /**
@@ -29,19 +28,8 @@ export class PluginActionImpl {
     this.#get = get;
   }
 
-  checkPluginsIsInstalled = async (plugins: string[]): Promise<void> => {
-    // if there is no plugins, just skip.
-    if (plugins.length === 0) return;
-
-    const { loadPluginStore, installPlugins } = this.#get();
-
-    // check if the store is empty
-    // if it is, we need to load the plugin store
-    if (pluginStoreSelectors.onlinePluginStore(this.#get()).length === 0) {
-      await loadPluginStore();
-    }
-
-    await installPlugins(plugins);
+  checkPluginsIsInstalled = async (_plugins: string[]): Promise<void> => {
+    // Old plugin system has been deprecated, skip auto-installation
   };
 
   removeAllPlugins = async (): Promise<void> => {

@@ -1,5 +1,5 @@
 import { chainAnswerWithContext } from '@lobechat/prompts';
-import { EvalEvaluationStatus } from '@lobechat/types';
+import { EvalEvaluationStatus, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
@@ -65,11 +65,14 @@ export const ragEvalRouter = router({
 
         // If questionEmbeddingId does not exist, perform an embedding
         if (!questionEmbeddingId) {
-          const embeddings = await modelRuntime.embeddings({
-            dimensions: 1024,
-            input: question,
-            model: !!embeddingModel ? embeddingModel : DEFAULT_EMBEDDING_MODEL,
-          });
+          const embeddings = await modelRuntime.embeddings(
+            {
+              dimensions: 1024,
+              input: question,
+              model: !!embeddingModel ? embeddingModel : DEFAULT_EMBEDDING_MODEL,
+            },
+            { metadata: { trigger: RequestTrigger.Eval }, user: ctx.userId },
+          );
 
           const embeddingId = await ctx.embeddingModel.create({
             embeddings: embeddings?.[0],
@@ -102,13 +105,16 @@ export const ragEvalRouter = router({
         // Generate LLM answer
         const { messages } = chainAnswerWithContext({ context, knowledge: [], question });
 
-        const response = await modelRuntime.chat({
-          messages: messages!,
-          model: !!languageModel ? languageModel : DEFAULT_MODEL,
-          responseMode: 'json',
-          stream: false,
-          temperature: 1,
-        });
+        const response = await modelRuntime.chat(
+          {
+            messages: messages!,
+            model: !!languageModel ? languageModel : DEFAULT_MODEL,
+            responseMode: 'json',
+            stream: false,
+            temperature: 1,
+          },
+          { metadata: { trigger: RequestTrigger.Eval } },
+        );
 
         const data = (await response.json()) as OpenAI.ChatCompletion;
 

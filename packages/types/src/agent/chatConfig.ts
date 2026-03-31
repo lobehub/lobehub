@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { type SearchMode } from '../search';
 import { type UserMemoryEffort } from '../user/settings/memory';
-import { type LocalSystemConfig } from './agentConfig';
+import { type RuntimeEnvConfig } from './agentConfig';
 
 export interface WorkingModel {
   model: string;
@@ -19,10 +19,12 @@ export interface AgentMemoryChatConfig {
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   autoCreateTopicThreshold: number;
+  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
+
   /**
    * Disable context caching
    */
@@ -34,7 +36,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
-
   enableAutoCreateTopic?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -72,6 +73,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
    */
@@ -93,15 +95,31 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    */
   imageResolution2?: '512px' | '1K' | '2K' | '4K';
   inputTemplate?: string;
-  /**
-   * Local System configuration (desktop only)
-   */
-  localSystem?: LocalSystemConfig;
   reasoningBudgetToken?: number;
+  /**
+   * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
+   */
+  reasoningBudgetToken32k?: number;
+  /**
+   * Reasoning budget token for models with 80k max (Qwen3 series)
+   */
+  reasoningBudgetToken80k?: number;
   reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
+   * Runtime environment configuration (desktop only)
+   */
+  runtimeEnv?: RuntimeEnvConfig;
 
   searchFCModel?: WorkingModel;
   searchMode?: SearchMode;
+
+  /**
+   * Skill activate mode:
+   * - 'auto': Default tools (LobeTools, Skills, SkillStore, etc.) are always active,
+   *   allowing AI to autonomously activate tools, run skills, and install new skills.
+   * - 'manual': Only user-selected tools/skills are active, giving precise control.
+   */
+  skillActivateMode?: 'auto' | 'manual';
 
   /**
    * Output text verbosity control
@@ -114,6 +132,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  thinkingLevel5?: 'minimal' | 'low' | 'medium' | 'high';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -127,9 +146,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
 }
 
 /**
- * Zod schema for LocalSystemConfig
+ * Zod schema for RuntimeEnvConfig
  */
-export const LocalSystemConfigSchema = z.object({
+const runtimeEnvModeEnum = z.enum(['local', 'cloud', 'none']);
+
+export const RuntimeEnvConfigSchema = z.object({
+  runtimeMode: z.record(z.string(), runtimeEnvModeEnum).optional(),
   workingDirectory: z.string().optional(),
 });
 
@@ -146,6 +168,7 @@ export const MemoryChatConfigSchema = z.object({
 export const AgentChatConfigSchema = z
   .object({
     autoCreateTopicThreshold: z.number().default(2),
+    codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -163,13 +186,16 @@ export const AgentChatConfigSchema = z
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
+    grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
     imageResolution2: z.enum(['512px', '1K', '2K', '4K']).optional(),
-    localSystem: LocalSystemConfigSchema.optional(),
+    runtimeEnv: RuntimeEnvConfigSchema.optional(),
     reasoningBudgetToken: z.number().optional(),
+    reasoningBudgetToken32k: z.number().optional(),
+    reasoningBudgetToken80k: z.number().optional(),
     reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     searchFCModel: z
       .object({
@@ -178,6 +204,7 @@ export const AgentChatConfigSchema = z
       })
       .optional(),
     searchMode: z.enum(['off', 'on', 'auto']).optional(),
+    skillActivateMode: z.enum(['auto', 'manual']).optional(),
     textVerbosity: z.enum(['low', 'medium', 'high']).optional(),
     thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
     thinkingBudget: z.number().optional(),
@@ -185,7 +212,8 @@ export const AgentChatConfigSchema = z
     thinkingLevel2: z.enum(['low', 'high']).optional(),
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
-    toolResultMaxLength: z.number().default(6000),
+    thinkingLevel5: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+    toolResultMaxLength: z.number().default(25000),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),
   })

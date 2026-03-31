@@ -3,6 +3,13 @@ export { FileSnapshotStore } from './store/file-store';
 export type { ISnapshotStore } from './store/types';
 export type { ExecutionSnapshot, SnapshotSummary, StepSnapshot } from './types';
 export {
+  expandSnapshot,
+  isIncrementalFormat,
+  reconstructActivatedStepTools,
+  reconstructMessages,
+  reconstructToolsetBaseline,
+} from './utils/reconstruct';
+export {
   renderMessageDetail,
   renderSnapshot,
   renderStepDetail,

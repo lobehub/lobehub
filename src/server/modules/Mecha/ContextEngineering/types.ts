@@ -1,12 +1,16 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type {
   AgentBuilderContext,
+  AgentContextDocument,
   AgentManagementContext,
+  BotPlatformContext,
   DiscordContext,
   EvalContext,
   FileContent,
   KnowledgeBaseInfo,
   LobeToolManifest,
+  SkillMeta,
+  TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
@@ -61,6 +65,12 @@ export interface ServerUserMemoryConfig {
  * instead of fetching from stores
  */
 export interface ServerMessagesEngineParams {
+  /** Additional variable values to merge with defaults (e.g. device paths) */
+  additionalVariables?: Record<string, string>;
+  /** Agent documents to inject into context based on load rules and positions */
+  agentDocuments?: AgentContextDocument[];
+  /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
+  userTimezone?: string;
   // ========== Extended contexts ==========
   /** Agent Builder context (optional, for editing agents) */
   agentBuilderContext?: AgentBuilderContext;
@@ -69,6 +79,8 @@ export interface ServerMessagesEngineParams {
   // ========== Capability injection ==========
   /** Model capability checkers */
   capabilities?: ServerModelCapabilities;
+  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
+  botPlatformContext?: BotPlatformContext;
   /** Discord context for injecting channel/guild info */
   discordContext?: DiscordContext;
   // ========== Eval context ==========
@@ -109,9 +121,15 @@ export interface ServerMessagesEngineParams {
   /** System role */
   systemRole?: string;
 
+  // ========== Skills ==========
+  /** Skills configuration for <available_skills> injection */
+  skillsConfig?: { enabledSkills?: SkillMeta[] };
   // ========== Tools ==========
   /** Tools configuration */
   toolsConfig?: ServerToolsConfig;
+  // ========== Topic References ==========
+  /** Topic reference summaries to inject into last user message */
+  topicReferences?: TopicReferenceItem[];
   // ========== User memory ==========
   /** User memory configuration */
   userMemory?: ServerUserMemoryConfig;
@@ -121,11 +139,14 @@ export interface ServerMessagesEngineParams {
 
 export {
   type AgentBuilderContext,
+  type AgentContextDocument,
   type AgentManagementContext,
+  type BotPlatformContext,
   type DiscordContext,
   type EvalContext,
   type FileContent,
   type KnowledgeBaseInfo,
+  type TopicReferenceItem,
   type UserMemoryData,
 } from '@lobechat/context-engine';
 export type { PageContentContext } from '@lobechat/prompts';

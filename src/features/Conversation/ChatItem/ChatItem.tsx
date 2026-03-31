@@ -39,7 +39,6 @@ const ChatItem = memo<ChatItemProps>(
     disabled = false,
     id,
     style,
-    newScreenMinHeight,
     ...rest
   }) => {
     const isUser = placement === 'right';
@@ -68,7 +67,6 @@ const ChatItem = memo<ChatItemProps>(
         gap={8}
         paddingBlock={8}
         style={{
-          minHeight: newScreenMinHeight,
           paddingInlineStart: isUser ? 36 : 0,
           ...style,
         }}

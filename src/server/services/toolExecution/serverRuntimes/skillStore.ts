@@ -50,7 +50,13 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
     try {
       const result = await this.marketService.searchSkill(params);
       log('Search skills result: %O', result);
-      return result;
+      // Transform SDK response to match expected interface
+      return {
+        items: result.items,
+        page: result.currentPage,
+        pageSize: result.pageSize,
+        total: result.totalCount,
+      };
     } catch (error) {
       log('Error searching skills: %O', error);
       throw error;

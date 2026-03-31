@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type AIProviderStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -33,5 +34,7 @@ const createStore: StateCreator<AiInfraStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('aiInfra');
 
 export const useAiInfraStore = createWithEqualityFn<AiInfraStore>()(devtools(createStore), shallow);
+
+expose('aiInfra', useAiInfraStore);
 
 export const getAiInfraStoreState = () => useAiInfraStore.getState();

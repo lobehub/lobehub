@@ -1,6 +1,7 @@
 import { Input, Popover, stopPropagation } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
+import { useOverlayPopoverPortalProps } from '@/features/NavPanel/OverlayContainer';
 import { useChatStore } from '@/store/chat';
 
 interface EditingProps {
@@ -15,6 +16,7 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
     s.topicRenamingId === id,
     s.updateTopicTitle,
   ]);
+  const popoverPortalProps = useOverlayPopoverPortalProps();
 
   const handleUpdate = useCallback(async () => {
     if (newTitle && title !== newTitle) {
@@ -48,6 +50,7 @@ const Editing = memo<EditingProps>(({ id, title, toggleEditing }) => {
     <Popover
       open={editing}
       placement="bottomLeft"
+      portalProps={popoverPortalProps}
       trigger="click"
       content={
         <Input

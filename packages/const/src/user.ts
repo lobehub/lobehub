@@ -16,6 +16,6 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   lab: {
     enableInputMarkdown: true,
   },
-  topicDisplayMode: TopicDisplayMode.ByTime,
+  topicDisplayMode: TopicDisplayMode.ByUpdatedTime,
   useCmdEnterToSend: false,
 };

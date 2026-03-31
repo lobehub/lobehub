@@ -27,5 +27,6 @@ export const setupElectronApi = () => {
   contextBridge.exposeInMainWorld('lobeEnv', {
     darwinMajorVersion,
     isMacTahoe: process.platform === 'darwin' && darwinMajorVersion >= 25,
+    platform: process.platform,
   });
 };

@@ -52,9 +52,9 @@ const Layout: FC = () => {
         {isDesktop && <DesktopAutoOidcOnFirstOpen />}
         {isDesktop && <DesktopNavigationBridge />}
         {isDesktop && <DesktopFileMenuBridge />}
-        {isDesktop && <AuthRequiredModal />}
         {showCloudPromotion && <CloudBanner />}
       </Suspense>
+      {isDesktop && <AuthRequiredModal />}
 
       <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
       <DndContextWrapper>

@@ -26,6 +26,7 @@ describe('convertAnthropicUsage', () => {
       inputWriteCacheTokens: 20,
       totalInputTokens: 130,
       totalOutputTokens: 5,
+      totalTokens: 135,
     });
   });
 

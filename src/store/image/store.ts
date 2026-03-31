@@ -4,6 +4,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ImageStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -51,5 +52,7 @@ export const useImageStore = createWithEqualityFn<ImageStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+expose('image', useImageStore);
 
 export const getImageStoreState = () => useImageStore.getState();

@@ -2,6 +2,7 @@ import { safeParseJSON } from '@lobechat/utils';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Edit3Icon } from 'lucide-react';
 import { memo, Suspense, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
@@ -11,10 +12,11 @@ import { useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
-import ModeSelector from './ModeSelector';
 
 interface FallbackInterventionProps {
+  actionsPortalTarget?: HTMLDivElement | null;
   apiName: string;
+  assistantGroupId?: string;
   id: string;
   identifier: string;
   requestArgs: string;
@@ -22,7 +24,7 @@ interface FallbackInterventionProps {
 }
 
 const FallbackIntervention = memo<FallbackInterventionProps>(
-  ({ requestArgs, id, identifier, apiName, toolCallId }) => {
+  ({ requestArgs, id, identifier, apiName, toolCallId, assistantGroupId, actionsPortalTarget }) => {
     const { t } = useTranslation('chat');
     const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
     const [isEditing, setIsEditing] = useState(false);
@@ -77,16 +79,21 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           }
         />
 
-        <Flexbox horizontal justify={'space-between'}>
-          <ModeSelector />
-          <ApprovalActions
-            apiName={apiName}
-            approvalMode={approvalMode}
-            identifier={identifier}
-            messageId={id}
-            toolCallId={toolCallId}
-          />
-        </Flexbox>
+        {(() => {
+          const actions = (
+            <Flexbox horizontal justify={'flex-end'}>
+              <ApprovalActions
+                apiName={apiName}
+                approvalMode={approvalMode}
+                assistantGroupId={assistantGroupId}
+                identifier={identifier}
+                messageId={id}
+                toolCallId={toolCallId}
+              />
+            </Flexbox>
+          );
+          return actionsPortalTarget ? createPortal(actions, actionsPortalTarget) : actions;
+        })()}
       </Flexbox>
     );
   },

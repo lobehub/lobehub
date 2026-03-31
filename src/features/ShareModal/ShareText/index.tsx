@@ -3,17 +3,13 @@ import { exportFile } from '@lobechat/utils/client';
 import { type FormItemProps } from '@lobehub/ui';
 import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
 import { App, Switch } from 'antd';
-import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 
+import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
@@ -65,15 +61,11 @@ const ShareText = memo(() => {
     },
   ];
 
-  const [systemRole] = useAgentStore((s) => [agentSelectors.currentAgentSystemRole(s)]);
-  const messages = useChatStore(displayMessageSelectors.activeDisplayMessages, isEqual);
-  const topic = useChatStore(topicSelectors.currentActiveTopic, isEqual);
-
-  const title = topic?.title || t('shareModal.exportTitle');
+  const { displayMessages, systemRole, title } = useShareData();
   const content = generateMarkdown({
     ...fieldValue,
-    messages,
-    systemRole,
+    messages: displayMessages,
+    systemRole: systemRole ?? '',
     title,
   }).replaceAll('\n\n\n', '\n');
 

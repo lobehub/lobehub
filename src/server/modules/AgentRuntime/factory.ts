@@ -49,22 +49,22 @@ export const createAgentStateManager = (): IAgentStateManager => {
 /**
  * Create StreamEventManager based on configuration
  *
- * - If enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
- * - If enableQueueAgentRuntime=true: RedisStreamEventManager (requires Redis)
+ * - If Redis is available: RedisStreamEventManager
+ * - If Redis is unavailable and enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
+ * - If Redis is unavailable and enableQueueAgentRuntime=true: throw
  */
 export const createStreamEventManager = (): IStreamEventManager => {
-  // When queue mode is disabled, always use InMemory for simplicity
+  // Prefer Redis whenever it is available so the runtime worker and SSE route
+  // can communicate through the same stream bus even in local mode.
+  if (isRedisAvailable()) {
+    log('Redis available, using StreamEventManager');
+    return new StreamEventManager();
+  }
+
   if (!isQueueModeEnabled()) {
-    log('Queue mode disabled, using InMemoryStreamEventManager');
+    log('Redis unavailable and queue mode disabled, using InMemoryStreamEventManager');
     return inMemoryStreamEventManager;
   }
 
-  // Queue mode enabled, Redis is required
-  if (!isRedisAvailable()) {
-    throw new Error(
-      'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
-    );
-  }
-
-  return new StreamEventManager();
+  throw new Error('Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.');
 };

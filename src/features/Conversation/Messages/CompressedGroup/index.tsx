@@ -24,6 +24,7 @@ import { shinyTextStyles } from '@/styles/loading';
 
 import { dataSelectors, useConversationStore } from '../../store';
 import CompressedMessageItem from './CompressedMessageItem';
+import { isCompressionSummaryGenerating, shouldShowCompressedGroupPanel } from './logic';
 
 const STORAGE_KEY_PREFIX = 'compressed-group-tab:';
 
@@ -114,10 +115,12 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
 
   // Check if generateSummary operation is running for this message
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
-  const isGeneratingSummary = runningOp?.type === 'generateSummary';
+  const isGeneratingSummary = isCompressionSummaryGenerating(runningOp?.type);
 
-  // Auto-expand when generating summary to show streaming content
-  const showContent = expanded || isGeneratingSummary;
+  const showPanelContent = shouldShowCompressedGroupPanel({
+    expanded,
+    isGeneratingSummary,
+  });
 
   const tabItems: TabsProps['items'] = useMemo(
     () => [
@@ -172,7 +175,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
           </Flexbox>
         </Flexbox>
       )}
-      {!showContent ? null : activeTab === 'summary' ? (
+      {!showPanelContent ? null : activeTab === 'summary' ? (
         <ScrollShadow className={styles.contentScroll} offset={12} size={12}>
           <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
             {content}

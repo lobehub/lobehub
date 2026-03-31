@@ -1,0 +1,145 @@
+---
+title: 将 LobeHub 连接到 Slack
+description: 了解如何创建一个 Slack 应用并将其连接到您的 LobeHub 代理作为消息渠道，使您的 AI 助手能够直接在 Slack 频道和私信中与用户互动。
+tags:
+  - Slack
+  - 消息渠道
+  - 机器人设置
+  - 集成
+---
+
+# 将 LobeHub 连接到 Slack
+
+通过将 Slack 渠道连接到您的 LobeHub 代理，用户可以直接通过 Slack 频道和私信与 AI 助手互动。
+
+## 前置条件
+
+- 一个拥有有效订阅的 LobeHub 账户
+- 一个拥有安装应用权限的 Slack 工作区
+
+## 第一步：创建 Slack 应用
+
+<Steps>
+  ### 访问 Slack API 控制台
+
+  访问 [Slack API Apps](https://api.slack.com/apps)，点击 **Create New App**。选择 **From scratch**，为您的应用命名（例如 "LobeHub 助手"），选择要安装到的工作区，然后点击 **Create App**。
+
+  ### 复制 App ID 和 Signing Secret
+
+  在 **Basic Information** 页面，复制并保存：
+
+  - **App ID** — 显示在页面顶部
+  - **Signing Secret** — 在 **App Credentials** 部分下
+
+  ![](/blog/assets3865756ef6158a855aee64dd01bd3d6b.webp)
+
+  ### 添加 Bot Token 权限范围
+
+  在左侧菜单中，进入 **OAuth & Permissions**。向下滚动到 **Scopes** → **Bot Token Scopes**，添加以下权限：
+
+  - `app_mentions:read` — 检测机器人被提及
+  - `channels:history` — 读取公共频道中的消息
+  - `channels:read` — 读取频道信息
+  - `chat:write` — 发送消息
+  - `groups:history` — 读取私有频道中的消息
+  - `groups:read` — 读取私有频道信息
+  - `im:history` — 读取私信
+  - `im:read` — 读取私信频道信息
+  - `mpim:history` — 读取群组私信消息
+  - `mpim:read` — 读取群组私信信息
+  - `reactions:read` — 读取表情回应
+  - `reactions:write` — 添加表情回应
+  - `users:read` — 查询用户信息
+
+  **可选权限**（用于 Slack Assistants API）：
+
+  - `assistant:write` — 启用 Slack Assistants API 功能
+
+  ### 安装应用到工作区
+
+  仍然在 **OAuth & Permissions** 页面，点击 **Install to Workspace** 并授权应用。安装完成后，复制 **Bot User OAuth Token**（以 `xoxb-` 开头）。
+
+  > **重要提示：** 请将您的 Bot Token 视为密码。切勿公开分享或提交到版本控制系统。
+
+  ![](/blog/assetsfd4606a4b5d801a8764bf333cde77d57.webp)
+</Steps>
+
+## 第二步：在 LobeHub 中配置 Slack
+
+<Steps>
+  ### 打开渠道设置
+
+  在 LobeHub 中，导航到您的代理设置，然后选择 **渠道** 标签。点击平台列表中的 **Slack**。
+
+  ### 填写凭据
+
+  输入以下字段：
+
+  - **应用 ID** — 来自 Slack 应用 Basic Information 页面的 App ID
+  - **Bot Token** — 来自 OAuth & Permissions 页面的 Bot User OAuth Token（xoxb-...）
+  - **签名密钥** — 来自 Slack 应用 Basic Information 页面的 Signing Secret
+
+  您的令牌将被加密并安全存储。
+
+  ### 保存配置
+
+  点击 **保存配置**。LobeHub 将保存您的凭据并显示一个 **Webhook URL**。
+
+  ### 复制 Webhook URL
+
+  复制显示的 Webhook URL —— 您将在下一步中使用它来配置 Slack 的事件订阅。
+
+  ![](/blog/assetsc3042da681a9df811e70473636a8f461.webp)
+</Steps>
+
+## 第三步：配置事件订阅
+
+<Steps>
+  ### 启用事件
+
+  返回 [Slack API 控制台](https://api.slack.com/apps)，进入 **Event Subscriptions**，将 **Enable Events** 切换为 **On**。
+
+  ### 设置请求 URL
+
+  将您从 LobeHub 复制的 **Webhook URL** 粘贴到 **Request URL** 字段中。Slack 将发送一个验证请求 —— LobeHub 会自动响应。
+
+  ### 订阅机器人事件
+
+  在 **Subscribe to bot events** 下，添加：
+
+  - `app_mention` — 当有人提及机器人时触发
+  - `message.channels` — 公共频道中的消息
+  - `message.groups` — 私有频道中的消息
+  - `message.im` — 发送给机器人的私信
+  - `message.mpim` — 群组私信中的消息
+  - `member_joined_channel` — 当用户加入频道时触发
+
+  **可选事件**（用于 Slack Assistants API）：
+
+  - `assistant_thread_started` — 当用户打开新的助手会话时触发
+  - `assistant_thread_context_changed` — 当用户在助手面板打开时切换到不同频道时触发
+
+  ### 保存更改
+
+  点击页面底部的 **Save Changes**。
+
+  ![](/blog/assets8f3657f3785fc04c42b0f53c17daa72e.webp)
+</Steps>
+
+## 第四步：测试连接
+
+返回 LobeHub 的 Slack 渠道设置，点击 **测试连接** 以验证集成是否正确。然后进入您的 Slack 工作区，将机器人邀请到一个频道，通过 `@你的机器人名称` 提及它，确认其是否响应。
+
+## 配置参考
+
+| 字段            | 是否必需 | 描述                             |
+| ------------- | ---- | ------------------------------ |
+| **应用 ID**     | 是    | 您的 Slack 应用的 ID                |
+| **Bot Token** | 是    | Bot User OAuth Token（xoxb-...） |
+| **签名密钥**      | 是    | 用于验证来自 Slack 的 Webhook 请求      |
+
+## 故障排除
+
+- **机器人未响应：** 确认机器人已被邀请到频道，且事件订阅已正确配置了正确的 Webhook URL。
+- **测试连接失败：** 仔细检查应用 ID 和 Bot Token 是否正确。确保应用已安装到工作区。
+- **Webhook 验证失败：** 确保签名密钥与 Slack 应用 Basic Information 页面中的一致。

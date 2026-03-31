@@ -11,6 +11,7 @@ import AnthropicProvider from './anthropic';
 import AzureProvider from './azure';
 import AzureAIProvider from './azureai';
 import BaichuanProvider from './baichuan';
+import BailianCodingPlanProvider from './bailianCodingPlan';
 import BedrockProvider from './bedrock';
 import BflProvider from './bfl';
 import CerebrasProvider from './cerebras';
@@ -24,6 +25,7 @@ import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
+import GLMCodingPlanProvider from './glmCodingPlan';
 import GoogleProvider from './google';
 import GroqProvider from './groq';
 import HigressProvider from './higress';
@@ -32,9 +34,12 @@ import HunyuanProvider from './hunyuan';
 import InfiniAIProvider from './infiniai';
 import InternLMProvider from './internlm';
 import JinaProvider from './jina';
+import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
+import LongCatProvider from './longcat';
 import MinimaxProvider from './minimax';
+import MinimaxCodingPlanProvider from './minimaxCodingPlan';
 import MistralProvider from './mistral';
 import ModelScopeProvider from './modelscope';
 import MoonshotProvider from './moonshot';
@@ -67,6 +72,7 @@ import VercelAIGatewayProvider from './vercelaigateway';
 import VertexAIProvider from './vertexai';
 import VLLMProvider from './vllm';
 import VolcengineProvider from './volcengine';
+import VolcengineCodingPlanProvider from './volcengineCodingPlan';
 import WenxinProvider from './wenxin';
 import XAIProvider from './xai';
 import XiaomiMiMoProvider from './xiaomimimo';
@@ -135,11 +141,14 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ...(ENABLE_BUSINESS_FEATURES ? [LobeHubProvider] : []),
   AnthropicProvider,
   GoogleProvider,
+  GLMCodingPlanProvider,
+  KimiCodingPlanProvider,
   OpenAIProvider,
   DeepSeekProvider,
   XinferenceProvider,
   MoonshotProvider,
   BedrockProvider,
+  BailianCodingPlanProvider,
   VertexAIProvider,
   { ...AzureProvider, chatModels: [] },
   AzureAIProvider,
@@ -185,7 +194,9 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   StepfunProvider,
   BaichuanProvider,
   VolcengineProvider,
+  VolcengineCodingPlanProvider,
   MinimaxProvider,
+  MinimaxCodingPlanProvider,
   LMStudioProvider,
   InternLMProvider,
   HigressProvider,
@@ -204,6 +215,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ZenMuxProvider,
   StraicoProvider,
   XiaomiMiMoProvider,
+  LongCatProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -226,6 +238,7 @@ export { default as AnthropicProviderCard } from './anthropic';
 export { default as AzureProviderCard } from './azure';
 export { default as AzureAIProviderCard } from './azureai';
 export { default as BaichuanProviderCard } from './baichuan';
+export { default as BailianCodingPlanProviderCard } from './bailianCodingPlan';
 export { default as BedrockProviderCard } from './bedrock';
 export { default as BflProviderCard } from './bfl';
 export { default as CerebrasProviderCard } from './cerebras';
@@ -239,6 +252,7 @@ export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';
+export { default as GLMCodingPlanProviderCard } from './glmCodingPlan';
 export { default as GoogleProviderCard } from './google';
 export { default as GroqProviderCard } from './groq';
 export { default as HigressProviderCard } from './higress';
@@ -247,9 +261,12 @@ export { default as HunyuanProviderCard } from './hunyuan';
 export { default as InfiniAIProviderCard } from './infiniai';
 export { default as InternLMProviderCard } from './internlm';
 export { default as JinaProviderCard } from './jina';
+export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
+export { default as LongCatProviderCard } from './longcat';
 export { default as MinimaxProviderCard } from './minimax';
+export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
 export { default as MistralProviderCard } from './mistral';
 export { default as ModelScopeProviderCard } from './modelscope';
 export { default as MoonshotProviderCard } from './moonshot';
@@ -282,6 +299,7 @@ export { default as VercelAIGatewayProviderCard } from './vercelaigateway';
 export { default as VertexAIProviderCard } from './vertexai';
 export { default as VLLMProviderCard } from './vllm';
 export { default as VolcengineProviderCard } from './volcengine';
+export { default as VolcengineCodingPlanProviderCard } from './volcengineCodingPlan';
 export { default as WenxinProviderCard } from './wenxin';
 export { default as XAIProviderCard } from './xai';
 export { default as XiaomiMiMoProviderCard } from './xiaomimimo';

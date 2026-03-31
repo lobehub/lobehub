@@ -25,10 +25,6 @@ vi.mock('@/hooks/useInterceptingRoutes', () => ({
   useOpenSettings: vi.fn(() => vi.fn()),
 }));
 
-vi.mock('@/features/DataImporter', () => ({
-  default: vi.fn(({ children }) => <div>{children}</div>),
-}));
-
 vi.mock('react-i18next', () => ({
   useTranslation: vi.fn(() => ({
     t: vi.fn((key) => key),
@@ -58,9 +54,9 @@ describe('useMenu', () => {
 
     act(() => {
       const { mainItems, logoutItems } = result.current;
-      // 'setting' and 'import' are shown when logged in
+      // 'setting' and 'memory' are shown when logged in
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(true);
-      expect(mainItems?.some((item) => item?.key === 'import')).toBe(true);
+      expect(mainItems?.some((item) => item?.key === 'memory')).toBe(true);
       // 'logout' is shown when isLoginWithAuth is true
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(true);
     });
@@ -75,9 +71,9 @@ describe('useMenu', () => {
 
     act(() => {
       const { mainItems, logoutItems } = result.current;
-      // When not logged in, setting and import should not be shown
+      // When not logged in, setting and memory should not be shown
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(false);
-      expect(mainItems?.some((item) => item?.key === 'import')).toBe(false);
+      expect(mainItems?.some((item) => item?.key === 'memory')).toBe(false);
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(false);
     });
   });

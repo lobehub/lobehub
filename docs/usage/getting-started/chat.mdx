@@ -1,0 +1,196 @@
+---
+title: Chat Interface & Branching
+description: >-
+  Flexible conversation flow with branching — explore multiple paths, edit
+  messages, and manage conversations.
+tags:
+  - LobeHub
+  - Chat
+  - Branching
+  - Conversations
+  - Message Editing
+---
+
+# Chat Interface & Branching
+
+LobeHub offers a sophisticated chat interface that goes beyond linear conversations. Explore multiple paths and directions in your discussions with AI agents using conversation branching, message editing, and rich content support.
+
+## Core Chat Features
+
+The chat interface provides a modern, responsive experience optimized for both desktop and mobile:
+
+- **Real-time streaming responses** — Watch AI responses generate in real-time with smooth animations
+- **Rich content support** — Display formatted text, code blocks, images, and multimedia
+- **Message editing** — Edit previous messages to refine your questions
+- **Message reactions** — React to messages with quick feedback
+- **Context preservation** — Conversations maintain full context for coherent discussions
+
+## Branching Conversations
+
+One of LobeHub's most powerful features is conversation branching, which transforms linear chats into dynamic, tree-like structures.
+
+### How Branching Works
+
+From any message in your conversation, you can create a new branch to explore different directions while preserving the original context.
+
+**To create a branch:**
+
+1. Hover over any message in the conversation
+2. Click the branch icon in the message actions
+3. Choose your branching mode
+4. Continue the conversation in a new direction
+
+### Branching Modes
+
+<Tabs>
+  <Tab title="Continuation Mode">
+    **Continuation Mode** extends your current discussion while maintaining valuable context from previous messages.
+
+    **When to use:**
+
+    - Exploring alternative solutions to the same problem
+    - Testing different approaches while keeping background information
+    - Comparing multiple responses to the same question
+
+    **Example workflow:**
+
+    ```
+    Original: "How can I optimize my React app?"
+    ├─ Branch 1: "Focus on code splitting strategies"
+    ├─ Branch 2: "Focus on image optimization"
+    └─ Branch 3: "Focus on bundle size reduction"
+    ```
+  </Tab>
+
+  <Tab title="Standalone Mode">
+    **Standalone Mode** starts fresh with a new topic based on any previous message.
+
+    **When to use:**
+
+    - Diving deeper into a specific subtopic
+    - Starting a related but independent discussion
+    - Isolating a particular aspect for focused exploration
+
+    **Example workflow:**
+
+    ```
+    Main conversation: "Database design for e-commerce"
+    └─ Standalone branch: "Tell me specifically about payment processing security"
+    ```
+  </Tab>
+</Tabs>
+
+### Navigating Branches
+
+When a message has multiple branches, you'll see branch navigation controls:
+
+- **Arrow buttons** — Navigate between different branches
+- **Branch counter** — Shows current branch (e.g., "2/5")
+- **Branch indicator** — Visual cue showing branching points
+
+Click the left/right arrows to switch between different conversation paths and compare responses.
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Software Development">
+    **Exploring Multiple Solutions**
+
+    When debugging or architecting solutions:
+
+    - Create branches for different implementation approaches
+    - Compare pros/cons of various design patterns
+    - Test edge cases without losing your main conversation flow
+
+    ```
+    "How should I structure my API?"
+    ├─ REST architecture exploration
+    ├─ GraphQL approach
+    └─ gRPC implementation
+    ```
+  </Tab>
+
+  <Tab title="Creative Writing">
+    **Iterating on Content**
+
+    For content creation and editing:
+
+    - Generate multiple variations of headlines or introductions
+    - Explore different narrative directions
+    - Compare tone and style variations
+  </Tab>
+
+  <Tab title="Research & Analysis">
+    **Deep Diving Topics**
+
+    When conducting research:
+
+    - Investigate different aspects of a complex topic
+    - Compare contrasting viewpoints
+    - Maintain separate analysis threads
+  </Tab>
+
+  <Tab title="Learning">
+    **Adaptive Learning Paths**
+
+    For educational purposes:
+
+    - Try different explanation styles to find what works
+    - Explore related concepts without losing the main thread
+    - Build knowledge progressively across branches
+  </Tab>
+</Tabs>
+
+## Tips for Effective Branching
+
+<AccordionGroup>
+  <Accordion title="Keep Branches Organized">
+    Use descriptive first messages in each branch to remember what each path explores. This makes it easier to navigate back later.
+  </Accordion>
+
+  <Accordion title="Compare Results Side-by-Side">
+    Use the branch navigation to quickly flip between responses and identify the best approach for your needs.
+  </Accordion>
+
+  <Accordion title="Don't Over-Branch">
+    While branching is powerful, creating too many branches can become overwhelming. Focus on 2–4 key alternatives.
+  </Accordion>
+
+  <Accordion title="Use Continuation for Iterations">
+    When refining responses, continuation mode helps maintain context while exploring variations.
+  </Accordion>
+
+  <Accordion title="Use Standalone for Deep Dives">
+    When you want to explore a tangent without cluttering your main conversation, standalone mode keeps things clean.
+  </Accordion>
+</AccordionGroup>
+
+## Chat Management
+
+### Organizing Conversations
+
+- **Search** — Find specific messages or topics across all conversations
+- **Pin important chats** — Keep frequently accessed conversations at the top
+- **Archive** — Clean up your workspace without deleting valuable conversations
+- **Export** — Save conversations in multiple formats for sharing or backup
+
+### Message Actions
+
+Each message includes quick actions:
+
+- **Copy** — Copy message content to clipboard
+- **Edit** — Modify your sent messages
+- **Delete** — Remove messages from the conversation
+- **Regenerate** — Get a new response from the AI
+- **Branch** — Create a new conversation path
+- **Share** — Export individual messages or threads
+
+Branching conversations are preserved in your conversation history, so you can always return to explore different paths later.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+
+  <Card href={'/docs/usage/agent/topic'} title={'Topics'} />
+
+  <Card href={'/docs/usage/agent/share'} title={'Share Conversations'} />
+</Cards>

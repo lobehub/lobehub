@@ -92,6 +92,14 @@ const autoInferMapping = (
     ? new Set(preset.fieldInference.sortOrder.map((s) => s.toLowerCase()))
     : SORT_ORDER_CANDIDATES;
 
+  const requiredCandidates = new Set<string>(
+    preset ? preset.requiredFields.map((s) => s.toLowerCase()) : [],
+  );
+
+  const optionalCandidates = new Set<string>(
+    preset ? preset.optionalFields.map((s) => s.toLowerCase()) : [],
+  );
+
   for (const h of headers) {
     const lower = h.toLowerCase().trim();
     if (!inputFound && inputCandidates.has(lower)) {
@@ -109,6 +117,10 @@ const autoInferMapping = (
     } else if (!sortOrderFound && sortOrderCandidates.has(lower)) {
       result[h] = 'sortOrder';
       sortOrderFound = true;
+    } else if (requiredCandidates.has(lower) || optionalCandidates.has(lower)) {
+      // If the field was claimed by the config but not matched by any candidate,
+      // assign it to metadata to ensure it's not missed
+      result[h] = 'metadata';
     } else {
       result[h] = 'ignore';
     }

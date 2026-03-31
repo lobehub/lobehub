@@ -1,4 +1,4 @@
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
 import { UnixContentSearch } from './unix';

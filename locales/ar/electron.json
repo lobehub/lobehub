@@ -1,4 +1,13 @@
 {
+  "gateway.description": "الوصف",
+  "gateway.descriptionPlaceholder": "اختياري",
+  "gateway.deviceName": "اسم الجهاز",
+  "gateway.deviceNamePlaceholder": "أدخل اسم الجهاز",
+  "gateway.enableConnection": "الاتصال بالبوابة",
+  "gateway.statusConnected": "متصل بالبوابة",
+  "gateway.statusConnecting": "جارٍ الاتصال بالبوابة...",
+  "gateway.statusDisconnected": "غير متصل بالبوابة",
+  "gateway.title": "بوابة الجهاز",
   "navigation.chat": "محادثة",
   "navigation.discover": "اكتشف",
   "navigation.discoverAssistants": "اكتشف المساعدين",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "هل تريد استخدام نسخة مستضافة ذاتياً؟",
   "sync.selfHosted.description": "نسخة المجتمع التي يمكنك نشرها بنفسك",
   "sync.selfHosted.title": "نسخة مستضافة ذاتياً",
+  "tab.closeCurrentTab": "إغلاق علامة التبويب",
+  "tab.closeLeftTabs": "إغلاق العلامات على اليسار",
+  "tab.closeOtherTabs": "إغلاق العلامات الأخرى",
+  "tab.closeRightTabs": "إغلاق العلامات على اليمين",
   "updater.checkingUpdate": "جارٍ التحقق من التحديثات",
   "updater.checkingUpdateDesc": "جارٍ جلب معلومات الإصدار...",
   "updater.downloadNewVersion": "تحميل الإصدار الجديد",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "فشل الاتصال بالتفويض",
   "waitingOAuth.helpText": "إذا لم يفتح المتصفح تلقائياً، يرجى النقر على إلغاء والمحاولة مرة أخرى",
   "waitingOAuth.retry": "إعادة المحاولة",
-  "waitingOAuth.title": "في انتظار الاتصال بالتفويض"
+  "waitingOAuth.title": "في انتظار الاتصال بالتفويض",
+  "window.close": "إغلاق النافذة",
+  "window.maximize": "تكبير النافذة",
+  "window.minimize": "تصغير النافذة",
+  "window.restore": "استعادة النافذة"
 }

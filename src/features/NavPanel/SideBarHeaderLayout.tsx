@@ -128,15 +128,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         padding={6}
       >
         {leftContent}
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={2}
-          justify={'flex-end'}
-          style={{
-            overflow: 'hidden',
-          }}
-        >
+        <Flexbox horizontal align={'center'} gap={2} justify={'flex-end'}>
           {showTogglePanelButton && <ToggleLeftPanelButton />}
           {right}
         </Flexbox>

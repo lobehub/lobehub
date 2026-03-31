@@ -5,7 +5,7 @@ import { Flexbox, Markdown, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { RunSkillParams, RunSkillState } from '../../../types';
+import type { ActivateSkillParams, ActivateSkillState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const RunSkill = memo<BuiltinRenderProps<RunSkillParams, RunSkillState>>(
+const RunSkill = memo<BuiltinRenderProps<ActivateSkillParams, ActivateSkillState>>(
   ({ content, pluginState }) => {
     const { description, name } = pluginState || {};
 

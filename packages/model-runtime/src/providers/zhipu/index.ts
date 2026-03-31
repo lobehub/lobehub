@@ -1,4 +1,4 @@
-import { ModelProvider,zhipu as zhipuChatModels } from 'model-bank';
+import { ModelProvider, zhipu as zhipuChatModels } from 'model-bank';
 
 import {
   createOpenAICompatibleRuntime,
@@ -83,7 +83,7 @@ export const params = {
         tools: zhipuTools,
       } as any;
     },
-    handleStream: (stream, { callbacks, inputStartAt }) => {
+    handleStream: (stream, { callbacks, inputStartAt, payload }) => {
       const readableStream =
         stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
 
@@ -97,28 +97,33 @@ export const params = {
               const choice = chunk.choices[0];
               if (choice.delta?.tool_calls && Array.isArray(choice.delta.tool_calls)) {
                 // Fix negative index, convert -1 to positive index based on array position
-                const fixedToolCalls = choice.delta.tool_calls.map(
-                  (toolCall: any, globalIndex: number) => ({
+                // With tool_stream enabled, some proxies (e.g., aihubmix) send
+                // incomplete tool_call chunks without id/function.name before the
+                // real chunk arrives. Filter them out to prevent ZodError in parseToolCalls.
+                const fixedToolCalls = choice.delta.tool_calls
+                  .filter(
+                    (toolCall: any) =>
+                      // Keep chunks that have id/name (first real chunk) or
+                      // non-empty arguments (subsequent incremental chunks)
+                      toolCall.id || toolCall.function?.name || toolCall.function?.arguments,
+                  )
+                  .map((toolCall: any, globalIndex: number) => ({
                     ...toolCall,
+                    // Fix negative index (-1 → array position)
                     index: toolCall.index < 0 ? globalIndex : toolCall.index,
-                  }),
-                );
+                  }));
 
-                // Create fixed chunk
-                const fixedChunk = {
-                  ...chunk,
-                  choices: [
-                    {
-                      ...choice,
-                      delta: {
-                        ...choice.delta,
-                        tool_calls: fixedToolCalls,
-                      },
-                    },
-                  ],
-                };
-
-                controller.enqueue(fixedChunk);
+                if (fixedToolCalls.length === 0) {
+                  // All tool_calls were incomplete placeholders, skip this chunk
+                  controller.enqueue({ ...chunk, choices: [{ ...choice, delta: {} }] });
+                } else {
+                  controller.enqueue({
+                    ...chunk,
+                    choices: [
+                      { ...choice, delta: { ...choice.delta, tool_calls: fixedToolCalls } },
+                    ],
+                  });
+                }
               } else {
                 controller.enqueue(chunk);
               }
@@ -132,9 +137,7 @@ export const params = {
       return OpenAIStream(preprocessedStream, {
         callbacks,
         inputStartAt,
-        payload: {
-          provider: 'zhipu',
-        },
+        payload,
       });
     },
   },

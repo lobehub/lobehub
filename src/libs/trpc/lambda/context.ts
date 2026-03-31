@@ -5,12 +5,16 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
 import { auth } from '@/auth';
+import { getServerDB } from '@/database/core/db-adaptor';
+import { ApiKeyModel } from '@/database/models/apiKey';
 import { authEnv, LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
+const LOBE_CHAT_API_KEY_HEADER = 'X-API-Key';
 
 const extractClientIp = (request: NextRequest): string | undefined => {
   const forwardedFor = request.headers.get('x-forwarded-for');
@@ -23,6 +27,31 @@ const extractClientIp = (request: NextRequest): string | undefined => {
   if (realIp) return realIp;
 
   return undefined;
+};
+
+const validateApiKeyUserId = async (apiKey: string): Promise<string | null> => {
+  if (!validateApiKeyFormat(apiKey)) return null;
+
+  try {
+    const db = await getServerDB();
+    const apiKeyRecord = await ApiKeyModel.findByKey(db, apiKey);
+
+    if (!apiKeyRecord) return null;
+    if (!apiKeyRecord.enabled) return null;
+    if (isApiKeyExpired(apiKeyRecord.expiresAt)) return null;
+
+    const userApiKeyModel = new ApiKeyModel(db, apiKeyRecord.userId);
+    void userApiKeyModel.updateLastUsed(apiKeyRecord.id).catch((error) => {
+      log('Failed to update API key last used timestamp: %O', error);
+      console.error('Failed to update API key last used timestamp:', error);
+    });
+
+    return apiKeyRecord.userId;
+  } catch (error) {
+    log('API key authentication failed: %O', error);
+    console.error('API key authentication failed, trying other methods:', error);
+    return null;
+  }
 };
 
 export interface OIDCAuth {
@@ -116,6 +145,31 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     userAgent,
   };
   log('LobeChat Authorization header: %s', authorization ? 'exists' : 'not found');
+
+  const apiKeyToken = request.headers.get(LOBE_CHAT_API_KEY_HEADER)?.trim();
+  log('X-API-Key header: %s', apiKeyToken ? 'exists' : 'not found');
+
+  if (apiKeyToken) {
+    const apiKeyUserId = await validateApiKeyUserId(apiKeyToken);
+
+    if (!apiKeyUserId) {
+      log('API key authentication failed; rejecting request without fallback auth');
+
+      return createContextInner({
+        ...commonContext,
+        traceContext,
+        userId: null,
+      });
+    }
+
+    log('API key authentication successful, userId: %s', apiKeyUserId);
+
+    return createContextInner({
+      ...commonContext,
+      traceContext,
+      userId: apiKeyUserId,
+    });
+  }
 
   let userId;
   let oidcAuth;

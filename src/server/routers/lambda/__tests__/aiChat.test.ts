@@ -166,6 +166,113 @@ describe('aiChatRouter', () => {
     );
   });
 
+  it('should persist preload messages before user message and chain parent ids', async () => {
+    const mockCreateMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'm-preload-assistant' })
+      .mockResolvedValueOnce({ id: 'm-preload-tool' })
+      .mockResolvedValueOnce({ id: 'm-user' })
+      .mockResolvedValueOnce({ id: 'm-assistant' });
+    const mockGet = vi.fn().mockResolvedValue({ messages: [], topics: undefined });
+
+    vi.mocked(MessageModel).mockImplementation(() => ({ create: mockCreateMessage }) as any);
+    vi.mocked(AiChatService).mockImplementation(() => ({ getMessagesAndTopics: mockGet }) as any);
+
+    const caller = aiChatRouter.createCaller(mockCtx as any);
+
+    await caller.sendMessageInServer({
+      newAssistantMessage: { model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hi', parentId: 'm-parent' },
+      preloadMessages: [
+        {
+          content: '',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'runSkill',
+              arguments: '{"name":"Grep"}',
+              id: 'tool-call-1',
+              identifier: 'lobe-skills',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: 'Use grep to search the codebase.',
+          plugin: {
+            apiName: 'runSkill',
+            arguments: '{"name":"Grep"}',
+            identifier: 'lobe-skills',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+        },
+      ],
+      sessionId: 's1',
+      threadId: 'thread-123',
+      topicId: 't1',
+    } as any);
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        content: '',
+        parentId: 'm-parent',
+        role: 'assistant',
+        sessionId: 's1',
+        threadId: 'thread-123',
+        topicId: 't1',
+        tools: [
+          expect.objectContaining({
+            apiName: 'runSkill',
+            id: 'tool-call-1',
+          }),
+        ],
+      }),
+    );
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        content: 'Use grep to search the codebase.',
+        parentId: 'm-preload-assistant',
+        plugin: expect.objectContaining({
+          apiName: 'runSkill',
+          identifier: 'lobe-skills',
+        }),
+        role: 'tool',
+        sessionId: 's1',
+        threadId: 'thread-123',
+        tool_call_id: 'tool-call-1',
+        topicId: 't1',
+      }),
+    );
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        content: 'hi',
+        parentId: 'm-preload-tool',
+        role: 'user',
+        sessionId: 's1',
+        threadId: 'thread-123',
+        topicId: 't1',
+      }),
+    );
+
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({
+        parentId: 'm-user',
+        role: 'assistant',
+        sessionId: 's1',
+        threadId: 'thread-123',
+        topicId: 't1',
+      }),
+    );
+  });
+
   it('should create thread and use its id for messages when newThread is provided', async () => {
     const mockCreateThread = vi.fn().mockResolvedValue({ id: 'thread-new' });
     const mockCreateMessage = vi
@@ -714,12 +821,15 @@ describe('aiChatRouter', () => {
       const result = await caller.outputJSON(input);
 
       expect(initModelRuntimeFromDB).toHaveBeenCalledWith({}, 'u1', 'openai');
-      expect(mockGenerateObject).toHaveBeenCalledWith({
-        messages: input.messages,
-        model: 'gpt-4o',
-        schema: input.schema,
-        tools: undefined,
-      });
+      expect(mockGenerateObject).toHaveBeenCalledWith(
+        {
+          messages: input.messages,
+          model: 'gpt-4o',
+          schema: input.schema,
+          tools: undefined,
+        },
+        { metadata: { trigger: 'chat' } },
+      );
       expect(result).toEqual(mockResult);
     });
 
@@ -755,12 +865,15 @@ describe('aiChatRouter', () => {
 
       await caller.outputJSON(input);
 
-      expect(mockGenerateObject).toHaveBeenCalledWith({
-        messages: [],
-        model: 'gpt-4o',
-        schema: undefined,
-        tools: mockTools,
-      });
+      expect(mockGenerateObject).toHaveBeenCalledWith(
+        {
+          messages: [],
+          model: 'gpt-4o',
+          schema: undefined,
+          tools: mockTools,
+        },
+        { metadata: { trigger: 'chat' } },
+      );
     });
   });
 });

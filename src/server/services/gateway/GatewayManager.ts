@@ -2,23 +2,32 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-
-import type { PlatformBot, PlatformBotClass } from '../bot/types';
+import {
+  type BotPlatformRuntimeContext,
+  type BotProviderConfig,
+  buildRuntimeKey,
+  type PlatformClient,
+  type PlatformDefinition,
+} from '@/server/services/bot/platforms';
 
 const log = debug('lobe-server:bot-gateway');
 
 export interface GatewayManagerConfig {
-  registry: Record<string, PlatformBotClass>;
+  definitions: PlatformDefinition[];
 }
 
 export class GatewayManager {
-  private bots = new Map<string, PlatformBot>();
+  private clients = new Map<string, PlatformClient>();
   private running = false;
   private config: GatewayManagerConfig;
 
+  private definitionByPlatform: Map<string, PlatformDefinition>;
+
   constructor(config: GatewayManagerConfig) {
     this.config = config;
+    this.definitionByPlatform = new Map(this.config.definitions.map((e) => [e.id, e]));
   }
 
   get isRunning(): boolean {
@@ -42,7 +51,7 @@ export class GatewayManager {
     });
 
     this.running = true;
-    log('GatewayManager started with %d bots', this.bots.size);
+    log('GatewayManager started with %d clients', this.clients.size);
   }
 
   async stop(): Promise<void> {
@@ -50,29 +59,29 @@ export class GatewayManager {
 
     log('Stopping GatewayManager');
 
-    for (const [key, bot] of this.bots) {
-      log('Stopping bot %s', key);
-      await bot.stop();
+    for (const [key, client] of this.clients) {
+      log('Stopping client %s', key);
+      await client.stop();
     }
-    this.bots.clear();
+    this.clients.clear();
 
     this.running = false;
     log('GatewayManager stopped');
   }
 
   // ------------------------------------------------------------------
-  // Bot operations (point-to-point)
+  // Client operations (point-to-point)
   // ------------------------------------------------------------------
 
-  async startBot(platform: string, applicationId: string, userId: string): Promise<void> {
-    const key = `${platform}:${applicationId}`;
+  async startClient(platform: string, applicationId: string, userId: string): Promise<void> {
+    const key = buildRuntimeKey(platform, applicationId);
 
     // Stop existing if any
-    const existing = this.bots.get(key);
+    const existing = this.clients.get(key);
     if (existing) {
-      log('Stopping existing bot %s before restart', key);
+      log('Stopping existing client %s before restart', key);
       await existing.stop();
-      this.bots.delete(key);
+      this.clients.delete(key);
     }
 
     // Load from DB (user-scoped, single row)
@@ -86,25 +95,25 @@ export class GatewayManager {
       return;
     }
 
-    const bot = this.createBot(platform, provider);
-    if (!bot) {
+    const client = this.createClient(platform, provider);
+    if (!client) {
       log('Unsupported platform: %s', platform);
       return;
     }
 
-    await bot.start();
-    this.bots.set(key, bot);
-    log('Started bot %s', key);
+    await client.start();
+    this.clients.set(key, client);
+    log('Started client %s', key);
   }
 
-  async stopBot(platform: string, applicationId: string): Promise<void> {
-    const key = `${platform}:${applicationId}`;
-    const bot = this.bots.get(key);
-    if (!bot) return;
+  async stopClient(platform: string, applicationId: string): Promise<void> {
+    const key = buildRuntimeKey(platform, applicationId);
+    const client = this.clients.get(key);
+    if (!client) return;
 
-    await bot.stop();
-    this.bots.delete(key);
-    log('Stopped bot %s', key);
+    await client.stop();
+    this.clients.delete(key);
+    log('Stopped client %s', key);
   }
 
   // ------------------------------------------------------------------
@@ -112,7 +121,7 @@ export class GatewayManager {
   // ------------------------------------------------------------------
 
   private async sync(): Promise<void> {
-    for (const platform of Object.keys(this.config.registry)) {
+    for (const platform of this.definitionByPlatform.keys()) {
       try {
         await this.syncPlatform(platform);
       } catch (error) {
@@ -136,40 +145,40 @@ export class GatewayManager {
 
     for (const provider of providers) {
       const { applicationId, credentials } = provider;
-      const key = `${platform}:${applicationId}`;
+      const key = buildRuntimeKey(platform, applicationId);
       activeKeys.add(key);
 
       log('Sync: processing provider %s, hasCredentials=%s', key, !!credentials);
 
-      const existing = this.bots.get(key);
+      const existing = this.clients.get(key);
       if (existing) {
-        log('Sync: bot %s already running, skipping', key);
-        continue;
-      }
-
-      const bot = this.createBot(platform, provider);
-      if (!bot) {
-        log('Sync: createBot returned null for %s', key);
+        log('Sync: client %s already running, skipping', key);
         continue;
       }
 
       try {
-        await bot.start();
-        this.bots.set(key, bot);
-        log('Sync: started bot %s', key);
+        const client = this.createClient(platform, provider);
+        if (!client) {
+          log('Sync: createClient returned null for %s', key);
+          continue;
+        }
+
+        await client.start();
+        this.clients.set(key, client);
+        log('Sync: started client %s', key);
       } catch (err) {
-        log('Sync: failed to start bot %s: %O', key, err);
+        log('Sync: failed to start client %s: %O', key, err);
       }
     }
 
-    // Stop bots that are no longer in DB
-    for (const [key, bot] of this.bots) {
+    // Stop clients that are no longer in DB
+    for (const [key, client] of this.clients) {
       if (!key.startsWith(`${platform}:`)) continue;
       if (activeKeys.has(key)) continue;
 
-      log('Sync: bot %s removed from DB, stopping', key);
-      await bot.stop();
-      this.bots.delete(key);
+      log('Sync: client %s removed from DB, stopping', key);
+      await client.stop();
+      this.clients.delete(key);
     }
   }
 
@@ -177,20 +186,33 @@ export class GatewayManager {
   // Factory
   // ------------------------------------------------------------------
 
-  private createBot(
+  private createClient(
     platform: string,
-    provider: { applicationId: string; credentials: Record<string, string> },
-  ): PlatformBot | null {
-    const BotClass = this.config.registry[platform];
-    if (!BotClass) {
-      log('No bot class registered for platform: %s', platform);
+    provider: {
+      applicationId: string;
+      credentials: Record<string, string>;
+      settings?: Record<string, unknown> | null;
+    },
+  ): PlatformClient | null {
+    const def = this.definitionByPlatform.get(platform);
+    if (!def) {
+      log('No definition registered for platform: %s', platform);
       return null;
     }
 
-    return new BotClass({
-      ...provider.credentials,
+    const config: BotProviderConfig = {
       applicationId: provider.applicationId,
-    });
+      credentials: provider.credentials,
+      platform,
+      settings: (provider.settings as Record<string, unknown>) || {},
+    };
+
+    const context: BotPlatformRuntimeContext = {
+      appUrl: process.env.APP_URL,
+      redisClient: getAgentRuntimeRedisClient() as any,
+    };
+
+    return def.clientFactory.createClient(config, context);
   }
 }
 

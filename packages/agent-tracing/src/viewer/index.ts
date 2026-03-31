@@ -1,4 +1,25 @@
+import { encode } from 'gpt-tokenizer';
+
 import type { ExecutionSnapshot, SnapshotSummary, StepSnapshot } from '../types';
+import { reconstructMessages } from '../utils/reconstruct';
+
+/**
+ * Resolve messages for a step, supporting both legacy (full) and incremental (delta) formats.
+ */
+function resolveStepMessages(
+  step: StepSnapshot,
+  allSteps?: StepSnapshot[],
+): { messages: any[] | undefined; messagesAfter: any[] | undefined } {
+  // Legacy format: messages stored directly on step
+  if (step.messages) {
+    return { messages: step.messages, messagesAfter: step.messagesAfter };
+  }
+  // Incremental format: reconstruct from baseline + deltas
+  if (step.messagesDelta !== undefined && allSteps) {
+    return reconstructMessages(allSteps, step.stepIndex);
+  }
+  return { messages: undefined, messagesAfter: undefined };
+}
 
 // ANSI color helpers
 const dim = (s: string) => `\x1B[2m${s}\x1B[22m`;
@@ -8,6 +29,8 @@ const red = (s: string) => `\x1B[31m${s}\x1B[39m`;
 const yellow = (s: string) => `\x1B[33m${s}\x1B[39m`;
 const cyan = (s: string) => `\x1B[36m${s}\x1B[39m`;
 const magenta = (s: string) => `\x1B[35m${s}\x1B[39m`;
+const blue = (s: string) => `\x1B[34m${s}\x1B[39m`;
+const white = (s: string) => `\x1B[37m${s}\x1B[39m`;
 
 function formatMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -25,6 +48,33 @@ function formatCost(cost: number): string {
   return `$${cost.toFixed(4)}`;
 }
 
+interface CacheStats {
+  cached: number;
+  miss: number;
+  rate: number; // 0-1
+  total: number;
+}
+
+function getStepCacheStats(step: StepSnapshot): CacheStats | null {
+  const ev = step.events?.find((e) => e.type === 'llm_result') as any;
+  const usage = ev?.result?.usage;
+  if (!usage) return null;
+
+  const cached = usage.inputCachedTokens ?? 0;
+  const total = usage.inputTextTokens ?? usage.totalInputTokens ?? step.inputTokens ?? 0;
+  if (total === 0) return null;
+
+  const miss = usage.inputCacheMissTokens ?? total - cached;
+  const rate = cached / total;
+  return { cached, miss, rate, total };
+}
+
+function formatCacheRate(rate: number): string {
+  const pct = (rate * 100).toFixed(0);
+  const colorFn = rate >= 0.8 ? green : rate >= 0.4 ? yellow : rate > 0 ? red : dim;
+  return colorFn(`${pct}%`);
+}
+
 function truncate(s: string, maxLen: number): string {
   const single = s.replaceAll('\n', ' ');
   if (single.length <= maxLen) return single;
@@ -34,6 +84,91 @@ function truncate(s: string, maxLen: number): string {
 function padEnd(s: string, len: number): string {
   if (s.length >= len) return s;
   return s + ' '.repeat(len - s.length);
+}
+
+// Application-defined structural XML tags — rendered in blue+bold
+const STRUCTURAL_TAGS = new Set([
+  'agent_document',
+  'api',
+  'available_tools',
+  'collection',
+  'collection.instructions',
+  'device',
+  'discord_context',
+  'instruction',
+  'memory_effort_policy',
+  'online-devices',
+  'persona',
+  'plugins',
+  'session_context',
+  'user_context',
+  'user_memory',
+]);
+
+/**
+ * Extract tag name from an XML tag string like `<foo>`, `</foo>`, `<foo attr="bar">`.
+ */
+function extractTagName(tag: string): string {
+  const m = tag.match(/^<\/?(\w[\w.:-]*)/);
+  return m ? m[1] : '';
+}
+
+/**
+ * Format XML-structured content:
+ * - Structural tags (app-defined) → blue + bold
+ * - Other XML tags → white + bold
+ * - Text inside XML elements → dim
+ */
+function formatXmlContent(text: string): string {
+  const xmlTagRe = /<\/?[\w.:-]+(?:\s[^>]*)?\/?>/g;
+  const lines = text.split('\n');
+  let depth = 0;
+
+  return lines
+    .map((line) => {
+      const tags = [...line.matchAll(xmlTagRe)];
+
+      if (tags.length === 0) {
+        return depth > 0 ? dim(line) : line;
+      }
+
+      let result = '';
+      let lastIndex = 0;
+
+      for (const match of tags) {
+        const tag = match[0];
+        const idx = match.index!;
+
+        // Text before this tag
+        if (idx > lastIndex) {
+          const textBefore = line.slice(lastIndex, idx);
+          result += depth > 0 ? dim(textBefore) : textBefore;
+        }
+
+        const tagName = extractTagName(tag);
+        const colorFn = STRUCTURAL_TAGS.has(tagName) ? white : blue;
+
+        if (tag.endsWith('/>')) {
+          result += bold(colorFn(tag));
+        } else if (tag.startsWith('</')) {
+          depth = Math.max(0, depth - 1);
+          result += bold(colorFn(tag));
+        } else {
+          result += bold(colorFn(tag));
+          depth++;
+        }
+
+        lastIndex = idx + tag.length;
+      }
+
+      if (lastIndex < line.length) {
+        const textAfter = line.slice(lastIndex);
+        result += depth > 0 ? dim(textAfter) : textAfter;
+      }
+
+      return result;
+    })
+    .join('\n');
 }
 
 export function renderSnapshot(snapshot: ExecutionSnapshot): string {
@@ -69,12 +204,32 @@ export function renderSnapshot(snapshot: ExecutionSnapshot): string {
     }
   }
 
+  // Aggregate cache stats
+  let totalCached = 0;
+  let totalInput = 0;
+  for (const step of snapshot.steps) {
+    const cache = getStepCacheStats(step);
+    if (cache) {
+      totalCached += cache.cached;
+      totalInput += cache.total;
+    }
+  }
+  const totalCacheParts: string[] = [];
+  if (totalInput > 0) {
+    totalCacheParts.push(`cache:${formatCacheRate(totalCached / totalInput)}`);
+    if (totalCached > 0) totalCacheParts.push(dim(`hit:${formatTokens(totalCached)}`));
+    const totalMiss = totalInput - totalCached;
+    if (totalMiss > 0) totalCacheParts.push(dim(`miss:${formatTokens(totalMiss)}`));
+  }
+  const totalCacheLabel = totalCacheParts.length > 0 ? `  ${totalCacheParts.join(' ')}` : '';
+
   // Footer
   const reasonColor = snapshot.completionReason === 'done' ? green : snapshot.error ? red : yellow;
   lines.push(
     `${dim('└─')} ${reasonColor(snapshot.completionReason ?? 'unknown')}` +
       `  tokens=${formatTokens(snapshot.totalTokens)}` +
-      `  cost=${formatCost(snapshot.totalCost)}`,
+      `  cost=${formatCost(snapshot.totalCost)}` +
+      totalCacheLabel,
   );
 
   if (snapshot.error) {
@@ -89,8 +244,17 @@ function renderLlmStep(lines: string[], step: StepSnapshot, prefix: string): voi
   if (step.inputTokens) tokenInfo.push(`in:${formatTokens(step.inputTokens)}`);
   if (step.outputTokens) tokenInfo.push(`out:${formatTokens(step.outputTokens)}`);
 
+  const cache = getStepCacheStats(step);
+  const cacheParts: string[] = [];
+  if (cache) {
+    cacheParts.push(`cache:${formatCacheRate(cache.rate)}`);
+    if (cache.cached > 0) cacheParts.push(dim(`hit:${formatTokens(cache.cached)}`));
+    if (cache.miss > 0) cacheParts.push(dim(`miss:${formatTokens(cache.miss)}`));
+  }
+  const cacheLabel = cacheParts.length > 0 ? `  ${cacheParts.join(' ')}` : '';
+
   if (tokenInfo.length > 0) {
-    lines.push(`${prefix}${dim('├─')} LLM     ${tokenInfo.join(' ')} tokens`);
+    lines.push(`${prefix}${dim('├─')} LLM     ${tokenInfo.join(' ')} tokens${cacheLabel}`);
   }
 
   if (step.toolsCalling && step.toolsCalling.length > 0) {
@@ -116,12 +280,14 @@ function renderMessageList(lines: string[], messages: any[], maxContentLen: numb
     const roleColor =
       role === 'user' ? green : role === 'assistant' ? cyan : role === 'system' ? magenta : yellow;
     const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    const tokenCount = rawContent ? encode(rawContent).length : 0;
+    const tokenLabel = tokenCount > 0 ? dim(`  ~${formatTokens(tokenCount)} tokens`) : '';
     const preview =
       rawContent && rawContent.length > maxContentLen
         ? rawContent.slice(0, maxContentLen) + '...'
         : rawContent;
     lines.push(
-      `  ${dim(`[${i}]`)} ${roleColor(role)}${msg.tool_call_id ? dim(` [${msg.tool_call_id}]`) : ''}`,
+      `  ${dim(`[${i}]`)} ${roleColor(role)}${tokenLabel}${msg.tool_call_id ? dim(` [${msg.tool_call_id}]`) : ''}`,
     );
     if (preview) lines.push(`    ${dim(preview)}`);
     if (msg.tool_calls) {
@@ -183,16 +349,19 @@ export function renderMessageDetail(
   step: StepSnapshot,
   msgIndex: number,
   source: 'input' | 'output' = 'output',
+  allSteps?: StepSnapshot[],
 ): string {
   const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
   let messages: any[] | undefined;
   let label: string;
 
+  const { messages: resolvedMessages } = resolveStepMessages(step, allSteps);
+
   if (source === 'input') {
-    messages = ceEvent?.input?.messages ?? step.messages;
+    messages = ceEvent?.input?.messages ?? resolvedMessages;
     label = ceEvent ? 'Context Engine Input' : 'Messages (before step)';
   } else {
-    messages = ceEvent?.output ?? step.messages;
+    messages = ceEvent?.output ?? resolvedMessages;
     label = ceEvent ? 'Final LLM Payload' : 'Messages (before step)';
   }
 
@@ -218,7 +387,7 @@ export function renderMessageDetail(
 
   const rawContent =
     typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2);
-  if (rawContent) lines.push(rawContent);
+  if (rawContent) lines.push(formatXmlContent(rawContent));
 
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     lines.push('');
@@ -234,9 +403,394 @@ export function renderMessageDetail(
   return lines.join('\n');
 }
 
+export function renderSystemRole(step: StepSnapshot): string {
+  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+
+  // Try input.systemRole first (user-configured agent prompt)
+  const inputSystemRole = ceEvent?.input?.systemRole;
+
+  // Fall back to the first system message in the final LLM payload (assembled system prompt)
+  const outputMsgs = ceEvent?.output as any[] | undefined;
+  const systemMsg = outputMsgs?.find((m: any) => m.role === 'system');
+  const outputSystemRole =
+    systemMsg &&
+    (typeof systemMsg.content === 'string'
+      ? systemMsg.content
+      : JSON.stringify(systemMsg.content, null, 2));
+
+  const systemRole = inputSystemRole || outputSystemRole;
+
+  if (!systemRole) {
+    return red('No system role found in this step.');
+  }
+
+  const lines: string[] = [];
+  const source = inputSystemRole ? 'input' : 'output';
+  lines.push(
+    bold('System Role') + `  ${dim(`Step ${step.stepIndex}`)}  ${dim(`(from ${source})`)}`,
+  );
+  lines.push(dim('─'.repeat(60)));
+  lines.push(formatXmlContent(systemRole));
+
+  return lines.join('\n');
+}
+
+export function renderEnvContext(step: StepSnapshot): string {
+  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+  const outputMsgs: any[] | undefined = ceEvent?.output;
+
+  if (!outputMsgs || outputMsgs.length === 0) {
+    return red('No context engine output found in this step.');
+  }
+
+  const envMsg = outputMsgs.find((m: any) => m.role === 'user');
+
+  if (!envMsg) {
+    return red('No user environment message found in LLM payload.');
+  }
+
+  const content =
+    typeof envMsg.content === 'string' ? envMsg.content : JSON.stringify(envMsg.content, null, 2);
+
+  const lines: string[] = [
+    bold('Environment Context') + `  ${dim(`Step ${step.stepIndex}`)}`,
+    dim('─'.repeat(60)),
+    formatXmlContent(content),
+  ];
+
+  return lines.join('\n');
+}
+
+export function renderPayloadTools(step: StepSnapshot): string {
+  const lines: string[] = [];
+  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+
+  // Section 1: Plugin manifests from context engine input
+  const toolsConfig = ceEvent?.input?.toolsConfig;
+  if (toolsConfig) {
+    const enabledPlugins: string[] = toolsConfig.tools ?? [];
+    const manifests: any[] = toolsConfig.manifests ?? [];
+
+    lines.push(bold('Enabled Plugins') + `  ${dim(`(${enabledPlugins.length} enabled)`)}`);
+    lines.push(dim('─'.repeat(60)));
+
+    for (const manifest of manifests) {
+      const id = manifest.identifier ?? '?';
+      const apis: any[] = manifest.api ?? [];
+      const isEnabled = enabledPlugins.includes(id);
+      const statusIcon = isEnabled ? green('●') : dim('○');
+      const name = manifest.meta?.title || id;
+
+      lines.push(`${statusIcon} ${cyan(id)}${name !== id ? dim(` (${name})`) : ''}`);
+      for (const api of apis) {
+        lines.push(
+          `    ${dim('─')} ${api.name ?? '?'}${api.description ? dim(` — ${truncate(api.description, 60)}`) : ''}`,
+        );
+      }
+    }
+  }
+
+  // Section 2: Actual function definitions in LLM payload
+  const payloadTools = (step.context?.payload as any)?.tools as any[] | undefined;
+  if (payloadTools && payloadTools.length > 0) {
+    if (lines.length > 0) lines.push('');
+    lines.push(bold('LLM Payload Functions') + `  ${dim(`(${payloadTools.length} functions)`)}`);
+    lines.push(dim('─'.repeat(60)));
+
+    for (const tool of payloadTools) {
+      const fn = tool.function;
+      if (fn) {
+        lines.push(
+          `  ${fn.name}${fn.description ? dim(` — ${truncate(fn.description, 60)}`) : ''}`,
+        );
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    return red('No tools data found in this step.');
+  }
+
+  lines.unshift(bold('Payload Tools') + `  ${dim(`Step ${step.stepIndex}`)}`);
+  lines.splice(1, 0, '');
+
+  return lines.join('\n');
+}
+
+export function renderPayload(step: StepSnapshot): string {
+  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+  if (!ceEvent?.input) {
+    return red('No context engine data found in this step.');
+  }
+
+  const input = ceEvent.input;
+  const lines: string[] = [
+    bold('Context Engine Input') + `  ${dim(`Step ${step.stepIndex}`)}`,
+    dim('─'.repeat(60)),
+  ];
+
+  // Model & Provider
+  if (input.model) lines.push(`${bold('Model:')} ${cyan(input.model)}`);
+  if (input.provider) lines.push(`${bold('Provider:')} ${input.provider}`);
+
+  // History config
+  lines.push(
+    `${bold('History:')} enableHistoryCount=${input.enableHistoryCount ?? '-'}  historyCount=${input.historyCount ?? '-'}`,
+  );
+  if (input.forceFinish) lines.push(`${bold('Force Finish:')} ${input.forceFinish}`);
+
+  // System Role (summary)
+  if (input.systemRole) {
+    lines.push('');
+    lines.push(
+      `${bold('System Role:')} ${dim(`${input.systemRole.length} chars`)}  ${dim('(use -r to view full)')}`,
+    );
+  }
+
+  // Capabilities
+  if (input.capabilities && Object.keys(input.capabilities).length > 0) {
+    lines.push('');
+    lines.push(bold('Capabilities:'));
+    for (const [key, value] of Object.entries(input.capabilities)) {
+      lines.push(`  ${key}: ${JSON.stringify(value)}`);
+    }
+  }
+
+  // Knowledge
+  const knowledge = input.knowledge;
+  if (knowledge) {
+    const fileContents: any[] = knowledge.fileContents ?? [];
+    const knowledgeBases: any[] = knowledge.knowledgeBases ?? [];
+    if (fileContents.length > 0 || knowledgeBases.length > 0) {
+      lines.push('');
+      lines.push(bold('Knowledge:'));
+      if (fileContents.length > 0) {
+        lines.push(`  Files: ${fileContents.length}`);
+        for (const f of fileContents) {
+          const name = f.name ?? f.filename ?? f.id ?? '?';
+          lines.push(`    ${dim('─')} ${name}`);
+        }
+      }
+      if (knowledgeBases.length > 0) {
+        lines.push(`  Knowledge Bases: ${knowledgeBases.length}`);
+        for (const kb of knowledgeBases) {
+          lines.push(`    ${dim('─')} ${kb.name ?? kb.id ?? '?'}`);
+        }
+      }
+    }
+  }
+
+  // Tools (summary)
+  const toolsConfig = input.toolsConfig;
+  if (toolsConfig) {
+    const plugins: string[] = toolsConfig.tools ?? [];
+    const manifests: any[] = toolsConfig.manifests ?? [];
+    lines.push('');
+    lines.push(
+      `${bold('Tools:')} ${plugins.length} enabled, ${manifests.length} manifests  ${dim('(use -T to view full)')}`,
+    );
+    if (plugins.length > 0) {
+      lines.push(`  Enabled: ${plugins.map((p: string) => cyan(p)).join(', ')}`);
+    }
+  }
+
+  // User Memory
+  const userMemory = input.userMemory;
+  if (userMemory) {
+    const memories = userMemory.memories;
+    lines.push('');
+    lines.push(bold('User Memory:'));
+    if (userMemory.fetchedAt) {
+      lines.push(`  Fetched: ${dim(new Date(userMemory.fetchedAt).toLocaleString())}`);
+    }
+    if (memories && typeof memories === 'object') {
+      if (Array.isArray(memories)) {
+        lines.push(`  ${memories.length} memories`);
+      } else {
+        for (const [category, items] of Object.entries(memories)) {
+          const arr = items as any[];
+          if (arr.length > 0) {
+            lines.push(`  ${category}: ${green(String(arr.length))} items`);
+            for (const item of arr.slice(0, 3)) {
+              const content =
+                typeof item === 'string'
+                  ? item
+                  : (item.content ?? item.text ?? JSON.stringify(item));
+              lines.push(`    ${dim('─')} ${truncate(String(content), 80)}`);
+            }
+            if (arr.length > 3) lines.push(`    ${dim(`... +${arr.length - 3} more`)}`);
+          }
+        }
+      }
+    }
+  }
+
+  // Platform context (discord, etc.)
+  for (const key of Object.keys(input)) {
+    if (key.endsWith('Context') && key !== 'stepContext') {
+      const ctx = input[key];
+      if (ctx && typeof ctx === 'object' && Object.keys(ctx).length > 0) {
+        lines.push('');
+        lines.push(bold(`${key}:`));
+        const json = JSON.stringify(ctx, null, 2);
+        for (const line of json.split('\n').slice(0, 20)) {
+          lines.push(`  ${dim(line)}`);
+        }
+      }
+    }
+  }
+
+  // Messages summary
+  const messages = input.messages;
+  if (messages && Array.isArray(messages)) {
+    lines.push('');
+    lines.push(
+      `${bold('Input Messages:')} ${messages.length} messages  ${dim('(use -m to view full)')}`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+export function renderMemory(step: StepSnapshot): string {
+  const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
+  const userMemory = ceEvent?.input?.userMemory;
+
+  if (!userMemory) {
+    return red('No user memory found in this step.');
+  }
+
+  const lines: string[] = [
+    bold('User Memory') + `  ${dim(`Step ${step.stepIndex}`)}`,
+    dim('─'.repeat(60)),
+  ];
+
+  if (userMemory.fetchedAt) {
+    lines.push(`Fetched: ${dim(new Date(userMemory.fetchedAt).toLocaleString())}`);
+    lines.push('');
+  }
+
+  const memories = userMemory.memories;
+  if (!memories) {
+    lines.push(dim('No memories present.'));
+    return lines.join('\n');
+  }
+
+  if (Array.isArray(memories)) {
+    lines.push(`${memories.length} memories`);
+    for (const item of memories) {
+      lines.push('');
+      lines.push(dim('─'.repeat(40)));
+      lines.push(typeof item === 'string' ? item : JSON.stringify(item, null, 2));
+    }
+    return lines.join('\n');
+  }
+
+  // Dict format: { contexts, experiences, persona, preferences, ... }
+  // Render in priority order: persona first, then identity, contexts, preferences, experiences, rest
+  const categoryOrder = ['persona', 'identity', 'contexts', 'preferences', 'experiences'];
+  const allKeys = Object.keys(memories);
+  const sortedKeys = [
+    ...categoryOrder.filter((k) => allKeys.includes(k)),
+    ...allKeys.filter((k) => !categoryOrder.includes(k)),
+  ];
+
+  for (const category of sortedKeys) {
+    const items = (memories as Record<string, any>)[category];
+
+    if (category === 'persona') {
+      const persona = items as any;
+      lines.push(bold('persona'));
+      if (persona.tagline) {
+        lines.push(`  ${cyan('tagline:')} ${persona.tagline}`);
+      }
+      if (persona.narrative) {
+        lines.push(`  ${cyan('narrative:')}`);
+        for (const line of persona.narrative.split('\n')) {
+          lines.push(`    ${line}`);
+        }
+      }
+      lines.push('');
+      continue;
+    }
+
+    const arr = items as any[];
+    if (!Array.isArray(arr)) {
+      lines.push(`${bold(category)}: ${JSON.stringify(items)}`);
+      lines.push('');
+      continue;
+    }
+
+    lines.push(bold(category) + `  ${dim(`(${arr.length} items)`)}`);
+    if (arr.length === 0) {
+      lines.push(dim('  (empty)'));
+    } else {
+      for (const item of arr) {
+        const content =
+          typeof item === 'string'
+            ? item
+            : (item.content ?? item.text ?? JSON.stringify(item, null, 2));
+        lines.push(`  ${dim('─')} ${String(content)}`);
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+export function renderDiff(
+  contentA: string,
+  contentB: string,
+  options: { labelA: string; labelB: string; title: string },
+): string {
+  const linesA = contentA.split('\n');
+  const linesB = contentB.split('\n');
+  const lines: string[] = [
+    bold(`${options.title} Diff`) + `  ${cyan(options.labelA)} → ${cyan(options.labelB)}`,
+    dim('─'.repeat(60)),
+  ];
+
+  // Simple line-by-line diff
+  const maxLen = Math.max(linesA.length, linesB.length);
+  let hasChanges = false;
+
+  for (let i = 0; i < maxLen; i++) {
+    const a = linesA[i];
+    const b = linesB[i];
+
+    if (a === b) {
+      lines.push(`  ${a ?? ''}`);
+    } else {
+      hasChanges = true;
+      if (a !== undefined && b === undefined) {
+        lines.push(red(`- ${a}`));
+      } else if (a === undefined && b !== undefined) {
+        lines.push(green(`+ ${b}`));
+      } else {
+        lines.push(red(`- ${a}`));
+        lines.push(green(`+ ${b}`));
+      }
+    }
+  }
+
+  if (!hasChanges) {
+    lines.push('');
+    lines.push(dim('No differences found.'));
+  }
+
+  return lines.join('\n');
+}
+
 export function renderStepDetail(
   step: StepSnapshot,
-  options?: { context?: boolean; events?: boolean; messages?: boolean; tools?: boolean },
+  options?: {
+    allSteps?: StepSnapshot[];
+    context?: boolean;
+    events?: boolean;
+    messages?: boolean;
+    tools?: boolean;
+  },
 ): string {
   const lines: string[] = [
     bold(`Step ${step.stepIndex}`) + `  [${step.stepType}]  ${formatMs(step.executionTimeMs)}`,
@@ -263,6 +817,22 @@ export function renderStepDetail(
       lines.push('');
       lines.push(bold('Reasoning:'));
       lines.push(step.reasoning);
+    }
+  }
+
+  // Default view: show tool errors even without -t flag
+  if (!hasSpecificFlag && step.toolsResult) {
+    const failedResults = step.toolsResult.filter((tr) => tr.isSuccess === false);
+    if (failedResults.length > 0) {
+      lines.push('');
+      lines.push(bold(red('Errors:')));
+      for (const tr of failedResults) {
+        lines.push(`  ${red('✗')} ${cyan(tr.identifier || tr.apiName)}`);
+        if (tr.output) {
+          const output = tr.output.length > 500 ? tr.output.slice(0, 500) + '...' : tr.output;
+          lines.push(`    ${red(output)}`);
+        }
+      }
     }
   }
 
@@ -342,12 +912,15 @@ export function renderStepDetail(
         lines.push(dim('─'.repeat(60)));
         renderMessageList(lines, outputMsgs, 300);
       }
-    } else if (step.messages) {
+    } else {
       // Fallback: show raw DB messages if no context engine event
-      lines.push('');
-      lines.push(bold(`Messages (before step): ${step.messages.length} messages`));
-      lines.push(dim('─'.repeat(60)));
-      renderMessageList(lines, step.messages, 200);
+      const { messages: resolvedMsgs } = resolveStepMessages(step, options?.allSteps);
+      if (resolvedMsgs && resolvedMsgs.length > 0) {
+        lines.push('');
+        lines.push(bold(`Messages (before step): ${resolvedMsgs.length} messages`));
+        lines.push(dim('─'.repeat(60)));
+        renderMessageList(lines, resolvedMsgs, 200);
+      }
     }
   }
 

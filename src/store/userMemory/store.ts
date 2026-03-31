@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type UserMemoryStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -66,5 +67,7 @@ export const useUserMemoryStore = createWithEqualityFn<UserMemoryStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('userMemory', useUserMemoryStore);
 
 export const getUserMemoryStoreState = () => useUserMemoryStore.getState();

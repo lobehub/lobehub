@@ -109,16 +109,16 @@ Use the following emojis to prefix your commit messages:
 
 **1. Fork and clone the repository**
 
-Fork [lobehub/lobe-chat](https://github.com/lobehub/lobe-chat) on GitHub, then clone your fork locally.
+Fork [lobehub/lobehub](https://github.com/lobehub/lobehub) on GitHub, then clone your fork locally.
 
 **2. Create a branch**
 
 Use the branch naming format: `username/type/description`
 
 ```bash
-git checkout -b yourname/feat/add-voice-input
-git checkout -b yourname/fix/message-duplication
-git checkout -b yourname/docs/update-api-guide
+git checkout -b feat/add-voice-input
+git checkout -b fix/message-duplication
+git checkout -b docs/update-api-guide
 ```
 
 **3. Make changes**
@@ -142,29 +142,33 @@ git commit -m "📝 docs: update installation guide"
 **5. Open a Pull Request**
 
 <Callout type={'warning'}>
-  Always target the **`canary`** branch — not `main`. `canary` is the active development branch.
-  PRs to `main` will be redirected.
+  Always target the **`canary`** branch — not `main`. `canary` is the active development branch. PRs
+  to `main` will be redirected.
 </Callout>
 
 Fill out the PR template in `.github/PULL_REQUEST_TEMPLATE.md`:
 
 ```markdown
 ## Description
+
 Clear description of what this PR does.
 
 ## Type of Change
+
 - [ ] ✨ New feature
 - [ ] 🐛 Bug fix
 - [ ] 📝 Documentation
 - [ ] ♻️ Refactoring
 
 ## Checklist
+
 - [ ] Code follows project style guidelines
 - [ ] Tests added/updated
 - [ ] Documentation updated
 - [ ] All tests pass
 
 ## Related Issues
+
 Fixes #123
 ```
 
@@ -177,14 +181,14 @@ Automated checks run on every PR: ESLint, TypeScript type check, Vitest unit tes
 ### Syncing Your Fork with Upstream
 
 ```bash
-git remote add upstream https://github.com/lobehub/lobe-chat.git
+git remote add upstream https://github.com/lobehub/lobehub.git
 git fetch upstream
 git rebase upstream/canary
 ```
 
 ### Ways to Contribute
 
-- **Features** — Check [issues labeled `good first issue`](https://github.com/lobehub/lobe-chat/issues?q=is%3Aissue+label%3A%22good+first+issue%22) to find beginner-friendly tasks
+- **Features** — Check [issues labeled `good first issue`](https://github.com/lobehub/lobehub/issues?q=is%3Aissue+label%3A%22good+first+issue%22) to find beginner-friendly tasks
 - **Bug fixes** — Search open issues labeled `bug`
 - **Documentation** — Improve docs, fix typos, add examples
 - **Testing** — Add test coverage for uncovered code paths

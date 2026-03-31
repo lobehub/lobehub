@@ -10,6 +10,7 @@ import { default as anthropic } from './anthropic';
 import { default as azure } from './azure';
 import { default as azureai } from './azureai';
 import { default as baichuan } from './baichuan';
+import { default as bailiancodingplan } from './bailianCodingPlan';
 import { default as bedrock } from './bedrock';
 import { default as bfl } from './bfl';
 import { default as cerebras } from './cerebras';
@@ -23,6 +24,7 @@ import { default as fireworksai } from './fireworksai';
 import { default as giteeai } from './giteeai';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
+import { default as glmcodingplan } from './glmCodingPlan';
 import { default as google } from './google';
 import { default as groq } from './groq';
 import { default as higress } from './higress';
@@ -31,9 +33,12 @@ import { default as hunyuan } from './hunyuan';
 import { default as infiniai } from './infiniai';
 import { default as internlm } from './internlm';
 import { default as jina } from './jina';
+import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as lobehub } from './lobehub/index';
+import { default as longcat } from './longcat';
 import { default as minimax } from './minimax';
+import { default as minimaxcodingplan } from './minimaxCodingPlan';
 import { default as mistral } from './mistral';
 import { default as modelscope } from './modelscope';
 import { default as moonshot } from './moonshot';
@@ -66,6 +71,7 @@ import { default as vercelaigateway } from './vercelaigateway';
 import { default as vertexai } from './vertexai';
 import { default as vllm } from './vllm';
 import { default as volcengine } from './volcengine';
+import { default as volcenginecodingplan } from './volcengineCodingPlan';
 import { default as wenxin } from './wenxin';
 import { default as xai } from './xai';
 import { default as xiaomimimo } from './xiaomimimo';
@@ -103,6 +109,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   azure,
   azureai,
   baichuan,
+  bailiancodingplan,
   bedrock,
   bfl,
   cerebras,
@@ -117,6 +124,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   github,
   githubcopilot,
   google,
+  glmcodingplan,
   groq,
   higress,
   huggingface,
@@ -124,9 +132,12 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   infiniai,
   internlm,
   jina,
+  kimicodingplan,
   lmstudio,
+  longcat,
   ...(ENABLE_BUSINESS_FEATURES ? { lobehub } : {}),
   minimax,
+  minimaxcodingplan,
   mistral,
   modelscope,
   moonshot,
@@ -159,6 +170,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   vertexai,
   vllm,
   volcengine,
+  volcenginecodingplan,
   wenxin,
   xai,
   xiaomimimo,
@@ -177,6 +189,7 @@ export { default as anthropic } from './anthropic';
 export { default as azure } from './azure';
 export { default as azureai } from './azureai';
 export { default as baichuan } from './baichuan';
+export { default as bailiancodingplan } from './bailianCodingPlan';
 export { default as bedrock } from './bedrock';
 export { default as bfl } from './bfl';
 export { default as cerebras } from './cerebras';
@@ -190,6 +203,7 @@ export { default as fireworksai } from './fireworksai';
 export { default as giteeai } from './giteeai';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';
+export { default as glmcodingplan } from './glmCodingPlan';
 export { default as google } from './google';
 export { default as groq } from './groq';
 export { default as higress } from './higress';
@@ -198,9 +212,12 @@ export { default as hunyuan } from './hunyuan';
 export { default as infiniai } from './infiniai';
 export { default as internlm } from './internlm';
 export { default as jina } from './jina';
+export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { default as lobehub } from './lobehub/index';
+export { default as longcat } from './longcat';
 export { default as minimax } from './minimax';
+export { default as minimaxcodingplan } from './minimaxCodingPlan';
 export { default as mistral } from './mistral';
 export { default as modelscope } from './modelscope';
 export { default as moonshot } from './moonshot';
@@ -233,6 +250,7 @@ export { default as vercelaigateway } from './vercelaigateway';
 export { default as vertexai } from './vertexai';
 export { default as vllm } from './vllm';
 export { default as volcengine } from './volcengine';
+export { default as volcenginecodingplan } from './volcengineCodingPlan';
 export { default as wenxin } from './wenxin';
 export { default as xai } from './xai';
 export { default as xiaomimimo } from './xiaomimimo';

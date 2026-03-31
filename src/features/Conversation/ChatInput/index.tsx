@@ -15,10 +15,13 @@ import {
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
-import { messageStateSelectors, useConversationStore } from '../store';
+import InterventionBar from '../InterventionBar';
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import QueueTray from './QueueTray';
 
 export interface ChatInputProps {
   /**
@@ -71,6 +74,10 @@ export interface ChatInputProps {
    */
   sendMenu?: MenuProps;
   /**
+   * Whether to show the runtime config bar (Local/Cloud/Auto Approve)
+   */
+  showRuntimeConfig?: boolean;
+  /**
    * Remove a small margin when placed adjacent to the ChatList
    */
   skipScrollMarginWithList?: boolean;
@@ -95,12 +102,14 @@ const ChatInput = memo<ChatInputProps>(
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
+    showRuntimeConfig = true,
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
 
     // ConversationStore state
+    const context = useConversationStore((s) => s.context);
     const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
       s.context.agentId,
       s.inputMessage,
@@ -110,8 +119,22 @@ const ChatInput = memo<ChatInputProps>(
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
 
-    // Generation state from ConversationStore (bridged from ChatStore)
-    const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
+    // Loading state from ConversationStore (bridged from ChatStore)
+    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
+
+    // Pending interventions — use custom equality to prevent infinite re-render loop.
+    // The selector creates new array/object refs each call; without equality check,
+    // any store update → new ref → re-render → Intervention's store writes → loop.
+    const pendingInterventions = useConversationStore(
+      dataSelectors.pendingInterventions,
+      (a, b) => {
+        if (a.length !== b.length) return false;
+        return a.every(
+          (item, i) => item.toolCallId === b[i].toolCallId && item.requestArgs === b[i].requestArgs,
+        );
+      },
+    );
+    const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
@@ -122,25 +145,34 @@ const ChatInput = memo<ChatInputProps>(
     const contextList = useFileStore(fileChatSelectors.chatContextSelections);
     const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
 
+    // Queue state
+    const hasQueuedMessages = useChatStore(
+      (s) => operationSelectors.queuedMessageCount(context)(s) > 0,
+    );
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const disabled = isInputEmpty || isUploadingFiles || isAIGenerating;
+    // Input stays enabled during agent execution — messages are queued
+    const disabled = isInputEmpty || isUploadingFiles;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
-      async ({ clearContent, getMarkdownContent }) => {
+      async ({ clearContent, getMarkdownContent, getEditorData }) => {
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
 
-        if (currentIsUploading || isAIGenerating) return;
+        if (currentIsUploading) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
+
+        // Capture editor JSON state before clearing for rich text rendering
+        const editorData = getEditorData();
 
         // Clear content immediately for responsive UX
         clearContent();
@@ -156,37 +188,60 @@ const ChatInput = memo<ChatInputProps>(
         }));
 
         // Fire and forget - send with captured message
-        await sendMessage({ files: currentFileList, message, pageSelections });
+        await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [isAIGenerating, sendMessage],
+      [sendMessage],
     );
 
     const sendButtonProps: SendButtonProps = {
       disabled,
-      generating: isAIGenerating,
+      generating: isInputLoading,
       onStop: stopGenerating,
       ...customSendButtonProps,
     };
 
     const defaultContent = (
-      <WideScreenContainer style={skipScrollMarginWithList ? { marginTop: -12 } : undefined}>
-        {sendMessageErrorMsg && (
-          <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-            <Alert
-              closable
-              title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
-              type={'secondary'}
-              onClose={clearSendMessageError}
+      <WideScreenContainer
+        style={skipScrollMarginWithList ? { marginTop: -12, position: 'relative' } : undefined}
+      >
+        {hasPendingInterventions ? (
+          <InterventionBar interventions={pendingInterventions} />
+        ) : (
+          <>
+            {sendMessageErrorMsg && (
+              <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
+                <Alert
+                  closable
+                  title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+                  type={'secondary'}
+                  onClose={clearSendMessageError}
+                />
+              </Flexbox>
+            )}
+            {hasQueuedMessages && (
+              <Flexbox
+                paddingInline={12}
+                style={{
+                  position: 'absolute',
+                  zIndex: 10,
+                  bottom: '100%',
+                  left: 12,
+                  right: 12,
+                }}
+              >
+                <QueueTray />
+              </Flexbox>
+            )}
+            <DesktopChatInput
+              actionBarStyle={actionBarStyle}
+              borderRadius={12}
+              extraActionItems={extraActionItems}
+              leftContent={leftContent}
+              sendAreaPrefix={sendAreaPrefix}
+              showRuntimeConfig={showRuntimeConfig}
             />
-          </Flexbox>
+          </>
         )}
-        <DesktopChatInput
-          actionBarStyle={actionBarStyle}
-          borderRadius={12}
-          extraActionItems={extraActionItems}
-          leftContent={leftContent}
-          sendAreaPrefix={sendAreaPrefix}
-        />
       </WideScreenContainer>
     );
 
@@ -199,6 +254,7 @@ const ChatInput = memo<ChatInputProps>(
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
         sendMenu={sendMenu}
+        slashPlacement="top"
         chatInputEditorRef={(instance) => {
           if (instance) {
             setEditor(instance);

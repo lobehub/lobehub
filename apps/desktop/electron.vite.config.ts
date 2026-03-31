@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import dotenv from 'dotenv';
 import { defineConfig } from 'electron-vite';
@@ -34,11 +35,14 @@ function electronDesktopHtmlPlugin(): PluginOption {
 dotenv.config();
 
 const isDev = process.env.NODE_ENV === 'development';
-const ROOT_DIR = resolve(__dirname, '../..');
+const ROOT_DIR = path.resolve(__dirname, '../..');
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 
 Object.assign(process.env, loadEnv(mode, ROOT_DIR, ''));
 const updateChannel = process.env.UPDATE_CHANNEL;
+const desktopPackageJson = JSON.parse(
+  readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
+) as { version: string };
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 
@@ -48,8 +52,9 @@ export default defineConfig({
       minify: !isDev,
       outDir: 'dist/main',
       rollupOptions: {
-        // Native modules must be externalized to work correctly
-        external: getExternalDependencies(),
+        // Native modules must be externalized to work correctly.
+        // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
+        external: [...getExternalDependencies(), 'bufferutil', 'utf-8-validate'],
         output: {
           // Prevent debug package from being bundled into index.js to avoid side-effect pollution
           manualChunks(id) {
@@ -74,8 +79,8 @@ export default defineConfig({
     },
     resolve: {
       alias: {
-        '@': resolve(__dirname, 'src/main'),
-        '~common': resolve(__dirname, 'src/common'),
+        '@': path.resolve(__dirname, 'src/main'),
+        '~common': path.resolve(__dirname, 'src/common'),
       },
     },
   },
@@ -88,21 +93,24 @@ export default defineConfig({
 
     resolve: {
       alias: {
-        '@': resolve(__dirname, 'src/main'),
-        '~common': resolve(__dirname, 'src/common'),
+        '@': path.resolve(__dirname, 'src/main'),
+        '~common': path.resolve(__dirname, 'src/common'),
       },
     },
   },
   renderer: {
     root: ROOT_DIR,
     build: {
-      outDir: resolve(__dirname, 'dist/renderer'),
+      outDir: path.resolve(__dirname, 'dist/renderer'),
       rollupOptions: {
-        input: resolve(__dirname, 'index.html'),
+        input: path.resolve(__dirname, 'index.html'),
         output: sharedRollupOutput,
       },
     },
-    define: sharedRendererDefine({ isMobile: false, isElectron: true }),
+    define: {
+      ...sharedRendererDefine({ isMobile: false, isElectron: true }),
+      __MAIN_VERSION__: JSON.stringify(desktopPackageJson.version),
+    },
     optimizeDeps: sharedOptimizeDeps,
     plugins: [
       electronDesktopHtmlPlugin(),

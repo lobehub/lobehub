@@ -3,6 +3,23 @@
   "cloud": [],
   "community": [
     {
+      "image": "https://hub-apac-1.lobeobjects.space/blog/assets/4a68a7644501cb513d08670b102a446e.webp",
+      "id": "2026-03-16-search",
+      "date": "2026-03-16",
+      "versionRange": ["2.1.38", "2.1.43"]
+    },
+    {
+      "id": "2026-02-08-runtime-auth",
+      "date": "2026-02-08",
+      "versionRange": ["2.1.6", "2.1.26"]
+    },
+    {
+      "image": "https://private-user-images.githubusercontent.com/17870709/540830955-0fe626a3-0ddc-4f67-b595-3c5b3f1701e0.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzQwODY2MzYsIm5iZiI6MTc3NDA4NjMzNiwicGF0aCI6Ii8xNzg3MDcwOS81NDA4MzA5NTUtMGZlNjI2YTMtMGRkYy00ZjY3LWI1OTUtM2M1YjNmMTcwMWUwLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjAzMjElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwMzIxVDA5NDUzNlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWRkMjg5MjUxMGI2OTYzMjYyYjA0NTExZTA4OTY4ODg1YmI2OWU4MmRiNDU4MjZhNzNiYWI3MjNjYmVkYzYwYTcmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.KmNeu3YwMCu8wMVCxB5VuJ9Em49fchBJqPYdfoz4G-Q",
+      "id": "2026-01-27-v2",
+      "date": "2026-01-27",
+      "versionRange": ["2.0.1", "2.1.5"]
+    },
+    {
       "image": "/blog/assets7f3b38c1d76cceb91edb29d6b1eb60db.webp",
       "id": "2025-12-20-mcp",
       "date": "2025-12-20",

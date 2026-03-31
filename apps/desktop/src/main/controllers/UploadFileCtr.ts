@@ -1,4 +1,4 @@
-import { UploadFileParams } from '@lobechat/electron-client-ipc';
+import type { UploadFileParams } from '@lobechat/electron-client-ipc';
 
 import FileService from '@/services/fileSrv';
 

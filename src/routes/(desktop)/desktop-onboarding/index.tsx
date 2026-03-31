@@ -88,7 +88,7 @@ const DesktopOnboardingPage = memo(() => {
     setDesktopOnboardingScreen(currentScreen);
   }, [currentScreen, isLoading]);
 
-  // 设置窗口大小和可调整性
+  // Set window size and resizability
   useEffect(() => {
     const minimumSize = { height: 900, width: 1200 };
 
@@ -110,7 +110,7 @@ const DesktopOnboardingPage = memo(() => {
     };
   }, []);
 
-  // 检测平台：非 macOS 直接跳过权限页
+  // Detect platform: skip permissions page on non-macOS
   useEffect(() => {
     let mounted = true;
     const detectPlatform = async () => {
@@ -145,7 +145,7 @@ const DesktopOnboardingPage = memo(() => {
       const next = flow[idx + 1];
 
       if (!next) {
-        // Complete onboarding.
+        // Complete onboarding - mark as completed and clear persisted screen state
         setDesktopOnboardingCompleted();
         clearDesktopOnboardingScreen();
 

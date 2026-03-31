@@ -1,4 +1,4 @@
-import { ToolCategory, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
+import type { ToolCategory, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';

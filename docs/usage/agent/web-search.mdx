@@ -52,11 +52,19 @@ Expand the grounding card to see exactly where the information came from and eva
 
 Web search is not active by default — it requires plugin or MCP configuration.
 
-**Via Skills** — Install a web search Skill from the marketplace (Settings → Skills). Options include general web search, news search, and academic search. Some may require an API key from the search provider.
+<Tabs>
+  <Tab title="Via Skills">
+    Install a web search Skill from the marketplace (Settings → Skills). Options include general web search, news search, and academic search. Some may require an API key from the search provider.
+  </Tab>
 
-**Via MCP servers** — Connect a search MCP server (Brave Search, Google Search, DuckDuckGo, etc.) in your MCP settings. This gives more control and supports custom search implementations.
+  <Tab title="Via MCP Servers">
+    Connect a search MCP server (Brave Search, Google Search, DuckDuckGo, etc.) in your MCP settings. This gives more control and supports custom search implementations.
+  </Tab>
 
-**Per-Agent configuration** — In Agent Settings → Skills, enable web search for that specific Agent and choose the search provider.
+  <Tab title="Per-Agent Configuration">
+    In Agent Settings → Skills, enable web search for that specific Agent and choose the search provider. This lets you control which Agents have web access.
+  </Tab>
+</Tabs>
 
 ## Using Web Search
 
@@ -90,15 +98,50 @@ Each search builds on the conversation context. Chain searches to go deeper:
 → "Find salary data for senior Python engineers in Europe"
 ```
 
+## Search Quality
+
+### Optimized Queries
+
+The AI generates optimized search queries tailored to your question, including adding time context, using precise terminology, and breaking complex questions into multiple targeted searches.
+
+### Source Selection
+
+Results are ranked by relevance, authority, and recency. The AI considers whether sources are authoritative (news outlets, official docs, academic papers) vs. informal (blogs, forum posts).
+
+### Information Synthesis
+
+The AI synthesizes findings from multiple sources into a coherent response, noting when sources agree or disagree, and flagging any uncertainty.
+
 ## Use Cases
 
-**Research and news** — Get current information on news, markets, finance, and academic topics. "Latest news on \[subject]", "Recent papers on \[topic]", "Current stock price of X".
+<Tabs>
+  <Tab title="Research & News">
+    - Get current information on news, markets, finance, and academic topics
+    - "Latest news on \[subject]"
+    - "Recent papers on \[topic]"
+    - "Current stock price of X"
+  </Tab>
 
-**Technical information** — Access up-to-date docs, API changes, package releases, and bug fix discussions. Especially useful for fast-moving frameworks where training data may be outdated. "What's new in React 19?", "Find solutions to \[specific error]".
+  <Tab title="Technical Information">
+    - Access up-to-date docs, API changes, package releases, and bug fix discussions
+    - "What's new in React 19?"
+    - "Find solutions to \[specific error]"
+    - Especially useful for fast-moving frameworks where training data may be outdated
+  </Tab>
 
-**Product research** — Compare current prices, find recent reviews, and identify alternatives. "Compare the latest MacBook models", "Reviews for noise-cancelling headphones under $200".
+  <Tab title="Product Research">
+    - Compare current prices, find recent reviews, and identify alternatives
+    - "Compare the latest MacBook models"
+    - "Reviews for noise-cancelling headphones under $200"
+  </Tab>
 
-**Planning** — Get real-world current data for travel, events, and local recommendations. "Best restaurants in Austin right now", "Current museum exhibits in Paris", "Tech conferences in 2025".
+  <Tab title="Planning">
+    - Get real-world current data for travel, events, and local recommendations
+    - "Best restaurants in Austin right now"
+    - "Current museum exhibits in Paris"
+    - "Tech conferences in 2025"
+  </Tab>
+</Tabs>
 
 ## Understanding Citations
 
@@ -109,7 +152,25 @@ Every web search response includes citations. Check them:
 - **URL** — Click to visit the original source
 - **Relevance snippet** — Preview of the relevant content used
 
-**Always verify critical information** by clicking through to sources. Check publication dates for time-sensitive topics and consider whether sources are authoritative (news outlet, official docs, academic paper) vs. informal (blog, forum post).
+### Citation Verification
+
+<AccordionGroup>
+  <Accordion title="Check Publication Dates">
+    For time-sensitive topics, verify the publication date. A result from two years ago may be outdated for rapidly evolving subjects.
+  </Accordion>
+
+  <Accordion title="Evaluate Source Authority">
+    Consider whether sources are authoritative (news outlet, official docs, academic paper) vs. informal (blog, forum post). Weight your trust accordingly.
+  </Accordion>
+
+  <Accordion title="Cross-Reference Key Facts">
+    For critical information, check that multiple sources agree. If only one source makes a claim, treat it with more skepticism.
+  </Accordion>
+
+  <Accordion title="Click Through to Originals">
+    Always expand the grounding card and click through to verify critical information yourself.
+  </Accordion>
+</AccordionGroup>
 
 ## Tips for Better Results
 
@@ -134,11 +195,25 @@ Search queries are sent to your configured search provider. Source websites may 
 
 ## Limitations
 
-- **Paywalled content** — Cannot access subscription-only content (e.g., academic journals, news sites with paywalls)
-- **Very recent events** — Slight indexing delay means very recent information (hours old) may not appear
-- **Geo-restricted content** — Some sources may be regionally limited
-- **Added latency** — Web search adds a few seconds to response time
-- **Creative and personal tasks** — Web search isn't helpful for purely creative writing or personal advice — it's designed for factual questions
+<Tabs>
+  <Tab title="Content Limitations">
+    - **Paywalled content** — Cannot access subscription-only content (e.g., academic journals, news sites with paywalls)
+    - **Geo-restricted content** — Some sources may be regionally limited
+    - **Very recent events** — Slight indexing delay means very recent information (hours old) may not appear
+  </Tab>
+
+  <Tab title="Performance Limitations">
+    - **Added latency** — Web search adds a few seconds to response time
+    - **Token usage** — Search results consume additional tokens in the context
+    - **Rate limits** — Some search providers have usage limits
+  </Tab>
+
+  <Tab title="Scope Limitations">
+    - **Creative tasks** — Web search isn't helpful for purely creative writing or personal advice
+    - **Real-time data** — Not suitable for data that changes by the second (live stock tickers, etc.)
+    - **Deep web** — Cannot access content not indexed by search engines
+  </Tab>
+</Tabs>
 
 <Callout type={'info'}>
   Web search requires either a search plugin or MCP server to be configured. Some search providers

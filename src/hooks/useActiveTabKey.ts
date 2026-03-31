@@ -17,7 +17,7 @@ export const useActiveTabKey = () => {
 export const useActiveSettingsKey = () => {
   const [searchParams] = useSearchParams();
   const tabs = searchParams.get('active');
-  if (!tabs) return SettingsTabs.Common;
+  if (!tabs) return SettingsTabs.Appearance;
   return tabs as SettingsTabs;
 };
 

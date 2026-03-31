@@ -7,7 +7,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createAsyncCaller } from '@/server/routers/async/caller';
 import { FileService } from '@/server/services/file';
 import {
@@ -22,26 +22,16 @@ import { validateNoUrlsInConfig } from './utils';
 
 const log = debug('lobe-image:lambda');
 
-const imageProcedure = authedProcedure
-  .use(keyVaults)
-  .use(serverDatabase)
-  .use(async (opts) => {
-    const { ctx } = opts;
+const imageProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
 
-    const { apiKey } = ctx.jwtPayload;
-    if (apiKey) {
-      log('API key found in jwtPayload: %s', apiKey);
-    } else {
-      log('No API key found in jwtPayload');
-    }
-
-    return opts.next({
-      ctx: {
-        asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-        fileService: new FileService(ctx.serverDB, ctx.userId),
-      },
-    });
+  return opts.next({
+    ctx: {
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
+      fileService: new FileService(ctx.serverDB, ctx.userId),
+    },
   });
+});
 
 const createImageInputSchema = z.object({
   generationTopicId: z.string(),
@@ -288,7 +278,10 @@ export const imageRouter = router({
       }
     }
 
-    const createdGenerations = generationsWithTasks.map((item) => item.generation);
+    const createdGenerations = generationsWithTasks.map((item) => ({
+      ...item.generation,
+      asyncTaskId: item.asyncTaskId,
+    }));
     log('Image creation process completed successfully: %O', {
       batchId: createdBatch.id,
       generationCount: createdGenerations.length,

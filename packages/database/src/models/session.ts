@@ -6,8 +6,7 @@ import type {
   LobeGroupSession,
   SessionRankItem,
 } from '@lobechat/types';
-import type { Column } from 'drizzle-orm';
-import { and, asc, count, desc, eq, gt, inArray, isNull, like, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, not, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -15,6 +14,7 @@ import { merge } from '@/utils/merge';
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
 import { agents, agentsToSessions, sessionGroups, sessions, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 
@@ -634,6 +634,8 @@ export class SessionModel {
     const offset = current * pageSize;
 
     try {
+      const bm25Query = sanitizeBm25Query(keyword);
+
       const results = await this.db.query.agents.findMany({
         limit: pageSize,
         offset,
@@ -641,13 +643,7 @@ export class SessionModel {
         orderBy: [asc(agents.id)],
         where: and(
           eq(agents.userId, this.userId),
-          or(
-            like(sql`lower(${agents.title})` as unknown as Column, `%${keyword.toLowerCase()}%`),
-            like(
-              sql`lower(${agents.description})` as unknown as Column,
-              `%${keyword.toLowerCase()}%`,
-            ),
-          ),
+          sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
         ),
         with: { agentsToSessions: { columns: {}, with: { session: true } } },
       });

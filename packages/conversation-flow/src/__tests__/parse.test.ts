@@ -286,6 +286,138 @@ describe('parse', () => {
     });
   });
 
+  describe('Compression', () => {
+    it('should keep follow-up chain visible after compressedGroup from recursive tool result', () => {
+      // Data provenance:
+      // - The compressedGroup + nested assistant/tool structure is abstracted from the
+      //   real `lh eval message list` output after we fixed the CLI/router to expose
+      //   full compression data.
+      // - That output models the async eval path: long-running search/tool chains that
+      //   later get compressed by the backend before follow-up steps continue.
+      // - We intentionally keep the sample minimal while preserving the real eval traits:
+      //   compressed history, assistant/tool chaining, and tool result message redirection.
+      const messages = [
+        {
+          compressedMessages: [
+            {
+              content:
+                'I was reviewing the list of winners of a prestigious international prize...',
+              id: 'msg-user-hidden',
+              role: 'user',
+            },
+            {
+              content: '',
+              id: 'msg-assistant-hidden',
+              role: 'assistantGroup',
+              tools: [
+                {
+                  id: 'tool-call-1',
+                  result_msg_id: 'msg-tool-hidden',
+                },
+              ],
+            },
+          ],
+          content: 'Compressed summary of earlier search steps',
+          createdAt: 1000,
+          id: 'comp-group-1',
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 1000,
+        },
+        {
+          content: 'John Clarke was born in the United Kingdom, not the USA.',
+          createdAt: 2000,
+          id: 'msg-follow-up-1',
+          parentId: 'msg-tool-hidden',
+          role: 'assistant',
+          updatedAt: 2000,
+        },
+        {
+          content: '',
+          createdAt: 3000,
+          id: 'msg-follow-up-2',
+          parentId: 'msg-follow-up-1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-2',
+              identifier: 'lobe-web-browsing',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: 3000,
+        },
+        {
+          content: '<searchResults><item title="MIT Nobel Prize winners" /></searchResults>',
+          createdAt: 4000,
+          id: 'msg-tool-2',
+          parentId: 'msg-follow-up-2',
+          role: 'tool',
+          tool_call_id: 'tool-call-2',
+          updatedAt: 4000,
+        },
+      ] as any[];
+
+      const result = parse(messages);
+
+      expect(result.flatList).toHaveLength(3);
+      expect(result.flatList[0].id).toBe('comp-group-1');
+      expect(result.flatList[0].role).toBe('compressedGroup');
+      expect(result.flatList[1].id).toBe('msg-follow-up-1');
+      expect(result.flatList[2].role).toBe('assistantGroup');
+      expect((result.flatList[2] as any).children).toHaveLength(1);
+      expect((result.flatList[2] as any).children[0].id).toBe('msg-follow-up-2');
+      expect((result.flatList[2] as any).children[0].tools[0].result_msg_id).toBe('msg-tool-2');
+
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'comp-group-1',
+        'msg-follow-up-1',
+        'msg-follow-up-2',
+      ]);
+      expect(result.messageMap['msg-follow-up-2']).toBeDefined();
+    });
+
+    it('should keep orphan follow-up chain as root when compressed parent is missing', () => {
+      // Data provenance:
+      // - This case is derived from the current frontend chat continuation behavior:
+      //   after compression, a follow-up request may be queried without the original
+      //   compressed parent message still being present in the current message slice.
+      // - It represents the synchronous chat path, where UI queries a partial window and
+      //   still needs the remaining visible chain instead of dropping it as an orphan.
+      const messages = [
+        {
+          content: 'Continue the Nobel Prize search',
+          createdAt: 1000,
+          id: 'msg-follow-up-1',
+          parentId: 'msg-compressed-hidden',
+          role: 'user',
+          updatedAt: 1000,
+        },
+        {
+          content: 'I will check the laureates by institution.',
+          createdAt: 2000,
+          id: 'msg-follow-up-2',
+          parentId: 'msg-follow-up-1',
+          role: 'assistant',
+          updatedAt: 2000,
+        },
+      ] as any[];
+
+      const result = parse(messages);
+
+      expect(result.flatList).toHaveLength(2);
+      expect(result.flatList[0].id).toBe('msg-follow-up-1');
+      expect(result.flatList[1].id).toBe('msg-follow-up-2');
+      expect(result.contextTree.map((node) => node.id)).toEqual([
+        'msg-follow-up-1',
+        'msg-follow-up-2',
+      ]);
+      expect(result.messageMap['msg-follow-up-1'].parentId).toBe('msg-compressed-hidden');
+    });
+  });
+
   describe('Performance', () => {
     it('should parse 10000 items within 100ms', () => {
       // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)

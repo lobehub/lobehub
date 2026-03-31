@@ -1,4 +1,13 @@
 {
+  "gateway.description": "描述",
+  "gateway.descriptionPlaceholder": "可选",
+  "gateway.deviceName": "设备名称",
+  "gateway.deviceNamePlaceholder": "输入设备名称",
+  "gateway.enableConnection": "连接到网关",
+  "gateway.statusConnected": "已连接到网关",
+  "gateway.statusConnecting": "正在连接到网关...",
+  "gateway.statusDisconnected": "未连接到网关",
+  "gateway.title": "设备网关",
   "navigation.chat": "对话",
   "navigation.discover": "发现",
   "navigation.discoverAssistants": "发现助理",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "使用自托管实例？",
   "sync.selfHosted.description": "自行部署的社区版本",
   "sync.selfHosted.title": "自托管实例",
+  "tab.closeCurrentTab": "关闭标签页",
+  "tab.closeLeftTabs": "关闭左侧标签页",
+  "tab.closeOtherTabs": "关闭其他标签页",
+  "tab.closeRightTabs": "关闭右侧标签页",
   "updater.checkingUpdate": "检查新版本",
   "updater.checkingUpdateDesc": "正在获取版本信息…",
   "updater.downloadNewVersion": "下载新版本",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "授权连接失败",
   "waitingOAuth.helpText": "如果浏览器没有自动打开，请点击取消后重新尝试",
   "waitingOAuth.retry": "重试",
-  "waitingOAuth.title": "等待授权连接"
+  "waitingOAuth.title": "等待授权连接",
+  "window.close": "关闭窗口",
+  "window.maximize": "最大化窗口",
+  "window.minimize": "最小化窗口",
+  "window.restore": "恢复窗口"
 }

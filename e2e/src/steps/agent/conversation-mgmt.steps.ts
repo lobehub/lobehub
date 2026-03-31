@@ -11,7 +11,7 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
 
 // ============================================
 // Given Steps
@@ -158,25 +158,9 @@ When('用户点击另一个对话', async function (this: CustomWorld) {
   }
 
   // Fallback: try to find topic items in the sidebar
-  // Topics are displayed with star icons (lucide-star) in the left sidebar
-  const sidebarTopics = this.page.locator('svg.lucide-star').locator('..').locator('..');
-  let topicCount = await sidebarTopics.count();
-  console.log(`   📍 Found ${topicCount} topics with star icons`);
-
-  // If not found by star, try finding by topic list structure
-  if (topicCount < 2) {
-    // Topics might be in a list container - look for items in sidebar with specific text
-    const topicItems = this.page.locator('[class*="nav-item"], [class*="NavItem"]');
-    topicCount = await topicItems.count();
-    console.log(`   📍 Found ${topicCount} nav items`);
-
-    if (topicCount >= 2) {
-      await topicItems.nth(1).click();
-      console.log('   ✅ 已点击另一个对话');
-      await this.page.waitForTimeout(500);
-      return;
-    }
-  }
+  const sidebarTopics = this.page.locator('[data-testid="topic-item"]');
+  const topicCount = await sidebarTopics.count();
+  console.log(`   📍 Found ${topicCount} topic items`);
 
   // Click the second topic (first one is current/active)
   if (topicCount >= 2) {
@@ -192,13 +176,11 @@ When('用户点击另一个对话', async function (this: CustomWorld) {
 When('用户右键点击对话', async function (this: CustomWorld) {
   console.log('   📍 Step: 右键点击对话...');
 
-  // Find topic items by their star icon - each saved topic has a star
-  const sidebarTopics = this.page.locator('svg.lucide-star').locator('..').locator('..');
-  let topicCount = await sidebarTopics.count();
-  console.log(`   📍 Found ${topicCount} topics with star icons`);
+  const sidebarTopics = this.page.locator('[data-testid="topic-item"]');
+  const topicCount = await sidebarTopics.count();
+  console.log(`   📍 Found ${topicCount} topic items`);
 
   if (topicCount > 0) {
-    // Right-click the first saved topic
     await sidebarTopics.first().click({ button: 'right' });
     console.log('   ✅ 已右键点击对话');
   } else {
@@ -211,10 +193,9 @@ When('用户右键点击对话', async function (this: CustomWorld) {
 When('用户右键点击一个对话', async function (this: CustomWorld) {
   console.log('   📍 Step: 右键点击一个对话...');
 
-  // Find topic items by their star icon
-  const sidebarTopics = this.page.locator('svg.lucide-star').locator('..').locator('..');
-  let topicCount = await sidebarTopics.count();
-  console.log(`   📍 Found ${topicCount} topics with star icons`);
+  const sidebarTopics = this.page.locator('[data-testid="topic-item"]');
+  const topicCount = await sidebarTopics.count();
+  console.log(`   📍 Found ${topicCount} topic items`);
 
   // Store the topic text for later verification
   if (topicCount > 0) {
@@ -238,7 +219,7 @@ When('用户选择重命名选项', async function (this: CustomWorld) {
 
   // Instead of using right-click context menu, use the "..." dropdown menu
   // which appears when hovering over a topic item
-  const topicItems = this.page.locator('svg.lucide-star').locator('..').locator('..');
+  const topicItems = this.page.locator('[data-testid="topic-item"]');
   const topicCount = await topicItems.count();
   console.log(`   📍 Found ${topicCount} topic items`);
 
@@ -253,7 +234,7 @@ When('用户选择重命名选项', async function (this: CustomWorld) {
     // Important: we must find the icon WITHIN the hovered topic, not the global one
     // The topic item has a specific structure with nav-item-actions
     const moreButtonInTopic = firstTopic.locator('svg.lucide-ellipsis, svg.lucide-more-horizontal');
-    let moreButtonCount = await moreButtonInTopic.count();
+    const moreButtonCount = await moreButtonInTopic.count();
     console.log(`   📍 Found ${moreButtonCount} more buttons inside topic`);
 
     if (moreButtonCount > 0) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_EMAIL } from '@lobechat/business-const';
 import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
 import { App, Form, Input, Upload } from 'antd';
 import { ImagePlus, Send } from 'lucide-react';
@@ -126,6 +127,10 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
       }
       onCancel={handleCancel}
     >
+      <p style={{ color: 'var(--colorTextSecondary)', fontSize: 14, marginBottom: 16 }}>
+        {t('feedback.emailContact', { email: BRANDING_EMAIL.business })}
+      </p>
+
       <Form form={form} initialValues={initialValues} layout="vertical">
         <Form.Item
           label={t('feedback.fields.title.label')}

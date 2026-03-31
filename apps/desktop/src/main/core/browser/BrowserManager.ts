@@ -1,15 +1,12 @@
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
-import { WebContents } from 'electron';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type { WebContents } from 'electron';
 
+import { isLinux } from '@/const/env';
+import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { createLogger } from '@/utils/logger';
 
-import {
-  AppBrowsersIdentifiers,
-  BrowsersIdentifiers,
-  WindowTemplateIdentifiers,
-  appBrowsers,
-  windowTemplates,
-} from '../../appBrowsers';
+import type { AppBrowsersIdentifiers, WindowTemplateIdentifiers } from '../../appBrowsers';
+import { appBrowsers, BrowsersIdentifiers, windowTemplates } from '../../appBrowsers';
 import type { App } from '../App';
 import type { BrowserWindowOpts } from './Browser';
 import Browser from './Browser';
@@ -141,7 +138,7 @@ export class BrowserManager {
     const browserOpts: BrowserWindowOpts = {
       ...template,
       identifier: windowId,
-      path: path,
+      path,
     };
 
     logger.debug(`Creating multi-instance window: ${windowId} with path: ${path}`);
@@ -149,7 +146,7 @@ export class BrowserManager {
     const browser = this.retrieveOrInitialize(browserOpts);
 
     return {
-      browser: browser,
+      browser,
       identifier: windowId,
     };
   }
@@ -181,12 +178,28 @@ export class BrowserManager {
   /**
    * Initialize all browsers when app starts up
    */
-  initializeBrowsers() {
+  async initializeBrowsers() {
     logger.info('Initializing all browsers');
+
+    // Check if onboarding is completed (remote server configured)
+    const remoteServerConfigCtr = this.app.getController(RemoteServerConfigCtr);
+    const isOnboardingCompleted = await remoteServerConfigCtr.isRemoteServerConfigured();
+
     Object.values(appBrowsers).forEach((browser: BrowserWindowOpts) => {
       logger.debug(`Initializing browser: ${browser.identifier}`);
 
-      if (browser.keepAlive) {
+      // Dynamically determine initial path for main window
+      if (browser.identifier === BrowsersIdentifiers.app) {
+        const initialPath = isOnboardingCompleted ? '/' : '/desktop-onboarding';
+        browser = {
+          ...browser,
+          keepAlive: isLinux ? false : browser.keepAlive,
+          path: initialPath,
+        };
+        logger.debug(`Main window initial path: ${initialPath}`);
+      }
+
+      if (browser.keepAlive || browser.identifier === BrowsersIdentifiers.app) {
         this.retrieveOrInitialize(browser);
       }
     });
@@ -243,6 +256,11 @@ export class BrowserManager {
     } else {
       browser?.browserWindow.maximize();
     }
+  }
+
+  isWindowMaximized(identifier: string) {
+    const browser = this.browsers.get(identifier);
+    return browser?.browserWindow.isMaximized() ?? false;
   }
 
   setWindowSize(identifier: string, size: { height?: number; width?: number }) {

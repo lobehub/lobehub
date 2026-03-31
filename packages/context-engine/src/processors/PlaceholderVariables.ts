@@ -3,9 +3,23 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    placeholderVariablesProcessed?: number;
+  }
+}
+
 const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
 
-const placeholderVariablesRegex = /{{(.*?)}}/g;
+const PLACEHOLDER_START = '{{';
+const PLACEHOLDER_END = '}}';
+
+interface PlaceholderToken {
+  end: number;
+  key: string;
+  raw: string;
+  start: number;
+}
 
 export type PlaceholderValue = unknown | (() => unknown);
 export type PlaceholderValueMap = Record<string, PlaceholderValue>;
@@ -63,9 +77,56 @@ export interface PlaceholderVariablesConfig {
  * @param text String containing template variables
  * @returns Array of variable names, e.g. ['date', 'nickname']
  */
-const extractPlaceholderVariables = (text: string): string[] => {
-  const matches = [...text.matchAll(placeholderVariablesRegex)];
-  return matches.map((m) => m[1].trim());
+const extractPlaceholderTokens = (text: string): PlaceholderToken[] => {
+  const tokens: PlaceholderToken[] = [];
+  let searchIndex = 0;
+
+  while (searchIndex < text.length) {
+    const start = text.indexOf(PLACEHOLDER_START, searchIndex);
+    if (start === -1) break;
+
+    const end = text.indexOf(PLACEHOLDER_END, start + PLACEHOLDER_START.length);
+    if (end === -1) break;
+
+    const tokenEnd = end + PLACEHOLDER_END.length;
+    tokens.push({
+      end: tokenEnd,
+      key: text.slice(start + PLACEHOLDER_START.length, end).trim(),
+      raw: text.slice(start, tokenEnd),
+      start,
+    });
+
+    searchIndex = tokenEnd;
+  }
+
+  return tokens;
+};
+
+const replaceAvailablePlaceholders = (
+  text: string,
+  placeholders: PlaceholderToken[],
+  availableVariables: Record<string, string>,
+): string => {
+  const output: string[] = [];
+  let cursor = 0;
+  let changed = false;
+
+  for (const placeholder of placeholders) {
+    output.push(text.slice(cursor, placeholder.start));
+
+    if (Object.hasOwn(availableVariables, placeholder.key)) {
+      output.push(availableVariables[placeholder.key]);
+      changed = true;
+    } else {
+      output.push(placeholder.raw);
+    }
+
+    cursor = placeholder.end;
+  }
+
+  output.push(text.slice(cursor));
+
+  return changed ? output.join('') : text;
 };
 
 /**
@@ -85,14 +146,17 @@ export const parsePlaceholderVariables = (
   // Recursive parsing to handle cases like {{text}} containing additional preset variables
   for (let i = 0; i < depth; i++) {
     try {
-      const extractedVariables = extractPlaceholderVariables(result);
+      const placeholders = extractPlaceholderTokens(result);
+      const extractedVariables = placeholders.map((placeholder) => placeholder.key);
+
+      if (placeholders.length === 0) break;
 
       log('Extracted variables from text: %o', extractedVariables);
       log('Available generator keys: %o', Object.keys(variableGenerators));
 
       // Debug: check if text contains {{username}} pattern
       if (result.includes('username') || result.includes('{{')) {
-        const matches = result.match(/{{[^}]*}}/g);
+        const matches = placeholders.map((placeholder) => placeholder.raw);
         log('All {{...}} patterns found in text: %o', matches);
       }
 
@@ -112,16 +176,7 @@ export const parsePlaceholderVariables = (
       // Only perform replacement when there are available variables
       if (Object.keys(availableVariables).length === 0) break;
 
-      // Replace variables one by one to avoid es-toolkit template's error handling for undefined variables
-      let tempResult = result;
-      for (const [key, value] of Object.entries(availableVariables)) {
-        const regex = new RegExp(
-          `{{\\s*${key.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&')}\\s*}}`,
-          'g',
-        );
-        // @ts-ignore
-        tempResult = tempResult.replace(regex, value);
-      }
+      const tempResult = replaceAvailablePlaceholders(result, placeholders, availableVariables);
 
       if (tempResult === result) break;
       result = tempResult;

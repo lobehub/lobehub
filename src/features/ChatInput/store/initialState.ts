@@ -7,6 +7,7 @@ import { type ActionKeys } from '@/features/ChatInput';
 export type SendButtonHandler = (params: {
   clearContent: () => void;
   editor: IEditor;
+  getEditorData: () => Record<string, any> | undefined;
   getMarkdownContent: () => string;
 }) => Promise<void> | void;
 
@@ -24,6 +25,8 @@ export const initialSendButtonState: SendButtonProps = {
   onStop: () => {},
 };
 
+export type SlashPlacement = 'top' | 'bottom';
+
 export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
@@ -37,6 +40,10 @@ export interface PublicState {
   sendButtonProps?: SendButtonProps;
   sendMenu?: MenuProps;
   showTypoBar?: boolean;
+  /**
+   * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)
+   */
+  slashPlacement?: SlashPlacement;
 }
 
 export interface State extends PublicState {
@@ -54,4 +61,5 @@ export const initialState: State = {
   markdownContent: '',
   rightActions: [],
   slashMenuRef: { current: null },
+  slashPlacement: 'top',
 };

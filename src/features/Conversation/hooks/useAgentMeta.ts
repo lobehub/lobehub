@@ -30,8 +30,8 @@ export const useAgentMeta = (messageAgentId?: string | null): MetaData => {
     const isBuiltinAgent = builtinAgentIds.includes(agentId);
 
     if (isBuiltinAgent) {
-      // Use avatar from backend (merged from builtin-agents package), only override title
-      return { ...agentMeta, title: LOBE_AI_TITLE };
+      // Use DB-stored title if customized (e.g. via onboarding), otherwise fallback to Lobe AI
+      return { ...agentMeta, title: agentMeta.title || LOBE_AI_TITLE };
     }
 
     return agentMeta;

@@ -98,6 +98,7 @@ export default {
   'createNewAiProvider.description.title': 'Provider Description',
   'createNewAiProvider.id.desc':
     'Unique identifier for the service provider, which cannot be modified after creation',
+  'createNewAiProvider.id.duplicate': 'Provider ID already exists',
   'createNewAiProvider.id.format':
     'Can only contain numbers, lowercase letters, hyphens (-), and underscores (_) ',
   'createNewAiProvider.id.placeholder':
@@ -245,6 +246,8 @@ export default {
   'providerModels.item.modelConfig.displayName.title': 'Model Display Name',
   'providerModels.item.modelConfig.extendParams.extra':
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
+  'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint':
+    'For Codex models; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
   'providerModels.item.modelConfig.extendParams.options.effort.hint':
@@ -261,6 +264,8 @@ export default {
     'For GPT-5.2 Pro series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
     'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint':
+    'For Grok 4.20 series; controls reasoning intensity. Low/Medium uses 4 agents, High/XHigh uses 16 agents.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
     'For Gemini image generation models; controls aspect ratio of generated images.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint':
@@ -271,6 +276,10 @@ export default {
     'For Gemini 3.1 Flash Image models; controls resolution of generated images (supports 512px).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
     'For Claude, Qwen3 and similar; controls token budget for reasoning.',
+  'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint':
+    'For GLM-5 and GLM-4.7; controls token budget for reasoning (max 32k).',
+  'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint':
+    'For Qwen3 series; controls token budget for reasoning (max 80k).',
   'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
     'For OpenAI and other reasoning-capable models; controls reasoning effort.',
   'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':
@@ -287,6 +296,8 @@ export default {
     'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint':
     'For Gemini 3.1 Flash Image models; toggle thinking on/off.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint':
+    'For Gemini 3.1 Flash-Lite Preview; controls thinking depth with minimal/low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':

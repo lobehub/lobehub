@@ -37,7 +37,7 @@ export const GetAvailableModelsInspector = memo<
         <span>{t('builtins.lobe-agent-builder.apiName.getAvailableModels')}</span>
         {providerId && (
           <>
-            : <span className={highlightTextStyles.primary}>{providerId}</span>
+            :<span className={highlightTextStyles.primary}>{providerId}</span>
           </>
         )}
       </div>
@@ -47,7 +47,7 @@ export const GetAvailableModelsInspector = memo<
   // Loaded state with results
   return (
     <div className={inspectorTextStyles.root}>
-      <span>{t('builtins.lobe-agent-builder.apiName.getAvailableModels')}: </span>
+      <span>{t('builtins.lobe-agent-builder.apiName.getAvailableModels')}:</span>
       {modelInfo && (
         <span className={highlightTextStyles.primary}>
           {modelInfo.displayModels.join(' / ')}

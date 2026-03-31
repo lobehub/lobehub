@@ -168,6 +168,7 @@ export function defineConfig() {
 
   const isPublicRoute = createRouteMatcher([
     // backend api
+    '/api/v1(.*)', // OpenAPI routes should use OpenAPI auth (API Key/OIDC), not BetterAuth session
     '/api/auth(.*)',
     '/api/webhooks(.*)',
     '/api/workflows(.*)',
@@ -188,6 +189,7 @@ export function defineConfig() {
     // Make only the consent view public (GET page), not other oauth paths
     '/oauth/consent/(.*)',
     '/oidc/handoff',
+    '/oidc/device/auth',
     '/oidc/token',
     // market
     '/market-auth-callback',

@@ -5,6 +5,7 @@ import {
 } from '@lobehub/market-sdk';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import { discoverService } from '@/services/discover';
 import {
   type AgentForkRequest,
   type AgentForkResponse,
@@ -14,6 +15,7 @@ import {
   type AgentGroupForkResponse,
   type AgentGroupForkSourceResponse,
   type AgentGroupForksResponse,
+  type SkillSorts,
 } from '@/types/discover';
 
 interface GetOwnAgentsParams {
@@ -209,39 +211,17 @@ export class MarketApiService {
    * Search for skills in the LobeHub Market
    */
   async searchSkill(params: {
+    category?: string;
     locale?: string;
     order?: 'asc' | 'desc';
     page?: number;
     pageSize?: number;
     q?: string;
-    sort?:
-      | 'createdAt'
-      | 'forks'
-      | 'installCount'
-      | 'name'
-      | 'relevance'
-      | 'stars'
-      | 'updatedAt'
-      | 'watchers';
-  }): Promise<{
-    items: Array<{
-      category?: string;
-      createdAt: string;
-      description: string;
-      installCount: number;
-      identifier: string;
-      name: string;
-      repository?: string;
-      sourceUrl?: string;
-      summary?: string;
-      updatedAt: string;
-      version?: string;
-    }>;
-    page: number;
-    pageSize: number;
-    total: number;
-  }> {
-    return lambdaClient.market.skill.searchSkill.query(params);
+    sort?: SkillSorts;
+  }) {
+    await discoverService.safeInjectMPToken();
+
+    return lambdaClient.market.skill.getSkillList.query(params);
   }
 
   /**

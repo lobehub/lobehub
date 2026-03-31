@@ -11,6 +11,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
     checkHash: vi.fn().mockResolvedValue({ isExist: true }),
     create: vi.fn().mockResolvedValue({ id: 'test-id' }),
     findById: vi.fn().mockResolvedValue(undefined),
+    findByIds: vi.fn().mockResolvedValue([]),
     query: vi.fn().mockResolvedValue([]),
     delete: vi.fn().mockResolvedValue(undefined),
     deleteMany: vi.fn().mockResolvedValue([]),
@@ -45,6 +46,9 @@ function createCallerWithCtx(partialCtx: any = {}) {
   };
 
   const documentModel = {};
+  const documentService = {
+    deleteDocuments: vi.fn().mockResolvedValue(undefined),
+  };
 
   const ctx = {
     serverDB: {} as any,
@@ -52,6 +56,7 @@ function createCallerWithCtx(partialCtx: any = {}) {
     asyncTaskModel,
     chunkModel,
     documentModel,
+    documentService,
     fileModel,
     fileService,
     knowledgeRepo,
@@ -99,6 +104,7 @@ const mockFileModelCreate = vi.fn();
 const mockFileModelDelete = vi.fn();
 const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
+const mockFileModelFindByIds = vi.fn();
 const mockFileModelQuery = vi.fn();
 const mockFileModelClear = vi.fn();
 
@@ -109,6 +115,7 @@ vi.mock('@/database/models/file', () => ({
     delete: mockFileModelDelete,
     deleteMany: mockFileModelDeleteMany,
     findById: mockFileModelFindById,
+    findByIds: mockFileModelFindByIds,
     query: mockFileModelQuery,
     clear: mockFileModelClear,
   })),
@@ -127,6 +134,7 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 const mockKnowledgeRepoQuery = vi.fn().mockResolvedValue([]);
+const mockDocumentServiceDeleteDocuments = vi.fn();
 
 vi.mock('@/database/repositories/knowledge', () => ({
   KnowledgeRepo: vi.fn(() => ({
@@ -136,6 +144,12 @@ vi.mock('@/database/repositories/knowledge', () => ({
 
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn(() => ({})),
+}));
+
+vi.mock('@/server/services/document', () => ({
+  DocumentService: vi.fn(() => ({
+    deleteDocuments: mockDocumentServiceDeleteDocuments,
+  })),
 }));
 
 describe('fileRouter', () => {
@@ -445,6 +459,60 @@ describe('fileRouter', () => {
     });
   });
 
+  describe('getKnowledgeItemStatusesByIds', () => {
+    it('should return lightweight status fields in input order and skip missing ids', async () => {
+      mockFileModelFindByIds.mockResolvedValue([
+        {
+          ...mockFile,
+          chunkTaskId: null,
+          embeddingTaskId: 'emb-2',
+          id: 'file-2',
+        },
+        {
+          ...mockFile,
+          chunkTaskId: 'chunk-1',
+          embeddingTaskId: 'emb-1',
+          id: 'file-1',
+        },
+      ]);
+      mockChunkCountByFileIds.mockResolvedValue([
+        { count: 3, id: 'file-2' },
+        { count: 10, id: 'file-1' },
+      ]);
+      mockAsyncTaskFindByIds
+        .mockResolvedValueOnce([{ error: null, id: 'chunk-1', status: AsyncTaskStatus.Success }])
+        .mockResolvedValueOnce([
+          { error: null, id: 'emb-2', status: AsyncTaskStatus.Processing },
+          { error: null, id: 'emb-1', status: AsyncTaskStatus.Success },
+        ]);
+
+      const result = await caller.getKnowledgeItemStatusesByIds({
+        ids: ['file-2', 'missing-id', 'file-1'],
+      });
+
+      expect(result).toEqual([
+        {
+          chunkCount: 3,
+          chunkingError: null,
+          chunkingStatus: null,
+          embeddingError: null,
+          embeddingStatus: AsyncTaskStatus.Processing,
+          finishEmbedding: false,
+          id: 'file-2',
+        },
+        {
+          chunkCount: 10,
+          chunkingError: null,
+          chunkingStatus: AsyncTaskStatus.Success,
+          embeddingError: null,
+          embeddingStatus: AsyncTaskStatus.Success,
+          finishEmbedding: true,
+          id: 'file-1',
+        },
+      ]);
+    });
+  });
+
   describe('removeFile', () => {
     it('should do nothing when file not found', async () => {
       ctx.fileModel.delete.mockResolvedValue(null);
@@ -462,6 +530,46 @@ describe('fileRouter', () => {
       await caller.removeFiles({ ids: ['invalid-1', 'invalid-2'] });
 
       expect(ctx.fileService.deleteFiles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeAllFiles', () => {
+    it('should include knowledge-base files when clearing all user files', async () => {
+      mockFileModelQuery.mockResolvedValue([{ id: 'file-1' }, { id: 'file-2' }]);
+      mockFileModelDeleteMany.mockResolvedValue([]);
+
+      await caller.removeAllFiles();
+
+      expect(mockFileModelQuery).toHaveBeenCalledWith({ showFilesInKnowledgeBase: true });
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-1', 'file-2'], false);
+    });
+  });
+
+  describe('deleteKnowledgeItemsByQuery', () => {
+    it('should delete page-backed knowledge items via documentService and plain files via fileModel', async () => {
+      mockKnowledgeRepoQuery.mockResolvedValue([
+        {
+          documentId: 'doc-1',
+          fileId: 'file-1',
+          fileType: 'custom/page',
+          id: 'doc-1',
+          sourceType: 'file',
+        },
+        {
+          documentId: null,
+          fileId: 'file-2',
+          fileType: 'text/plain',
+          id: 'file-2',
+          sourceType: 'file',
+        },
+      ]);
+      mockFileModelDeleteMany.mockResolvedValue([]);
+
+      const result = await caller.deleteKnowledgeItemsByQuery({});
+
+      expect(mockDocumentServiceDeleteDocuments).toHaveBeenCalledWith(['doc-1']);
+      expect(mockFileModelDeleteMany).toHaveBeenCalledWith(['file-2'], false);
+      expect(result).toEqual({ count: 2 });
     });
   });
 

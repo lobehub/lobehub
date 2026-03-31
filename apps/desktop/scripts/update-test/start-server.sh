@@ -35,9 +35,20 @@ echo "   目录: $SERVER_DIR"
 echo "   端口: $PORT"
 echo ""
 
-# 列出服务器目录中的文件
-echo "📦 可用文件:"
-ls -la "$SERVER_DIR" | grep -v "^d" | grep -v "^total" | awk '{print "   " $NF}'
+# 列出可用渠道
+echo "📦 可用渠道:"
+for ch_dir in "$SERVER_DIR"/*/; do
+  if [ -d "$ch_dir" ]; then
+    ch=$(basename "$ch_dir")
+    manifest="$ch_dir/$ch-mac.yml"
+    if [ -f "$manifest" ]; then
+      ver=$(grep '^version:' "$manifest" | awk '{print $2}')
+      echo "   $ch -> v$ver  (http://localhost:$PORT/$ch/$ch-mac.yml)"
+    else
+      echo "   $ch -> (no manifest)"
+    fi
+  fi
+done
 echo ""
 
 # 启动服务器 (后台运行)
@@ -56,10 +67,6 @@ if ps -p "$SERVER_PID" > /dev/null 2>&1; then
   echo "   地址: http://localhost:$PORT"
   echo "   PID:  $SERVER_PID"
   echo "   日志: $LOG_FILE"
-  echo ""
-  echo "📋 测试 URL:"
-  echo "   latest-mac.yml: http://localhost:$PORT/latest-mac.yml"
-  echo "   latest.yml:     http://localhost:$PORT/latest.yml"
   echo ""
   echo "🛑 停止服务器: ./stop-server.sh"
 else

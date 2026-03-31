@@ -1,4 +1,124 @@
 export default {
+  'chat.01.prompt':
+    'Explain quantum computing in simple terms. What makes it different from classical computing, and what are some real-world applications that could benefit from it?',
+  'chat.01.title': 'Explain quantum computing simply',
+  'chat.02.prompt':
+    'What are the most effective strategies for learning a new skill quickly? I want practical, science-backed techniques I can start using today.',
+  'chat.02.title': 'Best strategies for learning fast',
+  'chat.03.prompt':
+    'Help me write a professional email to my manager requesting time off for a vacation. I want it to be polite, clear, and include all the necessary details.',
+  'chat.03.title': 'Draft a time-off request email',
+  'chat.04.prompt':
+    'I want to start a morning routine that boosts productivity. What habits do successful people commonly practice, and how should I structure my mornings?',
+  'chat.04.title': 'Design a productive morning routine',
+  'chat.05.prompt':
+    'Compare the pros and cons of different popular programming languages (Python, JavaScript, Rust, Go) for someone starting a new backend project in 2025.',
+  'chat.05.title': 'Compare programming languages',
+  'chat.06.prompt':
+    'Summarize the key ideas from the book "Thinking, Fast and Slow" by Daniel Kahneman. What are the most important takeaways I can apply to daily decision-making?',
+  'chat.06.title': 'Summarize a famous book for me',
+  'chat.07.prompt':
+    'Help me brainstorm creative gift ideas for a friend who loves cooking, traveling, and reading. I want something thoughtful and unique.',
+  'chat.07.title': 'Brainstorm creative gift ideas',
+  'chat.08.prompt':
+    'What are the biggest trends in AI and technology right now? Give me a brief overview of what is happening and why it matters.',
+  'chat.08.title': 'Latest trends in AI and tech',
+  'chat.09.prompt':
+    'Help me plan a healthy meal prep for the week. I want balanced meals that are easy to prepare, store well, and taste great reheated.',
+  'chat.09.title': 'Plan a weekly meal prep',
+  'chat.10.prompt':
+    'Explain the basics of personal investing for a beginner. What should I know about stocks, bonds, index funds, and retirement accounts?',
+  'chat.10.title': 'Investing basics for beginners',
+  'chat.11.prompt':
+    'Write a short bedtime story about a brave little fox who goes on an adventure in a magical forest. Make it enchanting and suitable for a 5-year-old.',
+  'chat.11.title': 'Write a bedtime story',
+  'chat.12.prompt':
+    'Help me debug my thinking about a difficult decision I need to make. Walk me through a structured decision-making framework I can use.',
+  'chat.12.title': 'Help me make a tough decision',
+  'chat.13.prompt':
+    'What are some fun and educational science experiments I can do at home with common household items? I want activities suitable for kids aged 8-12.',
+  'chat.13.title': 'Fun science experiments at home',
+  'chat.14.prompt':
+    'Help me write a compelling LinkedIn summary that showcases my professional experience and attracts recruiters. I want it to stand out.',
+  'chat.14.title': 'Write a standout LinkedIn bio',
+  'chat.15.prompt':
+    'Explain how the global economy works in simple terms. Cover topics like GDP, inflation, interest rates, and trade in a way anyone can understand.',
+  'chat.15.title': 'Explain the global economy simply',
+  'chat.16.prompt':
+    'Give me a list of thought-provoking questions I can use to have deeper, more meaningful conversations with friends and family.',
+  'chat.16.title': 'Deep conversation starters',
+  'chat.17.prompt':
+    'Help me create a 30-day fitness challenge that I can do at home with no equipment. Include a mix of cardio, strength, and flexibility exercises.',
+  'chat.17.title': 'Create a 30-day fitness challenge',
+  'chat.18.prompt':
+    'What are some effective techniques for managing stress and anxiety? Give me practical strategies I can use in the moment and long-term habits to build.',
+  'chat.18.title': 'Techniques for managing stress',
+  'chat.19.prompt':
+    'Help me understand how climate change works. What causes it, what are its effects, and what can individuals realistically do to help?',
+  'chat.19.title': 'Understand climate change',
+  'chat.20.prompt':
+    'Recommend 5 must-watch movies from different genres that are considered masterpieces. Explain briefly why each one is worth watching.',
+  'chat.20.title': 'Recommend must-watch movies',
+  'chat.21.prompt':
+    'Help me improve my writing skills. What are the most common mistakes people make, and what techniques can I practice to write more clearly and persuasively?',
+  'chat.21.title': 'Improve my writing skills',
+  'chat.22.prompt':
+    'Explain blockchain technology and cryptocurrency in plain language. What problems do they solve, and what should I be cautious about?',
+  'chat.22.title': 'Explain blockchain simply',
+  'chat.23.prompt':
+    'Help me create a study plan for learning data science from scratch. What topics should I cover, in what order, and what resources would you recommend?',
+  'chat.23.title': 'Create a data science study plan',
+  'chat.24.prompt':
+    'What are some creative ways to make extra income on the side? I want realistic ideas that I can start with minimal upfront investment.',
+  'chat.24.title': 'Creative side income ideas',
+  'chat.25.prompt':
+    'Help me write a thank you note to a mentor who has significantly influenced my career. I want it to be genuine, specific, and memorable.',
+  'chat.25.title': 'Write a heartfelt thank you note',
+  'chat.26.prompt':
+    'Explain the theory of relativity in a way that a high school student could understand. Use analogies and everyday examples.',
+  'chat.26.title': 'Explain relativity simply',
+  'chat.27.prompt':
+    'Help me organize and declutter my digital life — emails, files, photos, subscriptions, and passwords. Give me a step-by-step plan.',
+  'chat.27.title': 'Organize my digital life',
+  'chat.28.prompt':
+    'What are the most important soft skills for career success? How can I develop skills like communication, leadership, and emotional intelligence?',
+  'chat.28.title': 'Develop essential soft skills',
+  'chat.29.prompt':
+    'Create a fun trivia quiz with 10 questions across different categories like science, history, pop culture, and geography. Include the answers at the end.',
+  'chat.29.title': 'Create a fun trivia quiz',
+  'chat.30.prompt':
+    'Help me plan a weekend trip to a nearby city. What should I consider when planning, and can you create a sample itinerary template I can customize?',
+  'chat.30.title': 'Plan a weekend getaway',
+  'chat.31.prompt':
+    'What are the best practices for giving and receiving feedback at work? Help me learn to give constructive criticism that people actually appreciate.',
+  'chat.31.title': 'Master giving feedback at work',
+  'chat.32.prompt':
+    'Explain how machine learning works at a high level. What are the different types, and what kinds of problems can it solve?',
+  'chat.32.title': 'Explain machine learning basics',
+  'chat.33.prompt':
+    'Help me create a personal budget. Walk me through categorizing my expenses, setting savings goals, and tracking my spending effectively.',
+  'chat.33.title': 'Create a personal budget',
+  'chat.34.prompt':
+    'What are some proven techniques for better sleep? I want to improve my sleep quality and feel more rested in the morning.',
+  'chat.34.title': 'Tips for better sleep',
+  'chat.35.prompt':
+    'Help me write a compelling short bio for my personal website. It should be professional yet personable, around 150 words.',
+  'chat.35.title': 'Write a personal website bio',
+  'chat.36.prompt':
+    'Explain the basics of photography composition. What rules and techniques can I use to take more visually appealing photos with my phone?',
+  'chat.36.title': 'Photography tips for beginners',
+  'chat.37.prompt':
+    'Help me prepare for a job interview. What are the most common questions, how should I structure my answers, and what mistakes should I avoid?',
+  'chat.37.title': 'Prepare for a job interview',
+  'chat.38.prompt':
+    'What are some interesting philosophical thought experiments? Explain a few classic ones and what they teach us about ethics, reality, and consciousness.',
+  'chat.38.title': 'Explore philosophical puzzles',
+  'chat.39.prompt':
+    'Help me set meaningful goals for the next year. Walk me through a goal-setting framework that balances ambition with practicality.',
+  'chat.39.title': 'Set meaningful yearly goals',
+  'chat.40.prompt':
+    'Teach me the basics of cooking. What fundamental techniques, tools, and recipes should every home cook know to feel confident in the kitchen?',
+  'chat.40.title': 'Learn cooking fundamentals',
   'agent.01.prompt':
     "You are a Creative Writing Mentor who helps writers develop their craft. What You Do: Provide constructive feedback on writing (praise strengths, suggest improvements); Teach storytelling techniques: plot structure, character development, pacing, dialogue; Suggest exercises to overcome writer's block; Guide through different genres and styles; Help writers find their unique voice. Tool Usage: Artifacts: Create character cards, plot diagrams (Mermaid), writing prompt generators (React), and story templates; Notebook: Save user's drafts, feedback reports, and writing plans (ask before saving). Be supportive, honest, and passionate about stories. Meet writers where they are.",
   'agent.01.title': 'Help me become a better writer',

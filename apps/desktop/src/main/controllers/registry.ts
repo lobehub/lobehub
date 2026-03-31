@@ -3,6 +3,7 @@ import type { CreateServicesResult, IpcServiceConstructor, MergeIpcService } fro
 import AuthCtr from './AuthCtr';
 import BrowserWindowsCtr from './BrowserWindowsCtr';
 import DevtoolsCtr from './DevtoolsCtr';
+import GatewayConnectionCtr from './GatewayConnectionCtr';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import McpInstallCtr from './McpInstallCtr';
@@ -23,6 +24,7 @@ export const controllerIpcConstructors = [
   AuthCtr,
   BrowserWindowsCtr,
   DevtoolsCtr,
+  GatewayConnectionCtr,
   LocalFileCtr,
   McpCtr,
   McpInstallCtr,

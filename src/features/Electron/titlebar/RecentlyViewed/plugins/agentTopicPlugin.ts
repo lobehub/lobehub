@@ -1,5 +1,7 @@
 import { MessageSquare } from 'lucide-react';
 
+import { useChatStore } from '@/store/chat';
+
 import { type AgentTopicParams, type PageReference, type ResolvedPageData } from '../types';
 import { type PluginContext, type RecentlyViewedPlugin } from './types';
 import { createPageReference } from './types';
@@ -36,6 +38,10 @@ export const agentTopicPlugin: RecentlyViewedPlugin<'agent-topic'> = {
     return AGENT_PATH_REGEX.test(pathname) && searchParams.has('topic');
   },
 
+  onActivate(reference: PageReference<'agent-topic'>) {
+    useChatStore.getState().switchTopic(reference.params.topicId);
+  },
+
   parseUrl(pathname: string, searchParams: URLSearchParams): PageReference<'agent-topic'> | null {
     const match = pathname.match(AGENT_PATH_REGEX);
     if (!match) return null;
@@ -56,6 +62,7 @@ export const agentTopicPlugin: RecentlyViewedPlugin<'agent-topic'> = {
     const { agentId, topicId } = reference.params;
     const agentMeta = ctx.getAgentMeta(agentId);
     const topic = ctx.getTopic(topicId);
+
     const cached = reference.cached;
 
     const agentExists = agentMeta !== undefined && Object.keys(agentMeta).length > 0;

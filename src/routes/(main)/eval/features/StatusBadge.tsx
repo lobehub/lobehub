@@ -2,13 +2,14 @@
 
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Activity, CheckCircle2, Clock, Pause, XCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Clock, Hourglass, Pause, XCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const statusConfig: Record<string, { cls: string; icon: any }> = {
   aborted: { cls: 'default', icon: Pause },
   completed: { cls: 'success', icon: CheckCircle2 },
+  external: { cls: 'warning', icon: Hourglass },
   failed: { cls: 'error', icon: XCircle },
   idle: { cls: 'default', icon: Clock },
   pending: { cls: 'warning', icon: Clock },

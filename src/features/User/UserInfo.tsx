@@ -5,7 +5,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
-import PlanTag from '@/features/User/PlanTag';
+import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -19,10 +19,9 @@ export interface UserInfoProps extends FlexboxProps {
 
 const UserInfo = memo<UserInfoProps>(({ avatarProps, onClick, ...rest }) => {
   const isSignedIn = useUserStore(authSelectors.isLogin);
-  const [nickname, username, subscriptionPlan] = useUserStore((s) => [
+  const [nickname, username] = useUserStore((s) => [
     userProfileSelectors.nickName(s),
     userProfileSelectors.displayUserName(s),
-    s.subscriptionPlan,
   ]);
 
   return (
@@ -48,7 +47,7 @@ const UserInfo = memo<UserInfoProps>(({ avatarProps, onClick, ...rest }) => {
           )}
         </Flexbox>
       </Flexbox>
-      {isSignedIn && <PlanTag type={subscriptionPlan} />}
+      {isSignedIn && <ThemeButton placement={'right'} size={16} />}
     </Flexbox>
   );
 });

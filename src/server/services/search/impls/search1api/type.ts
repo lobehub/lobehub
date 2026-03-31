@@ -65,8 +65,6 @@ export interface Search1ApiSearchParameters {
   time_range?: TimeRange;
 }
 
-// Define the Search1API specific response structure based on user input
-// Ideally, this would live in a dedicated types file (e.g., src/types/tool/search/search1api.ts)
 interface Search1ApiResult {
   content?: string;
   link: string;
@@ -74,8 +72,23 @@ interface Search1ApiResult {
   title?: string;
 }
 
+export interface Search1ApiResponseItem {
+  data: {
+    results?: Search1ApiResult[];
+    searchParameters?: Search1ApiSearchParameters;
+  };
+  success: boolean;
+}
+
+/**
+ * @deprecated Use Search1ApiRawResponse instead
+ */
 export interface Search1ApiResponse {
-  // Keeping this generic for now
   results?: Search1ApiResult[];
   searchParameters?: Search1ApiSearchParameters;
+}
+
+export interface Search1ApiRawResponse {
+  results: Search1ApiResponseItem[];
+  summary?: string;
 }

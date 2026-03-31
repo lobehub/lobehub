@@ -1,36 +1,31 @@
 import { type DesktopOnboardingScreen } from './types';
 import { isDesktopOnboardingScreen } from './types';
 
-export const DESKTOP_ONBOARDING_STORAGE_KEY = 'lobechat:desktop:onboarding:completed:v1';
+export const DESKTOP_ONBOARDING_COMPLETED_KEY = 'lobechat:desktop:onboarding:completed:v1';
 export const DESKTOP_ONBOARDING_SCREEN_KEY = 'lobechat:desktop:onboarding:screen:v1';
 
+/**
+ * Check if user has completed onboarding in this session
+ * Uses sessionStorage so it clears when the browser session ends
+ */
 export const getDesktopOnboardingCompleted = () => {
-  if (typeof window === 'undefined') return true;
-
-  try {
-    return window.localStorage.getItem(DESKTOP_ONBOARDING_STORAGE_KEY) === '1';
-  } catch {
-    // If localStorage is unavailable, treat as completed to avoid redirect loops.
-    return true;
-  }
-};
-
-export const setDesktopOnboardingCompleted = () => {
   if (typeof window === 'undefined') return false;
 
   try {
-    window.localStorage.setItem(DESKTOP_ONBOARDING_STORAGE_KEY, '1');
-    return true;
+    return window.sessionStorage.getItem(DESKTOP_ONBOARDING_COMPLETED_KEY) === '1';
   } catch {
     return false;
   }
 };
 
-export const clearDesktopOnboardingCompleted = () => {
+/**
+ * Mark onboarding as completed for this session
+ */
+export const setDesktopOnboardingCompleted = () => {
   if (typeof window === 'undefined') return false;
 
   try {
-    window.localStorage.removeItem(DESKTOP_ONBOARDING_STORAGE_KEY);
+    window.sessionStorage.setItem(DESKTOP_ONBOARDING_COMPLETED_KEY, '1');
     return true;
   } catch {
     return false;

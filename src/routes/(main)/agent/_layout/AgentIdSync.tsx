@@ -1,6 +1,6 @@
 import { useMount, usePrevious, useUnmount } from 'ahooks';
-import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { useAgentStore } from '@/store/agent';
@@ -10,6 +10,9 @@ const AgentIdSync = () => {
   const useStoreUpdater = createStoreUpdater(useAgentStore);
   const useChatStoreUpdater = createStoreUpdater(useChatStore);
   const params = useParams<{ aid?: string }>();
+  const [searchParams] = useSearchParams();
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
   const prevAgentId = usePrevious(params.aid);
 
   useStoreUpdater('activeAgentId', params.aid);
@@ -20,7 +23,12 @@ const AgentIdSync = () => {
   useEffect(() => {
     // Only reset topic when switching between agents (not on initial mount)
     if (prevAgentId !== undefined && prevAgentId !== params.aid) {
-      useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+      // Preserve topic if the URL already carries one (e.g. tab navigation)
+      const topicFromUrl = searchParamsRef.current.get('topic');
+
+      if (!topicFromUrl) {
+        useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+      }
     }
     // Clear unread completion indicator for the agent being viewed
     if (params.aid) {

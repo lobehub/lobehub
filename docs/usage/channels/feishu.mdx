@@ -1,0 +1,192 @@
+---
+title: Connect LobeHub to Feishu (飞书)
+description: >-
+  Learn how to create a Feishu custom app and connect it to your LobeHub agent
+  as a message channel, enabling your AI assistant to interact with team members
+  in Feishu chats.
+tags:
+  - Feishu
+  - 飞书
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to Feishu (飞书)
+
+By connecting a Feishu channel to your LobeHub agent, team members can interact with the AI assistant directly in Feishu private chats and group conversations.
+
+> If you are using the international version (Lark), please refer to the [Lark setup guide](/docs/usage/channels/lark).
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A Feishu account with permissions to create enterprise apps
+
+## Step 1: Create a Feishu App
+
+<Steps>
+  ### Open the Developer Portal
+
+  Visit [open.feishu.cn/app](https://open.feishu.cn/app) and sign in with your account.
+
+  ### Create an Enterprise App
+
+  Click **Create Enterprise App**. Fill in the app name (e.g., "LobeHub 助手"), description, and icon, then submit the form.
+
+  ![](/blog/assets086849ced67ad95fc3f0d1f509add1bf.webp)
+
+  ### Copy App Credentials
+
+  Go to **Credentials & Basic Info** and copy:
+
+  - **App ID** (format: `cli_xxx`)
+  - **App Secret**
+
+  > **Important:** Keep your App Secret confidential. Never share it publicly.
+
+  ![](/blog/assetsf811b07c10e4a887248fc3f53d085241.webp)
+</Steps>
+
+## Step 2: Configure App Permissions and Bot
+
+<Steps>
+  ### Import Required Permissions
+
+  In your app settings, go to **Permissions & Scopes**, click **Batch Import**, and paste the JSON below to grant the bot all necessary permissions.
+
+  ```json
+  {
+    "scopes": {
+      "tenant": [
+        "aily:file:read",
+        "aily:file:write",
+        "application:application.app_message_stats.overview:readonly",
+        "application:application:self_manage",
+        "application:bot.menu:write",
+        "cardkit:card:read",
+        "cardkit:card:write",
+        "contact:user.employee_id:readonly",
+        "corehr:file:download",
+        "event:ip_list",
+        "im:chat.access_event.bot_p2p_chat:read",
+        "im:chat.members:bot_access",
+        "im:message",
+        "im:message.group_at_msg:readonly",
+        "im:message.p2p_msg:readonly",
+        "im:message:readonly",
+        "im:message:send_as_bot",
+        "im:resource"
+      ],
+      "user": [
+        "aily:file:read",
+        "aily:file:write",
+        "im:chat.access_event.bot_p2p_chat:read"
+      ]
+    }
+  }
+  ```
+
+  ![](/blog/assets03aba6c4b7a39ed9b1be75ecd8f335dc.webp)
+
+  ### Enable Bot Capability
+
+  Go to **App Capability** → **Bot**. Toggle the bot capability on and set your preferred bot name.
+
+  ![](/blog/assetsb74a9fc9aecbaa74529cf0fb0da37bca.webp)
+</Steps>
+
+## Step 3: Configure Feishu in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **飞书** (Feishu) from the platform list.
+
+  ### Fill in App Credentials
+
+  Enter the following fields:
+
+  - **App ID** — The App ID from your Feishu app
+  - **App Secret** — The App Secret from your Feishu app
+
+  > You don't need to fill in **Verification Token** or **Encrypt Key** at this point — you can set them up after configuring the Event Subscription in Step 4.
+
+  ### Save and Copy the Webhook URL
+
+  Click **Save Configuration**. After saving, an **Event Subscription URL** will be displayed. Copy this URL — you will need it in the next step.
+
+  ![](/blog/assetsbc6a72dc53430bbbbeafcc7d921396f4.webp)
+</Steps>
+
+## Step 4: Set Up Event Subscription in Feishu
+
+<Steps>
+  ### Open Event Subscription Settings
+
+  Go back to your app in the Feishu Developer Portal. Navigate to **Event Subscription**.
+
+  ### Configure the Request URL
+
+  Paste the **Event Subscription URL** you copied from LobeHub into the **Request URL** field. The platform will verify the endpoint automatically.
+
+  ### Add the Message Event
+
+  Add the following event:
+
+  - `im.message.receive_v1` — Triggered when a message is received
+
+  This allows your app to receive messages and forward them to LobeHub.
+
+  ![](/blog/assetsb6f4b163825de58e2b6fe4dba8ef1b26.webp)
+
+  ### (Recommended) Fill in Verification Token and Encrypt Key
+
+  After configuring Event Subscription, you can find the **Verification Token** and **Encrypt Key** at the top of the Event Subscription page under **Encryption Strategy**.
+
+  ![](/blog/assets05b5684db0f7035e8f0609f6b1b8d85c.webp)
+
+  Go back to LobeHub's channel settings and fill in:
+
+  - **Verification Token** — Used to verify that webhook events originate from Feishu
+  - **Encrypt Key** (optional) — Used to decrypt encrypted event payloads
+
+  Click **Save Configuration** again to apply.
+
+  ![](/blog/assets3fcf2ee44ffb6be5c3148667f0c1696e.webp)
+</Steps>
+
+## Step 5: Publish the App
+
+<Steps>
+  ### Create a Version
+
+  In your app settings, go to **Version Management & Release**. Create a new version with release notes.
+
+  ![](/blog/assetsbd0ac93d1d3bba86d5da86b9569a6fb1.webp)
+
+  ### Submit for Review
+
+  Submit the version for review and publish. For enterprise self-managed apps, approval is typically automatic.
+</Steps>
+
+## Step 6: Test the Connection
+
+Back in LobeHub's channel settings, click **Test Connection** to verify the credentials. Then find your bot in Feishu by searching its name and send it a message to confirm it responds.
+
+## Configuration Reference
+
+| Field                      | Required | Description                                                     |
+| -------------------------- | -------- | --------------------------------------------------------------- |
+| **App ID**                 | Yes      | Your Feishu app's App ID (`cli_xxx`)                            |
+| **App Secret**             | Yes      | Your Feishu app's App Secret                                    |
+| **Verification Token**     | No       | Verifies webhook event source (recommended)                     |
+| **Encrypt Key**            | No       | Decrypts encrypted event payloads                               |
+| **Event Subscription URL** | —        | Auto-generated after saving; paste into Feishu Developer Portal |
+
+## Troubleshooting
+
+- **Event Subscription URL verification failed:** Ensure you saved the configuration in LobeHub first, and the URL was copied correctly.
+- **Bot not responding:** Verify the app is published and approved, the bot capability is enabled, and the `im.message.receive_v1` event is subscribed.
+- **Permission errors:** Confirm all required permissions are added and approved in the Developer Portal.
+- **Test Connection failed:** Double-check the App ID and App Secret.

@@ -8,6 +8,11 @@ export const systemPrompt = `You have access to a Cloud Sandbox that provides a 
 - Sessions may expire after inactivity; files will be recreated if needed
 - The sandbox has its own isolated file system starting at the root directory
 - Commands will time out after 60 seconds by default
+- **Default shell is /bin/sh** (typically dash or ash), NOT bash. The \`source\` command may not work as expected. If you need bash-specific features or \`source\`, wrap your command with bash: \`bash -c "source ~/.creds/env && your_command"\`
+
+**Credential Injection Locations:**
+- Environment-based credentials (oauth, kv-env, kv-header) are written to \`~/.creds/env\`
+- File-based credentials are extracted to \`~/.creds/files/{key}/{filename}\`
 </sandbox_environment>
 
 

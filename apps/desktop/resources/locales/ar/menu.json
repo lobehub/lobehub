@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "التحقق من التحديثات...",
+  "common.checkingUpdates": "جاري التحقق من التحديثات...",
+  "common.downloadingUpdate": "جاري تنزيل التحديث...",
+  "common.isLatestVersion": "الإصدار محدث بالفعل",
+  "common.restartToUpdate": "أعد التشغيل للتحديث",
   "context.copyImage": "نسخ الصورة",
   "context.copyImageAddress": "نسخ عنوان الصورة",
   "context.copyLink": "نسخ الرابط",

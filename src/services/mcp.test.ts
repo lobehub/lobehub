@@ -57,7 +57,7 @@ vi.mock('@/utils/electron/ipc', () => ({
 
 vi.mock('./discover', () => ({
   discoverService: {
-    injectMPToken: vi.fn().mockResolvedValue(undefined),
+    safeInjectMPToken: vi.fn().mockResolvedValue(undefined),
     reportPluginCall: vi.fn().mockResolvedValue(undefined),
   },
 }));

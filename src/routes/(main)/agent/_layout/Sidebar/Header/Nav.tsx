@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { BlocksIcon, MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
+import { MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -15,8 +15,6 @@ import { useActionSWR } from '@/libs/swr';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
@@ -25,11 +23,10 @@ const Nav = memo(() => {
   const agentId = params.aid;
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
-  const isIntegrationActive = pathname.includes('/integration');
+  const isChannelActive = pathname.includes('/channel');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const hideProfile = !isAgentEditable;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
@@ -37,7 +34,7 @@ const Nav = memo(() => {
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
     // If in agent sub-route, navigate back to agent chat first
-    if (isProfileActive && agentId) {
+    if ((isProfileActive || isChannelActive) && agentId) {
       router.push(urlJoin('/agent', agentId));
     }
     mutate();
@@ -61,14 +58,14 @@ const Nav = memo(() => {
           }}
         />
       )}
-      {!hideProfile && isDevMode && (
+      {!hideProfile && (
         <NavItem
-          active={isIntegrationActive}
-          icon={BlocksIcon}
+          active={isChannelActive}
+          icon={RadioTowerIcon}
           title={t('tab.integration')}
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
-            router.push(urlJoin('/agent', agentId!, 'integration'));
+            router.push(urlJoin('/agent', agentId!, 'channel'));
           }}
         />
       )}

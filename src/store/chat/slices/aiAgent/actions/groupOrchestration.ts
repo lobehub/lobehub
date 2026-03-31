@@ -346,6 +346,13 @@ export class GroupOrchestrationActionImpl {
     // 8. Complete Operation
     if (state.status === 'done') {
       this.#get().completeOperation(operationId);
+
+      // Mark unread completion for background conversations
+      const completedOp = this.#get().operations[operationId];
+      if (completedOp?.context.agentId) {
+        this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+      }
+
       log('[internal_execGroupOrchestration] Operation completed successfully');
     } else if (state.status === 'error') {
       this.#get().failOperation(operationId, {

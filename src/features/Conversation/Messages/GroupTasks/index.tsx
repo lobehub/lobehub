@@ -91,7 +91,7 @@ const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id, index }) => {
       .filter(Boolean) as { avatar?: string; background?: string; title?: string }[];
   }, isEqual);
 
-  // Build title: "Agent1 / Agent2 等 N 个 agents tasks" (show max 2 agents)
+  // Build title: "Agent1 / Agent2 and N more agents tasks" (show max 2 agents)
   const title = useMemo(() => {
     const agentNames = taskAgents.map((a) => a.title).filter(Boolean);
     if (agentNames.length === 0) return '';
@@ -108,7 +108,7 @@ const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id, index }) => {
       });
     }
 
-    // Show "Agent1 / Agent2 等 X 个 agents tasks" when more than 2
+    // Show "Agent1 / Agent2 and X more agents tasks" when more than 2
     return t('task.groupTasksTitle', {
       agents: displayedAgents,
       count: totalAgents,

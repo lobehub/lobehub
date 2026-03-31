@@ -24,7 +24,6 @@ import {
   agentByIdSelectors,
   agentChatConfigSelectors,
   agentSelectors,
-  chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
@@ -142,7 +141,10 @@ class ChatService {
 
     // =================== 1.1 process user memories =================== //
 
-    const enableUserMemories = settingsSelectors.memoryEnabled(getUserStoreState());
+    const userLevelMemoryEnabled = settingsSelectors.memoryEnabled(getUserStoreState());
+    // Agent-level memory toggle takes priority over user-level setting,
+    // matching the logic in useMemoryEnabled hook
+    const enableUserMemories = chatConfig.memory?.enabled ?? userLevelMemoryEnabled;
     const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
     const effectiveMemoryEffort =
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
@@ -159,11 +161,12 @@ class ChatService {
       const activeAgentId = getChatStoreState().activeAgentId || '';
       const baseContext =
         agentByIdSelectors.getAgentBuilderContextById(activeAgentId)(getAgentStoreState());
+      const activeAgentConfig =
+        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
 
       // Build official tools list (builtin tools + Klavis tools)
       const toolState = getToolStoreState();
-      const enabledPlugins =
-        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState()).plugins || [];
+      const enabledPlugins = activeAgentConfig?.plugins || [];
 
       const officialTools: OfficialToolItem[] = [];
 
@@ -240,12 +243,12 @@ class ChatService {
     const modelMessages = await contextEngineering({
       agentBuilderContext,
       agentId: targetAgentId,
-      enableHistoryCount:
-        chatConfigByIdSelectors.getEnableHistoryCountById(targetAgentId)(getAgentStoreState()),
+      // Use raw chatConfig values, not selectors with business logic that may force false
+      enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
-      historyCount:
-        chatConfigByIdSelectors.getHistoryCountById(targetAgentId)(getAgentStoreState()) + 2,
+      // historyCount is number of history messages; add 1 for current user message
+      historyCount: (chatConfig.historyCount ?? 20) + 1,
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
@@ -345,6 +348,8 @@ class ChatService {
     const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
 
     delete (res as any).scope;
+    // Fork flow stores market metadata in agent.params; must not reach OpenAI-compatible / Responses API
+    delete (res as any).forkedFromIdentifier;
 
     const payload = merge(
       {

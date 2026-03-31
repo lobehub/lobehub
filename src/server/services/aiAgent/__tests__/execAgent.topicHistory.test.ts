@@ -101,6 +101,19 @@ vi.mock('@/server/modules/Mecha', () => ({
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({
+    uploadFromUrl: vi.fn(),
+  })),
+}));
+
+vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
+  deviceProxy: {
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 vi.mock('model-bank', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelBankModule>();
   return {
@@ -161,6 +174,7 @@ describe('AiAgentService.execAgent - topic history loading', () => {
       // Verify messageModel.query was called to load history for the topic
       expect(mockMessageQuery).toHaveBeenCalledWith(
         expect.objectContaining({ topicId: 'topic-existing' }),
+        expect.objectContaining({ postProcessUrl: expect.any(Function) }),
       );
 
       // Verify createOperation received all history messages + the new user message

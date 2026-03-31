@@ -1,6 +1,6 @@
 import { platform } from 'node:os';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 
 import { LinuxSearchServiceImpl } from './impl/linux';
 import { MacOSSearchServiceImpl } from './impl/macOS';

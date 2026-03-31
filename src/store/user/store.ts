@@ -4,9 +4,12 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type UserState } from './initialState';
 import { initialState } from './initialState';
+import { type AgentOnboardingAction } from './slices/agentOnboarding/action';
+import { createAgentOnboardingSlice } from './slices/agentOnboarding/action';
 import { type UserAuthAction } from './slices/auth/action';
 import { createAuthSlice } from './slices/auth/action';
 import { type CommonAction } from './slices/common/action';
@@ -25,12 +28,14 @@ export type UserStore = UserState &
   PreferenceAction &
   UserAuthAction &
   CommonAction &
+  AgentOnboardingAction &
   OnboardingAction;
 
 type UserStoreAction = UserSettingsAction &
   PreferenceAction &
   UserAuthAction &
   CommonAction &
+  AgentOnboardingAction &
   OnboardingAction;
 
 const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
@@ -42,6 +47,7 @@ const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
     createPreferenceSlice(...parameters),
     createAuthSlice(...parameters),
     createCommonSlice(...parameters),
+    createAgentOnboardingSlice(...parameters),
     createOnboardingSlice(...parameters),
   ]),
 });
@@ -54,5 +60,7 @@ export const useUserStore = createWithEqualityFn<UserStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+expose('user', useUserStore);
 
 export const getUserStoreState = () => useUserStore.getState();

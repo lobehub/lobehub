@@ -1,5 +1,5 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { Menu, MenuItemConstructorOptions, app, clipboard, shell } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
+import { app, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 
@@ -96,12 +96,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),
             label: t('file.preferences'),
           },
-          {
-            click: () => {
-              this.app.updaterManager.checkForUpdates({ manual: true });
-            },
-            label: t('common.checkUpdates'),
-          },
+          this.getUpdateMenuItem(t),
           { type: 'separator' },
           {
             accelerator: 'Alt+F4',
@@ -129,6 +124,8 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('view.title'),
         submenu: [
+          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          { type: 'separator' },
           { label: t('view.resetZoom'), role: 'resetZoom' },
           { label: t('view.zoomIn'), role: 'zoomIn' },
           { label: t('view.zoomOut'), role: 'zoomOut' },
@@ -211,6 +208,34 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
     }
 
     return template;
+  }
+
+  private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
+    const { stage } = this.app.updaterManager.getUpdaterState();
+
+    switch (stage) {
+      case 'checking': {
+        return { enabled: false, label: t('common.checkingUpdates') };
+      }
+      case 'downloading': {
+        return { enabled: false, label: t('common.downloadingUpdate') };
+      }
+      case 'downloaded': {
+        return {
+          click: () => this.app.updaterManager.installNow(),
+          label: t('common.restartToUpdate'),
+        };
+      }
+      case 'latest': {
+        return { enabled: false, label: t('common.isLatestVersion') };
+      }
+      default: {
+        return {
+          click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
+          label: t('common.checkUpdates'),
+        };
+      }
+    }
   }
 
   private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {

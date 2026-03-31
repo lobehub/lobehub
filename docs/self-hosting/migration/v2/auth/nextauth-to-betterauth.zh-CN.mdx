@@ -22,7 +22,7 @@ tags:
   - **务必先备份数据库**！如使用 Neon，可通过 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 创建备份
   - 迁移过程中可能出现的任何数据丢失或问题，LobeHub 概不负责
   - 本指南适合有一定开发背景的用户，不建议无技术经验的用户自行操作
-  - 如有任何疑问，欢迎到 [Discord](https://discord.com/invite/AYFPHvv2jT) 社区或 [GitHub Issue](https://github.com/lobehub/lobe-chat/issues) 提问
+  - 如有任何疑问，欢迎到 [Discord](https://discord.com/invite/AYFPHvv2jT) 社区或 [GitHub Issue](https://github.com/lobehub/lobehub/issues) 提问
 </Callout>
 
 ## 选择迁移方式
@@ -172,8 +172,8 @@ Better Auth 支持更多功能，以下是新增的环境变量：
 1. Clone LobeHub 仓库并安装依赖：
 
    ```bash
-   git clone https://github.com/lobehub/lobe-chat.git
-   cd lobe-chat
+   git clone https://github.com/lobehub/lobehub.git
+   cd lobehub
    pnpm install
    ```
 
@@ -350,7 +350,7 @@ npx tsx scripts/nextauth-to-betterauth/verify.ts
 对于 Casdoor、Logto 等身份提供商，用户可能没有配置邮箱。
 
 <Callout type={'warning'}>
-  **Casdoor 用户注意**：Casdoor 不要求用户必须配置邮箱，但 LobeHub 强依赖邮箱进行身份认证。如果因为大量用户没有邮箱而感觉迁移困难，建议暂时停留在 [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) 版本。后续官方计划提供用户端自助迁移功能，届时没有邮箱的用户登录时会被重定向到绑定邮箱页面。
+  **Casdoor 用户注意**：Casdoor 不要求用户必须配置邮箱，但 LobeHub 强依赖邮箱进行身份认证。如果因为大量用户没有邮箱而感觉迁移困难，建议暂时停留在 [v2.0.0-next.344](https://github.com/lobehub/lobehub/releases/tag/v2.0.0-next.344) 版本。后续官方计划提供用户端自助迁移功能，届时没有邮箱的用户登录时会被重定向到绑定邮箱页面。
 </Callout>
 
 解决方案：

@@ -7,18 +7,18 @@ import { memo, Suspense, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
-import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import dynamic from '@/libs/next/dynamic';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import InterruptedHint from '../Assistant/components/InterruptedHint';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
 import {
@@ -45,7 +45,7 @@ interface GroupMessageProps {
   isLatestItem?: boolean;
 }
 
-const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLatestItem }) => {
+const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => {
   // Get message and actionsConfig from ConversationStore
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
@@ -70,16 +70,18 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
 
   const contentId = lastAssistantMsg?.id;
 
-  // Get editing state from ConversationStore
+  // Get editing and interrupted state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
-  const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
-  const { minHeight } = useNewScreen({
-    creating: creating || generating,
-    isLatestItem,
-    messageId: id,
-  });
+  // Check interrupted on both the group root and the active block, because
+  // continuation runs attach their operations to lastBlockId (contentId),
+  // not the group root.
+  const groupInterrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
+  const blockInterrupted = useConversationStore(
+    messageStateSelectors.isMessageInterrupted(contentId || ''),
+  );
+  const interrupted = groupInterrupted || blockInterrupted;
 
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const addReaction = useConversationStore((s) => s.addReaction);
   const removeReaction = useConversationStore((s) => s.removeReaction);
   const userId = useUserStore(userProfileSelectors.userId)!;
@@ -135,13 +137,12 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
     <ChatItem
       showTitle
       avatar={avatar}
-      newScreenMinHeight={minHeight}
       placement={'left'}
       time={createdAt}
       actions={
         !disableEditing && (
           <>
-            {branch && (
+            {isDevMode && branch && (
               <MessageBranch
                 activeBranchIndex={branch.activeBranchIndex}
                 count={branch.count}
@@ -170,7 +171,8 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
           <FileListViewer items={aggregatedFileList} />
         </div>
       )}
-      {model && (
+      {interrupted && <InterruptedHint />}
+      {isDevMode && model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />
       )}
       {reactions.length > 0 && (

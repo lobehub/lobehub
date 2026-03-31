@@ -90,6 +90,13 @@ export class FileModel {
     return this.db.insert(globalFiles).values(file).returning();
   };
 
+  updateGlobalFile = async (
+    hashId: string,
+    data: Partial<Pick<NewGlobalFile, 'metadata' | 'url'>>,
+  ) => {
+    return this.db.update(globalFiles).set(data).where(eq(globalFiles.hashId, hashId));
+  };
+
   checkHash = async (hash: string) => {
     const item = await this.db.query.globalFiles.findFirst({
       where: eq(globalFiles.hashId, hash),

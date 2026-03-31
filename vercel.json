@@ -1,5 +1,54 @@
 {
   "buildCommand": "bun run build:vercel",
+  "headers": [
+    {
+      "source": "/_spa/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=86400, immutable"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=86400, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/_dangerous_local_dev_proxy",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/_dangerous_local_dev_proxy/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    }
+  ],
   "installCommand": "npx pnpm@10.26.2 install",
   "rewrites": [
     {

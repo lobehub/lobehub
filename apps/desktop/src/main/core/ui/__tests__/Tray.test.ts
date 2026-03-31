@@ -1,4 +1,4 @@
-import { Tray as ElectronTray, Menu, app, nativeImage } from 'electron';
+import { app, Menu, nativeImage,Tray as ElectronTray } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '../../App';

@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "檢查更新...",
+  "common.checkingUpdates": "正在檢查更新...",
+  "common.downloadingUpdate": "正在下載更新...",
+  "common.isLatestVersion": "已是最新版本",
+  "common.restartToUpdate": "重新啟動以完成更新",
   "context.copyImage": "複製圖片",
   "context.copyImageAddress": "複製圖片位址",
   "context.copyLink": "複製連結",

@@ -41,10 +41,10 @@ export const desktopRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/agent/integration'),
-                  'Desktop > Chat > Integration',
+                  () => import('@/routes/(main)/agent/channel'),
+                  'Desktop > Chat > Channel',
                 ),
-                path: 'integration',
+                path: 'channel',
               },
             ],
             element: dynamicLayout(
@@ -142,6 +142,22 @@ export const desktopRoutes: RouteObject[] = [
                 children: [
                   {
                     element: dynamicElement(
+                      () => import('@/routes/(main)/community/(list)/skill'),
+                      'Desktop > Discover > List > Skill',
+                    ),
+                    index: true,
+                  },
+                ],
+                element: dynamicElement(
+                  () => import('@/routes/(main)/community/(list)/skill/_layout'),
+                  'Desktop > Discover > List > Skill > Layout',
+                ),
+                path: 'skill',
+              },
+              {
+                children: [
+                  {
+                    element: dynamicElement(
                       () => import('@/routes/(main)/community/(list)/mcp'),
                       'Desktop > Discover > List > MCP',
                     ),
@@ -197,6 +213,13 @@ export const desktopRoutes: RouteObject[] = [
                   'Desktop > Discover > Detail > Provider',
                 ),
                 path: 'provider/:slug',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/community/(detail)/skill'),
+                  'Desktop > Discover > Detail > Skill',
+                ),
+                path: 'skill/:slug',
               },
               {
                 element: dynamicElement(
@@ -383,12 +406,15 @@ export const desktopRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/video'), 'Desktop > Video'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/video'),
+              'Desktop > Video',
+            ),
             index: true,
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/video/_layout'),
+          () => import('@/routes/(main)/(create)/video/_layout'),
           'Desktop > Video > Layout',
         ),
         errorElement: <ErrorBoundary resetPath="/video" />,
@@ -399,12 +425,15 @@ export const desktopRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/image'), 'Desktop > Image'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/image'),
+              'Desktop > Image',
+            ),
             index: true,
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/image/_layout'),
+          () => import('@/routes/(main)/(create)/image/_layout'),
           'Desktop > Image > Layout',
         ),
         errorElement: <ErrorBoundary resetPath="/image" />,
@@ -546,4 +575,22 @@ desktopRoutes.push({
   element: dynamicElement(() => import('@/routes/onboarding'), 'Desktop > Onboarding'),
   errorElement: <ErrorBoundary resetPath="/" />,
   path: '/onboarding',
+});
+
+desktopRoutes.push({
+  element: dynamicElement(
+    () => import('@/routes/onboarding/agent'),
+    'Desktop > Onboarding > Agent',
+  ),
+  errorElement: <ErrorBoundary resetPath="/" />,
+  path: '/onboarding/agent',
+});
+
+desktopRoutes.push({
+  element: dynamicElement(
+    () => import('@/routes/onboarding/classic'),
+    'Desktop > Onboarding > Classic',
+  ),
+  errorElement: <ErrorBoundary resetPath="/" />,
+  path: '/onboarding/classic',
 });

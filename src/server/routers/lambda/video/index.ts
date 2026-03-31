@@ -17,7 +17,7 @@ import {
 } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 import {
@@ -29,19 +29,16 @@ import {
 
 const log = debug('lobe-video:lambda');
 
-const videoProcedure = authedProcedure
-  .use(keyVaults)
-  .use(serverDatabase)
-  .use(async (opts) => {
-    const { ctx } = opts;
+const videoProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
 
-    return opts.next({
-      ctx: {
-        asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-        fileService: new FileService(ctx.serverDB, ctx.userId),
-      },
-    });
+  return opts.next({
+    ctx: {
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
+      fileService: new FileService(ctx.serverDB, ctx.userId),
+    },
   });
+});
 
 const createVideoInputSchema = z.object({
   generationTopicId: z.string(),
@@ -263,7 +260,7 @@ export const videoRouter = router({
     return {
       data: {
         batch: createdBatch,
-        generations: [createdGeneration],
+        generations: [{ ...createdGeneration, asyncTaskId }],
       },
       success: true,
     };

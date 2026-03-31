@@ -13,11 +13,11 @@ export enum GroupKey {
 
 const Body = memo(() => {
   return (
-    <Flexbox paddingInline={4}>
+    <Flexbox flex={1} justify={'space-between'} paddingInline={4}>
       <Accordion defaultExpandedKeys={[GroupKey.Project, GroupKey.Agent]} gap={8}>
         <Agent itemKey={GroupKey.Agent} />
-        <BottomMenu />
       </Accordion>
+      <BottomMenu />
     </Flexbox>
   );
 });

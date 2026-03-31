@@ -3,7 +3,7 @@ let apiKeyCounter = 0;
 
 /**
  * Generate API Key
- * Format: lb-{random}
+ * Format: sk-lh-{random}
  * @returns Generated API Key
  */
 export function generateApiKey(): string {
@@ -35,7 +35,7 @@ export function generateApiKey(): string {
   randomPart = randomPart.slice(0, 16);
 
   // Combine to form the final API Key
-  return `lb-${randomPart}`;
+  return `sk-lh-${randomPart}`;
 }
 
 /**
@@ -54,7 +54,7 @@ export function isApiKeyExpired(expiresAt: Date | null): boolean {
  * @returns Whether the key has a valid format
  */
 export function validateApiKeyFormat(key: string): boolean {
-  // Check format: lb-{random}
-  const pattern = /^lb-[\da-f]{16}$/;
+  // Check format: sk-lh-{random}
+  const pattern = /^sk-lh-[\da-z]{16}$/;
   return pattern.test(key);
 }

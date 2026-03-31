@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { type MenuItemType } from 'antd/es/menu/interface';
-import { Bot, BrainCog, Handshake, MessagesSquare, Mic2, UserCircle } from 'lucide-react';
+import { BookText, Bot, BrainCog, Handshake, MessagesSquare, Mic2, UserCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,6 +31,11 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
           key: ChatSettingsTabs.Prompt,
           label: t('agentTab.prompt'),
         },
+        {
+          icon: <Icon icon={BookText} size={iconSize} />,
+          key: ChatSettingsTabs.Documents,
+          label: t('agentTab.documents'),
+        },
         (!isInbox && {
           icon: <Icon icon={Handshake} size={iconSize} />,
           key: ChatSettingsTabs.Opening,
@@ -52,7 +57,7 @@ export const useCategory = ({ mobile }: UseCategoryOptions = {}) => {
           label: t('agentTab.tts'),
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, isInbox],
+    [t, isInbox, iconSize],
   );
 
   return cateItems;

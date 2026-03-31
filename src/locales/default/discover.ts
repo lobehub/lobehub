@@ -101,6 +101,7 @@ export default {
   'category.assistant.life': 'Life',
   'category.assistant.marketing': 'Marketing',
   'category.assistant.office': 'Office',
+  'category.assistant.productivity': 'Productivity',
   'category.assistant.programming': 'Programming',
   'category.assistant.translation': 'Translation',
   'category.plugin.all': 'All',
@@ -865,6 +866,244 @@ export default {
 
   'search.searching': 'Searching...',
 
+  'skillEmpty.description': 'Try adjusting filters or searching with different keywords.',
+
+  'skillEmpty.search': 'No matching Skills found',
+
+  'skillEmpty.title': 'No Skills found',
+
+  'skills.categories.agent-to-agent-protocols.description':
+    'Inter-agent communication, orchestration, and protocol skills',
+  'skills.categories.agent-to-agent-protocols.name': 'Agent-to-Agent Protocols',
+
+  'skills.categories.ai-llms.description':
+    'AI model integrations, LLM tooling, and prompt engineering skills',
+  'skills.categories.ai-llms.name': 'AI & LLMs',
+
+  'skills.categories.all.description': 'All Skills',
+  'skills.categories.all.name': 'All',
+
+  'skills.categories.apple-apps-services.description':
+    'Apple ecosystem apps, services, and platform integrations',
+  'skills.categories.apple-apps-services.name': 'Apple Apps & Services',
+
+  'skills.categories.browser-automation.description':
+    'Browser control, web scraping, and UI automation skills',
+  'skills.categories.browser-automation.name': 'Browser & Automation',
+
+  'skills.categories.calendar-scheduling.description':
+    'Calendar management, meeting scheduling, and time coordination skills',
+  'skills.categories.calendar-scheduling.name': 'Calendar & Scheduling',
+
+  'skills.categories.clawdbot-tools.description':
+    'Skills and utilities built for the Clawdbot ecosystem',
+  'skills.categories.clawdbot-tools.name': 'Clawdbot Tools',
+
+  'skills.categories.cli-utilities.description':
+    'Command-line tools, shell scripting, and terminal utilities',
+  'skills.categories.cli-utilities.name': 'CLI Utilities',
+
+  'skills.categories.coding-agents-ides.description':
+    'Skills for coding agents, IDEs, and AI-assisted development',
+  'skills.categories.coding-agents-ides.name': 'Coding Agents & IDEs',
+
+  'skills.categories.communication.description':
+    'Messaging, email, chat platforms, and communication workflow skills',
+  'skills.categories.communication.name': 'Communication',
+
+  'skills.categories.data-analytics.description':
+    'Data analysis, visualization, and business intelligence skills',
+  'skills.categories.data-analytics.name': 'Data & Analytics',
+
+  'skills.categories.devops-cloud.description':
+    'DevOps pipelines, cloud infrastructure, and deployment skills',
+  'skills.categories.devops-cloud.name': 'DevOps & Cloud',
+
+  'skills.categories.finance.description': 'Finance, banking, payments, and financial data skills',
+  'skills.categories.finance.name': 'Finance',
+
+  'skills.categories.gaming.description':
+    'Game data, achievements, leaderboards, and gaming platform skills',
+  'skills.categories.gaming.name': 'Gaming',
+
+  'skills.categories.git-github.description':
+    'Git version control and GitHub platform integrations',
+  'skills.categories.git-github.name': 'Git & GitHub',
+
+  'skills.categories.health-fitness.description':
+    'Health tracking, fitness planning, and wellness skills',
+  'skills.categories.health-fitness.name': 'Health & Fitness',
+
+  'skills.categories.image-video-generation.description':
+    'AI image generation, video creation, and visual media skills',
+  'skills.categories.image-video-generation.name': 'Image & Video Generation',
+
+  'skills.categories.ios-macos-development.description':
+    'iOS and macOS app development, Xcode, and Swift tooling skills',
+  'skills.categories.ios-macos-development.name': 'iOS & macOS Development',
+
+  'skills.categories.marketing-sales.description':
+    'Marketing campaigns, sales workflows, and growth automation skills',
+  'skills.categories.marketing-sales.name': 'Marketing & Sales',
+
+  'skills.categories.media-streaming.description':
+    'Media playback, streaming platforms, and content delivery skills',
+  'skills.categories.media-streaming.name': 'Media & Streaming',
+
+  'skills.categories.moltbook.description':
+    'Moltbook platform integrations and notebook automation skills',
+  'skills.categories.moltbook.name': 'Moltbook',
+
+  'skills.categories.notes-pkm.description':
+    'Note-taking, personal knowledge management, and second-brain skills',
+  'skills.categories.notes-pkm.name': 'Notes & PKM',
+
+  'skills.categories.pdf-documents.description':
+    'PDF processing, document parsing, and file management skills',
+  'skills.categories.pdf-documents.name': 'PDF & Documents',
+
+  'skills.categories.personal-development.description':
+    'Personal growth, habit building, and self-improvement skills',
+  'skills.categories.personal-development.name': 'Personal Development',
+
+  'skills.categories.productivity-tasks.description':
+    'Task management, workflow automation, and productivity skills',
+  'skills.categories.productivity-tasks.name': 'Productivity & Tasks',
+
+  'skills.categories.search-research.description':
+    'Web search, data retrieval, and research automation skills',
+  'skills.categories.search-research.name': 'Search & Research',
+
+  'skills.categories.security-passwords.description':
+    'Security auditing, password management, and privacy protection skills',
+  'skills.categories.security-passwords.name': 'Security & Passwords',
+
+  'skills.categories.self-hosted-automation.description':
+    'Self-hosted services, home lab automation, and infrastructure skills',
+  'skills.categories.self-hosted-automation.name': 'Self-Hosted & Automation',
+
+  'skills.categories.shopping-ecommerce.description':
+    'E-commerce integrations, shopping automation, and retail skills',
+  'skills.categories.shopping-ecommerce.name': 'Shopping & E-commerce',
+
+  'skills.categories.smart-home-iot.description':
+    'Smart home automation, IoT device control, and home management skills',
+  'skills.categories.smart-home-iot.name': 'Smart Home & IoT',
+
+  'skills.categories.speech-transcription.description':
+    'Speech recognition, audio transcription, and voice interface skills',
+  'skills.categories.speech-transcription.name': 'Speech & Transcription',
+
+  'skills.categories.transportation.description':
+    'Transportation, logistics, routing, and mobility skills',
+  'skills.categories.transportation.name': 'Transportation',
+
+  'skills.categories.web-frontend-development.description':
+    'Web development, frontend frameworks, and UI tooling skills',
+  'skills.categories.web-frontend-development.name': 'Web & Frontend Development',
+
+  'skills.details.nav.needHelp': 'Need Help?',
+
+  'skills.details.nav.reportIssue': 'Report Issue',
+
+  'skills.details.nav.viewSourceCode': 'View Source Code',
+
+  'skills.details.overview.title': 'Overview',
+
+  'skills.details.rating.title': 'Ratings',
+
+  'skills.details.related.empty': 'No related Skills yet',
+
+  'skills.details.related.listTitle': 'Related Skills',
+
+  'skills.details.related.more': 'View More',
+
+  'skills.details.related.title': 'Related Skills',
+
+  'skills.details.resources.empty': 'No resources available',
+
+  'skills.details.resources.table.name': 'Name',
+
+  'skills.details.resources.table.size': 'Size',
+
+  'skills.details.resources.title': 'Resources',
+
+  'skills.details.review.title': 'How to Submit a Review',
+
+  'skills.details.sidebar.agent.copied': 'Prompt Copied',
+
+  'skills.details.sidebar.agent.copyPrompt': 'Copy Prompt',
+
+  'skills.details.sidebar.agent.title': 'Send this prompt to your Agent to install this Skill',
+
+  'skills.details.sidebar.agent.useOnLobeAI': 'Use on LobeAI',
+
+  'skills.details.sidebar.description': 'Description',
+
+  'skills.details.sidebar.details': 'Details',
+
+  'skills.details.sidebar.directoryLayout': 'Directory Layout',
+
+  'skills.details.sidebar.downloadSkill': 'Download Skill',
+
+  'skills.details.sidebar.files': 'File Tree',
+
+  'skills.details.sidebar.installationConfig': 'Installation',
+
+  'skills.details.sidebar.installCommand': 'Install Command',
+
+  'skills.details.sidebar.platform.layout.lobehub': 'Skills are managed by LobeHub automatically',
+
+  'skills.details.sidebar.platform.layout.resourcesHint': 'other resources',
+
+  'skills.details.sidebar.platform.steps.claude':
+    'Run the install command in your terminal to download and configure this skill for Claude Code.',
+
+  'skills.details.sidebar.platform.steps.cline':
+    'Run the install command in your terminal to download and configure this skill for Cline.',
+
+  'skills.details.sidebar.platform.steps.codex':
+    'Run the install command in your terminal to download and configure this skill for Codex.',
+
+  'skills.details.sidebar.platform.steps.cursor':
+    'Run the install command in your terminal to download and configure this skill for Cursor.',
+
+  'skills.details.sidebar.platform.steps.lobehub':
+    'Install directly from the LobeHub marketplace with one click.',
+
+  'skills.details.sidebar.platform.steps.vscode':
+    'Run the install command in your terminal to download and configure this skill for VS Code.',
+
+  'skills.details.sidebar.platform.title': 'Install on {{platform}}',
+
+  'skills.details.sidebar.tags': 'Tags',
+
+  'skills.details.summary.title': 'Summary',
+
+  'skills.details.versions.empty': 'No historical versions yet',
+
+  'skills.details.versions.table.isLatest': 'Latest',
+
+  'skills.details.versions.table.publishAt': 'Published',
+
+  'skills.details.versions.table.version': 'Version',
+
+  'skills.details.versions.title': 'Version History',
+
+  'skills.hero.guide.agent': 'I am Agent',
+
+  'skills.hero.guide.human': 'I am Human',
+
+  'skills.sorts.createdAt': 'Recently Published',
+
+  'skills.sorts.installCount': 'Downloads',
+
+  'skills.sorts.name': 'Name',
+
+  'skills.sorts.stars': 'GitHub Stars',
+
+  'skills.sorts.updatedAt': 'Recently Updated',
+
   'tab.assistant': 'Agent',
 
   'tab.home': 'Home',
@@ -874,6 +1113,8 @@ export default {
   'tab.plugin': 'Skill',
 
   'tab.provider': 'Provider',
+
+  'tab.skill': 'Skills',
 
   'tab.user': 'User',
 
@@ -914,11 +1155,19 @@ export default {
 
   'user.noForkedAgents': 'No forked Agents yet',
 
+  'user.noPlugins': "This user hasn't published any Plugins yet",
+
+  'user.noSkills': "This user hasn't published any Skills yet",
+
+  'user.plugins': 'Plugins',
+
   'user.publishedAgents': 'Created Agents',
 
   'user.publishedGroups': 'Created Groups',
 
   'user.searchPlaceholder': 'Search by name or description...',
+
+  'user.skills': 'Skills',
 
   'user.statusFilter.all': 'All',
   'user.statusFilter.archived': 'Archived',
@@ -940,4 +1189,17 @@ export default {
   'user.unfavoriteSuccess': 'Unsaved',
   'user.unfollow': 'Unfollow',
   'user.website': 'Website',
+
+  'user.cancel': 'Cancel',
+  'user.githubUrl': 'GitHub Repository URL',
+  'user.githubUrlInvalid': 'Please enter a valid GitHub repository URL',
+  'user.githubUrlRequired': 'Please enter a GitHub repository URL',
+  'user.submit': 'Submit',
+  'user.submitRepo': 'Submit Repo',
+  'user.submitRepoDescription':
+    'Submit your GitHub repository to import your Skills or MCPs to the community.',
+  'user.submitRepoError': 'Failed to submit repository. Please try again.',
+  'user.submitRepoHint': 'The repository will be reviewed before being published.',
+  'user.submitRepoSuccess': 'Repository submitted successfully! It will be reviewed shortly.',
+  'user.submitRepoTitle': 'Submit Your Repository',
 };

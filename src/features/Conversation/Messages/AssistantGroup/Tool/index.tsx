@@ -6,13 +6,13 @@ import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo, useEffect, useState } from 'react';
 
+import SafeBoundary from '@/components/ErrorBoundary';
 import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
-import { ToolErrorBoundary } from '../../Tool/ErrorBoundary';
 import Actions from './Actions';
 import Inspectors from './Inspector';
 
@@ -118,6 +118,7 @@ const Tool = memo<GroupToolProps>(
     return (
       <AccordionItem
         expand={isToolDetailExpand}
+        hideIndicator={isAlwaysExpand}
         itemKey={id}
         paddingBlock={4}
         paddingInline={4}
@@ -158,7 +159,7 @@ const Tool = memo<GroupToolProps>(
               type={type}
             />
           )}
-          <ToolErrorBoundary apiName={apiName} identifier={identifier}>
+          <SafeBoundary alertTitle={`${identifier} / ${apiName}`} variant="alert">
             <Detail
               apiName={apiName}
               arguments={requestArgs}
@@ -174,7 +175,7 @@ const Tool = memo<GroupToolProps>(
               toolMessageId={toolMessageId}
               type={type}
             />
-          </ToolErrorBoundary>
+          </SafeBoundary>
           <Divider dashed style={{ marginBottom: 0, marginTop: 8 }} />
         </Flexbox>
       </AccordionItem>

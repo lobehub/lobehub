@@ -1,6 +1,6 @@
 import type { App } from '@/core/App';
 import { IoCContainer } from '@/core/infrastructure/IoCContainer';
-import { ShortcutActionType } from '@/shortcuts';
+import type { ShortcutActionType } from '@/shortcuts';
 import { IpcService } from '@/utils/ipc';
 
 const shortcutDecorator = (name: string) => (target: any, methodName: string, descriptor?: any) => {
@@ -36,9 +36,9 @@ export const createProtocolHandler = (urlType: string) => (action: string) =>
   protocolDecorator(urlType, action);
 
 interface IControllerModule {
-  afterAppReady?(): void;
+  afterAppReady?: () => void;
   app: App;
-  beforeAppReady?(): void;
+  beforeAppReady?: () => void;
 }
 
 export class ControllerModule extends IpcService implements IControllerModule {

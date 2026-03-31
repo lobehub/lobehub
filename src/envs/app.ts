@@ -22,8 +22,8 @@ const APP_URL = process.env.APP_URL
   : isInVercel
     ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
-      ? 'http://localhost:3010'
-      : 'http://localhost:3210';
+      ? `http://localhost:${process.env.PORT || 3010}`
+      : `http://localhost:${process.env.PORT || 3210}`;
 
 // INTERNAL_APP_URL is used for server-to-server calls to bypass CDN/proxy
 // Falls back to APP_URL if not set
@@ -59,8 +59,8 @@ export const getAppConfig = () => {
 
       SSRF_ALLOW_PRIVATE_IP_ADDRESS: z.boolean().optional(),
       SSRF_ALLOW_IP_ADDRESS_LIST: z.string().optional(),
-      MARKET_BASE_URL: z.string().optional(),
 
+      MARKET_BASE_URL: z.string().optional(),
       /**
        * Trusted Client Secret for Market API authentication
        * 64-character hex string (32 bytes) shared with Market server

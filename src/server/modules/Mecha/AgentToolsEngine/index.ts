@@ -9,11 +9,15 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
+import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
-import { type LobeToolManifest } from '@lobechat/context-engine';
+import { alwaysOnToolIds, builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
+import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
 import debug from 'debug';
 
@@ -89,6 +93,9 @@ export const createServerAgentToolsEngine = (
   const {
     additionalManifests,
     agentConfig,
+    deviceContext,
+    globalMemoryEnabled = false,
+    hasAgentDocuments = false,
     hasEnabledKnowledgeBases = false,
     model,
     provider,
@@ -96,12 +103,21 @@ export const createServerAgentToolsEngine = (
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
+  // Determine runtime mode based on platform
+  const isDesktopClient = !!deviceContext?.gatewayConfigured;
+  const platform = isDesktopClient ? 'desktop' : 'web';
+  const runtimeMode =
+    agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[platform] ??
+    (isDesktopClient ? 'local' : 'none');
+
   log(
-    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, additionalManifests=%d',
+    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, runtimeMode=%s, additionalManifests=%d, deviceGateway=%s',
     model,
     provider,
     searchMode,
+    runtimeMode,
     additionalManifests?.length ?? 0,
+    !!deviceContext?.gatewayConfigured,
   );
 
   return createServerToolsEngine(context, {
@@ -109,26 +125,26 @@ export const createServerAgentToolsEngine = (
     additionalManifests,
     // Add default tools based on configuration
     defaultToolIds,
-    // Create search-aware enableChecker for this request
-    enableChecker: ({ pluginId }) => {
-      // Filter LocalSystem tool on server (it's desktop-only)
-      if (pluginId === LocalSystemManifest.identifier) {
-        return false;
-      }
-
-      // For WebBrowsingManifest, apply search logic
-      if (pluginId === WebBrowsingManifest.identifier) {
-        // TODO: Check model builtin search capability when needed
-        return isSearchEnabled;
-      }
-
-      // For KnowledgeBaseManifest, only enable if knowledge is enabled
-      if (pluginId === KnowledgeBaseManifest.identifier) {
-        return hasEnabledKnowledgeBases;
-      }
-
-      // For all other plugins, enable by default
-      return true;
-    },
+    enableChecker: createEnableChecker({
+      rules: {
+        // User-selected plugins
+        ...Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true])),
+        // Always-on builtin tools
+        ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+        // System-level rules (may override user selection for specific tools)
+        [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
+        [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
+        [LocalSystemManifest.identifier]:
+          runtimeMode === 'local' &&
+          !!deviceContext?.gatewayConfigured &&
+          !!deviceContext?.deviceOnline &&
+          !!deviceContext?.autoActivated,
+        [MemoryManifest.identifier]: globalMemoryEnabled,
+        [RemoteDeviceManifest.identifier]:
+          !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
+        [AgentDocumentsManifest.identifier]: hasAgentDocuments,
+        [WebBrowsingManifest.identifier]: isSearchEnabled,
+      },
+    }),
   });
 };

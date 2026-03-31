@@ -39,6 +39,11 @@ export const useOperationState = (context: ConversationContext): OperationState 
     operationSelectors.isAgentRuntimeRunningByContext(context)(s),
   );
 
+  // Check if input should show loading (sendMessage + AI runtime)
+  const isInputLoading = useChatStore((s) =>
+    operationSelectors.isInputLoadingByContext(context)(s),
+  );
+
   // Get send message error for this context
   const sendMessageError = useMemo(() => {
     const operationIds = operationsByContext[contextKey] || [];
@@ -68,14 +73,25 @@ export const useOperationState = (context: ConversationContext): OperationState 
         const messageOps = operationIds.map((id) => operations[id]).filter(Boolean);
         const runningOps = messageOps.filter((op) => op.status === 'running');
 
+        const isGenerating = runningOps.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type));
+
+        // A message is interrupted only if the latest AI runtime operation was cancelled.
+        // Using .some() would incorrectly flag messages where a stale cancelled op
+        // precedes a successful retry (stop-then-continue flow).
+        const latestRuntimeOp = [...messageOps]
+          .reverse()
+          .find((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type));
+        const isInterrupted =
+          !isGenerating && !!latestRuntimeOp && latestRuntimeOp.status === 'cancelled';
+
         return {
           isContinuing: runningOps.some((op) => op.type === 'continue'),
           isCreating: runningOps.some(
             (op) => op.type === 'sendMessage' || op.type === 'createAssistantMessage',
           ),
-          // Check AI runtime operations (client-side and server-side)
-          isGenerating: runningOps.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type)),
+          isGenerating,
           isInReasoning: runningOps.some((op) => op.type === 'reasoning'),
+          isInterrupted,
           isProcessing: operationSelectors.isMessageProcessing(messageId)(state),
           isRegenerating: runningOps.some((op) => op.type === 'regenerate'),
         };
@@ -101,9 +117,17 @@ export const useOperationState = (context: ConversationContext): OperationState 
         };
       },
       isAIGenerating,
+      isInputLoading,
       sendMessageError,
     };
-  }, [operations, operationsByMessage, toolCallingStreamIds, isAIGenerating, sendMessageError]);
+  }, [
+    operations,
+    operationsByMessage,
+    toolCallingStreamIds,
+    isAIGenerating,
+    isInputLoading,
+    sendMessageError,
+  ]);
 
   return operationState;
 };

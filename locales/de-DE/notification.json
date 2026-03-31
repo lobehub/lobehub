@@ -1,0 +1,12 @@
+{
+  "image_generation_completed": "Bild \"{{prompt}}\" erfolgreich erstellt",
+  "image_generation_completed_title": "Bild erstellt",
+  "inbox.archiveAll": "Alle archivieren",
+  "inbox.empty": "Noch keine Benachrichtigungen",
+  "inbox.emptyUnread": "Keine ungelesenen Benachrichtigungen",
+  "inbox.filterUnread": "Nur ungelesene anzeigen",
+  "inbox.markAllRead": "Alle als gelesen markieren",
+  "inbox.title": "Benachrichtigungen",
+  "video_generation_completed": "Video \"{{prompt}}\" erfolgreich erstellt",
+  "video_generation_completed_title": "Video erstellt"
+}

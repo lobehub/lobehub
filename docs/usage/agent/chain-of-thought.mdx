@@ -48,35 +48,87 @@ When a model is reasoning, you'll see:
 
 ### Display Modes
 
-**Collapsed view** — Shows only the "Thinking..." indicator and duration. Best for quick responses where you trust the reasoning, or when you want to keep the interface clean.
+<Tabs>
+  <Tab title="Collapsed View">
+    Shows only the "Thinking..." indicator and duration.
 
-**Expanded view** — Click to reveal complete step-by-step reasoning, intermediate conclusions, logical connections, and the full thought process from start to finish. Best for validating complex reasoning or learning how problems are approached.
+    **Best for**: Quick responses where you trust the reasoning, or when you want to keep the interface clean.
+  </Tab>
+
+  <Tab title="Expanded View">
+    Click to reveal:
+
+    - Complete step-by-step reasoning
+    - Intermediate conclusions
+    - Logical connections between steps
+    - Full thought process from start to finish
+
+    **Best for**: Validating complex reasoning, learning how problems are approached, debugging incorrect answers.
+  </Tab>
+</Tabs>
 
 ## When Chain of Thought Activates
 
 CoT reasoning is most beneficial — and most commonly used by models — for:
 
-**Mathematical problems** — Multi-step calculations where the model sets up equations, performs intermediate calculations, and shows work at each step. Example: "Calculate the compound interest on $10,000 at 5% annual rate for 3 years, compounded quarterly."
+<AccordionGroup>
+  <Accordion title="Mathematical Problems">
+    Multi-step calculations where the model sets up equations, performs intermediate calculations, and shows work at each step.
 
-**Logical reasoning** — Deductive and inductive problems where the model identifies premises, applies logical rules, draws intermediate conclusions, and builds to a final inference.
+    Example: "Calculate the compound interest on $10,000 at 5% annual rate for 3 years, compounded quarterly."
+  </Accordion>
 
-**Code debugging** — Systematic error analysis where the model examines code structure, identifies potential issues, tests hypotheses, and proposes solutions.
+  <Accordion title="Logical Reasoning">
+    Deductive and inductive problems where the model identifies premises, applies logical rules, draws intermediate conclusions, and builds to a final inference.
+  </Accordion>
 
-**Complex problem solving** — Multi-faceted analysis where the model breaks down the problem, considers multiple angles, weighs trade-offs, and synthesizes solutions.
+  <Accordion title="Code Debugging">
+    Systematic error analysis where the model examines code structure, identifies potential issues, tests hypotheses, and proposes solutions.
+  </Accordion>
 
-**Strategic planning** — Structured decision-making where the model defines objectives, analyzes constraints, evaluates options, and recommends approaches.
+  <Accordion title="Complex Problem Solving">
+    Multi-faceted analysis where the model breaks down the problem, considers multiple angles, weighs trade-offs, and synthesizes solutions.
+  </Accordion>
+
+  <Accordion title="Strategic Planning">
+    Structured decision-making where the model defines objectives, analyzes constraints, evaluates options, and recommends approaches.
+  </Accordion>
+</AccordionGroup>
+
+## Benefits
+
+- **Transparency** — See exactly how the AI arrived at its answer, building trust in the output
+- **Learning** — Observe expert-level reasoning patterns to improve your own problem-solving
+- **Validation** — Verify that conclusions follow logically from premises
+- **Debugging** — Identify exactly where reasoning went wrong to get better results
 
 ## Use Cases
 
-**Education and learning** — Chain of Thought is invaluable for students. See how to approach complex problems, learn step-by-step methodologies, and understand where mistakes occur. Ask the AI to "show its work" or "explain step-by-step" for the clearest reasoning display.
+<Tabs>
+  <Tab title="Education & Learning">
+    Chain of Thought is invaluable for students. See how to approach complex problems, learn step-by-step methodologies, and understand where mistakes occur. Ask the AI to "show its work" or "explain step-by-step" for the clearest reasoning display.
+  </Tab>
 
-**Software development** — Use CoT to understand technical decisions: code review logic, architecture choices, debugging complex issues, algorithm optimization. Follow the AI's analysis to discover considerations you may have missed.
+  <Tab title="Software Development">
+    Use CoT to understand technical decisions: code review logic, architecture choices, debugging complex issues, algorithm optimization. Follow the AI's analysis to discover considerations you may have missed.
+  </Tab>
 
-**Data analysis** — See how conclusions are drawn from data. Watch statistical reasoning, hypothesis testing, and pattern recognition unfold, then verify the analytical approach before acting on insights.
+  <Tab title="Data Analysis">
+    See how conclusions are drawn from data. Watch statistical reasoning, hypothesis testing, and pattern recognition unfold, then verify the analytical approach before acting on insights.
+  </Tab>
 
-**Research and writing** — Observe how arguments and narratives are constructed: how points are organized, how logical flow develops, and how supporting evidence is selected.
+  <Tab title="Research & Writing">
+    Observe how arguments and narratives are constructed: how points are organized, how logical flow develops, and how supporting evidence is selected.
+  </Tab>
+
+  <Tab title="Decision Making">
+    For complex business or personal decisions, CoT shows the weighing of trade-offs, evaluation of options, and the reasoning that supports each recommendation.
+  </Tab>
+</Tabs>
 
 ## Interpreting the Reasoning
+
+### Understanding Steps
 
 When reviewing Chain of Thought output, look for:
 
@@ -85,6 +137,15 @@ When reviewing Chain of Thought output, look for:
 **Completeness** — Are all aspects of the question addressed? Were edge cases considered? Is anything overlooked?
 
 **Validity** — Are assumptions reasonable? Is the logic sound? Do conclusions follow from the premises?
+
+### Reading the Flow
+
+Follow the reasoning from start to finish:
+
+1. **Initial analysis** — How did the model frame the problem?
+2. **Key decisions** — What approach did it choose and why?
+3. **Critical steps** — Where were the most important logical leaps?
+4. **Conclusion** — Does the final answer align with the reasoning?
 
 If a reasoning step seems incorrect or incomplete, continue the conversation: "That step seems wrong because..." or "Can you reconsider step 3?" The model can revise its reasoning based on your feedback.
 

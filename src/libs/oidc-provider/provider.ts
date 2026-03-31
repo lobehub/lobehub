@@ -93,7 +93,33 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       backchannelLogout: { enabled: true },
       clientCredentials: { enabled: false },
       devInteractions: { enabled: false },
-      deviceFlow: { enabled: false },
+      deviceFlow: {
+        charset: 'base-20',
+        enabled: true,
+        mask: '****-****',
+        successSource: async (ctx) => {
+          ctx.redirect('/oauth/device/success');
+        },
+        userCodeConfirmSource: async (ctx, form, client, deviceInfo, userCode) => {
+          const xsrf = (ctx.oidc.session as any)?.state?.secret;
+          const params = new URLSearchParams();
+          if (xsrf) params.set('xsrf', xsrf);
+          params.set('user_code', userCode);
+          params.set('client_name', client.clientName || client.clientId);
+          params.set('client_id', client.clientId);
+          ctx.redirect(`/oauth/device/confirm?${params.toString()}`);
+        },
+        userCodeInputSource: async (ctx, form, out, err) => {
+          const xsrf = (ctx.oidc.session as any)?.state?.secret;
+          const params = new URLSearchParams();
+          if (xsrf) params.set('xsrf', xsrf);
+          if (err) {
+            params.set('error', err.message || 'Unknown error');
+            if ((err as any).userCode) params.set('user_code', (err as any).userCode);
+          }
+          ctx.redirect(`/oauth/device?${params.toString()}`);
+        },
+      },
       introspection: { enabled: true },
       resourceIndicators: {
         defaultResource: () => API_AUDIENCE,
@@ -262,6 +288,8 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
 
     routes: {
       authorization: '/oidc/auth',
+      code_verification: '/oidc/device',
+      device_authorization: '/oidc/device/auth',
       end_session: '/oidc/session/end',
       token: '/oidc/token',
     },

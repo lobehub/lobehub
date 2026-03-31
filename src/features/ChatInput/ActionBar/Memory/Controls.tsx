@@ -1,9 +1,10 @@
 import { type UserMemoryEffort } from '@lobechat/types';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { BrainOffIcon } from '@lobehub/ui/icons';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
-import { BrainCircuit, CircleOff } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +14,7 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+import { useMemoryEnabled } from './useMemoryEnabled';
 
 const MEMORY_EFFORT_LEVELS: readonly UserMemoryEffort[] = ['low', 'medium', 'high'];
 
@@ -60,9 +62,7 @@ interface ToggleOption {
 const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const isEnabled = useAgentStore((s) =>
-    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
-  );
+  const isEnabled = useMemoryEnabled(agentId);
 
   const isActive = value === 'on' ? isEnabled : !isEnabled;
 
@@ -91,21 +91,19 @@ const Controls = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [isEnabled, effort] = useAgentStore((s) => [
-    chatConfigByIdSelectors.isMemoryToolEnabledById(agentId)(s),
-    chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s),
-  ]);
+  const isEnabled = useMemoryEnabled(agentId);
+  const effort = useAgentStore((s) => chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s));
 
   const toggleOptions: ToggleOption[] = [
     {
       description: t('memory.off.desc'),
-      icon: CircleOff,
+      icon: BrainOffIcon,
       label: t('memory.off.title'),
       value: 'off',
     },
     {
       description: t('memory.on.desc'),
-      icon: BrainCircuit,
+      icon: Brain,
       label: t('memory.on.title'),
       value: 'on',
     },

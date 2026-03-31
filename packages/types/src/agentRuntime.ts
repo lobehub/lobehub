@@ -1,3 +1,15 @@
+export enum RequestTrigger {
+  Api = 'api',
+  Bot = 'bot',
+  Chat = 'chat',
+  Cron = 'cron',
+  Eval = 'eval',
+  FileEmbedding = 'file_embedding',
+  Memory = 'memory',
+  SemanticSearch = 'semantic_search',
+  Topic = 'topic',
+}
+
 // ******* Runtime Biz Error ******* //
 export const AgentRuntimeErrorType = {
   AgentRuntimeError: 'AgentRuntimeError', // Agent Runtime module runtime error

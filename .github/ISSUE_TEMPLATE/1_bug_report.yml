@@ -68,19 +68,19 @@ body:
 
   - type: textarea
     attributes:
-      label: '🐛 Bug Description'
+      label: '🐛 What happened?'
       description: A clear and concise description of the bug, if the above option is `Other`, please also explain in detail.
     validations:
       required: true
 
   - type: textarea
     attributes:
-      label: '📷 Recurrence Steps'
-      description: A clear and concise description of how to recurrence.
+      label: '📷 How to reproduce it?'
+      description: A clear and concise description of how to reproduce.
 
   - type: textarea
     attributes:
-      label: '🚦 Expected Behavior'
+      label: '🚦 What it should be?'
       description: A clear and concise description of what you expected to happen.
 
   - type: textarea

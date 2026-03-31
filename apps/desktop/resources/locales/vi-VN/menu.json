@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Kiểm tra cập nhật...",
+  "common.checkingUpdates": "Đang kiểm tra cập nhật...",
+  "common.downloadingUpdate": "Đang tải xuống cập nhật...",
+  "common.isLatestVersion": "Đã là phiên bản mới nhất",
+  "common.restartToUpdate": "Khởi động lại để cập nhật",
   "context.copyImage": "Sao chép hình ảnh",
   "context.copyImageAddress": "Sao chép địa chỉ hình ảnh",
   "context.copyLink": "Sao chép liên kết",

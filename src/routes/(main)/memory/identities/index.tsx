@@ -7,8 +7,8 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useQueryState } from '@/hooks/useQueryParam';
+import ActionBar from '@/routes/(main)/memory/features/ActionBar';
 import CommonFilterBar from '@/routes/(main)/memory/features/FilterBar';
-import MemoryAnalysis from '@/routes/(main)/memory/features/MemoryAnalysis';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { type TypesEnum } from '@/types/userMemory';
 
@@ -78,11 +78,10 @@ const IdentitiesArea = memo(() => {
           )
         }
         right={
-          <>
-            <MemoryAnalysis iconOnly />
+          <ActionBar showAnalysis showPurge>
             <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
             <WideScreenButton />
-          </>
+          </ActionBar>
         }
       />
       <Flexbox

@@ -48,7 +48,7 @@ tags:
   | ----------------------------------- | -- | ------------------------------------------------------------------------------------------------------------ |
   | `AUTH_SECRET`                       | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令生成秘钥： `openssl rand -base64 32`                                                |
   | `NEXT_AUTH_SSO_PROVIDERS`           | 必选 | 选择 LoboChat 的单点登录提供商。使用 Cloudflare Zero Trust 请填写 `cloudflare-zero-trust`。                                   |
-  | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`     | 必选 | 在 Cloudflare Zero Trust 生成的 `Client ID`，示例值是 `lobe-chat`                                                     |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`     | 必选 | 在 Cloudflare Zero Trust 生成的 `Client ID`，示例值是 `lobehub`                                                       |
   | `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET` | 必选 | 在 Cloudflare Zero Trust 生成的 `Client secret`，示例值是 `insecure_secret`                                           |
   | `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER` | 必选 | 在 Cloudflare Zero Trust 生成的 `Issuer`，例如 `https://example.cloudflareaccess.com/cdn-cgi/access/sso/oidc/7db0f` |
   | `AUTH_URL`                          | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://chat.example.com/api/auth`             |

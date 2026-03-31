@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/openapi",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "test:response-compliance": "./scripts/compliance-test.sh"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.7.6",
+    "@lobechat/model-runtime": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "debug": "^4.4.3",
+    "drizzle-orm": "^0.45.1",
+    "formidable": "^3.5.0",
+    "hono": "^4.11.1",
+    "js-sha256": "^0.11.1",
+    "lodash": "^4.17.21",
+    "url-join": "^5.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/formidable": "^3.0.0"
+  }
+}

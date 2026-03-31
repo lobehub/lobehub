@@ -1,0 +1,425 @@
+---
+title: 添加新的 Bot 平台
+description: 了解如何向 LobeHub 的渠道系统添加新的 Bot 平台（如 Slack、WhatsApp），包括 Schema 定义、客户端实现和平台注册。
+tags:
+  - Bot 平台
+  - 消息渠道
+  - 集成
+  - 开发指南
+---
+
+# 添加新的 Bot 平台
+
+本指南介绍如何向 LobeHub 的渠道系统添加新的 Bot 平台。平台架构是模块化的 —— 每个平台是 `src/server/services/bot/platforms/` 下的一个独立目录。
+
+## 架构概览
+
+```
+src/server/services/bot/platforms/
+├── types.ts            # 核心接口（FieldSchema、PlatformClient、ClientFactory 等）
+├── registry.ts         # PlatformRegistry 类
+├── index.ts            # 单例注册表 + 平台注册
+├── utils.ts            # 共享工具函数
+├── discord/            # 示例：Discord 平台
+│   ├── definition.ts   # PlatformDefinition 导出
+│   ├── schema.ts       # 凭据和设置的 FieldSchema[]
+│   ├── client.ts       # ClientFactory + PlatformClient 实现
+│   └── api.ts          # 平台 API 辅助类
+└── <your-platform>/    # 你的新平台
+```
+
+**核心概念：**
+
+- **FieldSchema** — 声明式 Schema，同时驱动服务端校验和前端表单自动生成
+- **PlatformClient** — 与平台交互的运行时接口（消息收发、生命周期管理）
+- **ClientFactory** — 创建 PlatformClient 实例并验证凭据
+- **PlatformDefinition** — 元数据 + Schema + 工厂，注册到全局注册表
+- **Chat SDK Adapter** — 将平台的 Webhook / 事件桥接到统一的 Chat SDK
+
+## 前置条件：Chat SDK Adapter
+
+每个平台都需要一个 **Chat SDK Adapter**，用于将平台的 Webhook 事件桥接到统一的 [Vercel Chat SDK](https://github.com/vercel/chat)（`chat` npm 包）。在实现平台之前，需要确定使用哪个 Adapter：
+
+### 方案 A：使用已有的 npm Adapter
+
+部分平台已有官方 Adapter 发布在 `@chat-adapter/*` 下：
+
+- `@chat-adapter/discord` — Discord
+- `@chat-adapter/slack` — Slack
+- `@chat-adapter/telegram` — Telegram
+
+可以通过 `npm view @chat-adapter/<platform>` 检查是否存在。
+
+### 方案 B：在 `packages/` 中开发自定义 Adapter
+
+如果没有现成的 npm Adapter，你需要在工作区中创建一个 Adapter 包。可参考现有实现：
+
+- `packages/chat-adapter-feishu` — 飞书 / Lark Adapter（`@lobechat/chat-adapter-feishu`）
+- `packages/chat-adapter-qq` — QQ Adapter（`@lobechat/chat-adapter-qq`）
+
+每个 Adapter 包遵循以下结构：
+
+```
+packages/chat-adapter-<platform>/
+├── package.json        # name: @lobechat/chat-adapter-<platform>
+├── tsconfig.json
+├── tsup.config.ts
+└── src/
+    ├── index.ts            # 公共导出：createXxxAdapter、XxxApiClient 等
+    ├── adapter.ts          # 实现 chat SDK 的 Adapter 接口的适配器类
+    ├── api.ts              # 平台 API 客户端（Webhook 验证、消息解析）
+    ├── crypto.ts           # 请求签名验证
+    ├── format-converter.ts # 消息格式转换（平台格式 ↔ Chat SDK AST）
+    └── types.ts            # 平台特定的类型定义
+```
+
+开发自定义 Adapter 的要点：
+
+- Adapter 必须实现 `chat` 包中的 `Adapter` 接口
+- 需要处理 Webhook 请求验证、事件解析和消息格式转换
+- `createXxxAdapter(config)` 工厂函数是 `PlatformClient.createAdapter()` 调用的入口
+- 在 `package.json` 中添加 `"chat": "^4.14.0"` 作为依赖
+
+## 第一步：创建平台目录
+
+```bash
+mkdir src/server/services/bot/platforms/<platform-name>
+```
+
+需要创建四个文件：
+
+| 文件              | 用途                                    |
+| --------------- | ------------------------------------- |
+| `schema.ts`     | 凭据和设置的字段定义                            |
+| `api.ts`        | 用于出站消息的轻量 API 客户端                     |
+| `client.ts`     | `ClientFactory` + `PlatformClient` 实现 |
+| `definition.ts` | `PlatformDefinition` 导出               |
+
+## 第二步：定义 Schema（`schema.ts`）
+
+Schema 是一个 `FieldSchema` 对象数组，包含两个顶层部分：`credentials`（凭据）和 `settings`（设置）。
+
+```ts
+import type { FieldSchema } from '../types';
+
+export const schema: FieldSchema[] = [
+  {
+    key: 'credentials',
+    label: 'channel.credentials',
+    properties: [
+      {
+        key: 'applicationId',
+        description: 'channel.applicationIdHint',
+        label: 'channel.applicationId',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'botToken',
+        description: 'channel.botTokenEncryptedHint',
+        label: 'channel.botToken',
+        required: true,
+        type: 'password', // 存储时加密，UI 中遮蔽显示
+      },
+    ],
+    type: 'object',
+  },
+  {
+    key: 'settings',
+    label: 'channel.settings',
+    properties: [
+      {
+        key: 'charLimit',
+        default: 4000,
+        description: 'channel.charLimitHint',
+        label: 'channel.charLimit',
+        minimum: 100,
+        type: 'number',
+      },
+      // 添加平台特定设置...
+    ],
+    type: 'object',
+  },
+];
+```
+
+**Schema 约定：**
+
+- `type: 'password'` 字段会被加密存储，在表单中以密码形式显示
+- 共享字段使用已有的 i18n 键（如 `channel.botToken`、`channel.charLimit`）
+- 平台特有字段使用 `channel.<platform>.<key>` 命名
+- `devOnly: true` 的字段仅在 `NODE_ENV === 'development'` 时显示
+- 凭据中必须包含一个能解析为 `applicationId` 的字段 —— 可以是显式的 `applicationId` 字段、`appId` 字段，或从 `botToken` 中提取（参见渠道详情页的 `resolveApplicationId`）
+
+## 第三步：创建 API 客户端（`api.ts`）
+
+用于回调服务（Chat SDK Adapter 之外）的出站消息操作的轻量类：
+
+```ts
+import debug from 'debug';
+
+const log = debug('bot-platform:<platform>:client');
+
+export const API_BASE = 'https://api.example.com';
+
+export class PlatformApi {
+  private readonly token: string;
+
+  constructor(token: string) {
+    this.token = token;
+  }
+
+  async sendMessage(channelId: string, text: string): Promise<{ id: string }> {
+    log('sendMessage: channel=%s', channelId);
+    return this.call('messages.send', { channel: channelId, text });
+  }
+
+  async editMessage(channelId: string, messageId: string, text: string): Promise<void> {
+    log('editMessage: channel=%s, message=%s', channelId, messageId);
+    await this.call('messages.update', { channel: channelId, id: messageId, text });
+  }
+
+  // ... 其他操作（输入指示器、表情回应等）
+
+  private async call(method: string, body: Record<string, unknown>): Promise<any> {
+    const response = await fetch(`${API_BASE}/${method}`, {
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      log('API error: method=%s, status=%d, body=%s', method, response.status, text);
+      throw new Error(`API ${method} failed: ${response.status} ${text}`);
+    }
+
+    return response.json();
+  }
+}
+```
+
+## 第四步：实现客户端（`client.ts`）
+
+实现 `PlatformClient` 并继承 `ClientFactory`：
+
+```ts
+import { createPlatformAdapter } from '@chat-adapter/<platform>';
+import debug from 'debug';
+
+import {
+  type BotPlatformRuntimeContext,
+  type BotProviderConfig,
+  ClientFactory,
+  type PlatformClient,
+  type PlatformMessenger,
+  type ValidationResult,
+} from '../types';
+import { PlatformApi } from './api';
+
+const log = debug('bot-platform:<platform>:bot');
+
+class MyPlatformClient implements PlatformClient {
+  readonly id = '<platform>';
+  readonly applicationId: string;
+
+  private config: BotProviderConfig;
+  private context: BotPlatformRuntimeContext;
+
+  constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
+    this.config = config;
+    this.context = context;
+    this.applicationId = config.applicationId;
+  }
+
+  // --- 生命周期 ---
+
+  async start(): Promise<void> {
+    // 注册 webhook 或开始监听
+    // Webhook 平台：通过平台 API 配置 webhook URL
+    // 网关平台：打开持久连接
+  }
+
+  async stop(): Promise<void> {
+    // 清理：移除 webhook 注册或关闭连接
+  }
+
+  // --- 运行时操作 ---
+
+  createAdapter(): Record<string, any> {
+    // 返回 Chat SDK adapter 实例用于入站消息处理
+    return {
+      '<platform>': createPlatformAdapter({
+        botToken: this.config.credentials.botToken,
+        // ... adapter 特定配置
+      }),
+    };
+  }
+
+  getMessenger(platformThreadId: string): PlatformMessenger {
+    const api = new PlatformApi(this.config.credentials.botToken);
+    const channelId = platformThreadId.split(':')[1];
+
+    return {
+      createMessage: (content) => api.sendMessage(channelId, content).then(() => {}),
+      editMessage: (messageId, content) => api.editMessage(channelId, messageId, content),
+      removeReaction: (messageId, emoji) => api.removeReaction(channelId, messageId, emoji),
+      triggerTyping: () => Promise.resolve(),
+    };
+  }
+
+  extractChatId(platformThreadId: string): string {
+    return platformThreadId.split(':')[1];
+  }
+
+  parseMessageId(compositeId: string): string {
+    return compositeId;
+  }
+
+  // --- 可选方法 ---
+
+  // sanitizeUserInput(text: string): string { ... }
+  // shouldSubscribe(threadId: string): boolean { ... }
+  // formatReply(body: string, stats?: UsageStats): string { ... }
+}
+
+export class MyPlatformClientFactory extends ClientFactory {
+  createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
+    return new MyPlatformClient(config, context);
+  }
+
+  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+    // 调用平台 API 验证凭据有效性
+    try {
+      const res = await fetch('https://api.example.com/auth.test', {
+        headers: { Authorization: `Bearer ${credentials.botToken}` },
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return { valid: true };
+    } catch {
+      return {
+        errors: [{ field: 'botToken', message: 'Failed to authenticate' }],
+        valid: false,
+      };
+    }
+  }
+}
+```
+
+**需要实现的关键接口：**
+
+| 方法                    | 用途                           |
+| --------------------- | ---------------------------- |
+| `start()`             | 注册 webhook 或启动网关监听           |
+| `stop()`              | 关闭时清理资源                      |
+| `createAdapter()`     | 返回 Chat SDK adapter 用于入站事件处理 |
+| `getMessenger()`      | 返回指定会话的出站消息接口                |
+| `extractChatId()`     | 从复合会话 ID 中解析平台频道 ID          |
+| `parseMessageId()`    | 将复合消息 ID 转换为平台原生格式           |
+| `sanitizeUserInput()` | \*（可选）\* 去除用户输入中的 Bot 提及标记   |
+| `shouldSubscribe()`   | \*（可选）\* 控制会话自动订阅行为          |
+| `formatReply()`       | \*（可选）\* 在回复中追加平台特定的格式化内容    |
+
+## 第五步：导出定义（`definition.ts`）
+
+```ts
+import type { PlatformDefinition } from '../types';
+import { MyPlatformClientFactory } from './client';
+import { schema } from './schema';
+
+export const myPlatform: PlatformDefinition = {
+  id: '<platform>',
+  name: 'Platform Name',
+  description: 'Connect a Platform bot',
+  documentation: {
+    portalUrl: 'https://developers.example.com',
+    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/<platform>',
+  },
+  schema,
+  showWebhookUrl: true, // 如果用户需要手动复制 webhook URL 则设为 true
+  clientFactory: new MyPlatformClientFactory(),
+};
+```
+
+**`showWebhookUrl`：** 对于需要用户手动粘贴 webhook URL 的平台（如 Slack、飞书）设为 `true`。对于通过 API 自动注册 webhook 的平台（如 Telegram）设为 `false` 或省略。
+
+## 第六步：注册平台
+
+编辑 `src/server/services/bot/platforms/index.ts`：
+
+```ts
+import { myPlatform } from './<platform>/definition';
+
+// 添加到导出
+export { myPlatform } from './<platform>/definition';
+
+// 注册
+platformRegistry.register(myPlatform);
+```
+
+## 第七步：添加 i18n 键
+
+### 默认键（`src/locales/default/agent.ts`）
+
+添加平台特有键。尽量复用通用键：
+
+```ts
+// 可复用（已存在）：
+// 'channel.botToken'、'channel.applicationId'、'channel.charLimit' 等
+
+// 平台特有：
+'channel.<platform>.description': 'Connect this assistant to Platform for ...',
+'channel.<platform>.someFieldHint': 'Description of this field.',
+```
+
+### 翻译文件（`locales/zh-CN/agent.json`、`locales/en-US/agent.json`）
+
+在两个语言文件中添加所有新键的对应翻译。
+
+## 第八步：添加用户文档
+
+在 `docs/usage/channels/` 下创建配置教程：
+
+- `<platform>.mdx` — 英文教程
+- `<platform>.zh-CN.mdx` — 中文教程
+
+参考现有文档的结构（如 `discord.mdx`）：前置条件 → 创建应用 → 在 LobeHub 中配置 → 配置 Webhook → 测试连接 → 配置参考 → 故障排除。
+
+## 前端：自动 UI 生成
+
+前端会根据 Schema 自动生成配置表单，无需修改前端代码（除非你的平台需要自定义图标）。图标解析通过将平台 `name` 与 `@lobehub/ui/icons` 中的已知图标匹配来实现：
+
+```
+// src/routes/(main)/agent/channel/const.ts
+const ICON_NAMES = ['Discord', 'GoogleChat', 'Lark', 'Slack', 'Telegram', ...];
+```
+
+如果你的平台 `name` 与图标名称匹配（不区分大小写），图标会自动使用。否则需要在 `ICON_ALIASES` 中添加别名。
+
+## Webhook URL 模式
+
+所有平台共享同一个 Webhook 路由：
+
+```
+POST /api/agent/webhooks/[platform]/[appId]
+```
+
+`BotMessageRouter` 会自动处理路由分发、按需加载 Bot 和 Chat SDK 集成。
+
+## 检查清单
+
+- [ ] 确保 Chat SDK Adapter 可用（npm 上的 `@chat-adapter/*` 或自定义的 `packages/chat-adapter-<platform>`）
+- [ ] 创建 `src/server/services/bot/platforms/<platform>/`
+  - [ ] `schema.ts` — 凭据和设置的字段定义
+  - [ ] `api.ts` — 出站 API 客户端
+  - [ ] `client.ts` — `ClientFactory` + `PlatformClient`
+  - [ ] `definition.ts` — `PlatformDefinition` 导出
+- [ ] 在 `src/server/services/bot/platforms/index.ts` 中注册
+- [ ] 在 `src/locales/default/agent.ts` 中添加 i18n 键
+- [ ] 在 `locales/zh-CN/agent.json` 和 `locales/en-US/agent.json` 中添加翻译
+- [ ] 在 `docs/usage/channels/<platform>.mdx` 中添加配置教程（中英文）
+- [ ] 验证图标在 `const.ts` 中能正确解析（或添加别名）

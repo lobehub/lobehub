@@ -83,6 +83,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface TestCaseTableProps {
+  datasetEvalMode?: string | null;
   diffFilter: 'all' | 'easy' | 'medium' | 'hard';
   onAddCase?: () => void;
   onDelete?: (testCase: any) => void;
@@ -106,6 +107,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
     total,
     search,
     diffFilter,
+    datasetEvalMode,
     pagination,
     onSearchChange,
     onDiffFilterChange,
@@ -170,10 +172,18 @@ const TestCaseTable = memo<TestCaseTableProps>(
           dataIndex: 'evalMode',
           key: 'evalMode',
           render: (text: string) => {
-            if (!text) return <span style={{ color: cssVar.colorTextQuaternary }}>-</span>;
+            const effective = text ?? datasetEvalMode;
+            if (!effective) return <span style={{ color: cssVar.colorTextQuaternary }}>-</span>;
+            const isInherited = !text && !!datasetEvalMode;
             return (
-              <span style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
-                {t(`evalMode.${text}` as any)}
+              <span
+                style={{
+                  color: isInherited ? cssVar.colorTextQuaternary : cssVar.colorTextSecondary,
+                  fontSize: 12,
+                  fontStyle: isInherited ? 'italic' : 'normal',
+                }}
+              >
+                {t(`evalMode.${effective}` as any)}
               </span>
             );
           },
@@ -238,7 +248,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
       }
 
       return base;
-    }, [pagination, readOnly, onEdit, onDelete, t]);
+    }, [pagination, readOnly, onEdit, onDelete, t, datasetEvalMode]);
 
     return (
       <>

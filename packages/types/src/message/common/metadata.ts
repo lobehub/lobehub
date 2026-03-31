@@ -105,6 +105,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   subAgentId: z.string().optional(),
+  toolExecutionTimeMs: z.number().optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
@@ -193,5 +194,9 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
   taskTitle?: string;
   // message content is multimodal, display content in the streaming, won't save to db
   tempDisplayContent?: string;
+  /**
+   * Tool execution time for tool messages (ms)
+   */
+  toolExecutionTimeMs?: number;
   usage?: ModelUsage;
 }

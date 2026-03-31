@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Mô tả",
+  "gateway.descriptionPlaceholder": "Không bắt buộc",
+  "gateway.deviceName": "Tên thiết bị",
+  "gateway.deviceNamePlaceholder": "Nhập tên thiết bị",
+  "gateway.enableConnection": "Kết nối với Gateway",
+  "gateway.statusConnected": "Đã kết nối với Gateway",
+  "gateway.statusConnecting": "Đang kết nối với Gateway...",
+  "gateway.statusDisconnected": "Chưa kết nối với Gateway",
+  "gateway.title": "Cổng thiết bị",
   "navigation.chat": "Trò chuyện",
   "navigation.discover": "Khám phá",
   "navigation.discoverAssistants": "Khám phá Trợ lý",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "Sử dụng phiên bản tự triển khai?",
   "sync.selfHosted.description": "Phiên bản cộng đồng bạn có thể tự triển khai",
   "sync.selfHosted.title": "Phiên bản tự triển khai",
+  "tab.closeCurrentTab": "Đóng Tab",
+  "tab.closeLeftTabs": "Đóng Các Tab Bên Trái",
+  "tab.closeOtherTabs": "Đóng Các Tab Khác",
+  "tab.closeRightTabs": "Đóng Các Tab Bên Phải",
   "updater.checkingUpdate": "Đang kiểm tra cập nhật",
   "updater.checkingUpdateDesc": "Đang lấy thông tin phiên bản...",
   "updater.downloadNewVersion": "Tải phiên bản mới",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "Kết nối xác thực thất bại",
   "waitingOAuth.helpText": "Nếu trình duyệt không tự động mở, vui lòng nhấn hủy và thử lại",
   "waitingOAuth.retry": "Thử lại",
-  "waitingOAuth.title": "Đang chờ kết nối xác thực"
+  "waitingOAuth.title": "Đang chờ kết nối xác thực",
+  "window.close": "Đóng cửa sổ",
+  "window.maximize": "Phóng to cửa sổ",
+  "window.minimize": "Thu nhỏ cửa sổ",
+  "window.restore": "Khôi phục cửa sổ"
 }

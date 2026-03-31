@@ -6,17 +6,24 @@ import {
   ChevronRight,
   FileText,
   Folder,
+  Library,
   MessageCircle,
   MessageSquare,
   Plug,
   Puzzle,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { type SearchResult } from '@/database/repositories/search';
+import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { useImageStore } from '@/store/image';
+import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
+import { useVideoStore } from '@/store/video';
+import { generationTopicSelectors as videoGenerationTopicSelectors } from '@/store/video/slices/generationTopic/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
@@ -32,18 +39,36 @@ interface SearchResultsProps {
   typeFilter: ValidSearchType | undefined;
 }
 
+interface LocalGenerationTopicResult {
+  createdAt: Date;
+  id: string;
+  title: string;
+  updatedAt: Date;
+}
+
 /**
  * Search results from unified search index.
  */
 const SearchResults = memo<SearchResultsProps>(
   ({ isLoading, onClose, onSetTypeFilter, results, searchQuery, typeFilter }) => {
     const { t } = useTranslation('common');
+    const { t: tImage } = useTranslation('image');
+    const { t: tVideo } = useTranslation('video');
     const navigate = useNavigate();
+    const { menuContext } = useCommandMenuContext();
+    const imageTopics = useImageStore(imageGenerationTopicSelectors.generationTopics);
+    const activeImageTopicId = useImageStore((s) => s.activeGenerationTopicId);
+    const videoTopics = useVideoStore(videoGenerationTopicSelectors.generationTopics);
+    const activeVideoTopicId = useVideoStore((s) => s.activeGenerationTopicId);
 
     const handleNavigate = (result: SearchResult) => {
       switch (result.type) {
         case 'agent': {
           navigate(`/agent/${result.id}?agent=${result.id}`);
+          break;
+        }
+        case 'chatGroup': {
+          navigate(`/group/${result.id}`);
           break;
         }
         case 'topic': {
@@ -111,6 +136,10 @@ const SearchResults = memo<SearchResultsProps>(
           navigate(`/memory/preferences?preferenceId=${result.id}`);
           break;
         }
+        case 'knowledgeBase': {
+          navigate(`/resource/library/${result.id}`);
+          break;
+        }
       }
       onClose();
     };
@@ -119,6 +148,9 @@ const SearchResults = memo<SearchResultsProps>(
       switch (type) {
         case 'agent': {
           return <Sparkles size={16} />;
+        }
+        case 'chatGroup': {
+          return <Users size={16} />;
         }
         case 'topic': {
           return <MessageSquare size={16} />;
@@ -147,6 +179,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'memory': {
           return <Brain size={16} />;
         }
+        case 'knowledgeBase': {
+          return <Library size={16} />;
+        }
       }
     };
 
@@ -154,6 +189,9 @@ const SearchResults = memo<SearchResultsProps>(
       switch (type) {
         case 'agent': {
           return t('cmdk.search.agent');
+        }
+        case 'chatGroup': {
+          return t('cmdk.search.chatGroup');
         }
         case 'topic': {
           return t('cmdk.search.topic');
@@ -181,6 +219,9 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'memory': {
           return t('cmdk.search.memory');
+        }
+        case 'knowledgeBase': {
+          return t('cmdk.search.knowledgeBase');
         }
       }
     };
@@ -220,10 +261,55 @@ const SearchResults = memo<SearchResultsProps>(
       onSetTypeFilter(type);
     };
 
+    const localImageTopicResults: LocalGenerationTopicResult[] =
+      menuContext === 'painting'
+        ? (imageTopics || [])
+            .filter((topic) => {
+              const title = topic.title || tImage('topic.untitled');
+              return title.toLowerCase().includes(searchQuery.toLowerCase());
+            })
+            .sort((a, b) => {
+              if (a.id === activeImageTopicId) return -1;
+              if (b.id === activeImageTopicId) return 1;
+              return b.updatedAt.getTime() - a.updatedAt.getTime();
+            })
+            .slice(0, 8)
+            .map((topic) => ({
+              createdAt: topic.createdAt,
+              id: topic.id,
+              title: topic.title || tImage('topic.untitled'),
+              updatedAt: topic.updatedAt,
+            }))
+        : [];
+
+    const localVideoTopicResults: LocalGenerationTopicResult[] =
+      menuContext === 'video'
+        ? (videoTopics || [])
+            .filter((topic) => {
+              const title = topic.title || tVideo('topic.untitled');
+              return title.toLowerCase().includes(searchQuery.toLowerCase());
+            })
+            .sort((a, b) => {
+              if (a.id === activeVideoTopicId) return -1;
+              if (b.id === activeVideoTopicId) return 1;
+              return b.updatedAt.getTime() - a.updatedAt.getTime();
+            })
+            .slice(0, 8)
+            .map((topic) => ({
+              createdAt: topic.createdAt,
+              id: topic.id,
+              title: topic.title || tVideo('topic.untitled'),
+              updatedAt: topic.updatedAt,
+            }))
+        : [];
+
     const hasResults = results.length > 0;
+    const hasLocalTopicResults =
+      localImageTopicResults.length > 0 || localVideoTopicResults.length > 0;
 
     // Group results by type
     const messageResults = results.filter((r) => r.type === 'message');
+    const chatGroupResults = results.filter((r) => r.type === 'chatGroup');
     const agentResults = results.filter((r) => r.type === 'agent');
     const topicResults = results.filter((r) => r.type === 'topic');
     const fileResults = results.filter((r) => r.type === 'file');
@@ -232,10 +318,11 @@ const SearchResults = memo<SearchResultsProps>(
     const memoryResults = results.filter((r) => r.type === 'memory');
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
+    const knowledgeBaseResults = results.filter((r) => r.type === 'knowledgeBase');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
 
     // Don't render anything if no results and not loading
-    if (!hasResults && !isLoading) {
+    if (!hasResults && !hasLocalTopicResults && !isLoading) {
       return null;
     }
 
@@ -311,6 +398,80 @@ const SearchResults = memo<SearchResultsProps>(
 
     return (
       <>
+        {localImageTopicResults.length > 0 && (
+          <Command.Group forceMount>
+            {localImageTopicResults.map((result) => {
+              const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
+              return (
+                <CommandItem
+                  forceMount
+                  description={formattedDate}
+                  icon={<MessageSquare size={16} />}
+                  key={`image-topic-${result.id}`}
+                  value={`local-image-topic ${result.id} ${result.title}`}
+                  variant="detailed"
+                  title={
+                    <>
+                      <span style={{ opacity: 0.5 }}>{t('tab.image')}</span>
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          display: 'inline',
+                          marginInline: '6px',
+                          opacity: 0.5,
+                          verticalAlign: 'middle',
+                        }}
+                      />
+                      {result.title}
+                    </>
+                  }
+                  onSelect={() => {
+                    navigate(`/image?topic=${result.id}`);
+                    onClose();
+                  }}
+                />
+              );
+            })}
+          </Command.Group>
+        )}
+
+        {localVideoTopicResults.length > 0 && (
+          <Command.Group forceMount>
+            {localVideoTopicResults.map((result) => {
+              const formattedDate = dayjs(result.updatedAt).format('MMM D, YYYY');
+              return (
+                <CommandItem
+                  forceMount
+                  description={formattedDate}
+                  icon={<MessageSquare size={16} />}
+                  key={`video-topic-${result.id}`}
+                  value={`local-video-topic ${result.id} ${result.title}`}
+                  variant="detailed"
+                  title={
+                    <>
+                      <span style={{ opacity: 0.5 }}>{t('tab.video')}</span>
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          display: 'inline',
+                          marginInline: '6px',
+                          opacity: 0.5,
+                          verticalAlign: 'middle',
+                        }}
+                      />
+                      {result.title}
+                    </>
+                  }
+                  onSelect={() => {
+                    navigate(`/video?topic=${result.id}`);
+                    onClose();
+                  }}
+                />
+              );
+            })}
+          </Command.Group>
+        )}
+
         {/* Render search results grouped by type without headers */}
         {messageResults.length > 0 && (
           <Command.Group forceMount>
@@ -323,6 +484,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {agentResults.map((result) => renderResultItem(result))}
             {renderSearchMore('agent', agentResults.length)}
+          </Command.Group>
+        )}
+
+        {chatGroupResults.length > 0 && (
+          <Command.Group forceMount>
+            {chatGroupResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('chatGroup', chatGroupResults.length)}
           </Command.Group>
         )}
 
@@ -358,6 +526,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {folderResults.map((result) => renderResultItem(result))}
             {renderSearchMore('folder', folderResults.length)}
+          </Command.Group>
+        )}
+
+        {knowledgeBaseResults.length > 0 && (
+          <Command.Group forceMount>
+            {knowledgeBaseResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('knowledgeBase', knowledgeBaseResults.length)}
           </Command.Group>
         )}
 

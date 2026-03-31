@@ -1,7 +1,7 @@
 ---
 title: Scheduled Tasks
 description: >-
-  Learn how to use scheduled tasks, including how to create, edit, and delete
+  Learn how to use scheduled tasks, including creating, editing, and deleting
   them.
 tags:
   - LobeHub
@@ -14,23 +14,23 @@ tags:
 
 # Scheduled Tasks
 
-Scheduled tasks are jobs that run periodically in the cloud. In simple terms, you can configure an Agent to execute tasks based on your prompt at regular intervals — for example, checking social media content and sending notifications on a schedule. Instead of manually triggering the same workflow repeatedly, schedule it once and let it run automatically — daily, weekly, or hourly.
+Scheduled tasks are jobs that run periodically in the cloud. In short, you can have an Agent run on your prompt on a schedule — for example, checking social media regularly and sending notifications. Instead of manually triggering the same workflow over and over, set it once and let it run automatically — daily, weekly, or hourly.
 
 ## Creating a Task
 
-Find Scheduled Tasks in the left panel of the Agent conversation page, and click `Add Scheduled Task` to start creating a task.
+Find **Scheduled Tasks** in the left panel of the Agent conversation page, and click `Add Scheduled Task` to start creating a task.
 
-![Create Task](https://file.rene.wang/clipboard-1770261091677-74b74e4d6bf23.png)
+![Create Task](/blog/assets3059f679eef80c5e777085db3d2d056e.webp)
 
-### Configuration Fields
+### Configuration fields
 
-**Task Name** — Give your task a descriptive name so you can identify it at a glance:
+**Task name** — Give the task a descriptive name so you can recognize it at a glance:
 
-- ✅ "Daily Market Summary - 9am EST"
+- ✅ "Daily Market Summary - 9am"
 - ✅ "Weekly Competitor Analysis"
 - ❌ "Task 1"
 
-**Task Content** — Enter the prompt or instructions for the Agent to execute each time the task runs. Be specific and complete — this exact prompt runs every scheduled execution. For example:
+**Task content** — Enter the prompt or instructions the Agent should run each time the task fires. Be specific and complete — this exact prompt runs on every scheduled execution. For example:
 
 ```
 Analyze today's top tech news and summarize:
@@ -43,21 +43,21 @@ Format as a brief executive summary.
 **Frequency** — Choose how often the task runs:
 
 - **Daily** — Every day at a specified time
-- **Weekly** — Specific days of the week at a specified time (you can select multiple days)
+- **Weekly** — On selected weekdays at a specified time (you can pick multiple days)
 - **Hourly** — Every 1, 2, 6, 12, or 24 hours
 
-**Time and Timezone** — Specify the exact time of day and your timezone so the task runs at the correct local time. Times are in 24-hour format. Timezone selection is especially important for teams across multiple regions.
+**Time and timezone** — Set the exact time and timezone so the task runs at the correct local time. Times use 24-hour format. For distributed teams, getting the timezone right matters.
 
-**Max Executions** — Optionally limit how many times the task runs total. Leave unlimited for ongoing tasks. Set a number (e.g., 30) for time-limited campaigns — the task disables automatically after reaching the limit.
+**Max executions** — Optionally cap how many times the task runs in total. Ongoing tasks often need no limit; for time-boxed campaigns (e.g. 30 days), you might set 30 — the task disables itself after reaching the limit.
 
-After creation, you can modify the scheduled task configuration at any time.
+After you create a task, you can change its configuration at any time.
 
-## Schedule Configuration Examples
+## Schedule configuration examples
 
 **Daily morning report:**
 
 - Frequency: Daily at 08:00 in your timezone
-- Prompt: "Generate a summary of yesterday's key metrics and action items for today."
+- Prompt: "Summarize yesterday's key metrics and list today's priorities."
 
 **Weekly planning session:**
 
@@ -71,67 +71,67 @@ After creation, you can modify the scheduled task configuration at any time.
 
 **End-of-month review:**
 
-- Frequency: Monthly — set Max Executions to 1 per month, or use day-of-month scheduling
+- Frequency: Monthly — set Max Executions to once per month, or combine with a specific day
 - Prompt: "Analyze this month's performance data and generate an executive report."
 
-## Managing Tasks
+## Managing tasks
 
-### Viewing Run History
+### Viewing run history
 
-Each scheduled run creates a conversation in the agent's conversation history, labeled with the task name and timestamp. Review outputs, check for errors, and track results over time.
+Each scheduled run creates an entry in that Agent's conversation history, labeled with the task name and timestamp. You can review outputs, check for errors, and track past results.
 
-### Editing a Schedule
+### Editing a schedule
 
-Click on a scheduled task to modify it — update the prompt, change the frequency or time, or adjust the timezone. Changes take effect on the next scheduled execution.
+Click a scheduled task to edit it — update the prompt, change frequency or time, or adjust the timezone. Changes apply from the next scheduled run onward.
 
-### Pausing a Task
+### Pausing a task
 
-If you temporarily don't need a scheduled task, you can disable it. After disabling, the task will no longer execute automatically, but the task's execution plan and prompt configuration will be preserved. The task resumes after re-enabling.
+If you temporarily don't need a scheduled task, turn off its enabled state. While off, it won't run automatically; the schedule and prompt stay saved. When you turn it back on, the task continues as configured.
 
-![Pause Task](https://file.rene.wang/clipboard-1770266335710-1fec523143aab.png)
+![Pause Task](/blog/assets636c78daf95c590cd7d80284c68eb6d9.webp)
 
-### Deleting a Task
+### Deleting a task
 
-If you no longer need a scheduled task, you can delete it. After deletion, the task's execution plan and prompt configuration are removed, and the system will no longer trigger any subsequent executions. Past conversation history is preserved.
+If you no longer need a scheduled task, you can delete it. Deletion removes the schedule and prompt configuration; the system will not trigger further runs. Past conversation history is kept.
 
-## Best Practices
+## Best practices
 
-**Write clear, self-contained prompts** — The task prompt runs without any prior conversation context. Every detail the Agent needs must be in the prompt itself:
+**Write clear, self-contained prompts** — The scheduled task prompt runs with no prior conversation context. Everything the Agent needs must be in the prompt:
 
 - ✅ "Search for news about electric vehicles published in the last 24 hours and summarize the top 3 developments."
-- ❌ "Check the news like we discussed." (Agent has no conversation context when scheduled)
+- ❌ "Check the news like we discussed." (The Agent has no access to earlier chats when the schedule runs.)
 
-**Choose appropriate frequency** — Match the schedule to the actual cadence of the information you're monitoring. Hourly monitoring for daily news is unnecessary overhead; weekly reports for real-time metrics miss the point.
+**Choose appropriate frequency** — Match the schedule to how fast the information actually changes. Hourly checks for daily news add unnecessary load; weekly reports for real-time metrics miss important updates.
 
-**Use descriptive task names** — Include the purpose and schedule in the name: "Weekly Competitor Analysis - Monday 9am" is far more useful than "Task 2".
+**Use descriptive task names** — Put purpose and timing in the name: "Weekly Competitor Analysis - Monday 9am" beats "Task 2".
 
-**Set max executions for experiments** — When testing a new scheduled task, set a max execution count of 5–10 so it doesn't run indefinitely if the prompt doesn't work as expected.
+**Set max executions while experimenting** — When testing a new scheduled task, use a max execution count of 5–10 so it doesn't run forever if the prompt needs tuning.
 
-**Timezone awareness** — Always set the correct timezone. A task scheduled for "9:00 AM" defaults to the server timezone, which may differ from your local time. Misconfigured timezones are a common source of unexpected run times.
+**Timezone awareness** — Always set the correct timezone. "09:00" is interpreted in the configured timezone, which may differ from your local clock. Wrong timezone is a common cause of unexpected run times.
 
-## Use Cases
+## Use cases
 
-### Periodic Social Media Monitoring with Notifications
+### Regularly check social media and notify you
 
-Set up scheduled tasks to periodically check social media content related to specified platforms or keywords. The task automatically fetches the latest updates, filters information that meets the criteria, and generates summaries when important updates are detected. Suitable for brand reputation monitoring, competitor tracking, and creator content update alerts.
+Schedule a task to periodically check social content for given platforms or keywords. It can fetch recent activity, filter what matters, and summarize when there's something important — useful for brand monitoring, competitor tracking, or creator update alerts.
 
-### Periodic Summary and Report Generation
+### Periodic summaries and reports
 
-For work that requires regular review — data analysis, project progress tracking, or content performance evaluation — use scheduled tasks to automatically complete aggregation and analysis. The task collects relevant information at specified times and outputs structured conclusions, helping you continuously track trend changes.
+For work that needs regular review — analytics, project status, or content performance — a scheduled task can gather information on a cadence and produce structured takeaways so you keep sight of trends.
 
-### Scheduled Reminder Notifications
+### Timed reminders
 
-Set up reminders in advance for important milestones, periodic check tasks, or items needing attention. LobeHub automatically generates reminder messages and notifies you via email or other methods without manual triggering.
+Set reminders for milestones, recurring checks, or follow-ups. LobeHub can generate reminder messages and notify you (for example by email) without you triggering the flow manually.
 
 ## Troubleshooting
 
-**Task didn't run at expected time** — Check the timezone setting. The scheduled time is relative to your configured timezone, not necessarily your local timezone. Also verify the task is in "enabled" status.
+**Task didn't run when expected** — Check the timezone. Scheduled times are relative to the configured timezone, not necessarily "now" on your device. Also confirm the task is enabled.
 
-**Unexpected run times** — Verify you haven't confused AM/PM in 24-hour format (e.g., 17:00 = 5:00 PM, not 5:00 AM).
+**Runs at surprising times** — Double-check 24-hour time (e.g. 17:00 is 5:00 PM, not 5:00 AM).
 
-**Poor quality outputs** — The scheduled prompt runs without conversational context. Rewrite the prompt to be fully self-contained, including all necessary context, data sources, and formatting instructions.
+**Poor output quality** — Scheduled prompts run without chat history. Rewrite the prompt so it is fully self-contained, with background, data sources, and format requirements spelled out.
 
-**Too many runs** — Set a `Max Executions` limit when experimenting with new tasks. Delete and recreate a task if it has exceeded expectations.
+**Too many runs** — While experimenting, set a **Max executions** cap. If a task has already run more than intended, delete it and create a new one with the right limits.
 
 <Cards>
   <Card href={'/docs/usage/agent/web-search'} title={'Web Search'} />

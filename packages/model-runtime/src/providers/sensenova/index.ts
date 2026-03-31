@@ -1,7 +1,6 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
-import { convertSenseNovaMessage } from '../../core/contextBuilders/sensenova';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 
@@ -10,19 +9,11 @@ export interface SenseNovaModelCard {
 }
 
 export const params = {
-  baseURL: 'https://api.sensenova.cn/compatible-mode/v1',
+  baseURL: 'https://api.sensenova.cn/compatible-mode/v2',
   chatCompletion: {
     handlePayload: (payload) => {
-      const {
-        frequency_penalty,
-        max_tokens,
-        messages,
-        model,
-        temperature,
-        thinking,
-        top_p,
-        ...rest
-      } = payload;
+      const { frequency_penalty, max_tokens, model, temperature, thinking, top_p, ...rest } =
+        payload;
 
       return {
         ...rest,
@@ -31,11 +22,6 @@ export const params = {
             ? frequency_penalty
             : undefined,
         max_new_tokens: max_tokens !== undefined && max_tokens > 0 ? max_tokens : undefined,
-        messages: messages.map((message) =>
-          message.role !== 'user' || !model || !/^Sense(Nova-V6|Chat-Vision)/.test(model)
-            ? message
-            : { ...message, content: convertSenseNovaMessage(message.content) },
-        ) as any[],
         model,
         stream: true,
         temperature:

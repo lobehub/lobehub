@@ -20,30 +20,9 @@ export class UsageRecordService {
   }
 
   /**
-   * @description Find usage records by month.
-   * @param mo Month
-   * @returns UsageRecordItem[]
+   * @description Find usage records by date range.
    */
-  findByMonth = async (mo?: string): Promise<UsageRecordItem[]> => {
-    // Set startAt and endAt
-    let startAt: string;
-    let endAt: string;
-    if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
-      // mo format: "YYYY-MM"
-      startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
-      endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
-    } else {
-      startAt = dayjs().startOf('month').format('YYYY-MM-DD');
-      endAt = dayjs().endOf('month').format('YYYY-MM-DD');
-    }
-
-    // TODO: To extend to support other features
-    // - Functionality:
-    //  - More type of usage, e.g. image generation, file processing, summary, search engine.
-    //  - More dimension for analysis, e.g. relational analysis.
-    // - Performance: Computing asynchronously for performance.
-    // For now, we only support chat messages for normal users for PoC.
-
+  findByDateRange = async (startAt: string, endAt: string): Promise<UsageRecordItem[]> => {
     const spends = await this.db
       .select({
         createdAt: messages.createdAt,
@@ -72,35 +51,46 @@ export class UsageRecordService {
         metadata: spend.metadata,
         model: spend.model,
         provider: spend.provider,
-        spend: metadata?.cost || 0, // Messages do not have a direct cost associated
+        spend: metadata?.cost || 0,
         totalInputTokens: metadata?.totalInputTokens || 0,
         totalOutputTokens: metadata?.totalOutputTokens || 0,
         totalTokens: (metadata?.totalInputTokens || 0) + (metadata?.totalOutputTokens || 0),
         tps: metadata?.tps || 0,
         ttft: metadata?.ttft || 0,
-        type: 'chat', // Default to 'chat' for messages
+        type: 'chat',
         updatedAt: spend.createdAt,
         userId: spend.userId,
       } as UsageRecordItem;
     });
   };
 
-  findAndGroupByDay = async (mo?: string): Promise<UsageLog[]> => {
-    // Set startAt and endAt
+  /**
+   * @description Find usage records by month.
+   * @param mo Month
+   * @returns UsageRecordItem[]
+   */
+  findByMonth = async (mo?: string): Promise<UsageRecordItem[]> => {
     let startAt: string;
     let endAt: string;
-    let month: string;
     if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
-      // mo format: "YYYY-MM"
       startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
       endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
-      month = mo;
     } else {
       startAt = dayjs().startOf('month').format('YYYY-MM-DD');
       endAt = dayjs().endOf('month').format('YYYY-MM-DD');
-      month = dayjs().format('YYYY-MM');
     }
-    const spends = await this.findByMonth(month);
+    return this.findByDateRange(startAt, endAt);
+  };
+
+  /**
+   * @description Group usage records by day for a given date range.
+   */
+  private groupByDay = (
+    spends: UsageRecordItem[],
+    startAt: string,
+    endAt: string,
+    pad = true,
+  ): UsageLog[] => {
     // Clustering by time
     const usages = new Map<string, { date: Date; logs: UsageRecordItem[] }>();
     spends.forEach((spend) => {
@@ -132,15 +122,16 @@ export class UsageRecordService {
         records: spends.logs,
         totalRequests,
         totalSpend,
-        totalTokens, // Store the formatted date as a string
+        totalTokens,
       });
     });
+
+    if (!pad) return usageLogs;
+
     // Padding to ensure the date range is complete
     const startDate = dayjs(startAt);
     const endDate = dayjs(endAt);
     const paddedUsageLogs: UsageLog[] = [];
-    // For every day in the range, check if it exists in usageLogs
-    // If exists, use it; if not, create a new log with 0 values
     log(
       'Padding usage logs from',
       startDate.format('YYYY-MM-DD'),
@@ -148,9 +139,9 @@ export class UsageRecordService {
       endDate.format('YYYY-MM-DD'),
     );
     for (let date = startDate; date.isBefore(endDate); date = date.add(1, 'day')) {
-      const log = usageLogs.find((log) => log.day === date.format('YYYY-MM-DD'));
-      if (log) {
-        paddedUsageLogs.push(log);
+      const found = usageLogs.find((l) => l.day === date.format('YYYY-MM-DD'));
+      if (found) {
+        paddedUsageLogs.push(found);
       } else {
         paddedUsageLogs.push({
           date: date.toDate().getTime(),
@@ -163,5 +154,28 @@ export class UsageRecordService {
       }
     }
     return paddedUsageLogs;
+  };
+
+  findAndGroupByDay = async (mo?: string): Promise<UsageLog[]> => {
+    let startAt: string;
+    let endAt: string;
+    if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
+      startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
+      endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
+    } else {
+      startAt = dayjs().startOf('month').format('YYYY-MM-DD');
+      endAt = dayjs().endOf('month').format('YYYY-MM-DD');
+    }
+    const spends = await this.findByDateRange(startAt, endAt);
+    return this.groupByDay(spends, startAt, endAt);
+  };
+
+  /**
+   * @description Find usage grouped by day for a custom date range (e.g. past 12 months).
+   * Does not pad missing days for large ranges.
+   */
+  findAndGroupByDateRange = async (startAt: string, endAt: string): Promise<UsageLog[]> => {
+    const spends = await this.findByDateRange(startAt, endAt);
+    return this.groupByDay(spends, startAt, endAt, false);
   };
 }

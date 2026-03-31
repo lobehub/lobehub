@@ -178,7 +178,11 @@ export class PluginTypesActionImpl {
     console.error(
       `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
     );
-    return;
+    return {
+      content: `Tool ${payload.identifier}/${payload.apiName} is not available`,
+      error: { type: 'ToolNotFound', message: 'No executor found' },
+      success: false,
+    };
   };
 
   invokeDefaultTypePlugin = async (id: string, payload: any): Promise<string | undefined> => {

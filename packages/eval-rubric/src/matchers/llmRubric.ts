@@ -64,6 +64,10 @@ export const matchLLMRubric = async (
       schema: JUDGE_SCORE_SCHEMA,
     });
 
+    if (!result?.score) {
+      return { passed: false, reason: 'LLM judge did not return a score', score: 0 };
+    }
+
     const score = Math.max(0, Math.min(1, result.score));
     const threshold = rubric.threshold ?? 0.6;
 

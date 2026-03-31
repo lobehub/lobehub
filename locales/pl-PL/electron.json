@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Opis",
+  "gateway.descriptionPlaceholder": "Opcjonalne",
+  "gateway.deviceName": "Nazwa urządzenia",
+  "gateway.deviceNamePlaceholder": "Wprowadź nazwę urządzenia",
+  "gateway.enableConnection": "Połącz z bramą",
+  "gateway.statusConnected": "Połączono z bramą",
+  "gateway.statusConnecting": "Łączenie z bramą...",
+  "gateway.statusDisconnected": "Nie połączono z bramą",
+  "gateway.title": "Bramka urządzenia",
   "navigation.chat": "Czat",
   "navigation.discover": "Odkryj",
   "navigation.discoverAssistants": "Odkryj Asystentów",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "Używasz własnej instancji?",
   "sync.selfHosted.description": "Wersja społecznościowa, którą możesz wdrożyć samodzielnie",
   "sync.selfHosted.title": "Własna instancja",
+  "tab.closeCurrentTab": "Zamknij kartę",
+  "tab.closeLeftTabs": "Zamknij karty po lewej",
+  "tab.closeOtherTabs": "Zamknij inne karty",
+  "tab.closeRightTabs": "Zamknij karty po prawej",
   "updater.checkingUpdate": "Sprawdzanie aktualizacji",
   "updater.checkingUpdateDesc": "Pobieranie informacji o wersji...",
   "updater.downloadNewVersion": "Pobierz nową wersję",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "Nie udało się nawiązać połączenia autoryzacyjnego",
   "waitingOAuth.helpText": "Jeśli przeglądarka nie otworzyła się automatycznie, kliknij Anuluj i spróbuj ponownie",
   "waitingOAuth.retry": "Spróbuj ponownie",
-  "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne"
+  "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne",
+  "window.close": "Zamknij okno",
+  "window.maximize": "Maksymalizuj okno",
+  "window.minimize": "Minimalizuj okno",
+  "window.restore": "Przywróć okno"
 }

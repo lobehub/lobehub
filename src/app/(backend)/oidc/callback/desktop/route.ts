@@ -11,10 +11,10 @@ const log = debug('lobe-oidc:callback:desktop');
 const errorPathname = '/oauth/callback/error';
 
 /**
- * 安全地构建重定向URL - 直接使用 APP_URL 作为目标
+ * Safely build redirect URL - directly use APP_URL as target
  */
 const buildRedirectUrl = (req: NextRequest, pathname: string): URL => {
-  // 使用统一的环境变量管理
+  // Use unified environment variable management
   if (appEnv.APP_URL) {
     try {
       const baseUrl = new URL(appEnv.APP_URL);
@@ -26,7 +26,7 @@ const buildRedirectUrl = (req: NextRequest, pathname: string): URL => {
     }
   }
 
-  // 后备方案：使用 req.nextUrl
+  // Fallback: use req.nextUrl
   log('Warning: APP_URL not configured, using req.nextUrl as fallback');
   const fallbackUrl = req.nextUrl.clone();
   fallbackUrl.pathname = pathname;
@@ -62,7 +62,7 @@ export const GET = async (req: NextRequest) => {
 
     const successUrl = buildRedirectUrl(req, '/oauth/callback/success');
 
-    // 添加调试日志
+    // Add debug logging
     log('Request host header: %s', req.headers.get('host'));
     log('Request x-forwarded-host: %s', req.headers.get('x-forwarded-host'));
     log('Request x-forwarded-proto: %s', req.headers.get('x-forwarded-proto'));

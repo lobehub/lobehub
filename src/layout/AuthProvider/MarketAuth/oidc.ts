@@ -2,6 +2,13 @@ import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
 import { MarketAuthError } from './errors';
+import {
+  clearMarketAuthResult,
+  getMarketAuthResultStorageKey,
+  type MarketAuthHandoffPayload,
+  readMarketAuthResult,
+  resolveMarketAuthHandoffPayload,
+} from './handoff';
 import { type OIDCConfig, type PKCEParams, type TokenResponse } from './types';
 
 /**
@@ -15,6 +22,12 @@ export class MarketOIDC {
   private static readonly DESKTOP_HANDOFF_POLL_INTERVAL = 1500;
 
   private static readonly DESKTOP_HANDOFF_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+
+  private static readonly WEB_POPUP_CLOSE_GRACE_PERIOD = 1500;
+
+  private static readonly WEB_POPUP_MONITOR_INTERVAL = 500;
+
+  private static readonly WEB_POPUP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
   constructor(config: OIDCConfig) {
     this.config = config;
@@ -226,52 +239,152 @@ export class MarketOIDC {
       }
     }
 
+    clearMarketAuthResult(state);
+
     return new Promise((resolve, reject) => {
       let checkClosed: number | undefined;
+      let fallbackPolling: number | undefined;
+      let popupClosedGraceTimeout: number | undefined;
+
+      const authTimeout = setTimeout(() => {
+        cleanup();
+        reject(
+          new MarketAuthError('handoffTimeout', {
+            message:
+              'Authorization timeout. Please complete the authorization in the browser and try again.',
+          }),
+        );
+      }, MarketOIDC.WEB_POPUP_TIMEOUT) as unknown as number;
+
+      const cleanup = () => {
+        window.removeEventListener('message', messageHandler);
+        window.removeEventListener('storage', storageHandler);
+        clearTimeout(authTimeout);
+        if (checkClosed) clearInterval(checkClosed);
+        if (fallbackPolling) clearInterval(fallbackPolling);
+        if (popupClosedGraceTimeout) clearTimeout(popupClosedGraceTimeout);
+        clearMarketAuthResult(state);
+      };
+
+      const settle = (payload: MarketAuthHandoffPayload) => {
+        cleanup();
+
+        if (payload.type === 'MARKET_AUTH_SUCCESS') {
+          resolve({
+            code: payload.code,
+            state: payload.state,
+          });
+
+          return;
+        }
+
+        try {
+          popup?.close();
+        } catch {
+          // Ignore close failures from cross-origin popup contexts.
+        }
+
+        reject(
+          new MarketAuthError('authorizationFailed', {
+            message: payload.error || 'Authorization failed',
+            meta: { error: payload.error },
+          }),
+        );
+      };
+
+      const handleHandoffPayload = (payload: MarketAuthHandoffPayload | null) => {
+        if (!payload) return false;
+        if (payload.state && payload.state !== state) return false;
+
+        settle(payload);
+        return true;
+      };
+
+      const flushStoredResult = () => handleHandoffPayload(readMarketAuthResult(state));
+
+      const startStoragePolling = () => {
+        if (fallbackPolling) return;
+
+        fallbackPolling = setInterval(() => {
+          flushStoredResult();
+        }, MarketOIDC.WEB_POPUP_MONITOR_INTERVAL) as unknown as number;
+      };
+
+      const rejectPopupClosed = () => {
+        cleanup();
+        reject(new MarketAuthError('popupClosed', { message: 'Authorization popup was closed' }));
+      };
+
+      const handlePopupClosed = () => {
+        if (popupClosedGraceTimeout) return;
+        if (checkClosed) {
+          clearInterval(checkClosed);
+          checkClosed = undefined;
+        }
+
+        if (flushStoredResult()) return;
+
+        startStoragePolling();
+
+        popupClosedGraceTimeout = setTimeout(() => {
+          if (flushStoredResult()) return;
+          rejectPopupClosed();
+        }, MarketOIDC.WEB_POPUP_CLOSE_GRACE_PERIOD) as unknown as number;
+      };
 
       // Listen for message events, waiting for authorization to complete
       const messageHandler = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+
         console.info('[MarketOIDC] Received message from popup:', event.data);
 
-        if (event.data.type === 'MARKET_AUTH_SUCCESS') {
-          cleanup();
+        handleHandoffPayload(resolveMarketAuthHandoffPayload(event.data));
+      };
 
-          // Don't close the popup immediately, let the user see the success state
-          // The popup will close automatically after 3 seconds
-          resolve({
-            code: event.data.code,
-            state: event.data.state,
-          });
-        } else if (event.data.type === 'MARKET_AUTH_ERROR') {
-          cleanup();
-          popup?.close();
-          reject(
-            new MarketAuthError('authorizationFailed', {
-              message: event.data.error || 'Authorization failed',
-              meta: { error: event.data.error },
-            }),
-          );
+      const storageHandler = (event: StorageEvent) => {
+        if (event.storageArea !== localStorage) return;
+        if (event.key !== getMarketAuthResultStorageKey(state)) return;
+
+        if (!event.newValue) {
+          flushStoredResult();
+          return;
+        }
+
+        try {
+          handleHandoffPayload(resolveMarketAuthHandoffPayload(JSON.parse(event.newValue)));
+        } catch {
+          // Ignore malformed storage payloads and keep waiting for a valid handoff.
         }
       };
 
-      // Cleanup function
-      function cleanup() {
-        window.removeEventListener('message', messageHandler);
-        if (checkClosed) clearInterval(checkClosed);
-      }
-
       window.addEventListener('message', messageHandler);
+      window.addEventListener('storage', storageHandler);
 
-      // Check if the popup was closed
+      if (flushStoredResult()) return;
+
+      // Check if the popup was closed. A readable `closed === true` means the
+      // window is genuinely gone, so only wait a short grace period for the
+      // callback page to persist its handoff result. If accessing popup state
+      // throws, assume COOP isolation and keep waiting on storage handoff.
       if (popup) {
         checkClosed = setInterval(() => {
-          if (popup.closed) {
-            cleanup();
-            reject(
-              new MarketAuthError('popupClosed', { message: 'Authorization popup was closed' }),
+          try {
+            if (popup.closed) {
+              handlePopupClosed();
+            }
+          } catch {
+            console.info(
+              '[MarketOIDC] COOP blocked popup monitoring, falling back to storage handoff',
             );
+
+            if (checkClosed) {
+              clearInterval(checkClosed);
+              checkClosed = undefined;
+            }
+
+            startStoragePolling();
           }
-        }, 1000) as unknown as number;
+        }, MarketOIDC.WEB_POPUP_MONITOR_INTERVAL) as unknown as number;
       }
     });
   }

@@ -1,7 +1,7 @@
 import { Center, Checkbox, Flexbox, Skeleton } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 
-import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem';
+import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH } from './ListItem/constants';
 
 interface ListViewSkeletonProps {
   columnWidths?: {

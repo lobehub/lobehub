@@ -7,33 +7,21 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
 import { SkillsExecutor } from '@lobechat/builtin-tool-skills/executor';
-import { isDesktop } from '@lobechat/const';
 
+import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { cloudSandboxService } from '@/services/cloudSandbox';
-import { localFileService } from '@/services/electron/localFileService';
 import { agentSkillService } from '@/services/skill';
 import { useChatStore } from '@/store/chat';
 
 // Create runtime with client-side service
 const runtime = new SkillsExecutionRuntime({
-  builtinSkills,
+  builtinSkills: filterBuiltinSkills(builtinSkills),
   service: {
     execScript: async (command, options) => {
-      const { runInClient, description, config } = options;
-
-      // Desktop: run in local client if requested
-      if (isDesktop && runInClient) {
-        const result = await localFileService.runCommand({ command, timeout: undefined });
-        return {
-          exitCode: result.exit_code ?? 1,
-          output: result.stdout || result.output || '',
-          stderr: result.stderr,
-          success: result.success,
-        };
-      }
+      const { activatedSkills, description } = options;
 
       // Cloud: execute via Cloud Sandbox with execScript tool
-      // Server will automatically resolve zipUrl based on config.name
+      // Server will resolve zipUrls for all activatedSkills
       const chatState = useChatStore.getState();
       const topicId = chatState.activeTopicId || 'default';
 
@@ -42,8 +30,8 @@ const runtime = new SkillsExecutionRuntime({
         const result = await cloudSandboxService.callTool(
           'execScript',
           {
+            activatedSkills,
             command,
-            config,
             description,
           },
           { topicId },
@@ -105,18 +93,7 @@ const runtime = new SkillsExecutionRuntime({
     findById: (id) => agentSkillService.getById(id),
     findByName: (name) => agentSkillService.getByName(name),
     readResource: (id, path) => agentSkillService.readResource(id, path),
-    runCommand: async ({ command, runInClient, timeout }) => {
-      // Desktop: run in local client if requested
-      if (isDesktop && runInClient) {
-        const result = await localFileService.runCommand({ command, timeout });
-        return {
-          exitCode: result.exit_code ?? 1,
-          output: result.stdout || result.output || '',
-          stderr: result.stderr,
-          success: result.success,
-        };
-      }
-
+    runCommand: async ({ command, timeout }) => {
       // Cloud: execute via Cloud Sandbox
       // Get current session context for sandbox isolation
       const chatState = useChatStore.getState();

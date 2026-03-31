@@ -1,4 +1,4 @@
-import { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
+import type { GrepContentParams, GrepContentResult } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BaseContentSearch } from '../base';

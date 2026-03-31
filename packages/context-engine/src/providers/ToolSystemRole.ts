@@ -2,10 +2,21 @@ import type { API, Tool } from '@lobechat/prompts';
 import { pluginPrompts } from '@lobechat/prompts';
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
 import { ToolNameResolver } from '../engine/tools';
 import type { LobeToolManifest } from '../engine/tools/types';
 import type { PipelineContext, ProcessorOptions } from '../types';
+
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    toolSystemRole?: {
+      contentLength: number;
+      injected: boolean;
+      supportsFunctionCall: boolean;
+      toolsCount: number;
+    };
+  }
+}
 
 const log = debug('context-engine:provider:ToolSystemRoleProvider');
 
@@ -13,10 +24,11 @@ const log = debug('context-engine:provider:ToolSystemRoleProvider');
  * Tool System Role Configuration
  */
 export interface ToolSystemRoleConfig {
+  enabled?: boolean;
   /** Function to check if function calling is supported */
   isCanUseFC: (model: string, provider: string) => boolean | undefined;
   /** Tool manifests with systemRole and API definitions */
-  manifests: LobeToolManifest[];
+  manifests?: LobeToolManifest[];
   /** Model name */
   model: string;
   /** Provider name */
@@ -27,7 +39,7 @@ export interface ToolSystemRoleConfig {
  * Tool System Role Provider
  * Responsible for injecting tool-related system roles for models that support tool calling
  */
-export class ToolSystemRoleProvider extends BaseProvider {
+export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
   readonly name = 'ToolSystemRoleProvider';
 
   private toolNameResolver: ToolNameResolver;
@@ -40,30 +52,27 @@ export class ToolSystemRoleProvider extends BaseProvider {
     this.toolNameResolver = new ToolNameResolver();
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
+  protected buildSystemRoleContent(_context: PipelineContext): string | null {
+    if (this.config.enabled === false) return null;
 
-    // Check tool-related conditions
     const toolSystemRole = this.getToolSystemRole();
 
     if (!toolSystemRole) {
       log('No need to inject tool system role, skipping processing');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Inject tool system role
-    this.injectToolSystemRole(clonedContext, toolSystemRole);
+    log(`Tool system role injection completed, tools count: ${this.config.manifests?.length ?? 0}`);
+    return toolSystemRole;
+  }
 
-    // Update metadata
-    clonedContext.metadata.toolSystemRole = {
-      contentLength: toolSystemRole.length,
+  protected onInjected(context: PipelineContext, content: string): void {
+    context.metadata.toolSystemRole = {
+      contentLength: content.length,
       injected: true,
-      supportsFunctionCall: this.config.isCanUseFC(this.config.model, this.config.provider),
-      toolsCount: this.config.manifests.length,
+      supportsFunctionCall: !!this.config.isCanUseFC(this.config.model, this.config.provider),
+      toolsCount: this.config.manifests?.length ?? 0,
     };
-
-    log(`Tool system role injection completed, tools count: ${this.config.manifests.length}`);
-    return this.markAsExecuted(clonedContext);
   }
 
   /**
@@ -72,21 +81,17 @@ export class ToolSystemRoleProvider extends BaseProvider {
   private getToolSystemRole(): string | undefined {
     const { manifests, model, provider } = this.config;
 
-    // Check if manifests are available
     if (!manifests || manifests.length === 0) {
       log('No available tool manifests');
       return undefined;
     }
 
-    // Check if function calling is supported
     const hasFC = this.config.isCanUseFC(model, provider);
     if (!hasFC) {
       log(`Model ${model} (${provider}) does not support function calling`);
       return undefined;
     }
 
-    // Transform manifests to Tool[] format for pluginPrompts
-    // Only include manifests that have APIs or systemRole
     const tools: Tool[] = manifests
       .filter((manifest) => manifest.api.length > 0 || manifest.systemRole)
       .map((manifest) => ({
@@ -96,18 +101,17 @@ export class ToolSystemRoleProvider extends BaseProvider {
             name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
           }),
         ),
+        description: manifest.meta?.description,
         identifier: manifest.identifier,
         name: manifest.meta?.title || manifest.identifier,
         systemRole: manifest.systemRole,
       }));
 
-    // Skip if no meaningful tools after filtering
     if (tools.length === 0) {
       log('No meaningful tools to inject (all manifests have empty APIs and no systemRole)');
       return undefined;
     }
 
-    // Generate tool system role using pluginPrompts
     const toolSystemRole = pluginPrompts({ tools });
 
     if (!toolSystemRole) {
@@ -117,30 +121,5 @@ export class ToolSystemRoleProvider extends BaseProvider {
 
     log(`Generated tool system role for ${manifests.length} tools`);
     return toolSystemRole;
-  }
-
-  /**
-   * Inject tool system role
-   */
-  private injectToolSystemRole(context: PipelineContext, toolSystemRole: string): void {
-    const existingSystemMessage = context.messages.find((msg) => msg.role === 'system');
-
-    if (existingSystemMessage) {
-      // Merge to existing system message
-      existingSystemMessage.content = [existingSystemMessage.content, toolSystemRole]
-        .filter(Boolean)
-        .join('\n\n');
-
-      log(
-        `Tool system role merged to existing system message, final length: ${existingSystemMessage.content.length}`,
-      );
-    } else {
-      context.messages.unshift({
-        content: toolSystemRole,
-        id: `tool-system-role-${Date.now()}`,
-        role: 'system' as const,
-      } as any);
-      log(`New tool system message created, content length: ${toolSystemRole.length}`);
-    }
   }
 }

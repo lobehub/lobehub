@@ -1,0 +1,108 @@
+---
+title: Connect LobeHub to Telegram
+description: >-
+  Learn how to create a Telegram bot and connect it to your LobeHub agent as a
+  message channel, enabling your AI assistant to chat with users in Telegram
+  private and group conversations.
+tags:
+  - Telegram
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to Telegram
+
+By connecting a Telegram channel to your LobeHub agent, users can interact with the AI assistant through Telegram private chats and group conversations.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A Telegram account
+
+## Step 1: Create a Telegram Bot
+
+<Steps>
+  ### Open BotFather
+
+  Open Telegram and search for **@BotFather** — the official Telegram bot for managing bots. Start a conversation and send the `/newbot` command.
+
+  ![](/blog/assets1be39423d2bca3a6ee3f247e02a638be.webp)
+
+  ### Set Bot Name and Username
+
+  BotFather will ask you to:
+
+  1. Choose a **display name** for your bot (e.g., "LobeHub Assistant")
+  2. Choose a **username** — it must end with `bot` (e.g., `lobehub_assistant_bot`)
+
+  ![](/blog/assetsa95ea7fad4727559d3f8d84a96947d5e.webp)
+
+  ### Copy the Bot Token
+
+  After creating the bot, BotFather will send you an **API token** (format: `123456789:ABCdefGhIjKlmNoPQRsTuVwXyZ`). Copy and save this token.
+
+  ![](/blog/assets95dc1ff1901807b3f860b70294667682.webp)
+
+  > **Important:** Your bot token is a secret credential. Never share it publicly.
+</Steps>
+
+## Step 2: Configure Telegram in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **Telegram** from the platform list.
+
+  ### Enter the Bot Token
+
+  Paste the bot token you received from BotFather into the **Bot Token** field.
+
+  The **Bot User ID** will be automatically derived from your token — no need to enter it manually.
+
+  ![](/blog/assets939b659e955daf90e2e9e7caba8aa9bd.webp)
+
+  ### Optional: Set a Webhook Secret
+
+  You can optionally enter a **Webhook Secret Token** for additional security. This is used to verify that incoming webhook requests originate from Telegram.
+
+  ### Save Configuration
+
+  Click **Save Configuration**. LobeHub will automatically register the webhook URL with Telegram — no manual URL copying is required.
+
+  Your token will be encrypted and stored securely.
+</Steps>
+
+## Step 3: Test the Connection
+
+Click **Test Connection** in LobeHub's channel settings to verify the integration. Then open Telegram, find your bot by searching its username, and send a message. The bot should respond through your LobeHub agent.
+
+![](/blog/assets5dd8b54083201bff2494404b66e37df0.webp)
+
+## Adding the Bot to Group Chats
+
+To use the bot in Telegram groups:
+
+1. Add the bot as a member of the group
+2. By default, the bot responds when mentioned with `@your_bot_username`
+3. Send a message mentioning the bot to start interacting
+
+![](/blog/assetsfa30300bd730d56097bfbce49c5f3d06.webp)
+
+<Callout type={'warning'}>
+  **About Group Privacy Mode:** Telegram bots have privacy mode enabled by default, which means they only receive messages that @mention the bot, reply to the bot, or contain /commands. If you change the privacy mode setting after creating the bot, you **must remove and re-add the bot to the group** for the new setting to take effect in that group.
+</Callout>
+
+## Configuration Reference
+
+| Field                    | Required | Description                                    |
+| ------------------------ | -------- | ---------------------------------------------- |
+| **Bot Token**            | Yes      | API token from BotFather                       |
+| **Bot User ID**          | Auto     | Automatically derived from the bot token       |
+| **Webhook Secret Token** | No       | Optional secret for verifying webhook requests |
+
+## Troubleshooting
+
+- **Bot not responding:** Verify the bot token is correct and the configuration is saved. Click **Test Connection** to diagnose.
+- **Webhook registration failed:** Ensure your LobeHub subscription is active. Telegram requires HTTPS endpoints for webhooks, which LobeHub provides automatically.
+- **Group chat issues:** Make sure the bot has been added to the group and has permission to read messages. Mention the bot with `@username` to trigger a response. If the bot doesn't respond in a group, try removing the bot from the group and re-adding it — Telegram's privacy mode changes require re-joining the group to take effect.

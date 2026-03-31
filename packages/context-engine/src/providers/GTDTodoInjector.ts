@@ -3,6 +3,15 @@ import debug from 'debug';
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    gtdTodoCompletedCount?: number;
+    gtdTodoCount?: number;
+    gtdTodoInjected?: boolean;
+    gtdTodoProcessingCount?: number;
+  }
+}
+
 const log = debug('context-engine:provider:GTDTodoInjector');
 
 /** Status of a todo item */

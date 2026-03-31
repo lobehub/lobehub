@@ -1,3 +1,4 @@
+import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import { ModelTag } from '@lobehub/icons';
 import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
@@ -15,8 +16,14 @@ import { styles } from './style';
 import { type FieldType } from './type';
 import { WidthMode } from './type';
 
-const Preview = memo<FieldType & { title?: string }>(
-  ({ title, withSystemRole, withBackground, withFooter, widthMode }) => {
+interface PreviewProps extends FieldType {
+  context: ConversationContext;
+  messages: UIChatMessage[];
+  title?: string;
+}
+
+const Preview = memo<PreviewProps>(
+  ({ context, messages, title, withSystemRole, withBackground, withFooter, widthMode }) => {
     const [model, plugins, systemRole, isInbox, avatar, backgroundColor] = useAgentStore((s) => [
       agentSelectors.currentAgentModel(s),
       agentSelectors.displayableAgentPlugins(s),
@@ -66,7 +73,7 @@ const Preview = memo<FieldType & { title?: string }>(
                 </div>
               )}
             </div>
-            <ChatList />
+            <ChatList context={context} ids={[]} messages={messages} />
             {withFooter ? (
               <Flexbox align={'center'} className={styles.footer} gap={4}>
                 <ProductLogo type={'combine'} />

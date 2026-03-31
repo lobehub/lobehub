@@ -161,137 +161,28 @@ describe('useToolStore:pluginStore', () => {
   });
 
   describe('installPlugin', () => {
-    it('should install a plugin with valid manifest', async () => {
-      const pluginIdentifier = 'plugin1';
-
-      const originalUpdateInstallLoadingState = useToolStore.getState().updateInstallLoadingState;
-      const updateInstallLoadingStateMock = vi.fn();
-
-      act(() => {
-        useToolStore.setState({
-          updateInstallLoadingState: updateInstallLoadingStateMock,
-        });
-      });
-
-      const pluginManifestMock = {
-        $schema: '../node_modules/@lobehub/chat-plugin-sdk/schema.json',
-        api: [
-          {
-            url: 'https://realtime-weather.chat-plugin.lobehub.com/api/v1',
-            name: 'fetchCurrentWeather',
-            description: '获取当前天气情况',
-            parameters: {
-              properties: {
-                city: {
-                  description: '城市名称',
-                  type: 'string',
-                },
-              },
-              required: ['city'],
-              type: 'object',
-            },
-          },
-        ],
-        author: 'LobeHub',
-        createAt: '2023-08-12',
-        homepage: 'https://github.com/lobehub/chat-plugin-realtime-weather',
-        identifier: 'realtime-weather',
-        meta: {
-          avatar: '🌈',
-          tags: ['weather', 'realtime'],
-          title: 'Realtime Weather',
-          description: 'Get realtime weather information',
-        },
-        ui: {
-          url: 'https://realtime-weather.chat-plugin.lobehub.com/iframe',
-          height: 310,
-        },
-        version: '1',
-      };
-      (toolService.getToolManifest as Mock).mockResolvedValue(pluginManifestMock);
-
-      await act(async () => {
-        await useToolStore.getState().installPlugin(pluginIdentifier);
-      });
-
-      // Then
-      expect(toolService.getToolManifest).toHaveBeenCalled();
-      expect(notification.error).not.toHaveBeenCalled();
-      expect(updateInstallLoadingStateMock).toHaveBeenCalledTimes(2);
-      expect(pluginService.installPlugin).toHaveBeenCalledWith({
-        identifier: 'plugin1',
-        type: 'plugin',
-        manifest: pluginManifestMock,
-      });
-
-      act(() => {
-        useToolStore.setState({
-          updateInstallLoadingState: originalUpdateInstallLoadingState,
-        });
-      });
-    });
-
-    it('should throw error with no error', async () => {
-      // Given
-
-      const error = new TypeError('noManifest');
-
-      // Mock necessary modules and functions
-      (toolService.getToolManifest as Mock).mockRejectedValue(error);
-
-      useToolStore.setState({
-        oldPluginItems: [
-          {
-            identifier: 'plugin1',
-            title: 'plugin1',
-            avatar: '🍏',
-          } as DiscoverPluginItem,
-        ],
-      });
-
+    it('should be deprecated and do nothing', async () => {
+      // Old plugin system has been deprecated
       await act(async () => {
         await useToolStore.getState().installPlugin('plugin1');
       });
 
-      expect(notification.error).toHaveBeenCalledWith({
-        description: 'error.noManifest',
-        message: 'error.installError',
-      });
+      // Should not call any service
+      expect(toolService.getToolManifest).not.toHaveBeenCalled();
+      expect(pluginService.installPlugin).not.toHaveBeenCalled();
+      expect(notification.error).not.toHaveBeenCalled();
     });
   });
 
   describe('installPlugins', () => {
-    it('should install multiple plugins', async () => {
-      // Given
-      act(() => {
-        useToolStore.setState({
-          oldPluginItems: [
-            {
-              identifier: 'plugin1',
-              title: 'plugin1',
-              avatar: '🍏',
-              manifest: 'https://abc.com/manifest.json',
-            } as DiscoverPluginItem,
-            {
-              identifier: 'plugin2',
-              title: 'plugin2',
-              avatar: '🍏',
-              manifest: 'https://abc.com/manifest.json',
-            } as DiscoverPluginItem,
-          ],
-        });
-      });
-
-      const plugins = ['plugin1', 'plugin2'];
-
-      (toolService.getToolManifest as Mock).mockResolvedValue(pluginManifestMock);
-
-      // When
+    it('should be deprecated and do nothing', async () => {
+      // Old plugin system has been deprecated
       await act(async () => {
-        await useToolStore.getState().installPlugins(plugins);
+        await useToolStore.getState().installPlugins(['plugin1', 'plugin2']);
       });
 
-      expect(pluginService.installPlugin).toHaveBeenCalledTimes(2);
+      // Should not call any service
+      expect(pluginService.installPlugin).not.toHaveBeenCalled();
     });
   });
 

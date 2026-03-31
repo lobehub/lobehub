@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Description",
+  "gateway.descriptionPlaceholder": "Optional",
+  "gateway.deviceName": "Device Name",
+  "gateway.deviceNamePlaceholder": "Enter device name",
+  "gateway.enableConnection": "Connect to Gateway",
+  "gateway.statusConnected": "Connected to Gateway",
+  "gateway.statusConnecting": "Connecting to Gateway...",
+  "gateway.statusDisconnected": "Not connected to Gateway",
+  "gateway.title": "Device Gateway",
   "navigation.chat": "Chat",
   "navigation.discover": "Discover",
   "navigation.discoverAssistants": "Discover Assistants",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "Use a self-hosted instance?",
   "sync.selfHosted.description": "Community version that you can deploy yourself",
   "sync.selfHosted.title": "Self-Hosted Instance",
+  "tab.closeCurrentTab": "Close Tab",
+  "tab.closeLeftTabs": "Close Tabs to the Left",
+  "tab.closeOtherTabs": "Close Other Tabs",
+  "tab.closeRightTabs": "Close Tabs to the Right",
   "updater.checkingUpdate": "Checking for updates",
   "updater.checkingUpdateDesc": "Retrieving version information...",
   "updater.downloadNewVersion": "Download new version",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "Authorization Connection Failed",
   "waitingOAuth.helpText": "If the browser did not open automatically, please click cancel and try again",
   "waitingOAuth.retry": "Retry",
-  "waitingOAuth.title": "Waiting for Authorization Connection"
+  "waitingOAuth.title": "Waiting for Authorization Connection",
+  "window.close": "Close window",
+  "window.maximize": "Maximize window",
+  "window.minimize": "Minimize window",
+  "window.restore": "Restore window"
 }

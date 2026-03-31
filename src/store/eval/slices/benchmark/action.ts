@@ -1,161 +1,147 @@
 import isEqual from 'fast-deep-equal';
-import  { type SWRResponse } from 'swr';
-import  { type StateCreator } from 'zustand/vanilla';
+import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
-import  { type EvalStore } from '@/store/eval/store';
+import { type EvalStore } from '@/store/eval/store';
+import { type StoreSetter } from '@/store/types';
 
-import { type BenchmarkDetailDispatch,benchmarkDetailReducer } from './reducer';
+import { type BenchmarkDetailDispatch, benchmarkDetailReducer } from './reducer';
 
 const FETCH_BENCHMARKS_KEY = 'FETCH_BENCHMARKS';
 const FETCH_BENCHMARK_DETAIL_KEY = 'FETCH_BENCHMARK_DETAIL';
 
-export interface BenchmarkAction {
-  createBenchmark: (params: {
+type Setter = StoreSetter<EvalStore>;
+
+export const createBenchmarkSlice = (set: Setter, get: () => EvalStore, _api?: unknown) =>
+  new BenchmarkActionImpl(set, get, _api);
+
+export class BenchmarkActionImpl {
+  readonly #get: () => EvalStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => EvalStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createBenchmark = async (params: {
     description?: string;
     identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
     rubrics?: any[];
     tags?: string[];
-  }) => Promise<any>;
-  deleteBenchmark: (id: string) => Promise<void>;
-  // Internal methods
-  internal_dispatchBenchmarkDetail: (payload: BenchmarkDetailDispatch) => void;
-  internal_updateBenchmarkDetailLoading: (id: string, loading: boolean) => void;
-  refreshBenchmarkDetail: (id: string) => Promise<void>;
-  refreshBenchmarks: () => Promise<void>;
-  updateBenchmark: (params: {
+  }): Promise<any> => {
+    this.#set({ isCreatingBenchmark: true }, false, 'createBenchmark/start');
+    try {
+      const result = await agentEvalService.createBenchmark({
+        description: params.description,
+        identifier: params.identifier,
+        metadata: params.metadata,
+        name: params.name,
+        rubrics: params.rubrics ?? [],
+        tags: params.tags,
+      });
+      await this.#get().refreshBenchmarks();
+      return result;
+    } finally {
+      this.#set({ isCreatingBenchmark: false }, false, 'createBenchmark/end');
+    }
+  };
+
+  deleteBenchmark = async (id: string): Promise<void> => {
+    this.#set({ isDeletingBenchmark: true }, false, 'deleteBenchmark/start');
+    try {
+      await agentEvalService.deleteBenchmark(id);
+      await this.#get().refreshBenchmarks();
+    } finally {
+      this.#set({ isDeletingBenchmark: false }, false, 'deleteBenchmark/end');
+    }
+  };
+
+  refreshBenchmarkDetail = async (id: string): Promise<void> => {
+    await mutate([FETCH_BENCHMARK_DETAIL_KEY, id]);
+  };
+
+  refreshBenchmarks = async (): Promise<void> => {
+    await mutate(FETCH_BENCHMARKS_KEY);
+  };
+
+  updateBenchmark = async (params: {
     description?: string;
     id: string;
     identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
     tags?: string[];
-  }) => Promise<void>;
-
-  useFetchBenchmarkDetail: (id?: string) => SWRResponse;
-  useFetchBenchmarks: () => SWRResponse;
-}
-
-export const createBenchmarkSlice: StateCreator<
-  EvalStore,
-  [['zustand/devtools', never]],
-  [],
-  BenchmarkAction
-> = (set, get) => ({
-  createBenchmark: async (params) => {
-    set({ isCreatingBenchmark: true }, false, 'createBenchmark/start');
-    try {
-      const result = await agentEvalService.createBenchmark({
-        identifier: params.identifier,
-        name: params.name,
-        description: params.description,
-        metadata: params.metadata,
-        rubrics: params.rubrics ?? [],
-        tags: params.tags,
-      });
-      await get().refreshBenchmarks();
-      return result;
-    } finally {
-      set({ isCreatingBenchmark: false }, false, 'createBenchmark/end');
-    }
-  },
-
-  deleteBenchmark: async (id) => {
-    set({ isDeletingBenchmark: true }, false, 'deleteBenchmark/start');
-    try {
-      await agentEvalService.deleteBenchmark(id);
-      await get().refreshBenchmarks();
-    } finally {
-      set({ isDeletingBenchmark: false }, false, 'deleteBenchmark/end');
-    }
-  },
-
-  refreshBenchmarkDetail: async (id) => {
-    await mutate([FETCH_BENCHMARK_DETAIL_KEY, id]);
-  },
-
-  refreshBenchmarks: async () => {
-    await mutate(FETCH_BENCHMARKS_KEY);
-  },
-
-  updateBenchmark: async (params) => {
+  }): Promise<void> => {
     const { id } = params;
 
-    // 1. Optimistic update
-    get().internal_dispatchBenchmarkDetail({
-      type: 'updateBenchmarkDetail',
+    this.#get().internal_dispatchBenchmarkDetail({
       id,
+      type: 'updateBenchmarkDetail',
       value: params,
     });
 
-    // 2. Set loading
-    get().internal_updateBenchmarkDetailLoading(id, true);
+    this.#get().internal_updateBenchmarkDetailLoading(id, true);
 
     try {
-      // 3. Call service
       await agentEvalService.updateBenchmark({
+        description: params.description,
         id: params.id,
         identifier: params.identifier,
-        name: params.name,
-        description: params.description,
         metadata: params.metadata,
+        name: params.name,
         tags: params.tags,
       });
 
-      // 4. Refresh from server
-      await get().refreshBenchmarks();
-      await get().refreshBenchmarkDetail(id);
+      await this.#get().refreshBenchmarks();
+      await this.#get().refreshBenchmarkDetail(id);
     } finally {
-      get().internal_updateBenchmarkDetailLoading(id, false);
+      this.#get().internal_updateBenchmarkDetailLoading(id, false);
     }
-  },
+  };
 
-  useFetchBenchmarkDetail: (id) => {
-    return useClientDataSWR(
+  useFetchBenchmarkDetail = (id?: string): SWRResponse =>
+    useClientDataSWR(
       id ? [FETCH_BENCHMARK_DETAIL_KEY, id] : null,
       () => agentEvalService.getBenchmark(id!),
       {
         onSuccess: (data: any) => {
-          get().internal_dispatchBenchmarkDetail({
-            type: 'setBenchmarkDetail',
+          this.#get().internal_dispatchBenchmarkDetail({
             id: id!,
+            type: 'setBenchmarkDetail',
             value: data,
           });
-          get().internal_updateBenchmarkDetailLoading(id!, false);
+          this.#get().internal_updateBenchmarkDetailLoading(id!, false);
         },
       },
     );
-  },
 
-  useFetchBenchmarks: () => {
-    return useClientDataSWR(FETCH_BENCHMARKS_KEY, () => agentEvalService.listBenchmarks(), {
+  useFetchBenchmarks = (): SWRResponse =>
+    useClientDataSWR(FETCH_BENCHMARKS_KEY, () => agentEvalService.listBenchmarks(), {
       onSuccess: (data: any) => {
-        set(
+        this.#set(
           { benchmarkList: data, benchmarkListInit: true, isLoadingBenchmarkList: false },
           false,
           'useFetchBenchmarks/success',
         );
       },
     });
-  },
 
-  // Internal - Dispatch to reducer
-  internal_dispatchBenchmarkDetail: (payload) => {
-    const currentMap = get().benchmarkDetailMap;
+  internal_dispatchBenchmarkDetail = (payload: BenchmarkDetailDispatch): void => {
+    const currentMap = this.#get().benchmarkDetailMap;
     const nextMap = benchmarkDetailReducer(currentMap, payload);
 
-    // No need to update if map is the same
     if (isEqual(nextMap, currentMap)) return;
 
-    set({ benchmarkDetailMap: nextMap }, false, `dispatchBenchmarkDetail/${payload.type}`);
-  },
+    this.#set({ benchmarkDetailMap: nextMap }, false, `dispatchBenchmarkDetail/${payload.type}`);
+  };
 
-  // Internal - Update loading state for specific detail
-  internal_updateBenchmarkDetailLoading: (id, loading) => {
-    set(
+  internal_updateBenchmarkDetailLoading = (id: string, loading: boolean): void => {
+    this.#set(
       (state) => {
         if (loading) {
           return { loadingBenchmarkDetailIds: [...state.loadingBenchmarkDetailIds, id] };
@@ -167,5 +153,7 @@ export const createBenchmarkSlice: StateCreator<
       false,
       'updateBenchmarkDetailLoading',
     );
-  },
-});
+  };
+}
+
+export type BenchmarkAction = Pick<BenchmarkActionImpl, keyof BenchmarkActionImpl>;

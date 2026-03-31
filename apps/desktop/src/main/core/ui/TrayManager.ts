@@ -1,4 +1,4 @@
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
 import { nativeTheme } from 'electron';
 
 import { name } from '@/../../package.json';
@@ -6,7 +6,8 @@ import { isMac } from '@/const/env';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
-import { Tray, TrayOptions } from './Tray';
+import type { TrayOptions } from './Tray';
+import { Tray } from './Tray';
 
 // Create logger
 const logger = createLogger('core:TrayManager');

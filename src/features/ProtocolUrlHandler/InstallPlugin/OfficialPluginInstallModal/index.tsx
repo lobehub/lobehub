@@ -25,7 +25,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     const { t } = useTranslation(['plugin', 'common']);
     const [loading, setLoading] = useState(false);
 
-    // 获取 MCP 插件详情
+    // Fetch MCP plugin details
     const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
     const identifier = installRequest?.pluginId || '';
 
@@ -59,14 +59,14 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
 
     if (!installRequest) return null;
 
-    // 渲染内容
+    // Render content
     const renderContent = () => {
-      // 如果正在加载，显示骨架屏
+      // If loading, show skeleton screen
       if (isLoading || !identifier) {
         return <DetailLoading />;
       }
 
-      // 如果加载失败或没有数据，显示错误信息
+      // If loading failed or no data, show error message
       if (!data) {
         return (
           <Block>

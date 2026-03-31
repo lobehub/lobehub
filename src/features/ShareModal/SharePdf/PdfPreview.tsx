@@ -259,7 +259,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
           </Document>
         </div>
 
-        {/* 页脚导航 */}
+        {/* Footer navigation */}
         {pdfData && numPages > 1 && (
           <div className={localStyles.footerNavigation}>
             <Flexbox horizontal align="center" gap={8} justify="center">
@@ -297,7 +297,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         )}
       </div>
 
-      {/* 全屏模态框 */}
+      {/* Fullscreen modal */}
       <Modal
         centered
         footer={null}
@@ -320,7 +320,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
             </Document>
           </div>
 
-          {/* 全屏模式下的导航 */}
+          {/* Navigation in fullscreen mode */}
           {numPages > 1 && (
             <div className={localStyles.fullscreenNavigation}>
               <Flexbox horizontal align="center" gap={12}>

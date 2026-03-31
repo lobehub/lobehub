@@ -12,7 +12,8 @@ export type TimeGroupId =
   | `${number}`;
 
 export enum TopicDisplayMode {
-  ByTime = 'byTime',
+  ByCreatedTime = 'byTime',
+  ByUpdatedTime = 'byUpdatedTime',
   Flat = 'flat',
   // AscMessages = 'ascMessages',
   // DescMessages = 'descMessages',

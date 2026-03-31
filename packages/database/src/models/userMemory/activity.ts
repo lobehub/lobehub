@@ -1,10 +1,11 @@
 import type { ActivityListParams, ActivityListResult } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
 import type { NewUserMemoryActivity, UserMemoryActivity } from '../../schemas';
 import { userMemories, userMemoriesActivities } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { sanitizeBm25Query } from '../../utils/bm25';
 
 export class UserMemoryActivityModel {
   private userId: string;
@@ -68,16 +69,12 @@ export class UserMemoryActivityModel {
     const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
     const offset = (normalizedPage - 1) * normalizedPageSize;
     const normalizedQuery = typeof q === 'string' ? q.trim() : '';
+    const bm25Query = normalizedQuery ? sanitizeBm25Query(normalizedQuery) : '';
 
     const conditions: Array<SQL | undefined> = [
       eq(userMemoriesActivities.userId, this.userId),
       normalizedQuery
-        ? or(
-            ilike(userMemories.title, `%${normalizedQuery}%`),
-            ilike(userMemoriesActivities.narrative, `%${normalizedQuery}%`),
-            ilike(userMemoriesActivities.notes, `%${normalizedQuery}%`),
-            ilike(userMemoriesActivities.feedback, `%${normalizedQuery}%`),
-          )
+        ? sql`(${userMemories.title} @@@ ${bm25Query} OR ${userMemoriesActivities.narrative} @@@ ${bm25Query} OR ${userMemoriesActivities.notes} @@@ ${bm25Query} OR ${userMemoriesActivities.feedback} @@@ ${bm25Query})`
         : undefined,
       types && types.length > 0 ? inArray(userMemoriesActivities.type, types) : undefined,
       status && status.length > 0 ? inArray(userMemoriesActivities.status, status) : undefined,

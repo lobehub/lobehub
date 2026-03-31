@@ -1,0 +1,142 @@
+---
+title: Connect LobeHub to QQ
+description: >-
+  Learn how to create a QQ bot and connect it to your LobeHub agent as a message
+  channel, enabling your AI assistant to chat with users in QQ group chats and
+  direct messages.
+tags:
+  - QQ
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to QQ
+
+By connecting a QQ channel to your LobeHub agent, users can interact with the AI assistant through QQ group chats, guild channels, and direct messages.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A QQ account
+
+## Step 1: Create a QQ Bot
+
+<Steps>
+  ### Open the QQ Open Platform
+
+  Visit [q.qq.com](https://q.qq.com) and sign in with your QQ account.
+
+  ### Create an Application
+
+  In the QQ Open Platform dashboard, click **Create Bot**. Fill in the bot name, description, and avatar.
+
+  ### Copy App Credentials
+
+  After the application is created, go to **Development Settings** and copy:
+
+  - **App ID** — Your bot's unique identifier
+  - **App Secret** — Your bot's secret key
+
+  > **Important:** Keep your App Secret confidential. Never share it publicly.
+
+  ![](/blog/assets276a4e8748e9bd300b30dcd9d0e24980.webp)
+
+  ### Configure Webhook URL
+
+  In the QQ Open Platform, navigate to **Development Settings** → **Callback Configuration**. You will need to paste the LobeHub Callback URL here after completing Step 2.
+</Steps>
+
+## Step 2: Configure QQ in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **QQ** from the platform list.
+
+  ### Enter App Credentials
+
+  Fill in the following fields:
+
+  - **Application ID** — The App ID from the QQ Open Platform
+  - **App Secret** — The App Secret from the QQ Open Platform
+
+  ### Save and Copy the Callback URL
+
+  Click **Save Configuration**. After saving, a **Callback URL** will be displayed. Copy this URL.
+
+  Your credentials will be encrypted and stored securely.
+
+  ![](/blog/assetsf9317924035e48fcb1d1ae586568ea5f.webp)
+</Steps>
+
+## Step 3: Configure Callback in QQ Open Platform
+
+<Steps>
+  ### Paste the Callback URL
+
+  Go back to the QQ Open Platform, navigate to **Development Settings** → **Callback Configuration**. Paste the **Callback URL** you copied from LobeHub.
+
+  ### Select Event Types
+
+  Subscribe to the message events your bot needs. Common events include:
+
+  - `GROUP_AT_MESSAGE_CREATE` — Triggered when the bot is @mentioned in a group
+  - `C2C_MESSAGE_CREATE` — Triggered when the bot receives a private message
+  - `AT_MESSAGE_CREATE` — Triggered when the bot is @mentioned in a guild channel
+  - `DIRECT_MESSAGE_CREATE` — Triggered for direct messages in a guild
+
+  ![](/blog/assets737e194726e134bc205a37d74eaee98e.webp)
+
+  ### Verify the Callback
+
+  The QQ Open Platform will send a verification request to your Callback URL. LobeHub handles this automatically using Ed25519 signature verification.
+</Steps>
+
+## Step 4: Publish the Bot
+
+<Steps>
+  ### Submit for Review
+
+  In the QQ Open Platform, go to **Version Management** and create a new version. Submit the bot for review.
+
+  ### Wait for Approval
+
+  QQ will review your bot. Once approved, the bot will be published and ready to use. For sandbox testing, you can add test users directly without publishing.
+
+  ![](/blog/assets862c2fcdfd3a9e51c44c721c47e1ff5a.webp)
+</Steps>
+
+## Step 5: Test the Connection
+
+Click **Test Connection** in LobeHub's channel settings to verify the integration. Then open QQ, find your bot, and send a message. The bot should respond through your LobeHub agent.
+
+## Adding the Bot to Group Chats
+
+To use the bot in QQ groups:
+
+1. Add the bot to a QQ group
+2. @mention the bot in a message to trigger a response
+3. The bot will reply in the group conversation
+
+## Configuration Reference
+
+| Field              | Required | Description                                              |
+| ------------------ | -------- | -------------------------------------------------------- |
+| **Application ID** | Yes      | Your bot's App ID from QQ Open Platform                  |
+| **App Secret**     | Yes      | Your bot's App Secret from QQ Open Platform              |
+| **Callback URL**   | —        | Auto-generated after saving; paste into QQ Open Platform |
+
+## Limitations
+
+- **No message editing** — QQ Bot API does not support editing sent messages. Updated responses will be sent as new messages.
+- **No reactions** — QQ Bot API does not support emoji reactions.
+- **No typing indicator** — QQ Bot API does not provide typing indicator support for bots.
+- **Message length limit** — Messages exceeding 2000 characters will be automatically truncated.
+
+## Troubleshooting
+
+- **Callback URL verification failed:** Ensure you saved the configuration in LobeHub first and the URL was copied correctly. LobeHub handles Ed25519 verification automatically.
+- **Bot not responding:** Verify the App ID and App Secret are correct, the bot is published (or you are a sandbox test user), and the required message events are subscribed.
+- **Group chat issues:** Make sure the bot has been added to the group. @mention the bot to trigger a response.
+- **Test Connection failed:** Double-check the App ID and App Secret in LobeHub's channel settings.

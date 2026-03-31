@@ -1,25 +1,11 @@
 import type { ChatTopicMetadata, DBMessageItem, TopicRankItem } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import {
-  and,
-  count,
-  desc,
-  eq,
-  gt,
-  gte,
-  ilike,
-  inArray,
-  isNull,
-  lte,
-  ne,
-  not,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, inArray, isNull, lte, ne, not, or, sql } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
 import { agents, agentsToSessions, messagePlugins, messages, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 
@@ -239,34 +225,39 @@ export class TopicModel {
   };
 
   queryByKeyword = async (keyword: string, containerId?: string | null): Promise<TopicItem[]> => {
-    if (!keyword) return [];
+    if (!keyword.trim()) return [];
 
-    const keywordLowerCase = keyword.toLowerCase();
+    const bm25Query = sanitizeBm25Query(keyword);
 
-    // Query topics matching by title
-    const topicsByTitle = await this.db.query.topics.findMany({
-      orderBy: [desc(topics.updatedAt)],
-      where: and(
-        eq(topics.userId, this.userId),
-        this.matchContainer(containerId),
-        ilike(topics.title, `%${keywordLowerCase}%`),
-      ),
-    });
-
-    // Query topic IDs matching by message content
-    const topicIdsByMessages = await this.db
-      .select({ topicId: messages.topicId })
-      .from(messages)
-      .innerJoin(topics, eq(messages.topicId, topics.id))
-      .where(
-        and(
-          eq(messages.userId, this.userId),
-          ilike(messages.content, `%${keywordLowerCase}%`),
-          eq(topics.userId, this.userId),
-          this.matchContainer(containerId),
-        ),
-      )
-      .groupBy(messages.topicId);
+    // Run title and message content searches in parallel
+    const [topicsByTitle, topicIdsByMessages] = await Promise.all([
+      // Query topics matching by title (BM25)
+      this.db
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.userId, this.userId),
+            this.matchContainer(containerId),
+            sql`${topics.title} @@@ ${bm25Query}`,
+          ),
+        )
+        .orderBy(desc(topics.updatedAt)),
+      // Query topic IDs matching by message content (BM25)
+      this.db
+        .select({ topicId: messages.topicId })
+        .from(messages)
+        .innerJoin(topics, eq(messages.topicId, topics.id))
+        .where(
+          and(
+            eq(messages.userId, this.userId),
+            sql`${messages.content} @@@ ${bm25Query}`,
+            eq(topics.userId, this.userId),
+            this.matchContainer(containerId),
+          ),
+        )
+        .groupBy(messages.topicId),
+    ]);
     // If no topics found by message content, return topics matching by title
     if (topicIdsByMessages.length === 0) {
       return topicsByTitle;
@@ -787,8 +778,8 @@ export class TopicModel {
           eq(topics.userId, this.userId),
           eq(topics.agentId, agentId),
           eq(topics.trigger, 'cron'),
-          // Check if metadata contains cronJobId
-          sql`${topics.metadata}->>'cronJobId' IS NOT NULL`,
+          // Check if metadata contains cronJobId (use ? operator to avoid Neon rt_fetch bug with ->>)
+          sql`${topics.metadata} ? 'cronJobId'`,
         ),
       )
       .orderBy(desc(topics.updatedAt));

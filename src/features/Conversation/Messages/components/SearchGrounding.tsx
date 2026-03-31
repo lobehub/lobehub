@@ -1,7 +1,7 @@
 import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe, Images } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -195,7 +195,7 @@ const SearchGrounding = memo<GroundingSearch>(
 
         <AnimatePresence initial={false}>
           {showDetail && (
-            <motion.div
+            <m.div
               animate="open"
               exit="collapsed"
               initial="collapsed"
@@ -269,10 +269,7 @@ const SearchGrounding = memo<GroundingSearch>(
                           >
                             <Flexbox gap={2}>
                               {item.title && (
-                                <div
-                                  className={styles.imageTitle}
-                                  dangerouslySetInnerHTML={{ __html: item.title }}
-                                />
+                                <div className={styles.imageTitle}>{stripHtml(item.title)}</div>
                               )}
                               {item.domain && (
                                 <Flexbox horizontal align="center" gap={4}>
@@ -295,7 +292,7 @@ const SearchGrounding = memo<GroundingSearch>(
                   </div>
                 )}
               </Flexbox>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </Flexbox>

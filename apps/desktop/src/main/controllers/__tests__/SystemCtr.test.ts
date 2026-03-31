@@ -1,4 +1,4 @@
-import { ThemeMode } from '@lobechat/electron-client-ipc';
+import type { ThemeMode } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';

@@ -13,6 +13,8 @@ vi.mock('@lobechat/model-runtime', () => ({
   isThinkingWithToolClaudeModel: vi.fn((model) => model === 'claude-3-7-sonnet'),
 }));
 
+// isDesktop defaults to false in test environment (no __ELECTRON__)
+
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
   ...initialAgentSliceState,
   ...initialBuiltinAgentSliceState,
@@ -59,7 +61,7 @@ describe('chatConfigByIdSelectors', () => {
   });
 
   describe('getEnableHistoryCountById', () => {
-    it('should return false when context caching enabled and model supports it', () => {
+    it('should return enableHistoryCount value even when context caching is enabled', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -69,10 +71,10 @@ describe('chatConfigByIdSelectors', () => {
         },
       });
 
-      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(true);
     });
 
-    it('should return false when search enabled and model is claude-3-7-sonnet', () => {
+    it('should return enableHistoryCount value even when search is enabled', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -86,10 +88,10 @@ describe('chatConfigByIdSelectors', () => {
         },
       });
 
-      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(false);
+      expect(chatConfigByIdSelectors.getEnableHistoryCountById('agent-1')(state)).toBe(true);
     });
 
-    it('should return enableHistoryCount value when no special cases apply', () => {
+    it('should return enableHistoryCount value directly from config', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -114,7 +116,7 @@ describe('chatConfigByIdSelectors', () => {
             model: 'gpt-4',
           },
           'agent-2': {
-            chatConfig: { disableContextCaching: false, enableHistoryCount: true },
+            chatConfig: { disableContextCaching: false, enableHistoryCount: false },
             model: 'claude-3-5-sonnet',
           },
         },
@@ -425,6 +427,129 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getSearchFCModelById('agent-1')(state)).toStrictEqual(
         DEFAULT_AGENT_SEARCH_FC_MODEL,
       );
+    });
+  });
+
+  describe('getRuntimeEnvConfigById', () => {
+    it('should return runtimeEnv config for specified agent', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: {
+              runtimeEnv: { runtimeMode: { web: 'cloud' }, workingDirectory: '/home' },
+            },
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeEnvConfigById('agent-1')(state)).toEqual({
+        runtimeMode: { web: 'cloud' },
+        workingDirectory: '/home',
+      });
+    });
+
+    it('should return undefined when runtimeEnv is not set', () => {
+      const state = createState({
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeEnvConfigById('agent-1')(state)).toBeUndefined();
+    });
+  });
+
+  // In test environment, isDesktop is false (no __ELECTRON__), so CURRENT_PLATFORM = 'web'
+  describe('getRuntimeModeById (web platform)', () => {
+    it('should return web runtime mode when set', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { runtimeEnv: { runtimeMode: { web: 'cloud' } } },
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('cloud');
+    });
+
+    it('should default to "none" on web when not set', () => {
+      const state = createState({
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('none');
+    });
+
+    it('should default to "none" for non-existent agent', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(chatConfigByIdSelectors.getRuntimeModeById('non-existent')(state)).toBe('none');
+    });
+
+    it('should ignore desktop runtime mode on web', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { runtimeEnv: { runtimeMode: { desktop: 'local' } } },
+          },
+        },
+      });
+
+      // desktop is set but web is not, should fall back to web default
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('none');
+    });
+
+    it('should read correct platform when both are set', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: {
+              runtimeEnv: { runtimeMode: { desktop: 'local', web: 'cloud' } },
+            },
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('cloud');
+    });
+
+    it('should work with different agents independently', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { runtimeEnv: { runtimeMode: { web: 'cloud' } } },
+          },
+          'agent-2': {
+            chatConfig: { runtimeEnv: { runtimeMode: { web: 'none' } } },
+          },
+          'agent-3': { chatConfig: {} },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('cloud');
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-2')(state)).toBe('none');
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-3')(state)).toBe('none');
+    });
+  });
+
+  describe('isLocalSystemEnabledById', () => {
+    it('should return false on web even with desktop set to local', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { runtimeEnv: { runtimeMode: { desktop: 'local' } } },
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.isLocalSystemEnabledById('agent-1')(state)).toBe(false);
+    });
+
+    it('should return false when not set (web defaults to none)', () => {
+      const state = createState({
+        agentMap: { 'agent-1': {} },
+      });
+
+      expect(chatConfigByIdSelectors.isLocalSystemEnabledById('agent-1')(state)).toBe(false);
     });
   });
 });

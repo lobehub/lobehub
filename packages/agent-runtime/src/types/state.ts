@@ -1,4 +1,10 @@
 import type {
+  ActivatedStepSkill,
+  ActivatedStepTool,
+  OperationToolSet,
+  ToolSource,
+} from '@lobechat/context-engine';
+import type {
   ChatToolPayload,
   SecurityBlacklistConfig,
   UserInterventionConfig,
@@ -11,17 +17,21 @@ import type { Cost, CostLimit, Usage } from './usage';
  * This is the "passport" that can be persisted and transferred.
  */
 export interface AgentState {
+  /** Cumulative record of skills activated at step level */
+  activatedStepSkills?: ActivatedStepSkill[];
+  /** Cumulative record of tools activated at step level */
+  activatedStepTools?: ActivatedStepTool[];
   /**
    * Current calculated cost for this session.
    * Updated after each billable operation.
    */
   cost: Cost;
+
   /**
    * Optional cost limits configuration.
    * If set, execution will stop when limits are exceeded.
    */
   costLimit?: CostLimit;
-
   // --- Metadata ---
   createdAt: string;
   error?: any;
@@ -47,6 +57,7 @@ export interface AgentState {
     canResume: boolean;
   };
   lastModified: string;
+
   /**
    * Optional maximum number of steps allowed.
    * If set, execution will stop with error when exceeded.
@@ -75,16 +86,18 @@ export interface AgentState {
       provider: string;
     };
   };
-
   operationId: string;
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  /** Operation-level tool set snapshot (immutable after creation) */
+  operationToolSet?: OperationToolSet;
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
     options: Array<{ label: string; value: string }>;
     prompt?: string;
   };
+
   // --- HIL ---
   /**
    * When status is 'waiting_for_human', this stores pending requests
@@ -98,22 +111,23 @@ export interface AgentState {
    * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
    */
   securityBlacklist?: SecurityBlacklistConfig;
-
   // --- State Machine ---
   status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+
   // --- Execution Tracking ---
   /**
    * Number of execution steps in this session.
    * Incremented on each runtime.step() call.
    */
   stepCount: number;
-  systemRole?: string;
 
+  systemRole?: string;
   toolManifestMap: Record<string, any>;
 
   tools?: any[];
+
   /** Tool source map for routing tool execution to correct handler */
-  toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
+  toolSourceMap?: Record<string, ToolSource>;
   // --- Usage and Cost Tracking ---
   /**
    * Accumulated usage statistics for this session.

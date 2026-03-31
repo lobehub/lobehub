@@ -154,7 +154,7 @@ export default class Browser {
   private setupWindow(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] BrowserWindow instance created.`);
 
-    // Setup theme management (includes liquid glass lifecycle on macOS Tahoe)
+    // Setup theme management
     this.themeManager.attach(browserWindow);
 
     // Setup network interceptors
@@ -167,7 +167,7 @@ export default class Browser {
     // Setup devtools if enabled
     if (this.options.devTools) {
       logger.debug(`[${this.identifier}] Opening DevTools.`);
-      browserWindow.webContents.openDevTools();
+      browserWindow.webContents.openDevTools({ mode: 'detach' });
     }
 
     // Setup event listeners

@@ -183,6 +183,18 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
   - 选择访问协议：`http` 或 `https`
   - 安全密钥重新生成：我们强烈建议你重新生成安全密钥，如果你缺少脚本所需的密钥生成库，我们建议你参考 [自定义部署](#自定义部署) 章节对密钥进行修改。
 
+  <Callout type="tip">
+    **单域名部署方案**
+    如果只有一个域名，可以通过不同端口区分服务：
+
+    - LobeHub 服务的域名设置：`lobe.example.com:${PORT1}`
+    - S3 服务的域名设置：`lobe.example.com:${PORT2}`
+      需在反向代理中配置对应端口的转发规则。
+      **端口模式 vs 域名模式：**
+    - 端口模式：一键安装脚本自动使用默认端口（3210/9000/9001）
+    - 域名模式：可自定义端口（通过反向代理配置）
+  </Callout>
+
   <Callout type="warning">
     以下问题可能导致你的服务无法正常访问：
 
@@ -239,18 +251,13 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
 
 ## 自定义部署
 
-该章节主要为你介绍在不同的网络环境下自定义部署 LobeHub 服务必须要修改的配置。在开始前，你可以先下载 [Docker Compose 配置文件](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml) 以及 [环境变量配置文件](https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-CN.example)。
+该章节主要为你介绍在不同的网络环境下自定义部署 LobeHub 服务必须要修改的配置。在开始前，你可以先下载 [Docker Compose 配置文件](https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml) 以及 [环境变量配置文件](https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.zh-CN.example)。
 
 ```sh
-curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/lobehub/lobe-chat/HEAD/docker-compose/deploy/.env.zh-CN.example
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.zh-CN.example
 mv .env.zh-CN.example .env
 ```
-
-<Callout type="info">
-  本章节并不包含所有完整变量，剩余的变量可以查阅
-  [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
-</Callout>
 
 ### 预备知识
 
@@ -276,6 +283,10 @@ mv .env.zh-CN.example .env
 
 LobeHub 需要为 LLM 服务提供商提供文件对象的公网访问地址，因此你需要配置 S3 的 Endpoint：
 
+<Callout type="warning">
+  直接使用 `S3_ENDPOINT=http://rustfs:9000` 会导致对话内上传图片不可用（浏览器无法直接访问容器内网），但是头像上传不受影响
+</Callout>
+
 ```env
 S3_ENDPOINT=https://s3.example.com
 ```
@@ -290,6 +301,23 @@ services:
     environment:
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
 ```
+
+3. 内部通信地址 (`INTERNAL_APP_URL`)
+
+<Callout type="warning">
+  Docker Compose 部署时**必须配置** `INTERNAL_APP_URL`。LobeHub 的异步功能（如 AI 生图）需要容器内部发起 HTTP 请求调用自身。如果未设置 `INTERNAL_APP_URL`，系统将使用 `APP_URL` 作为回退。当 `APP_URL` 是宿主机 IP（如 `http://10.1.7.146:8080`）时，容器内部无法访问该地址，导致生图等异步功能静默失败。
+</Callout>
+
+```env
+INTERNAL_APP_URL=http://localhost:3210
+```
+
+- `APP_URL`：用于浏览器 / 客户端访问、OAuth 回调、webhook 等
+- `INTERNAL_APP_URL`：用于容器内部服务间通信（绕过 CDN / 代理 / 宿主机网络）
+
+<Callout type="tip">
+  对于 Docker Compose 部署，推荐使用 `http://localhost:3210`（容器调用自身）或 `http://lobe:3210`（使用服务名称进行容器间通信）。
+</Callout>
 
 ## 常见问题
 
@@ -312,37 +340,6 @@ docker compose down  # 停止服务
 sudo rm -rf ./data   # 移除挂载的数据库数据
 docker compose up -d # 重新启动
 ```
-
-#### 使用 `INTERNAL_APP_URL` 配置内部服务器通信
-
-<Callout type="info">
-  如果你在 CDN（如 Cloudflare）或反向代理后部署 LobeHub，你可以配置内部服务器到服务器通信以绕过 CDN / 代理层，以获得更好的性能。
-</Callout>
-
-你可以配置 `INTERNAL_APP_URL` 环境变量：
-
-```yaml
-environment:
-  - 'APP_URL=https://lobe.example.com'  # 浏览器访问的公开 URL
-  - 'INTERNAL_APP_URL=http://localhost:3210'  # 服务器到服务器调用的内部 URL
-```
-
-**工作原理：**
-
-- `APP_URL`：用于浏览器 / 客户端访问、OAuth 回调、webhook 等（通过 CDN / 代理）
-- `INTERNAL_APP_URL`：用于内部服务器到服务器通信（绕过 CDN / 代理）
-
-如果未设置 `INTERNAL_APP_URL`，它将默认为 `APP_URL`。
-
-**配置选项：**
-
-- `http://localhost:3210` - 如果使用 Docker 主机网络模式
-- `http://lobe:3210` - 如果使用 Docker 网络与服务名称
-- `http://127.0.0.1:3210` - 备用本地主机地址
-
-<Callout type="tip">
-  对于使用 `network_mode: 'service:network-service'` 的 Docker Compose 部署，请使用 `http://localhost:3210` 作为 `INTERNAL_APP_URL`。
-</Callout>
 
 ## 反向代理配置
 

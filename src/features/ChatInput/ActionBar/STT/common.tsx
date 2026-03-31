@@ -55,7 +55,7 @@ const CommonSTT = memo<{
         variant={mobile ? 'outlined' : 'borderless'}
         dropdown={{
           menu: {
-            // @ts-expect-error 等待 antd 修复
+            // @ts-expect-error waiting for antd to fix this
             activeKey: 'time',
             items: [
               {

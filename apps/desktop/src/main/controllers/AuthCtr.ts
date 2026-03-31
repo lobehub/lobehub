@@ -1,18 +1,20 @@
-import {
+import crypto from 'node:crypto';
+import querystring from 'node:querystring';
+import { URL } from 'node:url';
+
+import type {
   AuthorizationProgress,
   DataSyncConfig,
   MarketAuthorizationParams,
 } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
-import crypto from 'node:crypto';
-import querystring from 'node:querystring';
-import { URL } from 'node:url';
 
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 
-import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import { ControllerModule, IpcMethod } from './index';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:AuthCtr');
 
@@ -42,14 +44,14 @@ export default class AuthCtr extends ControllerModule {
   /**
    * Polling related parameters
    */
-  // eslint-disable-next-line no-undef
+
   private pollingInterval: NodeJS.Timeout | null = null;
   private cachedRemoteUrl: string | null = null;
 
   /**
    * Auto-refresh timer
    */
-  // eslint-disable-next-line no-undef
+
   private autoRefreshTimer: NodeJS.Timeout | null = null;
 
   /**
@@ -530,10 +532,26 @@ export default class AuthCtr extends ControllerModule {
       // Start auto-refresh timer
       this.startAutoRefresh();
 
+      // Connect to device gateway after successful login
+      this.connectGateway();
+
       return { success: true };
     } catch (error) {
       logger.error('Exchanging authorization code failed:', error);
       return { error: error.message, success: false };
+    }
+  }
+
+  /**
+   * Connect to device gateway (fire-and-forget)
+   */
+  private connectGateway() {
+    const gatewaySrv = this.app.getService(GatewayConnectionService);
+    if (gatewaySrv) {
+      logger.info('Triggering gateway connection after login');
+      gatewaySrv.connect().catch((error) => {
+        logger.error('Gateway connection after login failed:', error);
+      });
     }
   }
 

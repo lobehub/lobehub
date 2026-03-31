@@ -15,12 +15,12 @@ export const createAzureOpenai = (params: {
   const { AZURE_API_VERSION, AZURE_API_KEY } = getLLMConfig();
   const OPENAI_PROXY_URL = process.env.OPENAI_PROXY_URL || '';
 
-  const endpoint = !params.endpoint ? OPENAI_PROXY_URL : params.endpoint;
+  const endpoint = params.endpoint || OPENAI_PROXY_URL;
   const baseURL = urlJoin(endpoint, `/openai/deployments/${params.model.replace('.', '')}`); // refs: https://test-001.openai.azure.com/openai/deployments/gpt-35-turbo
 
   const defaultApiVersion = AZURE_API_VERSION || '2023-08-01-preview';
-  const apiVersion = !params.apiVersion ? defaultApiVersion : params.apiVersion;
-  const apiKey = !params.userApiKey ? AZURE_API_KEY : params.userApiKey;
+  const apiVersion = params.apiVersion || defaultApiVersion;
+  const apiKey = params.userApiKey || AZURE_API_KEY;
 
   if (!apiKey) throw new Error('AZURE_API_KEY is empty', { cause: ChatErrorType.NoOpenAIAPIKey });
 

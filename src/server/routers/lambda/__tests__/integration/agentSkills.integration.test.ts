@@ -16,6 +16,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 // Mock FileService to avoid S3 dependency
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({
+    createGlobalFile: vi.fn().mockResolvedValue({ id: 'mock-global-file-id' }),
     createFileRecord: vi.fn().mockResolvedValue({ fileId: 'mock-file-id', url: '/f/mock-file-id' }),
     downloadFileToLocal: vi.fn(),
     getFileContent: vi.fn(),
@@ -67,6 +68,13 @@ const mockParserInstance = {
 };
 vi.mock('@/server/services/skill/parser', () => ({
   SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
+}));
+
+const mockMarketServiceInstance = {
+  getSkillDownloadUrl: vi.fn(),
+};
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(() => mockMarketServiceInstance),
 }));
 
 // Mock global fetch for URL imports
@@ -637,6 +645,58 @@ description: A skill from URL
         url: 'https://example.com/update-test.md',
       });
       expect(second!.skill.id).toBe(first!.skill.id); // Same skill updated
+      expect(second!.skill.name).toBe('Updated Name');
+      expect(second!.skill.content).toBe('# Updated');
+    });
+  });
+
+  describe('importFromMarket', () => {
+    beforeEach(() => {
+      mockFetch.mockReset();
+      mockMarketServiceInstance.getSkillDownloadUrl.mockReset();
+    });
+
+    it('should keep the market identifier stable when re-importing from market', async () => {
+      mockMarketServiceInstance.getSkillDownloadUrl
+        .mockReturnValueOnce('https://market.lobehub.com/api/v1/skills/github.owner.repo/download')
+        .mockReturnValueOnce(
+          'https://market.lobehub.com/api/v1/skills/github.owner.repo/download?version=1.0.0',
+        );
+
+      mockFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(8),
+        headers: {
+          get: (key: string) => (key === 'content-type' ? 'application/zip' : null),
+        },
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      let callCount = 0;
+      mockParserInstance.parseZipPackage.mockImplementation(() => {
+        callCount++;
+        return {
+          content: callCount === 1 ? '# Original' : '# Updated',
+          manifest: {
+            description: callCount === 1 ? 'Original desc' : 'Updated desc',
+            name: callCount === 1 ? 'Original Name' : 'Updated Name',
+          },
+          resources: new Map(),
+          zipHash: undefined,
+        };
+      });
+
+      const caller = agentSkillsRouter.createCaller(createTestContext(userId));
+
+      const first = await caller.importFromMarket({ identifier: 'github.owner.repo' });
+      expect(first!.status).toBe('created');
+      expect(first!.skill.identifier).toBe('github.owner.repo');
+
+      const second = await caller.importFromMarket({ identifier: 'github.owner.repo' });
+      expect(second!.status).toBe('updated');
+      expect(second!.skill.id).toBe(first!.skill.id);
+      expect(second!.skill.identifier).toBe('github.owner.repo');
       expect(second!.skill.name).toBe('Updated Name');
       expect(second!.skill.content).toBe('# Updated');
     });

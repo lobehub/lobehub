@@ -384,8 +384,13 @@ describe('buildIdTree', () => {
       const helperMaps = buildHelperMaps(messages);
       const result = buildIdTree(helperMaps);
 
-      // Orphan messages without valid parents are not in main flow
-      expect(result).toEqual([]);
+      // Orphan messages are promoted to roots by the indexing fallback
+      expect(result).toEqual([
+        {
+          children: [],
+          id: 'msg-1',
+        },
+      ]);
     });
 
     it('should build correct tree when all messages are threaded', () => {

@@ -12,10 +12,12 @@ interface TesstProviderParams {
   defaultBaseURL: string;
   invalidErrorType?: string;
   provider: string;
+  responseDebugEnv?: string;
   Runtime: any;
   test?: {
     skipAPICall?: boolean;
     skipErrorHandle?: boolean;
+    useResponsesAPI?: boolean;
   };
 }
 
@@ -26,6 +28,7 @@ export const testProvider = ({
   defaultBaseURL,
   Runtime,
   chatDebugEnv,
+  responseDebugEnv,
   chatModel,
   test = {},
 }: TesstProviderParams) => {
@@ -37,10 +40,11 @@ export const testProvider = ({
   beforeEach(() => {
     instance = new Runtime({ apiKey: 'test' });
 
-    // 使用 vi.spyOn 来模拟 chat.completions.create 方法
+    // Use vi.spyOn to mock the chat.completions.create method or responses.create method
     vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
       new ReadableStream() as any,
     );
+    vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(new ReadableStream() as any);
   });
 
   afterEach(() => {
@@ -62,7 +66,10 @@ export const testProvider = ({
         const mockStream = new ReadableStream();
         const mockResponse = Promise.resolve(mockStream);
 
-        (instance['client'].chat.completions.create as Mock).mockResolvedValue(mockResponse);
+        const createMethod = test?.useResponsesAPI
+          ? instance['client'].responses.create
+          : instance['client'].chat.completions.create;
+        (createMethod as Mock).mockResolvedValue(mockResponse);
 
         // Act
         const result = await instance.chat({
@@ -81,7 +88,10 @@ export const testProvider = ({
           const mockStream = new ReadableStream();
           const mockResponse = Promise.resolve(mockStream);
 
-          (instance['client'].chat.completions.create as Mock).mockResolvedValue(mockResponse);
+          const createMethod = test?.useResponsesAPI
+            ? instance['client'].responses.create
+            : instance['client'].chat.completions.create;
+          (createMethod as Mock).mockResolvedValue(mockResponse);
 
           // Act
           const result = await instance.chat({
@@ -93,20 +103,24 @@ export const testProvider = ({
           });
 
           // Assert
-          expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-            {
-              max_tokens: 1024,
-              messages: [{ content: 'Hello', role: 'user' }],
-              model: chatModel,
-              stream: true,
-              stream_options: {
-                include_usage: true,
+          if (test?.useResponsesAPI) {
+            expect(instance['client'].responses.create).toHaveBeenCalled();
+          } else {
+            expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+              {
+                max_tokens: 1024,
+                messages: [{ content: 'Hello', role: 'user' }],
+                model: chatModel,
+                stream: true,
+                stream_options: {
+                  include_usage: true,
+                },
+                temperature: 0.7,
+                top_p: 1,
               },
-              temperature: 0.7,
-              top_p: 1,
-            },
-            { headers: { Accept: '*/*' } },
-          );
+              { headers: { Accept: '*/*' } },
+            );
+          }
           expect(result).toBeInstanceOf(Response);
         });
       }
@@ -127,7 +141,11 @@ export const testProvider = ({
               {},
             );
 
-            vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+            if (test?.useResponsesAPI) {
+              vi.mocked(instance['client'].responses.create).mockRejectedValue(apiError);
+            } else {
+              vi.mocked(instance['client'].chat.completions.create).mockRejectedValue(apiError);
+            }
 
             // Act
             try {
@@ -166,7 +184,11 @@ export const testProvider = ({
             };
             const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
 
-            vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+            if (test?.useResponsesAPI) {
+              vi.mocked(instance['client'].responses.create).mockRejectedValue(apiError);
+            } else {
+              vi.mocked(instance['client'].chat.completions.create).mockRejectedValue(apiError);
+            }
 
             // Act
             try {
@@ -196,11 +218,14 @@ export const testProvider = ({
 
             instance = new Runtime({
               apiKey: 'test',
-
               baseURL: 'https://api.abc.com/v1',
             });
 
-            vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+            if (test?.useResponsesAPI) {
+              vi.spyOn(instance['client'].responses, 'create').mockRejectedValue(apiError);
+            } else {
+              vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+            }
 
             // Act
             try {
@@ -225,7 +250,12 @@ export const testProvider = ({
             // Mock the API call to simulate a 401 error
             const error = new Error('Unauthorized') as any;
             error.status = 401;
-            vi.mocked(instance['client'].chat.completions.create).mockRejectedValue(error);
+
+            if (test?.useResponsesAPI) {
+              vi.mocked(instance['client'].responses.create).mockRejectedValue(error);
+            } else {
+              vi.mocked(instance['client'].chat.completions.create).mockRejectedValue(error);
+            }
 
             try {
               await instance.chat({
@@ -248,7 +278,11 @@ export const testProvider = ({
             // Arrange
             const genericError = new Error('Generic Error');
 
-            vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(genericError);
+            if (test?.useResponsesAPI) {
+              vi.mocked(instance['client'].responses.create).mockRejectedValue(genericError);
+            } else {
+              vi.mocked(instance['client'].chat.completions.create).mockRejectedValue(genericError);
+            }
 
             // Act
             try {
@@ -276,30 +310,35 @@ export const testProvider = ({
       describe('DEBUG', () => {
         it(`should call debugStream and return StreamingTextResponse when ${chatDebugEnv} is 1`, async () => {
           // Arrange
-          const mockProdStream = new ReadableStream() as any; // 模拟的 prod 流
+          const mockProdStream = new ReadableStream() as any; // Mocked prod stream
           const mockDebugStream = new ReadableStream({
             start(controller) {
               controller.enqueue('Debug stream content');
               controller.close();
             },
           }) as any;
-          mockDebugStream.toReadableStream = () => mockDebugStream; // 添加 toReadableStream 方法
+          mockDebugStream.toReadableStream = () => mockDebugStream; // Add toReadableStream method
 
-          // 模拟 chat.completions.create 返回值，包括模拟的 tee 方法
-          (instance['client'].chat.completions.create as Mock).mockResolvedValue({
+          // Mock the chat.completions.create return value, including the mocked tee method
+          const createMethod = test?.useResponsesAPI
+            ? instance['client'].responses.create
+            : instance['client'].chat.completions.create;
+          (createMethod as Mock).mockResolvedValue({
             tee: () => [mockProdStream, { toReadableStream: () => mockDebugStream }],
           });
 
-          // 保存原始环境变量值
-          const originalDebugValue = process.env[chatDebugEnv];
-
-          // 模拟环境变量
-          process.env[chatDebugEnv] = '1';
+          const debugEnv = test?.useResponsesAPI
+            ? (responseDebugEnv ?? chatDebugEnv)
+            : chatDebugEnv;
+          // Save the original environment variable value
+          const originalDebugValue = process.env[debugEnv];
+          // Mock the environment variable
+          process.env[debugEnv] = '1';
           vi.spyOn(debugStreamModule, 'debugStream').mockImplementation(() => Promise.resolve());
 
-          // 执行测试
-          // 运行你的测试函数，确保它会在条件满足时调用 debugStream
-          // 假设的测试函数调用，你可能需要根据实际情况调整
+          // Execute the test
+          // Run your test function, ensuring it calls debugStream when the condition is met
+          // This is a hypothetical test function call; adjust according to actual usage
           await instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
             model: chatModel,
@@ -307,11 +346,10 @@ export const testProvider = ({
             temperature: 0,
           });
 
-          // 验证 debugStream 被调用
+          // Verify that debugStream was called
           expect(debugStreamModule.debugStream).toHaveBeenCalled();
-
-          // 恢复原始环境变量值
-          process.env[chatDebugEnv] = originalDebugValue;
+          // Restore the original environment variable value
+          process.env[debugEnv] = originalDebugValue;
         });
       });
     });

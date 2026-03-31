@@ -1,4 +1,4 @@
-import { Menu, app, dialog, shell } from 'electron';
+import { app, dialog, Menu, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';

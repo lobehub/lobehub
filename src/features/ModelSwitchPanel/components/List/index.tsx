@@ -1,9 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
+import { type ComponentType, type FC } from 'react';
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessModelListGuard } from '@/business/client/hooks/useBusinessModelListGuard';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
 import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../../const';
 import { useBuildListItems } from '../../hooks/useBuildListItems';
@@ -12,29 +14,40 @@ import { usePanelHandlers } from '../../hooks/usePanelHandlers';
 import { styles } from '../../styles';
 import { type GroupMode } from '../../types';
 import { menuKey } from '../../utils';
+import type { PricingMode } from '../ModelDetailPanel';
+import GenerationListItemRenderer from './GenerationListItemRenderer';
 import { ListItemRenderer } from './ListItemRenderer';
 
 interface ListProps {
+  enabledList?: EnabledProviderWithModels[];
   groupMode: GroupMode;
   model?: string;
+  ModelItemComponent?: ComponentType<any>;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
+  pricingMode?: PricingMode;
   provider?: string;
   searchKeyword?: string;
 }
 
 export const List: FC<ListProps> = ({
+  ModelItemComponent,
+  enabledList: enabledListProp,
   groupMode,
   model: modelProp,
   onModelChange: onModelChangeProp,
   onOpenChange,
+  pricingMode,
   provider: providerProp,
   searchKeyword = '',
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
+  const { isModelRestricted, onRestrictedModelClick } = useBusinessModelListGuard();
+  const proLabel = isModelRestricted ? tCommon('pro') : undefined;
 
-  const enabledList = useEnabledChatModels();
+  const chatEnabledList = useEnabledChatModels();
+  const enabledList = enabledListProp ?? chatEnabledList;
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
   const { handleModelChange, handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
@@ -63,6 +76,17 @@ export const List: FC<ListProps> = ({
 
   const listHeight = panelHeight - TOOLBAR_HEIGHT - FOOTER_HEIGHT;
 
+  const scrollListenersRef = useRef(new Set<() => void>());
+  const subscribeScroll = useCallback((cb: () => void) => {
+    scrollListenersRef.current.add(cb);
+    return () => {
+      scrollListenersRef.current.delete(cb);
+    };
+  }, []);
+  const handleListScroll = useCallback(() => {
+    scrollListenersRef.current.forEach((cb) => cb());
+  }, []);
+
   useLayoutEffect(() => {
     if (hasInitializedPositionRef.current) return;
 
@@ -77,7 +101,13 @@ export const List: FC<ListProps> = ({
   }, [listHeight, activeKey]);
 
   return (
-    <Flexbox className={styles.list} flex={1} ref={listRef} style={{ height: listHeight }}>
+    <Flexbox
+      className={styles.list}
+      flex={1}
+      ref={listRef}
+      style={{ height: listHeight }}
+      onScroll={handleListScroll}
+    >
       {listItems.map((item, index) => {
         const itemKey = menuKey(
           'provider' in item && item.provider ? item.provider.id : '',
@@ -95,16 +125,32 @@ export const List: FC<ListProps> = ({
           (item.type === 'model-item-multiple' &&
             item.data.providers.some((p) => menuKey(p.id, item.data.model.id) === activeKey));
 
-        const renderItem = (key?: string) => (
-          <ListItemRenderer
-            activeKey={activeKey}
-            item={item}
-            key={key}
-            newLabel={newLabel}
-            onClose={handleClose}
-            onModelChange={handleModelChange}
-          />
-        );
+        const renderItem = (key?: string) =>
+          ModelItemComponent ? (
+            <GenerationListItemRenderer
+              ModelItemComponent={ModelItemComponent}
+              activeKey={activeKey}
+              enabledList={enabledList}
+              item={item}
+              key={key}
+              pricingMode={pricingMode}
+              onClose={handleClose}
+              onModelChange={handleModelChange}
+            />
+          ) : (
+            <ListItemRenderer
+              activeKey={activeKey}
+              isModelRestricted={isModelRestricted}
+              item={item}
+              key={key}
+              newLabel={newLabel}
+              proLabel={proLabel}
+              subscribeScroll={subscribeScroll}
+              onClose={handleClose}
+              onModelChange={handleModelChange}
+              onRestrictedModelClick={onRestrictedModelClick}
+            />
+          );
 
         return isActive ? (
           <div key={itemKey} ref={activeItemRef}>

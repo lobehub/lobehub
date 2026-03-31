@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import i18next from 'i18next';
 
-import { App } from '@/core/App';
+import type { App } from '@/core/App';
 import { loadResources } from '@/locales/resources';
 import { createLogger } from '@/utils/logger';
 
@@ -89,9 +89,8 @@ export class I18nManager {
   createNamespacedT(namespace: string) {
     return (key: string, options: any = {}) => {
       // Copy options to avoid modifying the original object
-      const mergedOptions = { ...options };
+      const mergedOptions = { ...options , ns: namespace,};
       // Set namespace
-      mergedOptions.ns = namespace;
 
       return this.t(key, mergedOptions);
     };

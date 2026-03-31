@@ -14,6 +14,8 @@
     "test:server-db": "vitest run --config vitest.config.server.mts"
   },
   "dependencies": {
+    "@lobechat/agent-templates": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/conversation-flow": "workspace:*",
     "@lobechat/types": "workspace:*",
@@ -31,7 +33,9 @@
   "peerDependencies": {
     "dayjs": "*",
     "drizzle-orm": "*",
+    "drizzle-zod": "*",
     "nanoid": "*",
-    "pg": "*"
+    "pg": "*",
+    "zod": "*"
   }
 }

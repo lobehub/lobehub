@@ -113,6 +113,8 @@ export interface UIChatMessage {
   compressedMessages?: UIChatMessage[];
   content: string;
   createdAt: number;
+  /** Lexical editor JSON state for rich text rendering */
+  editorData?: Record<string, any> | null;
   error?: ChatMessageError | null;
   // Extended fields
   extra?: ChatMessageExtra;

@@ -1,5 +1,5 @@
 import { DEFAULT_PREFERENCE } from '@lobechat/const';
-import type { CustomPluginParams, UserOnboarding } from '@lobechat/types';
+import type { CustomPluginParams, UserAgentOnboarding, UserOnboarding } from '@lobechat/types';
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { sql } from 'drizzle-orm';
 import { boolean, index, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
@@ -22,6 +22,7 @@ export const users = pgTable(
     interests: varchar('interests', { length: 64 }).array(),
 
     isOnboarded: boolean('is_onboarded').default(false),
+    agentOnboarding: jsonb('agent_onboarding').$type<UserAgentOnboarding>(),
     onboarding: jsonb('onboarding').$type<UserOnboarding>(),
     // Time user was created in Clerk
     clerkCreatedAt: timestamptz('clerk_created_at'),
@@ -81,6 +82,7 @@ export const userSettings = pgTable('user_settings', {
   memory: jsonb('memory'),
   tool: jsonb('tool'),
   image: jsonb('image'),
+  notification: jsonb('notification'),
 });
 export type UserSettingsItem = typeof userSettings.$inferSelect;
 

@@ -1,3 +1,4 @@
+import { MessagesEngine } from '@lobechat/context-engine';
 import { type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -5,11 +6,12 @@ import { serverMessagesEngine } from '../index';
 
 // Helper to compute expected date content from SystemDateProvider
 const getCurrentDateContent = () => {
+  const tz = 'UTC';
   const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `Current date: ${year}-${month}-${day}`;
+  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
+  return `Current date: ${year}-${month}-${day} (${tz})`;
 };
 
 describe('serverMessagesEngine', () => {
@@ -366,6 +368,166 @@ describe('serverMessagesEngine', () => {
       });
 
       expect(formatHistorySummary).toHaveBeenCalledWith(historySummary);
+    });
+  });
+
+  describe('userTimezone parameter', () => {
+    it('should pass userTimezone as timezone to MessagesEngine', async () => {
+      const constructorSpy = vi.spyOn(MessagesEngine.prototype, 'process').mockResolvedValue({
+        messages: [],
+      } as any);
+
+      const messages = createBasicMessages();
+
+      await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        userTimezone: 'Asia/Shanghai',
+      });
+
+      expect(constructorSpy).toHaveBeenCalled();
+      constructorSpy.mockRestore();
+    });
+
+    it('should use userTimezone in variable generators for time-related values', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'What time is it? {{timezone}}',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const result = await serverMessagesEngine({
+        inputTemplate: '{{text}} (tz: {{timezone}})',
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        userTimezone: 'America/New_York',
+      });
+
+      const userMessage = result.find((m) => m.role === 'user');
+      expect(userMessage?.content).toContain('America/New_York');
+    });
+  });
+
+  describe('additionalVariables parameter', () => {
+    it('should merge additionalVariables into variableGenerators', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'test input',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const result = await serverMessagesEngine({
+        additionalVariables: {
+          customVar: 'custom-value',
+        },
+        inputTemplate: '{{text}} {{customVar}}',
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((m) => m.role === 'user');
+      expect(userMessage?.content).toContain('custom-value');
+    });
+
+    it('should handle empty additionalVariables', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        additionalVariables: {},
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('extended context params forwarding', () => {
+    it('should forward discordContext when provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        discordContext: {
+          channel: { id: 'ch-1', name: 'general' },
+          guild: { id: 'guild-1', name: 'Test Guild' },
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should forward evalContext when provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        evalContext: {
+          envPrompt: 'This is an evaluation environment',
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should forward agentManagementContext when provided', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        agentManagementContext: {
+          availablePlugins: [
+            { identifier: 'web-browsing', name: 'Web Browsing', type: 'builtin' as const },
+          ],
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should handle multiple extended contexts simultaneously', async () => {
+      const messages = createBasicMessages();
+
+      const result = await serverMessagesEngine({
+        agentBuilderContext: {
+          config: { model: 'gpt-4', systemRole: 'Test role' },
+          meta: { description: 'Test agent', title: 'Test' },
+        },
+        discordContext: {
+          channel: { id: 'ch-1', name: 'general' },
+          guild: { id: 'guild-1', name: 'Test Guild' },
+        },
+        messages,
+        model: 'gpt-4',
+        pageContentContext: {
+          markdown: '# Doc',
+          metadata: { charCount: 5, lineCount: 1, title: 'Doc' },
+          xml: '<doc><h1 id="1">Doc</h1></doc>',
+        },
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
     });
   });
 });

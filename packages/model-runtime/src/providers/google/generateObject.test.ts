@@ -272,6 +272,46 @@ describe('Google generateObject', () => {
       expect(result).toEqual({ status: 'success' });
     });
 
+    it('should call onUsage callback with usage data', async () => {
+      const mockClient = {
+        models: {
+          generateContent: vi.fn().mockResolvedValue({
+            text: '{"result": "ok"}',
+            usageMetadata: {
+              candidatesTokenCount: 20,
+              promptTokenCount: 80,
+              totalTokenCount: 100,
+            },
+          }),
+        },
+      };
+
+      const contents = [{ parts: [{ text: 'Generate data' }], role: 'user' }];
+
+      const payload = {
+        contents,
+        model: 'gemini-2.5-flash',
+        schema: {
+          name: 'test',
+          schema: {
+            properties: { result: { type: 'string' } },
+            type: 'object' as const,
+          },
+        },
+      };
+
+      const onUsage = vi.fn();
+      const result = await createGoogleGenerateObject(mockClient as any, payload, { onUsage });
+
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalInputTokens: 80,
+          totalOutputTokens: 20,
+        }),
+      );
+      expect(result).toEqual({ result: 'ok' });
+    });
+
     it('should return undefined when JSON parsing fails', async () => {
       const mockClient = {
         models: {
@@ -502,6 +542,68 @@ describe('Google generateObject', () => {
       expect(result).toEqual([
         { arguments: { city: 'New York', unit: 'celsius' }, name: 'get_weather' },
       ]);
+    });
+
+    it('should call onUsage callback with usage data', async () => {
+      const mockClient = {
+        models: {
+          generateContent: vi.fn().mockResolvedValue({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      functionCall: {
+                        args: { city: 'Tokyo' },
+                        name: 'get_weather',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+            usageMetadata: {
+              candidatesTokenCount: 30,
+              promptTokenCount: 70,
+              totalTokenCount: 100,
+            },
+          }),
+        },
+      };
+
+      const contents = [{ parts: [{ text: 'What is the weather in Tokyo?' }], role: 'user' }];
+
+      const payload = {
+        contents,
+        model: 'gemini-2.5-flash',
+        tools: [
+          {
+            function: {
+              description: 'Get weather information',
+              name: 'get_weather',
+              parameters: {
+                properties: { city: { type: 'string' } },
+                required: ['city'],
+                type: 'object' as const,
+              },
+            },
+            type: 'function' as const,
+          },
+        ],
+      };
+
+      const onUsage = vi.fn();
+      const result = await createGoogleGenerateObjectWithTools(mockClient as any, payload, {
+        onUsage,
+      });
+
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalInputTokens: 70,
+          totalOutputTokens: 30,
+        }),
+      );
+      expect(result).toEqual([{ arguments: { city: 'Tokyo' }, name: 'get_weather' }]);
     });
 
     it('should handle multiple function calls', async () => {

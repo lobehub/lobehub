@@ -40,6 +40,7 @@ interface UploadWithProgressParams {
    * Optional source identifier for the file (e.g., 'page-editor', 'image_generation')
    */
   source?: string;
+  uploadId?: string;
 }
 
 interface UploadWithProgressResult {
@@ -89,8 +90,11 @@ export class FileUploadActionImpl {
     skipCheckFileType,
     parentId,
     source,
+    uploadId,
     abortController,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
+    const statusId = uploadId ?? file.name;
+
     try {
       const fileArrayBuffer = await file.arrayBuffer();
 
@@ -107,7 +111,7 @@ export class FileUploadActionImpl {
       if (checkStatus.isExist) {
         metadata = checkStatus.metadata as FileMetadata;
         onStatusUpdate?.({
-          id: file.name,
+          id: statusId,
           type: 'updateFile',
           value: { status: 'processing', uploadState: { progress: 100, restTime: 0, speed: 0 } },
         });
@@ -117,7 +121,7 @@ export class FileUploadActionImpl {
         const { data, success } = await uploadService.uploadFileToS3(file, {
           abortController,
           onNotSupported: () => {
-            onStatusUpdate?.({ id: file.name, type: 'removeFile' });
+            onStatusUpdate?.({ id: statusId, type: 'removeFile' });
             message.info({
               content: t('upload.fileOnlySupportInServerMode', {
                 cloud: LOBE_CHAT_CLOUD,
@@ -129,7 +133,7 @@ export class FileUploadActionImpl {
           },
           onProgress: (status, upload) => {
             onStatusUpdate?.({
-              id: file.name,
+              id: statusId,
               type: 'updateFile',
               value: { status: status === 'success' ? 'processing' : status, uploadState: upload },
             });
@@ -167,7 +171,7 @@ export class FileUploadActionImpl {
       );
 
       onStatusUpdate?.({
-        id: file.name,
+        id: statusId,
         type: 'updateFile',
         value: {
           fileUrl: data.url,
@@ -181,7 +185,7 @@ export class FileUploadActionImpl {
     } catch (error) {
       // Handle file storage plan limit error
       if ((error as any)?.message?.includes('beyond the plan limit')) {
-        onStatusUpdate?.({ id: file.name, type: 'removeFile' });
+        onStatusUpdate?.({ id: statusId, type: 'removeFile' });
         notification.error({
           description: t('upload.storageLimitExceeded', { ns: 'error' }),
           message: t('upload.uploadFailed', { ns: 'error' }),

@@ -17,6 +17,8 @@ export default {
     'You are about to delete this file. Once deleted, it cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmDeleteFolder':
     'You are about to delete this folder and all of its contents. This action cannot be undone. Please confirm your decision.',
+  'FileManager.actions.confirmDeleteAllFiles':
+    'You are about to delete all results in the current view. Once deleted, they cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmDeleteMultiFiles':
     'You are about to delete the selected {{count}} files. Once deleted, they cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmRemoveFromLibrary':
@@ -57,7 +59,12 @@ export default {
   'FileManager.title.createdAt': 'Created At',
   'FileManager.title.size': 'Size',
   'FileManager.title.title': 'File',
+  'FileManager.total.allSelectedCount': 'All {{count}} items are selected.',
+  'FileManager.total.allSelectedFallback': 'All results are selected.',
   'FileManager.total.fileCount': 'Total {{count}} items',
+  'FileManager.total.loadedSelectedCount': 'Selected {{count}} loaded items.',
+  'FileManager.total.selectAll': 'Select all {{count}} items',
+  'FileManager.total.selectAllFallback': 'Select all items',
   'FileManager.total.selectedCount': 'Selected {{count}} items',
   'FileManager.view.list': 'List View',
   'FileManager.view.masonry': 'Grid View',
@@ -76,6 +83,10 @@ export default {
   'FileParsingStatus.chunks.status.processing': 'Chunking',
   'FileParsingStatus.chunks.status.processingTip':
     'The server is splitting text chunks; closing the page will not affect the chunking progress.',
+  'GenerationModelItem.creditsPerImageApproximate': 'Approx. {{amount}} Credits / image',
+  'GenerationModelItem.creditsPerImageExact': '{{amount}} Credits / image',
+  'GenerationModelItem.creditsPerVideoApproximate': 'Approx. {{amount}} Credits / video',
+  'GenerationModelItem.creditsPerVideoExact': '{{amount}} Credits / video',
   'GoBack.back': 'Back',
   'HtmlPreview.actions.download': 'Download',
   'HtmlPreview.actions.preview': 'Preview',
@@ -134,6 +145,8 @@ export default {
   'ModelSwitchPanel.detail.pricing.group.text': 'Text',
   'ModelSwitchPanel.detail.pricing.input': 'Input ${{amount}}/M',
   'ModelSwitchPanel.detail.pricing.output': 'Output ${{amount}}/M',
+  'ModelSwitchPanel.detail.pricing.perImage': '~ ${{amount}} / image',
+  'ModelSwitchPanel.detail.pricing.perVideo': '~ ${{amount}} / video',
   'ModelSwitchPanel.detail.pricing.unit.audioInput': 'Audio Input',
   'ModelSwitchPanel.detail.pricing.unit.audioInput_cacheRead': 'Audio Input (Cached)',
   'ModelSwitchPanel.detail.pricing.unit.audioOutput': 'Audio Output',

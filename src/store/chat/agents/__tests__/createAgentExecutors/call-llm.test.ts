@@ -4,6 +4,7 @@ import { type MessageToolCall } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
+import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 
 import {
   createAssistantMessage,
@@ -163,6 +164,93 @@ describe('call_llm executor', () => {
           params: expect.objectContaining({
             model: 'gpt-4',
             provider: 'openai',
+          }),
+        }),
+      );
+    });
+
+    it('should merge activated tools even when selectedTools are provided', async () => {
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const userMsg = createUserMessage({ content: 'Use notebook' });
+      const instruction = createCallLLMInstruction({
+        model: 'gpt-4',
+        provider: 'openai',
+        messages: [userMsg],
+      });
+      const state = createInitialState();
+      const notebookTool = {
+        function: { name: 'lobe-notebook____createDocument' },
+        type: 'function',
+      } as const;
+      const activatedTool = {
+        function: { name: 'lobe-skills____runSkill' },
+        type: 'function',
+      } as const;
+      const toolsEngine = {
+        generateToolsDetailed: vi.fn().mockReturnValue({
+          enabledManifests: [{ identifier: 'lobe-skills' }],
+          enabledToolIds: ['lobe-skills'],
+          tools: [activatedTool],
+        }),
+      };
+
+      mockStreamResponse({ content: 'AI response' });
+      mockStore.dbMessagesMap[context.messageKey] = [];
+      mockStore.operations[context.operationId] = {
+        abortController: new AbortController(),
+        childOperationIds: [],
+        context: {
+          agentId: context.agentId,
+          messageId: context.parentId,
+          topicId: context.topicId,
+        },
+        id: context.operationId,
+        metadata: { startTime: Date.now() },
+        status: 'running',
+        type: 'execAgentRuntime',
+      } as any;
+
+      const executors = createAgentExecutors({
+        agentConfig: {
+          agentConfig: { model: 'gpt-4', provider: 'openai' } as any,
+          chatConfig: {} as any,
+          enabledManifests: [{ identifier: 'lobe-notebook' }] as any,
+          enabledToolIds: ['lobe-notebook'],
+          isBuiltinAgent: false,
+          plugins: ['lobe-notebook'],
+          tools: [notebookTool] as any,
+        },
+        get: () => mockStore,
+        messageKey: context.messageKey,
+        operationId: context.operationId,
+        parentId: context.parentId,
+        toolsEngine: toolsEngine as any,
+      });
+
+      await executors.call_llm!(instruction, state, {
+        initialContext: {
+          selectedTools: [{ identifier: 'lobe-notebook', name: 'Notebook' }],
+        },
+        phase: 'init',
+        stepContext: {
+          activatedToolIds: ['lobe-skills', 'lobe-activator'],
+        },
+      } as any);
+
+      expect(toolsEngine.generateToolsDetailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skipDefaultTools: true,
+          toolIds: ['lobe-skills', 'lobe-activator'],
+        }),
+      );
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({
+            resolvedAgentConfig: expect.objectContaining({
+              enabledToolIds: ['lobe-notebook', 'lobe-skills'],
+              tools: [notebookTool, activatedTool],
+            }),
           }),
         }),
       );
@@ -1582,6 +1670,61 @@ describe('call_llm executor', () => {
 
       // Then - Second call SHOULD create message
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalled();
+    });
+  });
+
+  describe('Google blocked stream errors', () => {
+    it('should keep normal content and update message error state', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const instruction = createCallLLMInstruction();
+      const state = createInitialState();
+
+      mockStore.dbMessagesMap[context.messageKey] = [];
+
+      vi.mocked(chatService.createAssistantMessageStream).mockImplementation(
+        async (params: any) => {
+          if (params.onMessageHandle) {
+            await params.onMessageHandle({ text: 'Partial output', type: 'text' });
+          }
+
+          if (params.onErrorHandle) {
+            params.onErrorHandle({
+              body: {
+                context: {
+                  finishReason: 'PROHIBITED_CONTENT',
+                },
+                provider: 'google',
+              },
+              message:
+                'Your request may contain prohibited content. Please adjust your request to comply with the usage guidelines.',
+              type: 'ProviderBizError',
+            });
+          }
+
+          if (params.onFinish) {
+            await params.onFinish('Partial output', { type: 'error' });
+          }
+        },
+      );
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(mockStore.optimisticUpdateMessageError).toHaveBeenCalled();
+
+      const contentCall = vi.mocked(mockStore.optimisticUpdateMessageContent).mock.calls.at(-1);
+      const finalContent = contentCall?.[1] as string;
+
+      expect(finalContent).toBe('Partial output');
     });
   });
 });

@@ -3,6 +3,16 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { Message, PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    orchestrationFilterProcessed?: {
+      assistantFiltered: number;
+      filteredCount: number;
+      toolFiltered: number;
+    };
+  }
+}
+
 const log = debug('context-engine:processor:GroupOrchestrationFilterProcessor');
 
 /**

@@ -1,0 +1,242 @@
+---
+title: Skills and Tools
+description: >-
+  Understand the difference between Skills and Tools — what agents know vs. what
+  agents can do.
+tags:
+  - LobeHub
+  - Skills
+  - Tools
+  - Plugins
+  - MCP
+  - Agent Configuration
+---
+
+# Skills and Tools
+
+Skills and tools are what transform agents from conversational interfaces into productive teammates. While agents can chat and reason, **skills** give them expertise and **tools** give them capabilities to take action.
+
+Think of skills as what an agent **knows** and tools as what an agent **can do**.
+
+## Skills
+
+### What Are Skills?
+
+Skills are structured knowledge packages that enhance an agent's capabilities. They typically include:
+
+- Expert prompts and instructions
+- Domain-specific knowledge
+- Best practices and methodologies
+- Templates and frameworks
+- Reference materials and examples
+
+### Types of Skills
+
+<AccordionGroup>
+  <Accordion title="Built-in Skills">
+    Pre-installed skills that ship with LobeHub:
+
+    - **Artifacts Skill**: Enables creation of interactive content, visualizations, and documents
+    - **Core reasoning skills**: Enhance problem-solving and analysis
+
+    Built-in skills are maintained by the LobeHub team and automatically updated.
+  </Accordion>
+
+  <Accordion title="Market Skills">
+    Community-created skills available from the LobeHub marketplace:
+
+    - Code review methodologies
+    - Writing style guides
+    - Industry-specific frameworks
+    - Language and translation guides
+
+    Browse, install, and share skills with the community.
+  </Accordion>
+
+  <Accordion title="User Skills">
+    Custom skills you create for your specific needs:
+
+    - Company-specific knowledge
+    - Personal methodologies
+    - Team guidelines
+    - Project templates
+
+    User skills give you complete control over agent expertise.
+  </Accordion>
+</AccordionGroup>
+
+### Using Skills
+
+Attach skills to agents to enhance their expertise:
+
+1. Open **Agent Settings**
+2. Go to the **Skills** tab
+3. Browse and select skills to attach
+4. Skills are automatically injected into agent context
+
+Skills are injected at runtime, which means agents always use the latest version of the skill.
+
+## Tools
+
+### What Are Tools?
+
+Tools are functions that agents can call to perform actions. When you ask an agent to do something beyond conversation, it uses tools:
+
+- "Search for the latest news on AI" → **Web Search tool**
+- "Create an image of a sunset" → **Image Generation tool**
+- "Save this to my notes" → **File Management tool**
+- "Remember that I prefer dark mode" → **Memory Management tool**
+
+### How Tools Work
+
+<Steps>
+  ### Agent Receives Request
+
+  You ask the agent to perform an action.
+
+  ### Tool Selection
+
+  The agent determines which tool(s) to use based on your request. This is automatic — you don't need to tell the agent which tool to use.
+
+  ### Function Calling
+
+  The agent calls the tool with appropriate parameters.
+
+  ### Tool Execution
+
+  The tool performs the action and returns results.
+
+  ### Response Generation
+
+  The agent incorporates tool results into its response.
+</Steps>
+
+### Built-in Tools
+
+LobeHub includes several powerful built-in tools:
+
+- **Web Search** — Search the internet for current information, news, and data
+- **Image Generation** — Create images using DALL-E, Midjourney, or other providers
+- **Memory Management** — Store and retrieve information from personal memory
+- **Page Agent Tools** — Initialize and edit documents in the page editor
+- **Agent Builder Tools** — Create and configure new agents
+- **Knowledge Base** — Search and read from uploaded documents
+
+### Plugin System
+
+Extend agent capabilities with plugins from the LobeHub marketplace:
+
+- **Shopping tools**: Product search and comparison
+- **Video tools**: YouTube transcript extraction
+- **Weather**: Current weather information
+- **SEO Assistant**: Keyword research and optimization
+- And many more community-contributed plugins
+
+### MCP (Model Context Protocol)
+
+MCP is LobeHub's system for connecting agents to external tools and services — databases, APIs, file systems, development tools, and business applications.
+
+See [MCP Marketplace](/docs/usage/community/mcp-market) for details on installing and using MCP plugins.
+
+## Tool Configuration
+
+Configure which tools are available to each agent:
+
+<AccordionGroup>
+  <Accordion title="Enable/Disable Tools">
+    In agent settings, toggle tools on or off:
+
+    - Enable only tools the agent needs
+    - Too many tools can slow responses
+    - Some tools have API costs
+  </Accordion>
+
+  <Accordion title="Tool Parameters">
+    Configure tool behavior:
+
+    - **Web Search**: Number of results, search region
+    - **Image Generation**: Model, size, quality
+    - **Memory**: Retention period, categories
+  </Accordion>
+
+  <Accordion title="Tool Permissions">
+    Some tools require permissions:
+
+    - File access
+    - API keys
+    - External service credentials
+
+    Review and approve before enabling.
+  </Accordion>
+</AccordionGroup>
+
+## Tool Chaining
+
+Agents can use multiple tools in sequence to handle complex requests:
+
+<Steps>
+  ### User Request
+
+  "Find recent research papers on quantum computing and summarize the key findings"
+
+  ### Web Search Tool
+
+  Searches for research papers
+
+  ### Knowledge Base Tool
+
+  Retrieves relevant documents from uploaded files
+
+  ### Response
+
+  Agent synthesizes a summary from all sources
+</Steps>
+
+Enable **Chain of Thought** to see which tools the agent selects, what parameters it uses, and the results at each step.
+
+## Best Practices
+
+### For Skills
+
+- **Keep skills focused** — Each skill should address one area of expertise
+- **Use clear, structured content** — Headings, lists, examples, and step-by-step instructions
+- **Update regularly** — Review skills periodically and remove outdated information
+- **Share valuable skills** — Publish to the marketplace to help the community
+
+### For Tools
+
+- **Enable only necessary tools** — More tools = slower responses and potential confusion
+- **Configure tool parameters** — Set sensible defaults for search limits, quality settings, etc.
+- **Test tools before production** — Verify tools work as expected with correct permissions
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Skill Not Appearing in Agent">
+    - Verify skill is attached in agent settings
+    - Check skill content is not empty
+    - Restart the agent session
+  </Accordion>
+
+  <Accordion title="Tool Not Being Used">
+    - Confirm tool is enabled in agent settings
+    - Make request more explicit: "Use web search to find..."
+    - Check tool permissions are granted
+    - Verify API keys are configured
+  </Accordion>
+
+  <Accordion title="Tool Errors">
+    - Review error message in Chain of Thought
+    - Check API quotas and rate limits
+    - Verify authentication credentials
+    - Test tool configuration
+  </Accordion>
+</AccordionGroup>
+
+<Cards>
+  <Card href={'/docs/usage/community/mcp-market'} title={'MCP Marketplace'} />
+
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agent'} />
+
+  <Card href={'/docs/usage/agent/chain-of-thought'} title={'Chain of Thought'} />
+</Cards>

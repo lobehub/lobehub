@@ -18,6 +18,7 @@ import { type UploadFileListDispatch } from '@/store/file/reducers/uploadFileLis
 import { uploadFileListReducer } from '@/store/file/reducers/uploadFileList';
 import { type StoreSetter } from '@/store/types';
 import { type FileListItem, type QueryFileListParams } from '@/types/files';
+import { type ResourceItem } from '@/types/resource';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { unzipFile } from '@/utils/unzipFile';
 
@@ -31,6 +32,10 @@ export interface FolderCrumb {
   id: string;
   name: string;
   slug: string;
+}
+
+interface RefreshFileListOptions {
+  revalidateResources?: boolean;
 }
 
 type Setter = StoreSetter<FileStore>;
@@ -47,6 +52,53 @@ export class FileManageActionImpl {
     this.#get = get;
   }
 
+  #buildOptimisticUploadResource = (
+    file: File,
+    result: { id: string; url: string },
+    knowledgeBaseId?: string,
+    parentId?: string,
+  ): ResourceItem => {
+    const existing = this.#get().resourceMap.get(result.id);
+
+    return {
+      ...(existing || {
+        createdAt: new Date(),
+        fileType: file.type || 'application/octet-stream',
+        name: file.name,
+        size: file.size,
+        sourceType: 'file' as const,
+      }),
+      _optimistic: undefined,
+      id: result.id,
+      knowledgeBaseId,
+      name: file.name,
+      parentId,
+      size: file.size,
+      updatedAt: new Date(),
+      url: result.url,
+    };
+  };
+
+  #insertOptimisticUpload = (
+    id: string,
+    file: File,
+    knowledgeBaseId?: string,
+    parentId?: string,
+  ) => {
+    this.#get().insertLocalResource(
+      {
+        fileType: file.type || 'application/octet-stream',
+        knowledgeBaseId,
+        name: file.name,
+        parentId,
+        size: file.size,
+        sourceType: 'file',
+        url: '',
+      },
+      id,
+    );
+  };
+
   cancelUpload = (id: string): void => {
     const { dockUploadFileList, dispatchDockFileList } = this.#get();
     const uploadItem = dockUploadFileList.find((item) => item.id === id);
@@ -60,6 +112,29 @@ export class FileManageActionImpl {
       id,
       status: 'cancelled',
       type: 'updateFileStatus',
+    });
+  };
+
+  cancelUploads = (ids: string[]): void => {
+    if (ids.length === 0) return;
+
+    const { dockUploadFileList, dispatchDockFileList } = this.#get();
+    const cancellableIds = new Set(ids);
+    const cancelledIds: string[] = [];
+
+    for (const uploadItem of dockUploadFileList) {
+      if (!cancellableIds.has(uploadItem.id)) continue;
+
+      uploadItem.abortController?.abort();
+      cancelledIds.push(uploadItem.id);
+    }
+
+    if (cancelledIds.length === 0) return;
+
+    dispatchDockFileList({
+      ids: cancelledIds,
+      status: 'cancelled',
+      type: 'updateFileStatuses',
     });
   };
 
@@ -167,6 +242,7 @@ export class FileManageActionImpl {
     parentId?: string,
   ): Promise<void> => {
     const { dispatchDockFileList } = this.#get();
+    const generateUploadId = createNanoId(12);
 
     // 0. Process ZIP files and extract their contents
     const filesToUpload: File[] = [];
@@ -194,10 +270,14 @@ export class FileManageActionImpl {
       return {
         abortController,
         file,
-        id: file.name,
+        id: `upload_${generateUploadId()}`,
         status: 'pending' as const,
       };
     });
+
+    for (const uploadFile of uploadFiles) {
+      this.#insertOptimisticUpload(uploadFile.id, uploadFile.file, knowledgeBaseId, parentId);
+    }
 
     // 3. Add all files to dock
     dispatchDockFileList({
@@ -216,10 +296,22 @@ export class FileManageActionImpl {
           knowledgeBaseId,
           onStatusUpdate: dispatchDockFileList,
           parentId,
+          uploadId: uploadFileItem.id,
         });
 
-        // Note: Don't refresh after each file to avoid flickering
-        // We'll refresh once at the end
+        if (!result) {
+          this.#get().removeLocalResource(uploadFileItem.id);
+        } else {
+          this.#get().replaceLocalResource(
+            uploadFileItem.id,
+            this.#buildOptimisticUploadResource(
+              uploadFileItem.file,
+              result,
+              knowledgeBaseId,
+              parentId,
+            ),
+          );
+        }
 
         return {
           file: uploadFileItem.file,
@@ -228,10 +320,13 @@ export class FileManageActionImpl {
         };
       },
       { concurrency: MAX_UPLOAD_FILE_COUNT },
-    );
+    ).catch((error) => {
+      for (const uploadFile of uploadFiles) {
+        this.#get().removeLocalResource(uploadFile.id);
+      }
 
-    // Refresh file list to show newly uploaded files
-    await this.#get().refreshFileList();
+      throw error;
+    });
 
     // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
@@ -271,7 +366,7 @@ export class FileManageActionImpl {
     this.#get().toggleParsingIds([id], false);
   };
 
-  refreshFileList = async (): Promise<void> => {
+  #refreshKnowledgeListCaches = async (): Promise<void> => {
     // Invalidate all queries that start with FETCH_ALL_KNOWLEDGE_KEY
     // This ensures all file lists (explorer, tree, etc.) are refreshed
     // Note: We don't pass data as undefined to avoid clearing the cache,
@@ -283,9 +378,13 @@ export class FileManageActionImpl {
         revalidate: true,
       },
     );
+  };
 
-    // Also revalidate the ResourceManager resource list cache (SWR_RESOURCES)
-    // so uploaded files appear immediately in the Explorer without a full refresh.
+  refreshFileList = async (options?: RefreshFileListOptions): Promise<void> => {
+    await this.#refreshKnowledgeListCaches();
+
+    if (options?.revalidateResources === false) return;
+
     const { revalidateResources } = await import('../resource/hooks');
     await revalidateResources();
   };
@@ -321,7 +420,6 @@ export class FileManageActionImpl {
     );
 
     // Perform the actual update
-    const { documentService } = await import('@/services/document');
     await documentService.updateDocument({ id: folderId, title: newName });
 
     // Revalidate to get fresh data from server
@@ -382,6 +480,7 @@ export class FileManageActionImpl {
     currentFolderId?: string,
   ): Promise<void> => {
     const { dispatchDockFileList } = this.#get();
+    const generateUploadId = createNanoId(12);
 
     // 1. Build folder tree from file paths
     const { filesByFolder, folders } = buildFolderTree(files);
@@ -477,34 +576,72 @@ export class FileManageActionImpl {
         ({ file }) => !FILE_UPLOAD_BLACKLIST.includes(file.name),
       );
 
+      const uploadItems = validUploads.map(({ file, parentId }) => ({
+        abortController: new AbortController(),
+        file,
+        id: `upload_${generateUploadId()}`,
+        parentId,
+        shouldShowInCurrentList: (parentId ?? undefined) === currentFolderId,
+      }));
+
       // 7. Add all files to dock
       dispatchDockFileList({
         atStart: true,
-        files: validUploads.map(({ file }) => ({ file, id: file.name, status: 'pending' })),
+        files: uploadItems.map(({ abortController, file, id }) => ({
+          abortController,
+          file,
+          id,
+          status: 'pending' as const,
+        })),
         type: 'addFiles',
       });
 
+      for (const uploadItem of uploadItems) {
+        if (!uploadItem.shouldShowInCurrentList) continue;
+
+        this.#insertOptimisticUpload(
+          uploadItem.id,
+          uploadItem.file,
+          knowledgeBaseId,
+          uploadItem.parentId,
+        );
+      }
+
       // 8. Upload files with concurrency limit
       const uploadResults = await pMap(
-        validUploads,
-        async ({ file, parentId }) => {
+        uploadItems,
+        async ({ abortController, file, id, parentId, shouldShowInCurrentList }) => {
           const result = await this.#get().uploadWithProgress({
+            abortController,
             file,
             knowledgeBaseId,
             onStatusUpdate: dispatchDockFileList,
             parentId,
+            uploadId: id,
           });
 
-          // Note: Don't refresh after each file to avoid flickering
-          // We'll refresh once at the end
+          if (shouldShowInCurrentList) {
+            if (!result) {
+              this.#get().removeLocalResource(id);
+            } else {
+              this.#get().replaceLocalResource(
+                id,
+                this.#buildOptimisticUploadResource(file, result, knowledgeBaseId, parentId),
+              );
+            }
+          }
 
           return { file, fileId: result?.id, fileType: file.type };
         },
         { concurrency: MAX_UPLOAD_FILE_COUNT },
-      );
+      ).catch((error) => {
+        for (const uploadItem of uploadItems) {
+          if (!uploadItem.shouldShowInCurrentList) continue;
+          this.#get().removeLocalResource(uploadItem.id);
+        }
 
-      // Refresh the file list once after all uploads are complete
-      await this.#get().refreshFileList();
+        throw error;
+      });
 
       // 9. Auto-embed files that support chunking
       const fileIdsToEmbed = uploadResults

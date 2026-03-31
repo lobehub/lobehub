@@ -11,6 +11,7 @@ export type AgentEvalRunStatus =
   | 'failed'
   | 'idle'
   | 'pending'
+  | 'external'
   | 'running';
 
 export interface AgentEvalRunTargetAgent {

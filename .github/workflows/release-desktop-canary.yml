@@ -187,6 +187,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -205,6 +206,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -219,6 +221,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -341,19 +344,40 @@ jobs:
             release/*.rpm*
             release/*.tar.gz*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+  # ============================================
+  # 发布到 S3 更新服务器
+  # ============================================
+  publish-s3:
+    needs: [merge-mac-files, calculate-version]
+    name: Publish to S3
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/desktop-publish-s3
+        with:
+          channel: canary
+          version: ${{ needs.calculate-version.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
 
   # ============================================
   # 清理旧的 Canary Releases (保留最近 7 个)
   # ============================================
   cleanup-old-canaries:
-    needs: [publish-release]
+    needs: [publish-release, publish-s3]
     name: Cleanup Old Canary Releases
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Delete old canary releases
+      - uses: actions/checkout@v6
+
+      - name: Delete old canary GitHub releases
         uses: actions/github-script@v7
         with:
           script: |
@@ -392,3 +416,14 @@ jobs:
             }
 
             console.log(`✅ Cleanup complete. Kept ${Math.min(canaryReleases.length, 7)} canary releases, deleted ${toDelete.length}.`);
+
+      - name: Cleanup old S3 versions
+        uses: ./.github/actions/desktop-cleanup-s3
+        with:
+          channel: canary
+          keep-count: '15'
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}

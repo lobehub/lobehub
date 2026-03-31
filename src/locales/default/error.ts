@@ -104,28 +104,44 @@ export default {
     'The request returned empty. Please check if the API proxy address does not end with `/v1`.',
   'response.CreateMessageError':
     'Sorry, the message could not be sent successfully. Please copy the content and try sending it again. This message will not be retained after refreshing the page.',
+  'exceededContext.compact': 'Compact Context',
+  'exceededContext.desc':
+    'The conversation has exceeded the context window limit. You can compact the context to compress history and continue chatting.',
+  'exceededContext.title': 'Context Window Exceeded',
+
+  'unknownError.copyTraceId': 'Trace ID Copied',
+  'unknownError.desc': 'An unexpected error occurred. You can retry or report on',
+  'unknownError.retry': 'Retry',
+  'unknownError.title': 'Oops, the request took a nap',
+
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  'response.ExceededContextWindowCloud':
+    'The conversation is too long to process. Please edit your last message to reduce input or delete some messages and try again.',
+  'response.QuotaLimitReachedCloud':
+    'The model service is currently under heavy load. Please try again later or switch to another model.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.InsufficientBudgetForModel':
+    'Your remaining credits are insufficient for this model. Please top up credits, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':
-    'Your content contains prohibited terms. Please review and modify your input, then try again.',
+    'The content includes blocked terms. Please rephrase and try again.',
   'response.GoogleAIBlockReason.IMAGE_SAFETY':
-    'The generated image was blocked for safety reasons. Please try modifying your image request.',
+    'The generated image was blocked for safety reasons. Please try modifying your request.',
   'response.GoogleAIBlockReason.LANGUAGE':
-    'The language you are using is not supported. Please try again in English or another supported language.',
+    "The requested language isn't supported. Please try again in a supported language.",
   'response.GoogleAIBlockReason.OTHER':
-    'The content was blocked for an unknown reason. Please try rephrasing your request.',
+    'The content was blocked for an unknown reason. Please rephrase and try again.',
   'response.GoogleAIBlockReason.PROHIBITED_CONTENT':
-    'Your request may contain prohibited content. Please adjust your request to comply with the usage guidelines.',
+    'The content may contain prohibited content. Please adjust it and try again.',
   'response.GoogleAIBlockReason.RECITATION':
-    'Your content was blocked due to potential copyright concerns. Please try using original content or rephrase your request.',
+    'The content was blocked due to recitation risk. Please use more original wording and try again.',
   'response.GoogleAIBlockReason.SAFETY':
-    'Your content was blocked for safety policy reasons. Please adjust your request to avoid potentially harmful or inappropriate content.',
+    'The content was blocked for safety reasons. Please adjust it and try again.',
   'response.GoogleAIBlockReason.SPII':
-    'Your content may contain sensitive personally identifiable information (PII). To protect privacy, please remove any sensitive details and try again.',
+    'The content may include sensitive personal information (SPII). Please remove sensitive details and try again.',
   'response.GoogleAIBlockReason.default':
-    'Content blocked: {{blockReason}}. Please adjust your request and try again.',
+    'The content was blocked ({{blockReason}}). Please adjust it and try again.',
   'response.InsufficientQuota':
     "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
   'response.InvalidAccessCode':

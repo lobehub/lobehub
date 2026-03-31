@@ -1,10 +1,9 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { NanoBanana } from '@lobehub/icons';
 import { type ButtonProps } from '@lobehub/ui';
 import { Button, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, PenLineIcon } from 'lucide-react';
+import { BotIcon, ImageIcon, PenLineIcon, VideoIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,9 +33,9 @@ type StarterTitleKey =
   | 'starter.createAgent'
   | 'starter.createGroup'
   | 'starter.write'
-  | 'starter.seedance'
-  | 'starter.deepResearch'
-  | 'starter.nanoBanana2';
+  | 'starter.imageGeneration'
+  | 'starter.videoGeneration'
+  | 'starter.deepResearch';
 
 interface StarterItem {
   disabled?: boolean;
@@ -77,16 +76,15 @@ const StarterList = memo(() => {
         titleKey: 'starter.write',
       },
       {
-        icon: NanoBanana.Color,
+        icon: ImageIcon,
         key: 'image',
-        titleKey: 'starter.nanoBanana2',
+        titleKey: 'starter.imageGeneration',
       },
-      // {
-      //   hot: true,
-      //   icon: VideoIcon,
-      //   key: 'video',
-      //   titleKey: 'starter.seedance',
-      // },
+      {
+        icon: VideoIcon,
+        key: 'video',
+        titleKey: 'starter.videoGeneration',
+      },
       // {
       //   disabled: true,
       //   icon: MicroscopeIcon,

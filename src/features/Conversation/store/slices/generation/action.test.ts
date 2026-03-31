@@ -1,7 +1,8 @@
+import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
@@ -9,6 +10,7 @@ import { createStore } from '../../index';
 // Mock useChatStore
 const mockCancelOperations = vi.fn();
 const mockCancelOperation = vi.fn();
+const mockCancelSendMessageInServer = vi.fn();
 const mockRegenerateUserMessage = vi.fn();
 const mockRegenerateAssistantMessage = vi.fn();
 const mockContinueGenerationMessage = vi.fn();
@@ -32,6 +34,7 @@ vi.mock('@/store/chat', () => ({
       messageLoadingIds: [],
       cancelOperations: mockCancelOperations,
       cancelOperation: mockCancelOperation,
+      cancelSendMessageInServer: mockCancelSendMessageInServer,
       regenerateUserMessage: mockRegenerateUserMessage,
       regenerateAssistantMessage: mockRegenerateAssistantMessage,
       continueGenerationMessage: mockContinueGenerationMessage,
@@ -71,7 +74,7 @@ describe('Generation Actions', () => {
 
       expect(mockCancelOperations).toHaveBeenCalledWith(
         {
-          type: AI_RUNTIME_OPERATION_TYPES,
+          type: INPUT_LOADING_OPERATION_TYPES,
           status: 'running',
           agentId: 'session-1',
           topicId: 'topic-1',
@@ -732,6 +735,77 @@ describe('Generation Actions', () => {
           parentMessageId: 'msg-1',
           parentMessageType: 'user',
           parentOperationId: 'test-op-id',
+        }),
+      );
+    });
+
+    it('should restore mention-based initialContext when regenerating a user message', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        messageLoadingIds: [],
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            {
+              id: 'msg-1',
+              role: 'user',
+              content: '<mention name="Agent A" id="agent-a" /> hello',
+              editorData: {
+                root: {
+                  type: 'root',
+                  children: [
+                    {
+                      type: 'paragraph',
+                      children: [
+                        {
+                          type: 'mention',
+                          label: 'Agent A',
+                          metadata: { id: 'agent-a', type: 'agent' },
+                        },
+                        { type: 'text', text: ' hello' },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      expect(mockInternalExecAgentRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext: {
+            initialContext: {
+              mentionedAgents: [{ id: 'agent-a', name: 'Agent A' }],
+              selectedTools: [{ identifier: AgentManagementIdentifier, name: 'Agent Management' }],
+            },
+            phase: 'init',
+          },
         }),
       );
     });

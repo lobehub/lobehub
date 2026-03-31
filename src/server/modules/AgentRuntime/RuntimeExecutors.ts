@@ -1,29 +1,66 @@
 import {
   type AgentEvent,
   type AgentInstruction,
+  type AgentInstructionCompressContext,
+  type AgentState,
   type CallLLMPayload,
   type GeneralAgentCallLLMResultPayload,
+  type GeneralAgentCompressionResultPayload,
   type InstructionExecutor,
   UsageCounter,
 } from '@lobechat/agent-runtime';
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+  type AgentContextDocument,
+  buildStepSkillDelta,
+  buildStepToolDelta,
+  type LobeToolManifest,
+  type OperationToolSet,
+  type ResolvedToolSet,
+  resolveTopicReferences,
+  SkillResolver,
+  ToolNameResolver,
+  ToolResolver,
+} from '@lobechat/context-engine';
 import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import { chainCompressContext } from '@lobechat/prompts';
 import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
 import { serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
-import { type MessageModel } from '@/database/models/message';
+import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-import { type ToolExecutionService } from '@/server/services/toolExecution';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { MessageService } from '@/server/services/message';
+import {
+  type ToolExecutionResultResponse,
+  type ToolExecutionService,
+} from '@/server/services/toolExecution';
 
+import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
 const timing = debug('lobe-server:agent-runtime:timing');
+
+const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
+  AGENT_DOCUMENT_INJECTION_POSITIONS,
+);
+
+const normalizeDocumentPosition = (
+  position: string | null | undefined,
+): AgentContextDocument['loadPosition'] | undefined => {
+  if (!position) return undefined;
+  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
+    ? (position as AgentContextDocument['loadPosition'])
+    : undefined;
+};
 
 // Tool pricing configuration (USD per call)
 const TOOL_PRICING: Record<string, number> = {
@@ -31,11 +68,135 @@ const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/search': 0,
 };
 
+const TOOL_MAX_RETRIES = 2;
+const LLM_MAX_RETRIES = 5;
+const LLM_RETRY_BASE_DELAY_MS = 1000;
+const LLM_RETRY_MAX_DELAY_MS = 30_000;
+
+type ToolFailureKind = 'replan' | 'retry' | 'stop';
+
+const getToolFailureKind = (result: ToolExecutionResultResponse): ToolFailureKind | undefined => {
+  if (!result.error || typeof result.error !== 'object') return;
+
+  const { kind } = result.error as { kind?: unknown };
+  return kind === 'replan' || kind === 'retry' || kind === 'stop' ? kind : undefined;
+};
+
+const shouldRetryTool = (kind: ToolFailureKind | undefined, attempt: number, maxRetries: number) =>
+  kind === 'retry' && attempt <= maxRetries;
+
+const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
+  kind === 'retry' && attempt <= maxRetries;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getLLMRetryDelayMs = (attempt: number) =>
+  Math.min(LLM_RETRY_BASE_DELAY_MS * 2 ** Math.max(attempt - 1, 0), LLM_RETRY_MAX_DELAY_MS);
+
+const isOperationInterrupted = async (ctx: RuntimeExecutorContext) => {
+  if (!ctx.loadAgentState) return false;
+
+  try {
+    const latestState = await ctx.loadAgentState(ctx.operationId);
+    return latestState?.status === 'interrupted';
+  } catch (error) {
+    console.error('[RuntimeExecutors] Failed to load operation state for retry guard:', error);
+    return false;
+  }
+};
+
+const executeToolWithRetry = async (
+  execute: () => Promise<ToolExecutionResultResponse>,
+  params: {
+    isInterrupted?: () => Promise<boolean>;
+    maxRetries: number;
+    operationLogId: string;
+    toolName: string;
+  },
+): Promise<{ attempts: number; result: ToolExecutionResultResponse }> => {
+  const maxAttempts = params.maxRetries + 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = await execute();
+
+    if (result.success) return { attempts: attempt, result };
+
+    const kind = getToolFailureKind(result);
+
+    if (shouldRetryTool(kind, attempt, params.maxRetries)) {
+      if (await params.isInterrupted?.()) {
+        return { attempts: attempt, result };
+      }
+
+      log(
+        '[%s] Tool %s failed with kind=%s (attempt %d/%d), retrying ...',
+        params.operationLogId,
+        params.toolName,
+        kind,
+        attempt,
+        maxAttempts,
+      );
+      continue;
+    }
+
+    return { attempts: attempt, result };
+  }
+
+  throw new Error('Tool execution retry loop exited unexpectedly');
+};
+
+const formatErrorEventData = (error: unknown, phase: string) => {
+  let errorMessage = 'Unknown error';
+  let errorType: string | undefined;
+
+  if (error && typeof error === 'object') {
+    const payload = error as { error?: unknown; errorType?: unknown; message?: unknown };
+
+    if (typeof payload.errorType === 'string') {
+      errorType = payload.errorType;
+    }
+
+    if (typeof payload.message === 'string' && payload.message.length > 0) {
+      errorMessage = payload.message;
+    } else if (typeof payload.error === 'string' && payload.error.length > 0) {
+      errorMessage = payload.error;
+    } else if (
+      payload.error &&
+      typeof payload.error === 'object' &&
+      'message' in payload.error &&
+      typeof payload.error.message === 'string'
+    ) {
+      errorMessage = payload.error.message;
+    } else if (error instanceof Error && error.message.length > 0) {
+      errorMessage = error.message;
+    } else if (errorType) {
+      errorMessage = errorType;
+    }
+  } else if (error instanceof Error && error.message.length > 0) {
+    errorMessage = error.message;
+    errorType = error.name;
+  } else if (typeof error === 'string' && error.length > 0) {
+    errorMessage = error;
+  }
+
+  if (!errorType && error instanceof Error && error.name) {
+    errorType = error.name;
+  }
+
+  return {
+    error: errorMessage,
+    errorType,
+    phase,
+  };
+};
+
 export interface RuntimeExecutorContext {
   agentConfig?: any;
+  botPlatformContext?: any;
   discordContext?: any;
   evalContext?: EvalContext;
   fileService?: any;
+  loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
   operationId: string;
   serverDB: LobeChatDatabase;
@@ -45,6 +206,7 @@ export interface RuntimeExecutorContext {
   toolExecutionService: ToolExecutionService;
   topicId?: string;
   userId?: string;
+  userTimezone?: string;
 }
 
 export const createRuntimeExecutors = (
@@ -63,9 +225,50 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
-    // forceFinish: strip tools so LLM produces pure text output
-    // Otherwise fallback to state's tools if not in payload
-    const tools = state.forceFinish ? undefined : llmPayload.tools || state.tools;
+    // Resolve tools via ToolResolver (unified tool injection)
+    const activeDeviceId = state.metadata?.activeDeviceId;
+    const operationToolSet: OperationToolSet = state.operationToolSet ?? {
+      enabledToolIds: [],
+      manifestMap: state.toolManifestMap ?? {},
+      sourceMap: state.toolSourceMap ?? {},
+      tools: state.tools ?? [],
+    };
+
+    const stepDelta = buildStepToolDelta({
+      activeDeviceId,
+      enabledToolIds: operationToolSet.enabledToolIds,
+      forceFinish: state.forceFinish,
+      localSystemManifest: LocalSystemManifest as unknown as LobeToolManifest,
+      operationManifestMap: operationToolSet.manifestMap,
+    });
+
+    const toolResolver = new ToolResolver();
+    const resolved: ResolvedToolSet = toolResolver.resolve(
+      operationToolSet,
+      stepDelta,
+      state.activatedStepTools ?? [],
+    );
+
+    const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+
+    if (stepDelta.activatedTools.length > 0) {
+      log(
+        `[${operationId}:${stepIndex}] ToolResolver injected %d step-level tools: %o`,
+        stepDelta.activatedTools.length,
+        stepDelta.activatedTools.map((t) => t.id),
+      );
+    }
+
+    // Resolve skills via SkillResolver (unified skill injection)
+    const skillResolver = new SkillResolver();
+    const stepSkillDelta = buildStepSkillDelta();
+    const resolvedSkills = state.metadata?.operationSkillSet
+      ? skillResolver.resolve(
+          state.metadata.operationSkillSet,
+          stepSkillDelta,
+          state.activatedStepSkills ?? [],
+        )
+      : undefined;
 
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
@@ -113,21 +316,7 @@ export const createRuntimeExecutors = (
     });
 
     try {
-      let content = '';
-      let toolsCalling: ChatToolPayload[] = [];
-      let tool_calls: MessageToolCall[] = [];
-      let thinkingContent = '';
-      const imageList: any[] = [];
-      let grounding: any = null;
-      let currentStepUsage: any = undefined;
-      let streamError: any = undefined;
-
-      // Multimodal content parts tracking
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
-      const contentParts: ContentPart[] = [];
-      const reasoningParts: ContentPart[] = [];
-      const hasContentImages = false;
-      const hasReasoningImages = false;
 
       // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
       // Rebuild params from agentConfig at execution time (capabilities built dynamically)
@@ -136,7 +325,64 @@ export const createRuntimeExecutors = (
       if (agentConfig) {
         const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
 
+        // Extract <refer_topic> tags from messages and fetch summaries.
+        // Skip if messages already contain injected topic_reference_context
+        // (e.g., from client-side contextEngineering preprocessing) to avoid double injection.
+        let topicReferences;
+        const alreadyHasTopicRefs = (
+          llmPayload.messages as Array<{ content: string | unknown }>
+        ).some(
+          (m) => typeof m.content === 'string' && m.content.includes('topic_reference_context'),
+        );
+
+        if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
+          const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+          const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId);
+          topicReferences = await resolveTopicReferences(
+            llmPayload.messages as Array<{ content: string | unknown }>,
+            async (topicId) => topicModel.findById(topicId),
+            async (topicId) => {
+              const topic = await topicModel.findById(topicId);
+              return messageModel.query({
+                agentId: topic?.agentId ?? undefined,
+                groupId: topic?.groupId ?? undefined,
+                topicId,
+              });
+            },
+          );
+        }
+
+        // Fetch agent documents for context injection
+        let agentDocuments: AgentContextDocument[] | undefined;
+        const agentId = state.metadata?.agentId;
+        if (agentId && ctx.serverDB && ctx.userId) {
+          try {
+            const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const docs = await agentDocService.getAgentDocuments(agentId);
+            if (docs.length > 0) {
+              agentDocuments = docs.map((doc) => ({
+                content: doc.content,
+                filename: doc.filename,
+                id: doc.id,
+                loadPosition: normalizeDocumentPosition(
+                  doc.policy?.context?.position || doc.policyLoadPosition,
+                ),
+                loadRules: doc.loadRules,
+                policyId: doc.templateId,
+                policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
+                title: doc.title,
+              }));
+              log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
+            }
+          } catch (error) {
+            log('Failed to resolve agent documents for agent %s: %O', agentId, error);
+          }
+        }
+
         const contextEngineInput = {
+          agentDocuments,
+          additionalVariables: state.metadata?.deviceSystemInfo,
+          userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
               const info = LOBE_DEFAULT_MODEL_LIST.find(
@@ -157,6 +403,7 @@ export const createRuntimeExecutors = (
               return info?.abilities?.vision ?? true;
             },
           },
+          botPlatformContext: ctx.botPlatformContext,
           discordContext: ctx.discordContext,
           enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
           evalContext: ctx.evalContext,
@@ -182,16 +429,37 @@ export const createRuntimeExecutors = (
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
           toolsConfig: {
-            tools: agentConfig.plugins ?? [],
+            manifests: Object.values(resolved.manifestMap),
+            tools: resolved.enabledToolIds,
           },
           userMemory: state.metadata?.userMemory,
+
+          // Skills configuration for <available_skills> injection
+          ...(resolvedSkills?.enabledSkills?.length && {
+            skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
+          }),
+
+          // Topic reference summaries
+          ...(topicReferences && { topicReferences }),
         };
 
         processedMessages = await serverMessagesEngine(contextEngineInput);
 
-        // Emit context engine event for tracing (captures input params and final LLM messages)
+        // Emit context engine event for tracing
+        // Omit large/redundant fields to reduce snapshot size:
+        // - input.messages: reconstructible from step's messagesBaseline + messagesDelta
+        // - input.toolsConfig: static per operation, ~47KB of manifests repeated every call_llm step
+        // Keep output (processedMessages) — needed by inspect CLI for --env, --system-role, -m
+        const {
+          messages: _inputMsgs,
+          toolsConfig: _toolsConfig,
+          ...contextEngineInputLite
+        } = contextEngineInput;
         events.push({
-          input: contextEngineInput,
+          input: {
+            ...contextEngineInputLite,
+            toolCount: _toolsConfig?.tools?.length ?? 0,
+          },
           output: processedMessages,
           type: 'context_engine_result',
         } as any);
@@ -206,20 +474,12 @@ export const createRuntimeExecutors = (
       const stream = ctx.stream ?? true;
       const chatPayload = { messages: processedMessages, model, stream, tools };
 
-      log(
-        `${stagePrefix} calling model-runtime chat (model: %s, messages: %d, tools: %d)`,
-        model,
-        processedMessages.length,
-        tools?.length ?? 0,
-      );
-
       // Buffer: accumulate text and reasoning, send every 50ms
       const BUFFER_INTERVAL = 50;
       let textBuffer = '';
       let reasoningBuffer = '';
 
       let textBufferTimer: NodeJS.Timeout | null = null;
-
       let reasoningBufferTimer: NodeJS.Timeout | null = null;
 
       const flushTextBuffer = async () => {
@@ -278,256 +538,335 @@ export const createRuntimeExecutors = (
         }
       };
 
-      // Call model-runtime chat
-      const response = await modelRuntime.chat(chatPayload, {
-        callback: {
-          onCompletion: async (data) => {
-            // Capture usage (may or may not include cost)
-            if (data.usage) {
-              currentStepUsage = data.usage;
-            }
-          },
-          onGrounding: async (groundingData) => {
-            log(`[${operationLogId}][grounding] %O`, groundingData);
-            grounding = groundingData;
+      const maxAttempts = LLM_MAX_RETRIES + 1;
 
-            await streamManager.publishStreamChunk(operationId, stepIndex, {
-              chunkType: 'grounding',
-              grounding: groundingData,
-            });
-          },
-          onText: async (text) => {
-            timing(
-              '[%s] onText received chunk at %d, length: %d',
-              operationLogId,
-              Date.now(),
-              text.length,
-            );
-            content += text;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let content = '';
+        let toolsCalling: ChatToolPayload[] = [];
+        let tool_calls: MessageToolCall[] = [];
+        let thinkingContent = '';
+        const imageList: any[] = [];
+        let grounding: any = null;
+        let currentStepUsage: any = undefined;
+        let streamError: any = undefined;
+        const contentParts: ContentPart[] = [];
+        const reasoningParts: ContentPart[] = [];
+        const hasContentImages = false;
+        const hasReasoningImages = false;
+        textBuffer = '';
+        reasoningBuffer = '';
 
-            textBuffer += text;
+        const clearAttemptBuffers = () => {
+          if (textBufferTimer) {
+            clearTimeout(textBufferTimer);
+            textBufferTimer = null;
+          }
 
-            // If no timer exists, create one
-            if (!textBufferTimer) {
-              textBufferTimer = setTimeout(async () => {
-                await flushTextBuffer();
-                textBufferTimer = null;
-              }, BUFFER_INTERVAL);
-            }
-          },
-          onThinking: async (reasoning) => {
-            timing(
-              '[%s] onThinking received chunk at %d, length: %d',
-              operationLogId,
-              Date.now(),
-              reasoning.length,
-            );
-            thinkingContent += reasoning;
+          if (reasoningBufferTimer) {
+            clearTimeout(reasoningBufferTimer);
+            reasoningBufferTimer = null;
+          }
 
-            // Buffer reasoning content
-            reasoningBuffer += reasoning;
-
-            // If no timer exists, create one
-            if (!reasoningBufferTimer) {
-              reasoningBufferTimer = setTimeout(async () => {
-                await flushReasoningBuffer();
-                reasoningBufferTimer = null;
-              }, BUFFER_INTERVAL);
-            }
-          },
-          onToolsCalling: async ({ toolsCalling: raw }) => {
-            const resolved = new ToolNameResolver().resolve(raw, state.toolManifestMap);
-            // Add source field from toolSourceMap for routing tool execution
-            const payload = resolved.map((p) => ({
-              ...p,
-              source: state.toolSourceMap?.[p.identifier],
-            }));
-            // log(`[${operationLogId}][toolsCalling]`, payload);
-            toolsCalling = payload;
-            tool_calls = raw;
-
-            // If textBuffer exists, flush it first
-            if (!!textBuffer) {
-              await flushTextBuffer();
-            }
-
-            await streamManager.publishStreamChunk(operationId, stepIndex, {
-              chunkType: 'tools_calling',
-              toolsCalling: payload,
-            });
-          },
-          onError: async (errorData) => {
-            streamError = errorData;
-            console.error(`[${operationLogId}][stream_error]`, errorData);
-          },
-        },
-        user: ctx.userId,
-      });
-
-      // Consume stream to ensure all callbacks complete execution
-      await consumeStreamUntilDone(response);
-
-      // If a stream error was captured via onError callback, throw to propagate the error
-      if (streamError) {
-        const errorMessage =
-          typeof streamError.message === 'string'
-            ? streamError.message
-            : JSON.stringify(streamError);
-        throw new Error(`LLM stream error: ${errorMessage}`);
-      }
-
-      await flushTextBuffer();
-      await flushReasoningBuffer();
-
-      // Clean up timers and flush remaining buffers
-      if (textBufferTimer) {
-        clearTimeout(textBufferTimer);
-        textBufferTimer = null;
-      }
-
-      if (reasoningBufferTimer) {
-        clearTimeout(reasoningBufferTimer);
-        reasoningBufferTimer = null;
-      }
-
-      log(
-        `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
-        content.length,
-        thinkingContent.length,
-        toolsCalling.length,
-        currentStepUsage ? 'yes' : 'none',
-      );
-
-      if (thinkingContent) {
-        log(`[${operationLogId}][reasoning]`, thinkingContent);
-      }
-      if (content) {
-        log(`[${operationLogId}][content]`, content);
-      }
-      if (toolsCalling.length > 0) {
-        log(`[${operationLogId}][toolsCalling] `, toolsCalling);
-      }
-
-      // Log usage information
-      if (currentStepUsage) {
-        log(`[${operationLogId}][usage] %O`, currentStepUsage);
-      }
-
-      // Add a complete llm_stream event (including all streaming chunks)
-      events.push({
-        result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
-        type: 'llm_result',
-      });
-
-      // Publish stream end event
-      await streamManager.publishStreamEvent(operationId, {
-        data: {
-          finalContent: content,
-          grounding,
-          imageList: imageList.length > 0 ? imageList : undefined,
-          reasoning: thinkingContent || undefined,
-          toolsCalling,
-          usage: currentStepUsage,
-        },
-        stepIndex,
-        type: 'stream_end',
-      });
-
-      log('[%s:%d] call_llm completed', operationId, stepIndex);
-
-      // ===== 1. First save original usage to message.metadata =====
-      // Determine final content - use serialized parts if has images, otherwise plain text
-      const finalContent = hasContentImages ? serializePartsForStorage(contentParts) : content;
-
-      // Determine final reasoning - handle multimodal reasoning
-      let finalReasoning: any = undefined;
-      if (hasReasoningImages) {
-        // Has images, use multimodal format
-        finalReasoning = {
-          content: serializePartsForStorage(reasoningParts),
-          isMultimodal: true,
+          textBuffer = '';
+          reasoningBuffer = '';
         };
-      } else if (thinkingContent) {
-        // Has text from reasoning but no images
-        finalReasoning = {
-          content: thinkingContent,
-        };
-      }
 
-      try {
-        // Build metadata object
-        const metadata: Record<string, any> = {};
-        if (currentStepUsage && typeof currentStepUsage === 'object') {
-          Object.assign(metadata, currentStepUsage);
+        try {
+          log(
+            `${stagePrefix} calling model-runtime chat (attempt %d/%d, model: %s, messages: %d, tools: %d)`,
+            attempt,
+            maxAttempts,
+            model,
+            processedMessages.length,
+            tools?.length ?? 0,
+          );
+
+          // Call model-runtime chat
+          const response = await modelRuntime.chat(chatPayload, {
+            callback: {
+              onCompletion: async (data) => {
+                // Capture usage (may or may not include cost)
+                if (data.usage) {
+                  currentStepUsage = data.usage;
+                }
+              },
+              onGrounding: async (groundingData) => {
+                log(`[${operationLogId}][grounding] %O`, groundingData);
+                grounding = groundingData;
+
+                await streamManager.publishStreamChunk(operationId, stepIndex, {
+                  chunkType: 'grounding',
+                  grounding: groundingData,
+                });
+              },
+              onText: async (text) => {
+                timing(
+                  '[%s] onText received chunk at %d, length: %d',
+                  operationLogId,
+                  Date.now(),
+                  text.length,
+                );
+                content += text;
+
+                textBuffer += text;
+
+                // If no timer exists, create one
+                if (!textBufferTimer) {
+                  textBufferTimer = setTimeout(async () => {
+                    await flushTextBuffer();
+                    textBufferTimer = null;
+                  }, BUFFER_INTERVAL);
+                }
+              },
+              onThinking: async (reasoning) => {
+                timing(
+                  '[%s] onThinking received chunk at %d, length: %d',
+                  operationLogId,
+                  Date.now(),
+                  reasoning.length,
+                );
+                thinkingContent += reasoning;
+
+                // Buffer reasoning content
+                reasoningBuffer += reasoning;
+
+                // If no timer exists, create one
+                if (!reasoningBufferTimer) {
+                  reasoningBufferTimer = setTimeout(async () => {
+                    await flushReasoningBuffer();
+                    reasoningBufferTimer = null;
+                  }, BUFFER_INTERVAL);
+                }
+              },
+              onToolsCalling: async ({ toolsCalling: raw }) => {
+                const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
+                // Add source field from resolved sourceMap for routing tool execution
+                const payload = resolvedCalls.map((p) => ({
+                  ...p,
+                  source: resolved.sourceMap[p.identifier],
+                }));
+                // log(`[${operationLogId}][toolsCalling]`, payload);
+                toolsCalling = payload;
+                tool_calls = raw;
+
+                // If textBuffer exists, flush it first
+                if (!!textBuffer) {
+                  await flushTextBuffer();
+                }
+
+                await streamManager.publishStreamChunk(operationId, stepIndex, {
+                  chunkType: 'tools_calling',
+                  toolsCalling: payload,
+                });
+              },
+              onError: async (errorData) => {
+                streamError = errorData;
+                console.error(`[${operationLogId}][stream_error]`, errorData);
+              },
+            },
+            metadata: {
+              operationId,
+              topicId: state.metadata?.topicId,
+              trigger: state.metadata?.trigger,
+            },
+            user: ctx.userId,
+          });
+
+          // Consume stream to ensure all callbacks complete execution
+          await consumeStreamUntilDone(response);
+
+          // If a stream error was captured via onError callback, throw to propagate the error
+          if (streamError) {
+            const streamExecutionError = new Error(
+              typeof streamError.message === 'string'
+                ? `LLM stream error: ${streamError.message}`
+                : `LLM stream error: ${JSON.stringify(streamError)}`,
+            );
+            const { message: _message, ...restStreamError } = streamError as Record<
+              string,
+              unknown
+            >;
+            Object.assign(streamExecutionError, restStreamError);
+            throw streamExecutionError;
+          }
+
+          await flushTextBuffer();
+          await flushReasoningBuffer();
+          clearAttemptBuffers();
+
+          log(
+            `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
+            content.length,
+            thinkingContent.length,
+            toolsCalling.length,
+            currentStepUsage ? 'yes' : 'none',
+          );
+
+          if (thinkingContent) {
+            log(`[${operationLogId}][reasoning]`, thinkingContent);
+          }
+          if (content) {
+            log(`[${operationLogId}][content]`, content);
+          }
+          if (toolsCalling.length > 0) {
+            log(`[${operationLogId}][toolsCalling] `, toolsCalling);
+          }
+
+          // Log usage information
+          if (currentStepUsage) {
+            log(`[${operationLogId}][usage] %O`, currentStepUsage);
+          }
+
+          // Add a complete llm_stream event (including all streaming chunks)
+          events.push({
+            result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
+            type: 'llm_result',
+          });
+
+          // Publish stream end event
+          await streamManager.publishStreamEvent(operationId, {
+            data: {
+              finalContent: content,
+              grounding,
+              imageList: imageList.length > 0 ? imageList : undefined,
+              reasoning: thinkingContent || undefined,
+              toolsCalling,
+              usage: currentStepUsage,
+            },
+            stepIndex,
+            type: 'stream_end',
+          });
+
+          log('[%s:%d] call_llm completed', operationId, stepIndex);
+
+          // ===== 1. First save original usage to message.metadata =====
+          // Determine final content - use serialized parts if has images, otherwise plain text
+          const finalContent = hasContentImages ? serializePartsForStorage(contentParts) : content;
+
+          // Determine final reasoning - handle multimodal reasoning
+          let finalReasoning: any = undefined;
+          if (hasReasoningImages) {
+            // Has images, use multimodal format
+            finalReasoning = {
+              content: serializePartsForStorage(reasoningParts),
+              isMultimodal: true,
+            };
+          } else if (thinkingContent) {
+            // Has text from reasoning but no images
+            finalReasoning = {
+              content: thinkingContent,
+            };
+          }
+
+          try {
+            // Build metadata object
+            const metadata: Record<string, any> = {};
+            if (currentStepUsage && typeof currentStepUsage === 'object') {
+              Object.assign(metadata, currentStepUsage);
+            }
+            if (hasContentImages) {
+              metadata.isMultimodal = true;
+            }
+
+            await ctx.messageModel.update(assistantMessageItem.id, {
+              content: finalContent,
+              imageList: imageList.length > 0 ? imageList : undefined,
+              metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+              reasoning: finalReasoning,
+              search: grounding,
+              tools: toolsCalling.length > 0 ? toolsCalling : undefined,
+            });
+          } catch (error) {
+            console.error('[call_llm] Failed to update message:', error);
+          }
+
+          // ===== 2. Then accumulate to AgentState =====
+          const newState = structuredClone(state);
+
+          newState.messages.push({
+            content,
+            role: 'assistant',
+            tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
+          });
+
+          if (currentStepUsage) {
+            // Use UsageCounter to uniformly accumulate usage and cost
+            const { usage, cost } = UsageCounter.accumulateLLM({
+              cost: newState.cost,
+              model: llmPayload.model,
+              modelUsage: currentStepUsage,
+              provider: llmPayload.provider,
+              usage: newState.usage,
+            });
+
+            newState.usage = usage;
+            if (cost) newState.cost = cost;
+          }
+
+          return {
+            events,
+            newState,
+            nextContext: {
+              payload: {
+                hasToolsCalling: toolsCalling.length > 0,
+                // Pass assistant message ID as parentMessageId for tool calls
+                parentMessageId: assistantMessageItem.id,
+                result: { content, tool_calls },
+                toolsCalling,
+              } as GeneralAgentCallLLMResultPayload,
+              phase: 'llm_result',
+              session: {
+                eventCount: events.length,
+                messageCount: newState.messages.length,
+                sessionId: operationId,
+                status: 'running',
+                stepCount: state.stepCount + 1,
+              },
+              stepUsage: currentStepUsage,
+            },
+          };
+        } catch (error) {
+          clearAttemptBuffers();
+
+          const classified = classifyLLMError(error);
+          const interrupted = await isOperationInterrupted(ctx);
+
+          if (!interrupted && shouldRetryLLM(classified.kind, attempt, LLM_MAX_RETRIES)) {
+            const delayMs = getLLMRetryDelayMs(attempt);
+
+            log(
+              '[%s] LLM call failed with kind=%s (attempt %d/%d), retrying in %dms ...',
+              operationLogId,
+              classified.kind,
+              attempt,
+              maxAttempts,
+              delayMs,
+            );
+
+            await streamManager.publishStreamEvent(operationId, {
+              data: { attempt: attempt + 1, delayMs, maxAttempts },
+              stepIndex,
+              type: 'stream_retry',
+            });
+
+            await sleep(delayMs);
+
+            if (await isOperationInterrupted(ctx)) {
+              throw error;
+            }
+
+            continue;
+          }
+
+          throw error;
         }
-        if (hasContentImages) {
-          metadata.isMultimodal = true;
-        }
-
-        await ctx.messageModel.update(assistantMessageItem.id, {
-          content: finalContent,
-          imageList: imageList.length > 0 ? imageList : undefined,
-          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-          reasoning: finalReasoning,
-          search: grounding,
-          tools: toolsCalling.length > 0 ? toolsCalling : undefined,
-        });
-      } catch (error) {
-        console.error('[call_llm] Failed to update message:', error);
       }
 
-      // ===== 2. Then accumulate to AgentState =====
-      const newState = structuredClone(state);
-
-      newState.messages.push({
-        content,
-        role: 'assistant',
-        tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
-      });
-
-      if (currentStepUsage) {
-        // Use UsageCounter to uniformly accumulate usage and cost
-        const { usage, cost } = UsageCounter.accumulateLLM({
-          cost: newState.cost,
-          model: llmPayload.model,
-          modelUsage: currentStepUsage,
-          provider: llmPayload.provider,
-          usage: newState.usage,
-        });
-
-        newState.usage = usage;
-        if (cost) newState.cost = cost;
-      }
-
-      return {
-        events,
-        newState,
-        nextContext: {
-          payload: {
-            hasToolsCalling: toolsCalling.length > 0,
-            // Pass assistant message ID as parentMessageId for tool calls
-            parentMessageId: assistantMessageItem.id,
-            result: { content, tool_calls },
-            toolsCalling,
-          } as GeneralAgentCallLLMResultPayload,
-          phase: 'llm_result',
-          session: {
-            eventCount: events.length,
-            messageCount: newState.messages.length,
-            sessionId: operationId,
-            status: 'running',
-            stepCount: state.stepCount + 1,
-          },
-          stepUsage: currentStepUsage,
-        },
-      };
+      throw new Error('LLM execution retry loop exited unexpectedly');
     } catch (error) {
       // Publish error event
       await streamManager.publishStreamEvent(operationId, {
-        data: {
-          error: (error as Error).message,
-          phase: 'llm_execution',
-        },
+        data: formatErrorEventData(error, 'llm_execution'),
         stepIndex,
         type: 'error',
       });
@@ -537,6 +876,258 @@ export const createRuntimeExecutors = (
         error,
       );
       throw error;
+    }
+  },
+
+  compress_context: async (instruction, state) => {
+    const { payload } = instruction as AgentInstructionCompressContext;
+    const { messages, currentTokenCount } = payload;
+    const { operationId, stepIndex } = ctx;
+    const operationLogId = `${operationId}:${stepIndex}`;
+    const stagePrefix = `[${operationLogId}][compress_context]`;
+    const events: AgentEvent[] = [];
+    const newState = structuredClone(state);
+    const topicId = state.metadata?.topicId;
+    const lastMessage = messages.at(-1);
+    const preservedMessages =
+      messages.length > 1 && lastMessage?.role === 'user' ? [lastMessage] : [];
+    const preservedMessageIds = new Set(
+      preservedMessages.map((message) => message.id).filter((id): id is string => Boolean(id)),
+    );
+    const messagesToCompress = preservedMessages.length > 0 ? messages.slice(0, -1) : messages;
+    const compressedMessagesFallback = [...messagesToCompress, ...preservedMessages];
+
+    if (!topicId || !ctx.userId) {
+      return {
+        events,
+        newState,
+        nextContext: {
+          payload: {
+            compressedMessages: compressedMessagesFallback,
+            groupId: '',
+            parentMessageId: undefined,
+            skipped: true,
+          } as GeneralAgentCompressionResultPayload,
+          phase: 'compression_result',
+          session: {
+            messageCount: newState.messages.length,
+            sessionId: operationId,
+            status: 'running',
+            stepCount: state.stepCount + 1,
+          },
+        },
+      };
+    }
+
+    try {
+      const dbMessages = await ctx.messageModel.query({
+        agentId: state.metadata?.agentId,
+        threadId: state.metadata?.threadId,
+        topicId,
+      });
+
+      const messageIds = dbMessages
+        .filter(
+          (message) =>
+            message.role !== 'compressedGroup' &&
+            Boolean(message.id) &&
+            !preservedMessageIds.has(message.id),
+        )
+        .map((message) => message.id);
+
+      if (messageIds.length === 0 || messagesToCompress.length === 0) {
+        return {
+          events,
+          newState,
+          nextContext: {
+            payload: {
+              compressedMessages: compressedMessagesFallback,
+              groupId: '',
+              parentMessageId: undefined,
+              skipped: true,
+            } as GeneralAgentCompressionResultPayload,
+            phase: 'compression_result',
+            session: {
+              messageCount: newState.messages.length,
+              sessionId: operationId,
+              status: 'running',
+              stepCount: state.stepCount + 1,
+            },
+          },
+        };
+      }
+
+      const latestAssistantMessage = dbMessages.findLast((message) => message.role === 'assistant');
+      const messageService = new MessageService(ctx.serverDB, ctx.userId);
+      const compressionResult = await messageService.createCompressionGroup(topicId, messageIds, {
+        agentId: state.metadata?.agentId,
+        threadId: state.metadata?.threadId,
+        topicId,
+      });
+
+      const compressionModel =
+        newState.modelRuntimeConfig?.compressionModel || newState.modelRuntimeConfig;
+
+      if (!compressionModel?.model || !compressionModel?.provider) {
+        return {
+          events,
+          newState,
+          nextContext: {
+            payload: {
+              compressedMessages: compressedMessagesFallback,
+              groupId: '',
+              parentMessageId: latestAssistantMessage?.id,
+              skipped: true,
+            } as GeneralAgentCompressionResultPayload,
+            phase: 'compression_result',
+            session: {
+              messageCount: newState.messages.length,
+              sessionId: operationId,
+              status: 'running',
+              stepCount: state.stepCount + 1,
+            },
+          },
+        };
+      }
+
+      const compressionPayload = chainCompressContext(compressionResult.messagesToSummarize);
+      const compressionRuntime = await initModelRuntimeFromDB(
+        ctx.serverDB,
+        ctx.userId,
+        compressionModel.provider,
+      );
+
+      let summaryContent = '';
+      let summaryUsage: any;
+      let summaryError: any;
+
+      const compressionResponse = await compressionRuntime.chat(
+        {
+          messages: compressionPayload.messages!,
+          model: compressionModel.model,
+          stream: true,
+        },
+        {
+          callback: {
+            onCompletion: async (data) => {
+              if (data.usage) summaryUsage = data.usage;
+            },
+            onError: async (errorData) => {
+              summaryError = errorData;
+            },
+            onText: async (text) => {
+              summaryContent += text;
+            },
+          },
+          user: ctx.userId,
+        },
+      );
+
+      await consumeStreamUntilDone(compressionResponse);
+
+      if (summaryError) {
+        throw new Error(
+          typeof summaryError.message === 'string'
+            ? summaryError.message
+            : JSON.stringify(summaryError),
+        );
+      }
+
+      const finalCompression = await messageService.finalizeCompression(
+        compressionResult.messageGroupId,
+        summaryContent,
+        {
+          agentId: state.metadata?.agentId,
+          threadId: state.metadata?.threadId,
+          topicId,
+        },
+      );
+
+      const compressedMessagesBase =
+        finalCompression.messages || compressionResult.messagesToSummarize;
+      const compressedMessages = [...compressedMessagesBase];
+
+      for (const preservedMessage of preservedMessages) {
+        if (
+          !compressedMessages.some(
+            (message) =>
+              message === preservedMessage ||
+              (Boolean(message.id) &&
+                Boolean(preservedMessage.id) &&
+                message.id === preservedMessage.id),
+          )
+        ) {
+          compressedMessages.push(preservedMessage);
+        }
+      }
+
+      newState.messages = compressedMessages;
+
+      if (summaryUsage) {
+        const { usage, cost } = UsageCounter.accumulateLLM({
+          cost: newState.cost,
+          model: compressionModel.model,
+          modelUsage: summaryUsage,
+          provider: compressionModel.provider,
+          usage: newState.usage,
+        });
+
+        newState.usage = usage;
+        if (cost) newState.cost = cost;
+      }
+
+      events.push({
+        groupId: compressionResult.messageGroupId,
+        parentMessageId: latestAssistantMessage?.id,
+        type: 'compression_complete',
+      });
+
+      return {
+        events,
+        newState,
+        nextContext: {
+          payload: {
+            compressedMessages,
+            groupId: compressionResult.messageGroupId,
+            parentMessageId: latestAssistantMessage?.id,
+          } as GeneralAgentCompressionResultPayload,
+          phase: 'compression_result',
+          session: {
+            messageCount: compressedMessages.length,
+            sessionId: operationId,
+            status: 'running',
+            stepCount: state.stepCount + 1,
+          },
+        },
+      };
+    } catch (error) {
+      log(
+        `${stagePrefix} Compression failed. originalTokens=%d error=%O`,
+        currentTokenCount,
+        error,
+      );
+
+      events.push({ error, type: 'compression_error' });
+
+      return {
+        events,
+        newState,
+        nextContext: {
+          payload: {
+            compressedMessages: compressedMessagesFallback,
+            groupId: '',
+            parentMessageId: undefined,
+            skipped: true,
+          } as GeneralAgentCompressionResultPayload,
+          phase: 'compression_result',
+          session: {
+            messageCount: newState.messages.length,
+            sessionId: operationId,
+            status: 'running',
+            stepCount: state.stepCount + 1,
+          },
+        },
+      };
     }
   },
   /**
@@ -567,17 +1158,40 @@ export const createRuntimeExecutors = (
       const agentConfig = state.metadata?.agentConfig;
       const toolResultMaxLength = agentConfig?.chatConfig?.toolResultMaxLength;
 
+      // Build effective manifest map (operation + step-level activations)
+      const effectiveManifestMap = {
+        ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+        ...Object.fromEntries(
+          (state.activatedStepTools ?? [])
+            .filter((a) => a.manifest)
+            .map((a) => [a.id, a.manifest!]),
+        ),
+      };
+
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
-      const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
-        memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
-        serverDB: ctx.serverDB,
-        toolManifestMap: state.toolManifestMap,
-        toolResultMaxLength,
-        topicId: ctx.topicId,
-        userId: ctx.userId,
-      });
+      const execution = await executeToolWithRetry(
+        () =>
+          toolExecutionService.executeTool(chatToolPayload, {
+            activeDeviceId: state.metadata?.activeDeviceId,
+            agentId: state.metadata?.agentId,
+            memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
+            serverDB: ctx.serverDB,
+            taskId: state.metadata?.taskId,
+            toolManifestMap: effectiveManifestMap,
+            toolResultMaxLength,
+            topicId: ctx.topicId,
+            userId: ctx.userId,
+          }),
+        {
+          isInterrupted: () => isOperationInterrupted(ctx),
+          maxRetries: TOOL_MAX_RETRIES,
+          operationLogId,
+          toolName,
+        },
+      );
 
+      const executionResult = execution.result;
       const executionTime = executionResult.executionTime;
       const isSuccess = executionResult.success;
       log(
@@ -590,6 +1204,8 @@ export const createRuntimeExecutors = (
         data: {
           executionTime,
           isSuccess,
+          attempts: execution.attempts,
+          maxAttempts: TOOL_MAX_RETRIES + 1,
           payload,
           phase: 'tool_execution',
           result: executionResult,
@@ -604,6 +1220,7 @@ export const createRuntimeExecutors = (
         const toolMessage = await ctx.messageModel.create({
           agentId: state.metadata!.agentId!,
           content: executionResult.content,
+          metadata: { toolExecutionTimeMs: executionTime },
           parentId: payload.parentMessageId,
           plugin: chatToolPayload as any,
           pluginError: executionResult.error,
@@ -643,6 +1260,34 @@ export const createRuntimeExecutors = (
 
       newState.usage = usage;
       if (cost) newState.cost = cost;
+
+      // Persist ToolsActivator discovery results to state.activatedStepTools
+      const discoveredTools = executionResult.state?.activatedTools as
+        | Array<{ identifier: string }>
+        | undefined;
+      if (discoveredTools?.length) {
+        const existingIds = new Set(
+          (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),
+        );
+        const newActivations = discoveredTools
+          .filter((t) => !existingIds.has(t.identifier))
+          .map((t) => ({
+            activatedAtStep: state.stepCount,
+            id: t.identifier,
+            manifest: effectiveManifestMap[t.identifier],
+            source: 'discovery' as const,
+          }));
+
+        if (newActivations.length > 0) {
+          newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
+
+          log(
+            `[${operationLogId}] Persisted %d tool activations to state: %o`,
+            newActivations.length,
+            newActivations.map((a) => a.id),
+          );
+        }
+      }
 
       // Find current tool statistics
       const currentToolStats = usage.tools.byTool.find((t) => t.name === toolName);
@@ -691,10 +1336,7 @@ export const createRuntimeExecutors = (
     } catch (error) {
       // Publish tool execution error event
       await streamManager.publishStreamEvent(operationId, {
-        data: {
-          error: (error as Error).message,
-          phase: 'tool_execution',
-        },
+        data: formatErrorEventData(error, 'tool_execution'),
         stepIndex,
         type: 'error',
       });
@@ -746,14 +1388,40 @@ export const createRuntimeExecutors = (
 
         try {
           log(`[${operationLogId}] Executing tool ${toolName} ...`);
-          const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
-            memoryToolPermission: state.metadata?.agentConfig?.chatConfig?.memory?.toolPermission,
-            serverDB: ctx.serverDB,
-            toolManifestMap: state.toolManifestMap,
-            topicId: ctx.topicId,
-            userId: ctx.userId,
-          });
+          // Build effective manifest map (operation + step-level activations)
+          const batchManifestMap = {
+            ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+            ...Object.fromEntries(
+              (state.activatedStepTools ?? [])
+                .filter((a) => a.manifest)
+                .map((a) => [a.id, a.manifest!]),
+            ),
+          };
 
+          const batchAgentConfig = state.metadata?.agentConfig;
+
+          const execution = await executeToolWithRetry(
+            () =>
+              toolExecutionService.executeTool(chatToolPayload, {
+                activeDeviceId: state.metadata?.activeDeviceId,
+                agentId: state.metadata?.agentId,
+                memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
+                serverDB: ctx.serverDB,
+                taskId: state.metadata?.taskId,
+                toolManifestMap: batchManifestMap,
+                toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
+                topicId: ctx.topicId,
+                userId: ctx.userId,
+              }),
+            {
+              isInterrupted: () => isOperationInterrupted(ctx),
+              maxRetries: TOOL_MAX_RETRIES,
+              operationLogId,
+              toolName,
+            },
+          );
+
+          const executionResult = execution.result;
           const executionTime = executionResult.executionTime;
           const isSuccess = executionResult.success;
           log(
@@ -765,6 +1433,8 @@ export const createRuntimeExecutors = (
             data: {
               executionTime,
               isSuccess,
+              attempts: execution.attempts,
+              maxAttempts: TOOL_MAX_RETRIES + 1,
               payload: { parentMessageId, toolCalling: chatToolPayload },
               phase: 'tool_execution',
               result: executionResult,
@@ -778,6 +1448,7 @@ export const createRuntimeExecutors = (
             const toolMessage = await ctx.messageModel.create({
               agentId: state.metadata!.agentId!,
               content: executionResult.content,
+              metadata: { toolExecutionTimeMs: executionTime },
               parentId: parentMessageId,
               plugin: chatToolPayload as any,
               pluginError: executionResult.error,
@@ -820,10 +1491,7 @@ export const createRuntimeExecutors = (
 
           // Publish error event
           await streamManager.publishStreamEvent(operationId, {
-            data: {
-              error: (error as Error).message,
-              phase: 'tool_execution',
-            },
+            data: formatErrorEventData(error, 'tool_execution'),
             stepIndex,
             type: 'error',
           });
@@ -848,6 +1516,40 @@ export const createRuntimeExecutors = (
         });
         newState.usage = usage;
         if (cost) newState.cost = cost;
+      }
+    }
+
+    // Persist ToolsActivator discovery results from batch tool executions
+    const batchEffectiveManifestMap = {
+      ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+      ...Object.fromEntries(
+        (state.activatedStepTools ?? []).filter((a) => a.manifest).map((a) => [a.id, a.manifest!]),
+      ),
+    };
+    const existingActivationIds = new Set(
+      (newState.activatedStepTools ?? []).map((t: { id: string }) => t.id),
+    );
+    for (const result of toolResults) {
+      const discovered = result.data?.state?.activatedTools as
+        | Array<{ identifier: string }>
+        | undefined;
+      if (discovered?.length) {
+        const newActivations = discovered
+          .filter((t) => !existingActivationIds.has(t.identifier))
+          .map((t) => ({
+            activatedAtStep: state.stepCount,
+            id: t.identifier,
+            manifest: batchEffectiveManifestMap[t.identifier],
+            source: 'discovery' as const,
+          }));
+
+        for (const activation of newActivations) {
+          existingActivationIds.add(activation.id);
+        }
+
+        if (newActivations.length > 0) {
+          newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
+        }
       }
     }
 

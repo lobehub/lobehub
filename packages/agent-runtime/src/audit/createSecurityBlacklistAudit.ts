@@ -13,7 +13,7 @@ export const SECURITY_BLACKLIST_AUDIT_TYPE = 'securityBlacklist';
  * Reads blacklist from `metadata.securityBlacklist`, falls back to DEFAULT_SECURITY_BLACKLIST.
  */
 export const createSecurityBlacklistAudit = (): DynamicInterventionResolver => {
-  return (toolArgs: Record<string, any>, metadata?: Record<string, any>): boolean => {
+  return async (toolArgs: Record<string, any>, metadata?: Record<string, any>) => {
     const securityBlacklist = metadata?.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
     const result = InterventionChecker.checkSecurityBlacklist(securityBlacklist, toolArgs);
     return result.blocked;

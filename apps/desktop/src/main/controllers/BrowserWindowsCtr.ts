@@ -4,10 +4,10 @@ import type {
   WindowMinimumSizeParams,
   WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
-import { findMatchingRoute } from '~common/routes';
 
-import { AppBrowsersIdentifiers, WindowTemplateIdentifiers } from '@/appBrowsers';
+import type { AppBrowsersIdentifiers, WindowTemplateIdentifiers } from '@/appBrowsers';
 import { getIpcContext } from '@/utils/ipc';
+import { findMatchingRoute } from '~common/routes';
 
 import { ControllerModule, IpcMethod, shortcut } from './index';
 
@@ -27,7 +27,7 @@ export default class BrowserWindowsCtr extends ControllerModule {
         ? { tab: typeof options === 'string' ? options : undefined }
         : options;
 
-    console.log('[BrowserWindowsCtr] Received request to open settings', normalizedOptions);
+    console.info('[BrowserWindowsCtr] Received request to open settings', normalizedOptions);
 
     try {
       let fullPath: string;
@@ -74,6 +74,13 @@ export default class BrowserWindowsCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  isWindowMaximized() {
+    return this.withSenderIdentifier((identifier) => {
+      return this.app.browserManager.isWindowMaximized(identifier);
+    });
+  }
+
+  @IpcMethod()
   setWindowSize(params: WindowSizeParams) {
     this.withSenderIdentifier((identifier) => {
       this.app.browserManager.setWindowSize(identifier, params);
@@ -106,7 +113,7 @@ export default class BrowserWindowsCtr extends ControllerModule {
   @IpcMethod()
   async interceptRoute(params: InterceptRouteParams) {
     const { path, source } = params;
-    console.log(
+    console.info(
       `[BrowserWindowsCtr] Received route interception request: ${path}, source: ${source}`,
     );
 
@@ -115,11 +122,11 @@ export default class BrowserWindowsCtr extends ControllerModule {
 
     // If no matching route found, return not intercepted
     if (!matchedRoute) {
-      console.log(`[BrowserWindowsCtr] No matching route configuration found: ${path}`);
+      console.info(`[BrowserWindowsCtr] No matching route configuration found: ${path}`);
       return { intercepted: false, path, source };
     }
 
-    console.log(
+    console.info(
       `[BrowserWindowsCtr] Intercepted route: ${path}, target window: ${matchedRoute.targetWindow}`,
     );
 
@@ -153,7 +160,7 @@ export default class BrowserWindowsCtr extends ControllerModule {
     uniqueId?: string;
   }) {
     try {
-      console.log('[BrowserWindowsCtr] Creating multi-instance window:', params);
+      console.info('[BrowserWindowsCtr] Creating multi-instance window:', params);
 
       const result = this.app.browserManager.createMultiInstanceWindow(
         params.templateId,
@@ -223,11 +230,11 @@ export default class BrowserWindowsCtr extends ControllerModule {
     browser.show();
   }
 
-  private withSenderIdentifier(fn: (identifier: string) => void) {
+  private withSenderIdentifier<T>(fn: (identifier: string) => T): T | undefined {
     const context = getIpcContext();
-    if (!context) return;
+    if (!context) return undefined;
     const identifier = this.app.browserManager.getIdentifierByWebContents(context.sender);
-    if (!identifier) return;
-    fn(identifier);
+    if (!identifier) return undefined;
+    return fn(identifier);
   }
 }

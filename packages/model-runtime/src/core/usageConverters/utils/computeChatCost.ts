@@ -149,6 +149,7 @@ const computeFixedCredits = (unit: FixedPricingUnit, quantity: number) => quanti
 const computeTieredCredits = (
   unit: TieredPricingUnit,
   quantity: number,
+  tierQuantity?: number,
 ): { credits: number; segments: Array<{ credits: number; quantity: number; rate: number }> } => {
   if (quantity <= 0) return { credits: 0, segments: [] };
 
@@ -156,11 +157,14 @@ const computeTieredCredits = (
   const tiers = unit.tiers ?? [];
   if (tiers.length === 0) return { credits: 0, segments };
 
+  // Use tierQuantity (from tierBy) to select the tier, but bill based on actual quantity
+  const lookupQuantity = tierQuantity ?? quantity;
+
   // Google and other providers charge the entire quantity at the new rate when exceeding threshold
   const matchedTier =
     tiers.find((tier) => {
       const limit = tier.upTo === 'infinity' ? Number.POSITIVE_INFINITY : tier.upTo;
-      return quantity <= limit;
+      return lookupQuantity <= limit;
     }) ?? tiers.at(-1);
 
   if (!matchedTier) return { credits: 0, segments };
@@ -284,7 +288,14 @@ export const computeChatCost = (
 
     if (unit.strategy === 'tiered') {
       const tieredUnit = unit as TieredPricingUnit;
-      const { credits: rawCredits, segments } = computeTieredCredits(tieredUnit, quantity);
+      // Use totalInputTokens to determine the tier — providers like OpenAI and Google
+      // set pricing tiers based on total prompt size, not per-unit quantity.
+      const tierQuantity = usage.totalInputTokens ?? usage.inputTextTokens;
+      const { credits: rawCredits, segments } = computeTieredCredits(
+        tieredUnit,
+        quantity,
+        tierQuantity,
+      );
       const usdCredits = toUSDCredits(rawCredits, currency, usdToCnyRate);
       breakdown.push({
         cost: creditsToUSD(usdCredits),

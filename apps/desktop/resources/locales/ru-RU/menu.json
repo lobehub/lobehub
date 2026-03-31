@@ -1,5 +1,9 @@
 {
-  "common.checkUpdates": "Проверка обновлений...",
+  "common.checkUpdates": "Проверить обновления...",
+  "common.checkingUpdates": "Проверка обновлений...",
+  "common.downloadingUpdate": "Загрузка обновления...",
+  "common.isLatestVersion": "Уже актуальная версия",
+  "common.restartToUpdate": "Перезапустите для обновления",
   "context.copyImage": "Копировать изображение",
   "context.copyImageAddress": "Копировать адрес изображения",
   "context.copyLink": "Копировать ссылку",

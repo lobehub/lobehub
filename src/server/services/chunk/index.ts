@@ -4,7 +4,6 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { type ChunkContentParams } from '@/server/modules/ContentChunk';
 import { ContentChunk } from '@/server/modules/ContentChunk';
-import { createAsyncCaller } from '@/server/routers/async';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -45,6 +44,8 @@ export class ChunkService {
     await this.fileModel.update(fileId, { embeddingTaskId: asyncTaskId });
 
     // Async router will read keyVaults from DB, no need to pass jwtPayload
+    // Dynamic import to avoid circular dependency
+    const { createAsyncCaller } = await import('@/server/routers/async');
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
     // trigger embedding task asynchronously
@@ -85,6 +86,8 @@ export class ChunkService {
     await this.fileModel.update(fileId, { chunkTaskId: asyncTaskId });
 
     // Async router will read keyVaults from DB, no need to pass jwtPayload
+    // Dynamic import to avoid circular dependency
+    const { createAsyncCaller } = await import('@/server/routers/async');
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
     // trigger parse file task asynchronously

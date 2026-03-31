@@ -11,6 +11,8 @@ import {
   type MessageActionItem,
 } from '@/features/Conversation/types';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 /**
  * Hook to create a branching action factory function.
@@ -48,16 +50,17 @@ export const useBranchingActionFactory = (): MessageActionFactory => {
  */
 export const useActionsBarConfig = (): ActionsBarConfig => {
   const branchingFactory = useBranchingActionFactory();
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return useMemo(
     () => ({
       assistant: {
-        extraBarActions: [branchingFactory],
+        extraBarActions: isDevMode ? [branchingFactory] : [],
       },
       user: {
-        extraBarActions: [branchingFactory],
+        extraBarActions: isDevMode ? [branchingFactory] : [],
       },
     }),
-    [branchingFactory],
+    [branchingFactory, isDevMode],
   );
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,7 +8,7 @@ import { notification } from '@/components/AntdStaticMethods';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-import ProfileRow from './ProfileRow';
+import { labelStyle, rowStyle } from './ProfileRow';
 
 interface PasswordRowProps {
   mobile?: boolean;
@@ -43,25 +43,26 @@ const PasswordRow = ({ mobile }: PasswordRowProps) => {
     }
   }, [userProfile?.email, t]);
 
-  return (
-    <ProfileRow
-      label={t('profile.password')}
-      mobile={mobile}
-      action={
-        <Text
-          style={{
-            cursor: sending ? 'default' : 'pointer',
-            fontSize: 13,
-            opacity: sending ? 0.5 : 1,
-          }}
-          onClick={sending ? undefined : handleChangePassword}
-        >
+  if (mobile) {
+    return (
+      <Flexbox horizontal align="center" gap={12} justify="space-between" style={rowStyle}>
+        <Text strong>{t('profile.password')}</Text>
+        <Button loading={sending} size="small" onClick={handleChangePassword}>
           {hasPasswordAccount ? t('profile.changePassword') : t('profile.setPassword')}
-        </Text>
-      }
-    >
-      <Text>{hasPasswordAccount ? '••••••' : '--'}</Text>
-    </ProfileRow>
+        </Button>
+      </Flexbox>
+    );
+  }
+
+  return (
+    <Flexbox horizontal align="center" gap={24} style={rowStyle}>
+      <Text style={labelStyle}>{t('profile.password')}</Text>
+      <Flexbox align="flex-end" style={{ flex: 1 }}>
+        <Button loading={sending} size="small" onClick={handleChangePassword}>
+          {hasPasswordAccount ? t('profile.changePassword') : t('profile.setPassword')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
   );
 };
 

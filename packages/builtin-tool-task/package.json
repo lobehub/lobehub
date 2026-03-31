@@ -1,0 +1,12 @@
+{
+  "name": "@lobechat/builtin-tool-task",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

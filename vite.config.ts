@@ -11,6 +11,7 @@ import {
   sharedRendererPlugins,
   sharedRollupOutput,
 } from './plugins/vite/sharedRendererConfig';
+import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
 
 const isMobile = process.env.MOBILE === 'true';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
@@ -21,9 +22,10 @@ const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
 
 export default defineConfig({
-  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/spa/',
+  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
+    reportCompressedSize: false,
     rollupOptions: {
       input: resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: sharedRollupOutput,
@@ -32,6 +34,7 @@ export default defineConfig({
   define: sharedRendererDefine({ isMobile, isElectron: false }),
   optimizeDeps: sharedOptimizeDeps,
   plugins: [
+    vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
     ...sharedRendererPlugins({ platform }),
 
@@ -106,14 +109,56 @@ export default defineConfig({
     port: 9876,
     host: true,
     proxy: {
-      '/api': 'http://localhost:3010',
-      '/oidc': 'http://localhost:3010',
-      '/trpc': 'http://localhost:3010',
-      '/webapi': 'http://localhost:3010',
+      '/api': `http://localhost:${process.env.PORT || 3010}`,
+      '/oidc': `http://localhost:${process.env.PORT || 3010}`,
+      '/trpc': `http://localhost:${process.env.PORT || 3010}`,
+      '/webapi': `http://localhost:${process.env.PORT || 3010}`,
     },
     warmup: {
       clientFiles: [
-        platform === 'mobile' ? './src/spa/entry.mobile.tsx' : './src/spa/entry.web.tsx',
+        // src/ business code
+        './src/initialize.ts',
+        './src/spa/**/*.tsx',
+        './src/business/**/*.{ts,tsx}',
+        './src/components/**/*.{ts,tsx}',
+        './src/config/**/*.ts',
+        './src/const/**/*.ts',
+        './src/envs/**/*.ts',
+        './src/features/**/*.{ts,tsx}',
+        './src/helpers/**/*.ts',
+        './src/hooks/**/*.{ts,tsx}',
+        './src/layout/**/*.{ts,tsx}',
+        './src/libs/**/*.{ts,tsx}',
+        './src/locales/**/*.ts',
+        './src/routes/**/*.{ts,tsx}',
+        './src/services/**/*.ts',
+        './src/store/**/*.{ts,tsx}',
+        './src/styles/**/*.ts',
+        './src/utils/**/*.{ts,tsx}',
+
+        // monorepo packages
+        './packages/types/src/**/*.ts',
+        './packages/const/src/**/*.ts',
+        './packages/utils/src/**/*.ts',
+        './packages/context-engine/src/**/*.ts',
+        './packages/prompts/src/**/*.ts',
+        './packages/model-bank/src/**/*.ts',
+        './packages/model-runtime/src/**/*.ts',
+        './packages/agent-runtime/src/**/*.ts',
+        './packages/conversation-flow/src/**/*.ts',
+        './packages/electron-client-ipc/src/**/*.ts',
+        './packages/builtin-agents/src/**/*.ts',
+        './packages/builtin-skills/src/**/*.ts',
+        './packages/builtin-tool-*/src/**/*.ts',
+        './packages/builtin-tools/src/**/*.ts',
+        './packages/business/*/src/**/*.ts',
+        './packages/config/src/**/*.ts',
+        './packages/edge-config/src/**/*.ts',
+        './packages/editor-runtime/src/**/*.ts',
+        './packages/fetch-sse/src/**/*.ts',
+        './packages/desktop-bridge/src/**/*.ts',
+        './packages/python-interpreter/src/**/*.ts',
+        './packages/agent-manager-runtime/src/**/*.ts',
       ],
     },
   },

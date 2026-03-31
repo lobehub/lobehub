@@ -29,7 +29,7 @@ const LocalForm = memo<{ form: FormInstance; mode?: 'edit' | 'create' }>(({ form
           message: t('dev.meta.identifier.pattenErrorMessage'),
           pattern: /^[\w-]+$/,
         },
-        // 编辑模式下，不进行重复校验
+        // In edit mode, skip duplicate validation
         isEditMode
           ? {}
           : {

@@ -15,12 +15,15 @@ import { type ModelSwitchPanelProps } from './types';
 
 const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
   ({
+    ModelItemComponent,
     children,
+    enabledList,
     model: modelProp,
     onModelChange,
     onOpenChange,
     open,
     placement = 'topLeft',
+    pricingMode,
     provider: providerProp,
     openOnHover = true,
   }) => {
@@ -38,12 +41,17 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     return (
       <TooltipGroup>
         <DropdownMenuRoot open={isOpen} onOpenChange={handleOpenChange}>
-          <DropdownMenuTrigger openOnHover={openOnHover}>{children}</DropdownMenuTrigger>
+          <DropdownMenuTrigger className={styles.trigger} openOnHover={openOnHover}>
+            {children}
+          </DropdownMenuTrigger>
           <DropdownMenuPortal>
             <DropdownMenuPositioner hoverTrigger={openOnHover} placement={placement}>
               <DropdownMenuPopup className={styles.container} onKeyDown={stopPropagation}>
                 <PanelContent
+                  ModelItemComponent={ModelItemComponent}
+                  enabledList={enabledList}
                   model={modelProp}
+                  pricingMode={pricingMode}
                   provider={providerProp}
                   onModelChange={onModelChange}
                   onOpenChange={handleOpenChange}

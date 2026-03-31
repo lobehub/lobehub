@@ -48,7 +48,7 @@ vi.mock('@/store/user/selectors', () => ({
     }),
   },
   userGeneralSettingsSelectors: {
-    responseLanguage: vi.fn(() => undefined),
+    currentResponseLanguage: vi.fn(() => 'en-US'),
   },
 }));
 

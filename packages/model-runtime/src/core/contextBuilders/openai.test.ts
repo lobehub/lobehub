@@ -1,4 +1,4 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64, videoUrlToBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,11 +9,13 @@ import {
   convertMessageContent,
   convertOpenAIMessages,
   convertOpenAIResponseInputs,
+  type ExtendedChatCompletionContentPart,
 } from './openai';
 
 // 模拟依赖
 vi.mock('@lobechat/utils', () => ({
   imageUrlToBase64: vi.fn(),
+  videoUrlToBase64: vi.fn(),
 }));
 vi.mock('../../utils/uriParser');
 
@@ -96,6 +98,91 @@ describe('convertMessageContent', () => {
     });
 
     expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
+
+  it('should convert video URL to base64 when necessary', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'base64String',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual({
+      type: 'video_url',
+      video_url: { url: 'data:video/mp4;base64,base64String' },
+    });
+
+    expect(parseDataUri).toHaveBeenCalledWith('https://example.com/video.mp4');
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+  });
+
+  it('should not convert video URL when not necessary', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+    expect(videoUrlToBase64).not.toHaveBeenCalled();
+  });
+
+  it('should convert video URL when forceVideoBase64 is true', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertMessageContent(content, { forceVideoBase64: true });
+
+    expect(result).toEqual({
+      type: 'video_url',
+      video_url: { url: 'data:video/mp4;base64,forcedBase64' },
+    });
+
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+  });
+
+  it('should return original content when video conversion fails', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = '1';
+
+    const content: ExtendedChatCompletionContentPart = {
+      type: 'video_url',
+      video_url: { url: 'https://example.com/video.mp4' },
+    };
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockRejectedValue(new Error('Conversion failed'));
+
+    const result = await convertMessageContent(content);
+
+    expect(result).toEqual(content);
+
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
   });
 });
 
@@ -213,6 +300,36 @@ describe('convertOpenAIMessages', () => {
     ]);
     // Ensure reasoning_content field is preserved
     expect((result[0] as any).reasoning_content).toBe('some reasoning content');
+  });
+
+  it('should filter internal thinking content parts but preserve reasoning_content', async () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            signature: 'sig_123',
+            thinking: 'internal reasoning',
+            type: 'thinking',
+          },
+          {
+            text: 'Visible answer',
+            type: 'text',
+          },
+        ],
+        reasoning_content: 'internal reasoning',
+      },
+    ] as any;
+
+    const result = await convertOpenAIMessages(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'assistant',
+        content: [{ text: 'Visible answer', type: 'text' }],
+        reasoning_content: 'internal reasoning',
+      },
+    ]);
   });
 
   it('should filter out reasoning but preserve reasoning_content field', async () => {
@@ -333,6 +450,106 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('应该正确转换包含视频的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'data:video/mp4;base64,test123',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is a video' },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,test123',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确转换包含图片和视频的混合消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image and a video' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'data:image/jpeg;base64,test123',
+            },
+          },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'data:video/mp4;base64,test456',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image and a video' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,test123',
+          },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,test456',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('应该正确处理带有无效 video_url 的消息', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: '',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: 'Here is a video' }],
+      },
+    ]);
+  });
+
   it('应该正确处理混合类型的消息序列', async () => {
     const messages: OpenAIChatMessage[] = [
       { role: 'user', content: 'I need help with a function' },
@@ -375,6 +592,88 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('should filter orphan tool calls when strictToolPairing is enabled', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'Use tools carefully' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_paired',
+            type: 'function',
+            function: {
+              name: 'get_weather',
+              arguments: '{"city":"Hangzhou"}',
+            },
+          },
+          {
+            id: 'call_orphan',
+            type: 'function',
+            function: {
+              name: 'get_news',
+              arguments: '{"topic":"AI"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '{"temp":22}',
+        tool_call_id: 'call_paired',
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { strictToolPairing: true });
+
+    expect(result).toEqual([
+      { role: 'user', content: 'Use tools carefully' },
+      {
+        arguments: '{"city":"Hangzhou"}',
+        call_id: 'call_paired',
+        name: 'get_weather',
+        type: 'function_call',
+      },
+      {
+        call_id: 'call_paired',
+        output: '{"temp":22}',
+        type: 'function_call_output',
+      },
+    ]);
+  });
+
+  it('should drop assistant message with all orphaned tool_calls in strict mode', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { role: 'user', content: 'Do something' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_orphan_1',
+            type: 'function',
+            function: { name: 'fn_a', arguments: '{}' },
+          },
+          {
+            id: 'call_orphan_2',
+            type: 'function',
+            function: { name: 'fn_b', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'assistant', content: 'Final answer' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages, { strictToolPairing: true });
+
+    // The assistant message with all-orphaned tool_calls should produce no items,
+    // NOT fall through to the default builder which would spread tool_calls back.
+    expect(result).toEqual([
+      { role: 'user', content: 'Do something' },
+      { role: 'assistant', content: 'Final answer' },
+    ]);
+  });
+
   it('should extract reasoning.content into a separate reasoning item', async () => {
     const messages: OpenAIChatMessage[] = [
       { content: 'system prompts', role: 'system' },
@@ -395,6 +694,41 @@ describe('convertOpenAIResponseInputs', () => {
       { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
       { content: 'hello', role: 'assistant' },
       { content: '杭州天气如何', role: 'user' },
+    ]);
+  });
+
+  it('should preserve message order when earlier messages have async content (images)', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { content: 'system prompts', role: 'system' },
+      {
+        content: [
+          { type: 'text', text: 'describe this image' },
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,abc123' } },
+        ],
+        role: 'user',
+      },
+      {
+        content: 'The image shows a green car.',
+        role: 'assistant',
+        reasoning: { content: 'analyzing the image', duration: 3000 },
+      },
+      { content: '1 + 1 = ?', role: 'user' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      {
+        content: [
+          { type: 'input_text', text: 'describe this image' },
+          { type: 'input_image', image_url: 'data:image/jpeg;base64,abc123' },
+        ],
+        role: 'user',
+      },
+      { summary: [{ text: 'analyzing the image', type: 'summary_text' }], type: 'reasoning' },
+      { content: 'The image shows a green car.', role: 'assistant' },
+      { content: '1 + 1 = ?', role: 'user' },
     ]);
   });
 
@@ -443,6 +777,90 @@ describe('convertOpenAIResponseInputs', () => {
         role: 'assistant',
       },
     ]);
+  });
+
+  it('should pass forceVideoBase64 to convertMessageContent in video_url branch', async () => {
+    process.env.LLM_VISION_VIDEO_USE_BASE64 = undefined;
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is a video' },
+          {
+            type: 'video_url',
+            video_url: {
+              url: 'https://example.com/video.mp4',
+            },
+          },
+        ],
+      },
+    ];
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(videoUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'video/mp4',
+    });
+
+    const result = await convertOpenAIResponseInputs(messages, { forceVideoBase64: true });
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is a video' },
+          {
+            type: 'input_video',
+            video_url: 'data:video/mp4;base64,forcedBase64',
+          },
+        ],
+      },
+    ]);
+
+    expect(videoUrlToBase64).toHaveBeenCalledWith('https://example.com/video.mp4');
+  });
+
+  it('should pass forceImageBase64 to convertMessageContent in image_url branch', async () => {
+    process.env.LLM_VISION_IMAGE_USE_BASE64 = undefined;
+
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Here is an image' },
+          {
+            type: 'image_url',
+            image_url: {
+              url: 'https://example.com/image.jpg',
+            },
+          },
+        ],
+      },
+    ];
+
+    vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+    vi.mocked(imageUrlToBase64).mockResolvedValue({
+      base64: 'forcedBase64',
+      mimeType: 'image/jpeg',
+    });
+
+    const result = await convertOpenAIResponseInputs(messages, { forceImageBase64: true });
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Here is an image' },
+          {
+            type: 'input_image',
+            image_url: 'data:image/jpeg;base64,forcedBase64',
+          },
+        ],
+      },
+    ]);
+
+    expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
   });
 });
 

@@ -1,16 +1,15 @@
-# 开发环境更新配置
-# 可选择 GitHub 或 Generic provider 进行测试
+# 本地更新测试配置
+# 将此文件复制到 apps/desktop/dev-app-update.yml 以使用本地服务器测试
+#
+# 注意: 此配置仅用于应用初始启动时的 provider 配置。
+# Channel 切换功能通过 UPDATE_SERVER_URL 环境变量 + setFeedURL() 实现，
+# 不依赖此文件。
+#
+# 使用方法:
+#   cp scripts/update-test/dev-app-update.local.yml dev-app-update.yml
+#   UPDATE_SERVER_URL=http://localhost:8787 bun run dev
 
-# 方式1: GitHub Provider (默认)
-provider: github
-owner: lobehub
-repo: lobe-chat
-updaterCacheDirName: electron-app-updater
-allowPrerelease: true
-channel: nightly
-
-# 方式2: Generic Provider (测试自定义服务器)
-# 取消下面的注释，注释掉上面的 GitHub 配置
-# provider: generic
-# url: http://localhost:8080
-# updaterCacheDirName: electron-app-updater
+provider: generic
+url: http://localhost:8787/stable
+updaterCacheDirName: lobehub-desktop-local-test
+channel: stable

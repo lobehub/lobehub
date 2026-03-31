@@ -1,6 +1,6 @@
 ---
 name: spa-routes
-description: SPA route and feature structure. Use when adding or modifying SPA routes in src/routes, defining new route segments, or moving route logic into src/features. Covers how to keep routes thin and how to divide files between routes and features.
+description: MUST use when editing src/routes/ segments, src/spa/router/desktopRouter.config.tsx or desktopRouter.config.desktop.tsx (always change both together), mobileRouter.config.tsx, or when moving UI/logic between routes and src/features/.
 ---
 
 # SPA Routes and Features Guide
@@ -12,6 +12,8 @@ SPA structure:
 - **`src/features/`** – Business logic and UI by domain.
 
 This project uses a **roots vs features** split: `src/routes/` only holds page segments; business logic and UI live in `src/features/` by domain.
+
+**Agent constraint — desktop router parity:** Edits to the desktop route tree must update **both** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` in the same change (same paths, nesting, index routes, and segment registration). Updating only one causes drift; the missing tree can fail to register routes and surface as a **blank screen** or broken navigation on the affected build.
 
 ## When to Use This Skill
 
@@ -73,8 +75,21 @@ Each feature should:
    - Layout: `export { default } from '@/features/MyFeature/MyLayout'` or compose a few feature components + `<Outlet />`.
    - Page: import from `@/features/MyFeature` (or a specific subpath) and render; no business logic in the route file.
 
-5. **Register the route**
-   - Add the segment to `src/spa/router/desktopRouter.config.tsx` (or the right router config) with `dynamicElement` / `dynamicLayout` pointing at the new route paths (e.g. `@/routes/(main)/my-feature`).
+5. **Register the route (desktop — two files, always)**
+   - **`desktopRouter.config.tsx`:** Add the segment with `dynamicElement` / `dynamicLayout` pointing at route modules (e.g. `@/routes/(main)/my-feature`).
+   - **`desktopRouter.config.desktop.tsx`:** Mirror the **same** `RouteObject` shape: identical `path` / `index` / parent-child structure. Use the static imports and elements already used in that file (see neighboring routes). Do **not** register in only one of these files.
+   - **Mobile-only flows:** use `mobileRouter.config.tsx` instead (no need to duplicate into the desktop pair unless the route truly exists on both).
+
+---
+
+## 3a. Desktop router pair (`desktopRouter.config` × 2)
+
+| File | Role |
+|------|------|
+| `desktopRouter.config.tsx` | Dynamic imports via `dynamicElement` / `dynamicLayout` — code-splitting; used by `entry.web.tsx` and `entry.desktop.tsx`. |
+| `desktopRouter.config.desktop.tsx` | Same route tree with **synchronous** imports — kept for Electron / local parity and predictable bundling. |
+
+Anything that changes the tree (new segment, renamed `path`, moved layout, new child route) must be reflected in **both** files in one PR or commit. Remove routes from both when deleting.
 
 ---
 

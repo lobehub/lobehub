@@ -5,6 +5,19 @@ const ollamaCloudModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax M2.7 is an efficient large language model built specifically for coding and agent workflows.',
+    displayName: 'MiniMax M2.7',
+    enabled: true,
+    id: 'minimax-m2.7',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -34,7 +47,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2.5 is a state-of-the-art large language model designed for real-world productivity and coding tasks.',
     displayName: 'MiniMax M2.5',
-    enabled: true,
     id: 'minimax-m2.5',
     type: 'chat',
   },
@@ -47,7 +59,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'K2 long thinking model supports 256k contexts, supports multi-step tool calling and thinking, and is good at solving more complex problems.',
     displayName: 'Kimi K2 Thinking',
-    enabled: true,
     id: 'kimi-k2-thinking',
     type: 'chat',
   },

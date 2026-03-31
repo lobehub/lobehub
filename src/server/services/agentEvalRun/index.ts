@@ -9,6 +9,7 @@ import type {
   EvalRunTopicResult,
   RubricType,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import {
   AgentEvalBenchmarkModel,
@@ -20,7 +21,6 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { appEnv } from '@/envs/app';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -78,7 +78,7 @@ export class AgentEvalRunService {
         testCases.map((tc) => ({
           agentId: params.targetAgentId ?? undefined,
           title: `[Eval Case #${(tc.sortOrder ?? 0) + 1}] ${tc.content?.input?.slice(0, 50) || 'Test Case'}...`,
-          trigger: 'eval',
+          trigger: RequestTrigger.Eval,
         })),
       );
 
@@ -165,7 +165,7 @@ export class AgentEvalRunService {
       errorTestCases.map((tc) => ({
         agentId: run.targetAgentId ?? undefined,
         title: `[Eval Case #${(tc.sortOrder ?? 0) + 1}] ${tc.input?.slice(0, 50) || 'Test Case'}...`,
-        trigger: 'eval',
+        trigger: RequestTrigger.Eval,
       })),
     );
 
@@ -204,7 +204,7 @@ export class AgentEvalRunService {
       {
         agentId: run.targetAgentId ?? undefined,
         title: `[Eval Case #${(runTopic.testCase?.sortOrder ?? 0) + 1}] ${runTopic.testCase?.content?.input?.slice(0, 50) || 'Test Case'}...`,
-        trigger: 'eval',
+        trigger: RequestTrigger.Eval,
       },
     ]);
 
@@ -263,20 +263,45 @@ export class AgentEvalRunService {
     await this.runTopicModel.updateByRunAndTopic(runId, topicId, { status: 'running' });
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
-    const webhookUrl = new URL(
-      '/api/workflows/agent-eval-run/on-trajectory-complete',
-      appEnv.APP_URL,
-    ).toString();
+    const webhookUrl = '/api/workflows/agent-eval-run/on-trajectory-complete';
+    const userId = this.userId;
+    const db = this.db;
 
     try {
       const execResult = await aiAgentService.execAgent({
         agentId: run.targetAgentId ?? undefined,
         appContext: { topicId },
         autoStart: true,
-        completionWebhook: {
-          body: { runId, testCaseId, userId: this.userId },
-          url: webhookUrl,
-        },
+        hooks: [
+          {
+            handler: async (event) => {
+              // Local mode: directly record completion
+              const service = new AgentEvalRunService(db, userId);
+              await service.recordTrajectoryCompletion({
+                runId,
+                status: event.status || event.reason || 'done',
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: event.cost,
+                  duration: event.duration,
+                  errorDetail: event.errorDetail,
+                  errorMessage: event.errorMessage,
+                  llmCalls: event.llmCalls,
+                  steps: event.steps,
+                  toolCalls: event.toolCalls,
+                  totalTokens: event.totalTokens,
+                },
+                testCaseId,
+              });
+            },
+            id: 'eval-trajectory-complete',
+            type: 'onComplete' as const,
+            webhook: {
+              body: { runId, testCaseId, userId },
+              url: webhookUrl,
+            },
+          },
+        ],
         ...(envPrompt && { evalContext: { envPrompt } }),
         maxSteps: run.config?.maxSteps,
         prompt: params.testCase.content.input || '',
@@ -380,20 +405,46 @@ export class AgentEvalRunService {
     const { envPrompt, run, runId, testCaseId, threadId, topicId } = params;
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
-    const webhookUrl = new URL(
-      '/api/workflows/agent-eval-run/on-thread-complete',
-      appEnv.APP_URL,
-    ).toString();
+    const webhookUrl = '/api/workflows/agent-eval-run/on-thread-complete';
+    const userId = this.userId;
+    const db = this.db;
 
     try {
       const execResult = await aiAgentService.execAgent({
         agentId: run.targetAgentId ?? undefined,
         appContext: { threadId, topicId },
         autoStart: true,
-        completionWebhook: {
-          body: { runId, testCaseId, threadId, topicId, userId: this.userId },
-          url: webhookUrl,
-        },
+        hooks: [
+          {
+            handler: async (event) => {
+              // Local mode: directly record thread completion
+              const service = new AgentEvalRunService(db, userId);
+              await service.recordThreadCompletion({
+                runId,
+                status: event.status || event.reason || 'done',
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: event.cost,
+                  duration: event.duration,
+                  errorMessage: event.errorMessage,
+                  llmCalls: event.llmCalls,
+                  steps: event.steps,
+                  toolCalls: event.toolCalls,
+                  totalTokens: event.totalTokens,
+                },
+                testCaseId,
+                threadId,
+                topicId,
+              });
+            },
+            id: 'eval-thread-complete',
+            type: 'onComplete' as const,
+            webhook: {
+              body: { runId, testCaseId, threadId, topicId, userId },
+              url: webhookUrl,
+            },
+          },
+        ],
         ...(envPrompt && { evalContext: { envPrompt } }),
         maxSteps: run.config?.maxSteps,
         prompt: params.testCase.content.input || '',
@@ -512,6 +563,7 @@ export class AgentEvalRunService {
     const passedCases = allTopics.filter((t) => t.status === 'passed').length;
     const failedCases = allTopics.filter((t) => t.status === 'failed').length;
     const errorCases = allTopics.filter((t) => t.status === 'error').length;
+    const externalCasesRT = allTopics.filter((t) => t.status === 'external').length;
     const timeoutCases = allTopics.filter((t) => t.status === 'timeout').length;
 
     let sumCost = 0;
@@ -556,6 +608,7 @@ export class AgentEvalRunService {
         completedCases: completedCount,
         cost: sumCost ? roundCost(sumCost) : undefined,
         errorCases,
+        externalCases: externalCasesRT || undefined,
         failedCases,
         llmCalls: sumLlmCalls || undefined,
         passedCases,
@@ -667,6 +720,17 @@ export class AgentEvalRunService {
     const evalMode = (testCase.evalMode ?? dataset.evalMode) as RubricType | null | undefined;
     const evalConfig = testCase.evalConfig ?? dataset.evalConfig;
 
+    // ── External eval mode: agent finished, hand off to external scorer ──
+    if (evalMode === 'external') {
+      return {
+        ...baseMeta,
+        awaitingExternalEval: true,
+        passed: undefined,
+        score: undefined,
+        status: 'external',
+      };
+    }
+
     let effectiveRubrics: EvalBenchmarkRubric[];
     if (evalMode) {
       effectiveRubrics = [
@@ -722,6 +786,7 @@ export class AgentEvalRunService {
       passed?: boolean;
       rubricScores?: Array<{ reason?: string; rubricId: string; score: number }>;
       score?: number;
+      status?: 'error' | 'external' | 'failed' | 'passed' | 'running' | 'timeout';
       steps?: number;
       threadId: string;
       tokens?: number;
@@ -737,12 +802,34 @@ export class AgentEvalRunService {
         passed: meta.passed as boolean | undefined,
         rubricScores: meta.rubricScores as any,
         score: meta.score as number | undefined,
+        status: meta.status as
+          | 'error'
+          | 'external'
+          | 'failed'
+          | 'passed'
+          | 'running'
+          | 'timeout'
+          | undefined,
         steps: meta.steps as number | undefined,
         threadId: t.id,
         tokens: meta.tokens as number | undefined,
         toolCalls: meta.toolCalls as number | undefined,
       };
     });
+
+    // ── External eval mode: if all threads await external scoring, propagate that status ──
+    const allExternal = threadResults.every((t) => t.status === 'external');
+    if (allExternal) {
+      await this.runTopicModel.updateByRunAndTopic(runId, topicId, {
+        evalResult: {
+          awaitingExternalEval: true,
+          completionReason: 'external',
+          threads: threadResults,
+        } satisfies EvalRunTopicResult,
+        status: 'external',
+      });
+      return;
+    }
 
     // pass@k: at least one thread passed
     const anyPassed = threadResults.some((t) => t.passed === true);
@@ -888,7 +975,7 @@ export class AgentEvalRunService {
     if (runTopic) {
       // Skip if topic is already in a terminal state (e.g. timeout marked by checkAndHandleRunTimeout).
       // The interrupted agent still fires the completion webhook, but we must not overwrite the result.
-      const terminalStates = ['passed', 'failed', 'error', 'timeout'];
+      const terminalStates = ['passed', 'failed', 'error', 'timeout', 'external'];
       if (runTopic.status && terminalStates.includes(runTopic.status)) {
         // Fall through to progress tracking below without modifying this topic
       } else {
@@ -945,11 +1032,15 @@ export class AgentEvalRunService {
     // Aggregate real-time metrics from all RunTopics
     const allTopics = await this.runTopicModel.findByRunId(runId);
     const completedCount = allTopics.filter(
-      (t) => (t.evalResult && 'completionReason' in t.evalResult) || t.status === 'timeout',
+      (t) =>
+        (t.evalResult && 'completionReason' in t.evalResult) ||
+        t.status === 'timeout' ||
+        t.status === 'external',
     ).length;
     const passedCases = allTopics.filter((t) => t.status === 'passed').length;
     const failedCases = allTopics.filter((t) => t.status === 'failed').length;
     const errorCases = allTopics.filter((t) => t.status === 'error').length;
+    const externalCasesTraj = allTopics.filter((t) => t.status === 'external').length;
     const timeoutCases = allTopics.filter((t) => t.status === 'timeout').length;
 
     let sumCost = 0;
@@ -995,6 +1086,7 @@ export class AgentEvalRunService {
         completedCases: completedCount,
         cost: sumCost ? roundCost(sumCost) : undefined,
         errorCases,
+        externalCases: externalCasesTraj || undefined,
         failedCases,
         llmCalls: sumLlmCalls || undefined,
         passedCases,
@@ -1048,6 +1140,7 @@ export class AgentEvalRunService {
     let passedCases = 0;
     let failedCases = 0;
     let errorCases = 0;
+    let externalCases = 0;
     let timeoutCases = 0;
     let totalScore = 0;
     // Sum of per-case averages (for per-case display)
@@ -1088,19 +1181,27 @@ export class AgentEvalRunService {
         failedCases++;
       } else if (runTopic.status === 'error') {
         errorCases++;
+      } else if (runTopic.status === 'external') {
+        externalCases++;
       } else if (runTopic.status === 'timeout') {
         timeoutCases++;
       }
 
-      // Only accumulate scores for evaluated (non-error, non-timeout) cases
-      if (runTopic.status !== 'error' && runTopic.status !== 'timeout' && runTopic.score != null) {
-        totalScore += runTopic.score;
-      }
-
-      // Accumulate per-rubric scores from existing evalResult (exclude error/timeout cases)
+      // Only accumulate scores for evaluated (non-error, non-timeout, non-external) cases
       if (
         runTopic.status !== 'error' &&
         runTopic.status !== 'timeout' &&
+        runTopic.status !== 'external' &&
+        runTopic.score != null
+      ) {
+        totalScore += runTopic.score;
+      }
+
+      // Accumulate per-rubric scores from existing evalResult (exclude error/timeout/external cases)
+      if (
+        runTopic.status !== 'error' &&
+        runTopic.status !== 'timeout' &&
+        runTopic.status !== 'external' &&
         existingResult?.rubricScores
       ) {
         for (const rs of existingResult.rubricScores) {
@@ -1138,6 +1239,7 @@ export class AgentEvalRunService {
       cost: sumCost ? roundCost(sumCost) : undefined,
       duration: wallClockDuration || undefined,
       errorCases,
+      externalCases: externalCases || undefined,
       failedCases,
       llmCalls: sumLlmCalls || undefined,
       passRate: totalCases > 0 ? passedCases / totalCases : 0,
@@ -1215,6 +1317,15 @@ export class AgentEvalRunService {
     // Resolve rubrics: TestCase evalMode > Dataset evalMode > Benchmark rubrics
     const evalMode = (testCase.evalMode ?? dataset.evalMode) as RubricType | null | undefined;
     const evalConfig = testCase.evalConfig ?? dataset.evalConfig;
+
+    // ── External eval mode: agent finished, hand off to external scorer ──
+    if (evalMode === 'external') {
+      await this.runTopicModel.updateByRunAndTopic(runTopic.runId, runTopic.topicId, {
+        evalResult: { ...existingResult, awaitingExternalEval: true },
+        status: 'external',
+      });
+      return;
+    }
 
     let effectiveRubrics: EvalBenchmarkRubric[];
     if (evalMode) {
@@ -1324,7 +1435,13 @@ export class AgentEvalRunService {
       });
 
       const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
-      const runStatus = nonSuccessCases >= metrics.totalCases ? 'failed' : 'completed';
+      const externalCount = metrics.externalCases || 0;
+      const runStatus =
+        externalCount > 0
+          ? 'external'
+          : nonSuccessCases >= metrics.totalCases
+            ? 'failed'
+            : 'completed';
 
       await this.runModel.update(run.id, { metrics, status: runStatus });
     } else {

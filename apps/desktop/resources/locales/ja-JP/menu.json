@@ -1,5 +1,9 @@
 {
-  "common.checkUpdates": "更新を確認しています...",
+  "common.checkUpdates": "更新を確認...",
+  "common.checkingUpdates": "更新を確認しています...",
+  "common.downloadingUpdate": "更新をダウンロード中...",
+  "common.isLatestVersion": "すでに最新です",
+  "common.restartToUpdate": "更新を完了するには再起動してください",
   "context.copyImage": "画像をコピー",
   "context.copyImageAddress": "画像のアドレスをコピー",
   "context.copyLink": "リンクをコピー",

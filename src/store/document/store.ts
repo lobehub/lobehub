@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type DocumentAction } from './slices/document';
 import { createDocumentSlice } from './slices/document';
@@ -39,5 +40,7 @@ export const useDocumentStore = createWithEqualityFn<DocumentStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('document', useDocumentStore);
 
 export const getDocumentStoreState = () => useDocumentStore.getState();

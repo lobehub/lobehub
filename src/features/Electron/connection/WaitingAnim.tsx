@@ -95,11 +95,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const WaitingAnim = memo(() => {
   return (
     <div className={styles.container}>
-      {/* 新增：星环 */}
+      {/* Added: star rings */}
       <div className={cx(styles.ringBase, styles.ring1)} />
       <div className={cx(styles.ringBase, styles.ring2)} />
       <div className={cx(styles.ringBase, styles.ring3)} />
-      {/* 脉冲 */}
+      {/* Pulses */}
       <div className={cx(styles.pulseBase, styles.pulse1)} />
       <div className={cx(styles.pulseBase, styles.pulse2)} />
       <div className={cx(styles.pulseBase, styles.pulse3)} />

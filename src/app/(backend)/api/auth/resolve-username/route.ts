@@ -49,5 +49,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', exists: false }, { status: 500 });
   }
 }
-
-export const runtime = 'nodejs';

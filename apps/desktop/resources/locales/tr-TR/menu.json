@@ -1,5 +1,9 @@
 {
   "common.checkUpdates": "Güncellemeleri kontrol et...",
+  "common.checkingUpdates": "Güncellemeler kontrol ediliyor...",
+  "common.downloadingUpdate": "Güncelleme indiriliyor...",
+  "common.isLatestVersion": "Zaten güncel",
+  "common.restartToUpdate": "Güncellemek için yeniden başlatın",
   "context.copyImage": "Resmi Kopyala",
   "context.copyImageAddress": "Resim Adresini Kopyala",
   "context.copyLink": "Bağlantıyı Kopyala",

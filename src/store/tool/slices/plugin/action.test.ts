@@ -3,7 +3,6 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { pluginService } from '@/services/plugin';
-import { type DiscoverPluginItem } from '@/types/discover';
 import { merge } from '@/utils/merge';
 
 import { useToolStore } from '../../store';
@@ -22,24 +21,8 @@ beforeEach(() => {
 
 describe('useToolStore:plugin', () => {
   describe('checkPluginsIsInstalled', () => {
-    it('should not perform any operations if the plugin list is empty', async () => {
-      const installPluginsMock = vi.fn();
-      useToolStore.setState({
-        loadPluginStore: vi.fn(),
-        installPlugins: installPluginsMock,
-      });
-
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.checkPluginsIsInstalled([]);
-      });
-
-      expect(installPluginsMock).not.toHaveBeenCalled();
-    });
-
-    it('should load the plugin store and install plugins if necessary', async () => {
-      const plugins = ['plugin1', 'plugin2'];
+    it('should be deprecated and do nothing', async () => {
+      // Old plugin system has been deprecated
       const loadPluginStoreMock = vi.fn();
       const installPluginsMock = vi.fn();
       useToolStore.setState({
@@ -50,32 +33,12 @@ describe('useToolStore:plugin', () => {
       const { result } = renderHook(() => useToolStore());
 
       await act(async () => {
-        await result.current.checkPluginsIsInstalled(plugins);
+        await result.current.checkPluginsIsInstalled(['plugin1', 'plugin2']);
       });
 
-      expect(loadPluginStoreMock).toHaveBeenCalled();
-      expect(installPluginsMock).toHaveBeenCalledWith(plugins);
-    });
-
-    it('should not load the plugin store and install plugins', async () => {
-      const plugins = ['plugin1', 'plugin2'];
-      const loadPluginStoreMock = vi.fn();
-      const installPluginsMock = vi.fn();
-      useToolStore.setState({
-        loadPluginStore: loadPluginStoreMock,
-        installPlugins: installPluginsMock,
-        installedPlugins: [{ identifier: 'abc' }] as LobeTool[],
-        oldPluginItems: [{ identifier: 'abc' }] as DiscoverPluginItem[],
-      });
-
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.checkPluginsIsInstalled(plugins);
-      });
-
+      // Should not call any methods since old plugin system is deprecated
       expect(loadPluginStoreMock).not.toHaveBeenCalled();
-      expect(installPluginsMock).toHaveBeenCalledWith(plugins);
+      expect(installPluginsMock).not.toHaveBeenCalled();
     });
   });
 

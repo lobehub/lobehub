@@ -1,23 +1,33 @@
-import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
-import { builtinTools } from '@lobechat/builtin-tools';
-import { LOADING_FLAT } from '@lobechat/const';
-import { type LobeToolManifest } from '@lobechat/context-engine';
-import { type LobeChatDatabase } from '@lobechat/database';
+import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
+import { builtinSkills } from '@lobechat/builtin-skills';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import {
-  type ChatTopicBotContext,
-  type ExecAgentParams,
-  type ExecAgentResult,
-  type ExecGroupAgentParams,
-  type ExecGroupAgentResult,
-  type ExecSubAgentTaskParams,
-  type ExecSubAgentTaskResult,
-  type UserInterventionConfig,
+  type DeviceAttachment,
+  generateSystemPrompt,
+  RemoteDeviceManifest,
+} from '@lobechat/builtin-tool-remote-device';
+import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { LOADING_FLAT } from '@lobechat/const';
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import { SkillEngine } from '@lobechat/context-engine';
+import type { LobeChatDatabase } from '@lobechat/database';
+import type {
+  ChatTopicBotContext,
+  ExecAgentParams,
+  ExecAgentResult,
+  ExecGroupAgentParams,
+  ExecGroupAgentResult,
+  ExecSubAgentTaskParams,
+  ExecSubAgentTaskResult,
+  UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -25,6 +35,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
@@ -32,11 +43,18 @@ import {
 } from '@/server/modules/Mecha';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
+import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
+
+import { ingestAttachment } from './ingestAttachment';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -69,8 +87,12 @@ function formatErrorForMetadata(error: unknown): Record<string, any> | undefined
  * This extends the public ExecAgentParams with server-side only options
  */
 interface InternalExecAgentParams extends ExecAgentParams {
+  /** Additional plugin IDs to inject (e.g., task tool during task execution) */
+  additionalPluginIds?: string[];
   /** Bot context for topic metadata (platform, applicationId, platformThreadId) */
   botContext?: ChatTopicBotContext;
+  /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
+  botPlatformContext?: any;
   /**
    * Completion webhook configuration
    * Persisted in Redis state, triggered via HTTP POST when the operation completes.
@@ -85,15 +107,22 @@ interface InternalExecAgentParams extends ExecAgentParams {
   discordContext?: any;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
-  /** External file URLs to download, upload to S3, and attach to the user message */
+  /** External files to upload to S3 and attach to the user message */
   files?: Array<{
+    /** Pre-downloaded buffer (from adapter/platform layer) */
+    buffer?: Buffer;
     mimeType?: string;
     name?: string;
     size?: number;
-    url: string;
+    /** External URL — fetched if no buffer provided */
+    url?: string;
   }>;
+  /** External lifecycle hooks (auto-adapt to local/production mode) */
+  hooks?: AgentHook[];
   /** Maximum steps for the agent operation */
   maxSteps?: number;
+  /** Abort startup before the agent runtime operation is created */
+  signal?: AbortSignal;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
   stepCallbacks?: StepLifecycleCallbacks;
   /**
@@ -109,13 +138,15 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
   stream?: boolean;
+  /** Task ID that triggered this execution (if trigger is 'task') */
+  taskId?: string;
   /**
    * Custom title for the topic.
    * When provided (including empty string), overrides the default prompt-based title.
    * When undefined, falls back to prompt.slice(0, 50).
    */
   title?: string;
-  /** Topic creation trigger source ('cron' | 'chat' | 'api') */
+  /** Topic creation trigger source ('cron' | 'chat' | 'api' | 'task') */
   trigger?: string;
   /**
    * User intervention configuration
@@ -141,6 +172,7 @@ interface InternalExecAgentParams extends ExecAgentParams {
 export class AiAgentService {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
+  private readonly agentDocumentsService: AgentDocumentsService;
   private readonly agentModel: AgentModel;
   private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
@@ -151,16 +183,21 @@ export class AiAgentService {
   private readonly marketService: MarketService;
   private readonly klavisService: KlavisService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    options?: { runtimeOptions?: AgentRuntimeServiceOptions },
+  ) {
     this.userId = userId;
     this.db = db;
+    this.agentDocumentsService = new AgentDocumentsService(db, userId);
     this.agentModel = new AgentModel(db, userId);
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.pluginModel = new PluginModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
-    this.agentRuntimeService = new AgentRuntimeService(db, userId);
+    this.agentRuntimeService = new AgentRuntimeService(db, userId, options?.runtimeOptions);
     this.marketService = new MarketService({ userInfo: { userId } });
     this.klavisService = new KlavisService({ db, userId });
   }
@@ -180,22 +217,28 @@ export class AiAgentService {
    */
   async execAgent(params: InternalExecAgentParams): Promise<ExecAgentResult> {
     const {
+      additionalPluginIds,
       agentId,
       slug,
       prompt,
       appContext,
       autoStart = true,
       botContext,
+      botPlatformContext,
       discordContext,
       existingMessageIds = [],
       files,
+      hooks,
+      instructions,
       stepCallbacks,
       stream,
       title,
       trigger,
       cronJobId,
+      taskId,
       evalContext,
       maxSteps,
+      signal,
       userInterventionConfig,
       completionWebhook,
       stepWebhook,
@@ -211,6 +254,39 @@ export class AiAgentService {
     const identifier = agentId || slug!;
 
     log('execAgent: identifier=%s, prompt=%s', identifier, prompt.slice(0, 50));
+
+    const assistantMessageRef: { current?: string } = {};
+    const updateAbortedAssistantMessage = async (errorMessage: string) => {
+      if (!assistantMessageRef.current) return;
+
+      try {
+        await this.messageModel.update(assistantMessageRef.current, {
+          content: '',
+          error: {
+            body: {
+              detail: errorMessage,
+            },
+            message: errorMessage,
+            type: 'ServerAgentRuntimeError',
+          },
+        });
+      } catch (error) {
+        log(
+          'execAgent: failed to update aborted assistant message %s: %O',
+          assistantMessageRef.current,
+          error,
+        );
+      }
+    };
+    const throwIfExecutionAborted = async (stage: string) => {
+      if (!signal?.aborted) return;
+
+      const error = getAbortError(signal, `Agent execution aborted during ${stage}`);
+      await updateAbortedAssistantMessage(error.message);
+      throw error;
+    };
+
+    throwIfAborted(signal, 'Agent execution aborted before startup');
 
     // 1. Get agent configuration with default config merged (supports both id and slug)
     const agentConfig = await this.agentService.getAgentConfig(identifier);
@@ -229,13 +305,46 @@ export class AiAgentService {
       agentConfig.provider,
     );
 
-    // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
+    // 2. Merge builtin agent runtime config (systemRole, plugins)
+    // The DB only stores persist config. Runtime config (e.g. inbox systemRole) is generated dynamically.
+    const agentSlug = agentConfig.slug;
+    const builtinSlugs = Object.values(BUILTIN_AGENT_SLUGS) as string[];
+    if (agentSlug && builtinSlugs.includes(agentSlug)) {
+      const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
+        model: agentConfig.model,
+        plugins: agentConfig.plugins ?? [],
+      });
+      if (runtimeConfig) {
+        // Runtime systemRole takes effect only if DB has no user-customized systemRole
+        if (!agentConfig.systemRole && runtimeConfig.systemRole) {
+          agentConfig.systemRole = runtimeConfig.systemRole;
+          log('execAgent: merged builtin agent runtime systemRole for slug=%s', agentSlug);
+        }
+        // Runtime plugins merged (runtime plugins take priority if provided)
+        if (runtimeConfig.plugins && runtimeConfig.plugins.length > 0) {
+          agentConfig.plugins = runtimeConfig.plugins;
+          log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
+        }
+      }
+    }
+
+    await throwIfExecutionAborted('agent configuration');
+
+    // 2.5. Append additional instructions to agent's systemRole
+    if (instructions) {
+      agentConfig.systemRole = agentConfig.systemRole
+        ? `${agentConfig.systemRole}\n\n${instructions}`
+        : instructions;
+      log('execAgent: appended additional instructions to systemRole');
+    }
+
+    // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     if (!topicId) {
-      // Prepare metadata with cronJobId and botContext if provided
+      // Prepare metadata with cronJobId, taskId, and botContext if provided
       const metadata =
-        cronJobId || botContext
-          ? { bot: botContext, cronJobId: cronJobId || undefined }
+        cronJobId || taskId || botContext
+          ? { bot: botContext, cronJobId: cronJobId || undefined, taskId: taskId || undefined }
           : undefined;
 
       const newTopic = await this.topicModel.create({
@@ -256,22 +365,24 @@ export class AiAgentService {
       log('execAgent: reusing existing topic %s', topicId);
     }
 
+    await throwIfExecutionAborted('topic setup');
+
     // Extract model and provider from agent config
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
 
-    // 3. Get installed plugins from database
+    // 4. Get installed plugins from database
     const installedPlugins = await this.pluginModel.query();
     log('execAgent: got %d installed plugins', installedPlugins.length);
 
-    // 4. Get model abilities from model-bank for function calling support check
+    // 5. Get model abilities from model-bank for function calling support check
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     const isModelSupportToolUse = (m: string, p: string) => {
       const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
       return info?.abilities?.functionCall ?? true;
     };
 
-    // 5. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
+    // 6. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
     let lobehubSkillManifests: LobeToolManifest[] = [];
     try {
       lobehubSkillManifests = await this.marketService.getLobehubSkillManifests();
@@ -280,7 +391,7 @@ export class AiAgentService {
     }
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
-    // 6. Fetch Klavis tool manifests from database
+    // 7. Fetch Klavis tool manifests from database
     let klavisManifests: LobeToolManifest[] = [];
     try {
       klavisManifests = await this.klavisService.getKlavisManifests();
@@ -289,32 +400,120 @@ export class AiAgentService {
     }
     log('execAgent: got %d klavis manifests', klavisManifests.length);
 
-    // 7. Create tools using Server AgentToolsEngine
+    // 8. Fetch user settings (memory config + timezone)
+    // Agent-level memory config takes priority; fallback to user-level setting
+    const agentMemoryEnabled = agentConfig.chatConfig?.memory?.enabled;
+    let globalMemoryEnabled = agentMemoryEnabled ?? false;
+    let userTimezone: string | undefined;
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+
+      globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
+
+      const generalSettings = settings?.general as { timezone?: string } | undefined;
+      userTimezone = generalSettings?.timezone;
+    } catch (error) {
+      log('execAgent: failed to fetch user settings: %O', error);
+    }
+    log(
+      'execAgent: globalMemoryEnabled=%s, timezone=%s',
+      globalMemoryEnabled,
+      userTimezone ?? 'default',
+    );
+
+    await throwIfExecutionAborted('tool discovery');
+
+    // 9. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
+
+    // Check if agent has documents (for auto-enabling agent-documents tool)
+    let hasAgentDocuments = false;
+    try {
+      const docs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
+      hasAgentDocuments = docs.length > 0;
+    } catch {
+      // Agent documents check is non-critical
+    }
+
+    // Build device context for ToolsEngine enableChecker
+    const gatewayConfigured = deviceProxy.isConfigured;
+    const boundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
+    let onlineDevices: DeviceAttachment[] = [];
+    if (gatewayConfigured) {
+      try {
+        onlineDevices = await deviceProxy.queryDeviceList(this.userId);
+        log('execAgent: found %d online device(s)', onlineDevices.length);
+      } catch (error) {
+        log('execAgent: failed to query device list: %O', error);
+      }
+    }
+    const deviceOnline = onlineDevices.length > 0;
 
     const toolsContext: ServerAgentToolsContext = {
       installedPlugins,
       isModelSupportToolUse,
     };
 
+    // Dynamically inject topic-reference tool when prompt contains <refer_topic> tags
+    const hasTopicReference = /refer_topic/.test(prompt ?? '');
+    const agentPlugins = [
+      ...(agentConfig?.plugins ?? []),
+      ...(additionalPluginIds || []),
+      ...(hasTopicReference ? ['lobe-topic-reference'] : []),
+    ];
+
+    // Derive activeDeviceId from device context:
+    // 1. If agent has a bound device and it's online, use it
+    // 2. In IM/Bot scenarios, auto-activate when exactly one device is online
+    const activeDeviceId = boundDeviceId
+      ? deviceOnline
+        ? boundDeviceId
+        : undefined
+      : (discordContext || botContext) && onlineDevices.length === 1
+        ? onlineDevices[0].deviceId
+        : undefined;
+
     const toolsEngine = createServerAgentToolsEngine(toolsContext, {
       additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
       agentConfig: {
         chatConfig: agentConfig.chatConfig ?? undefined,
-        plugins: agentConfig?.plugins ?? undefined,
+        plugins: agentPlugins,
       },
+      deviceContext: gatewayConfigured
+        ? {
+            autoActivated: activeDeviceId ? true : undefined,
+            boundDeviceId,
+            deviceOnline,
+            gatewayConfigured: true,
+          }
+        : undefined,
+      globalMemoryEnabled,
+      hasAgentDocuments,
       hasEnabledKnowledgeBases,
       model,
       provider,
     });
 
     // Generate tools and manifest map
-    const pluginIds = agentConfig.plugins || [];
+    // Include device tool IDs so ToolsEngine can process them via enableChecker
+    const pluginIds = [
+      ...(agentConfig.plugins || []),
+      ...(additionalPluginIds || []),
+      LocalSystemManifest.identifier,
+      RemoteDeviceManifest.identifier,
+    ];
     log('execAgent: agent configured plugins: %O', pluginIds);
 
+    // When skillActivateMode is 'manual', exclude only discovery tools (lobe-activator, lobe-skill-store)
+    // so that externally enabled tools (sandbox, web browsing, etc.) remain available
+    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+
     const toolsResult = toolsEngine.generateToolsDetailed({
+      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model,
       provider,
       toolIds: pluginIds,
@@ -351,7 +550,44 @@ export class AiAgentService {
       klavisManifests.length,
     );
 
-    // 7.5. Build Agent Management context if agent-management tool is enabled
+    // Override RemoteDevice manifest's systemRole with dynamic device list prompt
+    // The manifest is already included/excluded by ToolsEngine enableChecker
+    if (toolManifestMap[RemoteDeviceManifest.identifier]) {
+      toolManifestMap[RemoteDeviceManifest.identifier] = {
+        ...toolManifestMap[RemoteDeviceManifest.identifier],
+        systemRole: generateSystemPrompt(onlineDevices),
+      };
+    }
+
+    // 9.4. Fetch device system info for placeholder variable replacement
+    let deviceSystemInfo: Record<string, string> = {};
+    if (activeDeviceId) {
+      try {
+        const systemInfo = await deviceProxy.queryDeviceSystemInfo(this.userId, activeDeviceId);
+        if (systemInfo) {
+          const activeDevice = onlineDevices.find((d) => d.deviceId === activeDeviceId);
+          deviceSystemInfo = {
+            arch: systemInfo.arch,
+            desktopPath: systemInfo.desktopPath,
+            documentsPath: systemInfo.documentsPath,
+            downloadsPath: systemInfo.downloadsPath,
+            homePath: systemInfo.homePath,
+            hostname: activeDevice?.hostname ?? 'unknown',
+            musicPath: systemInfo.musicPath,
+            picturesPath: systemInfo.picturesPath,
+            platform: activeDevice?.platform ?? 'unknown',
+            userDataPath: systemInfo.userDataPath,
+            videosPath: systemInfo.videosPath,
+            workingDirectory: systemInfo.workingDirectory,
+          };
+          log('execAgent: fetched device system info for %s', activeDeviceId);
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch device system info: %O', error);
+      }
+    }
+
+    // 9.5. Build Agent Management context if agent-management tool is enabled
     const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
     let agentManagementContext;
     if (isAgentManagementEnabled) {
@@ -443,21 +679,10 @@ export class AiAgentService {
       );
     }
 
-    // 8. Fetch user persona for memory injection
-    // Persona is user-level global memory, only depends on user's global memory setting
+    await throwIfExecutionAborted('tool preparation');
+
+    // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
     let userMemory: ServerUserMemoryConfig | undefined;
-
-    let globalMemoryEnabled = true; // default: enabled (matches DEFAULT_MEMORY_SETTINGS)
-    try {
-      const userModel = new UserModel(this.db, this.userId);
-      const settings = await userModel.getUserSettings();
-      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
-      globalMemoryEnabled = memorySettings?.enabled !== false;
-    } catch (error) {
-      log('execAgent: failed to fetch user memory settings: %O', error);
-    }
-
-    log('execAgent: memory check — globalMemoryEnabled=%s', globalMemoryEnabled);
 
     if (globalMemoryEnabled) {
       try {
@@ -484,47 +709,60 @@ export class AiAgentService {
       }
     }
 
-    // 9. Get existing messages if provided
+    // 11. Get existing messages if provided
+    // Use postProcessUrl to resolve S3 keys in imageList to publicly accessible URLs,
+    // matching the frontend flow in aiChatService.getMessagesAndTopics.
+    const fileService = new FileService(this.db, this.userId);
+    const postProcessUrl = (path: string | null) => fileService.getFullFileUrl(path);
+
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
-      historyMessages = await this.messageModel.query({
-        sessionId: appContext?.sessionId,
-        topicId: appContext?.topicId ?? undefined,
-      });
+      historyMessages = await this.messageModel.query(
+        {
+          sessionId: appContext?.sessionId,
+          topicId: appContext?.topicId ?? undefined,
+        },
+        { postProcessUrl },
+      );
       const idSet = new Set(existingMessageIds);
       historyMessages = historyMessages.filter((msg) => idSet.has(msg.id));
     } else if (appContext?.topicId) {
       // Follow-up message in existing topic: load all history for context
-      historyMessages = await this.messageModel.query({
-        sessionId: appContext?.sessionId,
-        topicId: appContext.topicId,
-      });
+      historyMessages = await this.messageModel.query(
+        {
+          sessionId: appContext?.sessionId,
+          topicId: appContext.topicId,
+        },
+        { postProcessUrl },
+      );
     }
 
-    // 9. Upload external files to S3 and collect file IDs
+    await throwIfExecutionAborted('message history loading');
+
+    // 12. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
 
     if (files && files.length > 0) {
-      const fileService = new FileService(this.db, this.userId);
       fileIds = [];
       imageList = [];
 
       for (const file of files) {
-        const ext = file.name?.split('.').pop() || 'bin';
-        const pathname = `files/${this.userId}/${nanoid()}/${file.name || `file.${ext}`}`;
+        await throwIfExecutionAborted('file upload');
 
         try {
-          const result = await fileService.uploadFromUrl(file.url, pathname);
+          const result = await ingestAttachment(file, fileService, this.userId);
           fileIds.push(result.fileId);
 
-          // Build imageList for vision-capable models
-          const mimeType = file.mimeType || '';
-          if (mimeType.startsWith('image/')) {
-            imageList.push({ alt: file.name || 'image', id: result.fileId, url: result.url });
+          if (result.isImage) {
+            imageList.push({
+              alt: file.name || 'image',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
           }
         } catch (error) {
-          log('execAgent: failed to upload file %s: %O', file.url, error);
+          log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
         }
       }
 
@@ -534,7 +772,9 @@ export class AiAgentService {
       if (imageList.length === 0) imageList = undefined;
     }
 
-    // 10. Create user message in database
+    await throwIfExecutionAborted('message creation');
+
+    // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -546,7 +786,7 @@ export class AiAgentService {
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
-    // 11. Create assistant message placeholder in database
+    // 14. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -559,6 +799,7 @@ export class AiAgentService {
       topicId,
     });
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
+    assistantMessageRef.current = assistantMessageRecord.id;
 
     // Create user message object for processing (include imageList for vision models)
     const userMessage = { content: prompt, imageList, role: 'user' as const };
@@ -568,11 +809,13 @@ export class AiAgentService {
 
     log('execAgent: prepared evalContext for executor');
 
-    // 12. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
+    await throwIfExecutionAborted('operation preparation');
+
+    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
     const timestamp = Date.now();
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
-    // 13. Create initial context
+    // 16. Create initial context
     const initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
@@ -593,7 +836,7 @@ export class AiAgentService {
       },
     };
 
-    // 14. Log final operation parameters summary
+    // 17. Log final operation parameters summary
     log(
       'execAgent: creating operation %s with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d',
       operationId,
@@ -604,33 +847,82 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
-    // 15. Create operation using AgentRuntimeService
+    // 18. Build OperationSkillSet via SkillEngine
+    // Combines builtin skills + user DB skills, filters by platform via enableChecker,
+    // and pairs with agent's enabled plugin IDs for downstream SkillResolver consumption.
+    let operationSkillSet;
+    try {
+      const builtinMetas = builtinSkills.map((s) => ({
+        content: s.content,
+        description: s.description,
+        identifier: s.identifier,
+        name: s.name,
+      }));
+      const skillModel = new AgentSkillModel(this.db, this.userId);
+      const { data: dbSkills } = await skillModel.findAll();
+      const dbMetas = dbSkills.map((s) => ({
+        description: s.description ?? '',
+        identifier: s.identifier,
+        name: s.name,
+      }));
+
+      const skillEngine = new SkillEngine({
+        enableChecker: (skill) => shouldEnableBuiltinSkill(skill.identifier),
+        skills: [...builtinMetas, ...dbMetas],
+      });
+      operationSkillSet = skillEngine.generate(agentPlugins ?? []);
+    } catch (error) {
+      log('execAgent: failed to build operationSkillSet: %O', error);
+    }
+
+    // 19. Create operation using AgentRuntimeService
+    log(
+      'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
+      operationId,
+      hasAgentDocuments ? 'yes' : 0,
+      hasEnabledKnowledgeBases,
+      tools?.length ?? 0,
+      operationSkillSet?.skills?.length ?? 0,
+    );
+
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
       const result = await this.agentRuntimeService.createOperation({
+        activeDeviceId,
         agentConfig,
+        deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
+        userTimezone,
         appContext: {
           agentId: resolvedAgentId,
           groupId: appContext?.groupId,
+          taskId,
           threadId: appContext?.threadId,
           topicId,
+          trigger,
         },
         autoStart,
+        botPlatformContext,
         completionWebhook,
         discordContext,
         evalContext,
         initialContext,
         initialMessages: allMessages,
         maxSteps,
-        stepWebhook,
         modelRuntimeConfig: { model, provider },
+        hooks,
         operationId,
+        signal,
         stepCallbacks,
+        stepWebhook,
         stream,
-        toolManifestMap,
-        toolSourceMap,
-        tools,
+        toolSet: {
+          enabledToolIds: toolsResult.enabledToolIds,
+          manifestMap: toolManifestMap,
+          sourceMap: toolSourceMap,
+          tools,
+        },
+        operationSkillSet,
         userId: this.userId,
         userInterventionConfig,
         userMemory,
@@ -654,6 +946,12 @@ export class AiAgentService {
         userMessageId: userMessageRecord.id,
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        await updateAbortedAssistantMessage(error.message);
+        log('execAgent: createOperation aborted for %s: %s', operationId, error.message);
+        throw error;
+      }
+
       // Operation startup failed (e.g., QStash queue service unavailable)
       // Update assistant message with error so user can see what went wrong
       const errorMessage = error instanceof Error ? error.message : 'Unknown error starting agent';
@@ -806,18 +1104,18 @@ export class AiAgentService {
       status: ThreadStatus.Processing,
     });
 
-    // 3. Create step lifecycle callbacks for updating Thread metadata and task message
-    const stepCallbacks = this.createThreadMetadataCallbacks(thread.id, startedAt, parentMessageId);
+    // 3. Create hooks for updating Thread metadata and task message
+    const threadHooks = this.createThreadHooks(thread.id, startedAt, parentMessageId);
 
-    // 4. Delegate to execAgent with threadId in appContext and callbacks
+    // 4. Delegate to execAgent with threadId in appContext and hooks
     // The instruction will be created as user message in the Thread
     // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
+      hooks: threadHooks,
       prompt: instruction,
-      stepCallbacks,
       userInterventionConfig: { approvalMode: 'headless' },
     });
 
@@ -983,6 +1281,132 @@ export class AiAgentService {
   }
 
   /**
+   * Create hooks for tracking Thread metadata updates during SubAgent execution.
+   * Replaces the legacy createThreadMetadataCallbacks with the hooks system.
+   */
+  private createThreadHooks(
+    threadId: string,
+    startedAt: string,
+    sourceMessageId: string,
+  ): AgentHook[] {
+    let accumulatedToolCalls = 0;
+
+    return [
+      {
+        handler: async (event) => {
+          const state = event.finalState;
+          if (!state) return;
+
+          // Count tool calls from step result
+          const stepToolCalls = state.session?.toolCalls || 0;
+          if (stepToolCalls > accumulatedToolCalls) {
+            accumulatedToolCalls = stepToolCalls;
+          }
+
+          try {
+            await this.threadModel.update(threadId, {
+              metadata: {
+                operationId: event.operationId,
+                startedAt,
+                totalMessages: state.messages?.length ?? 0,
+                totalTokens: this.calculateTotalTokens(state.usage),
+                totalToolCalls: accumulatedToolCalls,
+              },
+            });
+          } catch (error) {
+            log('Thread hook afterStep: failed to update metadata: %O', error);
+          }
+        },
+        id: 'thread-metadata-update',
+        type: 'afterStep' as const,
+      },
+      {
+        handler: async (event) => {
+          const finalState = event.finalState;
+          if (!finalState) return;
+
+          const completedAt = new Date().toISOString();
+          const duration = Date.now() - new Date(startedAt).getTime();
+
+          // Map completion reason to ThreadStatus
+          let status: ThreadStatus;
+          switch (event.reason) {
+            case 'done': {
+              status = ThreadStatus.Completed;
+              break;
+            }
+            case 'error': {
+              status = ThreadStatus.Failed;
+              break;
+            }
+            case 'interrupted': {
+              status = ThreadStatus.Cancel;
+              break;
+            }
+            case 'waiting_for_human': {
+              status = ThreadStatus.InReview;
+              break;
+            }
+            default: {
+              status = ThreadStatus.Completed;
+            }
+          }
+
+          if (event.reason === 'error' && finalState.error) {
+            console.error(
+              'Thread hook onComplete: task failed for thread %s:',
+              threadId,
+              finalState.error,
+            );
+          }
+
+          try {
+            // Update task message with summary
+            const lastAssistantMessage = finalState.messages
+              ?.slice()
+              .reverse()
+              .find((m: { role: string }) => m.role === 'assistant');
+
+            if (lastAssistantMessage?.content) {
+              await this.messageModel.update(sourceMessageId, {
+                content: lastAssistantMessage.content,
+              });
+            }
+
+            const formattedError = formatErrorForMetadata(finalState.error);
+
+            await this.threadModel.update(threadId, {
+              metadata: {
+                completedAt,
+                duration,
+                error: formattedError,
+                operationId: finalState.operationId,
+                startedAt,
+                totalCost: finalState.cost?.total,
+                totalMessages: finalState.messages?.length ?? 0,
+                totalTokens: this.calculateTotalTokens(finalState.usage),
+                totalToolCalls: accumulatedToolCalls,
+              },
+              status,
+            });
+
+            log(
+              'Thread hook onComplete: thread %s status=%s reason=%s',
+              threadId,
+              status,
+              event.reason,
+            );
+          } catch (error) {
+            console.error('Thread hook onComplete: failed to update: %O', error);
+          }
+        },
+        id: 'thread-completion',
+        type: 'onComplete' as const,
+      },
+    ];
+  }
+
+  /**
    * Calculate total tokens from AgentState usage object
    * AgentState.usage is of type Usage from @lobechat/agent-runtime
    */
@@ -1021,22 +1445,23 @@ export class AiAgentService {
       throw new Error('Operation ID not found');
     }
 
-    // 2. Try to interrupt the operation
-    // Note: AgentRuntimeService may not have interruptOperation method yet
-    // We'll gracefully handle this case by only updating thread status
-    try {
-      // Check if the method exists before calling (using type assertion for future method)
-      const service = this.agentRuntimeService as any;
-      if (typeof service.interruptOperation === 'function') {
-        await service.interruptOperation({
-          operationId: resolvedOperationId,
-        });
-      } else {
-        log('interruptTask: interruptOperation method not available, only updating thread status');
-      }
-    } catch (error: any) {
-      log('interruptTask: Failed to interrupt operation: %O', error);
-      // Continue to update Thread status even if operation interrupt fails
+    // 2. Interrupt the runtime operation first. Only mark the thread cancelled
+    // after the runtime acknowledges the interrupt to avoid unlocking a live task.
+    const interrupted = await this.agentRuntimeService.interruptOperation(resolvedOperationId);
+    log(
+      'interruptTask: interruptOperation=%s for operationId=%s',
+      interrupted,
+      resolvedOperationId,
+    );
+
+    if (!interrupted) {
+      const alreadyCancelled = thread?.status === ThreadStatus.Cancel;
+
+      return {
+        operationId: resolvedOperationId,
+        success: alreadyCancelled,
+        threadId: thread?.id,
+      };
     }
 
     // 3. Update Thread status to cancel

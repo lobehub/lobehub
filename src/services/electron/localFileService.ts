@@ -1,4 +1,6 @@
 import {
+  type AuditSafePathsParams,
+  type AuditSafePathsResult,
   type EditLocalFileParams,
   type EditLocalFileResult,
   type GetCommandOutputParams,
@@ -20,7 +22,11 @@ import {
   type MoveLocalFilesParams,
   type OpenLocalFileParams,
   type OpenLocalFolderParams,
+  type PrepareSkillDirectoryParams,
+  type PrepareSkillDirectoryResult,
   type RenameLocalFileParams,
+  type ResolveSkillResourcePathParams,
+  type ResolveSkillResourcePathResult,
   type RunCommandParams,
   type RunCommandResult,
   type ShowSaveDialogParams,
@@ -66,6 +72,22 @@ class LocalFileService {
 
   async writeFile(params: WriteLocalFileParams) {
     return ensureElectronIpc().localSystem.handleWriteFile(params);
+  }
+
+  async auditSafePaths(params: AuditSafePathsParams): Promise<AuditSafePathsResult> {
+    return ensureElectronIpc().localSystem.auditSafePaths(params);
+  }
+
+  async prepareSkillDirectory(
+    params: PrepareSkillDirectoryParams,
+  ): Promise<PrepareSkillDirectoryResult> {
+    return ensureElectronIpc().localSystem.handlePrepareSkillDirectory(params);
+  }
+
+  async resolveSkillResourcePath(
+    params: ResolveSkillResourcePathParams,
+  ): Promise<ResolveSkillResourcePathResult> {
+    return ensureElectronIpc().localSystem.handleResolveSkillResourcePath(params);
   }
 
   async editLocalFile(params: EditLocalFileParams): Promise<EditLocalFileResult> {

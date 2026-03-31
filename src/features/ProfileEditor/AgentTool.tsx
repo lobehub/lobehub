@@ -3,13 +3,13 @@
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type ItemType } from '@lobehub/ui';
 import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { PlusIcon, ToyBrick } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
 import KlavisSkillIcon, {
@@ -91,15 +91,15 @@ const AgentTool = memo<AgentToolProps>(
       chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId),
     );
 
-    // Klavis 相关状态
+    // Klavis-related state
     const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
     const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
-    // LobeHub Skill 相关状态
+    // LobeHub Skill-related state
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
-    // Agent Skills 相关状态
+    // Agent Skills-related state
     const installedBuiltinSkills = useToolStore(
       builtinToolSelectors.installedBuiltinSkills,
       isEqual,
@@ -134,10 +134,10 @@ const AgentTool = memo<AgentToolProps>(
     useFetchAgentSkills(true);
     useCheckPluginsIsInstalled(plugins);
 
-    // 使用 SWR 加载用户的 Klavis 集成（从数据库）
+    // Load user's Klavis integrations via SWR (from database)
     useFetchUserKlavisServers(isKlavisEnabledInEnv);
 
-    // 使用 SWR 加载用户的 LobeHub Skill 连接
+    // Load user's LobeHub Skill connections via SWR
     useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
     // Toggle web browsing via searchMode - use byId action
@@ -201,18 +201,18 @@ const AgentTool = memo<AgentToolProps>(
       }
     }, [plugins.length]);
 
-    // 根据 identifier 获取已连接的服务器
+    // Get connected server by identifier
     const getServerByName = (identifier: string) => {
       return allKlavisServers.find((server) => server.identifier === identifier);
     };
 
-    // 获取所有 Klavis 服务器类型的 identifier 集合（用于过滤 builtinList）
+    // Get all Klavis server type identifiers (used to filter builtinList)
     const allKlavisTypeIdentifiers = useMemo(
       () => new Set(KLAVIS_SERVER_TYPES.map((type) => type.identifier)),
       [],
     );
 
-    // 获取所有 skill 的 identifier 集合（用于过滤 builtinList）
+    // Get all skill identifiers (used to filter builtinList)
     const allSkillIdentifiers = useMemo(() => {
       const ids = new Set<string>();
       for (const s of installedBuiltinSkills) ids.add(s.identifier);
@@ -221,8 +221,8 @@ const AgentTool = memo<AgentToolProps>(
       return ids;
     }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
 
-    // 过滤掉 builtinList 中的 klavis 工具和 skill（它们会单独显示）
-    // 根据配置，可选地过滤掉 availableInWeb: false 的工具（如 LocalSystem 仅桌面版可用）
+    // Filter out Klavis tools and skills from builtinList (they are displayed separately)
+    // Optionally filter out tools with availableInWeb: false based on config (e.g., LocalSystem is desktop-only)
     const filteredBuiltinList = useMemo(() => {
       // Cast to LobeToolMetaWithAvailability for type safety when filterAvailableInWeb is used
       type ListType = typeof builtinList;
@@ -253,7 +253,7 @@ const AgentTool = memo<AgentToolProps>(
       allSkillIdentifiers,
     ]);
 
-    // Klavis 服务器列表项
+    // Klavis server list items
     const klavisServerItems = useMemo(
       () =>
         isKlavisEnabledInEnv
@@ -274,7 +274,7 @@ const AgentTool = memo<AgentToolProps>(
       [isKlavisEnabledInEnv, allKlavisServers, effectiveAgentId],
     );
 
-    // LobeHub Skill Provider 列表项
+    // LobeHub Skill Provider list items
     const lobehubSkillItems = useMemo(
       () =>
         isLobehubSkillEnabled
@@ -286,7 +286,7 @@ const AgentTool = memo<AgentToolProps>(
                   size={SKILL_ICON_SIZE}
                 />
               ),
-              key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
+              key: provider.id, // Use provider.id as key, consistent with pluginId
               label: (
                 <LobehubSkillServerItem
                   agentId={effectiveAgentId}
@@ -316,16 +316,14 @@ const AgentTool = memo<AgentToolProps>(
         }
       };
 
-    // Builtin Agent Skills 列表项（归入 LobeHub 分组）
+    // Builtin Agent Skills list items (grouped under LobeHub)
     const builtinAgentSkillItems = useMemo(
       () =>
         installedBuiltinSkills.map((skill) => ({
-          icon: (
-            <Avatar
-              avatar={skill.avatar || '🧩'}
-              size={SKILL_ICON_SIZE}
-              style={{ marginInlineEnd: 0 }}
-            />
+          icon: skill.avatar ? (
+            <Avatar avatar={skill.avatar} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />
+          ) : (
+            <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
           ),
           key: skill.identifier,
           label: (
@@ -344,11 +342,11 @@ const AgentTool = memo<AgentToolProps>(
       [installedBuiltinSkills, isToolEnabled, handleToggleTool],
     );
 
-    // Market Agent Skills 列表项（归入 Community 分组）
+    // Market Agent Skills list items (grouped under Community)
     const marketAgentSkillItems = useMemo(
       () =>
         marketAgentSkills.map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -366,11 +364,11 @@ const AgentTool = memo<AgentToolProps>(
       [marketAgentSkills, isToolEnabled, handleToggleTool],
     );
 
-    // User Agent Skills 列表项（归入 Custom 分组）
+    // User Agent Skills list items (grouped under Custom)
     const userAgentSkillItems = useMemo(
       () =>
         userAgentSkills.map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -388,12 +386,12 @@ const AgentTool = memo<AgentToolProps>(
       [userAgentSkills, isToolEnabled, handleToggleTool],
     );
 
-    // 合并 Builtin Agent Skills、builtin 工具、LobeHub Skill Providers 和 Klavis 服务器
+    // Merge Builtin Agent Skills, builtin tools, LobeHub Skill Providers, and Klavis servers
     const builtinItems = useMemo(
       () => [
         // 1. Builtin Agent Skills
         ...builtinAgentSkillItems,
-        // 2. 原有的 builtin 工具
+        // 2. Original builtin tools
         ...filteredBuiltinList.map((item) => ({
           icon: (
             <Avatar
@@ -418,7 +416,7 @@ const AgentTool = memo<AgentToolProps>(
         })),
         // 3. LobeHub Skill Providers
         ...lobehubSkillItems,
-        // 4. Klavis 服务器
+        // 4. Klavis servers
         ...klavisServerItems,
       ],
       [
@@ -431,22 +429,19 @@ const AgentTool = memo<AgentToolProps>(
       ],
     );
 
-    // 区分社区插件和自定义插件
+    // Distinguish community plugins from custom plugins
     const communityPlugins = installedPluginList.filter((item) => item.type !== 'customPlugin');
     const customPlugins = installedPluginList.filter((item) => item.type === 'customPlugin');
 
-    // 生成插件列表项的函数
+    // Function to generate plugin list items
     const mapPluginToItem = useCallback(
       (item: (typeof installedPluginList)[0]) => ({
-        icon: item?.avatar ? (
-          <PluginAvatar
-            avatar={item.avatar}
-            size={SKILL_ICON_SIZE}
-            style={{ marginInlineEnd: 0 }}
-          />
-        ) : (
-          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-        ),
+        icon:
+          item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+          ) : (
+            <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+          ),
         key: item.identifier,
         label: (
           <ToolItem
@@ -464,34 +459,34 @@ const AgentTool = memo<AgentToolProps>(
       [plugins, togglePlugin],
     );
 
-    // Community 插件列表项
+    // Community plugin list items
     const communityPluginItems = useMemo(
       () => communityPlugins.map(mapPluginToItem),
       [communityPlugins, mapPluginToItem],
     );
 
-    // Custom 插件列表项
+    // Custom plugin list items
     const customPluginItems = useMemo(
       () => customPlugins.map(mapPluginToItem),
       [customPlugins, mapPluginToItem],
     );
 
-    // Community 分组 children（Market Agent Skills + 社区插件）
+    // Community group children (Market Agent Skills + community plugins)
     const communityGroupChildren = useMemo(
       () => [...marketAgentSkillItems, ...communityPluginItems],
       [marketAgentSkillItems, communityPluginItems],
     );
 
-    // Custom 分组 children（User Agent Skills + 自定义插件）
+    // Custom group children (User Agent Skills + custom plugins)
     const customGroupChildren = useMemo(
       () => [...userAgentSkillItems, ...customPluginItems],
       [userAgentSkillItems, customPluginItems],
     );
 
-    // All tab items (市场 tab)
+    // All tab items (marketplace tab)
     const allTabItems: ItemType[] = useMemo(
       () => [
-        // LobeHub 分组
+        // LobeHub group
         ...(builtinItems.length > 0
           ? [
               {
@@ -502,7 +497,7 @@ const AgentTool = memo<AgentToolProps>(
               },
             ]
           : []),
-        // Community 分组（Market Agent Skills + 社区插件）
+        // Community group (Market Agent Skills + community plugins)
         ...(communityGroupChildren.length > 0
           ? [
               {
@@ -513,7 +508,7 @@ const AgentTool = memo<AgentToolProps>(
               },
             ]
           : []),
-        // Custom 分组（User Agent Skills + 自定义插件）
+        // Custom group (User Agent Skills + custom plugins)
         ...(customGroupChildren.length > 0
           ? [
               {
@@ -528,11 +523,11 @@ const AgentTool = memo<AgentToolProps>(
       [builtinItems, communityGroupChildren, customGroupChildren, t],
     );
 
-    // Installed tab items - 只显示已启用的
+    // Installed tab items - only show enabled items
     const installedTabItems: ItemType[] = useMemo(() => {
       const items: ItemType[] = [];
 
-      // 已启用的 builtin 工具
+      // Enabled builtin tools
       const enabledBuiltinItems = filteredBuiltinList
         .filter((item) => isToolEnabled(item.identifier))
         .map((item) => ({
@@ -558,26 +553,24 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      // 已连接且已启用的 Klavis 服务器
+      // Connected and enabled Klavis servers
       const connectedKlavisItems = klavisServerItems.filter((item) =>
         plugins.includes(item.key as string),
       );
 
-      // 已连接的 LobeHub Skill Providers
+      // Connected LobeHub Skill Providers
       const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
         plugins.includes(item.key as string),
       );
 
-      // 已启用的 Builtin Agent Skills
+      // Enabled Builtin Agent Skills
       const enabledBuiltinAgentSkillItems = installedBuiltinSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: (
-            <Avatar
-              avatar={skill.avatar || '🧩'}
-              size={SKILL_ICON_SIZE}
-              style={{ marginInlineEnd: 0 }}
-            />
+          icon: skill.avatar ? (
+            <Avatar avatar={skill.avatar} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />
+          ) : (
+            <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
           ),
           key: skill.identifier,
           label: (
@@ -594,7 +587,7 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      // LobeHub 分组（Builtin Agent Skills + builtin + LobeHub Skill + Klavis）
+      // LobeHub group (Builtin Agent Skills + builtin + LobeHub Skill + Klavis)
       const lobehubGroupItems = [
         ...enabledBuiltinAgentSkillItems,
         ...enabledBuiltinItems,
@@ -611,15 +604,16 @@ const AgentTool = memo<AgentToolProps>(
         });
       }
 
-      // 已启用的社区插件
+      // Enabled community plugins
       const enabledCommunityPlugins = communityPlugins
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
-          icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-          ) : (
-            <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-          ),
+          icon:
+            item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+              <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+            ) : (
+              <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+            ),
           key: item.identifier,
           label: (
             <ToolItem
@@ -635,11 +629,11 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      // 已启用的 Market Agent Skills
+      // Enabled Market Agent Skills
       const enabledMarketAgentSkillItems = marketAgentSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -655,7 +649,7 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      // Community 分组（Market Agent Skills + 社区插件）
+      // Community group (Market Agent Skills + community plugins)
       const allCommunityItems = [...enabledMarketAgentSkillItems, ...enabledCommunityPlugins];
       if (allCommunityItems.length > 0) {
         items.push({
@@ -666,15 +660,16 @@ const AgentTool = memo<AgentToolProps>(
         });
       }
 
-      // 已启用的自定义插件
+      // Enabled custom plugins
       const enabledCustomPlugins = customPlugins
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
-          icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
-          ) : (
-            <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
-          ),
+          icon:
+            item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+              <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
+            ) : (
+              <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+            ),
           key: item.identifier,
           label: (
             <ToolItem
@@ -690,11 +685,11 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      // 已启用的 User Agent Skills
+      // Enabled User Agent Skills
       const enabledUserAgentSkillItems = userAgentSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: <Avatar avatar={'🧩'} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />,
+          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
           key: skill.identifier,
           label: (
             <ToolItem
@@ -710,7 +705,7 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      // Custom 分组（User Agent Skills + 自定义插件）
+      // Custom group (User Agent Skills + custom plugins)
       const allCustomItems = [...enabledUserAgentSkillItems, ...enabledCustomPlugins];
       if (allCustomItems.length > 0) {
         items.push({

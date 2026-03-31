@@ -182,7 +182,10 @@ export const agentSkillsRouter = router({
         // Get download URL from market service
         const downloadUrl = ctx.marketService.getSkillDownloadUrl(input.identifier);
         // Import using the download URL
-        return await ctx.skillImporter.importFromUrl({ url: downloadUrl });
+        return await ctx.skillImporter.importFromUrl(
+          { url: downloadUrl },
+          { identifier: input.identifier, source: 'market' },
+        );
       } catch (error) {
         handleSkillImportError(error);
       }

@@ -1,21 +1,16 @@
+import { escapeXml } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
-const log = debug('context-engine:provider:GroupAgentBuilderContextInjector');
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    groupAgentBuilderContextInjected?: boolean;
+  }
+}
 
-/**
- * Escape XML special characters
- */
-const escapeXml = (str: string): string => {
-  return str
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-};
+const log = debug('context-engine:provider:GroupAgentBuilderContextInjector');
 
 /**
  * Group member info for Group Agent Builder context

@@ -69,6 +69,16 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open }) => {
           message: t('createNewAiProvider.id.format'),
           pattern: /^[\d_a-z-]+$/,
         },
+        {
+          message: t('createNewAiProvider.id.duplicate'),
+          validator: (_, value: string) => {
+            const list = useAiInfraStore.getState().aiProviderList;
+            if (value && list.some((p) => p.id === value)) {
+              return Promise.reject();
+            }
+            return Promise.resolve();
+          },
+        },
       ],
     },
     {

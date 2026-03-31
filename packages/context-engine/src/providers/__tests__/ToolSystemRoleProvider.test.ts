@@ -16,11 +16,12 @@ const createMockManifests = (identifiers: string[]): LobeToolManifest[] =>
     identifier: id,
     api: [{ name: 'action', description: `${id} action`, parameters: {} }],
     meta: { title: id },
+    systemRole: `Instructions for ${id}`,
     type: 'default' as const,
   }));
 
 describe('ToolSystemRoleProvider', () => {
-  it('should inject tool system role when manifests are provided and FC is supported', async () => {
+  it('should inject tool system role when manifests with systemRole are provided and FC is supported', async () => {
     const mockIsCanUseFC = () => true;
     const manifests = createMockManifests(['calculator', 'weather']);
 
@@ -36,16 +37,45 @@ describe('ToolSystemRoleProvider', () => {
     const ctx = createContext(messages);
     const result = await provider.process(ctx);
 
-    // Should have system message with tool system role
+    // Should have system message with tool instructions
     const systemMessage = result.messages.find((msg) => msg.role === 'system');
     expect(systemMessage).toBeDefined();
-    expect(systemMessage!.content).toContain('calculator');
-    expect(systemMessage!.content).toContain('weather');
+    expect(systemMessage!.content).toContain('<tool name="calculator">');
+    expect(systemMessage!.content).toContain('<tool name="weather">');
+    expect(systemMessage!.content).toContain('Instructions for calculator');
 
     // Should update metadata
     expect(result.metadata.toolSystemRole).toBeDefined();
-    expect(result.metadata.toolSystemRole.injected).toBe(true);
-    expect(result.metadata.toolSystemRole.supportsFunctionCall).toBe(true);
+    expect(result.metadata.toolSystemRole!.injected).toBe(true);
+    expect(result.metadata.toolSystemRole!.supportsFunctionCall).toBe(true);
+  });
+
+  it('should skip injection when manifests have apis but no systemRole', async () => {
+    const mockIsCanUseFC = () => true;
+    const manifests: LobeToolManifest[] = [
+      {
+        identifier: 'no-instructions',
+        api: [{ name: 'action', description: 'some action', parameters: {} }],
+        meta: { title: 'No Instructions' },
+        type: 'default',
+      },
+    ];
+
+    const provider = new ToolSystemRoleProvider({
+      manifests,
+      model: 'gpt-4',
+      provider: 'openai',
+      isCanUseFC: mockIsCanUseFC,
+    });
+
+    const messages = [{ id: 'u1', role: 'user', content: 'Do something' }];
+    const ctx = createContext(messages);
+    const result = await provider.process(ctx);
+
+    // Has apis → still injects tool info even without systemRole
+    const systemMessage = result.messages.find((msg) => msg.role === 'system');
+    expect(systemMessage).toBeDefined();
+    expect(systemMessage!.content).toContain('No Instructions');
   });
 
   it('should merge tool system role with existing system message', async () => {

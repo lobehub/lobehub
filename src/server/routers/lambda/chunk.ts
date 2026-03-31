@@ -1,12 +1,11 @@
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 import { type ChatSemanticSearchChunk, type FileSearchResult } from '@lobechat/types';
-import { SemanticSearchSchema } from '@lobechat/types';
+import { RequestTrigger, SemanticSearchSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { checkBudgetsUsage } from '@/business/server/trpc-middlewares/lambda';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
@@ -219,18 +218,20 @@ export const chunkRouter = router({
         query: z.string(),
       }),
     )
-    .use(checkBudgetsUsage)
     .mutation(async ({ ctx, input }) => {
       const { model, provider } =
         getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
       // Read user's provider config from database
       const agentRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
-      const embeddings = await agentRuntime.embeddings({
-        dimensions: 1024,
-        input: input.query,
-        model,
-      });
+      const embeddings = await agentRuntime.embeddings(
+        {
+          dimensions: 1024,
+          input: input.query,
+          model,
+        },
+        { metadata: { trigger: RequestTrigger.SemanticSearch }, user: ctx.userId },
+      );
 
       return ctx.chunkModel.semanticSearch({
         embedding: embeddings![0],
@@ -251,11 +252,14 @@ export const chunkRouter = router({
         // slice content to make sure in the context window limit
         const query = input.query.length > 8000 ? input.query.slice(0, 8000) : input.query;
 
-        const embeddings = await modelRuntime.embeddings({
-          dimensions: 1024,
-          input: query,
-          model,
-        });
+        const embeddings = await modelRuntime.embeddings(
+          {
+            dimensions: 1024,
+            input: query,
+            model,
+          },
+          { metadata: { trigger: RequestTrigger.SemanticSearch }, user: ctx.userId },
+        );
 
         const embedding = embeddings![0];
 

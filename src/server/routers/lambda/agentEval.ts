@@ -33,15 +33,20 @@ const rubricTypeSchema = z.enum([
   'similar',
   'levenshtein',
   'rubric',
+  'external',
 ]);
 
 const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passthrough();
 
 const evalRunInputConfigSchema = z.object({
   k: z.number().min(1).max(10).optional(),
-  maxConcurrency: z.number().min(1).max(10).optional(),
+  maxConcurrency: z.number().min(1).max(20).optional(),
   maxSteps: z.number().min(1).max(1000).optional(),
-  timeout: z.number().min(60_000).max(3_600_000).optional(),
+  timeout: z
+    .number()
+    .min(60_000)
+    .max(6 * 3_600_000)
+    .optional(),
 });
 
 const agentEvalProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -621,7 +626,9 @@ export const agentEvalRouter = router({
       z.object({
         benchmarkId: z.string().optional(),
         datasetId: z.string().optional(),
-        status: z.enum(['idle', 'pending', 'running', 'completed', 'failed', 'aborted']).optional(),
+        status: z
+          .enum(['idle', 'pending', 'running', 'completed', 'failed', 'aborted', 'external'])
+          .optional(),
         limit: z.number().min(1).max(100).default(50).optional(),
         offset: z.number().min(0).default(0).optional(),
       }),
@@ -871,7 +878,15 @@ export const agentEvalRouter = router({
     .input(
       z.object({
         id: z.string(),
-        status: z.enum(['idle', 'pending', 'running', 'completed', 'failed', 'aborted']),
+        status: z.enum([
+          'idle',
+          'pending',
+          'running',
+          'completed',
+          'failed',
+          'aborted',
+          'external',
+        ]),
       }),
     )
     .mutation(async ({ input, ctx }) => {

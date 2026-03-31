@@ -23,6 +23,7 @@ import { isDesktop } from '@lobechat/const';
 import type { ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
+  type ChatMessageError,
   type ChatToolPayload,
   type ConversationContext,
   type CreateMessageParams,
@@ -32,6 +33,7 @@ import {
 } from '@lobechat/types';
 import { dedupeBy } from '@lobechat/utils';
 import debug from 'debug';
+import { t } from 'i18next';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -42,6 +44,7 @@ import { messageService } from '@/services/message';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 import { type ChatStore } from '@/store/chat/store';
+import { getCompressionCandidateMessageIds } from '@/store/chat/utils/compression';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getFileStoreState } from '@/store/file/store';
 import { sleep } from '@/utils/sleep';
@@ -55,6 +58,79 @@ const log = debug('lobe-store:agent-executors');
 const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0.002,
   'lobe-web-browsing/search': 0.001,
+};
+
+const isAbortError = (error: unknown, abortController?: AbortController) =>
+  !!abortController?.signal.aborted ||
+  (error instanceof Error &&
+    (error.name === 'AbortError' ||
+      error.message.includes('aborted') ||
+      error.message.includes('cancelled')));
+
+const createAbortError = () =>
+  Object.assign(new Error('Compression cancelled'), { name: 'AbortError' });
+
+const getGoogleBlockedReason = (error: ChatMessageError): string | undefined => {
+  const body = error.body as
+    | {
+        context?: {
+          finishReason?: unknown;
+          promptFeedback?: {
+            blockReason?: unknown;
+          };
+        };
+        provider?: unknown;
+      }
+    | undefined;
+
+  if (body?.provider !== 'google') return undefined;
+
+  const promptFeedbackReason = body.context?.promptFeedback?.blockReason;
+  if (typeof promptFeedbackReason === 'string') return promptFeedbackReason;
+
+  const finishReason = body.context?.finishReason;
+  if (typeof finishReason === 'string') return finishReason;
+
+  return undefined;
+};
+
+const localizeGoogleBlockedError = (error: ChatMessageError): ChatMessageError => {
+  const blockReason = getGoogleBlockedReason(error);
+  if (!blockReason) return error;
+
+  const translationKey = `response.GoogleAIBlockReason.${blockReason}`;
+  const localized = t(translationKey as any, {
+    defaultValue: error.message ?? '',
+    ns: 'error',
+  }).trim();
+
+  if (!localized || localized === translationKey) return error;
+
+  const normalizedBody =
+    error.body && typeof error.body === 'object' ? (error.body as Record<string, any>) : {};
+
+  return {
+    ...error,
+    body: {
+      ...normalizedBody,
+      message: localized,
+    },
+    message: localized,
+  };
+};
+
+const localizeError = (error: ChatMessageError): ChatMessageError => {
+  const body = error.body as
+    | {
+        provider?: unknown;
+      }
+    | undefined;
+
+  if (body?.provider === 'google') {
+    return localizeGoogleBlockedError(error);
+  }
+
+  return error;
 };
 
 /**
@@ -236,7 +312,7 @@ export const createAgentExecutors = (context: {
 
       const fetchContext = { ...operation.context, agentId };
 
-      const { agentConfig: agentConfigData, chatConfig } = context.agentConfig;
+      const { agentConfig: agentConfigData } = context.agentConfig;
 
       let finalUsage: ModelUsage | undefined;
       let finalToolCalls: MessageToolCall[] | undefined;
@@ -335,7 +411,7 @@ export const createAgentExecutors = (context: {
 
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
 
-      // Expand dynamically activated tools (from lobe-tools activateTools API)
+      // Expand dynamically activated tools (from lobe-activator activateTools API)
       // and merge them into the agent config for this LLM call
       const activatedToolIds = runtimeContext?.stepContext?.activatedToolIds;
       let resolvedAgentConfig = context.agentConfig;
@@ -400,7 +476,9 @@ export const createAgentExecutors = (context: {
           traceName: TraceNameMap.Conversation,
         },
         onErrorHandle: async (error) => {
-          await context.get().optimisticUpdateMessageError(assistantMessageId, error, {
+          const localizedError = localizeError(error);
+
+          await context.get().optimisticUpdateMessageError(assistantMessageId, localizedError, {
             operationId: context.operationId,
           });
         },
@@ -806,6 +884,28 @@ export const createAgentExecutors = (context: {
         context.get().completeOperation(executeToolOpId);
 
         const executionTime = Math.round(performance.now() - startTime);
+
+        // Fallback for undefined result (e.g. tool executor not found or returned nothing)
+        if (result === undefined || result === null) {
+          const fallbackResult = {
+            content: `Tool ${toolName} execution failed: no result returned`,
+            error: { type: 'ToolExecutionError', message: 'Tool returned no result' },
+            success: false,
+          };
+
+          if (toolOperationId) {
+            context.get().failOperation(toolOperationId, {
+              message: 'Tool returned no result',
+              type: 'ToolExecutionError',
+            });
+          }
+
+          events.push({ id: chatToolPayload.id, result: fallbackResult, type: 'tool_result' });
+
+          const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
+          return { events, newState: { ...state, messages: updatedMessages } };
+        }
+
         const isSuccess = result && !result.error;
 
         log(
@@ -2534,7 +2634,7 @@ export const createAgentExecutors = (context: {
 
       // Get message IDs from dbMessagesMap (raw db messages)
       const dbMessages = context.get().dbMessagesMap[context.messageKey] || [];
-      const messageIds = dbMessages.map((m) => m.id).filter(Boolean);
+      const messageIds = getCompressionCandidateMessageIds(dbMessages);
 
       if (!topicId || messageIds.length === 0) {
         // No topicId or no messages, skip compression
@@ -2618,13 +2718,16 @@ export const createAgentExecutors = (context: {
         let summaryContent = '';
 
         // Start generateSummary operation attached to the compressed group message
-        const { operationId: summaryOperationId } = context.get().startOperation({
-          context: { ...getOperationContext(), messageId: messageGroupId },
-          type: 'generateSummary',
-          parentOperationId: compressOperationId,
-        });
+        const { abortController: summaryAbortController, operationId: summaryOperationId } = context
+          .get()
+          .startOperation({
+            context: { ...getOperationContext(), messageId: messageGroupId },
+            type: 'generateSummary',
+            parentOperationId: compressOperationId,
+          });
 
         await chatService.fetchPresetTaskResult({
+          abortController: summaryAbortController,
           params: { ...compressionPayload, model, provider },
           onMessageHandle: (chunk) => {
             if (chunk.type === 'text') {
@@ -2645,6 +2748,8 @@ export const createAgentExecutors = (context: {
             });
           },
         });
+
+        if (summaryAbortController.signal.aborted) throw createAbortError();
 
         log(`${stagePrefix} Generated summary: %d chars`, summaryContent.length);
 
@@ -2701,6 +2806,34 @@ export const createAgentExecutors = (context: {
           } as AgentRuntimeContext,
         };
       } catch (error) {
+        if (isAbortError(error)) {
+          log(`${stagePrefix} Compression cancelled`);
+
+          if (context.get().operations[compressOperationId]?.status === 'running') {
+            context.get().completeOperation(compressOperationId, { cancelled: true });
+          }
+
+          events.push({ type: 'compression_error', error });
+
+          return {
+            events,
+            newState: state,
+            nextContext: {
+              payload: {
+                compressedMessages: messages,
+                skipped: true,
+              } as GeneralAgentCompressionResultPayload,
+              phase: 'compression_result',
+              session: {
+                messageCount: state.messages.length,
+                sessionId: state.operationId,
+                status: 'running',
+                stepCount: state.stepCount + 1,
+              },
+            } as AgentRuntimeContext,
+          };
+        }
+
         log(`${stagePrefix} Compression failed: %O`, error);
 
         // Complete the compress_context operation with error

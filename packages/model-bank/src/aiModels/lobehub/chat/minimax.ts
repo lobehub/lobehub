@@ -8,6 +8,51 @@ export const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     description:
+      'First self-evolving model with top-tier coding and agentic performance (~60 tps).',
+    displayName: 'MiniMax M2.7',
+    enabled: true,
+    id: 'MiniMax-M2.7',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-18',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description: 'Same performance as M2.7 with significantly faster inference (~100 tps).',
+    displayName: 'MiniMax M2.7 Highspeed',
+    enabled: true,
+    id: 'MiniMax-M2.7-highspeed',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-18',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
       'Optimized for code generation and refactoring, delivering peak performance with ultimate value to master complex tasks.',
     displayName: 'MiniMax M2.5',
     enabled: true,
@@ -55,7 +100,6 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Powerful multilingual programming capabilities, comprehensively upgraded programming experience.',
     displayName: 'MiniMax M2.1',
-    enabled: true,
     id: 'MiniMax-M2.1',
     maxOutput: 131_072,
     pricing: {
@@ -78,7 +122,6 @@ export const minimaxChatModels: AIChatModelCard[] = [
     description:
       'Powerful multilingual programming capabilities with faster and more efficient inference.',
     displayName: 'MiniMax M2.1 Highspeed',
-    enabled: true,
     id: 'MiniMax-M2.1-highspeed',
     maxOutput: 131_072,
     pricing: {

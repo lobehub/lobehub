@@ -1,12 +1,15 @@
+import { zipSync } from 'fflate';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import  { type App } from '@/core/App';
+import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
 }));
+
+const fetchMock = vi.fn();
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({
@@ -34,15 +37,19 @@ vi.mock('electron', () => ({
   },
 }));
 
+vi.stubGlobal('fetch', fetchMock);
+
 // Mock node:fs/promises and node:fs
 vi.mock('node:fs/promises', () => ({
-  stat: vi.fn(),
-  readdir: vi.fn(),
-  rename: vi.fn(),
   access: vi.fn(),
-  writeFile: vi.fn(),
-  readFile: vi.fn(),
   mkdir: vi.fn(),
+  readFile: vi.fn(),
+  readdir: vi.fn(),
+  realpath: vi.fn(),
+  rename: vi.fn(),
+  rm: vi.fn(),
+  stat: vi.fn(),
+  writeFile: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
@@ -77,6 +84,7 @@ vi.mock('@/utils/file-system', () => ({
 }));
 
 const mockApp = {
+  appStoragePath: '/mock/app/storage',
   getService: vi.fn((ServiceClass: any) => {
     // Return different mock based on service class name
     if (ServiceClass?.name === 'ContentSearchService') {
@@ -291,6 +299,144 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({ success: false, error: 'Failed to write file: Write failed' });
+    });
+  });
+
+  describe('auditSafePaths', () => {
+    it('should treat real temporary paths as safe', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.realpath).mockImplementation(async (targetPath: string) => {
+        if (targetPath === '/tmp') return '/private/tmp';
+        if (targetPath === '/var/tmp') return '/private/var/tmp';
+        if (targetPath === '/tmp/out') return '/private/tmp/out';
+        return targetPath;
+      });
+
+      const result = await localFileCtr.auditSafePaths({
+        paths: ['/tmp/out'],
+        resolveAgainstScope: '/Users/me/project',
+      });
+
+      expect(result).toEqual({ allSafe: true });
+    });
+
+    it('should reject safe-path candidates whose real target escapes the temporary roots', async () => {
+      vi.mocked(mockFsPromises.access).mockImplementation(async (targetPath: string) => {
+        if (targetPath === '/tmp/out/config') {
+          throw new Error('ENOENT');
+        }
+      });
+      vi.mocked(mockFsPromises.realpath).mockImplementation(async (targetPath: string) => {
+        if (targetPath === '/tmp') return '/private/tmp';
+        if (targetPath === '/var/tmp') return '/private/var/tmp';
+        if (targetPath === '/tmp/out') return '/Users/me/.ssh';
+        return targetPath;
+      });
+
+      const result = await localFileCtr.auditSafePaths({
+        paths: ['/tmp/out/config'],
+        resolveAgainstScope: '/Users/me/project',
+      });
+
+      expect(result).toEqual({ allSafe: false });
+    });
+  });
+
+  describe('handlePrepareSkillDirectory', () => {
+    it('should download and extract a skill zip into a local cache directory', async () => {
+      const zipped = zipSync({
+        'SKILL.md': new TextEncoder().encode('---\nname: Demo\n---\ncontent'),
+        'docs/reference.txt': new TextEncoder().encode('hello'),
+      });
+
+      fetchMock.mockResolvedValue({
+        arrayBuffer: vi
+          .fn()
+          .mockResolvedValue(
+            zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength),
+          ),
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+      });
+
+      vi.mocked(mockFsPromises.access).mockRejectedValue(new Error('missing cache'));
+      vi.mocked(mockFsPromises.mkdir).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.writeFile).mockResolvedValue(undefined);
+
+      const result = await (localFileCtr as any).handlePrepareSkillDirectory({
+        url: 'https://example.com/demo-skill.zip',
+        zipHash: 'zip-hash-123',
+      });
+
+      expect(result).toEqual({
+        extractedDir: '/mock/app/storage/file-storage/skills/extracted/zip-hash-123',
+        success: true,
+        zipPath: '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
+      });
+      expect(fetchMock).toHaveBeenCalledWith('https://example.com/demo-skill.zip');
+      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
+        '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
+        expect.any(Buffer),
+      );
+      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
+        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/SKILL.md',
+        expect.any(Buffer),
+      );
+      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
+        '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/docs/reference.txt',
+        expect.any(Buffer),
+      );
+    });
+
+    it('should reuse the cached extracted directory when it is already prepared', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+
+      const result = await (localFileCtr as any).handlePrepareSkillDirectory({
+        url: 'https://example.com/demo-skill.zip',
+        zipHash: 'zip-hash-123',
+      });
+
+      expect(result).toEqual({
+        extractedDir: '/mock/app/storage/file-storage/skills/extracted/zip-hash-123',
+        success: true,
+        zipPath: '/mock/app/storage/file-storage/skills/archives/zip-hash-123.zip',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleResolveSkillResourcePath', () => {
+    it('should resolve a skill resource path from the extracted directory', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+
+      const result = await (localFileCtr as any).handleResolveSkillResourcePath({
+        path: 'docs/reference.txt',
+        url: 'https://example.com/demo-skill.zip',
+        zipHash: 'zip-hash-123',
+      });
+
+      expect(result).toEqual({
+        fullPath: '/mock/app/storage/file-storage/skills/extracted/zip-hash-123/docs/reference.txt',
+        success: true,
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should reject paths that escape the extracted skill directory', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+
+      const result = await (localFileCtr as any).handleResolveSkillResourcePath({
+        path: '../secrets.txt',
+        url: 'https://example.com/demo-skill.zip',
+        zipHash: 'zip-hash-123',
+      });
+
+      expect(result).toEqual({
+        error: 'Unsafe skill resource path: ../secrets.txt',
+        success: false,
+      });
     });
   });
 

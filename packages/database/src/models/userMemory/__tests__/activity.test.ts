@@ -236,28 +236,30 @@ describe('UserMemoryActivityModel', () => {
       expect(result.pageSize).toBe(100);
     });
 
-    it('should search by query in title', async () => {
+    // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+    const isServerDB = process.env.TEST_SERVER_DB === '1';
+    it.skipIf(!isServerDB)('should search by query in title', async () => {
       const result = await activityModel.queryList({ q: 'Search Test' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-activity-3');
     });
 
-    it('should search by query in narrative', async () => {
+    it.skipIf(!isServerDB)('should search by query in narrative', async () => {
       const result = await activityModel.queryList({ q: 'Searchable narrative' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-activity-3');
     });
 
-    it('should search by query in notes', async () => {
+    it.skipIf(!isServerDB)('should search by query in notes', async () => {
       const result = await activityModel.queryList({ q: 'Some notes' });
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('list-activity-1');
     });
 
-    it('should search by query in feedback', async () => {
+    it.skipIf(!isServerDB)('should search by query in feedback', async () => {
       const result = await activityModel.queryList({ q: 'Some feedback' });
 
       expect(result.items).toHaveLength(1);

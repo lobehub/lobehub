@@ -4,6 +4,7 @@ export interface API {
 }
 export interface Tool {
   apis: API[];
+  description?: string;
   identifier: string;
   name?: string;
   systemRole?: string;
@@ -11,11 +12,15 @@ export interface Tool {
 
 export const apiPrompt = (api: API) => `<api identifier="${api.name}">${api.desc}</api>`;
 
-export const toolPrompt = (tool: Tool) =>
-  `<collection name="${tool.name}">
-${tool.systemRole ? `<collection.instructions>${tool.systemRole}</collection.instructions>` : ''}
-${tool.apis.map((api) => apiPrompt(api)).join('\n')}
-</collection>`;
+export const toolPrompt = (tool: Tool) => {
+  if (tool.systemRole) {
+    return `<tool name="${tool.name}">
+<tool.instructions>${tool.systemRole}</tool.instructions>
+</tool>`;
+  }
+
+  return `<tool name="${tool.name}">${tool.description || 'no description'}</tool>`;
+};
 
 export const toolsPrompts = (tools: Tool[]) => {
   const hasTools = tools.length > 0;

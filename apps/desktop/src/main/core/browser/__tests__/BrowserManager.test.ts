@@ -79,6 +79,19 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+// Mock RemoteServerConfigCtr
+vi.mock('@/controllers/RemoteServerConfigCtr', () => ({
+  default: class MockRemoteServerConfigCtr {
+    async isRemoteServerConfigured() {
+      return true;
+    }
+  },
+}));
+
+vi.mock('@/const/env', () => ({
+  isLinux: false,
+}));
+
 describe('BrowserManager', () => {
   let manager: BrowserManager;
   let mockApp: AppCore;
@@ -90,7 +103,11 @@ describe('BrowserManager', () => {
     MockBrowser.mockClear();
 
     // Create mock App
-    mockApp = {} as unknown as AppCore;
+    mockApp = {
+      getController: vi.fn().mockReturnValue({
+        isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
+      }),
+    } as unknown as AppCore;
 
     manager = new BrowserManager(mockApp);
   });
@@ -229,8 +246,8 @@ describe('BrowserManager', () => {
   });
 
   describe('initializeBrowsers', () => {
-    it('should initialize keepAlive browsers', () => {
-      manager.initializeBrowsers();
+    it('should initialize keepAlive browsers', async () => {
+      await manager.initializeBrowsers();
 
       // app has keepAlive: true, settings has keepAlive: false
       expect(manager.browsers.has('app')).toBe(true);
@@ -379,6 +396,24 @@ describe('BrowserManager', () => {
 
         expect(browser?.browserWindow.unmaximize).toHaveBeenCalled();
         expect(browser?.browserWindow.maximize).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('isWindowMaximized', () => {
+      it('should return false when window is not maximized', () => {
+        manager.retrieveByIdentifier('app');
+        const browser = manager.browsers.get('app');
+        browser!.browserWindow.isMaximized = vi.fn().mockReturnValue(false);
+
+        expect(manager.isWindowMaximized('app')).toBe(false);
+      });
+
+      it('should return true when window is maximized', () => {
+        manager.retrieveByIdentifier('app');
+        const browser = manager.browsers.get('app');
+        browser!.browserWindow.isMaximized = vi.fn().mockReturnValue(true);
+
+        expect(manager.isWindowMaximized('app')).toBe(true);
       });
     });
   });

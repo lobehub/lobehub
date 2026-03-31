@@ -28,11 +28,6 @@ vi.mock('debug', () => ({
   default: () => () => {},
 }));
 
-// Mock auth related
-vi.mock('@lobechat/utils/server', () => ({
-  getXorPayload: vi.fn(() => ({})),
-}));
-
 // Mock database adaptor
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(async () => mockServerDB),
@@ -87,7 +82,6 @@ describe('imageRouter', () => {
 
   const createMockCtx = (overrides = {}) => ({
     userId: mockUserId,
-    authorizationHeader: 'mock-auth-header',
     ...overrides,
   });
 

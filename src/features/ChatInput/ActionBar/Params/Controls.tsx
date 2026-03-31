@@ -16,7 +16,7 @@ import {
   TopP,
 } from '@/features/ModelParamsControl';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -142,7 +142,7 @@ const PARAM_CONFIG = {
   }
 >;
 
-const Controls = memo<ControlsProps>(({ setUpdating }) => {
+const Controls = memo<ControlsProps>(({ setUpdating, updating }) => {
   const { t } = useTranslation('setting');
   const mobile = useServerConfigStore((s) => s.isMobile);
   const agentId = useAgentId();
@@ -152,7 +152,16 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
   const [form] = Form.useForm();
 
   const enableMaxTokens = AntdForm.useWatch(['chatConfig', 'enableMaxTokens'], form);
+  const enableHistoryCount = AntdForm.useWatch(['chatConfig', 'enableHistoryCount'], form);
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};
+
+  const historyCountFromStore = useAgentStore((s) =>
+    chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
+  );
+  // Use raw chatConfig value, not the selector with business logic that may force false
+  const enableHistoryCountFromStore = useAgentStore(
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).enableHistoryCount,
+  );
 
   const lastValuesRef = useRef<Record<ParamKey, number | undefined>>({
     frequency_penalty,
@@ -173,6 +182,20 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
       lastValuesRef.current.frequency_penalty = frequency_penalty;
     }
   }, [config, form, frequency_penalty, presence_penalty, temperature, top_p]);
+
+  // Sync history count values to form
+  useEffect(() => {
+    // Skip syncing when updating to avoid overwriting user's in-progress edits
+    if (updating) return;
+
+    form.setFieldsValue({
+      chatConfig: {
+        ...form.getFieldValue('chatConfig'),
+        enableHistoryCount: enableHistoryCountFromStore,
+        historyCount: historyCountFromStore,
+      },
+    });
+  }, [form, enableHistoryCountFromStore, historyCountFromStore, updating]);
 
   const temperatureValue = AntdForm.useWatch(PARAM_NAME_MAP.temperature, form);
   const topPValue = AntdForm.useWatch(PARAM_NAME_MAP.top_p, form);
@@ -226,17 +249,17 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
         form.setFieldValue(namePath, nextValue);
       }
 
-      // 立即保存变更 - 手动构造配置对象确保使用最新值
+      // Save changes immediately - manually construct config object to ensure latest values are used
       setUpdating(true);
       const currentValues = form.getFieldsValue();
       const prevParams = (currentValues.params ?? {}) as Record<ParamKey, number | undefined>;
       const currentParams: Record<ParamKey, number | undefined> = { ...prevParams };
 
       if (newValue === undefined) {
-        // 显式删除该属性，而不是设置为 undefined
-        // 这样可以确保 Form 表单状态同步
+        // Explicitly delete the property instead of setting it to undefined
+        // This ensures the Form state stays in sync
         delete currentParams[key];
-        // 使用 null 作为禁用标记（数据库会保留 null，前端据此判断复选框状态）
+        // Use null as a disabled marker (the database preserves null, and the frontend uses it to determine checkbox state)
         currentParams[key] = null as any;
       } else {
         currentParams[key] = newValue;
@@ -253,7 +276,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     [form, setUpdating, updateAgentConfig],
   );
 
-  // 使用 useMemo 确保防抖函数只创建一次
+  // Use useMemo to ensure the debounce function is only created once
   const handleValuesChange = useCallback(
     debounce(async (values) => {
       setUpdating(true);
@@ -336,7 +359,55 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     },
   ];
 
-  const allItems = [...baseItems, ...maxTokensItems, ...contextCompressionItems];
+  // History Count items
+  const historyCountItems: FormItemProps[] = [
+    {
+      children: <Switch />,
+      label: (
+        <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
+          {t('settingChat.enableHistoryCount.title')}
+          <InfoTooltip title={t('settingChat.historyCount.desc')} />
+        </Flexbox>
+      ),
+      name: ['chatConfig', 'enableHistoryCount'],
+      tag: 'history',
+      valuePropName: 'checked',
+    },
+    ...(enableHistoryCount
+      ? [
+          {
+            children: (
+              <SliderWithInput
+                max={20}
+                min={0}
+                step={1}
+                unlimitedInput={true}
+                styles={{
+                  input: {
+                    maxWidth: 64,
+                  },
+                }}
+              />
+            ),
+            label: (
+              <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
+                {t('settingChat.historyCount.title')}
+                <InfoTooltip title={t('settingChat.historyCount.desc')} />
+              </Flexbox>
+            ),
+            name: ['chatConfig', 'historyCount'],
+            tag: 'history',
+          } satisfies FormItemProps,
+        ]
+      : []),
+  ];
+
+  const allItems = [
+    ...baseItems,
+    ...maxTokensItems,
+    ...contextCompressionItems,
+    ...historyCountItems,
+  ];
 
   return (
     <Form

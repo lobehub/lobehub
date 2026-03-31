@@ -66,6 +66,7 @@ export type FinishReason =
   | 'cost_limit_exceeded' // Reached cost limit
   | 'timeout' // Execution timeout
   | 'agent_decision' // Agent decided to finish
+  | 'queued_message_interrupt' // Soft interrupt: user queued a message during execution
   | 'error_recovery' // Finished due to unrecoverable error
   | 'system_shutdown'; // System is shutting down
 

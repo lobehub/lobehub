@@ -64,18 +64,25 @@ const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
   });
 };
 
-// Specific implementation of time grouping
-export const groupTopicsByTime = (topics: ChatTopic[]): GroupedTopic[] => {
+// Generic time-based grouping parameterized by field
+const groupTopicsByField = (
+  topics: ChatTopic[],
+  field: 'createdAt' | 'updatedAt',
+): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const sortedTopics = [...topics].sort((a, b) => b.createdAt - a.createdAt);
+  const sortedTopics = [...topics].sort((a, b) => b[field] - a[field]);
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
-  sortedTopics.forEach((topic) => {
-    const groupId = getTopicGroupId(topic.createdAt);
-    const existingGroup = groupsMap.get(groupId) || [];
-    groupsMap.set(groupId, [...existingGroup, topic]);
-  });
+  for (const topic of sortedTopics) {
+    const groupId = getTopicGroupId(topic[field]);
+    const existing = groupsMap.get(groupId);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(groupId, [topic]);
+    }
+  }
 
   const result = Array.from(groupsMap.entries()).map(([id, children]) => ({
     children,
@@ -84,3 +91,7 @@ export const groupTopicsByTime = (topics: ChatTopic[]): GroupedTopic[] => {
 
   return sortGroups(result);
 };
+
+export const groupTopicsByTime = (topics: ChatTopic[]) => groupTopicsByField(topics, 'createdAt');
+export const groupTopicsByUpdatedTime = (topics: ChatTopic[]) =>
+  groupTopicsByField(topics, 'updatedAt');

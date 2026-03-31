@@ -182,6 +182,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: nightly
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -200,6 +201,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: nightly
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -214,6 +216,7 @@ jobs:
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: nightly
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -342,16 +345,37 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ============================================
+  # 发布到 S3 更新服务器
+  # ============================================
+  publish-s3:
+    needs: [merge-mac-files, calculate-version]
+    name: Publish to S3
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/desktop-publish-s3
+        with:
+          channel: nightly
+          version: ${{ needs.calculate-version.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  # ============================================
   # 清理旧的 Nightly Releases (保留最近 7 个)
   # ============================================
   cleanup-old-nightlies:
-    needs: [publish-release]
+    needs: [publish-release, publish-s3]
     name: Cleanup Old Nightly Releases
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Delete old nightly releases
+      - uses: actions/checkout@v6
+
+      - name: Delete old nightly GitHub releases
         uses: actions/github-script@v7
         with:
           script: |
@@ -390,3 +414,14 @@ jobs:
             }
 
             console.log(`✅ Cleanup complete. Kept ${Math.min(nightlyReleases.length, 7)} nightly releases, deleted ${toDelete.length}.`);
+
+      - name: Cleanup old S3 versions
+        uses: ./.github/actions/desktop-cleanup-s3
+        with:
+          channel: nightly
+          keep-count: '15'
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}

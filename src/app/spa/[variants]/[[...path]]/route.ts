@@ -19,8 +19,6 @@ import {
 } from '@/types/spaServerConfig';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
-export const dynamic = 'force-static';
-
 export function generateStaticParams() {
   const mobileOptions = isDesktop ? [false] : [true, false];
   const staticLocales: Locales[] = ['en-US', 'zh-CN'];
@@ -222,6 +220,7 @@ export async function GET(
 
   return new Response(html, {
     headers: {
+      'Cache-Control': 'no-cache',
       'content-type': 'text/html; charset=utf-8',
     },
   });

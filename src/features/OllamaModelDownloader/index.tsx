@@ -32,7 +32,7 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
       return total ? Number(((completed / total) * 100).toFixed(1)) : 0;
     }, [completed, total]);
 
-    // 定义进度回调函数
+    // Define progress callback function
     const handleProgress = useCallback((progress: ModelProgressInfo) => {
       if (progress.completed) setCompleted(progress.completed);
       if (progress.total) setTotal(progress.total);

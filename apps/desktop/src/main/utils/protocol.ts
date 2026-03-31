@@ -1,6 +1,6 @@
 import { app } from 'electron';
 
-import { McpSchema, ProtocolUrlParsed } from '../types/protocol';
+import type { McpSchema, ProtocolUrlParsed } from '../types/protocol';
 
 export type AppChannel = 'stable' | 'beta' | 'nightly';
 

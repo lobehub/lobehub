@@ -4,6 +4,7 @@ import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
 import ActionPopover from '@/features/ChatInput/ActionBar/components/ActionPopover';
+import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { useAgentStore } from '@/store/agent';
@@ -35,12 +36,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface CopilotModelSelectorProps {
-  agentId: string;
-}
-
-const CopilotModelSelector = memo<CopilotModelSelectorProps>(({ agentId }) => {
+const CopilotModelSelector = memo(() => {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const agentId = useConversationStore(conversationSelectors.agentId);
 
   const [model, provider, updateAgentConfigById] = useAgentStore((s) => [
     agentByIdSelectors.getAgentModelById(agentId)(s),

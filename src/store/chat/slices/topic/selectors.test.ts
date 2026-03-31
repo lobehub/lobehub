@@ -1,3 +1,5 @@
+import { TopicDisplayMode } from '@lobechat/types';
+import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
 import { type ChatStore } from '@/store/chat';
@@ -119,7 +121,7 @@ describe('topicSelectors', () => {
   describe('groupedTopicsSelector', () => {
     it('should return empty array if there are no topics', () => {
       const state = merge(initialStore, { activeAgentId: 'test' });
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
       expect(grouped).toEqual([]);
     });
 
@@ -142,7 +144,7 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
       expect(grouped).toHaveLength(1); // One time-based group
       expect(grouped[0].children).toEqual(topics);
     });
@@ -167,7 +169,7 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
 
       expect(grouped).toHaveLength(2); // Favorite group + one time-based group
 
@@ -201,7 +203,7 @@ describe('topicSelectors', () => {
         activeAgentId: 'test',
       });
 
-      const grouped = topicSelectors.groupedTopicsSelector(state);
+      const grouped = topicSelectors.groupedTopicsSelector()(state);
 
       // Should not have a favorites group
       expect(grouped.find((g) => g.id === 'favorite')).toBeUndefined();
@@ -318,6 +320,103 @@ describe('topicSelectors', () => {
       };
 
       expect(topicSelectors.isUndefinedTopics(state)).toBe(true);
+    });
+  });
+
+  describe('groupedTopicsForSidebar', () => {
+    const now = Date.now();
+    const lastYear = dayjs(now).subtract(1, 'year').valueOf();
+
+    const topicsWithDifferentTimes = [
+      {
+        id: 'old-created-new-updated',
+        title: 'Old but active',
+        favorite: false,
+        createdAt: lastYear,
+        updatedAt: now,
+      },
+      {
+        id: 'new-created-new-updated',
+        title: 'New and active',
+        favorite: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    const createStateWithTopics = (topics: any[]) =>
+      merge(initialStore, {
+        topicDataMap: {
+          [topicMapKey({ agentId: 'test' })]: {
+            items: topics,
+            total: topics.length,
+            currentPage: 0,
+            hasMore: false,
+            pageSize: 20,
+          },
+        },
+        activeAgentId: 'test',
+      });
+
+    it('should group by createdAt when displayMode is ByCreatedTime', () => {
+      const state = createStateWithTopics(topicsWithDifferentTimes);
+
+      const grouped = topicSelectors.groupedTopicsForSidebar(
+        20,
+        TopicDisplayMode.ByCreatedTime,
+      )(state);
+
+      // "Old but active" was created last year, so it should be in a separate group from "New and active"
+      expect(grouped.length).toBeGreaterThanOrEqual(2);
+
+      const groupIds = grouped.map((g) => g.id);
+      // Should have a group for last year
+      expect(groupIds).toContain(dayjs(lastYear).year().toString());
+    });
+
+    it('should group by updatedAt when displayMode is ByUpdatedTime', () => {
+      const state = createStateWithTopics(topicsWithDifferentTimes);
+
+      const grouped = topicSelectors.groupedTopicsForSidebar(
+        20,
+        TopicDisplayMode.ByUpdatedTime,
+      )(state);
+
+      // Both topics have updatedAt = now, so they should be in the same group
+      expect(grouped).toHaveLength(1);
+      expect(grouped[0].id).toBe('today');
+      expect(grouped[0].children).toHaveLength(2);
+    });
+
+    it('should return empty array when no topics exist', () => {
+      const state = merge(initialStore, { activeAgentId: 'test' });
+
+      const grouped = topicSelectors.groupedTopicsForSidebar(
+        20,
+        TopicDisplayMode.ByUpdatedTime,
+      )(state);
+
+      expect(grouped).toEqual([]);
+    });
+
+    it('should respect pageSize limit', () => {
+      const manyTopics = Array.from({ length: 10 }, (_, i) => ({
+        id: `topic-${i}`,
+        title: `Topic ${i}`,
+        favorite: false,
+        createdAt: now - i * 1000,
+        updatedAt: now - i * 1000,
+      }));
+
+      const state = createStateWithTopics(manyTopics);
+
+      const grouped = topicSelectors.groupedTopicsForSidebar(
+        3,
+        TopicDisplayMode.ByUpdatedTime,
+      )(state);
+
+      const totalChildren = grouped.reduce((sum, g) => sum + g.children.length, 0);
+      expect(totalChildren).toBe(3);
     });
   });
 });

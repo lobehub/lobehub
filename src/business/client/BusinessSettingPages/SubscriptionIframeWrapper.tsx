@@ -15,7 +15,7 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 const PARTITION_ID = 'persist:subscription';
 
 interface SubscriptionIframeWrapperProps {
-  page: 'billing' | 'funds' | 'plans' | 'referral' | 'usage';
+  page: 'billing' | 'credits' | 'plans' | 'referral' | 'usage';
 }
 
 export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({ page }) => {

@@ -3,7 +3,23 @@ import debug from 'debug';
 import { BaseProcessor } from '../base/BaseProcessor';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    toolMessageReorder?: {
+      originalCount: number;
+      removedInvalidTools: number;
+      reorderedCount: number;
+    };
+  }
+}
+
 const log = debug('context-engine:processor:ToolMessageReorder');
+
+const DEFAULT_TOOL_FAILURE_CONTENT = JSON.stringify({
+  error: 'Tool call failed',
+  success: false,
+  synthetic: true,
+});
 
 /**
  * Reorder tool messages to ensure that tool messages are displayed in the correct order.
@@ -20,7 +36,9 @@ export class ToolMessageReorder extends BaseProcessor {
     const clonedContext = this.cloneContext(context);
 
     // Reorder messages
-    const reorderedMessages = this.reorderToolMessages(clonedContext.messages);
+    const { reorderedMessages, removedInvalidTools } = this.reorderToolMessages(
+      clonedContext.messages,
+    );
 
     const originalCount = clonedContext.messages.length;
     const reorderedCount = reorderedMessages.length;
@@ -30,14 +48,14 @@ export class ToolMessageReorder extends BaseProcessor {
     // Update metadata
     clonedContext.metadata.toolMessageReorder = {
       originalCount,
-      removedInvalidTools: originalCount - reorderedCount,
+      removedInvalidTools,
       reorderedCount,
     };
 
-    if (originalCount !== reorderedCount) {
+    if (removedInvalidTools > 0) {
       log(
         'Tool message reordering completed, removed',
-        originalCount - reorderedCount,
+        removedInvalidTools,
         'invalid tool messages',
       );
     } else {
@@ -50,63 +68,109 @@ export class ToolMessageReorder extends BaseProcessor {
   /**
    * Reorder tool messages
    */
-  private reorderToolMessages(messages: any[]): any[] {
-    // 1. First collect all valid tool_call_ids from assistant messages
+  private reorderToolMessages(messages: any[]): {
+    removedInvalidTools: number;
+    reorderedMessages: any[];
+  } {
+    let removedInvalidTools = 0;
     const validToolCallIds = new Set<string>();
-    messages.forEach((message) => {
-      if (message.role === 'assistant' && message.tool_calls) {
-        message.tool_calls.forEach((toolCall: any) => {
-          validToolCallIds.add(toolCall.id);
-        });
+    const toolMessages = new Map<string, any>();
+
+    // 1. First collect all valid tool_call_ids from assistant messages
+    for (const message of messages) {
+      if (message.role !== 'assistant' || !Array.isArray(message.tool_calls)) continue;
+
+      const seenToolCallIds = new Set<string>();
+      for (const toolCall of message.tool_calls) {
+        if (!toolCall?.id) continue;
+
+        if (seenToolCallIds.has(toolCall.id)) continue;
+
+        seenToolCallIds.add(toolCall.id);
+        validToolCallIds.add(toolCall.id);
       }
-    });
+    }
 
     // 2. Collect all valid tool messages
-    const toolMessages: Record<string, any> = {};
-    messages.forEach((message) => {
-      if (
-        message.role === 'tool' &&
-        message.tool_call_id &&
-        validToolCallIds.has(message.tool_call_id)
-      ) {
-        toolMessages[message.tool_call_id] = message;
+    for (const message of messages) {
+      if (message.role !== 'tool') continue;
+
+      // Skip invalid tool messages
+      if (!message.tool_call_id || !validToolCallIds.has(message.tool_call_id)) {
+        removedInvalidTools++;
+        continue;
       }
-    });
+
+      if (toolMessages.has(message.tool_call_id)) {
+        // Check if this tool message has already been added
+        removedInvalidTools++;
+        continue;
+      }
+
+      toolMessages.set(message.tool_call_id, message);
+    }
 
     // 3. Reorder messages
     const reorderedMessages: any[] = [];
-    messages.forEach((message) => {
-      // Skip invalid tool messages
-      if (
-        message.role === 'tool' &&
-        (!message.tool_call_id || !validToolCallIds.has(message.tool_call_id))
-      ) {
-        log('Skipping invalid tool message:', message.id);
-        return;
+
+    for (const [index, message] of messages.entries()) {
+      if (message.role === 'tool') continue;
+
+      if (message.role !== 'assistant' || !Array.isArray(message.tool_calls)) {
+        reorderedMessages.push(message);
+        continue;
       }
 
-      // Check if this tool message has already been added
-      const hasPushed = reorderedMessages.some(
-        (m) => !!message.tool_call_id && m.tool_call_id === message.tool_call_id,
+      const seenToolCallIds = new Set<string>();
+      const normalizedToolCalls = [];
+
+      for (const toolCall of message.tool_calls) {
+        if (!toolCall?.id) continue;
+
+        if (seenToolCallIds.has(toolCall.id)) continue;
+
+        seenToolCallIds.add(toolCall.id);
+        normalizedToolCalls.push(toolCall);
+      }
+
+      reorderedMessages.push(
+        normalizedToolCalls.length === message.tool_calls.length
+          ? message
+          : { ...message, tool_calls: normalizedToolCalls },
       );
 
-      if (hasPushed) return;
-
-      reorderedMessages.push(message);
-
       // If assistant message with tool_calls, add corresponding tool messages
-      if (message.role === 'assistant' && message.tool_calls) {
-        message.tool_calls.forEach((toolCall: any) => {
-          const correspondingToolMessage = toolMessages[toolCall.id];
-          if (correspondingToolMessage) {
-            reorderedMessages.push(correspondingToolMessage);
-            delete toolMessages[toolCall.id];
-          }
+      for (const toolCall of normalizedToolCalls) {
+        const matchedToolMessage = toolMessages.get(toolCall.id);
+
+        if (matchedToolMessage) {
+          const pluginErrorMessage =
+            typeof matchedToolMessage.pluginError?.message === 'string'
+              ? matchedToolMessage.pluginError.message
+              : undefined;
+
+          reorderedMessages.push({
+            ...matchedToolMessage,
+            content:
+              typeof matchedToolMessage.content === 'string' &&
+              (matchedToolMessage.content.length > 0 || !pluginErrorMessage)
+                ? matchedToolMessage.content
+                : pluginErrorMessage || DEFAULT_TOOL_FAILURE_CONTENT,
+          });
+          toolMessages.delete(toolCall.id);
+          continue;
+        }
+
+        reorderedMessages.push({
+          content: DEFAULT_TOOL_FAILURE_CONTENT,
+          ...(toolCall.function?.name && { name: toolCall.function.name }),
+          role: 'tool',
+          tool_call_id: toolCall.id,
         });
       }
-    });
+    }
 
-    return reorderedMessages;
+    return { reorderedMessages, removedInvalidTools };
   }
 
   // Simplified: removed validation/statistics helper methods

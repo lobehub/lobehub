@@ -1,6 +1,5 @@
 import {
   type ChatMessageExtra,
-  type ChatPluginPayload,
   type ChatToolPayload,
   type CreateMessageParams,
   type MessagePluginItem,
@@ -56,7 +55,7 @@ interface UpdateMessageTools {
   id: string;
   tool_call_id: string;
   type: 'updateMessageTools';
-  value: Partial<ChatPluginPayload>;
+  value: Partial<ChatToolPayload>;
 }
 
 interface AddMessageTool {

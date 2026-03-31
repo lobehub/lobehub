@@ -1,0 +1,5 @@
+packages:
+  - '../../packages/device-gateway-client'
+  - '../../packages/local-file-shell'
+  - '../../packages/file-loaders'
+  - '.'

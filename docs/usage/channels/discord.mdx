@@ -1,0 +1,135 @@
+---
+title: Connect LobeHub to Discord
+description: >-
+  Learn how to create a Discord bot and connect it to your LobeHub agent as a
+  message channel, allowing your AI assistant to interact with users directly in
+  Discord servers and direct messages.
+tags:
+  - Discord
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to Discord
+
+By connecting a Discord channel to your LobeHub agent, users can interact with the AI assistant directly through Discord server channels and direct messages.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A Discord account with **Manage Server** permission on the target server
+
+## Step 1: Create a Discord Application and Bot
+
+<Steps>
+  ### Go to the Discord Developer Portal
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/83f435317ea2c9c4a2adcbfd74301536.png)
+
+  Visit the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Give your application a name (e.g., "LobeHub Assistant") and click **Create**.
+
+  ### Create a Bot
+
+  In the left sidebar, click **Bot**. Customize the bot's username and avatar as needed.
+
+  ### Enable Privileged Gateway Intents
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/6126baa4154be45eefdad73c576723d0.png)
+
+  On the Bot settings page, scroll down to **Privileged Gateway Intents** and enable:
+
+  - **Message Content Intent** — Required for the bot to read message content
+  - **Server Members Intent** — Recommended for user identification
+  - **Presence Intent** — Optional; enable if you want the bot to access user online/offline status
+
+  Click **Save Changes**.
+
+  ### Copy the Bot Token
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/e76272de65ad8db8746b1dcafeafdce8.png)
+
+  On the **Bot** page, click **Reset Token** to generate your bot token. Copy and save it securely.
+
+  > **Important:** Treat your bot token like a password. Never share it publicly or commit it to version control.
+
+  ### Copy the Application ID and Public Key
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/d42901c6eb84e3e335d9a8535f317a35.png)
+
+  Go to **General Information** in the left sidebar. Copy and save:
+
+  - **Application ID**
+  - **Public Key**
+
+  You will need all three values (Bot Token, Application ID, Public Key) in the next step.
+</Steps>
+
+## Step 2: Configure Discord in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **Discord** from the platform list.
+
+  ### Fill in the Credentials
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/c5ced26ea287ee215a9dc385367c1083.png)
+
+  Enter the following fields:
+
+  - **Application ID** — The Application ID from your Discord app's General Information page
+  - **Bot Token** — The bot token you generated earlier
+  - **Public Key** — The Public Key from your Discord app, used for interaction verification
+
+  Your token will be encrypted and stored securely.
+
+  ### Save Configuration
+
+  Click **Save Configuration**. Your credentials will be saved and LobeHub will start listening for Discord events.
+</Steps>
+
+## Step 3: Invite the Bot to Your Server
+
+<Steps>
+  ### Generate an Invite URL
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/5e8a93f33e085a187deddb87704f0bd3.png)
+
+  In the Discord Developer Portal, go to **OAuth2** → **URL Generator**. Select the following scopes:
+
+  - `bot`
+  - `applications.commands`
+
+  Under **Bot Permissions**, select:
+
+  - View Channels
+  - Send Messages
+  - Read Message History
+  - Embed Links
+  - Attach Files
+  - Add Reactions (optional)
+
+  ### Authorize the Bot
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/2e47836fe4ac988e76460534ee57efa4.png)
+
+  Copy the generated URL, open it in your browser, select the server you want to add the bot to, and click **Authorize**.
+</Steps>
+
+## Step 4: Test the Connection
+
+Back in LobeHub's channel settings for Discord, click **Test Connection** to verify everything is configured correctly. Then send a message to your bot in Discord to confirm it responds.
+
+## Configuration Reference
+
+| Field              | Required | Description                                      |
+| ------------------ | -------- | ------------------------------------------------ |
+| **Application ID** | Yes      | Your Discord application's ID                    |
+| **Bot Token**      | Yes      | Authentication token for your Discord bot        |
+| **Public Key**     | Yes      | Used to verify interaction requests from Discord |
+
+## Troubleshooting
+
+- **Bot not responding in server:** Confirm the bot has been invited to the server with the correct permissions, and Message Content Intent is enabled.
+- **Test Connection failed:** Double-check the Application ID, Bot Token, and Public Key are correct.

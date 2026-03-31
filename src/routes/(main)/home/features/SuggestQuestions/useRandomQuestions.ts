@@ -15,7 +15,9 @@ const shuffleArray = <T>(array: T[]): T[] => {
 };
 
 const generateQuestions = (mode: StarterMode) => {
-  if (!mode || !['agent', 'group', 'write'].includes(mode)) {
+  const modeKey = mode ?? 'chat';
+
+  if (!['agent', 'group', 'write', 'chat'].includes(modeKey)) {
     return [];
   }
 
@@ -23,8 +25,8 @@ const generateQuestions = (mode: StarterMode) => {
   const shuffled = shuffleArray(ids);
   return shuffled.slice(0, DISPLAY_COUNT).map((id) => ({
     id,
-    promptKey: `${mode}.${String(id).padStart(2, '0')}.prompt`,
-    titleKey: `${mode}.${String(id).padStart(2, '0')}.title`,
+    promptKey: `${modeKey}.${String(id).padStart(2, '0')}.prompt`,
+    titleKey: `${modeKey}.${String(id).padStart(2, '0')}.title`,
   }));
 };
 

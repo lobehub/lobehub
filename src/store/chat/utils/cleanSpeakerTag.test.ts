@@ -33,6 +33,18 @@ describe('cleanSpeakerTag', () => {
       const expected = 'Content';
       expect(cleanSpeakerTag(input)).toBe(expected);
     });
+
+    it('should remove IM bot speaker tag with id/username/nickname', () => {
+      const input = '<speaker id="ou_abc123" username="ou_abc123" nickname="ou_abc123" />\nhello';
+      const expected = 'hello';
+      expect(cleanSpeakerTag(input)).toBe(expected);
+    });
+
+    it('should remove IM bot speaker tag with avatar', () => {
+      const input = '<speaker id="123" username="john" nickname="John Doe" avatar="abc" />\nHello!';
+      const expected = 'Hello!';
+      expect(cleanSpeakerTag(input)).toBe(expected);
+    });
   });
 
   describe('should not modify content without speaker tag', () => {
@@ -74,13 +86,9 @@ describe('cleanSpeakerTag', () => {
       const input1 = '<speaker name="Agent">\nContent';
       expect(cleanSpeakerTag(input1)).toBe(input1);
 
-      // Missing name attribute
+      // No attributes at all
       const input2 = '<speaker />\nContent';
       expect(cleanSpeakerTag(input2)).toBe(input2);
-
-      // Wrong attribute name
-      const input3 = '<speaker title="Agent" />\nContent';
-      expect(cleanSpeakerTag(input3)).toBe(input3);
     });
 
     it('should handle content that is only the speaker tag', () => {

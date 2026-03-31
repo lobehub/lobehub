@@ -45,7 +45,7 @@ export const AddExperienceMemoryInspector = memo<
       <span>{t('builtins.lobe-user-memory.apiName.addExperienceMemory')}</span>
       {title && (
         <>
-          : <span className={highlightTextStyles.primary}>{title}</span>
+          :<span className={highlightTextStyles.primary}>{title}</span>
         </>
       )}
       {!isLoading && isSuccess && (

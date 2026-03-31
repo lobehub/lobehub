@@ -1,7 +1,17 @@
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
+
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    historySummary?: {
+      formattedLength: number;
+      injected: boolean;
+      originalLength: number;
+    };
+  }
+}
 
 const log = debug('context-engine:provider:HistorySummaryProvider');
 
@@ -27,7 +37,7 @@ const defaultHistorySummaryFormatter = (historySummary: string): string => `<cha
  * History Summary Provider
  * Responsible for injecting history conversation summary into system messages
  */
-export class HistorySummaryProvider extends BaseProvider {
+export class HistorySummaryProvider extends BaseSystemRoleProvider {
   readonly name = 'HistorySummaryProvider';
 
   constructor(
@@ -37,66 +47,21 @@ export class HistorySummaryProvider extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
-    // Check if history summary exists
+  protected buildSystemRoleContent(_context: PipelineContext): string | null {
     if (!this.config.historySummary) {
       log('No history summary content, skipping processing');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Format history summary
-    const formattedSummary = this.formatHistorySummary(this.config.historySummary);
-
-    // Inject history summary
-    this.injectHistorySummary(clonedContext, formattedSummary);
-
-    // Update metadata
-    clonedContext.metadata.historySummary = {
-      formattedLength: formattedSummary.length,
-      injected: true,
-      originalLength: this.config.historySummary.length,
-    };
-
-    log(
-      `History summary injection completed, original length: ${this.config.historySummary.length}, formatted length: ${formattedSummary.length}`,
-    );
-    return this.markAsExecuted(clonedContext);
-  }
-
-  /**
-   * Format history summary
-   */
-  private formatHistorySummary(historySummary: string): string {
     const formatter = this.config.formatHistorySummary || defaultHistorySummaryFormatter;
-    return formatter(historySummary);
+    return formatter(this.config.historySummary);
   }
 
-  /**
-   * Inject history summary to system message
-   */
-  private injectHistorySummary(context: PipelineContext, formattedSummary: string): void {
-    const existingSystemMessage = context.messages.find((msg) => msg.role === 'system');
-
-    if (existingSystemMessage) {
-      // Merge to existing system message
-      existingSystemMessage.content = [existingSystemMessage.content, formattedSummary]
-        .filter(Boolean)
-        .join('\n\n');
-
-      log(
-        `History summary merged to existing system message, final length: ${existingSystemMessage.content.length}`,
-      );
-    } else {
-      // Create new system message
-      const systemMessage = {
-        content: formattedSummary,
-        role: 'system' as const,
-      };
-
-      context.messages.unshift(systemMessage as any);
-      log(`New history summary system message created, content length: ${formattedSummary.length}`);
-    }
+  protected onInjected(context: PipelineContext, content: string): void {
+    context.metadata.historySummary = {
+      formattedLength: content.length,
+      injected: true,
+      originalLength: this.config.historySummary!.length,
+    };
   }
 }

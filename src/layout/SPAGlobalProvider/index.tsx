@@ -10,6 +10,7 @@ import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvid
 import { isDesktop } from '@/const/version';
 import AuthProvider from '@/layout/AuthProvider';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
+import DynamicFavicon from '@/layout/GlobalProvider/DynamicFavicon';
 import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import ImportSettings from '@/layout/GlobalProvider/ImportSettings';
@@ -23,7 +24,7 @@ import type { SPAServerConfig } from '@/types/spaServerConfig';
 import Locale from './Locale';
 
 const ModalHost = lazy(() => import('@lobehub/ui').then((m) => ({ default: m.ModalHost })));
-const ToastHost = lazy(() => import('@lobehub/ui').then((m) => ({ default: m.ToastHost })));
+const ToastHost = lazy(() => import('@lobehub/ui/base-ui').then((m) => ({ default: m.ToastHost })));
 const ContextMenuHost = lazy(() =>
   import('@lobehub/ui').then((m) => ({ default: m.ContextMenuHost })),
 );
@@ -54,6 +55,7 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
 
                 {isDesktop && <ServerVersionOutdatedAlert />}
                 <FaviconProvider>
+                  <DynamicFavicon />
                   <GroupWizardProvider>
                     <DragUploadProvider>
                       <LazyMotion features={domMax}>

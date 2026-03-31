@@ -1,4 +1,4 @@
-import { Menu, app, shell } from 'electron';
+import { app, Menu, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -67,6 +67,11 @@ const createMockApp = () => {
       ns: vi.fn(() => mockT),
     },
     browserManager: {
+      getMainWindow: vi.fn(() => ({
+        broadcast: vi.fn(),
+        loadUrl: vi.fn(),
+        show: vi.fn(),
+      })),
       showMainWindow: vi.fn(),
       retrieveByIdentifier: vi.fn(() => ({
         show: vi.fn(),
@@ -74,6 +79,8 @@ const createMockApp = () => {
     },
     updaterManager: {
       checkForUpdates: vi.fn(),
+      getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
+      installNow: vi.fn(),
     },
   } as unknown as App;
 };

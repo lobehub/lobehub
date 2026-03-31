@@ -14,6 +14,8 @@ import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils
 import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
+const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
+
 type Step = 'email' | 'password';
 
 interface SignInFormValues {
@@ -40,9 +42,22 @@ export const useSignIn = () => {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [isSocialOnly, setIsSocialOnly] = useState(false);
+  const [lastAuthProvider] = useState(() => {
+    try {
+      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
+    } catch {
+      return null;
+    }
+  });
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
-  const { ssoProviders, preSocialSigninCheck, getAdditionalData } = useBusinessSignin();
+  const {
+    businessElement,
+    ssoProviders,
+    preSocialSigninCheck,
+    getAdditionalData,
+    getFetchOptions,
+  } = useBusinessSignin();
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -194,20 +209,29 @@ export const useSignIn = () => {
         return;
       }
 
+      try {
+        localStorage.setItem(LAST_AUTH_PROVIDER_KEY, provider);
+      } catch {
+        // Ignore localStorage errors (e.g., quota exceeded, private mode)
+      }
+
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const additionalData = await getAdditionalData();
+      const fetchOptions = await getFetchOptions();
       const result = isBuiltinProvider(normalizedProvider)
         ? await signIn.social({
             additionalData,
             callbackURL: callbackUrl,
+            fetchOptions,
             provider: normalizedProvider,
           })
         : await signIn.oauth2({
             additionalData,
             callbackURL: callbackUrl,
+            fetchOptions,
             providerId: normalizedProvider,
           });
-      if (result?.error) throw result.error;
+      if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
       message.error(t('betterAuth.signin.socialError'));
@@ -243,7 +267,17 @@ export const useSignIn = () => {
     }
   };
 
+  const resolvedProviders = ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders;
+  const sortedProviders = lastAuthProvider
+    ? [...resolvedProviders].sort((a, b) => {
+        if (a === lastAuthProvider) return -1;
+        if (b === lastAuthProvider) return 1;
+        return 0;
+      })
+    : resolvedProviders;
+
   return {
+    businessElement,
     disableEmailPassword,
     email,
     form,
@@ -254,8 +288,9 @@ export const useSignIn = () => {
     handleSignIn,
     handleSocialSignIn,
     isSocialOnly,
+    lastAuthProvider,
     loading,
-    oAuthSSOProviders: ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders,
+    oAuthSSOProviders: sortedProviders,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
     socialLoading,
     step,

@@ -5,7 +5,7 @@ import { ActionIcon, Block, Flexbox, Icon, showContextMenu, stopPropagation } fr
 import { App, Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,7 +14,7 @@ import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
   getTransparentDragImage,
   useDragActive,
-  useDragState,
+  useSetCurrentDrag,
 } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
@@ -135,7 +135,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     });
 
     const isDragActive = useDragActive();
-    const { setCurrentDrag } = useDragState();
+    const setCurrentDrag = useSetCurrentDrag();
     const [isDragging, setIsDragging] = useState(false);
     const [isOver, setIsOver] = useState(false);
 
@@ -264,7 +264,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             {isLoading ? (
               <ActionIcon spin icon={LoadingOutlined as any} size={'small'} style={{ width: 20 }} />
             ) : (
-              <motion.div
+              <m.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}
                 initial={false}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
@@ -278,7 +278,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
                     handleToggle();
                   }}
                 />
-              </motion.div>
+              </m.div>
             )}
             <Flexbox
               horizontal

@@ -5,9 +5,16 @@ import debug from 'debug';
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import { type PipelineContext, type ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    userMemoryInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:UserMemoryInjector');
 
 export interface UserMemoryInjectorConfig {
+  enabled?: boolean;
   /** User memories data */
   memories?: UserMemoryData;
 }
@@ -32,6 +39,8 @@ export class UserMemoryInjector extends BaseFirstUserContentProvider {
   }
 
   protected buildContent(_context: PipelineContext): string | null {
+    if (this.config.enabled === false) return null;
+
     const { memories } = this.config;
     if (!memories) return null;
 

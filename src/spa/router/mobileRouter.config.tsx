@@ -303,6 +303,22 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary resetPath="/" />,
     path: '/onboarding',
   },
+  {
+    element: dynamicElement(
+      () => import('@/routes/onboarding/agent'),
+      'Mobile > Onboarding > Agent',
+    ),
+    errorElement: <ErrorBoundary resetPath="/" />,
+    path: '/onboarding/agent',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/onboarding/classic'),
+      'Mobile > Onboarding > Classic',
+    ),
+    errorElement: <ErrorBoundary resetPath="/" />,
+    path: '/onboarding/classic',
+  },
   ...BusinessMobileRoutesWithoutMainLayout,
 
   // Share topic route (outside main layout)

@@ -43,7 +43,7 @@ Open-source, modern-design AI Agent Workspace: **LobeHub** (previously LobeChat)
 Monorepo using `@lobechat/` namespace for workspace packages.
 
 ```
-lobe-chat/
+lobehub/
 ├── apps/
 │   └── desktop/                 # Electron desktop app
 ├── docs/

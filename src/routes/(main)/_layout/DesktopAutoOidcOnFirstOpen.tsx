@@ -29,11 +29,14 @@ const DesktopAutoOidcOnFirstOpen = memo(() => {
   useEffect(() => {
     if (!isInitRemoteServerConfig) return;
 
-    // Don't auto-trigger during onboarding flow.
+    // Don't auto-trigger during onboarding flow
+    // Check localStorage flag which persists across sign-out
     if (!getDesktopOnboardingCompleted()) return;
 
-    // If already connected or not in cloud mode, don't auto-trigger.
+    // If already connected, don't auto-trigger
     if (dataSyncConfig.active) return;
+
+    // If not in cloud mode, don't auto-trigger
     if (dataSyncConfig.storageMode !== 'cloud') return;
 
     if (getDesktopAutoOidcFirstOpenHandled()) return;

@@ -86,3 +86,12 @@ When set to `1`, LobeHub will convert images to base64 encoding before uploading
 ```log
 Route: [xai] ProviderBizError: Fetching images over plain http:// is not supported.
 ```
+
+### `LLM_VISION_VIDEO_USE_BASE64`
+
+- Type: Optional
+- Description: Set to `1` to use base64 encoding for video upload.
+- Default: undefined
+- Example: `1`
+
+When set to `1`, LobeChat will convert videos to base64 encoding before uploading them to the LLM model.

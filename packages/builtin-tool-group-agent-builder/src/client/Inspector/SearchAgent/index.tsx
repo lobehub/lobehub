@@ -39,7 +39,7 @@ export const SearchAgentInspector = memo<
       <span>{t('builtins.lobe-group-agent-builder.apiName.searchAgent')}</span>
       {query && (
         <>
-          : <span className={highlightTextStyles.primary}>{query}</span>
+          :<span className={highlightTextStyles.primary}>{query}</span>
         </>
       )}
       {!isLoading &&

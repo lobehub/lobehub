@@ -18,6 +18,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
+    "@lobechat/database": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",

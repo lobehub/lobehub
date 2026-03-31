@@ -102,12 +102,12 @@ const NavItem = memo<NavItemProps>(
         paddingInline={4}
         variant={variant}
         onClick={(e) => {
-          if (disabled || loading) return;
-          // Prevent default link behavior for normal clicks (let onClick handle it)
-          // But allow cmd+click to open in new tab
+          // Always prevent default <a> navigation for normal clicks to avoid full page reload.
+          // This must run before any early return to ensure SPA navigation is never bypassed.
           if (href && !isModifierClick(e)) {
             e.preventDefault();
           }
+          if (disabled || loading) return;
           onClick?.(e);
         }}
         {...linkProps}

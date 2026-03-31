@@ -15,7 +15,7 @@ const SenseNova: ModelProviderCard = {
   settings: {
     disableBrowserRequest: true,
     proxyUrl: {
-      placeholder: 'https://api.sensenova.cn/compatible-mode/v1',
+      placeholder: 'https://api.sensenova.cn/compatible-mode/v2',
     },
     sdkType: 'openai',
     showModelFetcher: true,

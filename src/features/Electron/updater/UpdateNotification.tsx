@@ -50,10 +50,10 @@ export const UpdateNotification: React.FC = () => {
   useWatchBroadcast('updateWillInstallLater', () => {
     setInstallConfirmMode('installLater');
 
-    setTimeout(() => setInstallConfirmMode(null), 5000); // 5秒后自动隐藏提示
+    setTimeout(() => setInstallConfirmMode(null), 5000); // Auto-hide the notification after 5 seconds
   });
 
-  // 没有更新或正在下载时不显示任何内容
+  // Do not display anything when there's no update or it's currently downloading
   if (!updateDownloaded && !updateAvailable) return null;
 
   if (installConfirmMode === 'installLater') {

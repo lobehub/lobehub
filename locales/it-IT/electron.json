@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Descrizione",
+  "gateway.descriptionPlaceholder": "Facoltativo",
+  "gateway.deviceName": "Nome Dispositivo",
+  "gateway.deviceNamePlaceholder": "Inserisci il nome del dispositivo",
+  "gateway.enableConnection": "Connetti al Gateway",
+  "gateway.statusConnected": "Connesso al Gateway",
+  "gateway.statusConnecting": "Connessione al Gateway in corso...",
+  "gateway.statusDisconnected": "Non connesso al Gateway",
+  "gateway.title": "Gateway Dispositivo",
   "navigation.chat": "Chat",
   "navigation.discover": "Scopri",
   "navigation.discoverAssistants": "Scopri Assistenti",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "Utilizzare un'istanza self-hosted?",
   "sync.selfHosted.description": "Versione comunitaria che puoi distribuire autonomamente",
   "sync.selfHosted.title": "Istanza self-hosted",
+  "tab.closeCurrentTab": "Chiudi scheda",
+  "tab.closeLeftTabs": "Chiudi schede a sinistra",
+  "tab.closeOtherTabs": "Chiudi altre schede",
+  "tab.closeRightTabs": "Chiudi schede a destra",
   "updater.checkingUpdate": "Verifica aggiornamenti in corso",
   "updater.checkingUpdateDesc": "Recupero informazioni sulla versione...",
   "updater.downloadNewVersion": "Scarica nuova versione",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "Connessione di autorizzazione fallita",
   "waitingOAuth.helpText": "Se il browser non si è aperto automaticamente, fai clic su annulla e riprova",
   "waitingOAuth.retry": "Riprova",
-  "waitingOAuth.title": "In attesa della connessione di autorizzazione"
+  "waitingOAuth.title": "In attesa della connessione di autorizzazione",
+  "window.close": "Chiudi finestra",
+  "window.maximize": "Massimizza finestra",
+  "window.minimize": "Minimizza finestra",
+  "window.restore": "Ripristina finestra"
 }

@@ -3,6 +3,12 @@ import debug from 'debug';
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    forceFinishInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:ForceFinishSummaryInjector');
 
 export interface ForceFinishSummaryInjectorConfig {

@@ -1,4 +1,4 @@
-import { type TrustedClientUserInfo } from '@/libs/trusted-client';
+import { isTrustedClientEnabled, type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
 
 import { trpc } from '../init';
@@ -38,9 +38,15 @@ export const marketSDK = trpc.middleware(async (opts) => {
  * This middleware ensures that either accessToken or marketUserInfo is available.
  * It should be used after marketUserInfo and marketSDK middlewares.
  *
+ * If trusted client is enabled, authentication check is skipped.
  * Throws UNAUTHORIZED error if neither authentication method is available.
  */
 export const requireMarketAuth = trpc.middleware(async (opts) => {
+  // If trusted client is enabled, skip authentication check
+  if (isTrustedClientEnabled()) {
+    return opts.next();
+  }
+
   const ctx = opts.ctx as ContextWithMarketUserInfo;
 
   // Check if any authentication is available

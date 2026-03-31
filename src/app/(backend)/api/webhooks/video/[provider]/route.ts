@@ -15,6 +15,8 @@ import { type RuntimeVideoGenParams } from 'model-bank';
 import { NextResponse } from 'next/server';
 
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
+// TODO: temporarily disabled until notification UI is polished
+// import { notifyVideoCompleted } from '@/business/server/video-generation/notifyVideoCompleted';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { generationBatches } from '@/database/schemas';
@@ -50,8 +52,9 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
   let asyncTaskMetadata: VideoGenerationTaskMetadata | undefined;
 
   try {
-    // Parse webhook body using provider-specific handler
-    const runtime = ModelRuntime.initializeWithProvider(provider, {});
+    const runtime = ModelRuntime.initializeWithProvider(provider, {
+      apiKey: 'webhook-placeholder',
+    });
     const result = await runtime.handleCreateVideoWebhook({ body });
 
     if (!result) {
@@ -199,6 +202,15 @@ export const POST = async (req: Request, { params }: { params: Promise<{ provide
       duration,
       status: AsyncTaskStatus.Success,
     });
+
+    // TODO: temporarily disabled until notification UI is polished
+    // notifyVideoCompleted({
+    //   generationBatchId: generation.generationBatchId!,
+    //   model: resolvedModel,
+    //   prompt: batch?.prompt ?? '',
+    //   topicId: batch?.generationTopicId,
+    //   userId: asyncTask.userId,
+    // }).catch((err) => console.error('[video-webhook] notification failed:', err));
 
     // Charge after successful video generation
     try {

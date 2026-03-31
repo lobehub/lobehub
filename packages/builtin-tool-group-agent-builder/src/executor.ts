@@ -20,6 +20,7 @@ import { GroupAgentBuilderExecutionRuntime } from './ExecutionRuntime';
 import type {
   BatchCreateAgentsParams,
   CreateAgentParams,
+  CreateGroupParams,
   GetAgentInfoParams,
   InviteAgentParams,
   RemoveAgentParams,
@@ -54,6 +55,10 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
 
   searchAgent = async (params: SearchAgentParams): Promise<BuiltinToolResult> => {
     return groupAgentBuilderRuntime.searchAgent(params);
+  };
+
+  createGroup = async (params: CreateGroupParams): Promise<BuiltinToolResult> => {
+    return groupAgentBuilderRuntime.createGroup(params);
   };
 
   createAgent = async (

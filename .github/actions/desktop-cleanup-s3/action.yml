@@ -1,0 +1,93 @@
+name: Desktop Cleanup S3
+description: Remove old release versions from S3, keeping the most recent N versions
+
+inputs:
+  channel:
+    description: 'Update channel (stable, canary, nightly)'
+    required: true
+  keep-count:
+    description: 'Number of recent versions to keep'
+    required: false
+    default: '15'
+  aws-access-key-id:
+    description: 'AWS access key ID'
+    required: true
+  aws-secret-access-key:
+    description: 'AWS secret access key'
+    required: true
+  s3-bucket:
+    description: 'S3 bucket name'
+    required: true
+  s3-region:
+    description: 'S3 region (defaults to us-east-1)'
+    required: false
+    default: 'us-east-1'
+  s3-endpoint:
+    description: 'Custom S3 endpoint (for R2/MinIO etc.)'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Cleanup old S3 versions
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        AWS_REGION: ${{ inputs.s3-region }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_ENDPOINT: ${{ inputs.s3-endpoint }}
+        CHANNEL: ${{ inputs.channel }}
+        KEEP_COUNT: ${{ inputs.keep-count }}
+      run: |
+        if [ -z "$S3_BUCKET" ]; then
+          echo "⚠️ S3 bucket is not configured, skipping cleanup"
+          exit 0
+        fi
+
+        ENDPOINT_ARG=""
+        if [ -n "$S3_ENDPOINT" ]; then
+          ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
+        fi
+
+        echo "🧹 Cleaning up old $CHANNEL versions from S3 (keeping latest $KEEP_COUNT)"
+        echo ""
+
+        # List all version directories under {channel}/
+        # S3 ls output format: "PRE {version}/" for directories
+        all_versions=$(aws s3 ls "s3://$S3_BUCKET/$CHANNEL/" $ENDPOINT_ARG 2>/dev/null \
+          | grep 'PRE ' \
+          | awk '{print $2}' \
+          | sed 's|/$||' \
+          | sort -V)
+
+        if [ -z "$all_versions" ]; then
+          echo "📭 No version directories found in s3://$S3_BUCKET/$CHANNEL/"
+          exit 0
+        fi
+
+        total=$(echo "$all_versions" | wc -l | tr -d ' ')
+        echo "📋 Found $total version(s) in s3://$S3_BUCKET/$CHANNEL/"
+
+        if [ "$total" -le "$KEEP_COUNT" ]; then
+          echo "✅ Nothing to clean up ($total <= $KEEP_COUNT)"
+          exit 0
+        fi
+
+        delete_count=$((total - KEEP_COUNT))
+        to_delete=$(echo "$all_versions" | head -n "$delete_count")
+
+        echo "🗑️ Will delete $delete_count old version(s):"
+        echo "$to_delete" | while read -r version; do
+          echo "   - $version"
+        done
+        echo ""
+
+        echo "$to_delete" | while read -r version; do
+          echo "🗑️ Deleting s3://$S3_BUCKET/$CHANNEL/$version/ ..."
+          aws s3 rm "s3://$S3_BUCKET/$CHANNEL/$version/" --recursive $ENDPOINT_ARG
+        done
+
+        echo ""
+        echo "✅ Cleanup complete. Deleted $delete_count version(s), kept $KEEP_COUNT."

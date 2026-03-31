@@ -11,8 +11,8 @@ import {
   params,
 } from './index';
 
-const defaultOpenAIBaseURL = 'https://api.moonshot.ai/v1';
-const anthropicBaseURL = 'https://api.moonshot.ai/anthropic';
+const defaultOpenAIBaseURL = 'https://api.moonshot.cn/v1';
+const anthropicBaseURL = 'https://api.moonshot.cn/anthropic';
 
 // Mock the console.error and console.warn to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -28,7 +28,7 @@ describe('LobeMoonshotAI', () => {
     it('should route to OpenAI format when baseURL ends with /v1', async () => {
       const runtime = new LobeMoonshotAI({
         apiKey: 'test',
-        baseURL: 'https://api.moonshot.ai/v1',
+        baseURL: 'https://api.moonshot.cn/v1',
       });
       expect(runtime).toBeInstanceOf(LobeMoonshotAI);
     });
@@ -36,7 +36,7 @@ describe('LobeMoonshotAI', () => {
     it('should route to Anthropic format when baseURL ends with /anthropic', async () => {
       const runtime = new LobeMoonshotAI({
         apiKey: 'test',
-        baseURL: 'https://api.moonshot.ai/anthropic',
+        baseURL: 'https://api.moonshot.cn/anthropic',
       });
       expect(runtime).toBeInstanceOf(LobeMoonshotAI);
     });
@@ -44,7 +44,7 @@ describe('LobeMoonshotAI', () => {
     it('should route to Anthropic format when baseURL ends with /anthropic/', async () => {
       const runtime = new LobeMoonshotAI({
         apiKey: 'test',
-        baseURL: 'https://api.moonshot.ai/anthropic/',
+        baseURL: 'https://api.moonshot.cn/anthropic/',
       });
       expect(runtime).toBeInstanceOf(LobeMoonshotAI);
     });

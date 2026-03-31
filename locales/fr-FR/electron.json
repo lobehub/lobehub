@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Description",
+  "gateway.descriptionPlaceholder": "Optionnel",
+  "gateway.deviceName": "Nom de l'appareil",
+  "gateway.deviceNamePlaceholder": "Entrez le nom de l'appareil",
+  "gateway.enableConnection": "Se connecter à la passerelle",
+  "gateway.statusConnected": "Connecté à la passerelle",
+  "gateway.statusConnecting": "Connexion à la passerelle...",
+  "gateway.statusDisconnected": "Non connecté à la passerelle",
+  "gateway.title": "Passerelle de l'appareil",
   "navigation.chat": "Chat",
   "navigation.discover": "Découvrir",
   "navigation.discoverAssistants": "Découvrir les Assistants",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "Utiliser une instance auto-hébergée ?",
   "sync.selfHosted.description": "Version communautaire que vous pouvez déployer vous-même",
   "sync.selfHosted.title": "Instance auto-hébergée",
+  "tab.closeCurrentTab": "Fermer l'onglet",
+  "tab.closeLeftTabs": "Fermer les onglets à gauche",
+  "tab.closeOtherTabs": "Fermer les autres onglets",
+  "tab.closeRightTabs": "Fermer les onglets à droite",
   "updater.checkingUpdate": "Vérification des mises à jour",
   "updater.checkingUpdateDesc": "Récupération des informations de version...",
   "updater.downloadNewVersion": "Télécharger la nouvelle version",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "Échec de la connexion d'autorisation",
   "waitingOAuth.helpText": "Si le navigateur ne s'est pas ouvert automatiquement, veuillez cliquer sur annuler et réessayer",
   "waitingOAuth.retry": "Réessayer",
-  "waitingOAuth.title": "En attente de la connexion d'autorisation"
+  "waitingOAuth.title": "En attente de la connexion d'autorisation",
+  "window.close": "Fermer la fenêtre",
+  "window.maximize": "Maximiser la fenêtre",
+  "window.minimize": "Minimiser la fenêtre",
+  "window.restore": "Restaurer la fenêtre"
 }

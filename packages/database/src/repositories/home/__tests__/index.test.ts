@@ -416,7 +416,9 @@ describe('HomeRepository', () => {
     });
   });
 
-  describe('searchAgents', () => {
+  // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
+  const isServerDB = process.env.TEST_SERVER_DB === '1';
+  describe.skipIf(!isServerDB)('searchAgents', () => {
     beforeEach(async () => {
       // Create test agents for search
       await clientDB.transaction(async (tx) => {

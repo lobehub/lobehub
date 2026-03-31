@@ -104,6 +104,13 @@ vi.mock('@/server/services/klavis', () => ({
   })),
 }));
 
+// Mock FileService
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({
+    uploadFromUrl: vi.fn(),
+  })),
+}));
+
 // Mock Mecha modules
 vi.mock('@/server/modules/Mecha', () => ({
   createServerAgentToolsEngine: vi.fn().mockReturnValue({
@@ -111,6 +118,14 @@ vi.mock('@/server/modules/Mecha', () => ({
     getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
   }),
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
+}));
+
+// Mock deviceProxy
+vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
+  deviceProxy: {
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock model-bank

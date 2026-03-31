@@ -36,6 +36,9 @@ export type OperationType =
   // === Tool intervention ===
   | 'approveToolCalling' // Approve tool intervention
   | 'rejectToolCalling' // Reject tool intervention
+  | 'submitToolInteraction' // Submit user interaction response
+  | 'skipToolInteraction' // Skip user interaction
+  | 'cancelToolInteraction' // Cancel user interaction
   // === (sub-operations of executeToolCall) ===
   | 'pluginApi' // Plugin API call
   | 'builtinToolSearch' // Builtin tool: search
@@ -182,6 +185,37 @@ export interface Operation {
 }
 
 /**
+ * Queued message waiting to be injected into agent runtime
+ */
+export interface QueuedMessage {
+  content: string;
+  createdAt: number;
+  files?: string[];
+  id: string;
+  interruptMode: 'soft' | 'hard';
+}
+
+/**
+ * Merged message ready for injection
+ */
+export interface MergedQueuedMessage {
+  content: string;
+  files: string[];
+}
+
+/**
+ * Merge multiple queued messages into a single message.
+ * Sorted by creation time, content joined with double newlines.
+ */
+export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMessage => {
+  const sorted = [...messages].sort((a, b) => a.createdAt - b.createdAt);
+  return {
+    content: sorted.map((m) => m.content).join('\n\n'),
+    files: sorted.flatMap((m) => m.files ?? []),
+  };
+};
+
+/**
  * Operation filter for querying operations
  */
 export interface OperationFilter {
@@ -207,4 +241,14 @@ export interface OperationFilter {
 export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
   'execServerAgentRuntime',
+];
+
+/**
+ * Operation types that should block input and show loading state
+ * Superset of AI_RUNTIME_OPERATION_TYPES, also includes sendMessage
+ * since the input should be in loading state from the moment user sends until AI finishes
+ */
+export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
+  ...AI_RUNTIME_OPERATION_TYPES,
+  'sendMessage',
 ];

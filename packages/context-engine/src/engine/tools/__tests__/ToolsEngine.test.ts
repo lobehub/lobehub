@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createEnableChecker } from '../enableCheckerFactory';
 import { ToolsEngine } from '../ToolsEngine';
 import type { LobeToolManifest } from '../types';
 
@@ -1057,6 +1058,103 @@ describe('ToolsEngine', () => {
     });
   });
 
+  describe('explicit activation with always-on builtins', () => {
+    const builtinManifests: LobeToolManifest[] = [
+      {
+        identifier: 'lobe-activator',
+        api: [
+          { name: 'run', description: 'Discover and activate tools and skills', parameters: {} },
+        ],
+        meta: { title: 'Tools' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-skills',
+        api: [{ name: 'run', description: 'Run skill', parameters: {} }],
+        meta: { title: 'Skills' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-skill-store',
+        api: [{ name: 'search', description: 'Search', parameters: {} }],
+        meta: { title: 'Skill Store' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-web-browsing',
+        api: [{ name: 'search', description: 'Search web', parameters: {} }],
+        meta: { title: 'Web Browsing' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-knowledge-base',
+        api: [{ name: 'query', description: 'Query KB', parameters: {} }],
+        meta: { title: 'Knowledge Base' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-user-memory',
+        api: [{ name: 'recall', description: 'Recall', parameters: {} }],
+        meta: { title: 'Memory' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-notebook',
+        api: [{ name: 'write', description: 'Write note', parameters: {} }],
+        meta: { title: 'Notebook' },
+        type: 'builtin',
+      },
+    ];
+
+    it('should only enable notebook + always-on builtins when user selected only notebook', () => {
+      const userSelectedPlugins = ['lobe-notebook'];
+      const defaultToolIds = [
+        'lobe-activator',
+        'lobe-skills',
+        'lobe-skill-store',
+        'lobe-web-browsing',
+        'lobe-knowledge-base',
+        'lobe-user-memory',
+      ];
+
+      // Build rules: user-selected plugins + always-on builtins + system conditions
+      const rules: Record<string, boolean> = {
+        // User-selected plugins
+        ...Object.fromEntries(userSelectedPlugins.map((id) => [id, true])),
+        // Always-on builtin tools
+        'lobe-activator': true,
+        'lobe-skills': true,
+        // System-level rules
+        'lobe-knowledge-base': false, // no knowledge bases enabled
+        'lobe-user-memory': false, // memory disabled
+        'lobe-web-browsing': true, // search enabled
+      };
+
+      const engine = new ToolsEngine({
+        manifestSchemas: builtinManifests,
+        defaultToolIds,
+        enableChecker: createEnableChecker({ rules }),
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: userSelectedPlugins,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      // notebook + web-browsing + always-on builtins (lobe-activator, lobe-skills) should be enabled
+      expect(result.enabledToolIds).toContain('lobe-notebook');
+      expect(result.enabledToolIds).toContain('lobe-web-browsing');
+      expect(result.enabledToolIds).toContain('lobe-activator');
+      expect(result.enabledToolIds).toContain('lobe-skills');
+      // lobe-skill-store should NOT be enabled (not always-on, not user-selected)
+      expect(result.enabledToolIds).not.toContain('lobe-skill-store');
+      expect(result.enabledToolIds).not.toContain('lobe-knowledge-base');
+      expect(result.enabledToolIds).not.toContain('lobe-user-memory');
+    });
+  });
+
   describe('deduplication', () => {
     it('should deduplicate tool IDs in toolIds array', () => {
       const engine = new ToolsEngine({
@@ -1133,6 +1231,158 @@ describe('ToolsEngine', () => {
 
       // Should only generate 2 unique tools despite multiple duplicates
       expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('excludeDefaultToolIds (manual skill mode)', () => {
+    const builtinManifests: LobeToolManifest[] = [
+      {
+        identifier: 'lobe-activator',
+        api: [{ name: 'run', description: 'Run tool', parameters: {} }],
+        meta: { title: 'Tools' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-skills',
+        api: [{ name: 'run', description: 'Run skill', parameters: {} }],
+        meta: { title: 'Skills' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-skill-store',
+        api: [{ name: 'search', description: 'Search', parameters: {} }],
+        meta: { title: 'Skill Store' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-web-browsing',
+        api: [{ name: 'search', description: 'Search web', parameters: {} }],
+        meta: { title: 'Web Browsing' },
+        type: 'builtin',
+      },
+      {
+        identifier: 'lobe-cloud-sandbox',
+        api: [{ name: 'exec', description: 'Execute', parameters: {} }],
+        meta: { title: 'Cloud Sandbox' },
+        type: 'builtin',
+      },
+    ];
+
+    const defaultToolIds = [
+      'lobe-activator',
+      'lobe-skills',
+      'lobe-skill-store',
+      'lobe-web-browsing',
+      'lobe-cloud-sandbox',
+    ];
+
+    const alwaysOnToolIds = ['lobe-activator', 'lobe-skills', 'lobe-skill-store'];
+    const manualModeExcludeToolIds = ['lobe-activator', 'lobe-skill-store'];
+
+    it('should NOT inject lobe-activator and lobe-skill-store in manual mode', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: builtinManifests,
+        defaultToolIds,
+        enableChecker: createEnableChecker({
+          rules: {
+            ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+            'lobe-web-browsing': true,
+            'lobe-cloud-sandbox': true,
+          },
+        }),
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+        excludeDefaultToolIds: manualModeExcludeToolIds,
+      });
+
+      // Discovery tools should be excluded from defaults in manual mode
+      expect(result.enabledToolIds).not.toContain('lobe-activator');
+      expect(result.enabledToolIds).not.toContain('lobe-skill-store');
+      // Execution tools and other defaults should still be available
+      expect(result.enabledToolIds).toContain('lobe-skills');
+      expect(result.enabledToolIds).toContain('lobe-web-browsing');
+      expect(result.enabledToolIds).toContain('lobe-cloud-sandbox');
+    });
+
+    it('should inject lobe-activator and lobe-skill-store in auto mode (no excludeDefaultToolIds)', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: builtinManifests,
+        defaultToolIds,
+        enableChecker: createEnableChecker({
+          rules: {
+            ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+            'lobe-web-browsing': true,
+            'lobe-cloud-sandbox': true,
+          },
+        }),
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+        // No excludeDefaultToolIds = auto mode
+      });
+
+      // All default tools should be injected in auto mode
+      expect(result.enabledToolIds).toContain('lobe-activator');
+      expect(result.enabledToolIds).toContain('lobe-skill-store');
+      expect(result.enabledToolIds).toContain('lobe-skills');
+      expect(result.enabledToolIds).toContain('lobe-web-browsing');
+      expect(result.enabledToolIds).toContain('lobe-cloud-sandbox');
+    });
+
+    it('should keep externally enabled tools (sandbox, web browsing) available in manual mode', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: builtinManifests,
+        defaultToolIds,
+        enableChecker: createEnableChecker({
+          rules: {
+            ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
+            'lobe-web-browsing': true,
+            'lobe-cloud-sandbox': true,
+          },
+        }),
+        functionCallChecker: () => true,
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+        excludeDefaultToolIds: manualModeExcludeToolIds,
+      });
+
+      // Web browsing and sandbox should remain available even in manual mode
+      expect(result.enabledToolIds).toContain('lobe-web-browsing');
+      expect(result.enabledToolIds).toContain('lobe-cloud-sandbox');
+      expect(result.enabledToolIds).toHaveLength(3); // skills + web-browsing + cloud-sandbox
+    });
+
+    it('should not affect skipDefaultTools behavior', () => {
+      const engine = new ToolsEngine({
+        manifestSchemas: builtinManifests,
+        defaultToolIds,
+        enableChecker: () => true,
+        functionCallChecker: () => true,
+      });
+
+      // skipDefaultTools should still skip ALL defaults
+      const result = engine.generateToolsDetailed({
+        toolIds: [],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.tools).toBeUndefined();
     });
   });
 

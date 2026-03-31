@@ -47,6 +47,7 @@ export const searchRouter = router({
         type: z
           .enum([
             'agent',
+            'chatGroup',
             'topic',
             'file',
             'folder',
@@ -56,6 +57,7 @@ export const searchRouter = router({
             'mcp',
             'plugin',
             'communityAgent',
+            'knowledgeBase',
           ])
           .optional(),
       }),
@@ -70,7 +72,20 @@ export const searchRouter = router({
       const searchPromises: Promise<any>[] = [];
 
       // Database searches (agent, topic, file, folder, message, page, memory)
-      if (!type || ['agent', 'topic', 'file', 'folder', 'message', 'page', 'memory'].includes(type)) {
+      if (
+        !type ||
+        [
+          'agent',
+          'chatGroup',
+          'topic',
+          'file',
+          'folder',
+          'message',
+          'page',
+          'memory',
+          'knowledgeBase',
+        ].includes(type)
+      ) {
         searchPromises.push(ctx.searchRepo.search(input));
       }
 
@@ -168,7 +183,7 @@ export const searchRouter = router({
                 ),
                 tags: item.tags || null,
                 title: (item.title || item.identifier) as string,
-                type: 'assistant' as const,
+                type: 'communityAgent' as const,
                 updatedAt: new Date(item.updatedAt || Date.now()),
               })),
             )

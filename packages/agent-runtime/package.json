@@ -12,6 +12,7 @@
     "p-map": "^7.0.4"
   },
   "devDependencies": {
+    "@lobechat/context-engine": "workspace:*",
     "@lobechat/types": "workspace:*",
     "openai": "^4.104.0"
   }

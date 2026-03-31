@@ -34,10 +34,9 @@ const Body = memo(() => {
       <Accordion
         gap={8}
         defaultExpandedKeys={[
-          SettingsGroupKey.Profile,
+          SettingsGroupKey.General,
           SettingsGroupKey.Subscription,
-          SettingsGroupKey.Account,
-          SettingsGroupKey.AIConfig,
+          SettingsGroupKey.Agent,
           SettingsGroupKey.System,
         ]}
       >

@@ -19,6 +19,7 @@ export type ChatPayloadForTransformStream = {
  * context in the stream to save temporarily data
  */
 export interface StreamContext {
+  chunkIndex?: number;
   id: string;
   /**
    * As pplx citations is in every chunk, but we only need to return it once

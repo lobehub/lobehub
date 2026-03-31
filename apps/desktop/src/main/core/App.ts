@@ -1,22 +1,28 @@
-import { ElectronIPCEventHandler, ElectronIPCServer } from '@lobechat/electron-server-ipc';
-import { app, nativeTheme, protocol } from 'electron';
-import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
-import { macOS, windows } from 'electron-is';
 import os from 'node:os';
 import { join } from 'node:path';
 
+import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
+import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
+import { app, nativeTheme, protocol } from 'electron';
+import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
+import { macOS, windows } from 'electron-is';
+
 import { name } from '@/../../package.json';
-import { buildDir } from '@/const/dir';
+import { binDir, buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
-import { IControlModule } from '@/controllers';
+import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
 import {
   astSearchDetectors,
+  browserAutomationDetectors,
   contentSearchDetectors,
   fileSearchDetectors,
+  type IToolDetector,
+  runtimeEnvironmentDetectors,
+  type ToolCategory,
 } from '@/modules/toolDetectors';
-import { IServiceModule } from '@/services';
+import type { IServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
@@ -79,8 +85,13 @@ export class App {
     logger.info(` RAM: ${Math.round(os.totalmem() / 1024 / 1024 / 1024)} GB`);
     logger.info(`PATH: ${app.getAppPath()}`);
     logger.info(` lng: ${app.getLocale()}`);
+    logger.info(` bin: ${binDir}`);
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
+
+    // Append bundled binaries directory to PATH for fallback tool resolution
+    const pathSep = process.platform === 'win32' ? ';' : ':';
+    process.env.PATH = `${process.env.PATH}${pathSep}${binDir}`;
 
     logger.debug('Initializing App');
     // Initialize store manager
@@ -176,19 +187,20 @@ export class App {
   private registerBuiltinToolDetectors() {
     logger.debug('Registering built-in tool detectors');
 
-    // Register content search tools (rg, ag, grep)
-    for (const detector of contentSearchDetectors) {
-      this.toolDetectorManager.register(detector, 'content-search');
-    }
+    const detectorCategories: Partial<Record<ToolCategory, IToolDetector[]>> = {
+      'runtime-environment': runtimeEnvironmentDetectors,
+      'ast-search': astSearchDetectors,
+      'browser-automation': browserAutomationDetectors,
+      'content-search': contentSearchDetectors,
+      'file-search': fileSearchDetectors,
+    };
 
-    // Register AST-based code search tools (ast-grep)
-    for (const detector of astSearchDetectors) {
-      this.toolDetectorManager.register(detector, 'ast-search');
-    }
-
-    // Register file search tools (mdfind, fd, find)
-    for (const detector of fileSearchDetectors) {
-      this.toolDetectorManager.register(detector, 'file-search');
+    for (const [category, detectors] of Object.entries(detectorCategories)) {
+      if (detectors) {
+        for (const detector of detectors) {
+          this.toolDetectorManager.register(detector, category as ToolCategory);
+        }
+      }
     }
 
     logger.info(
@@ -224,7 +236,7 @@ export class App {
     // Initialize global shortcuts: globalShortcut must be called after app.whenReady()
     this.shortcutManager.initialize();
 
-    this.browserManager.initializeBrowsers();
+    await this.browserManager.initializeBrowsers();
 
     // Initialize tray manager
     if (process.platform === 'win32') {
@@ -238,8 +250,8 @@ export class App {
     this.isQuiting = false;
 
     app.on('window-all-closed', () => {
-      if (windows()) {
-        logger.info('All windows closed, quitting application (Windows)');
+      if (windows() || process.platform === 'linux') {
+        logger.info(`All windows closed, quitting application (${process.platform})`);
         app.quit();
       }
     });

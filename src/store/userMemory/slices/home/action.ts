@@ -25,19 +25,23 @@ export class HomeActionImpl {
     void get;
   }
 
-  useFetchPersona = (): SWRResponse<PersonaData | null> => {
-    return useClientDataSWR(FETCH_PERSONA_KEY, () => userMemoryService.getPersona(), {
-      onSuccess: (data: PersonaData | null | undefined) => {
-        this.#set(
-          {
-            persona: data ?? undefined,
-            personaInit: true,
-          },
-          false,
-          n('useFetchPersona/onSuccess'),
-        );
+  useFetchPersona = (isLogin = true): SWRResponse<PersonaData | null> => {
+    return useClientDataSWR(
+      isLogin ? FETCH_PERSONA_KEY : null,
+      () => userMemoryService.getPersona(),
+      {
+        onSuccess: (data: PersonaData | null | undefined) => {
+          this.#set(
+            {
+              persona: data ?? undefined,
+              personaInit: true,
+            },
+            false,
+            n('useFetchPersona/onSuccess'),
+          );
+        },
       },
-    });
+    );
   };
 
   useFetchTags = (): SWRResponse<QueryIdentityRolesResult> => {

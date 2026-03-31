@@ -25,7 +25,7 @@ const GithubBadge = memo(() => {
 
   const badgeFullUrl = urlJoin(OFFICIAL_SITE, 'badge/mcp-full', identifier);
 
-  // 构建带主题参数的完整 badge URL
+  // Build the full badge URL with theme parameter
   const styledBadgeFullUrl =
     selectedTheme === 'dark' ? badgeFullUrl : `${badgeFullUrl}?theme=${selectedTheme}`;
 

@@ -63,7 +63,7 @@ Version number is automatically bumped by patch +1. There are 4 common scenarios
 | Weekly Release      | canary        | `release/weekly-{YYYYMMDD}`   | Weekly release train, canary → main              |
 | Bug Hotfix          | main          | `hotfix/v{version}-{hash}`    | Emergency bug fix                                |
 | New Model Launch    | canary        | Community PR merged directly  | New model launch, triggered by PR title prefix   |
-| DB Schema Migration | canary        | `release/db-migration-{name}` | Database migration, requires dedicated changelog |
+| DB Schema Migration | main          | `release/db-migration-{name}` | Database migration, requires dedicated changelog |
 
 All scenarios auto-bump patch +1. Patch PR titles do not need a version number. See `reference/patch-release-scenarios.md` for detailed steps per scenario.
 
@@ -116,6 +116,14 @@ When the user requests a release:
 3. Push and create a PR — **title must be `🚀 release: v{version}`**
 4. Inform the user that merging the PR will automatically trigger the release
 
+### Precheck
+
+Before creating the release branch, verify the source branch:
+
+- **Weekly Release** (`release/weekly-*`): must branch from `canary`
+- **All other release/hotfix branches**: must branch from `main` — run `git merge-base --is-ancestor main <branch> && echo OK` to confirm
+- If the branch is based on the wrong source, delete and recreate from the correct base
+
 ### Patch Release
 
 Choose the appropriate workflow based on the scenario (see `reference/patch-release-scenarios.md`):
@@ -123,7 +131,7 @@ Choose the appropriate workflow based on the scenario (see `reference/patch-rele
 - **Weekly Release**: Create a `release/weekly-{YYYYMMDD}` branch from canary, scan `git log main..canary` to write the changelog, title like `🚀 release: 20260222`
 - **Bug Hotfix**: Create a `hotfix/` branch from main, use a gitmoji prefix title (e.g. `🐛 fix: ...`)
 - **New Model Launch**: Community PRs trigger automatically via title prefix (`feat` / `style`), no extra steps needed
-- **DB Migration**: Create a `release/db-migration-{name}` branch from canary, write a dedicated migration changelog
+- **DB Migration**: Create a `release/db-migration-{name}` branch from main, cherry-pick migration commits, write a dedicated migration changelog
 
 ### Important Notes
 

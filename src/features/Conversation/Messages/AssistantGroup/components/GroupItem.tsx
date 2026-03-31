@@ -11,11 +11,12 @@ interface GroupItemProps extends AssistantContentBlock {
   assistantId: string;
   contentId?: string;
   disableEditing?: boolean;
+  isFirstBlock?: boolean;
   messageIndex: number;
 }
 
 const GroupItem = memo<GroupItemProps>(
-  ({ contentId, disableEditing, error, assistantId, ...item }) => {
+  ({ contentId, disableEditing, error, assistantId, isFirstBlock, ...item }) => {
     const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
 
     return item.id === contentId ? (
@@ -30,6 +31,7 @@ const GroupItem = memo<GroupItemProps>(
           assistantId={assistantId}
           disableEditing={disableEditing}
           error={error}
+          isFirstBlock={isFirstBlock}
         />
       </Flexbox>
     ) : (
@@ -38,6 +40,7 @@ const GroupItem = memo<GroupItemProps>(
         assistantId={assistantId}
         disableEditing={disableEditing}
         error={error}
+        isFirstBlock={isFirstBlock}
       />
     );
   },

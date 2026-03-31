@@ -1,4 +1,13 @@
 {
+  "gateway.description": "توضیحات",
+  "gateway.descriptionPlaceholder": "اختیاری",
+  "gateway.deviceName": "نام دستگاه",
+  "gateway.deviceNamePlaceholder": "نام دستگاه را وارد کنید",
+  "gateway.enableConnection": "اتصال به درگاه",
+  "gateway.statusConnected": "متصل به درگاه",
+  "gateway.statusConnecting": "در حال اتصال به درگاه...",
+  "gateway.statusDisconnected": "به درگاه متصل نیست",
+  "gateway.title": "درگاه دستگاه",
   "navigation.chat": "چت",
   "navigation.discover": "کشف",
   "navigation.discoverAssistants": "کشف دستیاران",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "از نسخه خودمیزبان استفاده می‌کنید؟",
   "sync.selfHosted.description": "نسخه جامعه که می‌توانید خودتان آن را راه‌اندازی کنید",
   "sync.selfHosted.title": "نسخه خودمیزبان",
+  "tab.closeCurrentTab": "بستن زبانه",
+  "tab.closeLeftTabs": "بستن زبانه‌های سمت چپ",
+  "tab.closeOtherTabs": "بستن سایر زبانه‌ها",
+  "tab.closeRightTabs": "بستن زبانه‌های سمت راست",
   "updater.checkingUpdate": "در حال بررسی به‌روزرسانی",
   "updater.checkingUpdateDesc": "در حال دریافت اطلاعات نسخه...",
   "updater.downloadNewVersion": "دانلود نسخه جدید",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "اتصال احراز هویت ناموفق بود",
   "waitingOAuth.helpText": "اگر مرورگر به‌طور خودکار باز نشد، لطفاً لغو را بزنید و دوباره تلاش کنید",
   "waitingOAuth.retry": "تلاش مجدد",
-  "waitingOAuth.title": "در انتظار اتصال احراز هویت"
+  "waitingOAuth.title": "در انتظار اتصال احراز هویت",
+  "window.close": "بستن پنجره",
+  "window.maximize": "حداکثر کردن پنجره",
+  "window.minimize": "حداقل کردن پنجره",
+  "window.restore": "بازیابی پنجره"
 }

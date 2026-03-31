@@ -1,20 +1,48 @@
 name: lobehub
 services:
-  network-service:
-    image: alpine
-    container_name: lobe-network
-    restart: always
+  lobe:
+    image: lobehub/lobehub
+    container_name: lobehub
     ports:
-      - '${RUSTFS_PORT}:9000' # RustFS API
-      - '9001:9001' # RustFS Console
-      - '${LOBE_PORT}:3210' # LobeChat
-    command: tail -f /dev/null
+      - '${LOBE_PORT}:3210'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      - 'KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}'
+      - 'AUTH_SECRET=${AUTH_SECRET}'
+      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
+      - 'INTERNAL_APP_URL=http://localhost:3210'
+      - 'S3_ENDPOINT=${S3_ENDPOINT}'
+      - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
+      - 'S3_ENABLE_PATH_STYLE=1'
+      - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
+      - 'S3_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}'
+      - 'S3_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}'
+      - 'LLM_VISION_IMAGE_USE_BASE64=1'
+      - 'S3_SET_ACL=0'
+      - 'SEARXNG_URL=http://searxng:8080'
+      - 'REDIS_URL=redis://redis:6379'
+      - 'REDIS_PREFIX=lobechat'
+      - 'REDIS_TLS=0'
+    env_file:
+      - .env
+    restart: always
     networks:
       - lobe-network
 
   postgresql:
     image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
+    # Optional: Remove or change these ports if:
+    # - You don't need external database access
+    # - The ports conflict with other services on your host
     ports:
       - '5432:5432'
     volumes:
@@ -34,6 +62,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: lobe-redis
+    # Optional: Remove or change these ports if:
+    # - You don't need external access
+    # - The ports conflict with other services on your host
     ports:
       - '6379:6379'
     command: redis-server --save 60 1000 --appendonly yes
@@ -51,13 +82,20 @@ services:
   rustfs:
     image: rustfs/rustfs:latest
     container_name: lobe-rustfs
-    network_mode: 'service:network-service'
+    ports:
+      - '${RUSTFS_PORT}:9000'
+      - '${RUSTFS_ADMIN_PORT}:9001'
+    # Optional: Remove or change RUSTFS_ADMIN_PORT if:
+    # - You don't need external access to rustfs control panel
+    # - The ports conflict with other services on your host
+    # - RUSTFS_PORT is necessary only if you need to upload images to conversations. (avatar uploads are not affected)
+    # - Uploading images to conversations requires a browser-accessible S3_ENDPOINT.
     environment:
       - RUSTFS_CONSOLE_ENABLE=true
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
     volumes:
-      - rustfs-data:/data
+      - 'rustfs-data:/data'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
       interval: 5s
@@ -65,6 +103,8 @@ services:
       retries: 30
     command:
       ['--access-key', '${RUSTFS_ACCESS_KEY}', '--secret-key', '${RUSTFS_SECRET_KEY}', '/data']
+    networks:
+      - lobe-network
 
   rustfs-init:
     image: minio/mc:latest
@@ -75,7 +115,7 @@ services:
     volumes:
       - ./bucket.config.json:/bucket.config.json:ro
     entrypoint: /bin/sh
-    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; mc --version; mc alias set rustfs "http://network-service:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
+    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; mc --version; mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
     restart: 'no'
     networks:
       - lobe-network
@@ -93,48 +133,12 @@ services:
     env_file:
       - .env
 
-  lobe:
-    image: lobehub/lobehub
-    container_name: lobehub
-    network_mode: 'service:network-service'
-    depends_on:
-      postgresql:
-        condition: service_healthy
-      network-service:
-        condition: service_started
-      rustfs:
-        condition: service_healthy
-      rustfs-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    environment:
-      - 'KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}'
-      - 'AUTH_SECRET=${AUTH_SECRET}'
-      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
-      - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
-      - 'S3_ENABLE_PATH_STYLE=1'
-      - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
-      - 'S3_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}'
-      - 'S3_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}'
-      - 'LLM_VISION_IMAGE_USE_BASE64=1'
-      - 'S3_SET_ACL=0'
-      - 'SEARXNG_URL=http://searxng:8080'
-      - 'REDIS_URL=redis://redis:6379'
-      - 'REDIS_PREFIX=lobechat'
-      - 'REDIS_TLS=0'
-    env_file:
-      - .env
-    restart: always
+networks:
+  lobe-network:
+    driver: bridge
 
 volumes:
-  data:
-    driver: local
   redis_data:
     driver: local
   rustfs-data:
     driver: local
-
-networks:
-  lobe-network:
-    driver: bridge

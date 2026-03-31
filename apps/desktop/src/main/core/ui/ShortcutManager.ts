@@ -84,13 +84,23 @@ export class ShortcutManager {
       }
 
       // 2. Basic format validation
-      if (!accelerator || typeof accelerator !== 'string' || accelerator.trim() === '') {
+      if (typeof accelerator !== 'string') {
         logger.error(`Invalid accelerator format: ${accelerator}`);
         return { errorType: 'INVALID_FORMAT', success: false };
       }
 
+      const trimmedAccelerator = accelerator.trim();
+
+      // Empty value means disable this shortcut binding
+      if (trimmedAccelerator === '') {
+        this.shortcutsConfig[id] = '';
+        this.saveShortcutsConfig();
+        this.registerConfiguredShortcuts();
+        return { success: true };
+      }
+
       // Convert frontend format to Electron format
-      const convertedAccelerator = this.convertAcceleratorFormat(accelerator.trim());
+      const convertedAccelerator = this.convertAcceleratorFormat(trimmedAccelerator);
       const cleanAccelerator = convertedAccelerator.toLowerCase();
 
       logger.debug(`Converted accelerator from ${accelerator} to ${convertedAccelerator}`);
@@ -221,7 +231,7 @@ export class ShortcutManager {
       // If no configuration, use default configuration
       if (!config || Object.keys(config).length === 0) {
         logger.debug('No shortcuts config found, using defaults');
-        this.shortcutsConfig = DEFAULT_SHORTCUTS_CONFIG;
+        this.shortcutsConfig = { ...DEFAULT_SHORTCUTS_CONFIG };
         this.saveShortcutsConfig();
       } else {
         // Filter out invalid shortcuts that are not in DEFAULT_SHORTCUTS_CONFIG
@@ -257,7 +267,7 @@ export class ShortcutManager {
       logger.debug('Loaded shortcuts config:', this.shortcutsConfig);
     } catch (error) {
       logger.error('Error loading shortcuts config:', error);
-      this.shortcutsConfig = DEFAULT_SHORTCUTS_CONFIG;
+      this.shortcutsConfig = { ...DEFAULT_SHORTCUTS_CONFIG };
       this.saveShortcutsConfig();
     }
   }

@@ -13,6 +13,7 @@ import urlJoin from 'url-join';
 import { OFFICIAL_SITE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
+import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
@@ -25,10 +26,10 @@ const LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL = urlJoin(
   '/docs/usage/migrate-from-local-database',
 );
 
-// 登录方式类型
+// Login method type
 type LoginMethod = 'cloud' | 'selfhost';
 
-// 登录状态类型
+// Login status type
 type LoginStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const authorizationPhaseI18nKeyMap: Record<AuthorizationPhase, string> = {
@@ -69,6 +70,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const [showEndpoint, setShowEndpoint] = useState(false);
   const [hasLegacyLocalDb, setHasLegacyLocalDb] = useState(false);
   const [localRemainingSeconds, setLocalRemainingSeconds] = useState<number | null>(null);
+  const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
   const [
     dataSyncConfig,
@@ -115,12 +117,12 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     !!endpoint.trim() &&
     endpoint.trim() === (dataSyncConfig?.remoteServerUrl ?? '');
 
-  // 判断是否可以开始使用（任一方式成功即可）
+  // Determine if user can proceed (either method succeeding is sufficient)
   const canStart = () => {
     return isCloudAuthed || cloudLoginStatus === 'success' || isSelfHostEndpointVerified;
   };
 
-  // 处理云端登录
+  // Handle cloud login
   const handleCloudLogin = async () => {
     if (!isDesktop) {
       setRemoteError(t('screen5.errors.desktopOnlyOidc'));
@@ -138,7 +140,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     });
   };
 
-  // 处理自建服务器连接
+  // Handle self-hosted server connection
   const handleSelfhostConnect = async () => {
     if (!isDesktop) {
       setRemoteError(t('screen5.errors.desktopOnlyOidc'));
@@ -155,7 +157,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     await connectRemoteServer({ remoteServerUrl: url, storageMode: 'selfHost' });
   };
 
-  // 退出登录（断开远程同步授权）并回到登录选择
+  // Sign out (disconnect remote sync authorization) and return to login selection
   const handleSignOut = async () => {
     if (isSigningOut) return;
 
@@ -257,7 +259,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     await remoteServerService.cancelAuthorization();
   };
 
-  // 渲染 Cloud 登录内容
+  // Render Cloud login content
   const renderCloudContent = () => {
     if (cloudLoginStatus === 'success') {
       return (
@@ -359,7 +361,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     );
   };
 
-  // 渲染 Self-host 登录内容
+  // Render Self-host login content
   const renderSelfhostContent = () => {
     if (selfhostLoginStatus === 'success') {
       return (
@@ -457,6 +459,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           style={{ width: '100%' }}
           value={endpoint}
           onChange={(e) => setEndpoint(e.target.value)}
+          {...compositionProps}
           onContextMenu={async (e) => {
             if (!isDesktop) return;
             e.preventDefault();
@@ -471,7 +474,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             });
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !isComposingRef.current) {
               handleSelfhostConnect();
             }
           }}
@@ -532,7 +535,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
               </Text>
             </Divider>
 
-            {/* Self-host 选项 */}
+            {/* Self-host option */}
             {renderSelfhostContent()}
           </>
         )}

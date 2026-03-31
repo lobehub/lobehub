@@ -29,9 +29,10 @@ export type MenuContext =
   | 'memory'
   | 'community'
   | 'page'
-  | 'painting';
+  | 'painting'
+  | 'video';
 
 export type ContextType = Extract<
   MenuContext,
-  'agent' | 'group' | 'resource' | 'settings' | 'page' | 'painting'
+  'agent' | 'group' | 'resource' | 'settings' | 'page' | 'painting' | 'video'
 >;

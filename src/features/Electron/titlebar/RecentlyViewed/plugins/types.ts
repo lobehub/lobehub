@@ -73,6 +73,12 @@ export interface BaseRecentlyViewedPlugin {
   matchUrl: (pathname: string, searchParams: URLSearchParams) => boolean;
 
   /**
+   * Called when a tab with this reference type is activated.
+   * Use to perform store-level state transitions (e.g. switchTopic).
+   */
+  onActivate?: (reference: PageReference) => void;
+
+  /**
    * Parse URL into a page reference
    */
   parseUrl: (pathname: string, searchParams: URLSearchParams) => PageReference | null;
@@ -124,6 +130,12 @@ export interface RecentlyViewedPlugin<T extends PageType = PageType> {
    * Check if URL matches this plugin
    */
   matchUrl: (pathname: string, searchParams: URLSearchParams) => boolean;
+
+  /**
+   * Called when a tab with this reference type is activated.
+   * Use to perform store-level state transitions (e.g. switchTopic).
+   */
+  onActivate?: (reference: PageReference<T>) => void;
 
   /**
    * Parse URL into a page reference

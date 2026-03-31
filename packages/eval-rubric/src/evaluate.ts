@@ -87,12 +87,20 @@ export const evaluate = async (
       const candidates: string[] = JSON.parse(expected);
       const results: MatchResult[] = [];
       for (const c of candidates) {
-        results.push(await match({ actual: extracted, expected: c, rubric }, matchContext));
+        results.push(
+          await match(
+            { input: testCase.input, actual: extracted, expected: c, rubric },
+            matchContext,
+          ),
+        );
       }
       const best = results.reduce((a, b) => (a.score >= b.score ? a : b));
       result = best;
     } else {
-      result = await match({ actual: extracted, expected, rubric }, matchContext);
+      result = await match(
+        { input: testCase.input, actual: extracted, expected, rubric },
+        matchContext,
+      );
     }
 
     rubricResults.push({

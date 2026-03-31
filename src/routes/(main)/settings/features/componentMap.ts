@@ -7,24 +7,27 @@ import { SettingsTabs } from '@/store/global/initialState';
 const loading = (debugId: string) => () => createElement(Loading, { debugId });
 
 export const componentMap = {
-  [SettingsTabs.Common]: dynamic(() => import('../common'), {
-    loading: loading('Settings > Common'),
+  [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
+    loading: loading('Settings > Advanced'),
   }),
-  [SettingsTabs.ChatAppearance]: dynamic(() => import('../chat-appearance'), {
-    loading: loading('Settings > ChatAppearance'),
+  [SettingsTabs.Appearance]: dynamic(() => import('../appearance'), {
+    loading: loading('Settings > Appearance'),
   }),
   [SettingsTabs.Provider]: dynamic(() => import('../provider'), {
     loading: loading('Settings > Provider'),
   }),
-  [SettingsTabs.Image]: dynamic(() => import('../image'), {
-    loading: loading('Settings > Image'),
+  [SettingsTabs.ServiceModel]: dynamic(() => import('../service-model'), {
+    loading: loading('Settings > ServiceModel'),
   }),
   [SettingsTabs.Memory]: dynamic(() => import('../memory'), {
     loading: loading('Settings > Memory'),
   }),
-  [SettingsTabs.TTS]: dynamic(() => import('../tts'), {
-    loading: loading('Settings > TTS'),
-  }),
+  [SettingsTabs.Notification]: dynamic(
+    () => import('@/business/client/BusinessSettingPages/Notification'),
+    {
+      loading: loading('Settings > Notification'),
+    },
+  ),
   [SettingsTabs.About]: dynamic(() => import('../about'), {
     loading: loading('Settings > About'),
   }),
@@ -40,9 +43,6 @@ export const componentMap = {
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: loading('Settings > Storage'),
   }),
-  [SettingsTabs.Agent]: dynamic(() => import('../agent'), {
-    loading: loading('Settings > Agent'),
-  }),
   // Profile related tabs
   [SettingsTabs.Profile]: dynamic(() => import('../profile'), {
     loading: loading('Settings > Profile'),
@@ -50,8 +50,14 @@ export const componentMap = {
   [SettingsTabs.Stats]: dynamic(() => import('../stats'), {
     loading: loading('Settings > Stats'),
   }),
+  [SettingsTabs.Usage]: dynamic(() => import('@/business/client/BusinessSettingPages/Usage'), {
+    loading: loading('Settings > Usage'),
+  }),
   [SettingsTabs.APIKey]: dynamic(() => import('../apikey'), {
     loading: loading('Settings > APIKey'),
+  }),
+  [SettingsTabs.Creds]: dynamic(() => import('../creds'), {
+    loading: loading('Settings > Creds'),
   }),
   [SettingsTabs.Security]: dynamic(() => import('../security'), {
     loading: loading('Settings > Security'),
@@ -63,11 +69,8 @@ export const componentMap = {
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {
     loading: loading('Settings > Plans'),
   }),
-  [SettingsTabs.Funds]: dynamic(() => import('@/business/client/BusinessSettingPages/Funds'), {
-    loading: loading('Settings > Funds'),
-  }),
-  [SettingsTabs.Usage]: dynamic(() => import('@/business/client/BusinessSettingPages/Usage'), {
-    loading: loading('Settings > Usage'),
+  [SettingsTabs.Credits]: dynamic(() => import('@/business/client/BusinessSettingPages/Credits'), {
+    loading: loading('Settings > Credits'),
   }),
   [SettingsTabs.Billing]: dynamic(() => import('@/business/client/BusinessSettingPages/Billing'), {
     loading: loading('Settings > Billing'),

@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 import type { Agent, AgentRuntimeContext, AgentState } from '../src';
 import { AgentRuntime } from '../src';
 
-// OpenAI 模型运行时
+// OpenAI model runtime
 async function* openaiRuntime(payload: any) {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || '',
@@ -54,20 +54,20 @@ async function* openaiRuntime(payload: any) {
   }
 }
 
-// 简单的 Agent 实现
+// Simple Agent implementation
 class SimpleAgent implements Agent {
   private conversationState: 'waiting_user' | 'processing_llm' | 'executing_tools' | 'done' =
     'waiting_user';
   private pendingToolCalls: any[] = [];
 
-  // Agent 拥有自己的模型运行时
+  // Agent has its own model runtime
   modelRuntime = openaiRuntime;
 
-  // 定义可用工具
+  // Define available tools
   tools = {
     calculate: async ({ expression }: { expression: string }) => {
       try {
-        // 注意：实际应用中应使用安全的数学解析器
+        // Note: In production, use a secure math expression parser
         const result = new Function(`"use strict"; return (${expression})`)();
         return { expression, result };
       } catch {
@@ -83,7 +83,7 @@ class SimpleAgent implements Agent {
     },
   };
 
-  // 获取工具定义
+  // Get tool definitions
   private getToolDefinitions() {
     return [
       {
@@ -111,23 +111,23 @@ class SimpleAgent implements Agent {
     ];
   }
 
-  // Agent 决策逻辑 - 基于执行阶段和上下文
+  // Agent decision logic - based on execution phase and context
   async runner(context: AgentRuntimeContext, state: AgentState) {
     console.log(`[${context.phase}] 对话状态: ${this.conversationState}`);
 
     switch (context.phase) {
       case 'init': {
-        // 初始化阶段
+        // Initialization phase
         this.conversationState = 'waiting_user';
         return { reason: 'No action needed', type: 'finish' as const };
       }
 
       case 'user_input': {
-        // 用户输入阶段
+        // User input phase
         const userPayload = context.payload as { isFirstMessage: boolean; message: any };
         console.log(`👤 用户消息: ${userPayload.message.content}`);
 
-        // 只有在等待用户输入状态时才处理
+        // Only process when in waiting_user state
         if (this.conversationState === 'waiting_user') {
           this.conversationState = 'processing_llm';
           return {
@@ -139,7 +139,7 @@ class SimpleAgent implements Agent {
           };
         }
 
-        // 其他状态下不处理用户输入，结束对话
+        // Do not process user input in other states, end conversation
         console.log(`⚠️ 忽略用户输入，当前状态: ${this.conversationState}`);
         return {
           reason: `Not in waiting_user state: ${this.conversationState}`,
@@ -148,10 +148,10 @@ class SimpleAgent implements Agent {
       }
 
       case 'llm_result': {
-        // LLM 结果阶段，检查是否需要工具调用
+        // LLM result phase, check if tool calls are needed
         const llmPayload = context.payload as { hasToolCalls: boolean; result: any };
 
-        // 手动添加 assistant 消息到状态中（修复 Runtime 的问题）
+        // Manually add assistant message to state (fixes a Runtime issue)
         const assistantMessage: any = {
           content: llmPayload.result.content || null,
           role: 'assistant',
@@ -168,31 +168,31 @@ class SimpleAgent implements Agent {
             toolCalls.map((call: any) => call.function.name),
           );
 
-          // 添加包含 tool_calls 的 assistant 消息
+          // Add assistant message containing tool_calls
           state.messages.push(assistantMessage);
 
-          // 执行第一个工具调用
+          // Execute the first tool call
           return {
             toolCall: toolCalls[0],
             type: 'call_tool' as const,
           };
         }
 
-        // 没有工具调用，添加普通 assistant 消息
+        // No tool calls, add regular assistant message
         state.messages.push(assistantMessage);
         this.conversationState = 'done';
         return { reason: 'LLM response completed', type: 'finish' as const };
       }
 
       case 'tool_result': {
-        // 工具执行结果阶段
+        // Tool execution result phase
         const toolPayload = context.payload as { result: any; toolMessage: any };
         console.log(`🛠️ 工具执行完成: ${JSON.stringify(toolPayload.result)}`);
 
-        // 移除已执行的工具
+        // Remove the executed tool
         this.pendingToolCalls = this.pendingToolCalls.slice(1);
 
-        // 如果还有未执行的工具，继续执行
+        // If there are more pending tools, continue execution
         if (this.pendingToolCalls.length > 0) {
           return {
             toolCall: this.pendingToolCalls[0],
@@ -200,7 +200,7 @@ class SimpleAgent implements Agent {
           };
         }
 
-        // 所有工具执行完成，调用 LLM 处理结果
+        // All tools executed, call LLM to process results
         this.conversationState = 'processing_llm';
         return {
           payload: {
@@ -212,12 +212,12 @@ class SimpleAgent implements Agent {
       }
 
       case 'human_response': {
-        // 人机交互响应阶段（简化示例中不使用）
+        // Human interaction response phase (not used in this simplified example)
         return { reason: 'Human interaction not supported', type: 'finish' as const };
       }
 
       case 'error': {
-        // 错误阶段
+        // Error phase
         const errorPayload = context.payload as { error: any };
         console.error('❌ 错误状态:', errorPayload.error);
         return { reason: 'Error occurred', type: 'finish' as const };
@@ -230,7 +230,7 @@ class SimpleAgent implements Agent {
   }
 }
 
-// 主函数
+// Main function
 async function main() {
   console.log('🚀 简单的 OpenAI Tools Agent 示例\n');
 
@@ -239,15 +239,15 @@ async function main() {
     return;
   }
 
-  // 创建 Agent 和 Runtime
+  // Create Agent and Runtime
   const agent = new SimpleAgent();
-  const runtime = new AgentRuntime(agent); // modelRuntime 现在在 Agent 中
+  const runtime = new AgentRuntime(agent); // modelRuntime is now in Agent
 
-  // 测试消息
+  // Test message
   const testMessage = process.argv[2] || 'What time is it? Also calculate 15 * 8 + 7';
   console.log(`💬 用户: ${testMessage}\n`);
 
-  // 创建初始状态
+  // Create initial state
   let state = AgentRuntime.createInitialState({
     maxSteps: 10,
     messages: [{ content: testMessage, role: 'user' }],
@@ -256,13 +256,13 @@ async function main() {
 
   console.log('🤖 AI: ');
 
-  // 执行对话循环
+  // Execute conversation loop
   let nextContext: AgentRuntimeContext | undefined = undefined;
 
   while (state.status !== 'done' && state.status !== 'error') {
     const result = await runtime.step(state, nextContext);
 
-    // 处理事件
+    // Process events
     for (const event of result.events) {
       switch (event.type) {
         case 'llm_stream': {

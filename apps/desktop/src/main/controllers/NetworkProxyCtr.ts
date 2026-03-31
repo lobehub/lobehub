@@ -1,14 +1,15 @@
-import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
+import type { NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { isEqual, merge } from 'es-toolkit/compat';
 
 import { defaultProxySettings } from '@/const/store';
 import { createLogger } from '@/utils/logger';
 
+import type {
+  ProxyTestResult} from '../modules/networkProxy';
 import {
   ProxyConfigValidator,
   ProxyConnectionTester,
-  ProxyDispatcherManager,
-  ProxyTestResult,
+  ProxyDispatcherManager
 } from '../modules/networkProxy';
 import { ControllerModule, IpcMethod } from './index';
 

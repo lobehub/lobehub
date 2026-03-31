@@ -1,4 +1,3 @@
-import { Menu } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '../../App';

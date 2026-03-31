@@ -79,7 +79,7 @@ export const UpdateConfigInspector = memo<
       <span>{t('builtins.lobe-agent-builder.apiName.updateConfig')}</span>
       {displayText && (
         <>
-          : <span className={highlightTextStyles.primary}>{displayText}</span>
+          :<span className={highlightTextStyles.primary}>{displayText}</span>
         </>
       )}
       {!isLoading && isSuccess && (

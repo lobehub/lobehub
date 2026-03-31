@@ -41,57 +41,59 @@ Artifacts are AI-generated pieces of content that deserve their own dedicated sp
 
 ## Supported Artifact Types
 
-### SVG Graphics
+<Tabs>
+  <Tab title="SVG Graphics">
+    Create scalable, resolution-independent graphics and diagrams: charts, flowcharts, icons, infographics, and data visualizations.
 
-Create scalable, resolution-independent graphics and diagrams: charts, flowcharts, icons, infographics, and data visualizations.
+    **Example prompts:**
 
-Example prompts:
+    - "Create an SVG diagram showing the software development lifecycle"
+    - "Generate a pie chart showing market share distribution"
 
-- "Create an SVG diagram showing the software development lifecycle"
-- "Generate a pie chart showing market share distribution"
+    **Export options:** download as SVG, download as PNG, copy as image.
+  </Tab>
 
-Export options: download as SVG, download as PNG, copy as image.
+  <Tab title="React Components">
+    Build live, interactive React applications that run directly in the browser: calculators, dashboards, mini web apps, and UI prototypes.
 
-### React Components
+    **Example prompts:**
 
-Build live, interactive React applications that run directly in the browser: calculators, dashboards, mini web apps, and UI prototypes.
+    - "Create a mortgage calculator with React"
+    - "Build an interactive to-do list app"
+    - "Make a typing speed test game"
 
-Example prompts:
+    **Features:** full React hooks support, real-time state management, responsive layouts.
+  </Tab>
 
-- "Create a mortgage calculator with React"
-- "Build an interactive to-do list app"
-- "Make a typing speed test game"
+  <Tab title="HTML Pages">
+    Generate complete, styled HTML pages: landing pages, email templates, simple web pages, and formatted reports.
 
-Features: full React hooks support, real-time state management, responsive layouts.
+    **Example prompts:**
 
-### HTML Pages
+    - "Create a product landing page for a fitness app"
+    - "Design an HTML email newsletter template"
+  </Tab>
 
-Generate complete, styled HTML pages: landing pages, email templates, simple web pages, and formatted reports.
+  <Tab title="Mermaid Diagrams">
+    Create professional diagrams: flowcharts, sequence diagrams, class diagrams, state diagrams, Gantt charts, ER diagrams, and Git graphs.
 
-Example prompts:
+    **Example prompts:**
 
-- "Create a product landing page for a fitness app"
-- "Design an HTML email newsletter template"
+    - "Create a sequence diagram for user authentication"
+    - "Draw a flowchart for the order processing workflow"
+  </Tab>
 
-### Mermaid Diagrams
+  <Tab title="Code Files">
+    Generate standalone code in Python, JavaScript/TypeScript, shell scripts, configuration files (JSON, YAML), and more.
 
-Create professional diagrams: flowcharts, sequence diagrams, class diagrams, state diagrams, Gantt charts, ER diagrams, and Git graphs.
+    **Example prompts:**
 
-Example prompts:
+    - "Write a Python script to analyze CSV data"
+    - "Generate a GitHub Actions workflow file"
 
-- "Create a sequence diagram for user authentication"
-- "Draw a flowchart for the order processing workflow"
-
-### Code Files
-
-Generate standalone code in Python, JavaScript/TypeScript, shell scripts, configuration files (JSON, YAML), and more.
-
-Example prompts:
-
-- "Write a Python script to analyze CSV data"
-- "Generate a GitHub Actions workflow file"
-
-Features: syntax highlighting, one-click copy, side-by-side code and preview view.
+    **Features:** syntax highlighting, one-click copy, side-by-side code and preview view.
+  </Tab>
+</Tabs>
 
 ## Using Artifacts
 
@@ -112,8 +114,15 @@ Artifacts are generated automatically when the AI determines the output is subst
 
 When an artifact is created, the preview panel opens automatically on the right:
 
-1. **Preview mode** — Shows the rendered output. Interactive apps run live, SVG graphics display at full quality, HTML pages render completely.
-2. **Code mode** — Shows the syntax-highlighted source code. Use this to copy code to your project or understand the implementation.
+<Tabs>
+  <Tab title="Preview Mode">
+    Shows the rendered output. Interactive apps run live, SVG graphics display at full quality, HTML pages render completely. Use this to see the result and interact with it.
+  </Tab>
+
+  <Tab title="Code Mode">
+    Shows the syntax-highlighted source code. Use this to copy code to your project or understand the implementation details.
+  </Tab>
+</Tabs>
 
 Switch between modes using the toggle at the top of the panel.
 

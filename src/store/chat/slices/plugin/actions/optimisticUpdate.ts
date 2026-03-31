@@ -13,7 +13,7 @@ import { type StoreSetter } from '@/store/types';
 import { merge } from '@/utils/merge';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
-import { displayMessageSelectors } from '../../message/selectors';
+import { dbMessageSelectors, displayMessageSelectors } from '../../message/selectors';
 
 /**
  * Params for batch updating tool message content, state, and error
@@ -207,7 +207,6 @@ export class PluginOptimisticUpdateActionImpl {
     id: string,
     context?: OptimisticUpdateContext,
   ): Promise<void> => {
-    const { dbMessageSelectors } = await import('../../message/selectors');
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message || !message.tools) return;
 

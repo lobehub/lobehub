@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Descripción",
+  "gateway.descriptionPlaceholder": "Opcional",
+  "gateway.deviceName": "Nombre del Dispositivo",
+  "gateway.deviceNamePlaceholder": "Ingrese el nombre del dispositivo",
+  "gateway.enableConnection": "Conectar al Gateway",
+  "gateway.statusConnected": "Conectado al Gateway",
+  "gateway.statusConnecting": "Conectando al Gateway...",
+  "gateway.statusDisconnected": "No conectado al Gateway",
+  "gateway.title": "Gateway de Dispositivo",
   "navigation.chat": "Chat",
   "navigation.discover": "Descubrir",
   "navigation.discoverAssistants": "Descubrir Asistentes",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "¿Usar una instancia autohospedada?",
   "sync.selfHosted.description": "Versión comunitaria que puedes desplegar tú mismo",
   "sync.selfHosted.title": "Instancia Autohospedada",
+  "tab.closeCurrentTab": "Cerrar pestaña",
+  "tab.closeLeftTabs": "Cerrar pestañas a la izquierda",
+  "tab.closeOtherTabs": "Cerrar otras pestañas",
+  "tab.closeRightTabs": "Cerrar pestañas a la derecha",
   "updater.checkingUpdate": "Buscando actualizaciones",
   "updater.checkingUpdateDesc": "Obteniendo información de la versión...",
   "updater.downloadNewVersion": "Descargar nueva versión",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "Fallo en la conexión de autorización",
   "waitingOAuth.helpText": "Si el navegador no se abrió automáticamente, por favor haz clic en cancelar e inténtalo de nuevo",
   "waitingOAuth.retry": "Reintentar",
-  "waitingOAuth.title": "Esperando conexión de autorización"
+  "waitingOAuth.title": "Esperando conexión de autorización",
+  "window.close": "Cerrar ventana",
+  "window.maximize": "Maximizar ventana",
+  "window.minimize": "Minimizar ventana",
+  "window.restore": "Restaurar ventana"
 }

@@ -144,5 +144,45 @@ describe('StreamEventManager', () => {
         expect.any(String),
       );
     });
+
+    it('should derive error reasonDetail from finalState when omitted', async () => {
+      const operationId = 'test-operation-id';
+      const stepIndex = 3;
+      const finalState = {
+        error: {
+          message: 'Invalid provider API key',
+          type: 'InvalidProviderAPIKey',
+        },
+        status: 'error',
+      };
+
+      mockRedis.xadd.mockResolvedValue('event-id-790');
+
+      await streamManager.publishAgentRuntimeEnd(operationId, stepIndex, finalState, 'error');
+
+      expect(mockRedis.xadd).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        operationId,
+        'data',
+        JSON.stringify({
+          finalState,
+          operationId,
+          phase: 'execution_complete',
+          reason: 'error',
+          reasonDetail: 'Invalid provider API key',
+        }),
+        expect.any(String),
+        expect.any(String),
+      );
+    });
   });
 });

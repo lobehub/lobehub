@@ -1,18 +1,32 @@
 'use client';
 
-import { Center, Flexbox, Text } from '@lobehub/ui';
+import { Button, Center, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { cx } from 'antd-style';
-import { type FC, type PropsWithChildren } from 'react';
+import { cx, useTheme } from 'antd-style';
+import { type FC, type PropsWithChildren, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
+import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useUserStore } from '@/store/user';
 
 import { styles } from './style';
 
 const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
+  const theme = useTheme();
+  const { t } = useTranslation('onboarding');
+  const navigate = useNavigate();
+  const finishOnboarding = useUserStore((s) => s.finishOnboarding);
+
+  const handleSkip = useCallback(() => {
+    finishOnboarding();
+    navigate('/');
+  }, [finishOnboarding, navigate]);
+
   return (
     <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
       <Flexbox
@@ -28,20 +42,20 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
           padding={16}
           width={'100%'}
         >
-          <div />
-          <Flexbox horizontal align={'center'}>
-            <LangButton placement={'bottomRight'} size={18} />
-            <Divider className={styles.divider} orientation={'vertical'} />
-            <ThemeButton placement={'bottomRight'} size={18} />
+          <ProductLogo color={theme.colorText} size={28} type={'text'} />
+          <Flexbox horizontal align={'center'} gap={16}>
+            <Flexbox horizontal align={'center'}>
+              <LangButton placement={'bottomRight'} size={18} />
+              <Divider className={styles.divider} orientation={'vertical'} />
+              <ThemeButton placement={'bottomRight'} size={18} />
+            </Flexbox>
+            <Button size={'small'} type={'text'} onClick={handleSkip}>
+              {t('agent.skipOnboarding')}
+            </Button>
           </Flexbox>
         </Flexbox>
-        <Center height={'100%'} padding={16} width={'100%'}>
+        <Center height={'100%'} width={'100%'}>
           {children}
-        </Center>
-        <Center padding={24}>
-          <Text align={'center'} type={'secondary'}>
-            © 2026 LobeHub. All rights reserved.
-          </Text>
         </Center>
       </Flexbox>
     </Flexbox>

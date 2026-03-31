@@ -1,7 +1,5 @@
 import { getCachedTextInputUnitRate } from '@lobechat/utils';
-import { ModelIcon } from '@lobehub/icons';
-import { Accordion, AccordionItem, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Accordion, AccordionItem, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import {
@@ -30,12 +28,21 @@ import { useTranslation } from 'react-i18next';
 
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import type { EnabledProviderWithModels } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 import { formatPriceByCurrency, getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/index';
 
 import ControlsForm from './ControlsForm';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  actionText: css`
+    font-size: 14px;
+    font-weight: 500;
+    color: ${cssVar.colorText};
+  `,
+  container: css`
+    padding-block-end: 8px;
+  `,
   extraControls: css`
     padding: 8px;
 
@@ -50,19 +57,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     .ant-divider {
       display: none;
     }
-  `,
-  actionText: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  container: css`
-    padding-block-end: 8px;
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
   `,
   row: css`
     padding-block: 4px;
@@ -223,289 +217,313 @@ const ABILITY_CONFIG: AbilityItem[] = [
   { color: 'cyan', icon: GlobeIcon, key: 'search' },
 ];
 
+export type PricingMode = 'image' | 'video';
+
 interface ModelDetailPanelProps {
+  enabledList?: EnabledProviderWithModels[];
   model?: string;
+  pricingMode?: PricingMode;
   provider?: string;
 }
 
-const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(({ model: modelId, provider }) => {
-  const { t } = useTranslation('components');
-  const { t: tModels } = useTranslation('models');
+const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
+  ({ model: modelId, provider, enabledList: enabledListProp, pricingMode }) => {
+    const { t } = useTranslation('components');
 
-  const enabledList = useEnabledChatModels();
-  const model = useMemo(() => {
-    if (!modelId || !provider) return undefined;
-    const providerData = enabledList.find((p) => p.id === provider);
-    return providerData?.children.find((m) => m.id === modelId);
-  }, [enabledList, modelId, provider]);
+    const enabledListFromHook = useEnabledChatModels();
+    const enabledList = enabledListProp ?? enabledListFromHook;
+    const model = useMemo(() => {
+      if (!modelId || !provider) return undefined;
+      const providerData = enabledList.find((p) => p.id === provider);
+      return providerData?.children.find((m) => m.id === modelId);
+    }, [enabledList, modelId, provider]);
 
-  const hasExtendParams = useAiInfraStore(
-    aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
-  );
+    const hasExtendParams = useAiInfraStore(
+      aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
+    );
 
-  const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
-    const keys: string[] = [];
-    if (hasExtendParams) keys.push('config');
-    return keys;
-  });
+    const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
+      const keys: string[] = ['pricing'];
+      // ControlsForm uses ChatInput store + useAgentId; not available on create/image|video routes.
+      if (hasExtendParams && !pricingMode) keys.push('config');
+      return keys;
+    });
 
-  const hasPricing = !!model?.pricing;
-  const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;
-  const pricingGroups = useMemo(
-    () => (hasPricing ? groupPricingUnits(model!.pricing!.units) : []),
-    [hasPricing, model?.pricing],
-  );
+    const hasPricing = !!model?.pricing;
+    const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;
+    const pricingGroups = useMemo(
+      () => (hasPricing ? groupPricingUnits(model!.pricing!.units) : []),
+      [hasPricing, model?.pricing],
+    );
 
-  if (!model) return null;
+    const approximatePriceLabel = useMemo(() => {
+      if (!hasPricing || !model?.pricing || !pricingMode) return null;
+      const pricing = model.pricing;
+      const currency = pricing.currency as ModelPriceCurrency | undefined;
+      if (pricingMode === 'image' && typeof pricing.approximatePricePerImage === 'number') {
+        const amount = formatPriceByCurrency(pricing.approximatePricePerImage, currency);
+        return t('ModelSwitchPanel.detail.pricing.perImage', {
+          amount,
+          defaultValue: '~ ${{amount}} / image',
+        });
+      }
+      if (pricingMode === 'video' && typeof pricing.approximatePricePerVideo === 'number') {
+        const amount = formatPriceByCurrency(pricing.approximatePricePerVideo, currency);
+        return t('ModelSwitchPanel.detail.pricing.perVideo', {
+          amount,
+          defaultValue: '~ ${{amount}} / video',
+        });
+      }
+      return null;
+    }, [hasPricing, model?.pricing, pricingMode, t]);
 
-  const hasContext = typeof model.contextWindowTokens === 'number';
-  const enabledAbilities = ABILITY_CONFIG.filter(
-    (a) => model.abilities[a.key as keyof typeof model.abilities],
-  );
-  const hasAbilities = enabledAbilities.length > 0;
+    if (!model) return null;
 
-  return (
-    <Flexbox className={styles.container}>
-      {/* Header */}
-      <Flexbox gap={8} padding={8}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <ModelIcon model={model.id} size={28} />
-          <Text ellipsis style={{ fontSize: 16, fontWeight: 600 }}>
-            {model.displayName || model.id}
-          </Text>
-        </Flexbox>
-        {model.description && (
-          <div className={styles.description}>{tModels(`${model.id}.description`)}</div>
-        )}
-      </Flexbox>
-      <Divider size="small" />
+    const hasContext = typeof model.contextWindowTokens === 'number';
+    const enabledAbilities = ABILITY_CONFIG.filter(
+      (a) => model.abilities[a.key as keyof typeof model.abilities],
+    );
+    const hasAbilities = enabledAbilities.length > 0;
 
-      {/* Sections */}
-      {(hasPricing || hasContext || hasAbilities || hasExtendParams) && (
-        <Accordion
-          expandedKeys={expandedKeys}
-          gap={8}
-          onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
-        >
-          {/* Context Length */}
-          {hasContext && (
-            <AccordionItem
-              alwaysShowAction
-              hideIndicator
-              allowExpand={false}
-              itemKey="context"
-              paddingBlock={6}
-              paddingInline={8}
-              action={
-                <span className={styles.actionText}>
-                  {model.contextWindowTokens === 0
-                    ? '∞'
-                    : `${formatTokenNumber(model.contextWindowTokens!)} tokens`}
-                </span>
-              }
-              title={
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <div
-                    style={{
-                      background: '#1677ff',
-                      borderRadius: 2,
-                      flexShrink: 0,
-                      height: 14,
-                      width: 3,
-                    }}
-                  />
-                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
-                </Flexbox>
-              }
-            />
-          )}
-
-          {/* Abilities */}
-          {hasAbilities && (
-            <AccordionItem
-              alwaysShowAction
-              itemKey="abilities"
-              paddingBlock={6}
-              paddingInline={8}
-              action={
-                !expandedKeys.includes('abilities') && (
-                  <Flexbox horizontal gap={2}>
-                    {enabledAbilities.map((ability) => (
-                      <Tag
-                        color={ability.color}
-                        key={ability.key}
-                        style={{ borderRadius: 4, minWidth: 0, padding: '0 4px' }}
-                      >
-                        <Icon icon={ability.icon} style={{ fontSize: 12 }} />
-                      </Tag>
-                    ))}
+    return (
+      <Flexbox className={styles.container}>
+        {/* Sections */}
+        {(hasPricing || hasContext || hasAbilities || (hasExtendParams && !pricingMode)) && (
+          <Accordion
+            expandedKeys={expandedKeys}
+            gap={8}
+            onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
+          >
+            {/* Context Length */}
+            {hasContext && (
+              <AccordionItem
+                alwaysShowAction
+                hideIndicator
+                allowExpand={false}
+                itemKey="context"
+                paddingBlock={6}
+                paddingInline={8}
+                action={
+                  <span className={styles.actionText}>
+                    {model.contextWindowTokens === 0
+                      ? '∞'
+                      : `${formatTokenNumber(model.contextWindowTokens!)} tokens`}
+                  </span>
+                }
+                title={
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <div
+                      style={{
+                        background: '#1677ff',
+                        borderRadius: 2,
+                        flexShrink: 0,
+                        height: 14,
+                        width: 3,
+                      }}
+                    />
+                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
                   </Flexbox>
-                )
-              }
-              title={
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <div
-                    style={{
-                      background: '#722ed1',
-                      borderRadius: 2,
-                      flexShrink: 0,
-                      height: 14,
-                      width: 3,
-                    }}
-                  />
-                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.abilities')}</span>
-                </Flexbox>
-              }
-            >
-              <Flexbox gap={4}>
-                {enabledAbilities.map((ability) => (
-                  <Flexbox
-                    horizontal
-                    align={'center'}
-                    className={styles.row}
-                    justify={'space-between'}
-                    key={ability.key}
-                  >
-                    <Flexbox horizontal align={'center'} gap={6}>
-                      <Icon icon={ability.icon} style={{ fontSize: 12 }} />
-                      <span>{t(`ModelSwitchPanel.detail.abilities.${ability.key}` as any)}</span>
+                }
+              />
+            )}
+
+            {/* Abilities */}
+            {hasAbilities && (
+              <AccordionItem
+                alwaysShowAction
+                itemKey="abilities"
+                paddingBlock={6}
+                paddingInline={8}
+                action={
+                  !expandedKeys.includes('abilities') && (
+                    <Flexbox horizontal gap={2}>
+                      {enabledAbilities.map((ability) => (
+                        <Tag
+                          color={ability.color}
+                          key={ability.key}
+                          style={{ borderRadius: 4, minWidth: 0, padding: '0 4px' }}
+                        >
+                          <Icon icon={ability.icon} style={{ fontSize: 12 }} />
+                        </Tag>
+                      ))}
                     </Flexbox>
-                    <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
-                      {t(
-                        `ModelSelect.featureTag.${ability.key === 'files' ? 'file' : ability.key}` as any,
-                      )}
+                  )
+                }
+                title={
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <div
+                      style={{
+                        background: '#722ed1',
+                        borderRadius: 2,
+                        flexShrink: 0,
+                        height: 14,
+                        width: 3,
+                      }}
+                    />
+                    <span className={styles.titleText}>
+                      {t('ModelSwitchPanel.detail.abilities')}
                     </span>
                   </Flexbox>
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
+                }
+              >
+                <Flexbox gap={4}>
+                  {enabledAbilities.map((ability) => (
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      className={styles.row}
+                      justify={'space-between'}
+                      key={ability.key}
+                    >
+                      <Flexbox horizontal align={'center'} gap={6}>
+                        <Icon icon={ability.icon} style={{ fontSize: 12 }} />
+                        <span>{t(`ModelSwitchPanel.detail.abilities.${ability.key}` as any)}</span>
+                      </Flexbox>
+                      <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 11 }}>
+                        {t(
+                          `ModelSelect.featureTag.${ability.key === 'files' ? 'file' : ability.key}` as any,
+                        )}
+                      </span>
+                    </Flexbox>
+                  ))}
+                </Flexbox>
+              </AccordionItem>
+            )}
 
-          {/* Pricing */}
-          {hasPricing && formatPrice && (
-            <AccordionItem
-              alwaysShowAction
-              itemKey="pricing"
-              paddingBlock={6}
-              paddingInline={8}
-              action={
-                !expandedKeys.includes('pricing') && (
-                  <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
-                    {getCachedTextInputUnitRate(model.pricing!) && (
+            {/* Pricing */}
+            {hasPricing && (formatPrice || approximatePriceLabel) && (
+              <AccordionItem
+                alwaysShowAction
+                itemKey="pricing"
+                paddingBlock={6}
+                paddingInline={8}
+                action={
+                  !expandedKeys.includes('pricing') &&
+                  (approximatePriceLabel ? (
+                    <span className={styles.actionText}>{approximatePriceLabel}</span>
+                  ) : (
+                    <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
+                      {getCachedTextInputUnitRate(model.pricing!) && (
+                        <Tooltip
+                          title={t('ModelSwitchPanel.detail.pricing.cachedInput', {
+                            amount: formatPrice!.cachedInput,
+                          })}
+                        >
+                          <Flexbox horizontal align={'center'} gap={2}>
+                            <Icon icon={CircleFadingArrowUp} size={'small'} />
+                            {formatPrice!.cachedInput}
+                          </Flexbox>
+                        </Tooltip>
+                      )}
                       <Tooltip
-                        title={t('ModelSwitchPanel.detail.pricing.cachedInput', {
-                          amount: formatPrice.cachedInput,
+                        title={t('ModelSwitchPanel.detail.pricing.input', {
+                          amount: formatPrice!.input,
                         })}
                       >
                         <Flexbox horizontal align={'center'} gap={2}>
-                          <Icon icon={CircleFadingArrowUp} size={'small'} />
-                          {formatPrice.cachedInput}
+                          <Icon icon={ArrowUpFromDot} size={'small'} />
+                          {formatPrice!.input}
                         </Flexbox>
                       </Tooltip>
-                    )}
-                    <Tooltip
-                      title={t('ModelSwitchPanel.detail.pricing.input', {
-                        amount: formatPrice.input,
-                      })}
-                    >
-                      <Flexbox horizontal align={'center'} gap={2}>
-                        <Icon icon={ArrowUpFromDot} size={'small'} />
-                        {formatPrice.input}
-                      </Flexbox>
-                    </Tooltip>
-                    <Tooltip
-                      title={t('ModelSwitchPanel.detail.pricing.output', {
-                        amount: formatPrice.output,
-                      })}
-                    >
-                      <Flexbox horizontal align={'center'} gap={2}>
-                        <Icon icon={ArrowDownToDot} size={'small'} />
-                        {formatPrice.output}
-                      </Flexbox>
-                    </Tooltip>
-                  </Flexbox>
-                )
-              }
-              title={
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <div
-                    style={{
-                      background: '#fa8c16',
-                      borderRadius: 2,
-                      flexShrink: 0,
-                      height: 14,
-                      width: 3,
-                    }}
-                  />
-                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.pricing')}</span>
-                </Flexbox>
-              }
-            >
-              <Flexbox gap={8}>
-                {pricingGroups.map(({ group, units }) => (
-                  <Flexbox gap={4} key={group}>
-                    {pricingGroups.length > 1 && (
-                      <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
-                        {t(`ModelSwitchPanel.detail.pricing.group.${group}` as any)}
-                      </Flexbox>
-                    )}
-                    {units.map((unit) => (
-                      <Flexbox
-                        horizontal
-                        align={'center'}
-                        className={styles.row}
-                        justify={'space-between'}
-                        key={unit.name}
+                      <Tooltip
+                        title={t('ModelSwitchPanel.detail.pricing.output', {
+                          amount: formatPrice!.output,
+                        })}
                       >
-                        <Flexbox horizontal align={'center'} gap={6}>
-                          {UNIT_ICON_MAP[unit.name] && (
-                            <Icon icon={UNIT_ICON_MAP[unit.name]!} size={'small'} />
-                          )}
+                        <Flexbox horizontal align={'center'} gap={2}>
+                          <Icon icon={ArrowDownToDot} size={'small'} />
+                          {formatPrice!.output}
+                        </Flexbox>
+                      </Tooltip>
+                    </Flexbox>
+                  ))
+                }
+                title={
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <div
+                      style={{
+                        background: '#fa8c16',
+                        borderRadius: 2,
+                        flexShrink: 0,
+                        height: 14,
+                        width: 3,
+                      }}
+                    />
+                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.pricing')}</span>
+                  </Flexbox>
+                }
+              >
+                <Flexbox gap={8}>
+                  {approximatePriceLabel && (
+                    <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                      {approximatePriceLabel}
+                    </Flexbox>
+                  )}
+                  {pricingGroups.map(({ group, units }) => (
+                    <Flexbox gap={4} key={group}>
+                      {pricingGroups.length > 1 && (
+                        <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                          {t(`ModelSwitchPanel.detail.pricing.group.${group}` as any)}
+                        </Flexbox>
+                      )}
+                      {units.map((unit) => (
+                        <Flexbox
+                          horizontal
+                          align={'center'}
+                          className={styles.row}
+                          justify={'space-between'}
+                          key={unit.name}
+                        >
+                          <Flexbox horizontal align={'center'} gap={6}>
+                            {UNIT_ICON_MAP[unit.name] && (
+                              <Icon icon={UNIT_ICON_MAP[unit.name]!} size={'small'} />
+                            )}
+                            <span>
+                              {t(`ModelSwitchPanel.detail.pricing.unit.${unit.name}` as any)}
+                            </span>
+                          </Flexbox>
                           <span>
-                            {t(`ModelSwitchPanel.detail.pricing.unit.${unit.name}` as any)}
+                            {formatUnitRate(unit, model.pricing?.currency as ModelPriceCurrency)}
                           </span>
                         </Flexbox>
-                        <span>
-                          {formatUnitRate(unit, model.pricing?.currency as ModelPriceCurrency)}
-                        </span>
-                      </Flexbox>
-                    ))}
-                  </Flexbox>
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
-          {/* Model Config */}
-          {hasExtendParams && provider && (
-            <AccordionItem
-              itemKey="config"
-              paddingBlock={6}
-              paddingInline={8}
-              title={
-                <Flexbox horizontal align={'center'} gap={8}>
-                  <div
-                    style={{
-                      background: '#52c41a',
-                      borderRadius: 2,
-                      flexShrink: 0,
-                      height: 14,
-                      width: 3,
-                    }}
-                  />
-                  <span className={styles.titleText}>{t('ModelSwitchPanel.detail.config')}</span>
+                      ))}
+                    </Flexbox>
+                  ))}
                 </Flexbox>
-              }
-            >
-              <div className={styles.extraControls}>
-                <ControlsForm model={model.id} provider={provider} />
-              </div>
-            </AccordionItem>
-          )}
-        </Accordion>
-      )}
-    </Flexbox>
-  );
-});
+              </AccordionItem>
+            )}
+            {/* Model Config (agent chat only; requires ChatInput zustand provider) */}
+            {hasExtendParams && provider && !pricingMode && (
+              <AccordionItem
+                itemKey="config"
+                paddingBlock={6}
+                paddingInline={8}
+                title={
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <div
+                      style={{
+                        background: '#52c41a',
+                        borderRadius: 2,
+                        flexShrink: 0,
+                        height: 14,
+                        width: 3,
+                      }}
+                    />
+                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.config')}</span>
+                  </Flexbox>
+                }
+              >
+                <div className={styles.extraControls}>
+                  <ControlsForm model={model.id} provider={provider} />
+                </div>
+              </AccordionItem>
+            )}
+          </Accordion>
+        )}
+      </Flexbox>
+    );
+  },
+);
 
 ModelDetailPanel.displayName = 'ModelDetailPanel';
 

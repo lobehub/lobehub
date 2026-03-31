@@ -13,6 +13,7 @@ export interface ParsedQuery {
 // Note: 'pageContent' is excluded as it's not yet integrated in the backend
 const VALID_TYPES = [
   'agent',
+  'chatGroup',
   'topic',
   'message',
   'file',
@@ -22,6 +23,7 @@ const VALID_TYPES = [
   'mcp',
   'plugin',
   'communityAgent',
+  'knowledgeBase',
 ] as const;
 
 export type ValidSearchType = (typeof VALID_TYPES)[number];
@@ -64,9 +66,10 @@ export function parseSearchQuery(query: string): ParsedQuery {
     const [fullMatch, , typeValue] = match;
     const normalizedType = typeValue.toLowerCase();
 
-    // Validate type
-    if (VALID_TYPES.includes(normalizedType as ValidSearchType)) {
-      typeFilter = normalizedType as ValidSearchType;
+    // Validate type (case-insensitive match for camelCase types like chatGroup, knowledgeBase)
+    const matchedType = VALID_TYPES.find((t) => t.toLowerCase() === normalizedType);
+    if (matchedType) {
+      typeFilter = matchedType;
       // Remove the type filter from the query
       cleanQuery = cleanQuery.replace(fullMatch, ' ').trim();
     }

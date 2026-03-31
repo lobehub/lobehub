@@ -56,9 +56,22 @@ export interface MarketAuthState {
 }
 
 export interface MarketAuthContextType extends MarketAuthState {
+  /**
+   * Check for claimable resources and show modal if any found
+   * Call this when user enters their profile page
+   * @param onClaimSuccess - Optional callback to run after successful claim (e.g., to refresh page data)
+   * @returns true if claimable resources were found and modal was shown
+   */
+  checkAndShowClaimableResources: (onClaimSuccess?: () => void) => Promise<boolean>;
   getAccessToken: () => string | null;
   getCurrentUserInfo: () => MarketUserInfo | null;
   getRefreshToken: () => string | null;
+  /**
+   * Handle unauthorized (401) error from Market API
+   * Attempts to refresh token first, then triggers signIn if refresh fails
+   * @returns true if successfully re-authenticated, false if user cancelled or failed
+   */
+  handleUnauthorized: () => Promise<boolean>;
   openProfileSetup: (onSuccess?: (profile: MarketUserProfile) => void) => void;
   refreshToken: () => Promise<boolean>;
   signIn: () => Promise<number | null>;

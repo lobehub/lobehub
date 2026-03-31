@@ -11,9 +11,9 @@ import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-// 轮询配置
-const POLL_INTERVAL_MS = 1000; // 每秒轮询一次
-const POLL_TIMEOUT_MS = 15_000; // 15 秒超时
+// Polling configuration
+const POLL_INTERVAL_MS = 1000; // Poll once per second
+const POLL_TIMEOUT_MS = 15_000; // 15-second timeout
 
 interface KlavisServerItemProps {
   /**
@@ -53,7 +53,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
     const effectiveAgentId = agentId || activeAgentId || '';
 
-    // 清理所有定时器
+    // Clean up all timers
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
         clearInterval(windowCheckIntervalRef.current);
@@ -71,14 +71,14 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       setIsWaitingAuth(false);
     }, []);
 
-    // 组件卸载时清理
+    // Clean up on component unmount
     useEffect(() => {
       return () => {
         cleanup();
       };
     }, [cleanup]);
 
-    // 当服务器状态变为 CONNECTED 时停止所有监听
+    // Stop all listeners when server status becomes CONNECTED
     useEffect(() => {
       if (server?.status === KlavisServerStatus.CONNECTED && isWaitingAuth) {
         cleanup();
@@ -86,14 +86,14 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     }, [server?.status, isWaitingAuth, cleanup, t]);
 
     /**
-     * 启动降级轮询（当 window.closed 不可访问时）
+     * Start fallback polling (when window.closed is inaccessible)
      */
     const startFallbackPolling = useCallback(
       (serverName: string) => {
-        // 已经在轮询了，不重复启动
+        // Already polling, don't start again
         if (pollIntervalRef.current) return;
 
-        // 每秒轮询一次
+        // Poll once per second
         pollIntervalRef.current = setInterval(async () => {
           try {
             await refreshKlavisServerTools(serverName);
@@ -102,7 +102,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           }
         }, POLL_INTERVAL_MS);
 
-        // 15 秒后超时停止
+        // Stop after 15-second timeout
         pollTimeoutRef.current = setTimeout(() => {
           if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
@@ -115,27 +115,27 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     );
 
     /**
-     * 监听 OAuth 窗口关闭
+     * Monitor OAuth window close
      */
     const startWindowMonitor = useCallback(
       (oauthWindow: Window, serverName: string) => {
-        // 每 500ms 检查窗口状态
+        // Check window state every 500ms
         windowCheckIntervalRef.current = setInterval(() => {
           try {
-            // 尝试访问 window.closed（可能被 COOP 阻止）
+            // Try to access window.closed (may be blocked by COOP)
             if (oauthWindow.closed) {
-              // 窗口已关闭，清理监听并检查认证状态
+              // Window closed, clean up listeners and check auth status
               if (windowCheckIntervalRef.current) {
                 clearInterval(windowCheckIntervalRef.current);
                 windowCheckIntervalRef.current = null;
               }
               oauthWindowRef.current = null;
 
-              // 窗口关闭后开始轮询检查认证状态
+              // Start polling to check auth status after window closes
               startFallbackPolling(serverName);
             }
           } catch {
-            // COOP 阻止了访问，降级到轮询方案
+            // COOP blocked access, falling back to polling
             console.info('[Klavis] COOP blocked window.closed access, falling back to polling');
             if (windowCheckIntervalRef.current) {
               clearInterval(windowCheckIntervalRef.current);
@@ -149,28 +149,28 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     );
 
     /**
-     * 打开 OAuth 窗口
+     * Open OAuth window
      */
     const openOAuthWindow = useCallback(
       (oauthUrl: string, serverName: string) => {
-        // 清理之前的状态
+        // Clean up previous state
         cleanup();
         setIsWaitingAuth(true);
 
-        // 打开 OAuth 窗口
+        // Open OAuth window
         const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
         if (oauthWindow) {
           oauthWindowRef.current = oauthWindow;
           startWindowMonitor(oauthWindow, serverName);
         } else {
-          // 窗口被阻止，直接用轮询
+          // Window blocked, use polling directly
           startFallbackPolling(serverName);
         }
       },
       [cleanup, startWindowMonitor, startFallbackPolling, t],
     );
 
-    // Get plugin ID for this server (使用 identifier 作为 pluginId)
+    // Get plugin ID for this server (use identifier as pluginId)
     const pluginId = server ? server.identifier : '';
     const plugins =
       useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
@@ -209,15 +209,15 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         });
 
         if (newServer) {
-          // 安装完成后自动启用插件（使用 identifier）
+          // Auto-enable plugin after installation (using identifier)
           const newPluginId = newServer.identifier;
           await togglePlugin(newPluginId);
 
-          // 如果已认证，直接刷新工具列表，跳过 OAuth
+          // If already authenticated, refresh tool list directly, skip OAuth
           if (newServer.isAuthenticated) {
             await refreshKlavisServerTools(newServer.identifier);
           } else if (newServer.oauthUrl) {
-            // 需要 OAuth，打开 OAuth 窗口并监听关闭
+            // Need OAuth, open OAuth window and monitor close
             openOAuthWindow(newServer.oauthUrl, newServer.identifier);
           }
         }
@@ -235,9 +235,9 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       setIsToggling(false);
     };
 
-    // 渲染右侧控件
+    // Render right-side controls
     const renderRightControl = () => {
-      // 正在连接中
+      // Connecting in progress
       if (isConnecting) {
         return (
           <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
@@ -246,7 +246,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         );
       }
 
-      // 未连接，显示 Connect 按钮
+      // Not connected, show Connect button
       if (!server) {
         return (
           <Flexbox
@@ -265,10 +265,10 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         );
       }
 
-      // 根据状态显示不同控件
+      // Show different controls based on status
       switch (server.status) {
         case KlavisServerStatus.CONNECTED: {
-          // 正在切换状态
+          // Toggling state
           if (isToggling) {
             return <Icon spin icon={Loader2} />;
           }
@@ -283,7 +283,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           );
         }
         case KlavisServerStatus.PENDING_AUTH: {
-          // 正在等待认证
+          // Waiting for authentication
           if (isWaitingAuth) {
             return (
               <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
@@ -299,7 +299,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
               style={{ cursor: 'pointer', opacity: 0.65 }}
               onClick={(e) => {
                 e.stopPropagation();
-                // 点击重新打开 OAuth 窗口
+                // Click to reopen OAuth window
                 if (server.oauthUrl) {
                   openOAuthWindow(server.oauthUrl, server.identifier);
                 }
@@ -331,7 +331,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
         justify={'space-between'}
         onClick={(e) => {
           e.stopPropagation();
-          // 如果已连接，点击整行切换状态
+          // If connected, clicking the row toggles state
           if (server?.status === KlavisServerStatus.CONNECTED) {
             handleToggle();
           }

@@ -69,6 +69,5 @@ Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. Key sections:
 
 ## Notes
 
-- **Release impact**: PR titles with `✨ feat/` or `🐛 fix` trigger releases — use carefully
 - **Language**: All PR content must be in English
 - If a PR already exists for the branch, inform the user instead of creating a duplicate

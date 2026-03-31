@@ -1,0 +1,50 @@
+{
+  "name": "@lobehub/cli",
+  "version": "0.0.1-canary.14",
+  "type": "module",
+  "bin": {
+    "lh": "./dist/index.js",
+    "lobe": "./dist/index.js",
+    "lobehub": "./dist/index.js"
+  },
+  "man": [
+    "./man/man1/lh.1",
+    "./man/man1/lobe.1",
+    "./man/man1/lobehub.1"
+  ],
+  "files": [
+    "dist",
+    "man"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "cli:link": "bun link",
+    "cli:unlink": "bun unlink",
+    "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",
+    "man:generate": "bun src/man/generate.ts",
+    "prepublishOnly": "npm run build && npm run man:generate",
+    "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
+    "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@lobechat/device-gateway-client": "workspace:*",
+    "@lobechat/local-file-shell": "workspace:*",
+    "@trpc/client": "^11.8.1",
+    "@types/node": "^22.13.5",
+    "@types/ws": "^8.18.1",
+    "commander": "^13.1.0",
+    "debug": "^4.4.0",
+    "diff": "^8.0.3",
+    "fast-glob": "^3.3.3",
+    "picocolors": "^1.1.1",
+    "superjson": "^2.2.6",
+    "tsdown": "^0.21.4",
+    "typescript": "^5.9.3",
+    "ws": "^8.18.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

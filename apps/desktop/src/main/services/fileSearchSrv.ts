@@ -1,10 +1,11 @@
-import { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
+import type { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
 
-import {
+import type {
   BaseFileSearch,
   FileResult,
-  SearchOptions,
-  createFileSearchModule,
+  SearchOptions} from '@/modules/fileSearch';
+import {
+  createFileSearchModule
 } from '@/modules/fileSearch';
 
 import { ServiceModule } from './index';

@@ -37,6 +37,9 @@ const styles = createStaticStyles(({ css }) => ({
       margin-inline-end: var(--ant-margin-xs);
     }
   `,
+  trigger: css`
+    outline: none;
+  `,
 }));
 
 export type ActionDropdownMenuItem = MenuItemType;
@@ -58,7 +61,7 @@ export interface ActionDropdownProps extends Omit<DropdownMenuProps, 'items'> {
   minWidth?: number | string;
   popupRender?: (menu: ReactNode) => ReactNode;
   /**
-   * 是否在挂载时预渲染弹层，避免首次触发展开时的渲染卡顿
+   * Whether to pre-render the dropdown overlay on mount, to avoid rendering lag on first expand
    */
   prefetch?: boolean;
   trigger?: PopoverTrigger;
@@ -267,7 +270,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
         onOpenChange={handleOpenChange}
         onOpenChangeComplete={handleOpenChangeComplete}
       >
-        <DropdownMenuTrigger {...resolvedTriggerProps}>{children}</DropdownMenuTrigger>
+        <DropdownMenuTrigger className={styles.trigger} {...resolvedTriggerProps}>
+          {children}
+        </DropdownMenuTrigger>
         <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
           <DropdownMenuPositioner
             {...positionerProps}

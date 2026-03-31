@@ -21,8 +21,8 @@ export interface MoonshotModelCard {
   supports_image_in?: boolean;
 }
 
-const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
-const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.ai/anthropic';
+const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1';
+const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
 
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;

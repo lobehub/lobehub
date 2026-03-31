@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type AgentStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -57,5 +58,7 @@ const createStore: StateCreator<AgentStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('agent');
 
 export const useAgentStore = createWithEqualityFn<AgentStore>()(devtools(createStore), shallow);
+
+expose('agent', useAgentStore);
 
 export const getAgentStoreState = () => useAgentStore.getState();

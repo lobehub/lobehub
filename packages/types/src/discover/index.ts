@@ -1,5 +1,7 @@
 import type { DiscoverAssistantItem } from './assistants';
 import type { DiscoverGroupAgentItem } from './groupAgents';
+import type { DiscoverPluginItem } from './plugins';
+import type { DiscoverSkillItem } from './skills';
 
 export * from './assistants';
 export * from './fork';
@@ -8,6 +10,7 @@ export * from './mcp';
 export * from './models';
 export * from './plugins';
 export * from './providers';
+export * from './skills';
 
 export enum DiscoverTab {
   Assistants = 'agent',
@@ -17,6 +20,7 @@ export enum DiscoverTab {
   Models = 'model',
   Plugins = 'plugin',
   Providers = 'provider',
+  Skills = 'skill',
   User = 'user',
 }
 
@@ -32,6 +36,7 @@ export enum CacheTag {
   Models = 'models',
   Plugins = 'plugins',
   Providers = 'providers',
+  Skills = 'skills',
 }
 
 export enum CacheRevalidate {
@@ -83,5 +88,13 @@ export interface DiscoverUserProfile {
    * Agents forked by the user
    */
   forkedAgents?: DiscoverAssistantItem[];
+  /**
+   * Plugins owned by the user
+   */
+  plugins?: DiscoverPluginItem[];
+  /**
+   * Skills owned by the user
+   */
+  skills?: DiscoverSkillItem[];
   user: DiscoverUserInfo;
 }

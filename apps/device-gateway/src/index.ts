@@ -1,52 +1,47 @@
-import { verifyDesktopToken } from './auth';
+import { Hono } from 'hono';
+
 import { DeviceGatewayDO } from './DeviceGatewayDO';
 import type { Env } from './types';
 
 export { DeviceGatewayDO };
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
+const app = new Hono<{ Bindings: Env }>();
 
-    // ─── Health check ───
-    if (url.pathname === '/health') {
-      return new Response('OK', { status: 200 });
+// ─── Health check ───
+app.get('/health', (c) => c.text('OK'));
+
+// ─── Auth middleware for service APIs ───
+const serviceAuth = (): ((c: any, next: () => Promise<void>) => Promise<Response | void>) => {
+  return async (c, next) => {
+    const authHeader = c.req.header('Authorization');
+    if (authHeader !== `Bearer ${c.env.SERVICE_TOKEN}`) {
+      return c.text('Unauthorized', 401);
     }
-
-    // ─── Desktop WebSocket connection ───
-    if (url.pathname === '/ws') {
-      const token = url.searchParams.get('token');
-      if (!token) return new Response('Missing token', { status: 401 });
-
-      try {
-        const { userId } = await verifyDesktopToken(env, token);
-
-        const id = env.DEVICE_GATEWAY.idFromName(`user:${userId}`);
-        const stub = env.DEVICE_GATEWAY.get(id);
-
-        // Forward WebSocket upgrade to DO
-        const headers = new Headers(request.headers);
-        headers.set('X-User-Id', userId);
-        return stub.fetch(new Request(request, { headers }));
-      } catch {
-        return new Response('Invalid token', { status: 401 });
-      }
-    }
-
-    // ─── Vercel Agent HTTP API ───
-    if (url.pathname.startsWith('/api/device/')) {
-      const authHeader = request.headers.get('Authorization');
-      if (authHeader !== `Bearer ${env.SERVICE_TOKEN}`) {
-        return new Response('Unauthorized', { status: 401 });
-      }
-
-      const body = (await request.clone().json()) as { userId: string };
-      if (!body.userId) return new Response('Missing userId', { status: 400 });
-      const id = env.DEVICE_GATEWAY.idFromName(`user:${body.userId}`);
-      const stub = env.DEVICE_GATEWAY.get(id);
-      return stub.fetch(request);
-    }
-
-    return new Response('Not Found', { status: 404 });
-  },
+    await next();
+  };
 };
+
+// ─── Desktop WebSocket connection ───
+app.get('/ws', async (c) => {
+  const userId = c.req.query('userId');
+  if (!userId) return c.text('Missing userId', 400);
+
+  const id = c.env.DEVICE_GATEWAY.idFromName(`user:${userId}`);
+  const stub = c.env.DEVICE_GATEWAY.get(id);
+
+  const headers = new Headers(c.req.raw.headers);
+  headers.set('X-User-Id', userId);
+  return stub.fetch(new Request(c.req.raw, { headers }));
+});
+
+// ─── Vercel Agent HTTP API ───
+app.all('/api/device/*', serviceAuth(), async (c) => {
+  const body = (await c.req.raw.clone().json()) as { userId: string };
+  if (!body.userId) return c.text('Missing userId', 400);
+
+  const id = c.env.DEVICE_GATEWAY.idFromName(`user:${body.userId}`);
+  const stub = c.env.DEVICE_GATEWAY.get(id);
+  return stub.fetch(c.req.raw);
+});
+
+export default app;

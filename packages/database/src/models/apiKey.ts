@@ -1,38 +1,51 @@
+import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@lobechat/utils/apiKey';
+import { hashApiKey } from '@lobechat/utils/server';
 import { and, desc, eq } from 'drizzle-orm';
 
-import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
-import type { ApiKeyItem,NewApiKeyItem } from '../schemas';
+import type { ApiKeyItem, NewApiKeyItem } from '../schemas';
 import { apiKeys } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
-type EncryptAPIKeyVaults = (keyVaults: string) => Promise<string>;
-type DecryptAPIKeyVaults = (keyVaults: string) => Promise<{ plaintext: string }>;
-
-const defaultSerialize = (s: string) => s;
-
 export class ApiKeyModel {
+  static findByKey = async (db: LobeChatDatabase, key: string) => {
+    if (!validateApiKeyFormat(key)) {
+      return null;
+    }
+    const keyHash = hashApiKey(key);
+
+    return db.query.apiKeys.findFirst({
+      where: eq(apiKeys.keyHash, keyHash),
+    });
+  };
+
   private userId: string;
   private db: LobeChatDatabase;
+  private gateKeeperPromise: Promise<KeyVaultsGateKeeper> | null = null;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
   }
 
-  create = async (
-    params: Omit<NewApiKeyItem, 'userId' | 'id' | 'key'>,
-    encryptor?: EncryptAPIKeyVaults,
-  ) => {
+  private async getGateKeeper() {
+    if (!this.gateKeeperPromise) {
+      this.gateKeeperPromise = KeyVaultsGateKeeper.initWithEnvKey();
+    }
+
+    return this.gateKeeperPromise;
+  }
+
+  create = async (params: Omit<NewApiKeyItem, 'userId' | 'id' | 'key' | 'keyHash'>) => {
     const key = generateApiKey();
-
-    const encrypt = encryptor || defaultSerialize;
-
-    const encryptedKey = await encrypt(key);
+    const keyHash = hashApiKey(key);
+    const gateKeeper = await this.getGateKeeper();
+    const encryptedKey = await gateKeeper.encrypt(key);
 
     const [result] = await this.db
       .insert(apiKeys)
-      .values({ ...params, key: encryptedKey, userId: this.userId })
+      .values({ ...params, key: encryptedKey, keyHash, userId: this.userId })
       .returning();
 
     return result;
@@ -46,43 +59,34 @@ export class ApiKeyModel {
     return this.db.delete(apiKeys).where(eq(apiKeys.userId, this.userId));
   };
 
-  query = async (decryptor?: DecryptAPIKeyVaults) => {
+  query = async () => {
     const results = await this.db.query.apiKeys.findMany({
       orderBy: [desc(apiKeys.updatedAt)],
       where: eq(apiKeys.userId, this.userId),
     });
 
-    // If no decryptor is provided, return the original results directly
-    if (!decryptor) {
-      return results;
-    }
+    const gateKeeper = await this.getGateKeeper();
 
-    // Decrypt the key field for each API Key
-    const decryptedResults = await Promise.all(
+    return Promise.all(
       results.map(async (apiKey) => {
-        const decryptedKey = await decryptor(apiKey.key);
+        const decrypted = await gateKeeper.decrypt(apiKey.key);
+
+        if (!decrypted.wasAuthentic) {
+          throw new Error(
+            'Failed to decrypt API key. Please check whether KEY_VAULTS_SECRET is correct.',
+          );
+        }
+
         return {
           ...apiKey,
-          key: decryptedKey.plaintext,
+          key: decrypted.plaintext,
         };
       }),
     );
-
-    return decryptedResults;
   };
 
-  findByKey = async (key: string, encryptor?: EncryptAPIKeyVaults) => {
-    if (!validateApiKeyFormat(key)) {
-      return null;
-    }
-
-    const encrypt = encryptor || defaultSerialize;
-
-    const encryptedKey = await encrypt(key);
-
-    return this.db.query.apiKeys.findFirst({
-      where: eq(apiKeys.key, encryptedKey),
-    });
+  findByKey = async (key: string) => {
+    return ApiKeyModel.findByKey(this.db, key);
   };
 
   validateKey = async (key: string) => {

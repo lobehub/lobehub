@@ -217,6 +217,15 @@ class PluginRegistry {
   }
 
   /**
+   * Notify the matching plugin that a tab was activated.
+   * Plugins use this to perform store-level state transitions.
+   */
+  onActivate(reference: PageReference): void {
+    const plugin = this.plugins.get(reference.type);
+    plugin?.onActivate?.(reference);
+  }
+
+  /**
    * Resolve multiple page references, filtering out non-existent ones
    */
   resolveAll(references: PageReference[], ctx: PluginContext): ResolvedPageData[] {

@@ -1,13 +1,13 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // 绝对定位容器，占满父容器
+  // Absolutely positioned container, fills parent
   absoluteContainer: css`
     position: absolute;
     inset: 0;
   `,
 
-  // 内容区域 - 深色模式
+  // Content area - dark mode
   contentDark: css`
     overflow: hidden;
     background: linear-gradient(
@@ -17,7 +17,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     );
   `,
 
-  // 内容区域 - 浅色模式
+  // Content area - light mode
   contentLight: css`
     overflow: hidden;
     background: var(--content-bg-secondary, ${cssVar.colorBgContainer});

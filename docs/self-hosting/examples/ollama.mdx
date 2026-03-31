@@ -27,7 +27,7 @@ First, you need to install Ollama. For detailed steps on installing and configur
 Assuming you have already started the Ollama service locally on port `11434`. Run the following Docker command to start LobeHub locally:
 
 ```bash
-docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434 lobehub/lobe-chat
+docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434 lobehub/lobehub
 ```
 
 Now, you can use LobeHub to converse with the local LLM.

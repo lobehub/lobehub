@@ -177,7 +177,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     session: {
       cookieCache: {
         enabled: true,
-        maxAge: 10 * 60, // Cache duration in seconds
+        maxAge: 2 * 60, // Cache duration in seconds
       },
       // Keep a DB-backed fallback when Redis secondary storage entries are unexpectedly missing.
       storeSessionInDatabase: true,
@@ -251,6 +251,12 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
           // Other models: use shared nanoid generator (12 chars) to keep consistency.
           return createNanoId(12)();
         },
+      },
+    },
+    rateLimit: {
+      customRules: {
+        '/request-password-reset': { max: 3, window: 60 },
+        '/send-verification-email': { max: 3, window: 60 },
       },
     },
     plugins: [

@@ -1,25 +1,36 @@
 import { type IEditor } from '@lobehub/editor';
-import {
-  ReactCodemirrorPlugin,
-  ReactCodePlugin,
-  ReactHRPlugin,
-  ReactLinkPlugin,
-  ReactListPlugin,
-  ReactMathPlugin,
-  ReactTablePlugin,
-} from '@lobehub/editor';
+import { ReactLinkPlugin, ReactTablePlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
+import { type FC, useMemo } from 'react';
+
+import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 
 import TypoBar from './Typobar';
 
 interface EditorCanvasProps {
   defaultValue?: string;
   editor?: IEditor;
+  editorData?: unknown;
 }
 
-const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor }) => {
+const EDITOR_PLUGINS = [
+  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
+  ReactTablePlugin,
+];
+
+const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor, editorData }) => {
+  const { content, type } = useMemo(() => {
+    const hasValidEditorData =
+      editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
+
+    if (hasValidEditorData) {
+      return { content: JSON.stringify(editorData), type: 'json' as const };
+    }
+
+    return { content: defaultValue || '', type: 'markdown' as const };
+  }, [editorData, defaultValue]);
+
   return (
     <>
       <TypoBar editor={editor} />
@@ -29,29 +40,13 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor }) => {
       >
         <Editor
           autoFocus
-          content={''}
+          content={content}
           editor={editor}
-          type={'text'}
+          plugins={EDITOR_PLUGINS}
+          type={type}
           variant={'chat'}
-          plugins={[
-            ReactListPlugin,
-            ReactCodePlugin,
-            ReactCodemirrorPlugin,
-            ReactHRPlugin,
-            ReactLinkPlugin,
-            ReactTablePlugin,
-            ReactMathPlugin,
-          ]}
           style={{
             paddingBottom: 120,
-          }}
-          onInit={(editor) => {
-            if (!editor || !defaultValue) return;
-            try {
-              editor?.setDocument('markdown', defaultValue);
-            } catch (e) {
-              console.error('setDocument error:', e);
-            }
           }}
         />
       </Flexbox>

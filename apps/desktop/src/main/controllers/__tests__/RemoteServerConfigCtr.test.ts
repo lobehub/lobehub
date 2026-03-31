@@ -1,4 +1,4 @@
-import { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -47,8 +47,14 @@ const mockBrowserManager = {
   broadcastToAllWindows: vi.fn(),
 };
 
+const mockGatewayConnectionSrv = {
+  disconnect: vi.fn().mockResolvedValue({ success: true }),
+};
+
 const mockApp = {
   browserManager: mockBrowserManager,
+  getController: vi.fn(),
+  getService: vi.fn().mockReturnValue(mockGatewayConnectionSrv),
   storeManager: mockStoreManager,
 } as unknown as App;
 
@@ -293,6 +299,13 @@ describe('RemoteServerConfigCtr', () => {
       // Verify tokens are cleared from memory
       const accessToken = await controller.getAccessToken();
       expect(accessToken).toBeNull();
+    });
+
+    it('should disconnect gateway when tokens are cleared', async () => {
+      await controller.saveTokens('access', 'refresh', 3600);
+      await controller.clearTokens();
+
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalled();
     });
   });
 
@@ -747,6 +760,16 @@ describe('RemoteServerConfigCtr', () => {
   });
 
   describe('isRemoteServerConfigured', () => {
+    it('should return false when active is undefined', async () => {
+      mockStoreManager.get.mockReturnValue({
+        storageMode: 'cloud',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
     it('should return true for active cloud mode (no remoteServerUrl needed)', async () => {
       mockStoreManager.get.mockReturnValue({
         active: true,
@@ -787,6 +810,30 @@ describe('RemoteServerConfigCtr', () => {
         active: true,
         storageMode: 'selfHost',
         // remoteServerUrl is undefined
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode with blank remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: '   ',
+        storageMode: 'selfHost',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode with invalid remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: 'foo',
+        storageMode: 'selfHost',
       });
 
       const result = await controller.isRemoteServerConfigured();

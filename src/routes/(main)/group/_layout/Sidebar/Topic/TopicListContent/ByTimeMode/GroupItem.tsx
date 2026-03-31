@@ -1,7 +1,6 @@
-import { AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
+import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import { HashIcon } from 'lucide-react';
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type GroupedTopic } from '@/types/topic';
@@ -30,7 +29,6 @@ const GroupItem = memo<GroupItemProps>(({ group, activeTopicId, activeThreadId }
       paddingInline={'8px 4px'}
       title={
         <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
-          <Icon icon={HashIcon} style={{ opacity: 0.5 }} />
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
             {title || timeTitle}
           </Text>

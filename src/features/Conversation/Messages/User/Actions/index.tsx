@@ -4,6 +4,8 @@ import { ActionIconGroup, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import {
   type MessageActionItem,
@@ -161,6 +163,7 @@ const actionBarHolder = (
 );
 const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
   const { branch } = data;
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return (
     <Flexbox horizontal align={'center'}>
@@ -169,7 +172,7 @@ const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
           {actionBarHolder}
         </Flexbox>
       )}
-      {branch && (
+      {isDevMode && branch && (
         <MessageBranch
           activeBranchIndex={branch.activeBranchIndex}
           count={branch.count}

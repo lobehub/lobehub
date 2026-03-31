@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         {
           status: 429,
           headers: {
-            'Retry-After': '37', // 单位：秒
+            'Retry-After': '37', // unit: seconds
           },
         },
       );

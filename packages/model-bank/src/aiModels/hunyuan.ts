@@ -1,4 +1,4 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://cloud.tencent.com/document/product/1729/104753
 const hunyuanChatModels: AIChatModelCard[] = [
@@ -453,7 +453,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
     abilities: {
       vision: true,
     },
-    contextWindowTokens: 24_000,
+    contextWindowTokens: 40_000,
     description:
       'A fast-thinking image-to-text model built on the TurboS text base, showing notable improvements over the previous version in fundamental image recognition and image analysis reasoning.',
     displayName: 'Hunyuan Vision 1.5 Instruct',
@@ -474,12 +474,12 @@ const hunyuanChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 40_000,
+    contextWindowTokens: 48_000,
     description:
       'Latest t1-vision deep reasoning model with major improvements in VQA, visual grounding, OCR, charts, solving photographed problems, and image-based creation, plus stronger English and low-resource languages.',
     displayName: 'Hunyuan T1 Vision 20250916',
     id: 'hunyuan-t1-vision-20250916',
-    maxOutput: 16_000,
+    maxOutput: 20_000,
     pricing: {
       currency: 'CNY',
       units: [
@@ -490,8 +490,54 @@ const hunyuanChatModels: AIChatModelCard[] = [
     releasedAt: '2025-09-16',
     type: 'chat',
   },
+  {
+    abilities: {
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 32_000,
+    description:
+      'Applicable to video understanding scenarios. Release features: Based on the **Hunyuan Turbos-Vision** video understanding model, supporting fundamental video understanding capabilities such as video description and video content question answering.',
+    displayName: 'Hunyuan Turbos Vision Video',
+    id: 'hunyuan-turbos-vision-video',
+    maxOutput: 8_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-07-28',
+    type: 'chat',
+  },
 ];
 
-export const allModels = [...hunyuanChatModels];
+const hunyuanImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'Powerful original-image feature extraction and detail preservation capabilities, delivering richer visual texture and producing high-accuracy, well-composed, production-grade visuals.',
+    displayName: 'HY-Image-V3.0',
+    enabled: true,
+    id: 'HY-Image-V3.0',
+    parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      imageUrls: { default: [], maxCount: 3 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-26',
+    type: 'image',
+  },
+];
+
+export const allModels = [...hunyuanChatModels, ...hunyuanImageModels];
 
 export default allModels;

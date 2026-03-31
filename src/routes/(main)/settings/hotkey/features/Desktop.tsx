@@ -34,30 +34,34 @@ const HotkeySetting = memo(() => {
 
   if (!isHotkeysInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
+  const updateHotkey = async (id: DesktopHotkeyItem['id'], value: string) => {
+    setLoading(true);
+    try {
+      const result = await updateDesktopHotkey(id, value);
+      if (result.success) {
+        message.success(t('hotkey.updateSuccess', { ns: 'setting' }));
+      } else {
+        // Show the appropriate error message based on error type
+        message.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
+      }
+    } catch {
+      message.error(t('hotkey.updateError', { ns: 'setting' }));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const mapHotkeyItem = (item: DesktopHotkeyItem) => ({
     children: (
       <HotkeyInput
+        allowClear={!item.nonEditable}
         disabled={item.nonEditable}
         placeholder={t('hotkey.record')}
         resetValue={item.keys}
+        texts={{ clear: t('hotkey.clearBinding') }}
         value={hotkeys[item.id]}
-        onChange={async (value) => {
-          setLoading(true);
-          try {
-            const result = await updateDesktopHotkey(item.id, value);
-            if (result.success) {
-              message.success(t('hotkey.updateSuccess', { ns: 'setting' }));
-            } else {
-              // Show the appropriate error message based on error type
-
-              message.error(t(`hotkey.errors.${result.errorType}` as any, { ns: 'setting' }));
-            }
-          } catch {
-            message.error(t('hotkey.updateError', { ns: 'setting' }));
-          } finally {
-            setLoading(false);
-          }
-        }}
+        onChange={(value) => void updateHotkey(item.id, value)}
+        onClear={() => void updateHotkey(item.id, '')}
       />
     ),
 

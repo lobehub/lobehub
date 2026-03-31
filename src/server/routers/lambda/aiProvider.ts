@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AiProviderModel } from '@/database/models/aiProvider';
@@ -7,6 +8,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 import {
   CreateAiProviderSchema,
@@ -36,12 +38,69 @@ const aiProviderProcedure = authedProcedure.use(serverDatabase).use(async (opts)
 });
 
 export const aiProviderRouter = router({
+  checkProviderConnectivity: aiProviderProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        model: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Get the provider detail to find checkModel
+      const detail = await ctx.aiInfraRepos.getAiProviderDetail(
+        input.id,
+        KeyVaultsGateKeeper.getUserKeyVaults,
+      );
+
+      const model = input.model || detail?.checkModel;
+      if (!model) {
+        return { error: 'No check model configured. Use --model to specify one.', ok: false };
+      }
+
+      try {
+        const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, input.id);
+
+        const response = await modelRuntime.chat({
+          messages: [{ content: 'Hi', role: 'user' }],
+          model,
+          stream: false,
+          temperature: 0,
+        });
+
+        // If we get a response without error, connectivity is ok
+        if (response.ok) {
+          return { model, ok: true };
+        }
+
+        const errorBody = await response.text();
+        return { error: errorBody, model, ok: false, status: response.status };
+      } catch (error: any) {
+        const errorType = error.errorType || error.type;
+        const msg = errorType
+          ? errorType
+          : typeof error === 'string'
+            ? error
+            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        return { error: msg, model, ok: false };
+      }
+    }),
+
   createAiProvider: aiProviderProcedure
     .input(CreateAiProviderSchema)
     .mutation(async ({ input, ctx }) => {
-      const data = await ctx.aiProviderModel.create(input, ctx.gateKeeper.encrypt);
-
-      return data?.id;
+      try {
+        const data = await ctx.aiProviderModel.create(input, ctx.gateKeeper.encrypt);
+        return data?.id;
+      } catch (error: any) {
+        const pgErrorCode = error?.cause?.cause?.code || error?.cause?.code || error?.code;
+        if (pgErrorCode === '23505') {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `Provider "${input.id}" already exists`,
+          });
+        }
+        throw error;
+      }
     }),
 
   getAiProviderById: aiProviderProcedure

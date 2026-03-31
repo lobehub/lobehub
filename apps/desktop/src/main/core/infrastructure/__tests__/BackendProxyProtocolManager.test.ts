@@ -185,7 +185,7 @@ describe('BackendProxyProtocolManager', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('should respond with 502 when upstream fetch throws', async () => {
+  it('should throw when upstream fetch throws', async () => {
     const manager = new BackendProxyProtocolManager();
     const session = { protocol: mockProtocol } as any;
 
@@ -201,13 +201,12 @@ describe('BackendProxyProtocolManager', () => {
     });
 
     const handler = protocolHandlerRef.current;
-    const response = await handler({
-      headers: new Headers(),
-      method: 'GET',
-      url: 'lobe-backend://app/trpc/hello',
-    } as any);
-
-    expect(response.status).toBe(502);
-    expect(await response.text()).toContain('Upstream fetch failed');
+    await expect(
+      handler({
+        headers: new Headers(),
+        method: 'GET',
+        url: 'lobe-backend://app/trpc/hello',
+      } as any),
+    ).rejects.toThrow('network down');
   });
 });

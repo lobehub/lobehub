@@ -79,7 +79,7 @@ const ToolTitle = memo<ToolTitleProps>(
 
     const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier), isEqual);
     const isBuiltinPlugin = builtinToolIdentifiers.includes(identifier);
-    const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? t('unknownPlugin');
+    const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? identifier;
 
     const params = useMemo(() => {
       const argsToUse = args || partialArgs || {};
@@ -121,7 +121,7 @@ const ToolTitle = memo<ToolTitleProps>(
             <span className={styles.paramKey}>{' ('}</span>
             {params.map(([key, value], index) => (
               <span key={key}>
-                <span className={styles.paramKey}>{key}: </span>
+                <span className={styles.paramKey}>{key}:</span>
                 <span className={styles.paramValue}>{formatParamValue(value)}</span>
                 {index < params.length - 1 && <span className={styles.paramKey}>, </span>}
               </span>

@@ -2,7 +2,7 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
@@ -10,6 +10,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
+import SkillAvatar from '@/components/SkillAvatar';
 import { useToolStore } from '@/store/tool';
 
 import ContentViewer from './ContentViewer';
@@ -96,7 +97,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
       {skillDetail && (
         <div className={styles.meta}>
           <Flexbox horizontal align={'center'} gap={12}>
-            <Avatar avatar={'🧩'} shape={'square'} size={40} />
+            <SkillAvatar size={40} />
             <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                 <Flexbox horizontal align={'center'} className={styles.description} gap={4}>

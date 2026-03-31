@@ -22,6 +22,7 @@ export interface SlackBotConfig {
  * Each agent can independently configure its own bot providers.
  */
 export interface LobeAgentAgencyConfig {
+  boundDeviceId?: string;
   discord?: DiscordBotConfig;
   slack?: SlackBotConfig;
 }

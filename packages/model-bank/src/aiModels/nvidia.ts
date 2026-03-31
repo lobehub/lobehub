@@ -6,26 +6,32 @@ const nvidiaChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 204_800,
     description:
-      'MiniMax-M2 is a compact, fast, cost-effective MoE model (230B total, 10B active) built for top-tier coding and agent performance while retaining strong general intelligence. It excels at multi-file edits, code-run-fix loops, test validation, and complex toolchains.',
-    displayName: 'MiniMax-M2',
-    id: 'minimaxai/minimax-m2',
-    maxOutput: 16_384,
+      'MiniMax-M2.5 is the latest large language model from MiniMax, featuring a Mixture-of-Experts (MoE) architecture with 229 billion total parameters. It achieves industry-leading performance in programming, agent tool calling, search tasks, and office scenarios.',
+    displayName: 'MiniMax-M2.5',
+    enabled: true,
+    id: 'minimaxai/minimax-m2.5',
+    maxOutput: 131_072,
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+      video: true,
     },
-    contextWindowTokens: 204_800,
+    contextWindowTokens: 1_010_000,
     description:
-      'MiniMax-M2.1 is a compact, fast, cost-effective MoE model built for top-tier coding and agent performance.',
-    displayName: 'MiniMax-M2.1',
+      'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
+    displayName: 'Qwen3.5-397B-A17B',
     enabled: true,
-    id: 'minimaxai/minimax-m2.1',
-    maxOutput: 131_072,
+    id: 'qwen/qwen3.5-397b-a17b',
+    maxOutput: 65_536,
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -54,7 +60,6 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.7 is Zhipu latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities.',
     displayName: 'GLM-4.7',
-    enabled: true,
     id: 'z-ai/glm4.7',
     maxOutput: 131_072,
     settings: {

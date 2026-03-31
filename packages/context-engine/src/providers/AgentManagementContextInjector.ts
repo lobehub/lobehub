@@ -1,21 +1,17 @@
+import { escapeXml } from '@lobechat/prompts';
+import type { RuntimeMentionedAgent } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseProvider } from '../base/BaseProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
-const log = debug('context-engine:provider:AgentManagementContextInjector');
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    agentManagementContextInjected?: boolean;
+  }
+}
 
-/**
- * Escape XML special characters
- */
-const escapeXml = (str: string): string => {
-  return str
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-};
+const log = debug('context-engine:provider:AgentManagementContextInjector');
 
 /**
  * Available model info for Agent Management context
@@ -70,6 +66,8 @@ export interface AgentManagementContext {
   availablePlugins?: AvailablePluginInfo[];
   /** Available providers and models */
   availableProviders?: AvailableProviderInfo[];
+  /** Agents @mentioned by the user — supervisor should delegate to these via callAgent */
+  mentionedAgents?: RuntimeMentionedAgent[];
 }
 
 export interface AgentManagementContextInjectorConfig {
@@ -167,6 +165,21 @@ ${parts.join('\n')}
 };
 
 /**
+ * Format mentioned agents as delegation context for injection after the user message.
+ * Instructs the AI to delegate to the mentioned agent(s) via callAgent.
+ */
+const formatMentionedAgentsContext = (mentionedAgents: RuntimeMentionedAgent[]): string => {
+  const agentsXml = mentionedAgents
+    .map((a) => `  <agent id="${escapeXml(a.id)}" name="${escapeXml(a.name)}" />`)
+    .join('\n');
+
+  return `<mentioned_agents>
+<instruction>The user has @mentioned the following agent(s) in their message. You MUST use the callAgent tool to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — call the agent and let them respond.</instruction>
+${agentsXml}
+</mentioned_agents>`;
+};
+
+/**
  * Agent Management Context Injector
  * Responsible for injecting available models and plugins when Agent Management tool is enabled
  */
@@ -195,40 +208,69 @@ export class AgentManagementContextInjector extends BaseProvider {
       return this.markAsExecuted(clonedContext);
     }
 
-    // Format context
+    const hasMentionedAgents =
+      this.config.context.mentionedAgents && this.config.context.mentionedAgents.length > 0;
+
+    // Format context (excluding mentionedAgents — those are injected separately after the last user message)
+    const contextWithoutMentions: AgentManagementContext = hasMentionedAgents
+      ? {
+          availablePlugins: this.config.context.availablePlugins,
+          availableProviders: this.config.context.availableProviders,
+        }
+      : this.config.context;
+
     const formatFn = this.config.formatContext || defaultFormatContext;
-    const formattedContent = formatFn(this.config.context);
+    const formattedContent = formatFn(contextWithoutMentions);
 
-    // Skip if no content to inject
-    if (!formattedContent) {
-      log('No content to inject after formatting');
-      return this.markAsExecuted(clonedContext);
+    // Inject agent-management context (providers/plugins) before the first user message
+    if (formattedContent) {
+      const firstUserIndex = clonedContext.messages.findIndex((msg) => msg.role === 'user');
+
+      if (firstUserIndex !== -1) {
+        const contextMessage = {
+          content: formattedContent,
+          createdAt: Date.now(),
+          id: `agent-management-context-${Date.now()}`,
+          meta: { injectType: 'agent-management-context', systemInjection: true },
+          role: 'user' as const,
+          updatedAt: Date.now(),
+        };
+
+        clonedContext.messages.splice(firstUserIndex, 0, contextMessage);
+        clonedContext.metadata.agentManagementContextInjected = true;
+        log('Agent Management context injected before first user message');
+      }
     }
 
-    // Find the first user message index
-    const firstUserIndex = clonedContext.messages.findIndex((msg) => msg.role === 'user');
+    // Inject mentionedAgents delegation context AFTER the last user message
+    // This position makes the delegation instruction most salient to the model
+    if (hasMentionedAgents) {
+      const mentionedContent = formatMentionedAgentsContext(this.config.context.mentionedAgents!);
 
-    if (firstUserIndex === -1) {
-      log('No user messages found, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      // Find the last user message index
+      let lastUserIndex = -1;
+      for (let i = clonedContext.messages.length - 1; i >= 0; i--) {
+        if (clonedContext.messages[i].role === 'user') {
+          lastUserIndex = i;
+          break;
+        }
+      }
+
+      if (lastUserIndex !== -1) {
+        const mentionMessage = {
+          content: mentionedContent,
+          createdAt: Date.now(),
+          id: `agent-mention-delegation-${Date.now()}`,
+          meta: { injectType: 'agent-mention-delegation', systemInjection: true },
+          role: 'user' as const,
+          updatedAt: Date.now(),
+        };
+
+        // Insert after the last user message
+        clonedContext.messages.splice(lastUserIndex + 1, 0, mentionMessage);
+        log('Mentioned agents delegation context injected after last user message');
+      }
     }
-
-    // Insert a new user message with context before the first user message
-    const contextMessage = {
-      content: formattedContent,
-      createdAt: Date.now(),
-      id: `agent-management-context-${Date.now()}`,
-      meta: { injectType: 'agent-management-context', systemInjection: true },
-      role: 'user' as const,
-      updatedAt: Date.now(),
-    };
-
-    clonedContext.messages.splice(firstUserIndex, 0, contextMessage);
-
-    // Update metadata
-    clonedContext.metadata.agentManagementContextInjected = true;
-
-    log('Agent Management context injected as new user message');
 
     return this.markAsExecuted(clonedContext);
   }

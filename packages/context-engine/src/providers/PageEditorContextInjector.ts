@@ -5,6 +5,12 @@ import debug from 'debug';
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
+declare module '../types' {
+  interface PipelineContextMetadataOverrides {
+    pageEditorContextInjected?: boolean;
+  }
+}
+
 const log = debug('context-engine:provider:PageEditorContextInjector');
 
 export interface PageEditorContextInjectorConfig {

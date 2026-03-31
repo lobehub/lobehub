@@ -1,4 +1,13 @@
 {
+  "gateway.description": "描述",
+  "gateway.descriptionPlaceholder": "可選",
+  "gateway.deviceName": "設備名稱",
+  "gateway.deviceNamePlaceholder": "輸入設備名稱",
+  "gateway.enableConnection": "連接到網關",
+  "gateway.statusConnected": "已連接到網關",
+  "gateway.statusConnecting": "正在連接到網關...",
+  "gateway.statusDisconnected": "未連接到網關",
+  "gateway.title": "設備網關",
   "navigation.chat": "對話",
   "navigation.discover": "發現",
   "navigation.discoverAssistants": "發現助理",
@@ -93,6 +102,10 @@
   "sync.mode.useSelfHosted": "使用自托管實例？",
   "sync.selfHosted.description": "自行部署的社區版本",
   "sync.selfHosted.title": "自托管實例",
+  "tab.closeCurrentTab": "關閉標籤頁",
+  "tab.closeLeftTabs": "關閉左側標籤頁",
+  "tab.closeOtherTabs": "關閉其他標籤頁",
+  "tab.closeRightTabs": "關閉右側標籤頁",
   "updater.checkingUpdate": "檢查新版本",
   "updater.checkingUpdateDesc": "正在獲取版本資訊...",
   "updater.downloadNewVersion": "下載新版本",
@@ -116,5 +129,9 @@
   "waitingOAuth.errorTitle": "授權連接失敗",
   "waitingOAuth.helpText": "如果瀏覽器沒有自動打開，請點擊取消後重新嘗試",
   "waitingOAuth.retry": "重試",
-  "waitingOAuth.title": "等待授權連接"
+  "waitingOAuth.title": "等待授權連接",
+  "window.close": "關閉視窗",
+  "window.maximize": "最大化視窗",
+  "window.minimize": "最小化視窗",
+  "window.restore": "還原視窗"
 }

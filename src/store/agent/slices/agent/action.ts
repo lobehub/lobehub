@@ -1,3 +1,4 @@
+import { isChatGroupSessionId } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
@@ -14,7 +15,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import {
   type LobeAgentChatConfig,
   type LobeAgentConfig,
-  type LocalSystemConfig,
+  type RuntimeEnvConfig,
 } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
@@ -190,13 +191,13 @@ export class AgentSliceActionImpl {
     await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal);
   };
 
-  updateAgentLocalSystemConfigById = async (
+  updateAgentRuntimeEnvConfigById = async (
     agentId: string,
-    config: Partial<LocalSystemConfig>,
+    config: Partial<RuntimeEnvConfig>,
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentChatConfigById(agentId, { localSystem: config });
+    await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: config });
   };
 
   updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {
@@ -234,7 +235,7 @@ export class AgentSliceActionImpl {
   ): SWRResponse<LobeAgentConfig> => {
     return useClientDataSWR<LobeAgentConfig>(
       // Only fetch when login status is explicitly true (not null/undefined)
-      isLogin === true && agentId && !agentId.startsWith('cg_')
+      isLogin === true && agentId && !isChatGroupSessionId(agentId)
         ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
         : null,
       async ([, id]: readonly [string, string]) => {

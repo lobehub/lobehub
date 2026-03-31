@@ -39,7 +39,18 @@ const runtime = new SkillStoreExecutionRuntime({
       await getToolStoreState().refreshAgentSkills();
     },
     searchSkill: async (params) => {
-      return marketApiService.searchSkill(params);
+      const result = await marketApiService.searchSkill({
+        ...params,
+        // Only pass sort if it's a valid SkillSorts value
+        sort: params.sort as any,
+      });
+      // Transform SDK response to match expected interface
+      return {
+        items: result.items,
+        page: result.currentPage,
+        pageSize: result.pageSize,
+        total: result.totalCount,
+      };
     },
   },
 });

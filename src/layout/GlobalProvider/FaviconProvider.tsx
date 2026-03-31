@@ -56,6 +56,20 @@ const updateFaviconDOM = (state: FaviconState, isDev: boolean) => {
     'link[rel="icon"], link[rel="shortcut icon"]',
   );
 
+  if (existingLinks.length === 0) {
+    // No favicon links found — create them
+    const iconLink = document.createElement('link');
+    iconLink.rel = 'icon';
+    iconLink.href = `${getFaviconPath(state, isDev)}?v=${Date.now()}`;
+    head.append(iconLink);
+
+    const shortcutLink = document.createElement('link');
+    shortcutLink.rel = 'shortcut icon';
+    shortcutLink.href = `${getFaviconPath(state, isDev, '32x32')}?v=${Date.now()}`;
+    head.append(shortcutLink);
+    return;
+  }
+
   // Remove existing favicon links and create new ones to bust cache
   existingLinks.forEach((link) => {
     const oldHref = link.href;

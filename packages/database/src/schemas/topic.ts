@@ -37,6 +37,7 @@ export const topics = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     clientId: text('client_id'),
+    description: text('description'),
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
     trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source

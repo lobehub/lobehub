@@ -51,6 +51,21 @@ describe('parseSearchQuery', () => {
     });
   });
 
+  it('should handle case-insensitive matching for camelCase types', () => {
+    expect(parseSearchQuery('type:chatgroup search')).toEqual({
+      cleanQuery: 'search',
+      typeFilter: 'chatGroup',
+    });
+    expect(parseSearchQuery('type:KNOWLEDGEBASE search')).toEqual({
+      cleanQuery: 'search',
+      typeFilter: 'knowledgeBase',
+    });
+    expect(parseSearchQuery('is:communityagent search')).toEqual({
+      cleanQuery: 'search',
+      typeFilter: 'communityAgent',
+    });
+  });
+
   it('should ignore invalid type values', () => {
     const result = parseSearchQuery('type:invalid search');
     expect(result).toEqual({
@@ -76,9 +91,20 @@ describe('parseSearchQuery', () => {
   });
 
   it('should handle all valid types', () => {
-    // Note: Only lowercase types work because the parser normalizes to lowercase
-    // and VALID_TYPES comparison is case-sensitive
-    const types = ['agent', 'topic', 'message', 'file', 'page', 'mcp', 'plugin'];
+    const types = [
+      'agent',
+      'chatGroup',
+      'topic',
+      'message',
+      'file',
+      'folder',
+      'page',
+      'memory',
+      'mcp',
+      'plugin',
+      'communityAgent',
+      'knowledgeBase',
+    ];
 
     for (const type of types) {
       const result = parseSearchQuery(`type:${type} search`);

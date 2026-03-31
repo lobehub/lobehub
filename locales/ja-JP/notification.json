@@ -1,0 +1,12 @@
+{
+  "image_generation_completed": "画像「{{prompt}}」が正常に生成されました",
+  "image_generation_completed_title": "画像生成完了",
+  "inbox.archiveAll": "すべてをアーカイブ",
+  "inbox.empty": "通知はまだありません",
+  "inbox.emptyUnread": "未読の通知はありません",
+  "inbox.filterUnread": "未読のみ表示",
+  "inbox.markAllRead": "すべてを既読にする",
+  "inbox.title": "通知",
+  "video_generation_completed": "動画「{{prompt}}」が正常に生成されました",
+  "video_generation_completed_title": "動画生成完了"
+}

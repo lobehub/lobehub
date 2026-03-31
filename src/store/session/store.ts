@@ -6,6 +6,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type SessionStoreState } from './initialState';
 import { initialState } from './initialState';
@@ -48,5 +49,7 @@ export const useSessionStore = createWithEqualityFn<SessionStore>()(
   ),
   shallow,
 );
+
+expose('session', useSessionStore);
 
 export const getSessionStoreState = () => useSessionStore.getState();
