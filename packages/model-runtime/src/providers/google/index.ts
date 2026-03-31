@@ -20,12 +20,14 @@ import {
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { type CreateImagePayload, type CreateImageResponse } from '../../types/image';
+import { type CreateVideoPayload, type CreateVideoResponse } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
 import { StreamingResponse } from '../../utils/response';
 import { createGoogleImage } from './createImage';
+import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
 
@@ -282,6 +284,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    */
   async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
     return createGoogleImage(this.client, this.provider, payload);
+  }
+
+  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResponse> {
+    return createGoogleVideo(this.client, this.provider, payload);
+  }
+
+  async handlePollVideoStatus(inferenceId: string) {
+    return pollGoogleVideoOperation(this.client, inferenceId, this.provider, this.apiKey!);
   }
 
   /**

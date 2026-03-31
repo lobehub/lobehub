@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 // https://docs.x.ai/docs/models
 const xaiChatModels: AIChatModelCard[] = [
@@ -508,6 +508,39 @@ const xaiImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...xaiChatModels, ...xaiImageModels];
+const xaiVideoModels: AIVideoModelCard[] = [
+  {
+    description: 'State-of-the-art video generation across quality, cost, and latency.',
+    displayName: 'Grok Imagine Video',
+    enabled: true,
+    id: 'grok-imagine-video',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
+      },
+      duration: { default: 8, max: 15, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '480p',
+        enum: ['480p', '720p'],
+      },
+      size: {
+        default: '848x480',
+        enum: ['848x480', '1696x960', '1280x720', '1920x1080'],
+      },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.05, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+];
+
+export const allModels = [...xaiChatModels, ...xaiImageModels, ...xaiVideoModels];
 
 export default allModels;

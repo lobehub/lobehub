@@ -1,14 +1,39 @@
 import type { RuntimeVideoGenParams } from 'model-bank';
 
+export type CreateVideoErrorPayload = {
+  error: any;
+  errorType: string;
+  provider?: string;
+};
+
 export type CreateVideoPayload = {
   callbackUrl?: string;
   model: string;
   params: RuntimeVideoGenParams;
 };
 
-export type CreateVideoResponse = {
-  inferenceId: string;
-};
+export type CreateVideoResponse =
+  | {
+      inferenceId: string;
+    }
+  | {
+      inferenceId: string;
+      videoUrl: string;
+    };
+
+export type PollVideoStatusResult =
+  | {
+      headers?: Record<string, string>;
+      status: 'success';
+      videoUrl: string;
+    }
+  | {
+      error: string;
+      status: 'failed';
+    }
+  | {
+      status: 'pending';
+    };
 
 export type HandleCreateVideoWebhookPayload = {
   body: unknown;

@@ -4,6 +4,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { resolveParameters } from '../../core/parameterResolver';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { createMiniMaxImage } from './createImage';
+import { createMiniMaxVideo } from './createVideo';
 
 export const LobeMinimaxAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.minimaxi.com/v1',
@@ -72,6 +73,14 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
     },
   },
   createImage: createMiniMaxImage,
+  createVideo: createMiniMaxVideo,
+  handlePollVideoStatus: async (inferenceId, options) => {
+    const { pollMiniMaxVideoStatus } = await import('./createVideo');
+    return pollMiniMaxVideoStatus(inferenceId, {
+      apiKey: options.apiKey,
+      baseURL: options.baseURL || '',
+    });
+  },
   debug: {
     chatCompletion: () => process.env.DEBUG_MINIMAX_CHAT_COMPLETION === '1',
   },

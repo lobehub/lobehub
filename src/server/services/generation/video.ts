@@ -55,14 +55,19 @@ export class VideoGenerationService {
   /**
    * Download video, extract metadata, generate cover/thumbnail, upload all to S3
    */
-  async processVideoForGeneration(videoUrl: string): Promise<VideoProcessResult> {
+  async processVideoForGeneration(
+    videoUrl: string,
+    options?: {
+      headers?: Record<string, string>;
+    },
+  ): Promise<VideoProcessResult> {
     log('Processing video from URL: %s', videoUrl);
 
     let tempVideoPath: string | null = null;
     let tempCoverPath: string | null = null;
 
     try {
-      tempVideoPath = await this.downloadVideo(videoUrl);
+      tempVideoPath = await this.downloadVideo(videoUrl, options);
 
       const [metadata, videoBuffer] = await Promise.all([
         this.getVideoMetadata(tempVideoPath),
@@ -162,12 +167,18 @@ export class VideoGenerationService {
   /** Download timeout: 5 minutes */
   private static DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 
-  private async downloadVideo(url: string): Promise<string> {
+  private async downloadVideo(
+    url: string,
+    options?: {
+      headers?: Record<string, string>;
+    },
+  ): Promise<string> {
     const ext = path.extname(new URL(url).pathname).toLowerCase() || '.mp4';
     const tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${ext}`);
     log('Downloading video to: %s', tempVideoPath);
 
     const response = await fetch(url, {
+      headers: options?.headers,
       signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
     });
     if (!response.ok) {
