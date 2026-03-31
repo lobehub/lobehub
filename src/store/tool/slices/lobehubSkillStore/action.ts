@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { toolsClient } from '@/libs/trpc/client';
+import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -43,6 +44,9 @@ export class LobehubSkillStoreActionImpl {
     const { provider, toolName, args } = params;
     const toolId = `${provider}:${toolName}`;
 
+    // Get topicId directly from chat store
+    const topicId = useChatStore.getState().activeTopicId;
+
     this.#set(
       produce((draft: LobehubSkillStoreState) => {
         draft.lobehubSkillExecutingToolIds.add(toolId);
@@ -56,6 +60,7 @@ export class LobehubSkillStoreActionImpl {
         args,
         provider,
         toolName,
+        topicId,
       });
 
       this.#set(

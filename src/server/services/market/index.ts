@@ -25,6 +25,9 @@ export function extractAccessToken(req: NextRequest): string | undefined {
 
 export interface LobehubSkillExecuteParams {
   args: Record<string, any>;
+  context?: {
+    topicId?: string;
+  };
   provider: string;
   toolName: string;
 }
@@ -460,13 +463,15 @@ export class MarketService {
    * @returns Execution result with content and success status
    */
   async executeLobehubSkill(params: LobehubSkillExecuteParams): Promise<LobehubSkillExecuteResult> {
-    const { provider, toolName, args } = params;
+    const { provider, toolName, args, context } = params;
 
-    log('executeLobehubSkill: %s/%s with args: %O', provider, toolName, args);
+    log('executeLobehubSkill: %s/%s with args: %O, context: %O', provider, toolName, args, context);
 
     try {
       const response = await this.market.skills.callTool(provider, {
         args,
+        // @ts-ignore
+        topicId: context?.topicId,
         tool: toolName,
       });
 
