@@ -1,8 +1,8 @@
 'use client';
 
-import { type LobeAgentChatConfig } from '@lobechat/types';
-import { type SliderSingleProps } from 'antd/es/slider';
-import { type CSSProperties } from 'react';
+import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { SliderSingleProps } from 'antd/es/slider';
+import type { CSSProperties } from 'react';
 import { memo } from 'react';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
@@ -21,6 +21,11 @@ export interface LevelSliderConfig<T extends string> {
    * Default value when no value is provided
    */
   defaultValue: T;
+  /**
+   * Optional legacy key to read from when configKey is not set.
+   * Keeps UI consistent when older configs stored values under a previous key.
+   */
+  fallbackKey?: keyof LobeAgentChatConfig;
   /**
    * Ordered array of level values (left to right on slider)
    */
@@ -47,7 +52,7 @@ export interface CreatedLevelSliderProps<T extends string> {
  * (reading/writing to agent store).
  */
 export function createLevelSliderComponent<T extends string>(config: LevelSliderConfig<T>) {
-  const { levels, configKey, defaultValue, marks, style } = config;
+  const { levels, configKey, fallbackKey, defaultValue, marks, style } = config;
 
   // Inner pure UI component - no store hooks, safe for preview
   const LevelSliderInner = memo<{
@@ -71,13 +76,24 @@ export function createLevelSliderComponent<T extends string>(config: LevelSlider
     const { updateAgentChatConfig } = useUpdateAgentConfig();
     const agentConfig = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
 
-    const storeValue = (agentConfig[configKey] as T) || dv;
+    const resolveValue = (): T => {
+      const rawValue = agentConfig[configKey];
+      if (typeof rawValue === 'string' && levels.includes(rawValue as T)) return rawValue as T;
+
+      if (fallbackKey) {
+        const rawFallback = agentConfig[fallbackKey];
+        if (typeof rawFallback === 'string' && levels.includes(rawFallback as T))
+          return rawFallback as T;
+      }
+
+      return dv;
+    };
 
     const handleChange = (newValue: T) => {
       updateAgentChatConfig({ [configKey]: newValue });
     };
 
-    return <LevelSliderInner defaultValue={dv} value={storeValue} onChange={handleChange} />;
+    return <LevelSliderInner defaultValue={dv} value={resolveValue()} onChange={handleChange} />;
   });
 
   // Main exported component - chooses between controlled and store mode
