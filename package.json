@@ -196,7 +196,7 @@
     "@huggingface/inference": "^4.13.10",
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@khmyznikov/pwa-install": "0.3.9",
-    "@lexical/utils": "^0.39.0",
+    "@lexical/utils": "^0.42.0",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/agent-templates": "workspace:*",
     "@lobechat/builtin-agent-onboarding": "workspace:*",
@@ -340,7 +340,7 @@
     "klavis": "^2.15.0",
     "langfuse": "^3.38.6",
     "langfuse-core": "^3.38.6",
-    "lexical": "^0.39.0",
+    "lexical": "^0.42.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.1",
@@ -540,6 +540,7 @@
       "better-call": "1.1.8",
       "drizzle-orm": "^0.45.1",
       "fast-xml-parser": "5.4.2",
+      "lexical": "0.42.0",
       "pdfjs-dist": "5.4.530",
       "stylelint-config-clean-order": "7.0.0"
     }
