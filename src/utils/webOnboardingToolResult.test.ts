@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createWebOnboardingToolResult,
   formatWebOnboardingStateMessage,
-} from './webOnboardingToolResult';
+} from '@lobechat/builtin-tool-web-onboarding/utils';
 
 describe('web onboarding tool result helpers', () => {
   it('keeps tool action content message-first', () => {

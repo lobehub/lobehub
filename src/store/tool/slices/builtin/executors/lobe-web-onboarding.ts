@@ -14,7 +14,7 @@ import {
   createDocumentReadResult,
   createWebOnboardingToolResult,
   formatWebOnboardingStateMessage,
-} from '../../../../../utils/webOnboardingToolResult';
+} from '@lobechat/builtin-tool-web-onboarding/utils';
 
 const syncUserOnboardingState = async () => {
   try {
