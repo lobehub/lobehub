@@ -18,6 +18,8 @@ const text2ImageModels = [
 
 const image2ImageModels = [/^wan2\.(2|5)-i2i-/];
 
+const imageGenerationModels = [/^kling/];
+
 const imageRequiredModels = [/^qwen-image-edit/, /^wan2\.(2|5)-i2i-/, /^wan2\.6-image/];
 
 // Helper function to check if model matches any pattern in the array
@@ -133,18 +135,19 @@ async function createQwenImageTask(
 }
 
 /**
- * Create image with Qwen multimodal-generation API
+ * Create image with Qwen image/multimodal-generation API
  * This is a synchronous API that returns the result directly
  * Supports both text-to-image (t2i) and image-to-image (i2i) workflows
  */
-async function createMultimodalGeneration(
+async function createQwenImageLegacyTask(
   payload: CreateImagePayload,
   apiKey: string,
+  endpoint: 'image-generation' | 'multimodal-generation',
   baseUrl: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
-  const endpoint = `${baseUrl}/api/v1/services/aigc/multimodal-generation/generation`;
-  log('Creating image with model: %s, endpoint: %s', model, endpoint);
+  const url = `${baseUrl}/api/v1/services/aigc/${endpoint}/generation`;
+  log('Creating image with model: %s, endpoint: %s', model, url);
 
   // Check if this model requires an image
   const requiresImage = matchesModel(model, imageRequiredModels);
@@ -168,7 +171,7 @@ async function createMultimodalGeneration(
     }
   }
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(url, {
     body: JSON.stringify({
       input: {
         messages: [
@@ -180,6 +183,8 @@ async function createMultimodalGeneration(
       },
       model,
       parameters: {
+        ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
+        ...(params.resolution ? { resolution: params.resolution } : {}),
         ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
       },
     }),
@@ -280,6 +285,7 @@ export async function createQwenImage(
   try {
     const isText2Image = matchesModel(model, text2ImageModels);
     const isImage2Image = matchesModel(model, image2ImageModels);
+    const isImageGeneration = matchesModel(model, imageGenerationModels);
 
     if (isText2Image || isImage2Image) {
       const endpoint = isImage2Image ? 'image2image' : 'text2image';
@@ -329,8 +335,9 @@ export async function createQwenImage(
       return result;
     }
 
-    log('Using multimodal-generation API for model: %s', model);
-    return await createMultimodalGeneration(payload, apiKey, dashscopeURL);
+    const endpoint = isImageGeneration ? 'image-generation' : 'multimodal-generation';
+    log('Using %s API for model: %s', endpoint, model);
+    return await createQwenImageLegacyTask(payload, apiKey, endpoint, dashscopeURL);
   } catch (error) {
     log('Error in createQwenImage: %O', error);
 

@@ -1838,6 +1838,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       search: true,
       video: true,
       vision: true,
@@ -1902,6 +1903,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       search: true,
       video: true,
       vision: true,
@@ -3321,6 +3323,66 @@ const qwenImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.16, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2024-05-22',
+    type: 'image',
+  },
+  {
+    description:
+      'Supports up to 10 reference images, enabling consistent control over subjects, elements, and color tones to maintain stylistic coherence. It integrates style transfer, portrait/character referencing, multi-image fusion, and localized inpainting for flexible operation. The generated portraits feature realistic details, with overall visuals that are delicate and richly layered, and a color atmosphere that carries a cinematic quality.',
+    displayName: 'Kling v3 Image Generation',
+    enabled: true,
+    id: 'kling/kling-v3-image-generation',
+    organization: 'Qwen',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      imageUrl: {
+        default: '',
+      },
+      prompt: {
+        default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-02-06',
+    type: 'image',
+  },
+  {
+    description:
+      'Unlocks cinematic-level narrative visuals, with new support for series of images and direct 2K/4K output. It deeply analyzes prompt-based audiovisual elements to respond precisely to creative instructions. Supports flexible use of multiple reference images and comprehensive effect enhancements, making it ideal for storyboards, concept art for narratives, and scene design.',
+    displayName: 'Kling v3 Omni Image Generation',
+    enabled: true,
+    id: 'kling/kling-v3-omni-image-generation',
+    organization: 'Qwen',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k', '4k'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-02-06',
     type: 'image',
   },
   {

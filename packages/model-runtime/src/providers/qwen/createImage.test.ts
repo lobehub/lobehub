@@ -695,6 +695,99 @@ describe('createQwenImage', () => {
     });
   });
 
+  describe('kling model', () => {
+    it('should use image-generation endpoint for kling model', async () => {
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/kling-image.jpg';
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: {
+            choices: [
+              {
+                message: {
+                  content: [{ image: mockImageUrl }],
+                },
+              },
+            ],
+          },
+          request_id: 'req-kling-1',
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'kling/kling-v3-image-generation',
+        params: {
+          prompt: 'A futuristic city skyline',
+        },
+      };
+
+      const result = await createQwenImage(payload, mockOptions);
+
+      expect(result).toEqual({ imageUrl: mockImageUrl });
+
+      const [url, options] = (fetch as any).mock.calls[0];
+      expect(url).toBe(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/image-generation/generation',
+      );
+
+      const body = JSON.parse(options.body);
+      expect(body).toEqual({
+        input: {
+          messages: [
+            {
+              content: [{ text: 'A futuristic city skyline' }],
+              role: 'user',
+            },
+          ],
+        },
+        model: 'kling/kling-v3-image-generation',
+        parameters: {},
+      });
+    });
+
+    it('should map kling parameters to aspect_ratio and resolution', async () => {
+      const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/kling-image-2.jpg';
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output: {
+            choices: [
+              {
+                message: {
+                  content: [{ image: mockImageUrl }],
+                },
+              },
+            ],
+          },
+          request_id: 'req-kling-2',
+        }),
+      });
+
+      const payload: CreateImagePayload = {
+        model: 'kling/kling-v3-image-generation',
+        params: {
+          prompt: 'A flying car in cyberpunk style',
+          aspectRatio: '16:9',
+          resolution: '1k',
+          seed: 0,
+        },
+      };
+
+      await createQwenImage(payload, mockOptions);
+
+      const [, options] = (fetch as any).mock.calls[0];
+      const body = JSON.parse(options.body);
+
+      expect(body.parameters).toEqual({
+        aspect_ratio: '16:9',
+        resolution: '1k',
+        seed: 0,
+      });
+    });
+  });
+
   describe('qwen-image-edit model', () => {
     it('should successfully generate image with qwen-image-edit model', async () => {
       const mockImageUrl =
