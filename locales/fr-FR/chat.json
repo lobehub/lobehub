@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Voir",
   "tool.intervention.toolAbort": "Vous avez annulé cet appel de compétence",
   "tool.intervention.toolRejected": "Cet appel de compétence a été rejeté",
+  "tool.intervention.viewParameters": "Voir les paramètres ({{count}})",
   "toolAuth.authorize": "Autoriser",
   "toolAuth.authorizing": "Autorisation en cours...",
   "toolAuth.hint": "Sans autorisation ou configuration, les compétences peuvent ne pas fonctionner. Cela peut limiter l'agent ou provoquer des erreurs.",

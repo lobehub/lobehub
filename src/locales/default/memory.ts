@@ -80,7 +80,6 @@ export default {
   'identity.roleCloud.expand': 'Show More',
   'identity.view.list': 'List',
   'identity.view.timeline': 'Timeline',
-  'loading': 'Loading...',
   'preference.actions.delete': 'Delete',
   'preference.actions.edit': 'Edit',
   'preference.conclusionDirectives': 'Conclusion Directives',

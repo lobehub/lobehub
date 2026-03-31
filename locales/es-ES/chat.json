@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Ver",
   "tool.intervention.toolAbort": "Cancelaste esta llamada de habilidad",
   "tool.intervention.toolRejected": "Esta llamada de habilidad fue rechazada",
+  "tool.intervention.viewParameters": "Ver parámetros ({{count}})",
   "toolAuth.authorize": "Autorizar",
   "toolAuth.authorizing": "Autorizando...",
   "toolAuth.hint": "Sin autorización o configuración, las habilidades pueden no funcionar. Esto puede limitar al agente o causar errores.",

@@ -1,6 +1,4 @@
 export default {
-  'desc':
-    "Here you'll find occasional updates on new features we're exploring—feel free to try them out!",
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',

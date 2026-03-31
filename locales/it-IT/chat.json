@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Visualizza",
   "tool.intervention.toolAbort": "Hai annullato questa chiamata Skill",
   "tool.intervention.toolRejected": "Questa chiamata Skill è stata rifiutata",
+  "tool.intervention.viewParameters": "Visualizza parametri ({{count}})",
   "toolAuth.authorize": "Autorizza",
   "toolAuth.authorizing": "Autorizzazione in corso...",
   "toolAuth.hint": "Senza autorizzazione o configurazione, le Skill potrebbero non funzionare. Questo può limitare l'agente o causare errori.",

@@ -1,5 +1,4 @@
 {
-  "desc": "ここでは、私たちが現在試している新機能を不定期に更新しています。ぜひお試しください！",
   "features.assistantMessageGroup.desc": "アシスタントのメッセージとそのツール呼び出し結果をグループ化して表示します",
   "features.assistantMessageGroup.title": "アシスタントメッセージのグループ化表示",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",

@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Просмотреть",
   "tool.intervention.toolAbort": "Вы отменили вызов навыка",
   "tool.intervention.toolRejected": "Вызов навыка был отклонён",
+  "tool.intervention.viewParameters": "Просмотреть параметры ({{count}})",
   "toolAuth.authorize": "Авторизовать",
   "toolAuth.authorizing": "Авторизация...",
   "toolAuth.hint": "Без авторизации или настройки навыки могут не работать. Это может ограничить агента или вызвать ошибки.",

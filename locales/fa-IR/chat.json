@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "مشاهده",
   "tool.intervention.toolAbort": "شما این فراخوانی مهارت را لغو کردید",
   "tool.intervention.toolRejected": "این فراخوانی مهارت رد شد",
+  "tool.intervention.viewParameters": "مشاهده پارامترها ({{count}})",
   "toolAuth.authorize": "مجازسازی",
   "toolAuth.authorizing": "در حال مجازسازی...",
   "toolAuth.hint": "بدون مجازسازی یا پیکربندی، مهارت‌ها ممکن است کار نکنند. این می‌تواند باعث محدودیت یا خطا شود.",
