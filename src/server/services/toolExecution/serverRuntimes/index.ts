@@ -15,6 +15,7 @@ import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
+import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { skillsRuntime } from './skills';
@@ -50,6 +51,7 @@ registerRuntimes([
   skillsRuntime,
   memoryRuntime,
   activatorRuntime,
+  messageRuntime,
   localSystemRuntime,
   remoteDeviceRuntime,
   briefRuntime,

@@ -33,12 +33,12 @@ const qwenChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
-    contextWindowTokens: 204_800,
+    contextWindowTokens: 196_608,
     description:
       'MiniMax-M2.5 is a flagship open-source large model from MiniMax, focusing on solving complex real-world tasks. Its core strengths are multi-language programming capabilities and the ability to solve complex tasks as an Agent.',
     displayName: 'MiniMax-M2.5',
     id: 'MiniMax-M2.5',
-    maxOutput: 131_072,
+    maxOutput: 32_768,
     pricing: {
       currency: 'CNY',
       units: [
@@ -1838,6 +1838,135 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.5-omni-plus',
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Qwen3.5 Omni Plus supports text, image, and video input. It is the latest full-modal Qwen model for high-quality multimodal understanding and generation.',
+    displayName: 'Qwen3.5 Omni Plus',
+    id: 'qwen3.5-omni-plus',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8,
+              '[0.128, 0.256]': 2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        { name: 'audioInput', rate: 4.96, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.8,
+              '[0.128, infinity]': 2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'imageInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9.6,
+              '[0.128, 0.256]': 24,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-03-30',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'qwen3.5-omni-flash',
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Qwen3.5 Omni Flash is a fast, cost-effective full-modal Qwen model that supports text, image, and video input.',
+    displayName: 'Qwen3.5 Omni Flash',
+    id: 'qwen3.5-omni-flash',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.2,
+              '[0.128, 0.256]': 0.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        { name: 'audioInput', rate: 1.24, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 0.2,
+              '[0.128, infinity]': 0.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'imageInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 4,
+              '[0.128, 0.256]': 16,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-03-30',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
       video: true,
       vision: true,
@@ -1847,7 +1976,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      'Qwen-Omni accepts combined inputs across text, images, audio, and video, and outputs text or speech. It offers multiple natural voice styles, supports multilingual and dialect speech, and fits use cases like writing, vision recognition, and voice assistants.',
+      'Qwen3-Omni-Flash is a multimodal large model built on a Thinker–Talker Mixture-of-Experts (MoE) architecture. It supports efficient understanding across text, images, audio, and video, along with speech generation capabilities. The model enables text-based interaction in 119 languages and voice interaction in 20 languages, producing human-like speech for precise cross-lingual communication. It features strong instruction-following capabilities and supports customizable system prompts, allowing flexible adaptation to different conversational styles and role settings. It is widely applicable in scenarios such as text creation, voice assistants, and multimedia analysis, delivering a natural and seamless multimodal interaction experience.',
     displayName: 'Qwen3 Omni Flash',
     id: 'qwen3-omni-flash',
     maxOutput: 16_384,
@@ -1861,6 +1990,7 @@ const qwenChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2025-12-04',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },

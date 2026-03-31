@@ -369,111 +369,6 @@ const googleChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description:
-      'Gemini 2.5 Pro Preview is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
-    displayName: 'Gemini 2.5 Pro Preview 06-05',
-    id: 'gemini-2.5-pro-preview-06-05',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.31, upTo: 200_000 },
-            { rate: 0.625, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 1.25, upTo: 200_000 },
-            { rate: 2.5, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 10, upTo: 200_000 },
-            { rate: 15, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-06-05',
-    settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
-    description:
-      'Gemini 2.5 Pro Preview is Google’s most advanced reasoning model, able to reason over code, math, and STEM problems and analyze large datasets, codebases, and documents with long context.',
-    displayName: 'Gemini 2.5 Pro Preview 05-06',
-    id: 'gemini-2.5-pro-preview-05-06',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.31, upTo: 200_000 },
-            { rate: 0.625, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 1.25, upTo: 200_000 },
-            { rate: 2.5, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 10, upTo: 200_000 },
-            { rate: 15, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-05-06',
-    settings: {
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
     description: 'Gemini 2.5 Flash is Google’s best-value model with full capabilities.',
     displayName: 'Gemini 2.5 Flash',
     id: 'gemini-2.5-flash',
@@ -628,25 +523,6 @@ const googleChatModels: AIChatModelCard[] = [
       searchImpl: 'params',
       searchProvider: 'google',
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      imageOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description: 'Gemini 2.0 Flash experimental model with image generation support.',
-    displayName: 'Gemini 2.0 Flash (Image Generation) Experimental',
-    id: 'gemini-2.0-flash-exp-image-generation',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-03-14',
     type: 'chat',
   },
   {

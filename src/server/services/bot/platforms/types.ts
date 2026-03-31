@@ -230,6 +230,7 @@ export abstract class ClientFactory {
     _credentials: Record<string, string>,
     _settings?: Record<string, unknown>,
     _applicationId?: string,
+    _platform?: string,
   ): Promise<ValidationResult> {
     return { valid: true };
   }

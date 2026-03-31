@@ -6,6 +6,69 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax-M2.7 has reached or refreshed the latest SOTA benchmark in programming, tool calling and search, office productivity and many other scenarios, officially starting the journey of model recursive self-improvement.',
+    displayName: 'MiniMax M2.7',
+    enabled: true,
+    id: 'minimax-m2.7',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-17',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek-V3.2 is a model that balances high computational efficiency with excellent reasoning and agent performance.',
+    displayName: 'DeepSeek V3.2',
+    id: 'deepseek-v3.2',
+    maxOutput: 8192,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'DeepSeek-V3.2 Thinking is the thinking mode variant of DeepSeek-V3.2, focused on reasoning tasks.',
+    displayName: 'DeepSeek V3.2 Thinking',
+    enabled: true,
+    id: 'deepseek-v3.2-thinking',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 131_072,
@@ -56,7 +119,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2.5 is a state-of-the-art large language model designed for real-world productivity and coding tasks.',
     displayName: 'MiniMax M2.5',
-    enabled: true,
     id: 'minimax-m2.5',
     pricing: {
       currency: 'CNY',
@@ -118,7 +180,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2.1 is the latest version of the MiniMax series, optimized for multilingual programming and real-world complex tasks. As an AI-native model, MiniMax-M2.1 achieves significant improvements in model performance, agent framework support, and multi-scenario adaptation, aiming to help enterprises and individuals find AI-native work and lifestyle more quickly.',
     displayName: 'MiniMax M2.1',
-    enabled: true,
     id: 'minimax-m2.1',
     maxOutput: 200_000,
     pricing: {
@@ -159,7 +220,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.7 is the latest large language model launched by Zhipu AI, with enhanced reasoning and generation capabilities.',
     displayName: 'GLM-4.7',
-    enabled: true,
     id: 'glm-4.7',
     maxOutput: 4096,
     pricing: {

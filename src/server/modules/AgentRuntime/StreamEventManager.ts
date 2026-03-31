@@ -31,6 +31,7 @@ export interface StreamEvent {
     | 'stream_start'
     | 'stream_chunk'
     | 'stream_end'
+    | 'stream_retry'
     | 'tool_start'
     | 'tool_end'
     | 'step_start'

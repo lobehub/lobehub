@@ -11,6 +11,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { BaseService } from '../common/base.service';
 import type {
   CreateResponseRequest,
+  FunctionCallOutputItem,
   InputItem,
   OutputItem,
   ResponseObject,
@@ -34,6 +35,49 @@ export class ResponsesService extends BaseService {
   private extractHostedToolIds(tools?: Tool[] | null): string[] {
     if (!tools) return [];
     return tools.filter((t) => t.type !== 'function').map((t) => t.type);
+  }
+
+  /**
+   * Extract function tool definitions from tools array
+   */
+  private extractFunctionTools(
+    tools?: Tool[] | null,
+  ): Array<{ description?: string; name: string; parameters?: Record<string, any> }> {
+    if (!tools) return [];
+    return tools
+      .filter((t): t is Tool & { type: 'function' } => t.type === 'function')
+      .map((t) => ({
+        description: (t as any).description,
+        name: (t as any).name,
+        parameters: (t as any).parameters,
+      }));
+  }
+
+  /**
+   * Check if input contains function_call_output items (resume flow)
+   */
+  private hasFunctionCallOutputs(input: string | InputItem[]): boolean {
+    if (typeof input === 'string') return false;
+    return input.some((item) => item.type === 'function_call_output');
+  }
+
+  /**
+   * Extract function_call_output items from input
+   */
+  private extractFunctionCallOutputs(input: string | InputItem[]): FunctionCallOutputItem[] {
+    if (typeof input === 'string') return [];
+    return input.filter(
+      (item): item is FunctionCallOutputItem => item.type === 'function_call_output',
+    );
+  }
+
+  /**
+   * Build a prompt from function_call_output items for the resume flow.
+   * Encodes tool results so the LLM can continue the conversation.
+   */
+  private buildToolResultPrompt(outputs: FunctionCallOutputItem[]): string {
+    const parts = outputs.map((o) => `Tool call ${o.call_id} returned: ${o.output}`);
+    return parts.join('\n');
   }
 
   /**
@@ -139,11 +183,16 @@ export class ResponsesService extends BaseService {
         // Handle tool_calls from assistant
         if (hasToolCalls) {
           for (const toolCall of msg.tool_calls) {
+            // Convert internal tool names: lobe-client-fn____get_weather → get_weather
+            let fnName = toolCall.function?.name ?? '';
+            if (fnName.startsWith('lobe-client-fn____')) {
+              fnName = fnName.slice('lobe-client-fn____'.length);
+            }
             output.push({
               arguments: toolCall.function?.arguments ?? '{}',
               call_id: toolCall.id ?? `call_${itemCounter}`,
               id: `fc_${responseId}_${itemCounter++}`,
-              name: toolCall.function?.name ?? '',
+              name: fnName,
               status: 'completed' as const,
               type: 'function_call' as const,
             });
@@ -201,7 +250,6 @@ export class ResponsesService extends BaseService {
 
     try {
       const model = params.model;
-      const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
       // Resolve topicId from previous_response_id for multi-turn
@@ -209,8 +257,17 @@ export class ResponsesService extends BaseService {
         ? this.extractTopicIdFromResponseId(params.previous_response_id)
         : null;
 
+      // Check for function_call_output resume flow
+      const functionCallOutputs = this.extractFunctionCallOutputs(params.input);
+      const isResumeFlow = functionCallOutputs.length > 0 && previousTopicId;
+
+      const prompt = isResumeFlow
+        ? this.buildToolResultPrompt(functionCallOutputs)
+        : this.extractPrompt(params.input);
+
       this.log('info', 'Creating response via execAgent', {
         hasInstructions: !!instructions,
+        isResumeFlow,
         model,
         previousTopicId,
         prompt: prompt.slice(0, 50),
@@ -219,12 +276,14 @@ export class ResponsesService extends BaseService {
       // 1. Create agent operation without auto-start
       // model field is used as agentId
       const additionalPluginIds = this.extractHostedToolIds(params.tools);
+      const functionTools = this.extractFunctionTools(params.tools);
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
         additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
+        functionTools: functionTools.length > 0 ? functionTools : undefined,
         instructions,
         prompt,
         stream: false,
@@ -247,14 +306,23 @@ export class ResponsesService extends BaseService {
       const { output, outputText } = this.extractOutputItems(finalState, responseId);
       const usage = this.extractUsage(finalState);
 
+      const isClientToolInterrupt =
+        finalState.status === 'interrupted' &&
+        finalState.interruption?.reason === 'client_tool_execution';
+
       return this.buildResponseObject({
-        completedAt: Math.floor(Date.now() / 1000),
+        completedAt: isClientToolInterrupt ? null : Math.floor(Date.now() / 1000),
         createdAt,
         id: responseId,
+        incompleteDetails: isClientToolInterrupt ? { reason: 'client_tool_execution' } : undefined,
         output,
         outputText,
         params,
-        status: finalState.status === 'error' ? 'failed' : 'completed',
+        status: isClientToolInterrupt
+          ? 'incomplete'
+          : finalState.status === 'error'
+            ? 'failed'
+            : 'completed',
         usage,
       });
     } catch (error) {
@@ -288,7 +356,6 @@ export class ResponsesService extends BaseService {
 
     try {
       const model = params.model;
-      const prompt = this.extractPrompt(params.input);
       const instructions = this.buildInstructions(params);
 
       // Resolve topicId from previous_response_id for multi-turn
@@ -296,15 +363,25 @@ export class ResponsesService extends BaseService {
         ? this.extractTopicIdFromResponseId(params.previous_response_id)
         : null;
 
+      // Check for function_call_output resume flow
+      const functionCallOutputs = this.extractFunctionCallOutputs(params.input);
+      const isResumeFlow = functionCallOutputs.length > 0 && previousTopicId;
+
+      const prompt = isResumeFlow
+        ? this.buildToolResultPrompt(functionCallOutputs)
+        : this.extractPrompt(params.input);
+
       // 1. Create agent operation (before generating responseId so we have topicId)
       // model field is used as agentId
       const additionalPluginIds = this.extractHostedToolIds(params.tools);
+      const functionTools = this.extractFunctionTools(params.tools);
       const aiAgentService = new AiAgentService(this.db, this.userId);
       const execResult = await aiAgentService.execAgent({
         additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
         appContext: previousTopicId ? { topicId: previousTopicId } : undefined,
         autoStart: false,
+        functionTools: functionTools.length > 0 ? functionTools : undefined,
         instructions,
         prompt,
         stream: true,
@@ -489,12 +566,17 @@ export class ResponsesService extends BaseService {
               // Emit function_call output items for each tool call
               for (const toolCall of chunk.toolsCalling) {
                 const fcItemId = `fc_${responseId}_${itemCounter++}`;
+                // Client function tools use original name; hosted tools use identifier/apiName
+                const isClientTool = toolCall.identifier === 'lobe-client-fn';
+                const toolDisplayName = isClientTool
+                  ? toolCall.apiName
+                  : `${toolCall.identifier}/${toolCall.apiName}`;
                 yield {
                   item: {
                     arguments: toolCall.arguments ?? '{}',
                     call_id: toolCall.id,
                     id: fcItemId,
-                    name: `${toolCall.identifier}/${toolCall.apiName}`,
+                    name: toolDisplayName,
                     status: 'in_progress' as const,
                     type: 'function_call' as const,
                   } as OutputItem,
@@ -514,13 +596,22 @@ export class ResponsesService extends BaseService {
                   };
                 }
 
+                // Emit arguments done
+                yield {
+                  arguments: toolCall.arguments ?? '{}',
+                  item_id: fcItemId,
+                  output_index: currentOutputIndex,
+                  sequence_number: seq.n++,
+                  type: 'response.function_call_arguments.done' as const,
+                };
+
                 // Complete the function_call item
                 yield {
                   item: {
                     arguments: toolCall.arguments ?? '{}',
                     call_id: toolCall.id,
                     id: fcItemId,
-                    name: `${toolCall.identifier}/${toolCall.apiName}`,
+                    name: toolDisplayName,
                     status: 'completed' as const,
                     type: 'function_call' as const,
                   } as OutputItem,
@@ -594,24 +685,51 @@ export class ResponsesService extends BaseService {
         ? this.extractOutputItems(finalState, responseId)
         : { output: [], outputText: accumulatedText };
 
-      yield {
-        response: {
-          ...response,
-          completed_at: Math.floor(Date.now() / 1000),
-          output: fullOutput.output,
-          output_text: fullOutput.outputText || accumulatedText,
-          status: (finalState?.status === 'error' ? 'failed' : 'completed') as any,
-          usage: {
-            input_tokens: usage.input_tokens,
-            input_tokens_details: { cached_tokens: 0 },
-            output_tokens: usage.output_tokens,
-            output_tokens_details: { reasoning_tokens: 0 },
-            total_tokens: usage.total_tokens,
+      // Determine if agent was interrupted for client tool execution
+      const isClientToolInterrupt =
+        finalState?.status === 'interrupted' &&
+        finalState?.interruption?.reason === 'client_tool_execution';
+
+      if (isClientToolInterrupt) {
+        yield {
+          response: {
+            ...response,
+            completed_at: null,
+            incomplete_details: { reason: 'client_tool_execution' },
+            output: fullOutput.output,
+            output_text: fullOutput.outputText || accumulatedText,
+            status: 'incomplete' as any,
+            usage: {
+              input_tokens: usage.input_tokens,
+              input_tokens_details: { cached_tokens: 0 },
+              output_tokens: usage.output_tokens,
+              output_tokens_details: { reasoning_tokens: 0 },
+              total_tokens: usage.total_tokens,
+            },
           },
-        },
-        sequence_number: sequenceNumber,
-        type: 'response.completed' as const,
-      };
+          sequence_number: sequenceNumber,
+          type: 'response.incomplete' as const,
+        };
+      } else {
+        yield {
+          response: {
+            ...response,
+            completed_at: Math.floor(Date.now() / 1000),
+            output: fullOutput.output,
+            output_text: fullOutput.outputText || accumulatedText,
+            status: (finalState?.status === 'error' ? 'failed' : 'completed') as any,
+            usage: {
+              input_tokens: usage.input_tokens,
+              input_tokens_details: { cached_tokens: 0 },
+              output_tokens: usage.output_tokens,
+              output_tokens_details: { reasoning_tokens: 0 },
+              total_tokens: usage.total_tokens,
+            },
+          },
+          sequence_number: sequenceNumber,
+          type: 'response.completed' as const,
+        };
+      }
     } catch (error) {
       const errorResponseId = this.generateResponseId();
       this.log('error', 'Streaming response failed', { error, responseId: errorResponseId });
@@ -666,6 +784,7 @@ export class ResponsesService extends BaseService {
     createdAt: number;
     error?: { code: 'server_error'; message: string };
     id: string;
+    incompleteDetails?: { reason: string };
     output: OutputItem[];
     outputText: string;
     params: CreateResponseRequest;
@@ -680,7 +799,7 @@ export class ResponsesService extends BaseService {
       error: opts.error ?? null,
       frequency_penalty: p.frequency_penalty ?? 0,
       id: opts.id,
-      incomplete_details: null,
+      incomplete_details: opts.incompleteDetails ?? null,
       instructions: opts.params.instructions ?? null,
       max_output_tokens: opts.params.max_output_tokens ?? null,
       max_tool_calls: p.max_tool_calls ?? null,

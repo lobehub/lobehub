@@ -10,7 +10,7 @@
     "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
-    "lexical": "^0.39.0"
+    "lexical": "^0.42.0"
   },
   "peerDependencies": {
     "@lobehub/editor": "^4",

@@ -33,7 +33,6 @@
   "jina.description": "Fondée en 2020, Jina AI est une entreprise leader en IA de recherche. Sa pile technologique comprend des modèles vectoriels, des rerankers et de petits modèles linguistiques pour créer des applications de recherche générative et multimodale fiables et de haute qualité.",
   "kimicodingplan.description": "Kimi Code de Moonshot AI offre un accès aux modèles Kimi, y compris K2.5, pour des tâches de codage.",
   "lmstudio.description": "LM Studio est une application de bureau pour développer et expérimenter avec des LLMs sur votre ordinateur.",
-  "lobehub.description": "LobeHub Cloud utilise des API officielles pour accéder aux modèles d'IA et mesure l'utilisation avec des crédits liés aux jetons des modèles.",
   "longcat.description": "LongCat est une série de grands modèles d'IA générative développés indépendamment par Meituan. Elle est conçue pour améliorer la productivité interne de l'entreprise et permettre des applications innovantes grâce à une architecture informatique efficace et de puissantes capacités multimodales.",
   "minimax.description": "Fondée en 2021, MiniMax développe une IA généraliste avec des modèles fondamentaux multimodaux, incluant des modèles texte MoE à un billion de paramètres, des modèles vocaux et visuels, ainsi que des applications comme Hailuo AI.",
   "minimaxcodingplan.description": "Le plan de jetons MiniMax offre un accès aux modèles MiniMax, y compris M2.7, pour des tâches de codage via un abonnement à tarif fixe.",

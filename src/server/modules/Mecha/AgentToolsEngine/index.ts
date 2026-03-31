@@ -14,6 +14,7 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
@@ -97,6 +98,7 @@ export const createServerAgentToolsEngine = (
     globalMemoryEnabled = false,
     hasAgentDocuments = false,
     hasEnabledKnowledgeBases = false,
+    isBotConversation = false,
     model,
     provider,
   } = params;
@@ -140,6 +142,8 @@ export const createServerAgentToolsEngine = (
           !!deviceContext?.deviceOnline &&
           !!deviceContext?.autoActivated,
         [MemoryManifest.identifier]: globalMemoryEnabled,
+        // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
+        ...(isBotConversation && { [MessageManifest.identifier]: true }),
         [RemoteDeviceManifest.identifier]:
           !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,

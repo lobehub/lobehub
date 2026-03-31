@@ -1,6 +1,5 @@
 {
   "actions.confirmRemoveThread": "Je staat op het punt dit subonderwerp te verwijderen. Zodra het is verwijderd, kan het niet worden hersteld. Ga voorzichtig te werk.",
   "newPortalThread.includeContext": "Context van het onderwerp meenemen",
-  "newPortalThread.title": "Nieuw subonderwerp starten",
-  "notSupportMultiModals": "Subonderwerpen ondersteunen momenteel geen bestands- of afbeeldingsuploads. Als je verzoeken hebt, laat dan gerust een bericht achter: <1>💬 Discussieruimte</1>"
+  "newPortalThread.title": "Nieuw subonderwerp starten"
 }

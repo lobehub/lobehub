@@ -78,6 +78,95 @@ export class TelegramApi {
     await this.call('setMyCommands', { commands });
   }
 
+  // ==================== Pin Operations ====================
+
+  async pinChatMessage(
+    chatId: string | number,
+    messageId: number,
+    disableNotification?: boolean,
+  ): Promise<void> {
+    log('pinChatMessage: chatId=%s, messageId=%s', chatId, messageId);
+    await this.call('pinChatMessage', {
+      chat_id: chatId,
+      disable_notification: disableNotification ?? true,
+      message_id: messageId,
+    });
+  }
+
+  async unpinChatMessage(chatId: string | number, messageId: number): Promise<void> {
+    log('unpinChatMessage: chatId=%s, messageId=%s', chatId, messageId);
+    await this.call('unpinChatMessage', {
+      chat_id: chatId,
+      message_id: messageId,
+    });
+  }
+
+  // ==================== Chat / Channel Info ====================
+
+  async getChat(chatId: string | number): Promise<any> {
+    log('getChat: chatId=%s', chatId);
+    const data = await this.call('getChat', { chat_id: chatId });
+    return data.result;
+  }
+
+  async getChatMember(chatId: string | number, userId: number): Promise<any> {
+    log('getChatMember: chatId=%s, userId=%s', chatId, userId);
+    const data = await this.call('getChatMember', { chat_id: chatId, user_id: userId });
+    return data.result;
+  }
+
+  // ==================== Forum Topics (Threads) ====================
+
+  async createForumTopic(
+    chatId: string | number,
+    name: string,
+  ): Promise<{ message_thread_id: number }> {
+    log('createForumTopic: chatId=%s, name=%s', chatId, name);
+    const data = await this.call('createForumTopic', {
+      chat_id: chatId,
+      name: name.slice(0, 128), // Telegram forum topic name limit
+    });
+    return { message_thread_id: data.result.message_thread_id };
+  }
+
+  async sendMessageToTopic(
+    chatId: string | number,
+    topicId: number,
+    text: string,
+  ): Promise<{ message_id: number }> {
+    log('sendMessageToTopic: chatId=%s, topicId=%s', chatId, topicId);
+    const data = await this.call('sendMessage', {
+      chat_id: chatId,
+      message_thread_id: topicId,
+      parse_mode: 'HTML',
+      text: this.truncateText(text),
+    });
+    return { message_id: data.result.message_id };
+  }
+
+  // ==================== Polls ====================
+
+  async sendPoll(
+    chatId: string | number,
+    question: string,
+    options: string[],
+    isAnonymous?: boolean,
+    allowsMultipleAnswers?: boolean,
+  ): Promise<{ message_id: number; poll_id?: string }> {
+    log('sendPoll: chatId=%s, question=%s', chatId, question);
+    const data = await this.call('sendPoll', {
+      allows_multiple_answers: allowsMultipleAnswers ?? false,
+      chat_id: chatId,
+      is_anonymous: isAnonymous ?? true,
+      options: options.map((text) => ({ text })),
+      question,
+    });
+    return {
+      message_id: data.result.message_id,
+      poll_id: data.result.poll?.id,
+    };
+  }
+
   // ------------------------------------------------------------------
 
   private truncateText(text: string): string {

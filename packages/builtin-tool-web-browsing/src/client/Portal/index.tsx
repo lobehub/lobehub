@@ -8,7 +8,7 @@ import Search from './Search';
 
 const Inspector = memo<BuiltinPortalProps>(({ arguments: args, messageId, state, apiName }) => {
   switch (apiName) {
-    // 兼容旧版数据
+    // Backward compatibility for old data
     case WebBrowsingApiName.search: {
       return <Search messageId={messageId} query={args as SearchQuery} response={state} />;
     }

@@ -83,6 +83,7 @@ describe('RuntimeExecutors', () => {
     };
 
     ctx = {
+      loadAgentState: vi.fn().mockResolvedValue(null),
       messageModel: mockMessageModel,
       operationId: 'op-123',
       serverDB: {} as any, // Mock serverDB
@@ -1327,6 +1328,176 @@ describe('RuntimeExecutors', () => {
       const payload = result.nextContext!.payload as { parentMessageId?: string };
       expect(payload.parentMessageId).toBeUndefined();
     });
+
+    it('should retry tool execution when kind is retry and eventually succeed', async () => {
+      mockToolExecutionService.executeTool
+        .mockResolvedValueOnce({
+          content: 'timeout-1',
+          error: { kind: 'retry', message: 'timeout' },
+          executionTime: 50,
+          state: {},
+          success: false,
+        })
+        .mockResolvedValueOnce({
+          content: 'timeout-2',
+          error: { kind: 'retry', message: 'timeout' },
+          executionTime: 50,
+          state: {},
+          success: false,
+        })
+        .mockResolvedValueOnce({
+          content: 'Tool result success',
+          error: null,
+          executionTime: 80,
+          state: {},
+          success: true,
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-retry-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(3);
+      expect((result.nextContext!.payload as any).isSuccess).toBe(true);
+    });
+
+    it('should stop retrying tool execution after operation is interrupted', async () => {
+      mockToolExecutionService.executeTool.mockResolvedValue({
+        content: 'timeout',
+        error: { kind: 'retry', message: 'timeout' },
+        executionTime: 50,
+        state: {},
+        success: false,
+      });
+      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
+
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        loadAgentState,
+      });
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-retry-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(1);
+      expect(loadAgentState).toHaveBeenCalledWith('op-123');
+      expect((result.nextContext!.payload as any).isSuccess).toBe(false);
+    });
+
+    it('should materialize failed tool result after retry exhaustion', async () => {
+      mockToolExecutionService.executeTool.mockResolvedValue({
+        content: 'still failing',
+        error: { kind: 'retry', message: 'timeout' },
+        executionTime: 50,
+        state: {},
+        success: false,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-retry-2',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(3);
+      expect((result.nextContext!.payload as any).isSuccess).toBe(false);
+    });
+
+    it('should not retry for replan or stop kinds', async () => {
+      mockToolExecutionService.executeTool
+        .mockResolvedValueOnce({
+          content: 'invalid args',
+          error: { kind: 'replan', message: 'invalid schema' },
+          executionTime: 30,
+          state: {},
+          success: false,
+        })
+        .mockResolvedValueOnce({
+          content: 'permission denied',
+          error: { kind: 'stop', message: 'forbidden' },
+          executionTime: 30,
+          state: {},
+          success: false,
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const replanInstruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-replan-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const stopInstruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-stop-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      await executors.call_tool!(replanInstruction, state);
+      await executors.call_tool!(stopInstruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('call_tools_batch executor', () => {
@@ -1419,6 +1590,80 @@ describe('RuntimeExecutors', () => {
           role: 'tool',
           tool_call_id: 'tool-call-2',
         }),
+      );
+    });
+
+    it('should apply retry policy per tool in batch mode', async () => {
+      const attemptsByTool: Record<string, number> = {};
+
+      mockToolExecutionService.executeTool.mockImplementation((payload: any) => {
+        const toolId = payload.id as string;
+        const nextAttempt = (attemptsByTool[toolId] || 0) + 1;
+        attemptsByTool[toolId] = nextAttempt;
+
+        if (toolId === 'tool-call-retry-batch' && nextAttempt < 3) {
+          return Promise.resolve({
+            content: 'timeout',
+            error: { kind: 'retry', message: 'timeout' },
+            executionTime: 40,
+            state: {},
+            success: false,
+          });
+        }
+
+        if (toolId === 'tool-call-stop-batch') {
+          return Promise.resolve({
+            content: 'permission denied',
+            error: { kind: 'stop', message: 'forbidden' },
+            executionTime: 40,
+            state: {},
+            success: false,
+          });
+        }
+
+        return Promise.resolve({
+          content: 'ok',
+          error: null,
+          executionTime: 60,
+          state: {},
+          success: true,
+        });
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-retry-batch',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-stop-batch',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      const result = await executors.call_tools_batch!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(4);
+      expect((result.nextContext!.payload as any).toolResults).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ isSuccess: true }),
+          expect.objectContaining({ isSuccess: false }),
+        ]),
       );
     });
 
@@ -2431,7 +2676,9 @@ describe('RuntimeExecutors', () => {
       vi.mocked(consumeStreamUntilDone).mockResolvedValue(undefined);
     });
 
-    it('should throw when LLM stream contains error events from provider', async () => {
+    it('should retry and eventually throw when LLM stream contains error events from provider', async () => {
+      vi.useFakeTimers();
+
       // Import real implementations directly from source (bypassing the @lobechat/model-runtime mock)
       const { consumeStreamUntilDone: realConsume } =
         await import('../../../../../packages/model-runtime/src/utils/consumeStream');
@@ -2475,15 +2722,33 @@ describe('RuntimeExecutors', () => {
         type: 'call_llm' as const,
       };
 
-      await expect(executors.call_llm!(instruction, state)).rejects.toThrow(/LLM stream error/);
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+        const rejectionExpectation = expect(resultPromise).rejects.toThrow(/LLM stream error/);
 
-      // Error event should be published to stream manager
-      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
-        'op-123',
-        expect.objectContaining({
-          type: 'error',
-        }),
-      );
+        await Promise.resolve();
+        await vi.runAllTimersAsync();
+
+        await rejectionExpectation;
+
+        expect(mockChat).toHaveBeenCalledTimes(6);
+
+        const retryEvents = mockStreamManager.publishStreamEvent.mock.calls.filter(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        );
+
+        expect(retryEvents).toHaveLength(5);
+
+        // Error event should be published to stream manager after retries are exhausted
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'error',
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should throw and not produce llm_result when modelRuntime.chat rejects', async () => {
@@ -2519,6 +2784,217 @@ describe('RuntimeExecutors', () => {
           }),
         }),
       );
+    });
+
+    it('should retry llm execution, emit stream_retry, and commit only the successful attempt', async () => {
+      vi.useFakeTimers();
+
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'tool-call-1',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi
+        .fn()
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onGrounding?.({ query: 'draft' });
+          await options.callback.onToolsCalling?.({ toolsCalling: toolCallPayload });
+          throw new Error('network timeout');
+        })
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onText?.('final');
+          await options.callback.onCompletion?.({
+            usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+          });
+          return new Response('done');
+        });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+
+        await vi.runOnlyPendingTimersAsync();
+
+        const result = await resultPromise;
+
+        expect(mockChat).toHaveBeenCalledTimes(2);
+        expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({ content: 'final' }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should not retry llm execution after operation is interrupted', async () => {
+      const mockChat = vi.fn().mockRejectedValue(new Error('network timeout'));
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
+
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        loadAgentState,
+      });
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toThrow('network timeout');
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(loadAgentState).toHaveBeenCalledWith('op-123');
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        ),
+      ).toBe(false);
+    });
+
+    it('should not retry llm execution if operation is interrupted during backoff', async () => {
+      vi.useFakeTimers();
+
+      const mockChat = vi.fn().mockRejectedValue(new Error('network timeout'));
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const loadAgentState = vi
+        .fn()
+        .mockResolvedValueOnce({ status: 'running' })
+        .mockResolvedValueOnce({ status: 'interrupted' });
+
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        loadAgentState,
+      });
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+        const rejectionExpectation = expect(resultPromise).rejects.toThrow('network timeout');
+
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+
+        await rejectionExpectation;
+
+        expect(mockChat).toHaveBeenCalledTimes(1);
+        expect(loadAgentState).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should apply exponential backoff across multiple llm retries', async () => {
+      vi.useFakeTimers();
+
+      const mockChat = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('network timeout-1'))
+        .mockRejectedValueOnce(new Error('network timeout-2'))
+        .mockRejectedValueOnce(new Error('network timeout-3'))
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onText?.('final');
+          await options.callback.onCompletion?.({
+            usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+          });
+          return new Response('done');
+        });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+
+        await vi.runOnlyPendingTimersAsync();
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+
+        const result = await resultPromise;
+
+        expect(mockChat).toHaveBeenCalledTimes(4);
+        expect(result.nextContext?.phase).toBe('llm_result');
+
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+          }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 3, delayMs: 2000, maxAttempts: 6 },
+          }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 4, delayMs: 4000, maxAttempts: 6 },
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

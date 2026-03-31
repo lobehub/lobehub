@@ -183,13 +183,8 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Phase 2.5: Unknown tool guard — if no manifest found, require intervention
-      // This prevents auto-executing tools the LLM hallucinated or whose name was corrupted
+      // Phase 2.5: Get manifest for later use
       const manifest = state.toolManifestMap?.[identifier];
-      if (!manifest) {
-        toolsNeedingIntervention.push(toolCalling);
-        continue;
-      }
 
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
@@ -223,6 +218,16 @@ export class GeneralChatAgent implements Agent {
       // Phase 5: User config is 'auto-run', all tools execute directly
       if (approvalMode === 'auto-run') {
         toolsToExecute.push(toolCalling);
+        continue;
+      }
+
+      // Phase 5.5: Unknown tool guard — require intervention for tools not in manifest
+      // Only applies to manual/allow-list modes; auto-run users accept the risk
+      if (!manifest) {
+        console.warn(
+          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(state.toolManifestMap ?? {}).join(', ')}), requiring intervention`,
+        );
+        toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 

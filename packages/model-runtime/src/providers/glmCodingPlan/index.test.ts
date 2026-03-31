@@ -5,7 +5,7 @@ import { testProvider } from '../../providerTestUtils';
 import { LobeGLMCodingPlanAI } from './index';
 
 const provider = ModelProvider.GLMCodingPlan;
-const defaultBaseURL = 'https://api.z.ai/api/paas/v4';
+const defaultBaseURL = 'https://open.bigmodel.cn/api/coding/paas/v4';
 
 testProvider({
   Runtime: LobeGLMCodingPlanAI,

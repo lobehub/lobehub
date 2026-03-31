@@ -28,6 +28,8 @@ import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 /** Round cost to at most 6 decimal places to avoid floating-point noise */
 const roundCost = (v: number): number => Math.round(v * 1e6) / 1e6;
+const EVAL_AGENT_RUNTIME_QSTASH_RETRIES = 10;
+const EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY = '10000 * (1 + retried)';
 
 export class AgentEvalRunService {
   private readonly db: LobeChatDatabase;
@@ -305,6 +307,8 @@ export class AgentEvalRunService {
         ...(envPrompt && { evalContext: { envPrompt } }),
         maxSteps: run.config?.maxSteps,
         prompt: params.testCase.content.input || '',
+        queueRetries: EVAL_AGENT_RUNTIME_QSTASH_RETRIES,
+        queueRetryDelay: EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY,
         userInterventionConfig: { approvalMode: 'headless' },
       });
 
@@ -448,6 +452,8 @@ export class AgentEvalRunService {
         ...(envPrompt && { evalContext: { envPrompt } }),
         maxSteps: run.config?.maxSteps,
         prompt: params.testCase.content.input || '',
+        queueRetries: EVAL_AGENT_RUNTIME_QSTASH_RETRIES,
+        queueRetryDelay: EVAL_AGENT_RUNTIME_QSTASH_RETRY_DELAY,
         userInterventionConfig: { approvalMode: 'headless' },
       });
 

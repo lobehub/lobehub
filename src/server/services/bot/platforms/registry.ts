@@ -76,6 +76,11 @@ export class PlatformRegistry {
         valid: false,
       };
     }
-    return definition.clientFactory.validateCredentials(credentials, settings, applicationId);
+    return definition.clientFactory.validateCredentials(
+      credentials,
+      settings,
+      applicationId,
+      platform,
+    );
   }
 }

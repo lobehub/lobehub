@@ -196,7 +196,6 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.3 Chat is the latest ChatGPT model used in ChatGPT with improved conversation experiences.',
     displayName: 'GPT-5.3 Chat',
-    enabled: true,
     id: 'gpt-5.3-chat-latest',
     maxOutput: 16_384,
     pricing: {
@@ -561,7 +560,6 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'A faster, more cost-efficient GPT-5 variant for well-defined tasks, delivering quicker responses while maintaining quality.',
     displayName: 'GPT-5 mini',
-    enabled: true,
     id: 'gpt-5-mini',
     maxOutput: 128_000,
     pricing: {
