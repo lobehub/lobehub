@@ -122,7 +122,7 @@ export interface ReadMessagesParams {
   cursor?: string;
   /** End time as Unix second timestamp (Feishu/Lark only) */
   endTime?: string;
-  /** Max number of messages to fetch (default: 20, max: 100) */
+  /** Max number of messages to fetch */
   limit?: number;
   /** Platform to read from */
   platform: MessagePlatformType;

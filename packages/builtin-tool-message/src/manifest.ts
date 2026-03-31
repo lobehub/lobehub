@@ -104,7 +104,7 @@ export const MessageManifest: BuiltinToolManifest = {
           },
           limit: {
             default: DEFAULT_BOT_HISTORY_LIMIT,
-            description: `Maximum number of messages to fetch (default: ${DEFAULT_BOT_HISTORY_LIMIT}, max: ${MAX_BOT_HISTORY_LIMIT})`,
+            description: `Maximum number of messages to fetch (max: ${MAX_BOT_HISTORY_LIMIT}). Do NOT set this parameter unless the user explicitly requests a specific number. Omit to use the default (${DEFAULT_BOT_HISTORY_LIMIT}).`,
             maximum: MAX_BOT_HISTORY_LIMIT,
             minimum: MIN_BOT_HISTORY_LIMIT,
             type: 'integer',
