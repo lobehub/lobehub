@@ -2,28 +2,142 @@ import { isChatGroupSessionId } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
-import { type SWRResponse } from 'swr';
-import { type PartialDeep } from 'type-fest';
+import type { SWRResponse } from 'swr';
+import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { type CreateAgentParams, type CreateAgentResult } from '@/services/agent';
+import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService } from '@/services/agent';
-import { type StoreSetter } from '@/store/types';
+import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import {
-  type LobeAgentChatConfig,
-  type LobeAgentConfig,
-  type RuntimeEnvConfig,
-} from '@/types/agent';
-import { type MetaData } from '@/types/meta';
+import type { LobeAgentChatConfig, LobeAgentConfig, RuntimeEnvConfig } from '@/types/agent';
+import type { MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
 
-import { type AgentStore } from '../../store';
-import { type AgentSliceState, type LoadingState, type SaveStatus } from './initialState';
+import type { AgentStore } from '../../store';
+import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
+
+type ThinkingLevelVariantKey =
+  | 'thinkingLevel2'
+  | 'thinkingLevel3'
+  | 'thinkingLevel4'
+  | 'thinkingLevel5';
+
+const THINKING_LEVEL_VARIANT_LEVELS = {
+  thinkingLevel2: ['low', 'high'],
+  thinkingLevel3: ['low', 'medium', 'high'],
+  thinkingLevel4: ['minimal', 'high'],
+  thinkingLevel5: ['minimal', 'low', 'medium', 'high'],
+} as const satisfies Record<ThinkingLevelVariantKey, readonly string[]>;
+
+const THINKING_LEVEL_VARIANTS = [
+  'thinkingLevel5',
+  'thinkingLevel4',
+  'thinkingLevel3',
+  'thinkingLevel2',
+] as const satisfies readonly ThinkingLevelVariantKey[];
+
+const normalizeModelId = (id: string) => id.trim().toLowerCase();
+
+interface ExtendParamsLookup {
+  byId: Map<string, string[]>;
+  byProviderAndId: Map<string, string[]>;
+}
+
+let extendParamsLookupPromise: Promise<ExtendParamsLookup> | undefined;
+
+const getModelExtendParams = (model: unknown): string[] | undefined => {
+  const extendParams = (model as { settings?: { extendParams?: unknown } })?.settings?.extendParams;
+  if (!Array.isArray(extendParams) || extendParams.length === 0) return undefined;
+
+  const stringParams = extendParams.filter((item): item is string => typeof item === 'string');
+  if (stringParams.length === 0) return undefined;
+
+  return stringParams;
+};
+
+const getExtendParamsLookup = async (): Promise<ExtendParamsLookup> => {
+  if (!extendParamsLookupPromise) {
+    extendParamsLookupPromise = import('model-bank').then(({ LOBE_DEFAULT_MODEL_LIST }) => {
+      const byId = new Map<string, string[]>();
+      const byProviderAndId = new Map<string, string[]>();
+
+      for (const model of LOBE_DEFAULT_MODEL_LIST) {
+        const extendParams = getModelExtendParams(model);
+        if (!extendParams) continue;
+
+        const normalizedId = normalizeModelId(model.id);
+        const normalizedIdDash = normalizedId.replaceAll('.', '-');
+
+        byId.set(normalizedId, extendParams);
+        byId.set(normalizedIdDash, extendParams);
+
+        byProviderAndId.set(`${model.providerId}:${normalizedId}`, extendParams);
+        byProviderAndId.set(`${model.providerId}:${normalizedIdDash}`, extendParams);
+      }
+
+      return { byId, byProviderAndId };
+    });
+  }
+
+  return extendParamsLookupPromise;
+};
+
+const stripProviderPrefix = (id: string) => {
+  if (!id.includes('/')) return id;
+  return id.split('/').at(-1) || id;
+};
+
+const buildModelCandidates = (model: string) => {
+  const candidates = new Set<string>();
+
+  const addCandidate = (value?: string) => {
+    if (!value) return;
+    const normalized = normalizeModelId(value);
+    if (!normalized) return;
+
+    candidates.add(normalized);
+    candidates.add(normalized.replaceAll('.', '-'));
+  };
+
+  addCandidate(model);
+  addCandidate(stripProviderPrefix(model));
+
+  return [...candidates];
+};
+
+const resolveModelExtendParams = async (
+  model: string,
+  provider?: string,
+): Promise<string[] | undefined> => {
+  const lookup = await getExtendParamsLookup();
+  const candidates = buildModelCandidates(model);
+
+  if (provider) {
+    for (const candidate of candidates) {
+      const extendParams = lookup.byProviderAndId.get(`${provider}:${candidate}`);
+      if (extendParams) return extendParams;
+    }
+  }
+
+  for (const candidate of candidates) {
+    const extendParams = lookup.byId.get(candidate);
+    if (extendParams) return extendParams;
+  }
+
+  return undefined;
+};
+
+const pickThinkingLevelVariantKey = (
+  extendParams?: string[],
+): ThinkingLevelVariantKey | undefined =>
+  THINKING_LEVEL_VARIANTS.find((key) => !!extendParams?.includes(key));
+
+const legacyThinkingLevelMigrationInFlight = new Set<string>();
 
 /**
  * Agent Slice Actions
@@ -247,9 +361,96 @@ export class AgentSliceActionImpl {
           this.#get().internal_dispatchAgentMap(agentId, data);
 
           this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
+
+          // Migrate legacy Gemini thinking level config for upgraded agents:
+          // older configs stored only `thinkingLevel`, while newer models use thinkingLevel2/3/4/5.
+          const chatConfig = data.chatConfig || {};
+          const modelId = normalizeModelId(stripProviderPrefix(data.model));
+          const hasVariantKey = THINKING_LEVEL_VARIANTS.some(
+            (key) => typeof (chatConfig as any)[key] === 'string',
+          );
+
+          if (
+            data.provider === 'google' &&
+            modelId.includes('gemini-3') &&
+            typeof chatConfig.thinkingLevel === 'string' &&
+            !hasVariantKey
+          ) {
+            void this.#get().internal_migrateLegacyThinkingLevel(agentId, data);
+          }
         },
       },
     );
+  };
+
+  internal_migrateLegacyThinkingLevel = async (
+    agentId: string,
+    config: LobeAgentConfig,
+  ): Promise<void> => {
+    if (legacyThinkingLevelMigrationInFlight.has(agentId)) return;
+    legacyThinkingLevelMigrationInFlight.add(agentId);
+
+    try {
+      if (config.provider !== 'google') return;
+
+      const modelId = normalizeModelId(stripProviderPrefix(config.model));
+      if (!modelId.includes('gemini-3')) return;
+
+      const fetchedChatConfig = config.chatConfig || {};
+      const fetchedLegacyThinkingLevel = fetchedChatConfig.thinkingLevel;
+      if (!fetchedLegacyThinkingLevel || typeof fetchedLegacyThinkingLevel !== 'string') return;
+
+      // If the fetched config already has a new variant key, skip.
+      if (
+        THINKING_LEVEL_VARIANTS.some((key) => typeof (fetchedChatConfig as any)[key] === 'string')
+      ) {
+        return;
+      }
+
+      // If the store already has a new variant key (e.g. user edited quickly), skip without importing model-bank.
+      const currentBeforeLookup = this.#get().agentMap?.[agentId] as
+        | PartialDeep<LobeAgentConfig>
+        | undefined;
+      const currentBeforeLookupChatConfig = (currentBeforeLookup?.chatConfig ||
+        {}) as LobeAgentChatConfig;
+      if (
+        THINKING_LEVEL_VARIANTS.some(
+          (key) => typeof (currentBeforeLookupChatConfig as any)[key] === 'string',
+        )
+      ) {
+        return;
+      }
+
+      const extendParams = await resolveModelExtendParams(config.model, config.provider);
+      const variantKey = pickThinkingLevelVariantKey(extendParams);
+      if (!variantKey) return;
+
+      // Re-check the latest store state to avoid overwriting user edits during the async lookup.
+      const currentAgent = this.#get().agentMap?.[agentId] as
+        | PartialDeep<LobeAgentConfig>
+        | undefined;
+      if (!currentAgent) return;
+      if (currentAgent.model !== config.model || currentAgent.provider !== config.provider) return;
+
+      const currentChatConfig = (currentAgent.chatConfig || {}) as LobeAgentChatConfig;
+      if (typeof (currentChatConfig as any)[variantKey] === 'string') return;
+
+      const legacyThinkingLevel =
+        typeof currentChatConfig.thinkingLevel === 'string'
+          ? currentChatConfig.thinkingLevel
+          : fetchedLegacyThinkingLevel;
+
+      const allowedLevels = THINKING_LEVEL_VARIANT_LEVELS[variantKey];
+      if (!allowedLevels.includes(legacyThinkingLevel as never)) return;
+
+      await this.#get().optimisticUpdateAgentConfig(agentId, {
+        chatConfig: {
+          [variantKey]: legacyThinkingLevel,
+        },
+      });
+    } finally {
+      legacyThinkingLevelMigrationInFlight.delete(agentId);
+    }
   };
 
   internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {
