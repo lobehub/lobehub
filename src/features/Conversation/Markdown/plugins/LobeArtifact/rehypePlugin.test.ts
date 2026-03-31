@@ -212,7 +212,7 @@ describe('rehypePlugin', () => {
     plugin(tree);
 
     expect(tree.children).toHaveLength(2);
-    expect(tree.children[0].tagName).toBe('lobeArtifact');
-    expect(tree.children[1].tagName).toBe('lobeArtifact');
+    expect((tree.children[0] as any).tagName).toBe('lobeArtifact');
+    expect((tree.children[1] as any).tagName).toBe('lobeArtifact');
   });
 });
