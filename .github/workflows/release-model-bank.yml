@@ -76,70 +76,9 @@ jobs:
       - name: Build package
         run: pnpm --filter model-bank build
 
-      - name: Prepare publish package
-        env:
-          MODEL_BANK_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          rm -rf "$RUNNER_TEMP/model-bank-publish"
-          mkdir -p "$RUNNER_TEMP/model-bank-publish"
-          cp -R packages/model-bank/dist "$RUNNER_TEMP/model-bank-publish/dist"
-          cp LICENSE "$RUNNER_TEMP/model-bank-publish/LICENSE"
-          node --input-type=module <<'NODE'
-          import { readFile, writeFile } from 'node:fs/promises';
-          import { join } from 'node:path';
-
-          const workspacePackagePath = join(process.cwd(), 'packages/model-bank/package.json');
-          const publishPackagePath = join(process.env.RUNNER_TEMP, 'model-bank-publish/package.json');
-          const packageJson = JSON.parse(await readFile(workspacePackagePath, 'utf8'));
-
-          const rewriteExportTarget = (value) => {
-            if (typeof value !== 'string') return value;
-
-            const target = value.replace('./src/', './dist/').replace(/\.ts$/, '.mjs');
-
-            return {
-              import: target,
-              types: target.replace(/\.mjs$/, '.d.mts'),
-            };
-          };
-
-          const exports = Object.fromEntries(
-            Object.entries(packageJson.exports ?? {}).map(([key, value]) => [key, rewriteExportTarget(value)]),
-          );
-          const dependencies = Object.fromEntries(
-            Object.entries(packageJson.dependencies ?? {}).filter(([name]) => name !== '@lobechat/business-const'),
-          );
-
-          const publishPackageJson = {
-            author: 'LobeHub <i@lobehub.com>',
-            dependencies,
-            exports,
-            files: ['dist', 'LICENSE'],
-            homepage: 'https://github.com/lobehub/lobehub',
-            license: 'MIT',
-            main: './dist/index.mjs',
-            module: './dist/index.mjs',
-            name: '@lobehub/model-bank',
-            peerDependencies: packageJson.peerDependencies,
-            publishConfig: {
-              access: 'public',
-              registry: 'https://registry.npmjs.org',
-            },
-            repository: {
-              type: 'git',
-              url: 'https://github.com/lobehub/lobehub.git',
-            },
-            type: 'module',
-            types: './dist/index.d.mts',
-            version: process.env.MODEL_BANK_VERSION,
-          };
-
-          await writeFile(publishPackagePath, `${JSON.stringify(publishPackageJson, null, 2)}\n`);
-          NODE
-
       - name: Publish to npm
         run: npm publish --provenance
-        working-directory: ${{ runner.temp }}/model-bank-publish
+        working-directory: packages/model-bank
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
