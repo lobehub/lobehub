@@ -164,8 +164,12 @@ export interface ExecAgentParams {
   existingMessageIds?: string[];
   /** Additional system instructions appended after the agent's own system role */
   instructions?: string;
+  /** Override the agent's default model */
+  model?: string;
   /** The user input/prompt */
   prompt: string;
+  /** Override the agent's default provider */
+  provider?: string;
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
 }

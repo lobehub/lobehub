@@ -236,6 +236,8 @@ export class AiAgentService {
       functionTools,
       hooks,
       instructions,
+      model: modelOverride,
+      provider: providerOverride,
       stepCallbacks,
       stream,
       title,
@@ -304,6 +306,10 @@ export class AiAgentService {
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
+
+    // Apply per-call model/provider overrides (e.g. from task.config)
+    if (modelOverride) agentConfig.model = modelOverride;
+    if (providerOverride) agentConfig.provider = providerOverride;
 
     log(
       'execAgent: got agent config for %s (id: %s), model: %s, provider: %s',
