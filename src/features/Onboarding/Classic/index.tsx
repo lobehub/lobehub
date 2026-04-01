@@ -1,9 +1,8 @@
 'use client';
 
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
-import { Button, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
@@ -15,10 +14,8 @@ import ResponseLanguageStep from '@/routes/onboarding/features/ResponseLanguageS
 import TelemetryStep from '@/routes/onboarding/features/TelemetryStep';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
-import { isDev } from '@/utils/env';
 
 const ClassicOnboardingPage = memo(() => {
-  const { t } = useTranslation('onboarding');
   const [isUserStateInit, currentStep, goToNextStep, goToPreviousStep, resetOnboarding] =
     useUserStore((s) => [
       s.isUserStateInit,
@@ -69,15 +66,7 @@ const ClassicOnboardingPage = memo(() => {
   return (
     <OnboardingContainer>
       <Flexbox gap={24} style={{ maxWidth: 480, width: '100%' }}>
-        <ModeSwitch
-          actions={
-            isDev ? (
-              <Button danger loading={isResetting} size={'small'} onClick={handleReset}>
-                {t('agent.modeSwitch.reset')}
-              </Button>
-            ) : undefined
-          }
-        />
+        <ModeSwitch />
         {renderStep()}
       </Flexbox>
     </OnboardingContainer>

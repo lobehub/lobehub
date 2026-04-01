@@ -5,7 +5,7 @@ import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
 import { type FC, type PropsWithChildren, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
@@ -19,8 +19,10 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   const theme = useTheme();
   const { t } = useTranslation('onboarding');
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const finishOnboarding = useUserStore((s) => s.finishOnboarding);
+  const isAgentOnboarding = pathname.startsWith('/onboarding/agent');
 
   const handleSkip = useCallback(() => {
     finishOnboarding();
@@ -49,9 +51,11 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
               <Divider className={styles.divider} orientation={'vertical'} />
               <ThemeButton placement={'bottomRight'} size={18} />
             </Flexbox>
-            <Button size={'small'} type={'text'} onClick={handleSkip}>
-              {t('agent.skipOnboarding')}
-            </Button>
+            {isAgentOnboarding ? (
+              <Button size={'small'} type={'text'} onClick={handleSkip}>
+                {t('agent.skipOnboarding')}
+              </Button>
+            ) : null}
           </Flexbox>
         </Flexbox>
         <Center height={'100%'} width={'100%'}>
