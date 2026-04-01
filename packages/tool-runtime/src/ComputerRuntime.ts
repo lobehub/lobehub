@@ -197,7 +197,8 @@ export abstract class ComputerRuntime {
         return this.errorOutput(result, { results: [], totalCount: 0 });
       }
 
-      const results = result.result?.results || result.result || [];
+      const rawResults = result.result?.results || result.result;
+      const results = Array.isArray(rawResults) ? rawResults : [];
       const state: SearchFilesState = {
         results,
         totalCount: result.result?.totalCount || results.length,
@@ -225,7 +226,8 @@ export abstract class ComputerRuntime {
         });
       }
 
-      const results = result.result?.results || result.result || [];
+      const rawResults = result.result?.results || result.result;
+      const results = Array.isArray(rawResults) ? rawResults : [];
       const successCount =
         result.result?.successCount ??
         results.filter((r: { success: boolean }) => r.success).length;
@@ -438,7 +440,7 @@ export abstract class ComputerRuntime {
       }
 
       const files = result.result?.files || [];
-      const totalCount = result.result?.totalCount ?? result.result?.total_files ?? 0;
+      const totalCount = result.result?.totalCount ?? result.result?.total_files ?? files.length;
 
       const state: GlobFilesState = {
         files,

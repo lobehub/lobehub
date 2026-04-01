@@ -1,5 +1,5 @@
 export interface FormatGrepResultsParams {
-  matches: string[];
+  matches: Array<string | { content?: string; lineNumber?: number; path: string }>;
   maxDisplay?: number;
   totalMatches: number;
 }
@@ -16,7 +16,13 @@ export const formatGrepResults = ({
   }
 
   const displayMatches = matches.slice(0, maxDisplay);
-  const matchList = displayMatches.map((m) => `  ${m}`).join('\n');
+  const matchList = displayMatches
+    .map((m) => {
+      if (typeof m === 'string') return `  ${m}`;
+      const loc = m.lineNumber !== undefined ? `:${m.lineNumber}` : '';
+      return `  ${m.path}${loc}${m.content ? `: ${m.content}` : ''}`;
+    })
+    .join('\n');
   const moreInfo =
     matches.length > maxDisplay ? `\n  ... and ${matches.length - maxDisplay} more` : '';
 
