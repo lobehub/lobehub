@@ -1,11 +1,10 @@
 'use client';
 
+import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
-
-import type { RunCommandState } from '../../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -14,15 +13,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface RunCommandParams {
+interface RunCommandArgs {
   background?: boolean;
   command: string;
   description?: string;
   timeout?: number;
 }
 
-const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
-  ({ args, pluginState }) => {
+const RunCommand = memo<BuiltinRenderProps<RunCommandArgs, RunCommandState>>(
+  ({ args, content, pluginState }) => {
+    const output = pluginState?.output || pluginState?.stdout || content;
+
     return (
       <Flexbox className={styles.container} gap={8}>
         <Block gap={8} padding={8} variant={'outlined'}>
@@ -33,9 +34,9 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
             style={{ maxHeight: 200, overflow: 'auto', paddingInline: 8 }}
             variant={'borderless'}
           >
-            {args.command}
+            {args?.command || ''}
           </Highlighter>
-          {pluginState?.output && (
+          {output && (
             <Highlighter
               wrap
               language={'text'}
@@ -43,7 +44,7 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandParams, RunCommandState>>(
               style={{ maxHeight: 200, overflow: 'auto', paddingInline: 8 }}
               variant={'filled'}
             >
-              {pluginState.output}
+              {output}
             </Highlighter>
           )}
           {pluginState?.stderr && (

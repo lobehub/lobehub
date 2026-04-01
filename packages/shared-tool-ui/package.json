@@ -1,17 +1,12 @@
 {
-  "name": "@lobechat/builtin-tool-local-system",
+  "name": "@lobechat/shared-tool-ui",
   "version": "1.0.0",
   "private": true,
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client/index.ts",
-    "./executor": "./src/executor/index.ts",
-    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+    "./renders": "./src/Render/index.ts",
+    "./inspectors": "./src/Inspector/index.ts"
   },
-  "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/electron-client-ipc": "workspace:*",
-    "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*"
   },
   "devDependencies": {
@@ -19,7 +14,6 @@
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",
-    "antd": "^6",
     "antd-style": "*",
     "lucide-react": "*",
     "path-browserify-esm": "*",

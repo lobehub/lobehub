@@ -1,0 +1,15 @@
+{
+  "name": "@lobechat/tool-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}
