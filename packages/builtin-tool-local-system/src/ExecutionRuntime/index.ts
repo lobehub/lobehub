@@ -65,13 +65,65 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       return { error: { message: `Unknown tool: ${toolName}` }, result: null, success: false };
     }
 
-    const method = this.service[methodName] as (params: any) => Promise<any>;
-    const result = await method(params);
+    // Map ComputerRuntime params back to IPC-expected shapes
+    const ipcParams = this.denormalizeParams(toolName, params);
 
-    // Normalize IPC result into ServiceResult shape.
-    // IPC methods return the raw result directly (not wrapped in { success, result }).
-    // We need to wrap it and handle snake_case → camelCase for shell commands.
+    const method = this.service[methodName] as (params: any) => Promise<any>;
+    const result = await method(ipcParams);
+
     return this.normalizeResult(toolName, result);
+  }
+
+  /**
+   * Map ComputerRuntime normalized params back to IPC field names.
+   */
+  private denormalizeParams(toolName: string, params: Record<string, any>): any {
+    switch (toolName) {
+      case 'editLocalFile': {
+        return {
+          file_path: params.path,
+          new_string: params.replace,
+          old_string: params.search,
+          replace_all: params.all,
+        };
+      }
+
+      case 'listLocalFiles': {
+        return {
+          path: params.directoryPath,
+          sortBy: params.sortBy,
+          sortOrder: params.sortOrder,
+        };
+      }
+
+      case 'moveLocalFiles': {
+        return {
+          items: params.operations?.map((op: any) => ({
+            newPath: op.destination,
+            oldPath: op.source,
+          })),
+        };
+      }
+
+      case 'renameLocalFile': {
+        return {
+          newName: params.newName,
+          path: params.oldPath,
+        };
+      }
+
+      case 'getCommandOutput': {
+        return { shell_id: params.commandId };
+      }
+
+      case 'killCommand': {
+        return { shell_id: params.commandId };
+      }
+
+      default: {
+        return params;
+      }
+    }
   }
 
   /**

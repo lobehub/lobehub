@@ -80,6 +80,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
       });
+      // Map state for local-system render compatibility
+      if (result.state) {
+        result.state.listResults = result.state.files;
+      }
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);
@@ -93,6 +97,14 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
         path: params.path,
         startLine: params.loc?.[0],
       });
+      // Map state for local-system render compatibility
+      if (result.state) {
+        result.state.fileContent = {
+          content: result.state.content,
+          path: result.state.path,
+          totalLineCount: result.state.totalLines,
+        };
+      }
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);
@@ -114,6 +126,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       const result = await this.runtime.searchFiles({
         directory: resolvedParams.directory || '',
       });
+      // Map state for local-system render compatibility
+      if (result.state) {
+        result.state.searchResults = result.state.results;
+      }
       return this.toResult(result);
     } catch (error) {
       return this.errorResult(error);

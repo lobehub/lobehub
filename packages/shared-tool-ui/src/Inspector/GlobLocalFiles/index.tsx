@@ -32,13 +32,13 @@ export const createGlobLocalFilesInspector = (translationKey: string) => {
         if (!pattern)
           return (
             <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey)}</span>
+              <span>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
           <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey)}: </span>
+            <span>{t(translationKey as any)}: </span>
             <span className={highlightTextStyles.primary}>{pattern}</span>
           </div>
         );
@@ -49,7 +49,7 @@ export const createGlobLocalFilesInspector = (translationKey: string) => {
       return (
         <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
           <span style={{ marginInlineStart: 2 }}>
-            <span>{t(translationKey)}: </span>
+            <span>{t(translationKey as any)}: </span>
             {pattern && <span className={highlightTextStyles.primary}>{pattern}</span>}
             {isLoading ? null : pluginState ? (
               hasFiles ? (

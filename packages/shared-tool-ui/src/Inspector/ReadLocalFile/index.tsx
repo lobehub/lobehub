@@ -35,13 +35,13 @@ export const createReadLocalFileInspector = (translationKey: string) => {
         if (!filePath)
           return (
             <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey)}</span>
+              <span>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
           <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey)}: </span>
+            <span>{t(translationKey as any)}: </span>
             <FilePathDisplay filePath={filePath} />
           </div>
         );
@@ -49,7 +49,7 @@ export const createReadLocalFileInspector = (translationKey: string) => {
 
       return (
         <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-          <span>{t(translationKey)}: </span>
+          <span>{t(translationKey as any)}: </span>
           <FilePathDisplay filePath={filePath} />
           {lineRange && <span style={{ marginInlineStart: 4 }}>({lineRange})</span>}
         </div>

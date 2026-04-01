@@ -25,13 +25,13 @@ export const createListLocalFilesInspector = (translationKey: string) => {
         if (!dirPath)
           return (
             <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey)}</span>
+              <span>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
           <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey)}: </span>
+            <span>{t(translationKey as any)}: </span>
             <FilePathDisplay isDirectory filePath={dirPath} />
           </div>
         );
@@ -39,7 +39,7 @@ export const createListLocalFilesInspector = (translationKey: string) => {
 
       return (
         <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-          <span>{t(translationKey)}: </span>
+          <span>{t(translationKey as any)}: </span>
           <FilePathDisplay isDirectory filePath={dirPath} />
           {!isLoading && resultCount > 0 && (
             <span style={{ marginInlineStart: 4 }}>({resultCount})</span>

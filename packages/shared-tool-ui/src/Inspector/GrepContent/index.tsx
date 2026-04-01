@@ -34,13 +34,13 @@ export const createGrepContentInspector = ({
         if (!pattern)
           return (
             <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey)}</span>
+              <span>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
           <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey)}: </span>
+            <span>{t(translationKey as any)}: </span>
             <span className={highlightTextStyles.primary}>{pattern}</span>
           </div>
         );
@@ -51,7 +51,7 @@ export const createGrepContentInspector = ({
 
       return (
         <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-          <span>{t(translationKey)}: </span>
+          <span>{t(translationKey as any)}: </span>
           {pattern && <span className={highlightTextStyles.primary}>{pattern}</span>}
           {!isLoading &&
             pluginState &&
@@ -64,7 +64,7 @@ export const createGrepContentInspector = ({
                 fontSize={12}
                 style={{ marginInlineStart: 4 }}
               >
-                ({t(noResultsKey)})
+                ({t(noResultsKey as any)})
               </Text>
             ))}
         </div>

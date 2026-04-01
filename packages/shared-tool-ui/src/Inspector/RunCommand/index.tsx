@@ -41,13 +41,13 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
       if (!description)
         return (
           <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey)}</span>
+            <span>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
         <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t(translationKey)}: </span>
+          <span>{t(translationKey as any)}: </span>
           <span className={highlightTextStyles.primary}>{description}</span>
         </div>
       );
@@ -58,7 +58,7 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
     return (
       <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
         <span style={{ marginInlineStart: 2 }}>
-          <span>{t(translationKey)}: </span>
+          <span>{t(translationKey as any)}: </span>
           {description && <span className={highlightTextStyles.primary}>{description}</span>}
           {isLoading ? null : pluginState?.success !== undefined ? (
             isSuccess ? (

@@ -45,13 +45,13 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
       if (!filePath)
         return (
           <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey)}</span>
+            <span>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
         <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t(translationKey)}: </span>
+          <span>{t(translationKey as any)}: </span>
           <FilePathDisplay filePath={filePath} />
         </div>
       );
@@ -80,7 +80,7 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
 
     return (
       <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-        <span>{t(translationKey)}: </span>
+        <span>{t(translationKey as any)}: </span>
         <FilePathDisplay filePath={filePath} />
         {!isLoading && statsParts.length > 0 && (
           <>
