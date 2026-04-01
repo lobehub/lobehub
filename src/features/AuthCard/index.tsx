@@ -21,7 +21,12 @@ export const AuthCard = memo<AuthCardProps>(({ children, title, subtitle, footer
           </Text>
         )}
         {subtitle && (
-          <Text fontSize={18} style={{ lineHeight: 1.4 }} type={'secondary'} weight={500}>
+          <Text
+            fontSize={18}
+            style={{ color: 'var(--ant-color-text-description)', lineHeight: 1.4 }}
+            type={'secondary'}
+            weight={400}
+          >
             {subtitle}
           </Text>
         )}

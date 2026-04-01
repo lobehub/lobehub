@@ -57,4 +57,5 @@ export const signIn = lazyProp('signIn');
 export const signOut = lazyProp('signOut');
 export const signUp = lazyProp('signUp');
 export const unlinkAccount = lazyProp('unlinkAccount');
+export const updateUser = lazyProp('updateUser');
 export const useSession = lazyProp('useSession');

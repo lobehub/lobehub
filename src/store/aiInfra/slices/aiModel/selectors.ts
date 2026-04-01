@@ -2,6 +2,7 @@ import { AiModelSourceEnum } from 'model-bank';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { ModelSearchImplement } from '@/types/search';
+import { resolveAutoModel } from '@/utils/modelAccess';
 
 const aiProviderChatModelListIds = (s: AIProviderStoreState) =>
   s.aiProviderModelList.filter((item) => item.type === 'chat').map((item) => item.id);
@@ -26,8 +27,13 @@ const totalAiProviderModelList = (s: AIProviderStoreState) => s.aiProviderModelL
 
 const isEmptyAiProviderModelList = (s: AIProviderStoreState) => totalAiProviderModelList(s) === 0;
 
-const getModelCard = (model: string, provider: string) => (s: AIProviderStoreState) =>
-  s.builtinAiModelList.find((item) => item.id === model && item.providerId === provider);
+const getModelCard = (model: string, provider: string) => (s: AIProviderStoreState) => {
+  const resolved = resolveAutoModel(model, provider);
+
+  return s.builtinAiModelList.find(
+    (item) => item.id === resolved.model && item.providerId === resolved.provider,
+  );
+};
 
 const hasRemoteModels = (s: AIProviderStoreState) =>
   s.aiProviderModelList.some((m) => m.source === AiModelSourceEnum.Remote);
@@ -41,8 +47,15 @@ const isModelLoading = (id: string) => (s: AIProviderStoreState) =>
 const getAiModelById = (id: string) => (s: AIProviderStoreState) =>
   s.aiProviderModelList.find((i) => i.id === id);
 
-const getEnabledModelById = (id: string, provider: string) => (s: AIProviderStoreState) =>
-  s.enabledAiModels?.find((i) => i.id === id && (provider ? provider === i.providerId : true));
+const getEnabledModelById = (id: string, provider: string) => (s: AIProviderStoreState) => {
+  const resolved = resolveAutoModel(id, provider);
+
+  return s.enabledAiModels?.find(
+    (item) =>
+      item.id === resolved.model &&
+      (resolved.provider ? resolved.provider === item.providerId : true),
+  );
+};
 
 const isModelSupportToolUse = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const model = getEnabledModelById(id, provider)(s);

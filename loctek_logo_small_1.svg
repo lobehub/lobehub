@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="28px" height="28px" viewBox="0 0 28 28" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>loctek_logo_small_1</title>
+    <defs>
+        <path d="M0,0 L28,0 L28,28 L0,28 L0,0 Z" id="path-1"></path>
+    </defs>
+    <g id="loctek_logo_small_1" stroke="none" fill="none" xlink:href="#path-1" fill-rule="evenodd">
+        <rect id="矩形" fill="#D7000F" x="0" y="0" width="28" height="28" rx="6"></rect>
+        <path d="M13.9835836,18.885145 L13.9835836,5 L9.5,5 L9.5,19.5088546 C9.5,20.884805 10.6167165,22 11.9940858,22 L21.5,22 L21.5,19.7524297 L14.851864,19.7524297 C14.3721919,19.7524297 13.9835836,19.3640262 13.9835836,18.885145" id="Fill-1" fill="#FEFEFE"></path>
+    </g>
+</svg>

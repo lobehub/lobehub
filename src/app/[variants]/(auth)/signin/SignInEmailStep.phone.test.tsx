@@ -9,7 +9,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: vi.fn(() => ({
     t: vi.fn((key: string) => {
       if (key === 'betterAuth.signin.emailPlaceholder') return 'Enter your email or username';
-      if (key === 'betterAuth.signin.phonePlaceholder') return 'Enter mainland China phone number';
+      if (key === 'betterAuth.signin.orContinueWith') return 'OR';
       return key;
     }),
   })),
@@ -18,21 +18,18 @@ vi.mock('react-i18next', () => ({
 const renderComponent = () => {
   const TestComponent = () => {
     const [emailForm] = Form.useForm<{ email: string }>();
-    const [phoneForm] = Form.useForm<{ phone: string }>();
 
     return (
       <SignInEmailStep
         disableEmailPassword={false}
-        enablePhoneAuth={true}
         form={emailForm}
         isSocialOnly={false}
         loading={false}
+        modeSwitch={<div>Email / Username | Phone Number</div>}
         oAuthSSOProviders={[]}
-        phoneForm={phoneForm}
         serverConfigInit={true}
         socialLoading={null}
         onCheckUser={vi.fn()}
-        onSendPhoneCode={vi.fn()}
         onSetPassword={vi.fn()}
         onSocialSignIn={vi.fn()}
       />
@@ -43,10 +40,13 @@ const renderComponent = () => {
 };
 
 describe('SignInEmailStep phone entry', () => {
-  it('renders phone input alongside email input when phone auth is enabled', () => {
+  it('renders email input and mode switch without inline phone input', () => {
     renderComponent();
 
+    expect(screen.getByText('Email / Username | Phone Number')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter your email or username')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter mainland China phone number')).toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('Enter mainland China phone number'),
+    ).not.toBeInTheDocument();
   });
 });

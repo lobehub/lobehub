@@ -1,0 +1,7 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+CLAUDE_FLOW_HOOKS_ENABLED = "true"
+CLAUDE_FLOW_V3_ENABLED = "true"

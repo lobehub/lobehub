@@ -37,7 +37,7 @@ export const PRESET_AGENTS = [
     backgroundColor: '#c4f042',
     description:
       '把用户的工位/作业区照片与需求转写为可直接用于 Midjourney / SDXL / DALL·E / Flux 的高质量提示词与参数建议，保持真实仓库/作业场景一致性。',
-    model: 'gemini-3.1-flash-image-preview',
+    model: 'gemini-2.5-flash-image',
     provider: 'google',
     tags: ['文生图', '提示词', '电商', '仓库', '摄影风格'],
     title: '文生图AI员工',

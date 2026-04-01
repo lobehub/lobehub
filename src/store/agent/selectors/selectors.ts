@@ -19,6 +19,7 @@ import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
 import { filterToolIds } from '@/helpers/toolFilters';
+import { AUTO_MODEL_ID, AUTO_MODEL_PROVIDER } from '@/utils/modelAccess';
 
 import { type AgentStoreState } from '../initialState';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
@@ -105,6 +106,9 @@ const currentAgentModel = (s: AgentStoreState): string => {
 
 const currentAgentModelProvider = (s: AgentStoreState) => {
   const config = currentAgentConfig(s);
+  const model = config?.model || DEFAULT_MODEL;
+
+  if (model === AUTO_MODEL_ID) return AUTO_MODEL_PROVIDER;
 
   return config?.provider || DEFAULT_PROVIDER;
 };

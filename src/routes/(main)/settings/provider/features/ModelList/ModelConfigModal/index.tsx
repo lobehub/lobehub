@@ -33,7 +33,7 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ id, open, setOpen }) => 
   return (
     <Modal
       destroyOnHidden
-      maskClosable
+      mask={{ closable: true }}
       open={open}
       title={t('llm.customModelCards.modelConfig.modalTitle', { ns: 'setting' })}
       zIndex={1251} // Select is 1150

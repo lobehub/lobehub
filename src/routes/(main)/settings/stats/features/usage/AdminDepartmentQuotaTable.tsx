@@ -3,7 +3,7 @@
 import { Button } from '@lobehub/ui';
 import { DatePicker, Divider, Form, InputNumber, Modal } from 'antd';
 import dayjs from 'dayjs';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
@@ -12,6 +12,7 @@ import { usageService } from '@/services/usage';
 import { type UsageLog, type UsageRecordItem } from '@/types/usage/usageRecord';
 
 import { GroupBy } from '../../types';
+import { buildDepartmentQuotaRows, type DepartmentQuotaRow } from './departmentQuotaRows';
 import UsageCards from './UsageCards';
 import UsageTrends from './UsageTrends';
 
@@ -61,18 +62,31 @@ DeptDetailPanel.displayName = 'DeptDetailPanel';
 
 const AdminDepartmentQuotaTable = memo(() => {
   const { t } = useTranslation('auth');
-  const [editingDept, setEditingDept] = useState<any>(null);
+  const [editingDept, setEditingDept] = useState<DepartmentQuotaRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
-  const [detailMonth, setDetailMonth] = useState<dayjs.Dayjs>(dayjs());
+  const [detailMonth, setDetailMonth] = useState<dayjs.Dayjs>(() => dayjs());
   const [detailMonthStr, setDetailMonthStr] = useState<string | undefined>();
 
-  const { data, isLoading, mutate } = useClientDataSWR('admin-dept-quotas', () =>
-    usageService.adminGetAllDepartmentQuotas(),
+  const {
+    data: departmentQuotaData,
+    isLoading,
+    mutate,
+  } = useClientDataSWR('admin-dept-quotas', () => usageService.adminGetAllDepartmentQuotas());
+  const { data: userQuotaData, isLoading: isUserDataLoading } = useClientDataSWR(
+    'admin-user-quotas-for-department-view',
+    () => usageService.adminGetAllUserQuotas(),
+  );
+
+  const tableData = useMemo(
+    () => buildDepartmentQuotaRows(userQuotaData, departmentQuotaData),
+    [departmentQuotaData, userQuotaData],
   );
 
   const handleSave = async () => {
+    if (!editingDept) return;
+
     const values = await form.validateFields();
     setSaving(true);
     try {
@@ -152,8 +166,8 @@ const AdminDepartmentQuotaTable = memo(() => {
     <>
       <InlineTable
         columns={columns}
-        dataSource={data}
-        loading={isLoading}
+        dataSource={tableData}
+        loading={isLoading || isUserDataLoading}
         rowKey="department"
         size="small"
       />

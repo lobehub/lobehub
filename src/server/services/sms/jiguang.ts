@@ -46,8 +46,10 @@ export class JiguangSMSService {
     if (response.ok) return;
 
     const data = await response.json().catch(() => null);
+    const errorCode = data?.error?.code;
     const errorMessage = data?.error?.message || 'Failed to send verification SMS';
+    const statusText = `[Jiguang SMS ${response.status}${errorCode ? `/${errorCode}` : ''}]`;
 
-    throw new Error(errorMessage);
+    throw new Error(`${statusText} ${errorMessage}`);
   }
 }

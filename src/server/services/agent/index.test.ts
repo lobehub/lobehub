@@ -9,6 +9,7 @@ import { UserModel } from '@/database/models/user';
 import type * as RedisModule from '@/libs/redis';
 import { initializeRedisWithPrefix, isRedisEnabled, RedisKeys } from '@/libs/redis';
 import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
+import { syncPresetSharedAgents } from '@/server/services/sharedAgent/syncPresetSharedAgents';
 
 import { AgentService } from './index';
 
@@ -39,6 +40,10 @@ vi.mock('@/database/models/sharedAgent', () => ({
 
 vi.mock('@/database/models/user', () => ({
   UserModel: vi.fn(),
+}));
+
+vi.mock('@/server/services/sharedAgent/syncPresetSharedAgents', () => ({
+  syncPresetSharedAgents: vi.fn(),
 }));
 
 vi.mock('@/envs/redis', () => ({
@@ -383,6 +388,31 @@ describe('AgentService', () => {
   });
 
   describe('getAgentConfigById', () => {
+    it('should sync preset shared agents before fallback lookup', async () => {
+      const sharedAgent = {
+        id: 'shared_1',
+        provider: 'moonshot',
+        title: '文生图AI员工',
+      };
+
+      const mockAgentModel = {
+        getAgentConfigById: vi.fn().mockResolvedValue(null),
+      };
+      const mockSharedAgentModel = {
+        findById: vi.fn().mockResolvedValue(sharedAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (SharedAgentModel as any).mockImplementation(() => mockSharedAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      await newService.getAgentConfigById('shared_1');
+
+      expect(syncPresetSharedAgents).toHaveBeenCalledWith(mockDb);
+      expect(mockSharedAgentModel.findById).toHaveBeenCalledWith('shared_1');
+    });
+
     it('should fallback to shared agent config when user agent does not exist', async () => {
       const sharedAgent = {
         id: 'shared_1',

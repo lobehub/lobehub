@@ -7,6 +7,7 @@ declare global {
     interface ProcessEnv {
       AUTO_REGISTER_ON_PHONE_LOGIN?: string;
       SMS_APP_KEY?: string;
+      SMS_AUTO_REGISTER_ON_PHONE_LOGIN?: string;
       SMS_CODE_TTL?: string;
       SMS_MASTER_SECRET?: string;
       SMS_PHONE_RESEND_INTERVAL?: string;
@@ -18,6 +19,10 @@ declare global {
 }
 
 export const getSMSConfig = () => {
+  const autoRegisterRaw =
+    process.env.AUTO_REGISTER_ON_PHONE_LOGIN ?? process.env.SMS_AUTO_REGISTER_ON_PHONE_LOGIN;
+  const autoRegisterEnabled = autoRegisterRaw === '1' || autoRegisterRaw === 'true';
+
   return createEnv({
     server: {
       AUTO_REGISTER_ON_PHONE_LOGIN: z.boolean().optional().default(false),
@@ -30,9 +35,7 @@ export const getSMSConfig = () => {
       SMS_TEMPLATE_ID: z.coerce.number().int().positive().optional(),
     },
     runtimeEnv: {
-      AUTO_REGISTER_ON_PHONE_LOGIN:
-        process.env.AUTO_REGISTER_ON_PHONE_LOGIN === '1' ||
-        process.env.AUTO_REGISTER_ON_PHONE_LOGIN === 'true',
+      AUTO_REGISTER_ON_PHONE_LOGIN: autoRegisterEnabled,
       SMS_APP_KEY: process.env.SMS_APP_KEY,
       SMS_CODE_TTL: process.env.SMS_CODE_TTL,
       SMS_MASTER_SECRET: process.env.SMS_MASTER_SECRET,

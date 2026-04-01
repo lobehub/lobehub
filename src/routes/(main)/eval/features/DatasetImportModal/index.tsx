@@ -202,7 +202,7 @@ const DatasetImportModal = memo<DatasetImportModalProps>(
         cancelText={step === 1 ? t('dataset.import.prev') : undefined}
         centered={step === 1}
         footer={step === 0 ? null : undefined}
-        maskClosable={false}
+        mask={{ closable: false }}
         okText={step === 1 ? t('dataset.import.confirm') : undefined}
         open={open}
         title={t('dataset.import.title')}

@@ -19,6 +19,7 @@ import {
   RedisKeys,
 } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
+import { syncPresetSharedAgents } from '@/server/services/sharedAgent/syncPresetSharedAgents';
 
 import { type UpdateAgentResult } from './type';
 
@@ -128,9 +129,14 @@ export class AgentService {
       this.userModel.getUserSettingsDefaultAgentConfig(),
     ]);
 
-    // Shared agents are stored in `shared_agents` and don't exist in user-owned `agents`.
-    // Fall back to shared agent lookup so they can be opened/used like normal assistants.
-    const sourceAgent = agent ?? (await this.sharedAgentModel.findById(agentId));
+    let sourceAgent = agent;
+
+    if (!sourceAgent) {
+      // Shared agents are stored in `shared_agents` and don't exist in user-owned `agents`.
+      // Sync presets before fallback lookup so online data stays aligned with code defaults.
+      await syncPresetSharedAgents(this.db);
+      sourceAgent = await this.sharedAgentModel.findById(agentId);
+    }
 
     const config = this.mergeDefaultConfig(sourceAgent, defaultAgentConfig);
     if (!config) return null;

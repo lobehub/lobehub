@@ -5,6 +5,7 @@ import { SharedAgentModel } from '@/database/models/sharedAgent';
 import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { syncPresetSharedAgents } from '@/server/services/sharedAgent/syncPresetSharedAgents';
 
 const sharedAgentInput = z.object({
   avatar: z.string().optional().nullable(),
@@ -58,6 +59,8 @@ export const sharedAgentRouter = router({
 
   // Admin: list all (including disabled)
   listAll: adminProcedure.query(async ({ ctx }) => {
+    await syncPresetSharedAgents(ctx.serverDB);
+
     return ctx.sharedAgentModel.listAll();
   }),
 
@@ -77,6 +80,8 @@ export const sharedAgentRouter = router({
 
   // All users: list enabled shared agents
   list: readProcedure.query(async ({ ctx }) => {
+    await syncPresetSharedAgents(ctx.serverDB);
+
     return ctx.sharedAgentModel.list();
   }),
 });

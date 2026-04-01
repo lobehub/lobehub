@@ -22,6 +22,7 @@ export const {
   signOut,
   signUp,
   unlinkAccount,
+  updateUser,
   useSession,
 } = createAuthClient({
   plugins: [

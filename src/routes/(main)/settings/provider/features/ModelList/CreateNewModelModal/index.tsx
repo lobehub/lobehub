@@ -31,7 +31,7 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ open, setOpen }) => {
   return (
     <Modal
       destroyOnHidden
-      maskClosable
+      mask={{ closable: true }}
       open={open}
       title={t('providerModels.createNew.title')}
       zIndex={1251} // Select is 1150

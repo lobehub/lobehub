@@ -1,4 +1,4 @@
-import { BrainCircuit, Info, Settings2, Sparkles } from 'lucide-react';
+import { BrainCircuit, Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -24,11 +24,6 @@ export const useCategory = () => {
       icon: BrainCircuit,
       key: SettingsTabs.Memory,
       label: t('tab.memory'),
-    },
-    {
-      icon: Info,
-      key: SettingsTabs.About,
-      label: t('tab.about'),
     },
   ].filter(Boolean) as CellProps[];
 

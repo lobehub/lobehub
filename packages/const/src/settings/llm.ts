@@ -1,5 +1,5 @@
 export const DEFAULT_MODEL = 'auto';
-export const DEFAULT_MINI_MODEL = 'gpt-5-mini';
+export const DEFAULT_MINI_MODEL = 'gpt-5.4-mini';
 
 export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
 

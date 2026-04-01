@@ -104,7 +104,7 @@ export const useAuthRequiredModal = () => {
       instanceRef.current?.update?.({
         closable: !isSigningIn,
         keyboard: !isSigningIn,
-        maskClosable: !isSigningIn,
+        mask: { closable: !isSigningIn },
       });
     };
 
@@ -115,7 +115,7 @@ export const useAuthRequiredModal = () => {
       closable: false,
       footer: null,
       keyboard: false,
-      maskClosable: false,
+      mask: { closable: false },
       title: (
         <Flexbox horizontal align="center" gap={8}>
           <Icon icon={AlertCircle} />

@@ -1,4 +1,3 @@
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_AVATAR,
@@ -12,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin';
+import { AUTO_MODEL_PROVIDER } from '@/utils/modelAccess';
 
 import { agentSelectors, currentAgentConfig } from './selectors';
 
@@ -79,22 +79,31 @@ describe('agentSelectors', () => {
   });
 
   describe('currentAgentModelProvider', () => {
-    it('should return provider from current agent config', () => {
+    it('should return provider from current agent config for explicit non-auto models', () => {
       const state = createState({
         activeAgentId: 'agent-1',
-        agentMap: { 'agent-1': { provider: 'anthropic' } },
+        agentMap: { 'agent-1': { model: 'claude-3-5-sonnet', provider: 'anthropic' } },
       });
 
       expect(agentSelectors.currentAgentModelProvider(state)).toBe('anthropic');
     });
 
-    it('should return default provider when not specified', () => {
+    it('should resolve default auto model provider to moonshot when not specified', () => {
       const state = createState({
         activeAgentId: 'agent-1',
         agentMap: { 'agent-1': {} },
       });
 
-      expect(agentSelectors.currentAgentModelProvider(state)).toBe(DEFAULT_PROVIDER);
+      expect(agentSelectors.currentAgentModelProvider(state)).toBe(AUTO_MODEL_PROVIDER);
+    });
+
+    it('should resolve explicit auto model provider to moonshot', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': { model: DEFAULT_MODEL } },
+      });
+
+      expect(agentSelectors.currentAgentModelProvider(state)).toBe(AUTO_MODEL_PROVIDER);
     });
   });
 

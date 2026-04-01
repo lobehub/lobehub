@@ -3,6 +3,8 @@ import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG } from '@lobechat/const';
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import { type AgentMode, type LobeAgentTTSConfig, type RuntimeEnvConfig } from '@lobechat/types';
 
+import { AUTO_MODEL_ID, AUTO_MODEL_PROVIDER } from '@/utils/modelAccess';
+
 import { type AgentStoreState } from '../initialState';
 import { agentSelectors } from './selectors';
 
@@ -18,8 +20,14 @@ const getAgentModelById =
 
 const getAgentModelProviderById =
   (agentId: string) =>
-  (s: AgentStoreState): string =>
-    agentSelectors.getAgentConfigById(agentId)(s)?.provider || DEFAULT_PROVIDER;
+  (s: AgentStoreState): string => {
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const model = config?.model || DEFAULT_MODEL;
+
+    if (model === AUTO_MODEL_ID) return AUTO_MODEL_PROVIDER;
+
+    return config?.provider || DEFAULT_PROVIDER;
+  };
 
 const getAgentPluginsById =
   (agentId: string) =>

@@ -1,0 +1,17 @@
+{
+  "_note": "Intelligence grows as you use Ruflo",
+  "initialized": "2026-03-19T10:27:28.927Z",
+  "patterns": {
+    "shortTerm": 0,
+    "longTerm": 0,
+    "quality": 0
+  },
+  "routing": {
+    "accuracy": 0,
+    "decisions": 0
+  },
+  "sessions": {
+    "total": 0,
+    "current": null
+  }
+}

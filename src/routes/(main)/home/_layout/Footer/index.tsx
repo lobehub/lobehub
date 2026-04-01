@@ -1,8 +1,9 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { FlaskConical } from 'lucide-react';
+import { FlaskConical, Settings2 } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
@@ -10,11 +11,15 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 const Footer = memo(() => {
+  const { t } = useTranslation(['common']);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return (
     <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
       <Flexbox horizontal align={'center'} flex={1} gap={2}>
+        <Link to="/settings">
+          <ActionIcon icon={Settings2} size={16} title={t('userPanel.setting')} />
+        </Link>
         {isDevMode && (
           <Link to="/eval">
             <ActionIcon icon={FlaskConical} size={16} title="Evaluation Lab" />

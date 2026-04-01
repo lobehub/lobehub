@@ -2,6 +2,7 @@ import { AiModelSourceEnum } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
+import { AUTO_MODEL_ID, AUTO_MODEL_PROVIDER, AUTO_MODEL_TARGET_MODEL } from '@/utils/modelAccess';
 
 import { aiModelSelectors } from './selectors';
 
@@ -34,7 +35,20 @@ describe('aiModelSelectors', () => {
         displayName: 'Remote Model',
       },
     ],
-    builtinAiModelList: [],
+    builtinAiModelList: [
+      {
+        id: AUTO_MODEL_TARGET_MODEL,
+        providerId: AUTO_MODEL_PROVIDER,
+        abilities: {
+          functionCall: true,
+          reasoning: true,
+          vision: true,
+        },
+        contextWindowTokens: 262144,
+        displayName: 'Kimi K2.5',
+        type: 'chat',
+      },
+    ],
     modelSearchKeyword: '',
     aiModelLoadingIds: ['model2'],
     enabledAiModels: [
@@ -57,6 +71,17 @@ describe('aiModelSelectors', () => {
           vision: false,
           reasoning: false,
         },
+        type: 'chat',
+      },
+      {
+        id: AUTO_MODEL_TARGET_MODEL,
+        providerId: AUTO_MODEL_PROVIDER,
+        abilities: {
+          functionCall: true,
+          vision: true,
+          reasoning: true,
+        },
+        contextWindowTokens: 262144,
         type: 'chat',
       },
     ],
@@ -205,6 +230,20 @@ describe('aiModelSelectors', () => {
       expect(aiModelSelectors.isModelSupportReasoning('model1', 'provider1')(mockState)).toBe(true);
       expect(aiModelSelectors.isModelSupportReasoning('model4', 'provider2')(mockState)).toBe(
         false,
+      );
+    });
+
+    it('should resolve auto model capabilities from kimi k2.5', () => {
+      expect(aiModelSelectors.isModelSupportToolUse(AUTO_MODEL_ID, 'openai')(mockState)).toBe(true);
+      expect(aiModelSelectors.isModelSupportVision(AUTO_MODEL_ID, 'openai')(mockState)).toBe(true);
+      expect(aiModelSelectors.isModelSupportReasoning(AUTO_MODEL_ID, 'openai')(mockState)).toBe(
+        true,
+      );
+      expect(aiModelSelectors.modelContextWindowTokens(AUTO_MODEL_ID, 'openai')(mockState)).toBe(
+        262144,
+      );
+      expect(aiModelSelectors.getModelCard(AUTO_MODEL_ID, 'openai')(mockState)?.id).toBe(
+        AUTO_MODEL_TARGET_MODEL,
       );
     });
   });

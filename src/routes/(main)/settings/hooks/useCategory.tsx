@@ -10,10 +10,8 @@ import {
   EllipsisIcon,
   EthernetPort,
   Gift,
-  Info,
   KeyboardIcon,
   KeyIcon,
-  KeyRound,
   Map,
   PaletteIcon,
   Sparkles,
@@ -59,7 +57,7 @@ export const useCategory = () => {
   const { t: tAuth } = useTranslation('auth');
   const { t: tSubscription } = useTranslation('subscription');
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const { hideDocs, showApiKeyManage } = useServerConfigStore(featureFlagsSelectors);
+  const { showApiKeyManage } = useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -84,7 +82,7 @@ export const useCategory = () => {
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
         key: SettingsTabs.Profile,
-        label: username ? username : tAuth('tab.profile'),
+        label: username || tAuth('tab.profile'),
       },
       {
         icon: ChartColumnBigIcon,
@@ -148,11 +146,6 @@ export const useCategory = () => {
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
       },
-      {
-        icon: KeyRound,
-        key: SettingsTabs.Creds,
-        label: t('tab.creds'),
-      },
       showApiKeyManage && {
         icon: KeyIcon,
         key: SettingsTabs.APIKey,
@@ -193,11 +186,6 @@ export const useCategory = () => {
         key: SettingsTabs.Advanced,
         label: t('tab.advanced'),
       },
-      !hideDocs && {
-        icon: Info,
-        key: SettingsTabs.About,
-        label: t('tab.about'),
-      },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -227,7 +215,6 @@ export const useCategory = () => {
     tAuth,
     tSubscription,
     enableBusinessFeatures,
-    hideDocs,
     mobile,
     showApiKeyManage,
     isDevMode,

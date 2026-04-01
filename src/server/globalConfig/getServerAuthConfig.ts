@@ -21,6 +21,7 @@ export const getServerAuthConfig = (): GlobalServerConfig => {
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
     enablePhoneAuth: isPhoneAuthEnabled,
+    enablePhoneSignup: isPhoneAuthEnabled && smsEnv.AUTO_REGISTER_ON_PHONE_LOGIN,
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     phoneAuthResendInterval: smsEnv.SMS_PHONE_RESEND_INTERVAL,
     telemetry: {},

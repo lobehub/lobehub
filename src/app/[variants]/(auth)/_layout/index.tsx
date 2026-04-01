@@ -41,7 +41,11 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
           {children}
         </Center>
         <Center padding={24}>
-          <Text align={'center'} type={'secondary'}>
+          <Text
+            align={'center'}
+            style={{ color: 'var(--ant-color-text-description)' }}
+            type={'secondary'}
+          >
             {COPYRIGHT_FULL}
           </Text>
         </Center>
