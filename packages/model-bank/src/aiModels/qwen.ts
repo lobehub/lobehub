@@ -3516,7 +3516,6 @@ const qwenVideoModels: AIVideoModelCard[] = [
     description:
       'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
     displayName: 'Wan2.6 I2V',
-    enabled: true,
     id: 'wan2.6-i2v',
     parameters: {
       duration: { default: 5, max: 15, min: 2 },
@@ -3533,6 +3532,78 @@ const qwenVideoModels: AIVideoModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-16',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 Reference-to-Video – Flash offers faster generation and better cost performance. It supports referencing specific characters or any objects, accurately maintaining consistency in appearance and voice, and enables multi-character reference for co-performance.',
+    displayName: 'Wan2.6 R2V Flash',
+    enabled: true,
+    id: 'wan2.6-r2v-flash',
+    parameters: {
+      duration: { default: 5, max: 10, min: 2 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-16',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.6 Reference-to-Video supports referencing specific characters or any objects, accurately maintaining consistency in appearance and voice, and enabling multi-character reference for co-performance. Note: When using videos as references, the input video will also be counted toward the cost. Please refer to the model pricing documentation for details.',
+    displayName: 'Wan2.6 R2V',
+    id: 'wan2.6-r2v',
+    parameters: {
+      duration: { default: 5, max: 10, min: 2 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      size: {
+        default: '1920x1080',
+        enum: [
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1088x832',
+          '832x1088',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1632x1248',
+          '1248x1632',
+        ],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-12-16',
     type: 'video',
@@ -3843,6 +3914,725 @@ const qwenVideoModels: AIVideoModelCard[] = [
       units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2025-01-08',
+    type: 'video',
+  },
+  {
+    description:
+      'Intelligent storyboarding understands scene transitions within scripts, automatically arranging camera positions and shot types. A native multimodal framework ensures audiovisual consistency. Removes duration constraints, enabling more flexible multi-shot storytelling.',
+    displayName: 'Kling V3 Video Generation',
+    enabled: true,
+    id: 'kling/kling-v3-video-generation',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      duration: { default: 5, max: 12, min: 3 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080p',
+        enum: ['720p', '1080p'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.9, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'New “All-in-One Reference” feature supports 3–8 second videos or multiple images to anchor character elements. Can match original audio and lip movements for authentic character representation. Enhances video consistency and dynamic expression. Supports audiovisual synchronization and intelligent storyboarding.',
+    displayName: 'Kling V3 Omni Video Generation',
+    enabled: true,
+    id: 'kling/kling-v3-omni-video-generation',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      duration: { default: 5, max: 12, min: 3 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080p',
+        enum: ['720p', '1080p'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.9, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Enter a text prompt to generate video. ViduQ3-Pro text-to-video is a flagship-level audio-visual native model. Supports up to 16 seconds of synchronized audio-visual generation, allowing free multi-shot switching while precisely controlling pacing, emotion, and narrative continuity. With a leading parameter scale, it delivers exceptional image quality, character consistency, and emotional expression, meeting cinematic standards. Ideal for professional production scenarios such as advertising (e-commerce, TVC, performance campaigns), animated series, live-action drama, and games.',
+    displayName: 'Vidu Q3 Pro Text-to-Video',
+    enabled: true,
+    id: 'vidu/viduq3-pro_text2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x528',
+          '528x960',
+          '720x720',
+          '816x608',
+          '608x816',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1104x816',
+          '816x1104',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1674x1238',
+          '1238x1674',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.78125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Enter a text prompt to generate video. ViduQ3-Turbo text-to-video is a high-performance accelerated model. It offers extremely fast generation while maintaining high-quality visuals and dynamic expression, excelling in action scenes, emotional rendering, and semantic understanding. Cost-effective and well-suited for casual entertainment scenarios such as social media images, AI companions, and special effects assets.',
+    displayName: 'Vidu Q3 Turbo Text-to-Video',
+    id: 'vidu/viduq3-turbo_text2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x528',
+          '528x960',
+          '720x720',
+          '816x608',
+          '608x816',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1104x816',
+          '816x1104',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1674x1238',
+          '1238x1674',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Enter a text prompt to generate video. ViduQ2 text-to-video is a model designed for precise instruction adherence and nuanced emotion capture. It offers outstanding narrative control, accurately interpreting and expressing micro-expression changes; features rich cinematic language, smooth camera movements, and strong visual tension. Widely applicable to film and animation, advertising and e-commerce, short dramas, and cultural tourism industries.',
+    displayName: 'Vidu Q2 Turbo Text-to-Video',
+    id: 'vidu/viduq2_text2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x528',
+          '528x960',
+          '720x720',
+          '816x608',
+          '608x816',
+          '1280x720',
+          '720x1280',
+          '960x960',
+          '1104x816',
+          '816x1104',
+          '1920x1080',
+          '1080x1920',
+          '1440x1440',
+          '1674x1238',
+          '1238x1674',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.21875, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ3-Pro image-to-video is a flagship-level audio-visual native model. It supports up to 16 seconds of synchronized audio-visual generation, enabling free multi-shot switching while precisely controlling pacing, emotion, and narrative continuity. With a leading parameter scale, it delivers exceptional image quality, character consistency, and emotional expression, meeting cinematic standards. Ideal for professional production scenarios such as advertising (e-commerce, TVC, performance campaigns), animated series, live-action drama, and games.',
+    displayName: 'Vidu Q3 Pro Image-to-Video',
+    enabled: true,
+    id: 'vidu/viduq3-pro_img2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.78125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ3-Turbo image-to-video is a high-performance accelerated model. It offers extremely fast generation while maintaining high-quality visuals and dynamic expression, excelling in action scenes, emotional rendering, and semantic understanding. Cost-effective and ideal for casual entertainment scenarios such as social media images, AI companions, and special effects assets.',
+    displayName: 'Vidu Q3 Turbo Image-to-Video',
+    id: 'vidu/viduq3-turbo_img2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ2-Pro image-to-video is the world’s first “Everything Can Be Referenced” video model. It supports six reference dimensions—effects, expressions, textures, actions, characters, and scenes—enabling fully evolved video editing. Through controllable addition, deletion, and modification, it achieves fine-grained video editing, designed as a production-grade creation engine for animated series, short dramas, and film production.',
+    displayName: 'Vidu Q2 Pro Image-to-Video',
+    id: 'vidu/viduq2-pro_img2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.34375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input an image and a text description to generate video. ViduQ2-Turbo image-to-video is an ultra-fast generation engine. A 5-second 720P video can be generated in as little as 19 seconds, and a 5-second 1080P video in about 27 seconds. Character actions and expressions are natural and realistic, delivering strong authenticity and excellent performance in high-dynamic scenes such as action sequences, with wide-ranging motion.',
+    displayName: 'Vidu Q2 Turbo Image-to-Video',
+    id: 'vidu/viduq2-turbo_img2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.25, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ3-Pro keyframe-to-video is a flagship-level audio-visual native model. It supports up to 16 seconds of synchronized audio-visual generation, enabling free multi-shot switching while precisely controlling pacing, emotion, and narrative continuity. With a leading parameter scale, it delivers exceptional image quality, character consistency, and emotional expression, meeting cinematic standards. Ideal for professional production scenarios such as advertising (e-commerce, TVC, performance campaigns), animated series, live-action drama, and games.',
+    displayName: 'Vidu Q3 Pro Start-to-End Video',
+    enabled: true,
+    id: 'vidu/viduq3-pro_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.78125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ3-Turbo keyframe-to-video is a high-performance accelerated model. It delivers extremely fast generation while maintaining high-quality visuals and dynamic expression, excelling in action scenes, emotional rendering, and semantic understanding. Cost-effective and ideal for casual entertainment scenarios such as social media images, AI companions, and special effects assets.',
+    displayName: 'Vidu Q3 Turbo Start-to-End Video',
+    id: 'vidu/viduq3-turbo_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 16, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ2-Pro keyframe-to-video is the world’s first “Everything Can Be Referenced” video model. It supports six reference dimensions—effects, expressions, textures, actions, characters, and scenes—enabling fully evolved video editing. Through controllable addition, deletion, and modification, it achieves fine-grained video editing, designed as a production-grade creation engine for animated series, short dramas, and film production.',
+    displayName: 'Vidu Q2 Pro Start-to-End Video',
+    id: 'vidu/viduq2-pro_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.34375, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input the first and last frame images along with a text description to generate video. ViduQ2-Turbo keyframe-to-video is an ultra-fast generation engine. A 5-second 720P video can be produced in as little as 19 seconds, and a 5-second 1080P video in about 27 seconds. Character actions and expressions are natural and realistic, with strong authenticity, excelling in high-dynamic scenes such as action sequences, and supporting wide-ranging motion.',
+    displayName: 'Vidu Q2 Turbo Start-to-End Video',
+    id: 'vidu/viduq2-turbo_start-end2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.25, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input reference videos, images, and a text description to generate video. ViduQ2-Pro reference-to-video is the world’s first “Everything Can Be Referenced” video model. It supports six reference dimensions—effects, expressions, textures, actions, characters, and scenes—enabling fully evolved video editing. Through controllable addition, deletion, and modification, it achieves fine-grained video editing, designed as a production-grade creation engine for animated series, short dramas, and film production.',
+    displayName: 'Vidu Q2 Pro Reference-to-Video',
+    id: 'vidu/viduq2-pro_reference2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x540',
+          '720x540',
+          '540x540',
+          '540x720',
+          '540x960',
+          '1280x720',
+          '960x720',
+          '720x720',
+          '720x960',
+          '720x1280',
+          '1920x1080',
+          '1440x1080',
+          '1080x1080',
+          '1080x1440',
+          '1080x1920',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.3125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input reference images along with a text description to generate video. ViduQ2 reference-to-video is a model designed for precise instruction adherence and nuanced emotion capture. It offers outstanding narrative control, accurately interpreting and expressing micro-expression changes; features rich cinematic language, smooth camera movements, and strong visual tension. Widely applicable to film and animation, advertising and e-commerce, short dramas, and cultural tourism industries.',
+    displayName: 'Vidu Q2 Reference-to-Video',
+    id: 'vidu/viduq2_reference2video',
+    parameters: {
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '960x540',
+          '720x540',
+          '540x540',
+          '540x720',
+          '540x960',
+          '1280x720',
+          '960x720',
+          '720x720',
+          '720x960',
+          '720x1280',
+          '1920x1080',
+          '1440x1080',
+          '1080x1080',
+          '1080x1440',
+          '1080x1920',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.28125, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'V6 is PixVerse’s new model launched at the end of March 2026. Its t2v (text-to-video) model allows precise control of video visuals through prompts, accurately reproducing various cinematic techniques. Camera movements such as push, pull, pan, tilt, tracking, and follow are smooth and natural, with precise and controllable perspective switching. It supports up to 15-second videos, direct output of music and video, and multiple languages.',
+    displayName: 'PixVerse V6 T2V',
+    enabled: true,
+    id: 'pixverse/pixverse-v6-t2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '640x432',
+          '432x640',
+          '640x288',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1024x688',
+          '688x1024',
+          '1024x448',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1200x800',
+          '800x1200',
+          '1280x560',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+          '1776x1184',
+          '1184x1776',
+          '1920x832',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input a text description to generate high-quality videos with second-level speed and precise semantic alignment, supporting multiple styles. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly improves image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are enhanced in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further raising overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 T2V',
+    id: 'pixverse/pixverse-v5.6-t2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'V6 is PixVerse’s new model launched at the end of March 2026. Its it2v (image-to-video) model ranks second globally. In addition to the prompt-control capabilities of t2v (text-to-video), it2v can accurately reproduce the colors, saturation, scenes, and character features of reference images, delivering stronger character emotions and high-speed motion performance. It supports up to 15-second videos, direct output of music and video, and multiple languages. Ideal for scenarios such as e-commerce product close-ups, advertising promos, and simulated C4D modeling to showcase product structures, with one-click direct output.',
+    displayName: 'PixVerse V6 IT2V',
+    enabled: true,
+    id: 'pixverse/pixverse-v6-it2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Upload any image to freely customize the story, pacing, and style, generating vivid and coherent videos. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly enhances image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are improved in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further elevating overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 IT2V',
+    id: 'pixverse/pixverse-v5.6-it2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'V6 is PixVerse’s new model launched at the end of March 2026. Its kf2v (keyframe-to-video) model can seamlessly connect any two images, producing smoother and more natural video transitions. It supports up to 15-second videos, direct output of music and video, and multiple languages.',
+    displayName: 'PixVerse V6 KF2V',
+    enabled: true,
+    id: 'pixverse/pixverse-v6-kf2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Achieve seamless transitions between any two images, creating smoother and more natural scene changes with visually striking effects. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly improves image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are enhanced in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further elevating overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 KF2V',
+    id: 'pixverse/pixverse-v5.6-kf2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Input 2–7 images to intelligently merge different subjects while maintaining unified style and coordinated motion, easily building rich narrative scenes and enhancing content controllability and creative freedom. PixVerse V5.6 is a self-developed video generation large model by Aishi Technology, offering comprehensive upgrades in both text-to-video and image-to-video capabilities. The model significantly improves image clarity, stability in complex motion, and audio-visual synchronization. Lip-sync accuracy and natural emotional expression are enhanced in multi-character dialogue scenes. Composition, lighting, and texture consistency are also optimized, further elevating overall generation quality. PixVerse V5.6 ranks in the top global tier on the Artificial Analysis text-to-video and image-to-video leaderboard.',
+    displayName: 'PixVerse V5.6 R2V',
+    id: 'pixverse/pixverse-v5.6-r2v',
+    parameters: {
+      duration: { default: 5, enum: [5, 8, 10] },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+        ],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+    },
     type: 'video',
   },
 ];

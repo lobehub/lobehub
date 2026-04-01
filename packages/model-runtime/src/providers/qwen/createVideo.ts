@@ -26,8 +26,16 @@ interface QwenVideoTaskResponse {
 }
 
 // Model patterns for different video generation types
-const image2VideoModels = [/^wan2\.(2|5)-i2v-/, /^wanx2\.(0|1)-i2v-/];
-const keyframe2VideoModels = [/^wan2\.(2|5)-kf2v-/];
+const image2VideoModels = [
+  /^wan2\.(2|5)-i2v-/,
+  /^wanx2\.(0|1)-i2v-/,
+  /img2video$/,
+  /reference2video$/,
+  /it2v$/,
+  /r2v$/,
+];
+const keyframe2VideoModels = [/^wan2\.(2|5)-kf2v-/, /start-end2video$/, /kf2v$/];
+const reference2VideoModels = [/^wan2\.6-r2v/];
 
 /**
  * Query the status of a video generation task
@@ -112,31 +120,18 @@ async function createVideoTask(
   const { prompt, imageUrl, endImageUrl } = params;
 
   // Determine the endpoint based on task type
-  const endpoint = taskType === 'video-generation' ? 'video-synthesis' : 'video-synthesis';
-  const url = `${baseUrl}/api/v1/services/aigc/${taskType}/${endpoint}`;
+  const url = `${baseUrl}/api/v1/services/aigc/${taskType}/video-synthesis`;
 
   log('Creating %s task with model: %s, endpoint: %s', taskType, model, url);
 
   const input: Record<string, any> = {};
   const parameters: Record<string, any> = {};
 
-  // Build input based on model type
-  if (matchesModelPattern(model, keyframe2VideoModels)) {
-    // Keyframe-to-video requires first_frame_url and last_frame_url
-    if (!imageUrl || !endImageUrl) {
-      throw AgentRuntimeError.createVideo({
-        error: new Error(
-          'imageUrl (first frame) and endImageUrl (last frame) are required for keyframe-to-video models',
-        ),
-        errorType: 'ProviderBizError',
-        provider,
-      });
-    }
-    input.first_frame_url = imageUrl;
-    input.last_frame_url = endImageUrl;
-    input.prompt = prompt;
-  } else if (matchesModelPattern(model, image2VideoModels)) {
-    // Image-to-video requires img_url
+  // Validate required parameters based on model type
+  if (
+    matchesModelPattern(model, image2VideoModels) ||
+    matchesModelPattern(model, reference2VideoModels)
+  ) {
     if (!imageUrl) {
       throw AgentRuntimeError.createVideo({
         error: new Error('imageUrl is required for image-to-video models'),
@@ -144,14 +139,88 @@ async function createVideoTask(
         provider,
       });
     }
-    input.img_url = imageUrl;
-    input.prompt = prompt;
-  } else {
-    // Text-to-video only needs prompt
-    input.prompt = prompt;
+  } else if (matchesModelPattern(model, keyframe2VideoModels) && (!imageUrl || !endImageUrl)) {
+    throw AgentRuntimeError.createVideo({
+      error: new Error(
+        'imageUrl (first frame) and endImageUrl (last frame) are required for keyframe-to-video models',
+      ),
+      errorType: 'ProviderBizError',
+      provider,
+    });
   }
 
+  // Handle media input based on model type
+  if (model.startsWith('vidu/')) {
+    const media = [];
+    if (imageUrl) {
+      media.push({
+        type: 'image',
+        url: imageUrl,
+      });
+    }
+    if (endImageUrl) {
+      media.push({
+        type: 'image',
+        url: endImageUrl,
+      });
+    }
+    if (media.length > 0) {
+      input.media = media;
+    }
+  } else if (model.startsWith('kling/')) {
+    const media = [];
+    if (imageUrl) {
+      media.push({
+        type: 'first_frame',
+        url: imageUrl,
+      });
+    }
+    if (endImageUrl) {
+      media.push({
+        type: 'last_frame',
+        url: endImageUrl,
+      });
+    }
+    if (media.length > 0) {
+      input.media = media;
+    }
+  } else if (model.startsWith('pixverse/')) {
+    if (imageUrl && !endImageUrl) {
+      input.media = [
+        {
+          type: 'image_url',
+          url: imageUrl,
+        },
+      ];
+    } else if (imageUrl && endImageUrl) {
+      input.media = [
+        {
+          type: 'first_frame',
+          url: imageUrl,
+        },
+        {
+          type: 'last_frame',
+          url: endImageUrl,
+        },
+      ];
+    }
+  } else if (matchesModelPattern(model, reference2VideoModels)) {
+    input.reference_urls = [imageUrl];
+  } else if (matchesModelPattern(model, keyframe2VideoModels)) {
+    input.first_frame_url = imageUrl;
+    input.last_frame_url = endImageUrl;
+  } else if (matchesModelPattern(model, image2VideoModels)) {
+    input.img_url = imageUrl;
+  }
+
+  // Add prompt to input for all models
+  input.prompt = prompt;
+
   // Add optional parameters
+  if (params.aspectRatio) {
+    parameters.aspectRatio = params.aspectRatio;
+  }
+
   if (params.size) {
     // Convert size format from "widthxheight" to "width*height" if needed
     parameters.size = params.size.replace('x', '*');
@@ -163,6 +232,15 @@ async function createVideoTask(
 
   if (params.generateAudio) {
     parameters.audio = params.generateAudio;
+  }
+
+  if (params.resolution) {
+    if (model.startsWith('kling/')) {
+      // For Kling models, resolution is determined by mode parameter. Map 1080p to pro mode, others to std mode.
+      parameters.mode = params.resolution === '1080p' ? 'pro' : 'std';
+    } else {
+      parameters.resolution = params.resolution;
+    }
   }
 
   const response = await fetch(url, {

@@ -50,28 +50,6 @@ describe('createMiniMaxVideo', () => {
     expect(result).toEqual({ inferenceId: 'minimax-task-123' });
   });
 
-  it('should include default duration of 6', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        task_id: 'task-default-duration',
-        base_resp: { status_code: 0, status_msg: 'success' },
-      }),
-    });
-
-    const payload: CreateVideoPayload = {
-      model: 'video-01',
-      params: {
-        prompt: 'Test',
-      },
-    };
-
-    await createMiniMaxVideo(payload, mockOptions);
-
-    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
-    expect(body.duration).toBe(6);
-  });
-
   it('should include custom duration', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
@@ -141,26 +119,6 @@ describe('createMiniMaxVideo', () => {
     const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
     expect(body.first_frame_image).toBe('https://example.com/first.jpg');
     expect(body.last_frame_image).toBe('https://example.com/last.jpg');
-  });
-
-  it('should use default resolution of 1080P', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        task_id: 'task-resolution',
-        base_resp: { status_code: 0, status_msg: 'success' },
-      }),
-    });
-
-    const payload: CreateVideoPayload = {
-      model: 'video-01',
-      params: { prompt: 'Test' },
-    };
-
-    await createMiniMaxVideo(payload, mockOptions);
-
-    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
-    expect(body.resolution).toBe('1080P');
   });
 
   it('should throw on non-zero status_code', async () => {

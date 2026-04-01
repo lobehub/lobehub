@@ -95,6 +95,38 @@ describe('createQwenVideo', () => {
     expect(body.input.prompt).toBe('Transform between frames');
   });
 
+  it('should create vidu task with images in input.media', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        output: { task_id: 'vidu-task-321', task_status: 'PENDING' },
+        request_id: 'req-654',
+      }),
+    });
+
+    const payload: CreateVideoPayload = {
+      model: 'vidu/viduq3-turbo_start-end2video',
+      params: {
+        duration: 5,
+        imageUrl: 'https://example.com/first.jpg',
+        endImageUrl: 'https://example.com/last.jpg',
+        prompt: 'A cat jumps from the windowsill to the sofa',
+        resolution: '720p',
+      },
+    };
+
+    await createQwenVideo(payload, mockOptions);
+
+    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+    expect(body.input.media).toEqual([
+      { type: 'image', url: 'https://example.com/first.jpg' },
+      { type: 'image', url: 'https://example.com/last.jpg' },
+    ]);
+    expect(body.input.prompt).toBe('A cat jumps from the windowsill to the sofa');
+    expect(body.parameters.duration).toBe(5);
+    expect(body.parameters.resolution).toBe('720p');
+  });
+
   it('should include optional parameters', async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
@@ -165,6 +197,20 @@ describe('createQwenVideo', () => {
   it('should throw error when keyframe images required but missing', async () => {
     const payload: CreateVideoPayload = {
       model: 'wan2.2-kf2v-flash',
+      params: {
+        prompt: 'Transform',
+      },
+    };
+
+    await expect(createQwenVideo(payload, mockOptions)).rejects.toMatchObject({
+      errorType: 'ProviderBizError',
+      provider: 'qwen',
+    });
+  });
+
+  it('should throw error when vidu image required but missing', async () => {
+    const payload: CreateVideoPayload = {
+      model: 'vidu/viduq3-turbo_start-end2video',
       params: {
         prompt: 'Transform',
       },

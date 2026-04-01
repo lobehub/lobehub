@@ -488,6 +488,19 @@ const minimaxVideoModels: AIVideoModelCard[] = [
     type: 'video',
   },
   {
+    description: 'The foundational reference-to-video model of the 01 series.',
+    displayName: 'S2V 01',
+    id: 'S2V-01',
+    parameters: {
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    releasedAt: '2025-01-10',
+    type: 'video',
+  },
+  {
     description: 'The foundational text-to-video model of the 01 series.',
     displayName: 'T2V 01',
     id: 'T2V-01',

@@ -136,19 +136,31 @@ export async function createMiniMaxVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, endImageUrl, duration } = params;
+  const { prompt, imageUrl, endImageUrl, duration, resolution } = params;
 
   const baseURL = options.baseURL || 'https://api.minimaxi.com/v1';
 
   const body: Record<string, unknown> = {
-    duration: duration || 6,
     model,
     prompt,
-    resolution: '1080P',
+    aigc_watermark: false, // Disable watermark for better user experience
+    ...(typeof duration === 'number' ? { duration } : {}),
+    ...(typeof resolution === 'string' ? { resolution } : {}),
   };
 
   if (imageUrl) {
-    body.first_frame_image = imageUrl;
+    // For S2V-01 model, the image is treated as subject reference and included in the prompt.
+    if (model === 'S2V-01') {
+      body.subject_reference = [
+        {
+          type: 'character',
+          image: [imageUrl],
+        },
+      ];
+    } else {
+      // For other models, the image is treated as the first frame of the video.
+      body.first_frame_image = imageUrl;
+    }
   }
   if (endImageUrl) {
     body.last_frame_image = endImageUrl;
