@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LayersEnum, UserMemoryContextObjectType } from '@lobechat/types';
+import { LayersEnum, RelationshipEnum, UserMemoryContextObjectType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,8 @@ import {
   userMemories,
   userMemoriesActivities,
   userMemoriesContexts,
+  userMemoriesIdentities,
+  userMemoriesPreferences,
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
@@ -103,6 +105,88 @@ const createContextPair = async (opts: {
     .returning();
 
   return { context, memory };
+};
+
+const createPreferencePair = async (opts: {
+  conclusionDirectives?: string;
+  createdAt?: Date;
+  memoryTags?: string[];
+  suggestions?: string;
+  tags?: string[];
+  title?: string;
+  type?: string;
+}) => {
+  const [memory] = await serverDB
+    .insert(userMemories)
+    .values({
+      details: 'preference details',
+      lastAccessedAt: new Date(),
+      memoryLayer: 'preference',
+      memoryType: 'preference',
+      summary: 'preference summary',
+      tags: opts.memoryTags ?? opts.tags,
+      title: opts.title ?? 'Preference memory',
+      userId,
+    })
+    .returning();
+
+  const [preference] = await serverDB
+    .insert(userMemoriesPreferences)
+    .values({
+      conclusionDirectives: opts.conclusionDirectives ?? 'Prefer typed APIs',
+      createdAt: opts.createdAt,
+      suggestions: opts.suggestions ?? 'Add more integration tests',
+      tags: opts.tags,
+      type: opts.type ?? 'coding-style',
+      userId,
+      userMemoryId: memory.id,
+    })
+    .returning();
+
+  return { memory, preference };
+};
+
+const createIdentityPair = async (opts: {
+  capturedAt?: Date;
+  description?: string;
+  episodicDate?: Date;
+  memoryTags?: string[];
+  relationship?: RelationshipEnum;
+  role?: string;
+  tags?: string[];
+  title?: string;
+  type?: 'demographic' | 'personal' | 'professional';
+}) => {
+  const [memory] = await serverDB
+    .insert(userMemories)
+    .values({
+      details: 'identity details',
+      lastAccessedAt: new Date(),
+      memoryLayer: 'identity',
+      memoryType: 'identity',
+      summary: 'identity summary',
+      tags: opts.memoryTags ?? opts.tags,
+      title: opts.title ?? 'Identity memory',
+      userId,
+    })
+    .returning();
+
+  const [identity] = await serverDB
+    .insert(userMemoriesIdentities)
+    .values({
+      capturedAt: opts.capturedAt,
+      description: opts.description ?? 'Identity description',
+      episodicDate: opts.episodicDate,
+      relationship: opts.relationship ?? RelationshipEnum.Self,
+      role: opts.role ?? 'Engineer',
+      tags: opts.tags,
+      type: opts.type ?? 'personal',
+      userId,
+      userMemoryId: memory.id,
+    })
+    .returning();
+
+  return { identity, memory };
 };
 
 describe('user memory query layer', () => {
@@ -326,6 +410,74 @@ describe('user memory query layer', () => {
       expect(new Set(result.contexts.map((item) => item.id))).toEqual(
         new Set([duplicatedContext.id, distinctContext.id]),
       );
+    });
+
+    it('returns lexical preference matches when filtering by type without semantic search', async () => {
+      const { preference: expectedPreference } = await createPreferencePair({
+        conclusionDirectives: 'Prefer strongly typed APIs',
+        createdAt: new Date('2026-03-01T08:00:00.000Z'),
+        memoryTags: ['typescript', 'quality'],
+        suggestions: 'Add query regression coverage',
+        tags: ['typescript', 'quality'],
+        title: 'TypeScript preference',
+        type: 'coding-style',
+      });
+      await createPreferencePair({
+        conclusionDirectives: 'Keep product notes concise',
+        createdAt: new Date('2026-03-02T08:00:00.000Z'),
+        memoryTags: ['writing'],
+        suggestions: 'Shorten changelog entries',
+        tags: ['writing'],
+        title: 'Writing preference',
+        type: 'communication-style',
+      });
+
+      const result = await memoryModel.searchMemory({
+        layers: [LayersEnum.Preference],
+        tags: ['typescript', 'quality'],
+        topK: { activities: 0, contexts: 0, experiences: 0, identities: 0, preferences: 3 },
+        types: ['coding-style'],
+      });
+
+      expect(result.preferences.map((item) => item.id)).toEqual([expectedPreference.id]);
+    });
+
+    it('returns lexical identity matches when filters use relationship and episodic date', async () => {
+      const { identity: expectedIdentity } = await createIdentityPair({
+        capturedAt: new Date('2026-03-20T10:00:00.000Z'),
+        description: 'Primary project stakeholder for Atlas',
+        episodicDate: new Date('2026-03-20T00:00:00.000Z'),
+        memoryTags: ['atlas', 'stakeholder'],
+        relationship: RelationshipEnum.Friend,
+        role: 'Project sponsor',
+        tags: ['atlas', 'stakeholder'],
+        title: 'Atlas sponsor',
+      });
+      await createIdentityPair({
+        capturedAt: new Date('2026-02-01T10:00:00.000Z'),
+        description: 'Archived collaborator profile',
+        episodicDate: new Date('2026-02-01T00:00:00.000Z'),
+        memoryTags: ['legacy'],
+        relationship: RelationshipEnum.Friend,
+        role: 'Observer',
+        tags: ['legacy'],
+        title: 'Legacy observer',
+      });
+
+      const result = await memoryModel.searchMemory({
+        layers: [LayersEnum.Identity],
+        relationships: [RelationshipEnum.Friend],
+        tags: ['atlas', 'stakeholder'],
+        timeRange: {
+          end: new Date('2026-03-21T00:00:00.000Z'),
+          field: 'episodicDate',
+          start: new Date('2026-03-19T00:00:00.000Z'),
+        },
+        topK: { activities: 0, contexts: 0, experiences: 0, identities: 3, preferences: 0 },
+        types: ['personal'],
+      });
+
+      expect(result.identities.map((item) => item.id)).toEqual([expectedIdentity.id]);
     });
   });
 });
