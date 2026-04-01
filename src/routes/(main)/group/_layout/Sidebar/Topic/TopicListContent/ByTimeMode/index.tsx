@@ -23,7 +23,7 @@ const ByTimeMode = memo(() => {
   const topicDisplayMode = useUserStore(preferenceSelectors.topicDisplayMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
-    topicSelectors.hasMoreTopics(s),
+    topicSelectors.hasMoreTopicsForSidebar(s),
     topicSelectors.isExpandingPageSize(s),
     s.openAllTopicsDrawer,
   ]);

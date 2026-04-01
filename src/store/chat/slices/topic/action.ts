@@ -376,7 +376,11 @@ export class ChatTopicActionImpl {
           const currentData = this.#get().topicDataMap[containerKey];
 
           const isRefreshingExpandedList =
-            !!currentData && currentData.currentPage > 0 && currentData.pageSize === pageSize;
+            !!currentData &&
+            currentData.currentPage > 0 &&
+            currentData.pageSize === pageSize &&
+            Boolean(currentData.isInbox) === Boolean(isInbox) &&
+            isEqual(currentData.excludeTriggers, effectiveExcludeTriggers);
 
           const nextItems = isRefreshingExpandedList
             ? (() => {
@@ -409,6 +413,7 @@ export class ChatTopicActionImpl {
                   currentPage: isRefreshingExpandedList ? currentData.currentPage : 0,
                   excludeTriggers: effectiveExcludeTriggers,
                   hasMore,
+                  isInbox: Boolean(isInbox),
                   isExpandingPageSize: false,
                   isLoadingMore: false,
                   items: nextItems,
@@ -469,6 +474,7 @@ export class ChatTopicActionImpl {
               currentPage: nextPage,
               excludeTriggers,
               hasMore,
+              isInbox: currentData?.isInbox,
               isLoadingMore: false,
               items: nextItems,
               pageSize,
@@ -686,7 +692,7 @@ export class ChatTopicActionImpl {
     // no need to update if is the same
     if (isEqual(nextItems, currentData?.items)) return;
 
-    const currentTotal = currentData?.total ?? currentData?.items?.length ?? nextItems.length;
+    const currentTotal = currentData?.total ?? currentData?.items?.length ?? 0;
     const total =
       payload.type === 'addTopic'
         ? currentTotal + 1
@@ -702,6 +708,7 @@ export class ChatTopicActionImpl {
             ...currentData,
             currentPage: currentData?.currentPage ?? 0,
             hasMore: total > nextItems.length,
+            isInbox: currentData?.isInbox,
             items: nextItems,
             total,
           },
@@ -736,6 +743,7 @@ export class ChatTopicActionImpl {
           [key]: {
             currentPage,
             hasMore: total > nextItems.length,
+            isInbox: currentData?.isInbox,
             isExpandingPageSize: false,
             isLoadingMore: false,
             items: nextItems,

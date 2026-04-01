@@ -140,6 +140,13 @@ const hasMoreTopics = (s: ChatStoreState): boolean => {
   const topicData = currentTopicData(s);
   if (!topicData) return false;
 
+  return topicData.hasMore;
+};
+
+const hasMoreTopicsForSidebar = (s: ChatStoreState): boolean => {
+  const topicData = currentTopicData(s);
+  if (!topicData) return false;
+
   return topicData.hasMore || topicData.total > topicData.pageSize;
 };
 
@@ -166,6 +173,7 @@ export const topicSelectors = {
   groupedTopicsForSidebar,
   groupedTopicsSelector,
   hasMoreTopics,
+  hasMoreTopicsForSidebar,
   isCreatingTopic,
   isExpandingPageSize,
   isInSearchMode,

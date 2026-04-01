@@ -77,7 +77,44 @@ describe('topicSelectors', () => {
         },
       });
 
-      expect(topicSelectors.hasMoreTopics(state)).toBe(true);
+      expect(topicSelectors.hasMoreTopics(state)).toBe(false);
+      expect(topicSelectors.hasMoreTopicsForSidebar(state)).toBe(true);
+    });
+
+    it('should return false when all topics are already loaded', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'test' })]: {
+            currentPage: 1,
+            hasMore: false,
+            items: Array.from({ length: 21 }, (_, index) => ({ id: `topic-${index}` })),
+            pageSize: 20,
+            total: 21,
+          },
+        },
+      });
+
+      expect(topicSelectors.hasMoreTopics(state)).toBe(false);
+      expect(topicSelectors.hasMoreTopicsForSidebar(state)).toBe(true);
+    });
+
+    it('should return false for sidebar when total does not exceed pageSize', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'test' })]: {
+            currentPage: 1,
+            hasMore: false,
+            items: Array.from({ length: 21 }, (_, index) => ({ id: `topic-${index}` })),
+            pageSize: 30,
+            total: 21,
+          },
+        },
+      });
+
+      expect(topicSelectors.hasMoreTopics(state)).toBe(false);
+      expect(topicSelectors.hasMoreTopicsForSidebar(state)).toBe(false);
     });
   });
 
