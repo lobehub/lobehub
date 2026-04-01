@@ -49,6 +49,7 @@ class DiscordGatewayClient implements PlatformClient {
   readonly applicationId: string;
 
   private abort = new AbortController();
+  private bot: ChatBot<any> | null = null;
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private discord: DiscordApi;
@@ -81,6 +82,11 @@ class DiscordGatewayClient implements PlatformClient {
     );
 
     try {
+      if (this.bot) {
+        await this.bot.shutdown().catch(() => {});
+        this.bot = null;
+      }
+
       const adapter = createDiscordAdapter({
         applicationId: this.config.applicationId,
         botToken: this.config.credentials.botToken,
@@ -103,6 +109,7 @@ class DiscordGatewayClient implements PlatformClient {
       }
 
       const bot = new Chat(chatConfig);
+      this.bot = bot;
       await bot.initialize();
 
       const discordAdapter = (bot as any).adapters.get('discord') as DiscordAdapter;
@@ -165,6 +172,10 @@ class DiscordGatewayClient implements PlatformClient {
       this.refreshTimer = null;
     }
     this.abort.abort();
+    if (this.bot) {
+      await this.bot.shutdown().catch(() => {});
+      this.bot = null;
+    }
     await updateBotRuntimeStatus(
       {
         applicationId: this.applicationId,
