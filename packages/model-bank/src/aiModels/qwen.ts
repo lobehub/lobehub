@@ -3113,6 +3113,54 @@ const qwenImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
+    description: 'Wanxiang 2.7 Image Professional Edition, supports 4K high-definition output.',
+    displayName: 'Wanxiang2.7 Image Pro',
+    enabled: true,
+    id: 'wan2.7-image-pro',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 2048, max: 11_585, min: 271, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 2048, max: 11_585, min: 271, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-01',
+    type: 'image',
+  },
+  {
+    description: 'Wanxiang 2.7 Image, faster image generation speed.',
+    displayName: 'Wanxiang2.7 Image',
+    enabled: true,
+    id: 'wan2.7-image',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 2048, max: 5792, min: 271, step: 1 },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 2048, max: 5792, min: 271, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-04-01',
+    type: 'image',
+  },
+  {
     description: 'Wanxiang 2.6 Image supports image editing and mixed image–text layout output.',
     displayName: 'Wanxiang2.6 Image',
     enabled: true,
@@ -3325,6 +3373,66 @@ const qwenImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.16, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2024-05-22',
+    type: 'image',
+  },
+  {
+    description:
+      'Supports up to 10 reference images, allowing you to lock subjects, elements, and color tones to ensure consistent style. Combines style transfer, portrait/character referencing, multi-image fusion, and localized inpainting for flexible control. Delivers realistic portrait details, with overall visuals that are delicate and richly layered, featuring cinematic color and atmosphere.',
+    displayName: 'Kling V3 Image Generation',
+    enabled: true,
+    id: 'kling/kling-v3-image-generation',
+    organization: 'Qwen',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      imageUrl: {
+        default: '',
+      },
+      prompt: {
+        default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-03-26',
+    type: 'image',
+  },
+  {
+    description:
+      'Unlock cinematic storytelling visuals with new series image generation and direct 2K/4K output. Deeply analyzes audiovisual elements in prompts to precisely execute creative instructions. Supports flexible multi-reference inputs and comprehensive quality upgrades, ideal for storyboards, narrative concept art, and scene design.',
+    displayName: 'Kling V3 Omni Image Generation',
+    enabled: true,
+    id: 'kling/kling-v3-omni-image-generation',
+    organization: 'Qwen',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1'],
+      },
+      imageUrls: {
+        default: [],
+      },
+      prompt: {
+        default: '',
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k', '4k'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-03-26',
     type: 'image',
   },
   {
