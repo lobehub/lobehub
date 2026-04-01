@@ -28,6 +28,7 @@ const ExecutionTime = memo<ExecutionTimeProps>(({ isExecuting }) => {
     }
 
     startTimeRef.current = Date.now();
+    setElapsed(0);
 
     const update = (timestamp: number) => {
       if (timestamp - lastUpdateRef.current >= 100) {

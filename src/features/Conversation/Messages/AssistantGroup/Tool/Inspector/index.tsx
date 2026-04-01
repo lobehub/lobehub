@@ -31,9 +31,11 @@ const Inspectors = memo<InspectorProps>(
 
     const isPending = intervention?.status === 'pending';
     const isAborted = intervention?.status === 'aborted';
+    const isRejected = intervention?.status === 'rejected';
 
     // Distinguish between arguments streaming and tool executing
-    const isToolExecuting = !hasResult && !isPending && !isAborted && !isArgumentsStreaming;
+    const isToolExecuting =
+      !hasResult && !isPending && !isAborted && !isRejected && !isArgumentsStreaming;
     const isTitleLoading = isArgumentsStreaming || isToolExecuting;
 
     // Check for custom inspector renderer
