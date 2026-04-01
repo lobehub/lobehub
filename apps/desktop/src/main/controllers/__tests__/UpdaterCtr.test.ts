@@ -8,7 +8,20 @@ import UpdaterCtr from '../UpdaterCtr';
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
+    warn: vi.fn(),
   }),
+}));
+
+vi.mock('@/modules/updater/configs', () => ({
+  UPDATE_CHANNEL: 'stable',
+  coerceStoredUpdateChannel: (channel?: string | null) =>
+    channel === 'canary' ? 'canary' : 'stable',
+  resolveUpdateChannelInput: (channel?: string | null) => {
+    if (channel === 'stable' || channel === 'canary') return channel;
+    if (channel === 'nightly') return 'stable';
+
+    return undefined;
+  },
 }));
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
@@ -26,13 +39,23 @@ const mockCheckForUpdates = vi.fn();
 const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
 const mockInstallLater = vi.fn();
+const mockGetUpdaterState = vi.fn();
+const mockSwitchChannel = vi.fn();
+const mockStoreGet = vi.fn();
+const mockStoreSet = vi.fn();
 
 const mockApp = {
+  storeManager: {
+    get: mockStoreGet,
+    set: mockStoreSet,
+  },
   updaterManager: {
     checkForUpdates: mockCheckForUpdates,
     downloadUpdate: mockDownloadUpdate,
+    getUpdaterState: mockGetUpdaterState,
     installNow: mockInstallNow,
     installLater: mockInstallLater,
+    switchChannel: mockSwitchChannel,
   },
 } as unknown as App;
 
@@ -42,6 +65,8 @@ describe('UpdaterCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ipcMainHandleMock.mockClear();
+    mockStoreGet.mockReset();
+    mockStoreSet.mockReset();
     updaterCtr = new UpdaterCtr(mockApp);
   });
 
@@ -70,6 +95,31 @@ describe('UpdaterCtr', () => {
     it('should call updaterManager.installLater', () => {
       updaterCtr.installLater();
       expect(mockInstallLater).toHaveBeenCalled();
+    });
+  });
+
+  describe('update channel', () => {
+    it('should migrate persisted nightly channel to stable', async () => {
+      mockStoreGet.mockReturnValueOnce('nightly');
+
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('stable');
+      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'stable');
+    });
+
+    it('should normalize legacy nightly input to stable', async () => {
+      await updaterCtr.setUpdateChannel(
+        'nightly' as unknown as Parameters<UpdaterCtr['setUpdateChannel']>[0],
+      );
+
+      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'stable');
+      expect(mockSwitchChannel).toHaveBeenCalledWith('stable');
+    });
+
+    it('should keep canary input unchanged', async () => {
+      await updaterCtr.setUpdateChannel('canary');
+
+      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'canary');
+      expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
     });
   });
 

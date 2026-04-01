@@ -1,5 +1,10 @@
 import type { UpdateChannel, UpdaterState } from '@lobechat/electron-client-ipc';
 
+import {
+  coerceStoredUpdateChannel,
+  resolveUpdateChannelInput,
+  UPDATE_CHANNEL,
+} from '@/modules/updater/configs';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -46,11 +51,21 @@ export default class UpdaterCtr extends ControllerModule {
 
   @IpcMethod()
   async getUpdateChannel(): Promise<UpdateChannel> {
-    return this.app.storeManager.get('updateChannel') ?? 'stable';
+    const storedChannel = this.app.storeManager.get('updateChannel');
+    if (storedChannel === undefined) return UPDATE_CHANNEL;
+
+    const normalizedChannel = coerceStoredUpdateChannel(storedChannel);
+
+    if (storedChannel !== normalizedChannel) {
+      logger.info(`Migrating legacy update channel: ${storedChannel} -> ${normalizedChannel}`);
+      this.app.storeManager.set('updateChannel', normalizedChannel);
+    }
+
+    return normalizedChannel;
   }
 
   /**
-   * Get the build-time channel (stable, nightly, canary, beta).
+   * Get the build-time channel (stable, canary, beta, or legacy nightly).
    * Used for display in About page to distinguish pre-release builds.
    */
   @IpcMethod()
@@ -61,14 +76,20 @@ export default class UpdaterCtr extends ControllerModule {
 
   @IpcMethod()
   async setUpdateChannel(channel: UpdateChannel): Promise<void> {
-    const validChannels = new Set(['stable', 'nightly', 'canary']);
-    if (!validChannels.has(channel)) {
+    const normalizedChannel = resolveUpdateChannelInput(channel);
+
+    if (!normalizedChannel) {
       logger.warn(`Invalid update channel: ${channel}, ignoring`);
       return;
     }
-    logger.info(`Set update channel requested: ${channel}`);
-    this.app.storeManager.set('updateChannel', channel);
-    this.app.updaterManager.switchChannel(channel);
+
+    if (channel !== normalizedChannel) {
+      logger.info(`Normalizing legacy update channel: ${channel} -> ${normalizedChannel}`);
+    }
+
+    logger.info(`Set update channel requested: ${normalizedChannel}`);
+    this.app.storeManager.set('updateChannel', normalizedChannel);
+    this.app.updaterManager.switchChannel(normalizedChannel);
   }
 
   @IpcMethod()

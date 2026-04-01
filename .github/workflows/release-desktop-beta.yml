@@ -7,7 +7,7 @@ name: Release Desktop Beta
 # 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1
 #
 # 注意: Stable 版本 (如 v2.0.0) 由 release-desktop-stable.yml 处理
-# 注意: Nightly 版本 (如 v2.1.0-nightly.xxx) 由 release-desktop-nightly.yml 处理
+# 注意: Nightly 版本已停用，不再参与 Desktop 发布流程
 # ============================================
 
 on:
@@ -41,10 +41,10 @@ jobs:
           version="${version#v}"
           echo "version=${version}" >> $GITHUB_OUTPUT
 
-          # Beta 版本包含 beta/alpha/rc (nightly 由 release-desktop-nightly.yml 处理)
+          # Beta 版本包含 beta/alpha/rc；nightly 标签已停用
           if [[ "$version" == *"nightly"* ]]; then
             echo "is_beta=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Skipping: $version is a nightly release (handled by release-desktop-nightly.yml)"
+            echo "⏭️ Skipping: $version is a disabled nightly release tag"
           elif [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]]; then
             echo "is_beta=true" >> $GITHUB_OUTPUT
             echo "✅ Beta release detected: $version"
