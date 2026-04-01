@@ -39,10 +39,13 @@ const PHASE_GUIDANCE: Record<string, string> = {
 };
 
 interface OnboardingStateContext {
+  discoveryUserMessageCount?: number;
   finished: boolean;
   missingStructuredFields: string[];
   phase: string;
   remainingDiscoveryExchanges?: number;
+  topicId?: string;
+  version?: number;
 }
 
 export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) => {
