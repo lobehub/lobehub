@@ -47,6 +47,7 @@ export interface PublicState {
 }
 
 export interface State extends PublicState {
+  _savedEditorState?: Record<string, any>;
   editor?: IEditor;
   isContentEmpty: boolean;
   markdownContent: string;

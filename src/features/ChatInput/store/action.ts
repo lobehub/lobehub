@@ -59,7 +59,9 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   setExpand: (expand) => {
-    set({ expand });
+    const editor = get().editor;
+    const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
+    set({ _savedEditorState, expand });
   },
 
   setJSONState: (content) => {
