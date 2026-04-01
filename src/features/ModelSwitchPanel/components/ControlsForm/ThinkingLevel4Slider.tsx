@@ -8,7 +8,7 @@ export type ThinkingLevel4SliderProps = CreatedLevelSliderProps<ThinkingLevel4>;
 
 const ThinkingLevel4Slider = createLevelSliderComponent<ThinkingLevel4>({
   configKey: 'thinkingLevel4',
-  defaultValue: 'high',
+  defaultValue: 'minimal',
   levels: THINKING_LEVELS_4,
   style: { minWidth: 110 },
 });

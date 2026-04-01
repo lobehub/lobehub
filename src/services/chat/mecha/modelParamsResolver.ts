@@ -31,6 +31,22 @@ export interface ModelExtendParams {
   verbosity?: string;
 }
 
+const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
+  thinkingLevel: 'high',
+  thinkingLevel2: 'high',
+  thinkingLevel3: 'high',
+  thinkingLevel4: 'minimal',
+  thinkingLevel5: 'minimal',
+} as const satisfies Partial<Record<ExtendParamsType, string>>;
+
+const THINKING_LEVEL_PARAM_TO_CONFIG_KEY = {
+  thinkingLevel: 'thinkingLevel',
+  thinkingLevel2: 'thinkingLevel2',
+  thinkingLevel3: 'thinkingLevel3',
+  thinkingLevel4: 'thinkingLevel4',
+  thinkingLevel5: 'thinkingLevel5',
+} as const satisfies Partial<Record<ExtendParamsType, keyof LobeAgentChatConfig>>;
+
 /**
  * Resolves extended parameters for model runtime based on model capabilities and chat config
  *
@@ -169,24 +185,19 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingBudget = chatConfig.thinkingBudget;
   }
 
-  const thinkingLevelParamToConfigKey: Partial<Record<ExtendParamsType, keyof LobeAgentChatConfig>> =
-    {
-      thinkingLevel: 'thinkingLevel',
-      thinkingLevel2: 'thinkingLevel2',
-      thinkingLevel3: 'thinkingLevel3',
-      thinkingLevel4: 'thinkingLevel4',
-      thinkingLevel5: 'thinkingLevel5',
-    };
+  const supportedThinkingLevelParam = modelExtendParams.find(
+    (extendParam): extendParam is keyof typeof THINKING_LEVEL_PARAM_TO_CONFIG_KEY =>
+      extendParam in THINKING_LEVEL_PARAM_TO_CONFIG_KEY,
+  );
 
-  for (const extendParam of modelExtendParams) {
-    const configKey = thinkingLevelParamToConfigKey[extendParam];
-    if (!configKey) continue;
-
+  if (supportedThinkingLevelParam) {
+    const configKey = THINKING_LEVEL_PARAM_TO_CONFIG_KEY[supportedThinkingLevelParam];
     const value = chatConfig[configKey];
-    if (typeof value === 'string') {
-      extendParams.thinkingLevel = value;
-      break;
-    }
+
+    extendParams.thinkingLevel =
+      typeof value === 'string'
+        ? value
+        : DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[supportedThinkingLevelParam];
   }
 
   // URL context

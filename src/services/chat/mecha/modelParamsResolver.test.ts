@@ -479,7 +479,7 @@ describe('resolveModelExtendParams', () => {
           provider: 'provider',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
       });
     });
 
@@ -512,7 +512,7 @@ describe('resolveModelExtendParams', () => {
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
       });
     });
 
@@ -545,7 +545,73 @@ describe('resolveModelExtendParams', () => {
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
+      });
+    });
+
+    describe('thinkingLevel4 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel4',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel4 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel4: 'minimal',
+          } as any,
+          model: 'gemini-3.1-flash-image-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
+      });
+
+      it('should use the default thinkingLevel when thinkingLevel4 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-flash-image-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
+      });
+    });
+
+    describe('thinkingLevel5 param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel5',
+        ]);
+      });
+
+      it('should set thinkingLevel from thinkingLevel5 config key', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            thinkingLevel5: 'medium',
+          } as any,
+          model: 'gemini-3.1-flash-lite-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('medium');
+      });
+
+      it('should use the default thinkingLevel when thinkingLevel5 is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-flash-lite-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
       });
     });
 
@@ -562,6 +628,26 @@ describe('resolveModelExtendParams', () => {
         const result = resolveModelExtendParams({
           chatConfig: {
             thinkingLevel: 'high',
+            thinkingLevel3: 'medium',
+          } as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('high');
+      });
+
+      it('should use the first supported thinkingLevel param and ignore other keys', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel',
+          'thinkingLevel3',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
             thinkingLevel3: 'medium',
           } as any,
           model: 'gemini-3.1-pro-preview',
@@ -1140,7 +1226,7 @@ describe('resolveModelExtendParams', () => {
         expect(result.reasoning_effort).toBeUndefined();
         expect(result.verbosity).toBeUndefined();
         expect(result.thinkingBudget).toBeUndefined();
-        expect(result.thinkingLevel).toBeUndefined();
+        expect(result.thinkingLevel).toBe('high');
         expect(result.urlContext).toBeUndefined();
         expect(result.imageAspectRatio).toBeUndefined();
         expect(result.imageResolution).toBeUndefined();
