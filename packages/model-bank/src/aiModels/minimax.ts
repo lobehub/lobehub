@@ -360,7 +360,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.35, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1.35, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-10-28',
     type: 'video',
@@ -384,7 +384,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-10-28',
     type: 'video',
@@ -411,7 +411,7 @@ const minimaxVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',

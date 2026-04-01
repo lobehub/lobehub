@@ -1902,7 +1902,7 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },
@@ -1921,7 +1921,7 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.4, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1.4, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },
@@ -1940,7 +1940,7 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },
@@ -1959,7 +1959,7 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.7, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },
@@ -1977,7 +1977,7 @@ const wenxinVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },

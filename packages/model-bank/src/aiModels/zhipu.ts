@@ -1349,7 +1349,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',
@@ -1377,7 +1377,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',
@@ -1404,7 +1404,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',
@@ -1433,7 +1433,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1.25, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',
@@ -1461,7 +1461,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',
@@ -1486,7 +1486,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2.5, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-06-18',
     type: 'video',
@@ -1522,7 +1522,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2025-07-15',
     type: 'video',
@@ -1554,7 +1554,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },
@@ -1586,7 +1586,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0, strategy: 'fixed', unit: 'video' }],
     },
     type: 'video',
   },

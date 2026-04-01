@@ -2349,7 +2349,7 @@ const siliconcloudVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2026-01-28',
     type: 'video',
@@ -2370,7 +2370,7 @@ const siliconcloudVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
     },
     releasedAt: '2026-01-28',
     type: 'video',
