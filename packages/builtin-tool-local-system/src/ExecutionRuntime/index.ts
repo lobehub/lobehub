@@ -213,8 +213,17 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'readLocalFile': {
+        // Pass through all IPC fields for render compatibility
         return {
-          result: { content: raw.content, totalLines: raw.totalLineCount },
+          result: {
+            charCount: raw.charCount,
+            content: raw.content,
+            fileType: raw.fileType,
+            filename: raw.filename,
+            loc: raw.loc,
+            totalCharCount: raw.totalCharCount,
+            totalLineCount: raw.totalLineCount,
+          },
           success: true,
         };
       }

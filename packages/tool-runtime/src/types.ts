@@ -94,10 +94,21 @@ export interface ListFilesState {
 }
 
 export interface ReadFileState {
+  /** Character count of the returned content */
+  charCount?: number;
   content: string;
   endLine?: number;
+  /** Base filename extracted from path */
+  filename?: string;
+  /** Detected file type (e.g., 'ts', 'md', 'json') */
+  fileType?: string;
+  /** Line range as tuple [start, end] */
+  loc?: [number, number];
   path: string;
   startLine?: number;
+  /** Total character count of the entire file */
+  totalCharCount?: number;
+  /** Total line count of the entire file */
   totalLines?: number;
 }
 

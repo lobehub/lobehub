@@ -105,12 +105,20 @@ export abstract class ComputerRuntime {
         });
       }
 
+      const r = result.result || {};
+      const fileContent = r.content || '';
+
       const state: ReadFileState = {
-        content: result.result?.content || '',
+        charCount: r.charCount ?? fileContent.length,
+        content: fileContent,
         endLine: args.endLine,
+        fileType: r.fileType,
+        filename: r.filename,
+        loc: r.loc,
         path: args.path,
         startLine: args.startLine,
-        totalLines: result.result?.totalLines,
+        totalCharCount: r.totalCharCount,
+        totalLines: r.totalLineCount ?? r.totalLines,
       };
 
       const lineRange: [number, number] | undefined =
@@ -119,7 +127,7 @@ export abstract class ComputerRuntime {
           : undefined;
 
       const content = formatFileContent({
-        content: result.result?.content || '',
+        content: fileContent,
         lineRange,
         path: args.path,
       });
