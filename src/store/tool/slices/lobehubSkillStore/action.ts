@@ -4,7 +4,6 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { toolsClient } from '@/libs/trpc/client';
-import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -41,11 +40,8 @@ export class LobehubSkillStoreActionImpl {
   callLobehubSkillTool = async (
     params: CallLobehubSkillToolParams,
   ): Promise<CallLobehubSkillToolResult> => {
-    const { provider, toolName, args } = params;
+    const { provider, toolName, args, topicId } = params;
     const toolId = `${provider}:${toolName}`;
-
-    // Get topicId directly from chat store
-    const topicId = useChatStore.getState().activeTopicId;
 
     this.#set(
       produce((draft: LobehubSkillStoreState) => {
