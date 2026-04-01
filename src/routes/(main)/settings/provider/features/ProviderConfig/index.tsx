@@ -380,7 +380,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       : undefined;
 
     const showResponsesApiSwitch =
-      !!supportResponsesApi || isResponsesApiSupportedSdkType(settings?.sdkType);
+      !!supportResponsesApi || (isCustom && isResponsesApiSupportedSdkType(settings?.sdkType));
 
     const configItems = [
       ...apiKeyItem,
