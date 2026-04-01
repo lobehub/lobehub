@@ -1,7 +1,8 @@
 import { isDesktop } from '@lobechat/const';
+import { chainInputCompletion } from '@lobechat/prompts';
 import { HotkeyEnum, KeyEnum } from '@lobechat/types';
-import { isCommandPressed } from '@lobechat/utils';
-import { INSERT_MENTION_COMMAND, ReactMathPlugin } from '@lobehub/editor';
+import { isCommandPressed, merge } from '@lobechat/utils';
+import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
@@ -11,10 +12,16 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { chatService } from '@/services/chat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
+import {
+  labPreferSelectors,
+  preferenceSelectors,
+  settingsSelectors,
+  systemAgentSelectors,
+} from '@/store/user/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore, useStoreApi } from '../store';
@@ -125,30 +132,93 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
     [slashActionItems],
   );
 
-  const richRenderProps = useMemo(
-    () =>
-      !enableRichRender
-        ? {
-            enablePasteMarkdown: false,
-            markdownOption: false,
-            plugins: CHAT_INPUT_EMBED_PLUGINS,
-          }
-        : {
-            plugins: createChatInputRichPlugins({
-              mathPlugin: Editor.withProps(ReactMathPlugin, {
-                renderComp: expand
-                  ? undefined
-                  : (props) => (
-                      <FloatMenu
-                        {...props}
-                        getPopupContainer={() => (slashMenuRef as any)?.current}
-                      />
-                    ),
-              }),
-            }),
+  // --- Auto-completion ---
+  const inputCompletionConfig = useUserStore(systemAgentSelectors.inputCompletion);
+  const isAutoCompleteEnabled = inputCompletionConfig.enabled;
+
+  const getMessagesRef = useRef(storeApi.getState().getMessages);
+  useEffect(() => {
+    return storeApi.subscribe((s) => {
+      getMessagesRef.current = s.getMessages;
+    });
+  }, [storeApi]);
+
+  const handleAutoComplete = useCallback(
+    async ({
+      abortSignal,
+      afterText,
+      input,
+    }: {
+      abortSignal: AbortSignal;
+      afterText: string;
+      editor: any;
+      input: string;
+      selectionType: string;
+    }): Promise<string | null> => {
+      if (!input.trim()) return null;
+
+      const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
+        useUserStore.getState(),
+      );
+      const context = getMessagesRef.current?.();
+      const chainParams = chainInputCompletion(input, afterText, context);
+
+      const abortController = new AbortController();
+      abortSignal.addEventListener('abort', () => abortController.abort());
+
+      let result = '';
+
+      try {
+        await chatService.fetchPresetTaskResult({
+          abortController,
+          onMessageHandle: (chunk) => {
+            if (chunk.type === 'text') {
+              result += chunk.text;
+            }
           },
-    [enableRichRender, expand, slashMenuRef],
+          params: merge(config, chainParams),
+        });
+      } catch {
+        return null;
+      }
+
+      if (abortSignal.aborted) return null;
+
+      return result || null;
+    },
+    [],
   );
+
+  const autoCompletePlugin = useMemo(
+    () =>
+      isAutoCompleteEnabled
+        ? Editor.withProps(ReactAutoCompletePlugin, {
+            delay: 600,
+            onAutoComplete: handleAutoComplete,
+          })
+        : null,
+    [isAutoCompleteEnabled, handleAutoComplete],
+  );
+
+  const richRenderProps = useMemo(() => {
+    const basePlugins = !enableRichRender
+      ? CHAT_INPUT_EMBED_PLUGINS
+      : createChatInputRichPlugins({
+          mathPlugin: Editor.withProps(ReactMathPlugin, {
+            renderComp: expand
+              ? undefined
+              : (props) => (
+                  <FloatMenu {...props} getPopupContainer={() => (slashMenuRef as any)?.current} />
+                ),
+          }),
+        });
+
+    const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
+
+    return !enableRichRender
+      ? { enablePasteMarkdown: false, markdownOption: false, plugins }
+      : { plugins };
+  }, [enableRichRender, expand, slashMenuRef, autoCompletePlugin]);
 
   return (
     <Editor

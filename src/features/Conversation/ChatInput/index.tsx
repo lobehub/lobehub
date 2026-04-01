@@ -20,8 +20,25 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
 import QueueTray from './QueueTray';
+
+const useGetMessages = () => {
+  const storeApi = useConversationStoreApi();
+  return useCallback(
+    () =>
+      dataSelectors.dbMessages(storeApi.getState()).map((m) => ({
+        content: typeof m.content === 'string' ? m.content : '',
+        role: m.role as 'user' | 'assistant' | 'system',
+      })),
+    [storeApi],
+  );
+};
 
 export interface ChatInputProps {
   /**
@@ -107,6 +124,8 @@ const ChatInput = memo<ChatInputProps>(
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
+
+    const getMessages = useGetMessages();
 
     // ConversationStore state
     const context = useConversationStore((s) => s.context);
@@ -249,6 +268,7 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        getMessages={getMessages}
         leftActions={leftActions}
         mentionItems={mentionItems}
         rightActions={rightActions}

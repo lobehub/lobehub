@@ -886,6 +886,10 @@ When I am ___, I need ___
   'systemAgent.historyCompress.modelDesc':
     'Specify the model used to compress conversation history',
   'systemAgent.historyCompress.title': 'Conversation History Compression Agent',
+  'systemAgent.inputCompletion.label': 'Model',
+  'systemAgent.inputCompletion.modelDesc':
+    'Model used for input auto-completion suggestions (like GitHub Copilot ghost text)',
+  'systemAgent.inputCompletion.title': 'Input Auto-Completion Agent',
   'systemAgent.queryRewrite.label': 'Model',
   'systemAgent.queryRewrite.modelDesc': 'Specify the model used to optimize user inquiries',
   'systemAgent.queryRewrite.title': 'Library query rewrite Agent',
