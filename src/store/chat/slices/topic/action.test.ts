@@ -70,7 +70,11 @@ beforeEach(() => {
   useChatStore.setState(
     {
       activeAgentId: undefined,
+      activeGroupId: undefined,
       activeTopicId: undefined,
+      searchTopics: [],
+      topicDataMap: {},
+      topicLoadingIds: [],
       // ... initial state
     },
     false,
@@ -475,6 +479,135 @@ describe('topic action', () => {
       expect(
         useChatStore.getState().topicDataMap[topicMapKey({ agentId: sessionId })]?.items,
       ).toEqual(topics);
+    });
+
+    it('should preserve expanded topic list when first page revalidates after deletion', async () => {
+      const agentId = 'expanded-delete-agent';
+      const pageSize = 20;
+      const currentTopics = [
+        ...Array.from({ length: 19 }, (_, index) => ({
+          id: `topic-${index + 1}`,
+          title: `Topic ${index + 1}`,
+        })),
+        ...Array.from({ length: 20 }, (_, index) => ({
+          id: `topic-${index + 21}`,
+          title: `Topic ${index + 21}`,
+        })),
+      ] as ChatTopic[];
+      const refreshedFirstPage = [
+        ...Array.from({ length: 19 }, (_, index) => ({
+          id: `topic-${index + 1}`,
+          title: `Topic ${index + 1}`,
+        })),
+        { id: 'topic-21', title: 'Topic 21' },
+      ];
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [topicMapKey({ agentId })]: {
+              currentPage: 1,
+              hasMore: true,
+              items: currentTopics,
+              pageSize,
+              total: 59,
+            },
+          },
+        });
+      });
+
+      (topicService.getTopics as Mock).mockResolvedValue({
+        items: refreshedFirstPage,
+        total: 59,
+      });
+
+      const useFetchTopics = useChatStore.getState().useFetchTopics;
+
+      const swrResponse = renderHook(() => useFetchTopics(true, { agentId, pageSize }));
+
+      await waitFor(() => {
+        expect(swrResponse.result.current.data).toEqual({
+          items: refreshedFirstPage,
+          total: 59,
+        });
+      });
+
+      await waitFor(() => {
+        const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
+
+        expect(topicData).toMatchObject({
+          currentPage: 1,
+          hasMore: true,
+          total: 59,
+        });
+        expect(topicData.items).toHaveLength(39);
+        expect(topicData.items.map((topic) => topic.id)).toEqual([
+          ...Array.from({ length: 19 }, (_, index) => `topic-${index + 1}`),
+          ...Array.from({ length: 20 }, (_, index) => `topic-${index + 21}`),
+        ]);
+      });
+    });
+
+    it('should preserve expanded topic list when first page reorders after favorite refresh', async () => {
+      const agentId = 'favorite-agent';
+      const pageSize = 20;
+      const currentTopics = Array.from({ length: 40 }, (_, index) => ({
+        favorite: index === 34,
+        id: `topic-${index + 1}`,
+        title: `Topic ${index + 1}`,
+      })) as ChatTopic[];
+      const refreshedFirstPage = [
+        { favorite: true, id: 'topic-35', title: 'Topic 35' },
+        ...Array.from({ length: 19 }, (_, index) => ({
+          favorite: false,
+          id: `topic-${index + 1}`,
+          title: `Topic ${index + 1}`,
+        })),
+      ];
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [topicMapKey({ agentId })]: {
+              currentPage: 1,
+              hasMore: true,
+              items: currentTopics,
+              pageSize,
+              total: 60,
+            },
+          },
+        });
+      });
+
+      (topicService.getTopics as Mock).mockResolvedValue({
+        items: refreshedFirstPage,
+        total: 60,
+      });
+
+      const useFetchTopics = useChatStore.getState().useFetchTopics;
+      const swrResponse = renderHook(() => useFetchTopics(true, { agentId, pageSize }));
+
+      await waitFor(() => {
+        expect(swrResponse.result.current.data).toEqual({
+          items: refreshedFirstPage,
+          total: 60,
+        });
+      });
+
+      await waitFor(() => {
+        const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
+
+        expect(topicData).toMatchObject({
+          currentPage: 1,
+          hasMore: true,
+          total: 60,
+        });
+        expect(topicData.items).toHaveLength(40);
+        expect(topicData.items[0].id).toBe('topic-35');
+        expect(topicData.items.some((topic) => topic.id === 'topic-40')).toBe(true);
+      });
     });
   });
   describe('useSearchTopics', () => {
@@ -897,6 +1030,49 @@ describe('topic action', () => {
 
       expect(topicService.removeTopic).not.toHaveBeenCalled();
       expect(refreshTopicSpy).not.toHaveBeenCalled();
+    });
+
+    it('should keep expanded pagination state after removing a topic', async () => {
+      const topicId = 'topic-21';
+      const activeAgentId = 'expanded-agent';
+      const existingTopics = Array.from({ length: 40 }, (_, index) => ({
+        id: `topic-${index + 1}`,
+        title: `Topic ${index + 1}`,
+      })) as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId,
+          topicDataMap: {
+            [topicMapKey({ agentId: activeAgentId })]: {
+              currentPage: 1,
+              hasMore: true,
+              items: existingTopics,
+              pageSize: 20,
+              total: 60,
+            },
+          },
+        });
+      });
+
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.removeTopic(topicId);
+      });
+
+      const topicData =
+        useChatStore.getState().topicDataMap[topicMapKey({ agentId: activeAgentId })];
+
+      expect(topicService.removeTopic).toHaveBeenCalledWith(topicId);
+      expect(topicData).toMatchObject({
+        currentPage: 1,
+        hasMore: true,
+        total: 59,
+      });
+      expect(topicData.items).toHaveLength(39);
+      expect(topicData.items.some((topic) => topic.id === topicId)).toBe(false);
     });
   });
   describe('removeUnstarredTopic', () => {
