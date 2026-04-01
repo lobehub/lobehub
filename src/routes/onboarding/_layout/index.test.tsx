@@ -29,6 +29,19 @@ describe('OnBoardingContainer', () => {
     expect(screen.getByText('Lang Button')).toBeInTheDocument();
     expect(screen.getByText('Theme Button')).toBeInTheDocument();
     expect(screen.getByText('Onboarding Content')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'agent.skipOnboarding' })).not.toBeInTheDocument();
     expect(screen.queryByText('© 2026 LobeHub. All rights reserved.')).not.toBeInTheDocument();
+  });
+
+  it('shows skip onboarding on agent onboarding route', () => {
+    render(
+      <MemoryRouter initialEntries={['/onboarding/agent']}>
+        <OnBoardingContainer>
+          <div>Onboarding Content</div>
+        </OnBoardingContainer>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: 'agent.skipOnboarding' })).toBeInTheDocument();
   });
 });
