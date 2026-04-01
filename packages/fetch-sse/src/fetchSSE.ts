@@ -326,8 +326,8 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
             ? { ...error, body: { ...error.body, ...contextBody } }
             : {
                 body: {
-                  errorMessage: error.message,
-                  errorName: error.name,
+                  message: error.message,
+                  name: error.name,
                   ...contextBody,
                 },
                 message: error.message,
