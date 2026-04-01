@@ -1,0 +1,19 @@
+export interface BriefItem {
+  actions: unknown;
+  agentId: string | null;
+  artifacts: unknown;
+  createdAt: Date | string;
+  cronJobId: string | null;
+  id: string;
+  priority: string | null;
+  readAt: Date | string | null;
+  resolvedAction: string | null;
+  resolvedAt: Date | string | null;
+  resolvedComment: string | null;
+  summary: string;
+  taskId: string | null;
+  title: string;
+  topicId: string | null;
+  type: string;
+  userId: string;
+}
