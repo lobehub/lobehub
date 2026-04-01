@@ -64,6 +64,8 @@ vi.mock('@/utils/logger', () => ({
 
 // Mock updater configs
 vi.mock('@/modules/updater/configs', () => ({
+  coerceStoredUpdateChannel: (channel?: string | null) =>
+    channel === 'canary' ? 'canary' : 'stable',
   UPDATE_CHANNEL: 'stable',
   UPDATE_SERVER_URL: 'https://mock.update.server',
   updaterConfig: {
@@ -156,6 +158,15 @@ describe('UpdaterManager', () => {
       expect(autoUpdater.channel).toBe('stable');
       expect(autoUpdater.allowPrerelease).toBe(false);
       expect(autoUpdater.allowDowngrade).toBe(false);
+    });
+
+    it('should migrate legacy nightly channel to stable', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValueOnce('nightly');
+
+      await updaterManager.initialize();
+
+      expect(mockApp.storeManager.set).toHaveBeenCalledWith('updateChannel', 'stable');
+      expect(autoUpdater.allowPrerelease).toBe(false);
     });
 
     it('should register all event listeners', async () => {
