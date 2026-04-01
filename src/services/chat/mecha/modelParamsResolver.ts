@@ -185,19 +185,24 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingBudget = chatConfig.thinkingBudget;
   }
 
-  const supportedThinkingLevelParam = modelExtendParams.find(
+  const supportedThinkingLevelParams = modelExtendParams.filter(
     (extendParam): extendParam is keyof typeof THINKING_LEVEL_PARAM_TO_CONFIG_KEY =>
       extendParam in THINKING_LEVEL_PARAM_TO_CONFIG_KEY,
   );
 
-  if (supportedThinkingLevelParam) {
+  for (const supportedThinkingLevelParam of supportedThinkingLevelParams) {
     const configKey = THINKING_LEVEL_PARAM_TO_CONFIG_KEY[supportedThinkingLevelParam];
     const value = chatConfig[configKey];
 
+    if (typeof value === 'string') {
+      extendParams.thinkingLevel = value;
+      break;
+    }
+  }
+
+  if (!extendParams.thinkingLevel && supportedThinkingLevelParams.length > 0) {
     extendParams.thinkingLevel =
-      typeof value === 'string'
-        ? value
-        : DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[supportedThinkingLevelParam];
+      DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[supportedThinkingLevelParams[0]];
   }
 
   // URL context

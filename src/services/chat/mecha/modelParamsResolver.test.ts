@@ -637,7 +637,7 @@ describe('resolveModelExtendParams', () => {
         expect(result.thinkingLevel).toBe('high');
       });
 
-      it('should use the first supported thinkingLevel param and ignore other keys', () => {
+      it('should prefer the first configured thinkingLevel param before defaulting', () => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
           () => true,
         );
@@ -654,7 +654,25 @@ describe('resolveModelExtendParams', () => {
           provider: 'google',
         });
 
-        expect(result.thinkingLevel).toBe('high');
+        expect(result.thinkingLevel).toBe('medium');
+      });
+
+      it('should fall back to the first supported thinkingLevel default when none are configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'thinkingLevel4',
+          'thinkingLevel3',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'gemini-3.1-pro-preview',
+          provider: 'google',
+        });
+
+        expect(result.thinkingLevel).toBe('minimal');
       });
     });
   });
