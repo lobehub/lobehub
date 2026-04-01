@@ -226,6 +226,7 @@
   "builtins.lobe-user-memory.apiName.addExperienceMemory": "添加经验记忆",
   "builtins.lobe-user-memory.apiName.addIdentityMemory": "添加身份记忆",
   "builtins.lobe-user-memory.apiName.addPreferenceMemory": "添加偏好记忆",
+  "builtins.lobe-user-memory.apiName.queryTaxonomyOptions": "查询分类",
   "builtins.lobe-user-memory.apiName.removeIdentityMemory": "删除身份记忆",
   "builtins.lobe-user-memory.apiName.searchUserMemory": "搜索记忆",
   "builtins.lobe-user-memory.apiName.updateIdentityMemory": "更新身份记忆",

@@ -49,6 +49,8 @@ export interface ExtractorOptions extends ExtractorTemplateProps {
 
 export interface ExtractorTemplateProps {
   availableCategories?: string[];
+  availableLabels?: string[];
+  availableTags?: string[];
   language?: string;
   retrievedContexts?: string[];
   retrievedIdentitiesContext?: string;

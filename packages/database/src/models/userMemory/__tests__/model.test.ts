@@ -3,11 +3,13 @@ import {
   ActivityTypeEnum,
   IdentityTypeEnum,
   LayersEnum,
+  MergeStrategyEnum,
   RelationshipEnum,
+  TypesEnum,
   UserMemoryContextObjectType,
 } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
@@ -85,6 +87,8 @@ async function createIdentityPair(opts: {
 // Helper to create a base memory + experience pair
 async function createExperiencePair(opts?: {
   action?: string;
+  possibleOutcome?: string;
+  reasoning?: string;
   tags?: string[];
   type?: string;
   user?: string;
@@ -109,6 +113,8 @@ async function createExperiencePair(opts?: {
     .values({
       action: opts?.action ?? 'did something',
       keyLearning: 'learned stuff',
+      possibleOutcome: opts?.possibleOutcome ?? 'better outcomes',
+      reasoning: opts?.reasoning ?? 'careful reasoning',
       situation: 'a situation',
       tags: opts?.tags,
       type: opts?.type ?? 'learning',
@@ -123,6 +129,7 @@ async function createExperiencePair(opts?: {
 // Helper to create a base memory + preference pair
 async function createPreferencePair(opts?: {
   conclusionDirectives?: string;
+  suggestions?: string;
   tags?: string[];
   type?: string;
   user?: string;
@@ -146,6 +153,7 @@ async function createPreferencePair(opts?: {
     .insert(userMemoriesPreferences)
     .values({
       conclusionDirectives: opts?.conclusionDirectives ?? 'use dark mode',
+      suggestions: opts?.suggestions ?? 'keep it concise',
       tags: opts?.tags,
       type: opts?.type ?? 'ui',
       userId: uid,
@@ -158,8 +166,14 @@ async function createPreferencePair(opts?: {
 
 // Helper to create a base memory + activity pair
 async function createActivityPair(opts?: {
+  capturedAt?: Date;
+  memoryCategory?: string | null;
+  narrative?: string;
+  notes?: string;
   status?: string;
+  summary?: string;
   tags?: string[];
+  title?: string;
   type?: string;
   user?: string;
 }) {
@@ -168,12 +182,14 @@ async function createActivityPair(opts?: {
     .insert(userMemories)
     .values({
       details: 'activity details',
+      capturedAt: opts?.capturedAt,
       lastAccessedAt: new Date(),
+      memoryCategory: opts?.memoryCategory ?? null,
       memoryLayer: 'activity',
       memoryType: 'activity',
-      summary: 'activity summary',
+      summary: opts?.summary ?? 'activity summary',
       tags: opts?.tags,
-      title: 'Activity memory',
+      title: opts?.title ?? 'Activity memory',
       userId: uid,
     })
     .returning();
@@ -181,7 +197,9 @@ async function createActivityPair(opts?: {
   const [act] = await serverDB
     .insert(userMemoriesActivities)
     .values({
-      narrative: 'did a thing',
+      capturedAt: opts?.capturedAt,
+      narrative: opts?.narrative ?? 'did a thing',
+      notes: opts?.notes ?? 'important note',
       status: opts?.status ?? 'completed',
       tags: opts?.tags,
       type: opts?.type ?? 'task',
@@ -195,6 +213,8 @@ async function createActivityPair(opts?: {
 
 // Helper to create a base memory + context pair
 async function createContextPair(opts?: {
+  associatedObjectName?: string;
+  associatedSubjectName?: string;
   description?: string;
   tags?: string[];
   title?: string;
@@ -219,6 +239,12 @@ async function createContextPair(opts?: {
   const [ctx] = await serverDB
     .insert(userMemoriesContexts)
     .values({
+      associatedObjects: opts?.associatedObjectName
+        ? [{ name: opts.associatedObjectName, type: UserMemoryContextObjectType.Application }]
+        : [],
+      associatedSubjects: opts?.associatedSubjectName
+        ? [{ name: opts.associatedSubjectName, type: 'person' }]
+        : [],
       description: opts?.description ?? 'A context description',
       tags: opts?.tags,
       title: opts?.title ?? 'A context',
@@ -283,7 +309,7 @@ describe('UserMemoryModel', () => {
     });
 
     it('should handle object input (wraps in array)', () => {
-      const result = UserMemoryModel.parseAssociatedLocations({ name: 'Office' } as any);
+      const result = UserMemoryModel.parseAssociatedLocations({ name: 'Office' });
       expect(result).toHaveLength(1);
       expect(result[0].name).toBe('Office');
     });
@@ -296,7 +322,8 @@ describe('UserMemoryModel', () => {
     });
 
     it('should skip items with no valid fields', () => {
-      const result = UserMemoryModel.parseAssociatedLocations([{ invalid: true } as any]);
+      const invalidLocation: Record<string, unknown> = { invalid: true };
+      const result = UserMemoryModel.parseAssociatedLocations([invalidLocation]);
       expect(result).toEqual([]);
     });
   });
@@ -323,7 +350,11 @@ describe('UserMemoryModel', () => {
     });
 
     it('should return null for non-string input', () => {
-      expect(UserMemoryModel.parseDateFromString(42 as any)).toBeNull();
+      expect(
+        UserMemoryModel.parseDateFromString(
+          42 as unknown as Parameters<typeof UserMemoryModel.parseDateFromString>[0],
+        ),
+      ).toBeNull();
     });
   });
 
@@ -578,12 +609,161 @@ describe('UserMemoryModel', () => {
 
       it('should return empty items for unknown layer', async () => {
         const result = await memoryModel.queryMemories({
-          layer: 'unknown-layer' as any,
+          layer: 'unknown-layer' as unknown as LayersEnum,
         });
 
         expect(result.items).toEqual([]);
         expect(result.total).toBe(0);
       });
+    });
+  });
+
+  describe('searchMemory', () => {
+    it('boosts short-term related memories with matching tags and category during hybrid ranking', async () => {
+      const seedTime = new Date('2024-01-10T10:00:00.000Z');
+      const boostedTime = new Date('2024-01-10T16:00:00.000Z');
+      const unrelatedTime = new Date('2024-02-01T10:00:00.000Z');
+
+      const { activity: lexicalSeed } = await createActivityPair({
+        capturedAt: seedTime,
+        memoryCategory: 'project',
+        narrative: 'Project Atlas kickoff with roadmap review',
+        summary: 'Atlas kickoff',
+        tags: ['atlas', 'roadmap'],
+        title: 'Atlas kickoff',
+      });
+      const { activity: boostedSemantic } = await createActivityPair({
+        capturedAt: boostedTime,
+        memoryCategory: 'project',
+        narrative: 'Atlas follow-up on roadmap dependencies',
+        summary: 'Atlas follow-up',
+        tags: ['atlas', 'dependency'],
+        title: 'Atlas dependency review',
+      });
+      const { activity: unrelatedSemantic } = await createActivityPair({
+        capturedAt: unrelatedTime,
+        memoryCategory: 'personal',
+        narrative: 'Weekend grocery shopping',
+        summary: 'Groceries',
+        tags: ['shopping'],
+        title: 'Buy groceries',
+      });
+
+      const queryModel = Reflect.get(memoryModel, 'queryModel') as {
+        searchActivitiesLexical: (...args: unknown[]) => Promise<(typeof lexicalSeed)[]>;
+        searchActivitiesSemantic: (...args: unknown[]) => Promise<(typeof boostedSemantic)[]>;
+      };
+      queryModel.searchActivitiesLexical = async () => [lexicalSeed];
+      queryModel.searchActivitiesSemantic = async () => [unrelatedSemantic, boostedSemantic];
+
+      const result = await memoryModel.searchMemory(
+        {
+          layers: [LayersEnum.Activity],
+          queries: ['project atlas roadmap'],
+          topK: { activities: 3, contexts: 0, experiences: 0, identities: 0, preferences: 0 },
+        },
+        [[0.1, 0.2, 0.3]],
+      );
+
+      expect(result.activities.map((item) => item.id)).toEqual([
+        lexicalSeed.id,
+        boostedSemantic.id,
+        unrelatedSemantic.id,
+      ]);
+      expect(result.meta.ranking?.activities?.[boostedSemantic.id]?.clusterBoost).toBeGreaterThan(
+        result.meta.ranking?.activities?.[unrelatedSemantic.id]?.clusterBoost ?? 0,
+      );
+      expect(result.meta.ranking?.activities?.[boostedSemantic.id]?.final).toBeGreaterThan(
+        result.meta.ranking?.activities?.[unrelatedSemantic.id]?.final ?? 0,
+      );
+    });
+
+    it('runs semantic and lexical ranking together even when exact filters are present', async () => {
+      const lexicalSearch = vi.fn().mockResolvedValue([]);
+      const semanticSearch = vi.fn().mockResolvedValue([]);
+
+      const queryModel = Reflect.get(memoryModel, 'queryModel') as {
+        searchActivitiesLexical: typeof lexicalSearch;
+        searchActivitiesSemantic: typeof semanticSearch;
+      };
+      queryModel.searchActivitiesLexical = lexicalSearch;
+      queryModel.searchActivitiesSemantic = semanticSearch;
+
+      await memoryModel.searchMemory(
+        {
+          categories: ['project'],
+          layers: [LayersEnum.Activity],
+          queries: ['atlas'],
+          timeRange: {
+            end: new Date('2024-01-31T23:59:59.999Z'),
+            field: 'createdAt',
+            start: new Date('2024-01-01T00:00:00.000Z'),
+          },
+          topK: { activities: 3, contexts: 0, experiences: 0, identities: 0, preferences: 0 },
+        },
+        [[0.1, 0.2, 0.3]],
+      );
+
+      expect(semanticSearch).toHaveBeenCalledOnce();
+      expect(lexicalSearch).toHaveBeenCalledOnce();
+    });
+
+    it('returns full layer payloads for filter-only lexical searches', async () => {
+      const tag = 'atlas';
+
+      const { activity } = await createActivityPair({
+        notes: 'activity note',
+        tags: [tag],
+        title: 'Atlas activity',
+      });
+      const { context } = await createContextPair({
+        associatedObjectName: 'Linear',
+        associatedSubjectName: 'Alice',
+        tags: [tag],
+        title: 'Atlas context',
+      });
+      const { experience } = await createExperiencePair({
+        action: 'Investigated incident',
+        possibleOutcome: 'Resolved faster next time',
+        reasoning: 'Compared multiple logs',
+        tags: [tag],
+      });
+      const { preference } = await createPreferencePair({
+        suggestions: 'Summarize with bullets',
+        tags: [tag],
+      });
+
+      const result = await memoryModel.searchMemory({
+        categories: undefined,
+        layers: [
+          LayersEnum.Activity,
+          LayersEnum.Context,
+          LayersEnum.Experience,
+          LayersEnum.Preference,
+        ],
+        tags: [tag],
+        topK: { activities: 1, contexts: 1, experiences: 1, identities: 0, preferences: 1 },
+      });
+
+      expect(result.activities).toHaveLength(1);
+      expect(result.activities[0].id).toBe(activity.id);
+      expect(result.activities[0].notes).toBe('activity note');
+
+      expect(result.contexts).toHaveLength(1);
+      expect(result.contexts[0].id).toBe(context.id);
+      expect(result.contexts[0].associatedObjects).toEqual([
+        { name: 'Linear', type: UserMemoryContextObjectType.Application },
+      ]);
+      expect(result.contexts[0].associatedSubjects).toEqual([{ name: 'Alice', type: 'person' }]);
+
+      expect(result.experiences).toHaveLength(1);
+      expect(result.experiences[0].id).toBe(experience.id);
+      expect(result.experiences[0].reasoning).toBe('Compared multiple logs');
+      expect(result.experiences[0].possibleOutcome).toBe('Resolved faster next time');
+
+      expect(result.preferences).toHaveLength(1);
+      expect(result.preferences[0].id).toBe(preference.id);
+      expect(result.preferences[0].suggestions).toBe('Summarize with bullets');
     });
   });
 
@@ -655,7 +835,9 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect((result as any)?.context).toBeDefined();
+      if (!result || result.layer !== LayersEnum.Context)
+        throw new Error('Expected context detail');
+      expect(result.context).toBeDefined();
       expect(result?.memory).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Context);
     });
@@ -669,7 +851,9 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect((result as any)?.activity).toBeDefined();
+      if (!result || result.layer !== LayersEnum.Activity)
+        throw new Error('Expected activity detail');
+      expect(result.activity).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Activity);
     });
 
@@ -682,7 +866,9 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect((result as any)?.experience).toBeDefined();
+      if (!result || result.layer !== LayersEnum.Experience)
+        throw new Error('Expected experience detail');
+      expect(result.experience).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Experience);
     });
 
@@ -695,7 +881,9 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect((result as any)?.identity).toBeDefined();
+      if (!result || result.layer !== LayersEnum.Identity)
+        throw new Error('Expected identity detail');
+      expect(result.identity).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Identity);
     });
 
@@ -708,7 +896,9 @@ describe('UserMemoryModel', () => {
       });
 
       expect(result).toBeDefined();
-      expect((result as any)?.preference).toBeDefined();
+      if (!result || result.layer !== LayersEnum.Preference)
+        throw new Error('Expected preference detail');
+      expect(result.preference).toBeDefined();
       expect(result?.layer).toBe(LayersEnum.Preference);
     });
 
@@ -1129,7 +1319,7 @@ describe('UserMemoryModel', () => {
       const success = await memoryModel.updateIdentityEntry({
         identity: { description: 'replaced desc' },
         identityId,
-        mergeStrategy: 'replace' as any,
+        mergeStrategy: MergeStrategyEnum.Replace,
       });
 
       expect(success).toBe(true);
@@ -1219,9 +1409,7 @@ describe('UserMemoryModel', () => {
 
       expect(result).toHaveLength(2);
       // Most recent first
-      expect((result[0] as any).capturedAt.getTime()).toBeGreaterThanOrEqual(
-        (result[1] as any).capturedAt.getTime(),
-      );
+      expect(result[0].createdAt.getTime()).toBeGreaterThanOrEqual(result[1].createdAt.getTime());
     });
 
     it('should return empty array when no identities', async () => {
@@ -1358,17 +1546,26 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.createActivityMemory({
         details: 'Activity details',
         memoryLayer: LayersEnum.Activity,
-        memoryType: 'activity' as any,
+        memoryType: TypesEnum.Activity,
         summary: 'Activity summary',
         title: 'Activity test',
         activity: {
+          associatedLocations: null,
+          associatedObjects: [],
+          associatedSubjects: [],
+          feedback: null,
+          feedbackVector: null,
+          metadata: null,
           narrative: 'Did a thing',
+          narrativeVector: null,
+          notes: null,
           status: 'completed',
-          type: ActivityTypeEnum.Other,
-          tags: ['test-tag'],
-          startsAt: new Date('2025-01-01'),
           endsAt: new Date('2025-01-02'),
-        } as any,
+          startsAt: new Date('2025-01-01'),
+          tags: ['test-tag'],
+          timezone: null,
+          type: ActivityTypeEnum.Other,
+        },
       });
 
       expect(result.memory).toBeDefined();
@@ -1384,18 +1581,23 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.createExperienceMemory({
         details: 'Experience details',
         memoryLayer: LayersEnum.Experience,
-        memoryType: 'experience' as any,
+        memoryType: TypesEnum.Other,
         summary: 'Experience summary',
         title: 'Experience test',
         experience: {
           action: 'learned something',
+          actionVector: null,
           keyLearning: 'important lesson',
-          situation: 'at work',
-          type: 'learning',
-          tags: ['learn'],
-          reasoning: 'because reasons',
+          keyLearningVector: null,
+          metadata: null,
           possibleOutcome: 'better outcomes',
-        } as any,
+          reasoning: 'because reasons',
+          scoreConfidence: null,
+          situation: 'at work',
+          situationVector: null,
+          tags: ['learn'],
+          type: 'learning',
+        },
       });
 
       expect(result.memory).toBeDefined();
@@ -1411,23 +1613,247 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.createContextMemory({
         details: 'Context details',
         memoryLayer: LayersEnum.Context,
-        memoryType: 'context' as any,
+        memoryType: TypesEnum.Context,
         summary: 'Context summary',
         title: 'Context test',
         context: {
-          description: 'A test context',
-          title: 'Test Context',
-          type: 'project',
-          tags: ['ctx-tag'],
           associatedObjects: [],
           associatedSubjects: [],
-        } as any,
+          currentStatus: null,
+          description: 'A test context',
+          descriptionVector: null,
+          metadata: null,
+          scoreImpact: null,
+          scoreUrgency: null,
+          title: 'Test Context',
+          tags: ['ctx-tag'],
+          type: 'project',
+        },
       });
 
       expect(result.memory).toBeDefined();
       expect(result.memory.memoryLayer).toBe(LayersEnum.Context);
       expect(result.context).toBeDefined();
       expect(result.context.description).toBe('A test context');
+    });
+  });
+
+  describe('createPreferenceMemory', () => {
+    it('should create preference memory via model', async () => {
+      const capturedAt = new Date('2025-01-03T00:00:00.000Z');
+
+      const result = await memoryModel.createPreferenceMemory({
+        details: 'Preference details',
+        memoryLayer: LayersEnum.Preference,
+        memoryType: TypesEnum.Other,
+        summary: 'Preference summary',
+        title: 'Preference test',
+        preference: {
+          capturedAt,
+          conclusionDirectives: 'Use compact cards',
+          conclusionDirectivesVector: Array.from({ length: 1024 }, (_, index) =>
+            index === 0 ? 1 : 0,
+          ),
+          metadata: { source: 'unit-test' },
+          scorePriority: 0.8,
+          suggestions: 'Prefer short answers',
+          tags: ['ui', 'tone'],
+          type: null,
+        },
+      });
+
+      expect(result.memory).toBeDefined();
+      expect(result.memory.memoryLayer).toBe(LayersEnum.Preference);
+      expect(result.memory.metadata).toEqual({ source: 'unit-test' });
+      expect(result.preference).toBeDefined();
+      expect(result.preference.capturedAt).toEqual(capturedAt);
+      expect(result.preference.type).toBe(TypesEnum.Other);
+      expect(result.preference.userMemoryId).toBe(result.memory.id);
+    });
+  });
+
+  describe('search access metrics', () => {
+    it('should update access metrics for returned activities, contexts, experiences, and preferences', async () => {
+      const now = new Date('2025-01-04T00:00:00.000Z');
+      const { activity, memory: activityMemory } = await createActivityPair({
+        tags: ['activity-tag'],
+      });
+      const { context } = await createContextPair({ tags: ['context-tag'] });
+      const { experience, memory: experienceMemory } = await createExperiencePair({
+        tags: ['experience-tag'],
+      });
+      const { memory: preferenceMemory, preference } = await createPreferencePair({
+        tags: ['preference-tag'],
+      });
+
+      const result = await memoryModel.search({
+        limits: {
+          activities: 1,
+          contexts: 1,
+          experiences: 1,
+          preferences: 1,
+        },
+      });
+
+      expect(result.activities).toHaveLength(1);
+      expect(result.contexts).toHaveLength(1);
+      expect(result.experiences).toHaveLength(1);
+      expect(result.preferences).toHaveLength(1);
+
+      const updatedActivityMemory = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, activityMemory.id),
+      });
+      const updatedExperienceMemory = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, experienceMemory.id),
+      });
+      const updatedPreferenceMemory = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, preferenceMemory.id),
+      });
+      const updatedActivity = await serverDB.query.userMemoriesActivities.findFirst({
+        where: eq(userMemoriesActivities.id, activity.id),
+      });
+      const updatedContext = await serverDB.query.userMemoriesContexts.findFirst({
+        where: eq(userMemoriesContexts.id, context.id),
+      });
+      const updatedExperience = await serverDB.query.userMemoriesExperiences.findFirst({
+        where: eq(userMemoriesExperiences.id, experience.id),
+      });
+      const updatedPreference = await serverDB.query.userMemoriesPreferences.findFirst({
+        where: eq(userMemoriesPreferences.id, preference.id),
+      });
+
+      expect(updatedActivityMemory?.accessedCount).toBe(1);
+      expect(updatedActivityMemory?.lastAccessedAt).toBeInstanceOf(Date);
+      expect(updatedExperienceMemory?.accessedCount).toBe(1);
+      expect(updatedPreferenceMemory?.accessedCount).toBe(1);
+      expect(updatedActivity?.accessedAt).toBeInstanceOf(Date);
+      expect(updatedContext?.accessedAt).toBeInstanceOf(Date);
+      expect(updatedExperience?.accessedAt).toBeInstanceOf(Date);
+      expect(updatedPreference?.accessedAt).toBeInstanceOf(Date);
+      expect(updatedActivity?.accessedAt?.getTime()).toBeGreaterThanOrEqual(now.getTime() - 60_000);
+    });
+
+    it('should delegate searchWithEmbedding to search', async () => {
+      const searchSpy = vi.spyOn(memoryModel, 'search');
+
+      const result = await memoryModel.searchWithEmbedding({
+        embedding: [0.1, 0.2],
+        limits: { activities: 2 },
+      });
+
+      expect(searchSpy).toHaveBeenCalledWith({
+        embedding: [0.1, 0.2],
+        limits: { activities: 2 },
+      });
+      expect(result).toEqual(await searchSpy.mock.results[0]!.value);
+    });
+  });
+
+  describe('wrapper methods', () => {
+    it('should delegate queryTaxonomyOptions to the query model', async () => {
+      const mockedResult = {
+        activityTypes: ['task'],
+        categories: ['productivity'],
+        contextTypes: ['project'],
+        identityTypes: ['personal'],
+        preferenceTypes: ['ui'],
+      };
+      const params = {
+        include: ['categories'],
+        q: 'productivity',
+      };
+      const querySpy = vi
+        .spyOn((memoryModel as any).queryModel, 'queryTaxonomyOptions')
+        .mockResolvedValue(mockedResult);
+
+      const result = await memoryModel.queryTaxonomyOptions(params);
+
+      expect(querySpy).toHaveBeenCalledWith(params);
+      expect(result).toEqual(mockedResult);
+    });
+  });
+
+  describe('findById', () => {
+    it('should update access metrics for identity memories when a memory is found', async () => {
+      const { identity, memory } = await createIdentityPair({});
+
+      const found = await memoryModel.findById(memory.id);
+
+      expect(found?.id).toBe(memory.id);
+
+      const updatedMemory = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, memory.id),
+      });
+      const updatedIdentity = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identity.id),
+      });
+
+      expect(updatedMemory?.accessedCount).toBe(1);
+      expect(updatedMemory?.lastAccessedAt).toBeInstanceOf(Date);
+      expect(updatedIdentity?.accessedAt).toBeInstanceOf(Date);
+    });
+
+    it('should return undefined for a missing memory id', async () => {
+      const found = await memoryModel.findById('missing-memory-id');
+
+      expect(found).toBeUndefined();
+    });
+  });
+
+  describe('base memory CRUD methods', () => {
+    it('should update a base memory for the current user', async () => {
+      const { memory } = await createExperiencePair();
+
+      await memoryModel.update(memory.id, {
+        details: 'updated details',
+        summary: 'updated summary',
+        title: 'updated title',
+      });
+
+      const updated = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, memory.id),
+      });
+
+      expect(updated?.details).toBe('updated details');
+      expect(updated?.summary).toBe('updated summary');
+      expect(updated?.title).toBe('updated title');
+    });
+
+    it('should delete only the current user memory', async () => {
+      const { memory } = await createExperiencePair();
+      const { memory: otherMemory } = await createExperiencePair({ user: otherUserId });
+
+      await memoryModel.delete(memory.id);
+
+      const deleted = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, memory.id),
+      });
+      const kept = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, otherMemory.id),
+      });
+
+      expect(deleted).toBeUndefined();
+      expect(kept).toBeDefined();
+    });
+
+    it('should delete all memories for the current user only', async () => {
+      await createActivityPair();
+      await createContextPair();
+      await createExperiencePair();
+      await createPreferencePair();
+      await createIdentityPair({ user: otherUserId });
+
+      await memoryModel.deleteAll();
+
+      const currentUserMemories = await serverDB.query.userMemories.findMany({
+        where: eq(userMemories.userId, userId),
+      });
+      const otherUserMemories = await serverDB.query.userMemories.findMany({
+        where: eq(userMemories.userId, otherUserId),
+      });
+
+      expect(currentUserMemories).toHaveLength(0);
+      expect(otherUserMemories).toHaveLength(1);
     });
   });
 

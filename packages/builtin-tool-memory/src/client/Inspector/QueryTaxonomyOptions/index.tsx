@@ -8,33 +8,38 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { SearchMemoryParams, SearchUserMemoryState } from '../../../types';
+import type { QueryTaxonomyOptionsParams, QueryTaxonomyOptionsState } from '../../../types';
 
-export const SearchUserMemoryInspector = memo<
-  BuiltinInspectorProps<SearchMemoryParams, SearchUserMemoryState>
+const getTotalOptions = (state?: QueryTaxonomyOptionsState) => {
+  if (!state) return 0;
+
+  return (
+    state.categories.length +
+    state.labels.length +
+    state.relationships.length +
+    state.roles.length +
+    state.statuses.length +
+    state.tags.length +
+    state.types.length
+  );
+};
+
+export const QueryTaxonomyOptionsInspector = memo<
+  BuiltinInspectorProps<QueryTaxonomyOptionsParams, QueryTaxonomyOptionsState>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const query = args?.queries?.join(', ') || partialArgs?.queries?.join(', ');
+  const query = args?.q || partialArgs?.q || '';
+  const resultCount = getTotalOptions(pluginState);
+  const hasResults = resultCount > 0;
 
-  // Initial streaming state
   if (isArgumentsStreaming && !query) {
     return (
       <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-user-memory.apiName.searchUserMemory')}</span>
+        <span>{t('builtins.lobe-user-memory.apiName.queryTaxonomyOptions')}</span>
       </div>
     );
   }
-
-  // pluginState is SearchMemoryResult directly.
-  const resultCount = pluginState
-    ? (pluginState.activities?.length ?? 0) +
-      (pluginState.contexts?.length ?? 0) +
-      (pluginState.experiences?.length ?? 0) +
-      (pluginState.identities?.length ?? 0) +
-      (pluginState.preferences?.length ?? 0)
-    : 0;
-  const hasResults = resultCount > 0;
 
   return (
     <div
@@ -43,7 +48,7 @@ export const SearchUserMemoryInspector = memo<
         (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
       )}
     >
-      <span>{t('builtins.lobe-user-memory.apiName.searchUserMemory')}: </span>
+      <span>{t('builtins.lobe-user-memory.apiName.queryTaxonomyOptions')}: </span>
       {query && <span className={highlightTextStyles.primary}>{query}</span>}
       {!isLoading &&
         !isArgumentsStreaming &&
@@ -64,6 +69,6 @@ export const SearchUserMemoryInspector = memo<
   );
 });
 
-SearchUserMemoryInspector.displayName = 'SearchUserMemoryInspector';
+QueryTaxonomyOptionsInspector.displayName = 'QueryTaxonomyOptionsInspector';
 
-export default SearchUserMemoryInspector;
+export default QueryTaxonomyOptionsInspector;
