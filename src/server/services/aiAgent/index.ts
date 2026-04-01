@@ -414,6 +414,9 @@ export class AiAgentService {
     const toolSourceMap: Record<string, ToolSource> = {};
     let onlineDevices: DeviceAttachment[] = [];
     let activeDeviceId: string | undefined;
+    let hasAgentDocuments = false;
+    let hasEnabledKnowledgeBases = false;
+    const isBotConversation = !!(botContext || discordContext);
 
     if (params.disableTools) {
       log('execAgent: tools disabled by disableTools flag, skipping all tool discovery');
@@ -450,12 +453,11 @@ export class AiAgentService {
       await throwIfExecutionAborted('tool discovery');
 
       // 5e. Create tools using Server AgentToolsEngine
-      const hasEnabledKnowledgeBases =
+      hasEnabledKnowledgeBases =
         agentConfig.knowledgeBases?.some(
           (kb: { enabled?: boolean | null }) => kb.enabled === true,
         ) ?? false;
 
-      let hasAgentDocuments = false;
       try {
         const docs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
         hasAgentDocuments = docs.length > 0;
@@ -463,7 +465,6 @@ export class AiAgentService {
         // Agent documents check is non-critical
       }
 
-      const isBotConversation = !!(botContext || discordContext);
       log('execAgent: isBotConversation=%s', isBotConversation);
 
       // Build device context for ToolsEngine enableChecker
