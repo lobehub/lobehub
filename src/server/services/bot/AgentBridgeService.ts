@@ -90,6 +90,7 @@ interface BridgeHandlerOpts {
   botContext?: ChatTopicBotContext;
   charLimit?: number;
   client?: PlatformClient;
+  displayToolCalls?: boolean;
 }
 
 /**
@@ -247,7 +248,7 @@ export class AgentBridgeService {
     message: Message,
     opts: BridgeHandlerOpts,
   ): Promise<void> {
-    const { agentId, botContext, charLimit } = opts;
+    const { agentId, botContext, charLimit, displayToolCalls } = opts;
 
     log(
       'handleMention: agentId=%s, user=%s, text=%s',
@@ -295,6 +296,7 @@ export class AgentBridgeService {
         channelContext,
         charLimit,
         client,
+        displayToolCalls,
         trigger: RequestTrigger.Bot,
       });
       queueHandoffSucceeded = queueMode;
@@ -327,7 +329,7 @@ export class AgentBridgeService {
     message: Message,
     opts: BridgeHandlerOpts,
   ): Promise<void> {
-    const { agentId, botContext, charLimit } = opts;
+    const { agentId, botContext, charLimit, displayToolCalls } = opts;
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
 
@@ -372,6 +374,7 @@ export class AgentBridgeService {
         channelContext,
         charLimit,
         client: opts.client,
+        displayToolCalls,
         topicId,
         trigger: RequestTrigger.Bot,
       });
@@ -416,6 +419,7 @@ export class AgentBridgeService {
       channelContext?: DiscordChannelContext;
       charLimit?: number;
       client?: PlatformClient;
+      displayToolCalls?: boolean;
       topicId?: string;
       trigger?: string;
     },
@@ -596,6 +600,7 @@ export class AgentBridgeService {
       channelContext?: DiscordChannelContext;
       charLimit?: number;
       client?: PlatformClient;
+      displayToolCalls?: boolean;
       topicId?: string;
       trigger?: string;
     },
@@ -607,6 +612,7 @@ export class AgentBridgeService {
       channelContext,
       charLimit,
       client,
+      displayToolCalls,
       topicId,
       trigger,
     } = opts;
@@ -668,7 +674,7 @@ export class AgentBridgeService {
           stepCallbacks: {
             onAfterStep: async (stepData) => {
               const { content, shouldContinue, toolsCalling } = stepData;
-              if (!shouldContinue || !progressMessage) return;
+              if (!shouldContinue || !progressMessage || displayToolCalls === false) return;
 
               if (toolsCalling) totalToolCalls += toolsCalling.length;
 

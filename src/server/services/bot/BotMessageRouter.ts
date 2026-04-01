@@ -370,6 +370,7 @@ export class BotMessageRouter {
     const { agentId, applicationId, platform, userId } = info;
     const bridge = new AgentBridgeService(serverDB, userId);
     const charLimit = (info.settings?.charLimit as number) || undefined;
+    const displayToolCalls = info.settings?.displayToolCalls !== false;
 
     /** Try dispatching a text command. Returns true if handled. */
     const tryDispatch = async (
@@ -409,6 +410,7 @@ export class BotMessageRouter {
         botContext: { applicationId, platform, platformThreadId: thread.id },
         charLimit,
         client,
+        displayToolCalls,
       });
     });
 
@@ -432,6 +434,7 @@ export class BotMessageRouter {
         botContext: { applicationId, platform, platformThreadId: thread.id },
         charLimit,
         client,
+        displayToolCalls,
       });
     });
 
@@ -463,6 +466,7 @@ export class BotMessageRouter {
           botContext: { applicationId, platform, platformThreadId: thread.id },
           charLimit,
           client,
+          displayToolCalls,
         });
       });
     }

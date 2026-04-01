@@ -1,5 +1,6 @@
 import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
+import { displayToolCallsField } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -43,6 +44,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      displayToolCallsField,
     ],
     type: 'object',
   },
