@@ -28,14 +28,21 @@ import {
 } from '../store';
 import QueueTray from './QueueTray';
 
+/** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
+const MAX_CONTEXT_MESSAGES = 25;
+
 const useGetMessages = () => {
   const storeApi = useConversationStoreApi();
   return useCallback(
     () =>
-      dataSelectors.dbMessages(storeApi.getState()).map((m) => ({
-        content: typeof m.content === 'string' ? m.content : '',
-        role: m.role as 'user' | 'assistant' | 'system',
-      })),
+      dataSelectors
+        .dbMessages(storeApi.getState())
+        .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
+        .slice(-MAX_CONTEXT_MESSAGES)
+        .map((m) => ({
+          content: typeof m.content === 'string' ? m.content : '',
+          role: m.role as 'user' | 'assistant' | 'system',
+        })),
     [storeApi],
   );
 };
