@@ -4,9 +4,9 @@
   "private": true,
   "description": "E2E tests for LobeChat using Cucumber and Playwright",
   "scripts": {
-    "build": "cd .. && bun run build",
+    "build": "cd .. && pnpm run build",
     "test": "cucumber-js --config cucumber.config.js",
-    "test:ci": "bun run build && bun run test",
+    "test:ci": "pnpm run build && pnpm run test",
     "test:community": "cucumber-js --config cucumber.config.js src/features/community/",
     "test:headed": "cross-env HEADLESS=false cucumber-js --config cucumber.config.js",
     "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
