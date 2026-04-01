@@ -19,8 +19,14 @@ export const formatGrepResults = ({
   const matchList = displayMatches
     .map((m) => {
       if (typeof m === 'string') return `  ${m}`;
-      const loc = m.lineNumber !== undefined ? `:${m.lineNumber}` : '';
-      return `  ${m.path}${loc}${m.content ? `: ${m.content}` : ''}`;
+      const parts: string[] = [];
+      if (m.path) parts.push(m.path);
+      if (m.lineNumber !== undefined) parts.push(`:${m.lineNumber}`);
+      if (m.content) {
+        if (parts.length > 0) parts.push(`: ${m.content}`);
+        else parts.push(m.content);
+      }
+      return `  ${parts.join('')}`;
     })
     .join('\n');
   const moreInfo =
