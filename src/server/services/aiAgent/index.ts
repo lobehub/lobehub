@@ -406,7 +406,7 @@ export class AiAgentService {
 
     // 5. Tool discovery — short-circuit when disableTools is set
     let tools: any[] | undefined;
-    let toolsResult: { enabledToolIds: string[]; tools: any[] | undefined } = {
+    let toolsResult: { enabledToolIds: string[]; tools?: any[] | undefined } = {
       enabledToolIds: [],
       tools: undefined,
     };
@@ -418,6 +418,14 @@ export class AiAgentService {
     let hasEnabledKnowledgeBases = false;
     const isBotConversation = !!(botContext || discordContext);
 
+    // These are needed outside the tools block (for agent management context, skill engine, etc.)
+    let lobehubSkillManifests: LobeToolManifest[] = [];
+    let klavisManifests: LobeToolManifest[] = [];
+    let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
+
+    // model-bank is needed both for tool support check and model metadata
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+
     if (params.disableTools) {
       log('execAgent: tools disabled by disableTools flag, skipping all tool discovery');
     } else {
@@ -426,14 +434,12 @@ export class AiAgentService {
       log('execAgent: got %d installed plugins', installedPlugins.length);
 
       // 5b. Get model abilities from model-bank for function calling support check
-      const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
       const isModelSupportToolUse = (m: string, p: string) => {
         const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
         return info?.abilities?.functionCall ?? true;
       };
 
       // 5c. Fetch LobeHub Skills manifests
-      let lobehubSkillManifests: LobeToolManifest[] = [];
       try {
         lobehubSkillManifests = await this.marketService.getLobehubSkillManifests();
       } catch (error) {
@@ -442,7 +448,6 @@ export class AiAgentService {
       log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
       // 5d. Fetch Klavis tool manifests from database
-      let klavisManifests: LobeToolManifest[] = [];
       try {
         klavisManifests = await this.klavisService.getKlavisManifests();
       } catch (error) {
@@ -487,9 +492,8 @@ export class AiAgentService {
 
       // Dynamically inject topic-reference tool when prompt contains <refer_topic> tags
       const hasTopicReference = /refer_topic/.test(prompt ?? '');
-      const agentPlugins = [
-        ...(agentConfig?.plugins ?? []),
-        ...(additionalPluginIds || []),
+      agentPlugins = [
+        ...agentPlugins,
         ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(isBotConversation ? [MessageToolIdentifier] : []),
       ];
