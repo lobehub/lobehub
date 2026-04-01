@@ -73,7 +73,7 @@ describe('LobeGoogleAI', () => {
     });
 
     it('should handle grounding metadata in response', async () => {
-      const data: GenerateContentResponse[] = [
+      const data = [
         {
           text: 'Box office results',
           candidates: [
@@ -96,7 +96,7 @@ describe('LobeGoogleAI', () => {
           },
           modelVersion: 'gemini-2.0-flash',
         },
-      ];
+      ] as GenerateContentResponse[];
 
       const mockStream = new ReadableStream({
         start(controller) {
