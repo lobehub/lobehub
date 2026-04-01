@@ -68,16 +68,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
-        run: bun run lint
+        run: pnpm run lint
 
   build:
     needs: [check-beta]
@@ -174,11 +172,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       # 下载所有平台的构建产物
       - name: Download artifacts
         uses: actions/download-artifact@v7
@@ -195,15 +188,13 @@ jobs:
       - name: Install yaml only for merge step
         run: |
           cd scripts/electronWorkflow
-          # 在脚本目录创建最小 package.json，防止 bun 向上寻找根 package.json
           if [ ! -f package.json ]; then
             echo '{"name":"merge-mac-release","private":true}' > package.json
           fi
-          bun add --no-save yaml@2.8.1
+          npm install --no-save yaml@2.8.1
 
-      # 合并 macOS YAML 文件 (使用 bun 运行 JavaScript)
       - name: Merge latest-mac.yml files
-        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+        run: node scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       # 上传合并后的构建产物
       - name: Upload artifacts with merged macOS files

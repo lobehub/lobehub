@@ -81,15 +81,13 @@ jobs:
           node-version: 24.11.1
           package-manager-cache: false
 
-      - name: Install bun
+      - name: Install pnpm
         if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+        uses: pnpm/action-setup@v4
 
       - name: Install deps
         if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        run: bun i
+        run: pnpm install
 
       - name: Resolve patch version (patch bump)
         id: patch-version
@@ -164,11 +162,11 @@ jobs:
 
       - name: Generate changelog
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: bun run workflow:changelog:gen
+        run: pnpm run workflow:changelog:gen
 
       - name: Build static changelog
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        run: bun run workflow:changelog
+        run: pnpm run workflow:changelog
 
       - name: Commit release changes and push
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'

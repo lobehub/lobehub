@@ -61,27 +61,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
-      - name: Install dependencies (bun)
-        run: bun install
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.1
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Install Playwright browsers (with system deps)
-        run: bunx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run database migrations
-        run: bun run db:migrate
+        run: pnpm run db:migrate
 
       - name: Build application
-        run: bun run build
+        run: pnpm run build
         env:
           SKIP_LINT: '1'
 
       - name: Run E2E tests
-        run: bun run e2e
+        run: pnpm run e2e
 
       - name: Upload E2E test artifacts (on failure)
         if: failure()

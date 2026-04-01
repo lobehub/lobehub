@@ -43,19 +43,17 @@ jobs:
           node-version: 24.11.1
           package-manager-cache: false
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
-        run: bun run lint
+        run: pnpm run lint
 
       - name: Test Database Coverage
-        run: bun run --filter @lobechat/database test
+        run: pnpm run --filter @lobechat/database test
         env:
           DATABASE_TEST_URL: postgresql://postgres:postgres@localhost:5432/postgres
           DATABASE_DRIVER: node
@@ -64,10 +62,10 @@ jobs:
           APP_URL: https://home.com
 
       - name: Test App
-        run: bun run test-app
+        run: pnpm run test-app
 
       - name: Workflow
-        run: bun run workflow:readme
+        run: pnpm run workflow:readme
 
       - name: Commit changes
         run: |-

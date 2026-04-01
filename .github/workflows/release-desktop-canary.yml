@@ -139,16 +139,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
-        run: bun run lint
+        run: pnpm run lint
 
   # ============================================
   # 多平台构建
@@ -253,11 +251,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       - name: Download artifacts
         uses: actions/download-artifact@v7
         with:
@@ -274,10 +267,10 @@ jobs:
           if [ ! -f package.json ]; then
             echo '{"name":"merge-mac-release","private":true}' > package.json
           fi
-          bun add --no-save yaml@2.8.1
+          npm install --no-save yaml@2.8.1
 
       - name: Merge latest-mac.yml files
-        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
+        run: node scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
         uses: actions/upload-artifact@v6
