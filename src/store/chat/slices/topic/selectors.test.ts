@@ -62,6 +62,25 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('hasMoreTopics', () => {
+    it('should return true when total exceeds pageSize even if hasMore is temporarily false', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'test' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: Array.from({ length: 20 }, (_, index) => ({ id: `topic-${index}` })),
+            pageSize: 20,
+            total: 21,
+          },
+        },
+      });
+
+      expect(topicSelectors.hasMoreTopics(state)).toBe(true);
+    });
+  });
+
   describe('currentActiveTopic', () => {
     it('should return undefined if there is no active topic', () => {
       const topic = topicSelectors.currentActiveTopic(initialStore);

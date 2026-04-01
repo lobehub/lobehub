@@ -136,7 +136,12 @@ const groupedTopicsForSidebar =
     return buildGroupedTopics(limitedTopics, getGroupFn(displayMode));
   };
 
-const hasMoreTopics = (s: ChatStoreState): boolean => currentTopicData(s)?.hasMore ?? false;
+const hasMoreTopics = (s: ChatStoreState): boolean => {
+  const topicData = currentTopicData(s);
+  if (!topicData) return false;
+
+  return topicData.hasMore || topicData.total > topicData.pageSize;
+};
 
 const isLoadingMoreTopics = (s: ChatStoreState): boolean =>
   currentTopicData(s)?.isLoadingMore ?? false;
