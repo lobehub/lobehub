@@ -27,7 +27,7 @@ BeforeAll({ timeout: 600_000 }, async function () {
   // Start web server if not using external BASE_URL
   if (!process.env.BASE_URL) {
     await startWebServer({
-      command: `bunx next start -p ${PORT}`,
+      command: `npx next start -p ${PORT}`,
       port: PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
