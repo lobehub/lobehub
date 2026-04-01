@@ -61,31 +61,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install dependencies
         run: pnpm install
 
       - name: Install Playwright browsers (with system deps)
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Run database migrations
-        run: pnpm run db:migrate
+        run: bun run db:migrate
 
       - name: Build application
-        run: pnpm run build
+        run: bun run build
         env:
           SKIP_LINT: '1'
 
       - name: Run E2E tests
-        run: pnpm run e2e
+        run: bun run e2e
 
       - name: Upload E2E test artifacts (on failure)
         if: failure()

@@ -25,20 +25,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
 
       - name: Update i18n
-        run: pnpm run i18n
+        run: bun run i18n
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_PROXY_URL: ${{ secrets.OPENAI_PROXY_URL }}

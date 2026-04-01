@@ -266,11 +266,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
 
       - name: Download artifacts
         uses: actions/download-artifact@v7
@@ -288,10 +287,10 @@ jobs:
           if [ ! -f package.json ]; then
             echo '{"name":"merge-mac-release","private":true}' > package.json
           fi
-          npm install --no-save yaml@2.8.1
+          bun add --no-save yaml@2.8.1
 
       - name: Merge mac YAML files
-        run: node scripts/electronWorkflow/mergeMacReleaseFiles.js
+        run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
         uses: actions/upload-artifact@v6

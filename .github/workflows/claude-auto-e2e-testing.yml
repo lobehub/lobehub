@@ -51,26 +51,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers (with system deps)
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Run database migrations
-        run: pnpm run db:migrate
+        run: bun run db:migrate
 
       - name: Build application
-        run: pnpm run build
+        run: bun run build
         env:
           SKIP_LINT: '1'
 
@@ -120,7 +114,7 @@ jobs:
             - PostgreSQL is running at localhost:5432 (user: postgres, password: postgres)
             - Application has been built and is ready to start
             - Playwright chromium is installed
-            - To start the server for E2E tests, run: `pnpm exec next start -p 3006 &` from the project root, then wait for it to be ready
+            - To start the server for E2E tests, run: `bunx next start -p 3006 &` from the project root, then wait for it to be ready
             - Run E2E tests with: `cd e2e && BASE_URL=http://localhost:3006 pnpm exec cucumber-js --config cucumber.config.js --tags "<your-tags>"`
 
             **Start the auto E2E testing process now.**

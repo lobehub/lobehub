@@ -312,7 +312,7 @@ async function startServer(port: number): Promise<void> {
   const env = getServerEnv(port);
 
   // Start server in background
-  const child = spawn('npx', ['next', 'start', '-p', String(port)], {
+  const child = spawn('bunx', ['next', 'start', '-p', String(port)], {
     cwd: CONFIG.projectRoot,
     detached: true,
     env: { ...process.env, ...env },
@@ -515,7 +515,7 @@ ${colors.green('✅ E2E environment setup completed!')}
      ${colors.cyan(`bun e2e/scripts/setup.ts --start`)}
 
   2. Or start manually:
-     ${colors.cyan(`npx next start -p ${options.port}`)}
+     ${colors.cyan(`bunx next start -p ${options.port}`)}
 `);
     }
 

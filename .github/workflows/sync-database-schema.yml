@@ -15,14 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
@@ -30,4 +24,4 @@ jobs:
       - name: sync database schema to dbdocs
         env:
           DBDOCS_TOKEN: ${{ secrets.DBDOCS_TOKEN }}
-        run: pnpm run db:visualize
+        run: bun run db:visualize

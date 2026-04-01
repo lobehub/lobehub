@@ -17,20 +17,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install dependencies
         run: pnpm install
 
       - name: Auto-close duplicate issues
-        run: pnpm exec tsx .github/scripts/auto-close-duplicates.ts
+        run: bun run .github/scripts/auto-close-duplicates.ts
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}

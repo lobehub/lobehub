@@ -37,14 +37,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
@@ -53,7 +47,7 @@ jobs:
         run: |
           for package in $PACKAGES; do
             echo "::group::Testing $package"
-            pnpm run --filter $package test:coverage
+            bun run --filter $package test:coverage
             echo "::endgroup::"
           done
 
@@ -109,20 +103,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
 
       - name: Run tests
-        run: pnpm exec vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
@@ -142,8 +130,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
@@ -156,7 +144,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge reports
-        run: pnpm exec vitest --merge-reports --reporter=default --coverage
+        run: bunx vitest --merge-reports --reporter=default --coverage
 
       - name: Upload App Coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -175,14 +163,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm install
@@ -227,20 +209,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         run: pnpm i
 
       - name: Lint
-        run: pnpm run lint
+        run: bun run lint
 
       - name: Test Coverage
         run: pnpm --filter @lobechat/database test:coverage
