@@ -93,6 +93,13 @@ interface MessageToolCallsChunk {
   type: 'tool_calls';
 }
 
+export interface FetchSSERequestContext {
+  apiMode?: string;
+  fetchOnClient?: boolean;
+  model?: string;
+  provider?: string;
+}
+
 export interface FetchSSEOptions {
   fetcher?: typeof fetch;
   onAbort?: (text: string) => Promise<void>;
@@ -111,6 +118,7 @@ export interface FetchSSEOptions {
       | MessageSpeedChunk
       | MessageStopChunk,
   ) => void;
+  requestContext?: FetchSSERequestContext;
   responseAnimation?: ResponseAnimation;
 }
 
@@ -235,6 +243,7 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
 
   let finishedType: SSEFinishType = 'done';
   let response!: Response;
+  const fetchStartTime = Date.now();
 
   const { text, speed: smoothingSpeed } = standardizeAnimationStyle(
     options.responseAnimation ?? {},
@@ -303,14 +312,23 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
       } else {
         finishedType = 'error';
 
+        const elapsedMs = Date.now() - fetchStartTime;
+        const networkStatus = typeof navigator !== 'undefined' ? navigator.onLine : undefined;
+
+        const contextBody = {
+          ...options.requestContext,
+          elapsedMs,
+          networkStatus,
+        };
+
         options.onErrorHandle?.(
           error.type
-            ? error
+            ? { ...error, body: { ...error.body, ...contextBody } }
             : {
                 body: {
-                  message: error.message,
-                  name: error.name,
-                  stack: error.stack,
+                  errorMessage: error.message,
+                  errorName: error.name,
+                  ...contextBody,
                 },
                 message: error.message,
                 type: ChatErrorType.UnknownChatFetchError,
