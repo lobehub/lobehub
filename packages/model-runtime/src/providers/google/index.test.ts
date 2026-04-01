@@ -73,7 +73,7 @@ describe('LobeGoogleAI', () => {
     });
 
     it('should withGrounding', () => {
-      const data = [
+      const _data = [
         {
           candidates: [{ content: { parts: [{ text: 'As' }], role: 'model' } }],
           usageMetadata: { promptTokenCount: 8, totalTokenCount: 8 },
@@ -443,7 +443,7 @@ describe('LobeGoogleAI', () => {
         const chunks: any[] = [];
 
         // Read first value then cancel to trigger error chunk
-        chunks.push((await reader.read()).value);
+        chunks.push((await reader.read()).value); // eslint-disable-line unicorn/no-immediate-mutation
         abortController.abort();
 
         // Read all remaining chunks
@@ -497,7 +497,7 @@ describe('LobeGoogleAI', () => {
         const chunks: any[] = [];
 
         // Read first value then collect remaining chunks (error included)
-        chunks.push((await reader.read()).value);
+        chunks.push((await reader.read()).value); // eslint-disable-line unicorn/no-immediate-mutation
         let result;
         while (!(result = await reader.read()).done) {
           chunks.push(result.value);
@@ -518,6 +518,7 @@ describe('LobeGoogleAI', () => {
       });
 
       it('should handle AbortError without data', async () => {
+        // eslint-disable-next-line require-yield
         const mockStream = (async function* () {
           throw new Error('aborted');
         })();
@@ -562,7 +563,7 @@ describe('LobeGoogleAI', () => {
         const chunks: any[] = [];
 
         // Read first value then collect remaining chunks (parsing error)
-        chunks.push((await reader.read()).value);
+        chunks.push((await reader.read()).value); // eslint-disable-line unicorn/no-immediate-mutation
         let result;
         while (!(result = await reader.read()).done) {
           chunks.push(result.value);
@@ -780,9 +781,7 @@ describe('buildGoogleToolsWithSearch', () => {
       temperature: 0,
       enabledSearch: true,
       urlContext: true,
-      tools: [
-        { type: 'function', function: { name: 'test_tool', description: 'A test tool' } },
-      ],
+      tools: [{ type: 'function', function: { name: 'test_tool', description: 'A test tool' } }],
     });
 
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
@@ -805,6 +804,43 @@ describe('buildGoogleToolsWithSearch', () => {
         ],
       },
     ]);
+    // https://ai.google.dev/gemini-api/docs/tool-combination
+    expect(config.toolConfig).toEqual({ includeServerSideToolInvocations: true });
+  });
+
+  it('should not set toolConfig when Gemini 3+ has only search tools without function declarations', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.1-pro-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.1-pro-preview',
+      temperature: 0,
+      enabledSearch: true,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.tools).toEqual([{ googleSearch: {} }]);
+    expect(config.toolConfig).toBeUndefined();
   });
 
   it('should exclude function declarations when search is enabled for pre-Gemini 3 models', async () => {
@@ -835,9 +871,7 @@ describe('buildGoogleToolsWithSearch', () => {
       temperature: 0,
       enabledSearch: true,
       urlContext: true,
-      tools: [
-        { type: 'function', function: { name: 'test_tool', description: 'A test tool' } },
-      ],
+      tools: [{ type: 'function', function: { name: 'test_tool', description: 'A test tool' } }],
     });
 
     const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
