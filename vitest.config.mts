@@ -118,6 +118,8 @@ export default defineConfig({
           '@pierre/diffs',
           '@pierre/diffs/react',
           'lru_map',
+          'lexical',
+          /@lexical\//,
         ],
       },
     },
