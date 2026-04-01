@@ -52,7 +52,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
         });
 
         // Convert values object to array of key-value pairs
-        const values = (result as any).values || {};
+        const values = (result as any).plaintext || {};
         const kvPairs = Object.entries(values).map(([key, value]) => ({
           key,
           value: value as string,
