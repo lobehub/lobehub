@@ -1536,23 +1536,6 @@ describe('ChatService', () => {
     // Add more test cases to cover different scenarios and edge cases
   });
 
-  describe('runPluginApi', () => {
-    it('should make a POST request and return the result text', async () => {
-      const params = { identifier: 'test-plugin', apiName: '1' }; // Add more properties if needed
-      const options = {};
-      const mockResponse = new Response('Plugin Result', { status: 200 });
-
-      global.fetch = vi.fn(() => Promise.resolve(mockResponse));
-
-      const result = await chatService.runPluginApi(params, options);
-
-      expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
-      expect(result.text).toBe('Plugin Result');
-    });
-
-    // Add more test cases to cover different scenarios and edge cases
-  });
-
   describe('fetchPresetTaskResult', () => {
     it('should handle successful chat completion response', async () => {
       // Mock getChatCompletion to simulate successful completion

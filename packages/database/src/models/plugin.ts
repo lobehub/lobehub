@@ -62,7 +62,7 @@ export class PluginModel {
 
     return data.map<LobeTool>((item) => ({
       ...item,
-      runtimeType: item.manifest?.type === 'builtin' ? 'default' : item.manifest?.type || 'default',
+      runtimeType: item.manifest?.type || 'default',
     }));
   };
 

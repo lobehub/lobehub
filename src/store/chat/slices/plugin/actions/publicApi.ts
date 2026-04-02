@@ -92,14 +92,6 @@ export class PluginPublicApiActionImpl {
     stepContext?: RuntimeStepContext,
   ): Promise<any> => {
     switch (payload.type) {
-      case 'standalone': {
-        return await this.#get().invokeStandaloneTypePlugin(id, payload);
-      }
-
-      case 'markdown': {
-        return await this.#get().invokeMarkdownTypePlugin(id, payload);
-      }
-
       // @ts-ignore
       case 'mcp': {
         return await this.#get().invokeMCPTypePlugin(id, payload);

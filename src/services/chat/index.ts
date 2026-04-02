@@ -2,11 +2,10 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
-import { fetchSSE, getMessageError, standardizeAnimationStyle } from '@lobechat/fetch-sse';
+import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import {
-  type PluginRequestPayload,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
@@ -31,7 +30,6 @@ import {
   builtinToolSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
-  pluginSelectors,
 } from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
@@ -41,7 +39,7 @@ import {
 } from '@/store/user/selectors';
 import { type ChatStreamPayload, type OpenAIChatMessage } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
-import { createTraceHeader, getTraceId } from '@/utils/trace';
+import { createTraceHeader } from '@/utils/trace';
 
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
@@ -443,40 +441,6 @@ class ChatService {
       responseAnimation: mergedResponseAnimation,
       signal,
     });
-  };
-
-  /**
-   * run the plugin api to get result
-   * @param params
-   * @param options
-   */
-  runPluginApi = async (params: PluginRequestPayload, options?: FetchOptions) => {
-    const s = getToolStoreState();
-
-    const settings = pluginSelectors.getPluginSettingsById(params.identifier)(s);
-    const manifest = pluginSelectors.getToolManifestById(params.identifier)(s);
-
-    const traceHeader = createTraceHeader(this.mapTrace(options?.trace, TraceTagMap.ToolCalling));
-
-    const headers = await createHeaderWithAuth({
-      headers: traceHeader,
-    });
-
-    const gatewayURL = manifest?.gateway ?? API_ENDPOINTS.gateway;
-
-    const res = await fetch(gatewayURL, {
-      body: JSON.stringify({ ...params, manifest }),
-      headers,
-      method: 'POST',
-      signal: options?.signal,
-    });
-
-    if (!res.ok) {
-      throw await getMessageError(res);
-    }
-
-    const text = await res.text();
-    return { text, traceId: getTraceId(res) };
   };
 
   fetchPresetTaskResult = async ({
