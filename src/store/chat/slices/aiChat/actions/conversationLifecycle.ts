@@ -2,7 +2,7 @@
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
-import { formatSelectedSkillsContext } from '@lobechat/context-engine';
+import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatImageItem,
@@ -347,10 +347,31 @@ export class ConversationLifecycleActionImpl {
 
       const topicId = operationContext.topicId;
 
-      // Persist selected skill context into user message content so it survives across turns.
-      // This avoids ephemeral injection that breaks prompt cache when re-injected later.
-      const skillContext = formatSelectedSkillsContext(enrichedSelectedSkills);
-      const persistedContent = skillContext ? `${message}\n\n${skillContext}` : message;
+      // Persist selected skill/tool context into user message content so it survives across turns.
+      // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
+      const previouslyMentionedSkills = new Set<string>();
+      const previouslyMentionedTools = new Set<string>();
+
+      for (const m of messages) {
+        if (m.role !== 'user') continue;
+        for (const s of parseSelectedSkillsFromEditorData(m.editorData ?? undefined)) {
+          previouslyMentionedSkills.add(s.identifier);
+        }
+        for (const t of parseSelectedToolsFromEditorData(m.editorData ?? undefined)) {
+          previouslyMentionedTools.add(t.identifier);
+        }
+      }
+      const dedupedSkills = enrichedSelectedSkills.filter(
+        (s) => !previouslyMentionedSkills.has(s.identifier),
+      );
+      const dedupedTools = enrichedSelectedTools.filter(
+        (t) => !previouslyMentionedTools.has(t.identifier),
+      );
+
+      const skillContext = formatSelectedSkillsContext(dedupedSkills);
+      const toolContext = formatSelectedToolsContext(dedupedTools);
+      const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
+      const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
 
       data = await aiChatService.sendMessageInServer(
         {
@@ -575,17 +596,14 @@ export class ConversationLifecycleActionImpl {
         // so the AI can delegate directly without activating the full agent-management tool
         const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
 
-        const hasInitialContext =
-          enrichedSelectedTools.length > 0 || hasMentionedAgents || !!injectedManifests;
+        const hasInitialContext = hasMentionedAgents || !!injectedManifests;
 
-        // Note: selectedSkills are NOT passed here — they are persisted into the user
-        // message content above so they survive across turns without re-injection.
+        // Note: selectedSkills and selectedTools are NOT passed here — they are
+        // persisted into the user message content above so they survive across
+        // turns without re-injection.
         const agentRuntimeInitialContext = hasInitialContext
           ? {
               initialContext: {
-                ...(enrichedSelectedTools.length > 0
-                  ? { selectedTools: enrichedSelectedTools }
-                  : undefined),
                 // Only inject mentionedAgents in non-group context to avoid
                 // group @member mentions (including ALL_MEMBERS) leaking into agent-management
                 ...(hasMentionedAgents ? { mentionedAgents } : undefined),

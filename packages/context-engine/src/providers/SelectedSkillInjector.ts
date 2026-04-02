@@ -70,6 +70,37 @@ export const formatSelectedSkillsContext = (
 };
 
 /**
+ * Extract skill identifiers @mentioned in earlier messages via their persisted editorData.
+ * Walks the Lexical JSON tree looking for action-tag nodes with actionCategory === 'skill'.
+ */
+const collectMentionedSkillIds = (
+  messages: PipelineContext['messages'],
+  excludeIndex: number,
+): Set<string> => {
+  const ids = new Set<string>();
+  for (let i = 0; i < messages.length; i++) {
+    if (i === excludeIndex) continue;
+    const ed = messages[i].editorData;
+    if (!ed) continue;
+    walkActionTags(ed.root, (category, type) => {
+      if (category === 'skill' && type) ids.add(String(type));
+    });
+  }
+  return ids;
+};
+
+/** Walk Lexical JSON tree to find action-tag nodes. */
+const walkActionTags = (node: any, cb: (category: string, type: string) => void): void => {
+  if (!node) return;
+  if (node.type === 'action-tag') {
+    cb(node.actionCategory, node.actionType);
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) walkActionTags(child, cb);
+  }
+};
+
+/**
  * Selected Skill Injector
  * Appends user-selected slash-menu skills to the last user message as ephemeral context.
  */
@@ -87,10 +118,35 @@ export class SelectedSkillInjector extends BaseLastUserContentProvider {
     if (this.config.enabled === false) return this.markAsExecuted(context);
 
     const clonedContext = this.cloneContext(context);
-    const selectedSkills = this.config.selectedSkills ?? [];
+    const allSelectedSkills = this.config.selectedSkills ?? [];
+
+    if (allSelectedSkills.length === 0) {
+      log('No selected skills, skipping injection');
+      return this.markAsExecuted(clonedContext);
+    }
+    // Deduplicate: skip skills already @mentioned in earlier messages (via editorData)
+    const lastUserIndex = this.findLastUserMessageIndex(clonedContext.messages);
+
+    if (lastUserIndex === -1) {
+      log('No user messages found, skipping injection');
+      return this.markAsExecuted(clonedContext);
+    }
+
+    const previousIds = collectMentionedSkillIds(clonedContext.messages, lastUserIndex);
+    const selectedSkills =
+      previousIds.size > 0
+        ? allSelectedSkills.filter((s) => !previousIds.has(s.identifier))
+        : allSelectedSkills;
+
+    if (selectedSkills.length < allSelectedSkills.length) {
+      log(
+        'Deduplicated %d skills already @mentioned in earlier messages (via editorData)',
+        allSelectedSkills.length - selectedSkills.length,
+      );
+    }
 
     if (selectedSkills.length === 0) {
-      log('No selected skills, skipping injection');
+      log('All selected skills already injected in earlier messages, skipping');
       return this.markAsExecuted(clonedContext);
     }
 
@@ -98,13 +154,6 @@ export class SelectedSkillInjector extends BaseLastUserContentProvider {
 
     if (!content) {
       log('No selected skill content generated, skipping injection');
-      return this.markAsExecuted(clonedContext);
-    }
-
-    const lastUserIndex = this.findLastUserMessageIndex(clonedContext.messages);
-
-    if (lastUserIndex === -1) {
-      log('No user messages found, skipping injection');
       return this.markAsExecuted(clonedContext);
     }
 

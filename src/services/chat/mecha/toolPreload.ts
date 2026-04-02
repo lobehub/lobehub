@@ -2,9 +2,11 @@ import type { RuntimeSelectedTool } from '@lobechat/types';
 
 import { getToolStoreState } from '@/store/tool';
 
-const ACTION_TAG_REGEX = /<action\b([^>]*)\/>/g;
+// Match <tool name="..." label="..." /> and legacy <action type="..." category="tool" ... />
+const TOOL_TAG_REGEX = /<tool\b([^>]*)\/>/g;
+const LEGACY_ACTION_TAG_REGEX = /<action\b([^>]*)\/>/g;
 
-const getActionAttr = (attrs: string, name: string): string | undefined => {
+const getAttr = (attrs: string, name: string): string | undefined => {
   const match = new RegExp(`${name}="([^"]*)"`, 'i').exec(attrs);
   return match?.[1];
 };
@@ -12,17 +14,21 @@ const getActionAttr = (attrs: string, name: string): string | undefined => {
 export const extractSelectedToolsFromText = (text: string): RuntimeSelectedTool[] => {
   const parsedTools: RuntimeSelectedTool[] = [];
 
-  for (const match of text.matchAll(ACTION_TAG_REGEX)) {
+  // New format: <tool name="..." label="..." />
+  for (const match of text.matchAll(TOOL_TAG_REGEX)) {
     const attrs = match[1] || '';
-    if (getActionAttr(attrs, 'category') !== 'tool') continue;
-
-    const identifier = getActionAttr(attrs, 'type');
+    const identifier = getAttr(attrs, 'name');
     if (!identifier) continue;
+    parsedTools.push({ identifier, name: getAttr(attrs, 'label') || identifier });
+  }
 
-    parsedTools.push({
-      identifier,
-      name: getActionAttr(attrs, 'label') || identifier,
-    });
+  // Legacy format: <action type="..." category="tool" label="..." />
+  for (const match of text.matchAll(LEGACY_ACTION_TAG_REGEX)) {
+    const attrs = match[1] || '';
+    if (getAttr(attrs, 'category') !== 'tool') continue;
+    const identifier = getAttr(attrs, 'type');
+    if (!identifier) continue;
+    parsedTools.push({ identifier, name: getAttr(attrs, 'label') || identifier });
   }
 
   return parsedTools;

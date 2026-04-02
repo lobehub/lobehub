@@ -26,7 +26,11 @@ export {
   formatSelectedSkillsContext,
   SelectedSkillInjector,
 } from './SelectedSkillInjector';
-export { SelectedToolInjector } from './SelectedToolInjector';
+export {
+  formatSelectedTools,
+  formatSelectedToolsContext,
+  SelectedToolInjector,
+} from './SelectedToolInjector';
 export { SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';

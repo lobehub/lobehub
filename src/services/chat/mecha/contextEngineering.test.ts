@@ -302,7 +302,7 @@ describe('contextEngineering', () => {
       {
         role: 'user',
         content:
-          '<action type="grep" category="skill" /> <action type="lobe-notebook" category="tool" /> hi',
+          '<skill name="grep" label="Grep" /> <tool name="lobe-notebook" label="Notebook" /> hi',
         createdAt: Date.now(),
         id: 'selected-skill-user',
         updatedAt: Date.now(),
@@ -321,8 +321,8 @@ describe('contextEngineering', () => {
     });
     expect(result[1].role).toBe('user');
     expect(result[1].content).toContain('hi');
-    expect(result[1].content).not.toContain('<action type="grep" category="skill" />');
-    expect(result[1].content).not.toContain('<action type="lobe-notebook" category="tool" />');
+    expect(result[1].content).not.toContain('<skill name="grep"');
+    expect(result[1].content).not.toContain('<tool name="lobe-notebook"');
   });
 
   describe('getAssistantContent', () => {

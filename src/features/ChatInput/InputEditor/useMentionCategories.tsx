@@ -12,7 +12,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore } from '../store';
-import { useEnabledSkills } from './ActionTag/useEnabledSkills';
+import { useInstalledSkillsAndTools } from './ActionTag/useInstalledSkillsAndTools';
 import type { MentionCategory } from './MentionMenu/types';
 
 const MAX_AGENT_ITEMS = 20;
@@ -55,7 +55,7 @@ export const useMentionCategories = (): MentionCategory[] => {
   const externalMentionItems = useChatInputStore((s) => s.mentionItems);
   const isGroupChat = !!externalMentionItems;
 
-  const enabledSkills = useEnabledSkills();
+  const enabledSkills = useInstalledSkillsAndTools();
 
   return useMemo(() => {
     const categories: MentionCategory[] = [];
