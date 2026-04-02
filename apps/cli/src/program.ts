@@ -27,6 +27,7 @@ import { registerSearchCommand } from './commands/search';
 import { registerSessionGroupCommand } from './commands/session-group';
 import { registerSkillCommand } from './commands/skill';
 import { registerStatusCommand } from './commands/status';
+import { registerTaskCommand } from './commands/task';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
 import { registerUserCommand } from './commands/user';
@@ -61,6 +62,7 @@ export function createProgram() {
   registerFileCommand(program);
   registerSkillCommand(program);
   registerSessionGroupCommand(program);
+  registerTaskCommand(program);
   registerThreadCommand(program);
   registerTopicCommand(program);
   registerMessageCommand(program);
