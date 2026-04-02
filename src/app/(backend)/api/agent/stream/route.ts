@@ -33,14 +33,12 @@ export async function GET(request: NextRequest) {
   log(`Starting SSE connection for operation ${operationId} from eventId ${lastEventId}`);
 
   // Create Server-Sent Events stream
+  let cleanupRef: (() => void) | undefined;
+
   const stream = new ReadableStream({
     cancel(reason) {
       log(`SSE connection cancelled for operation ${operationId}:`, reason);
-
-      // Call cleanup function
-      if ((this as any)._cleanup) {
-        (this as any)._cleanup();
-      }
+      cleanupRef?.();
     },
 
     start(controller) {
@@ -201,8 +199,8 @@ export async function GET(request: NextRequest) {
       // Listen for connection close
       request.signal?.addEventListener('abort', cleanup);
 
-      // Store cleanup function for calling during cancel
-      (controller as any)._cleanup = cleanup;
+      // Store cleanup function so the cancel() callback can invoke it
+      cleanupRef = cleanup;
     },
   });
 
