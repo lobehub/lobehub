@@ -57,10 +57,11 @@ interface FileItemProps {
 }
 
 const FileItem = memo<FileItemProps>(
-  ({ isDirectory, name, path, size, type, showTime = false, createdTime }) => {
+  ({ isDirectory, name: nameProp, path, size, type, showTime = false, createdTime }) => {
     const { t } = useTranslation('tool');
     const [isHovering, setIsHovering] = useState(false);
     const { openFile, openFolder } = useToolRenderCapabilities();
+    const name = nameProp || path?.split('/').pop() || '';
 
     const handleClick = () => {
       if (!path) return;

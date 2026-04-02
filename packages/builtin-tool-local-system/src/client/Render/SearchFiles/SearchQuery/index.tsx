@@ -17,7 +17,7 @@ const SearchQueryView = memo<SearchQueryViewProps>(({ messageId, args, pluginSta
 
   return (
     <SearchView
-      defaultQuery={args?.keywords}
+      defaultQuery={args?.keywords || args?.keyword || args?.query || ''}
       resultsNumber={searchResults.length}
       searching={loading || !pluginState}
     />
