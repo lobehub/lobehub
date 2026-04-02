@@ -702,6 +702,10 @@ export class ResponsesService extends BaseService {
               type: 'response.output_item.done' as const,
             };
             currentOutputIndex++;
+          } else if (event.type === 'stream_retry') {
+            // LLM retry — discard stale tool call state from the failed attempt
+            // so we don't emit phantom function_calls on final flush
+            activeToolCalls.clear();
           }
         }
       }
