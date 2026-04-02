@@ -1167,6 +1167,27 @@ export const taskRouter = router({
     }
   }),
 
+  updateConfig: taskProcedure
+    .input(idInput.merge(z.object({ config: z.record(z.unknown()) })))
+    .mutation(async ({ input, ctx }) => {
+      const { id, config } = input;
+      try {
+        const model = ctx.taskModel;
+        const resolved = await resolveOrThrow(model, id);
+        const task = await model.updateTaskConfig(resolved.id, config);
+        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        return { data: task, message: 'Config updated', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateConfig]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update task config',
+        });
+      }
+    }),
+
   updateStatus: taskProcedure
     .input(
       z.object({
