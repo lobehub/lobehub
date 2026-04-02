@@ -46,6 +46,13 @@ export const desktopRoutes: RouteObject[] = [
                 ),
                 path: 'channel',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/agent/tasks'),
+                  'Desktop > Chat > Tasks',
+                ),
+                path: 'tasks',
+              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(main)/agent/_layout'),

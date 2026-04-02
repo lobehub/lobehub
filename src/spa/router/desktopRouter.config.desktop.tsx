@@ -19,6 +19,7 @@ import DesktopChatLayout from '@/routes/(main)/agent/_layout';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
 import AgentCronDetailPage from '@/routes/(main)/agent/cron/[cronId]';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
+import AgentTasksPage from '@/routes/(main)/agent/tasks';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -101,6 +102,10 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <AgentChannelPage />,
                 path: 'channel',
+              },
+              {
+                element: <AgentTasksPage />,
+                path: 'tasks',
               },
             ],
             element: <DesktopChatLayout />,
