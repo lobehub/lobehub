@@ -141,6 +141,25 @@ describe('LobeWenxinAI - Custom Features', () => {
     });
   });
 
+  describe('handlePollVideoStatus', () => {
+    it('should strip /v2 from baseURL when polling video status', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'processing', task_id: 'task-123' }),
+      });
+
+      await params.handlePollVideoStatus!('task-123', {
+        apiKey: 'test-key',
+        baseURL: 'https://qianfan.baidubce.com/v2',
+        provider: 'wenxin',
+      });
+
+      const url = (global.fetch as any).mock.calls[0][0];
+      expect(url).toBe('https://qianfan.baidubce.com/video/generations?task_id=task-123');
+      expect(url).not.toContain('/v2/');
+    });
+  });
+
   describe('handlePayload', () => {
     it('should transform payload without enabledSearch', () => {
       const payload = {

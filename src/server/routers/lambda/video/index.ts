@@ -221,20 +221,11 @@ export const videoRouter = router({
       log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
 
       // Determine async strategy based on response:
-      // - videoUrl present: video ready immediately (no async needed, just update status)
       // - useWebhook: provider registered a callback URL, wait for webhook
       // - otherwise: use background polling to check status
-      const hasVideoUrl = response && 'videoUrl' in response;
       const useWebhook = response && 'useWebhook' in response && response.useWebhook;
 
-      if (hasVideoUrl) {
-        log('Video URL returned immediately, no async processing needed');
-
-        await asyncTaskModel.update(asyncTaskId, {
-          inferenceId: response.inferenceId,
-          status: AsyncTaskStatus.Processing,
-        });
-      } else if (useWebhook) {
+      if (useWebhook) {
         // Webhook-based provider (e.g. Volcengine): wait for callback
         log('Webhook-based provider detected, waiting for callback');
 

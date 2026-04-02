@@ -276,40 +276,6 @@ async function createVideoTask(
 }
 
 /**
- * Query the status of a video generation task
- */
-async function queryTaskStatus(
-  taskId: string,
-  apiKey: string,
-  baseUrl: string,
-): Promise<QwenVideoTaskResponse> {
-  const endpoint = `${baseUrl}/api/v1/tasks/${taskId}`;
-
-  log('Querying task status for: %s', taskId);
-
-  const response = await fetch(endpoint, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    method: 'GET',
-  });
-
-  if (!response.ok) {
-    let errorData;
-    try {
-      errorData = await response.json();
-    } catch {
-      // Failed to parse JSON error response
-    }
-    throw new Error(
-      `Failed to query task status for ${taskId} (${response.status}): ${errorData?.message || response.statusText}`,
-    );
-  }
-
-  return response.json();
-}
-
-/**
  * Create video using Qwen DashScope API
  * Supports three types:
  * - text-to-video (wan2.2-t2v-plus, wanx2.0-t2v-*)

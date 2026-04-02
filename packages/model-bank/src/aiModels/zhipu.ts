@@ -1418,7 +1418,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     parameters: {
       aspectRatio: {
         default: '16:9',
-        enum: ['21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
       },
       duration: { default: 5, enum: [5] },
       generateAudio: { default: true },
@@ -1446,7 +1446,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
     parameters: {
       aspectRatio: {
         default: '16:9',
-        enum: ['21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
+        enum: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
       },
       duration: { default: 5, enum: [5] },
       generateAudio: { default: true },

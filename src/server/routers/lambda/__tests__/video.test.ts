@@ -163,7 +163,7 @@ describe('videoRouter', () => {
       expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
-    it('should use immediate path when response contains videoUrl', async () => {
+    it('should use polling path when response contains videoUrl (no special handling)', async () => {
       const { mockUpdate } = setupMocks();
       mockCreateVideo.mockResolvedValue({
         inferenceId: 'inf-3',
@@ -178,8 +178,9 @@ describe('videoRouter', () => {
         inferenceId: 'inf-3',
         status: AsyncTaskStatus.Processing,
       });
-      // Immediate: should NOT trigger background polling
-      expect(mockAfter).not.toHaveBeenCalled();
+      // No special videoUrl branch — falls through to polling
+      expect(mockAfter).toHaveBeenCalled();
+      expect(mockProcessBackgroundVideoPolling).toHaveBeenCalled();
     });
 
     it('should fall through to polling when useWebhook is false', async () => {

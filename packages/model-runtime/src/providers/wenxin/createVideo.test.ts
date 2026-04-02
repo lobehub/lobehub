@@ -272,4 +272,20 @@ describe('queryWenxinVideoStatus', () => {
       }),
     ).rejects.toThrow('Wenxin status API error: 404 Task not found');
   });
+
+  it('should not include /v2 in the polling URL when baseURL contains /v2', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'processing', task_id: 'task-v2' }),
+    });
+
+    await queryWenxinVideoStatus('task-v2', {
+      apiKey: 'test-key',
+      baseURL: 'https://qianfan.baidubce.com',
+    });
+
+    const url = (global.fetch as any).mock.calls[0][0];
+    expect(url).toBe('https://qianfan.baidubce.com/video/generations?task_id=task-v2');
+    expect(url).not.toContain('/v2/');
+  });
 });

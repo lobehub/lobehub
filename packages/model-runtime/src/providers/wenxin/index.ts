@@ -41,7 +41,7 @@ export const params = {
     const { pollWenxinVideoStatus } = await import('./createVideo');
     return pollWenxinVideoStatus(inferenceId, {
       apiKey: options.apiKey,
-      baseURL: options.baseURL || '',
+      baseURL: (options.baseURL || '').replace('/v2', ''),
     });
   },
   debug: {

@@ -10,6 +10,7 @@ import { GenerationModel } from '@/database/models/generation';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
+import { FileSource } from '@/types/files';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:async');
@@ -184,6 +185,7 @@ export const videoRouter = router({
             size: processResult.fileSize,
             url: processResult.videoKey,
           },
+          FileSource.VideoGeneration,
         );
 
         log('Asset and file created successfully for generation: %s', generationId);
