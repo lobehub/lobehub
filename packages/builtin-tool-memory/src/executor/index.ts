@@ -7,7 +7,12 @@ import type {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
-import type { BuiltinToolContext, BuiltinToolResult, SearchMemoryParams } from '@lobechat/types';
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  QueryTaxonomyOptionsParams,
+  SearchMemoryParams,
+} from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import type { z } from 'zod';
 
@@ -66,6 +71,10 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
       ...params,
       effort: this.resolveMemoryEffort(ctx?.agentId),
     });
+  };
+
+  queryTaxonomyOptions = async (params: QueryTaxonomyOptionsParams): Promise<BuiltinToolResult> => {
+    return this.runtime.queryTaxonomyOptions(params);
   };
 
   addContextMemory = async (

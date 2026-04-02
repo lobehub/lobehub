@@ -1,8 +1,10 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { ToolRenderProvider } from '@lobechat/shared-tool-ui';
 import { safeParseJSON } from '@lobechat/utils';
 import { memo } from 'react';
 
 import { useParseContent } from '../useParseContent';
+import { useToolRenderCaps } from './useToolRenderCaps';
 
 export interface BuiltinTypeProps {
   apiName?: string;
@@ -34,6 +36,7 @@ const BuiltinType = memo<BuiltinTypeProps>(
     apiName,
   }) => {
     const { data } = useParseContent(content);
+    const caps = useToolRenderCaps();
 
     const Render = getBuiltinRender(identifier, apiName);
 
@@ -42,16 +45,18 @@ const BuiltinType = memo<BuiltinTypeProps>(
     const args = safeParseJSON(argumentsStr);
 
     return (
-      <Render
-        apiName={apiName}
-        args={args || {}}
-        content={data}
-        identifier={identifier}
-        messageId={messageId || toolCallId || ''}
-        pluginError={pluginError}
-        pluginState={pluginState}
-        toolCallId={toolCallId}
-      />
+      <ToolRenderProvider value={caps}>
+        <Render
+          apiName={apiName}
+          args={args || {}}
+          content={data}
+          identifier={identifier}
+          messageId={messageId || toolCallId || ''}
+          pluginError={pluginError}
+          pluginState={pluginState}
+          toolCallId={toolCallId}
+        />
+      </ToolRenderProvider>
     );
   },
 );
