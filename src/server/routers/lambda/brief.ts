@@ -1,10 +1,51 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
+import type { BriefItem } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+
+type AgentAvatarInfo = {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  title: string | null;
+};
+
+const enrichBriefsWithAgents = async (
+  briefs: BriefItem[],
+  db: LobeChatDatabase,
+  userId: string,
+) => {
+  const taskIds = briefs.map((b) => b.taskId).filter((id): id is string => id !== null);
+
+  if (taskIds.length === 0) {
+    return briefs.map((brief) => ({ ...brief, agents: [] as AgentAvatarInfo[] }));
+  }
+
+  const taskModel = new TaskModel(db, userId);
+  const taskAgentIdsMap = await taskModel.getTreeAgentIdsForTaskIds(taskIds);
+
+  const allAgentIds = [...new Set(Object.values(taskAgentIdsMap).flat())];
+  let agentMap: Record<string, AgentAvatarInfo> = {};
+
+  if (allAgentIds.length > 0) {
+    const agentModel = new AgentModel(db, userId);
+    const agentList = await agentModel.getAgentAvatarsByIds(allAgentIds);
+    agentMap = Object.fromEntries(agentList.map((a) => [a.id, a]));
+  }
+
+  return briefs.map((brief) => ({
+    ...brief,
+    agents: (brief.taskId ? taskAgentIdsMap[brief.taskId] || [] : [])
+      .map((id) => agentMap[id])
+      .filter(Boolean),
+  }));
+};
 
 const briefProcedure = authedProcedure.use(serverDatabase);
 
@@ -109,7 +150,9 @@ export const briefRouter = router({
     try {
       const model = new BriefModel(ctx.serverDB, ctx.userId);
       const result = await model.list(input);
-      return { data: result.briefs, success: true, total: result.total };
+      const data = await enrichBriefsWithAgents(result.briefs, ctx.serverDB, ctx.userId);
+
+      return { data, success: true, total: result.total };
     } catch (error) {
       console.error('[brief:list]', error);
       throw new TRPCError({
@@ -124,7 +167,9 @@ export const briefRouter = router({
     try {
       const model = new BriefModel(ctx.serverDB, ctx.userId);
       const items = await model.listUnresolved();
-      return { data: items, success: true };
+      const data = await enrichBriefsWithAgents(items, ctx.serverDB, ctx.userId);
+
+      return { data, success: true };
     } catch (error) {
       console.error('[brief:listUnresolved]', error);
       throw new TRPCError({
