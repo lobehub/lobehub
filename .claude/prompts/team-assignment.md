@@ -10,7 +10,7 @@
 - **@nekomeowww**: Memory, backend, deployment, DevOps, database
 - **@sudongyuer**: Mobile app (React Native)
 - **@sxjeru**: Model providers and configuration
-- **@rdmclin2**: Team workspace, IM integration, bot integration
+- **@rdmclin2**: Team workspace, IM and bot integration
 - **@tcmonster**: Subscription, refund, recharge, business cooperation
 
 Quick reference for assigning issues based on labels.
@@ -60,8 +60,7 @@ Quick reference for assigning issues based on labels.
 | `feature:group-chat`     | @arvinxx        | Group chat functionality                                                |
 | `feature:memory`         | @nekomeowww     | Memory feature                                                          |
 | `feature:team-workspace` | @rdmclin2       | Team workspace application                                              |
-| `feature:im-integration` | @rdmclin2       | IM integration (Slack, Discord, etc.)                                    |
-| `feature:bot`            | @rdmclin2       | Bot integration                                                         |
+| `feature:im-integration` | @rdmclin2       | IM and bot integration (Slack, Discord, etc.)                            |
 | `feature:agent-builder`  | @ONLY-yours     | Agent builder                                                           |
 | `feature:schedule-task`  | @ONLY-yours     | Schedule task                                                           |
 | `feature:subscription`   | @tcmonster      | Subscription and billing                                                |
