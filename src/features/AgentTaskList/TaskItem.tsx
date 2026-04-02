@@ -2,9 +2,10 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CheckCircle2, Circle } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import { useTaskStore } from '@/store/task';
+import { useAgentStore } from '@/store/agent';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
@@ -30,7 +31,8 @@ interface TaskItemProps {
 }
 
 const TaskItem = memo<TaskItemProps>(({ task }) => {
-  const setActiveTaskId = useTaskStore((s) => s.setActiveTaskId);
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const navigate = useNavigate();
 
   const displayStatus = taskListSelectors.getDisplayStatus(task.status);
   const color = statusColorMap[task.status] ?? cssVar.colorTextQuaternary;
@@ -38,8 +40,12 @@ const TaskItem = memo<TaskItemProps>(({ task }) => {
   const time = formatTime(task.updatedAt);
   const StatusIcon = isDone ? CheckCircle2 : Circle;
 
+  const handleClick = useCallback(() => {
+    if (agentId) navigate(`/agent/${agentId}/tasks/${task.identifier}`);
+  }, [agentId, navigate, task.identifier]);
+
   return (
-    <div className={styles.item} onClick={() => setActiveTaskId(task.identifier)}>
+    <div className={styles.item} onClick={handleClick}>
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Text ellipsis style={{ fontSize: 15 }} weight="bold">
           {task.name || task.identifier}
