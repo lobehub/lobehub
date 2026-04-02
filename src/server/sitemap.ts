@@ -308,9 +308,6 @@ export class Sitemap {
       ...this._genSitemap('/', { noLocales: true }),
       ...this._genSitemap('/agent', { noLocales: true }),
       ...(!hideDocs ? this._genSitemap('/changelog', { noLocales: true }) : []),
-      /* ↓ cloud slot ↓ */
-
-      /* ↑ cloud slot ↑ */
       ...this._genSitemap('/community', { changeFrequency: 'daily', priority: 0.7 }),
       ...this._genSitemap('/community/agent', { changeFrequency: 'daily', priority: 0.7 }),
       ...this._genSitemap('/community/mcp', { changeFrequency: 'daily', priority: 0.7 }),

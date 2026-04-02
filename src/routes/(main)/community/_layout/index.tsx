@@ -12,9 +12,6 @@ const Layout: FC = () => {
       <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
         <Outlet />
       </Flexbox>
-      {/* ↓ cloud slot ↓ */}
-
-      {/* ↑ cloud slot ↑ */}
     </>
   );
 };
