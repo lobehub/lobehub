@@ -15,23 +15,19 @@ const log = debug('lobe-server:service:gateway');
 
 const isVercel = !!process.env.VERCEL_ENV;
 
-/** Platforms that have a real adapter in the external message-gateway. */
-const MESSAGE_GATEWAY_PLATFORMS = new Set(['discord']);
-
 export class GatewayService {
   /**
    * Check if the external message-gateway is configured.
-   * When enabled, connection management is delegated to the Cloudflare Worker
-   * instead of managing connections in-process.
+   * When enabled, all platforms are registered on the gateway for
+   * connection management and typing persistence.
    */
   get useMessageGateway(): boolean {
     return getMessageGatewayClient().isConfigured;
   }
 
   async ensureRunning(): Promise<void> {
-    // When using external message-gateway, no local GatewayManager needed
     if (this.useMessageGateway) {
-      log('Using external message-gateway, skipping local GatewayManager');
+      await this.syncGatewayConnections();
       return;
     }
 
@@ -47,6 +43,69 @@ export class GatewayService {
     log('GatewayManager started');
   }
 
+  /**
+   * Sync all enabled bots to the external message-gateway.
+   * Called on startup to recover connections after LobeHub restarts.
+   */
+  private async syncGatewayConnections(): Promise<void> {
+    const { getServerDB } = await import('@/database/core/db-adaptor');
+    const { AgentBotProviderModel } = await import('@/database/models/agentBotProvider');
+    const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
+
+    const client = getMessageGatewayClient();
+    const serverDB = await getServerDB();
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+
+    // Sync all registered platforms
+    for (const definition of platformRegistry.listPlatforms()) {
+      const platform = definition.id;
+      try {
+        const providers = await AgentBotProviderModel.findEnabledByPlatform(
+          serverDB,
+          platform,
+          gateKeeper,
+        );
+
+        log('Gateway sync: found %d enabled providers for %s', providers.length, platform);
+
+        for (const provider of providers) {
+          try {
+            const status = await client.getStatus(provider.id);
+            if (status.state.status === 'connected') {
+              log('Gateway sync: %s already connected, skipping', provider.id);
+              continue;
+            }
+          } catch {
+            // Status check failed — try to connect
+          }
+
+          try {
+            const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
+            await client.connect({
+              connectionId: provider.id,
+              credentials: provider.credentials,
+              platform,
+              userId: provider.userId,
+              webhookPath,
+            });
+
+            await updateBotRuntimeStatus({
+              applicationId: provider.applicationId,
+              platform,
+              status: BOT_RUNTIME_STATUSES.connected,
+            });
+
+            log('Gateway sync: connected %s:%s', platform, provider.applicationId);
+          } catch (err) {
+            log('Gateway sync: failed to connect %s:%s: %O', platform, provider.applicationId, err);
+          }
+        }
+      } catch (err) {
+        log('Gateway sync: error syncing platform %s: %O', platform, err);
+      }
+    }
+  }
+
   async stop(): Promise<void> {
     const manager = getGatewayManager();
     if (!manager) return;
@@ -60,8 +119,7 @@ export class GatewayService {
     applicationId: string,
     userId: string,
   ): Promise<'started' | 'queued'> {
-    // ─── Delegate platforms to external message-gateway if configured ───
-    if (this.useMessageGateway && MESSAGE_GATEWAY_PLATFORMS.has(platform)) {
+    if (this.useMessageGateway) {
       return this.startClientViaGateway(platform, applicationId, userId);
     }
 
@@ -97,8 +155,6 @@ export class GatewayService {
         return 'queued';
       }
 
-      // Webhook-based platforms only need a single HTTP call,
-      // so we can run directly in a Vercel serverless function.
       const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
       await manager.startClient(platform, applicationId, userId);
       log('Started client %s:%s (direct)', platform, applicationId);
@@ -118,8 +174,7 @@ export class GatewayService {
   }
 
   async stopClient(platform: string, applicationId: string,  userId?: string): Promise<void> {
-    // ─── Delegate platforms to external message-gateway if configured ───
-    if (this.useMessageGateway && MESSAGE_GATEWAY_PLATFORMS.has(platform)) {
+    if (this.useMessageGateway) {
       return this.stopClientViaGateway(platform, applicationId);
     }
 
@@ -159,14 +214,8 @@ export class GatewayService {
     });
   }
 
-  // ─── External Message Gateway Integration ───
+  // ─── External Message Gateway ───
 
-  /**
-   * Start a connection via the external message-gateway Cloudflare Worker.
-   * This offloads all persistent connection management (WebSocket, Socket.IO,
-   * webhook registration) to the edge, eliminating the need for in-process
-   * connection management on Vercel serverless or self-hosted instances.
-   */
   private async startClientViaGateway(
     platform: string,
     applicationId: string,
@@ -174,7 +223,6 @@ export class GatewayService {
   ): Promise<'started'> {
     const client = getMessageGatewayClient();
 
-    // Load credentials from DB
     const { getServerDB } = await import('@/database/core/db-adaptor');
     const { AgentBotProviderModel } = await import('@/database/models/agentBotProvider');
     const { KeyVaultsGateKeeper } = await import('@/server/modules/KeyVaultsEncrypt');
@@ -189,7 +237,6 @@ export class GatewayService {
       throw new Error(`No enabled provider found for ${platform}:${applicationId}`);
     }
 
-    const appUrl = process.env.APP_URL || '';
     const webhookPath = `/api/agent/webhooks/${platform}/${applicationId}`;
 
     await client.connect({
@@ -213,8 +260,6 @@ export class GatewayService {
   private async stopClientViaGateway(platform: string, applicationId: string): Promise<void> {
     const client = getMessageGatewayClient();
 
-    // We need the provider ID (connectionId) to disconnect
-    // Look up by platform + applicationId
     const { getServerDB } = await import('@/database/core/db-adaptor');
     const { AgentBotProviderModel } = await import('@/database/models/agentBotProvider');
 
