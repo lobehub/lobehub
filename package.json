@@ -108,7 +108,7 @@
     "test-app": "vitest run",
     "test-app:coverage": "vitest --coverage --silent='passed-only'",
     "tunnel:cloudflare": "cloudflared tunnel --url http://localhost:3010",
-    "tunnel:ngrok": "ngrok http http://localhost:3011",
+    "tunnel:ngrok": "ngrok http http://localhost:3010",
     "type-check": "tsgo --noEmit",
     "type-check:tsc": "tsc --noEmit",
     "workflow:cdn": "tsx ./scripts/cdnWorkflow/index.ts",
