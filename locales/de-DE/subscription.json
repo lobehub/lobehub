@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "Meine Belohnung",
   "referral.table.columns.rewardedAt": "Belohnungszeitpunkt",
   "referral.table.columns.status": "Status",
-  "referral.table.columns.suspectedReason": "Grund für Anomalie",
   "referral.table.status.pending_reward": "Ausstehende Belohnung",
   "referral.table.status.registered": "Registriert",
   "referral.table.status.revoked": "Widerrufen",

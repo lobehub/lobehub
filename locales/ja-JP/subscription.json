@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "自分の報酬",
   "referral.table.columns.rewardedAt": "報酬付与日時",
   "referral.table.columns.status": "ステータス",
-  "referral.table.columns.suspectedReason": "異常理由",
   "referral.table.status.pending_reward": "保留中の報酬",
   "referral.table.status.registered": "登録済み",
   "referral.table.status.revoked": "取り消し",
