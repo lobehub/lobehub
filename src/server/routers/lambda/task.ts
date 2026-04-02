@@ -80,7 +80,7 @@ const groupListSchema = z.object({
       }),
     )
     .min(1)
-    .max(20),
+    .max(10),
   parentTaskId: z.string().nullable().optional(),
 });
 
