@@ -15,6 +15,8 @@ export type CreateVideoPayload = {
 export type CreateVideoResponse =
   | {
       inferenceId: string;
+      /** Provider uses webhook callback instead of polling */
+      useWebhook?: boolean;
     }
   | {
       inferenceId: string;

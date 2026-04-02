@@ -220,8 +220,30 @@ export const videoRouter = router({
 
       log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
 
-      // Check if provider uses polling (returns only inferenceId, no videoUrl)
-      if (response && !('videoUrl' in response)) {
+      // Determine async strategy based on response:
+      // - videoUrl present: video ready immediately (no async needed, just update status)
+      // - useWebhook: provider registered a callback URL, wait for webhook
+      // - otherwise: use background polling to check status
+      const hasVideoUrl = response && 'videoUrl' in response;
+      const useWebhook = response && 'useWebhook' in response && response.useWebhook;
+
+      if (hasVideoUrl) {
+        log('Video URL returned immediately, no async processing needed');
+
+        await asyncTaskModel.update(asyncTaskId, {
+          inferenceId: response.inferenceId,
+          status: AsyncTaskStatus.Processing,
+        });
+      } else if (useWebhook) {
+        // Webhook-based provider (e.g. Volcengine): wait for callback
+        log('Webhook-based provider detected, waiting for callback');
+
+        await asyncTaskModel.update(asyncTaskId, {
+          inferenceId: response?.inferenceId,
+          status: AsyncTaskStatus.Processing,
+        });
+      } else if (response) {
+        // Polling-based provider (e.g. OpenAI Sora): use background polling
         log(
           'Polling-based provider detected (inferenceId only), using after() for background polling',
         );
@@ -257,14 +279,6 @@ export const videoRouter = router({
         });
 
         log('After() hook registered for background video polling: %s', asyncTaskId);
-      } else {
-        // Webhook-based provider: update status to Processing and wait for callback
-        log('Webhook-based provider detected, waiting for callback');
-
-        await asyncTaskModel.update(asyncTaskId, {
-          inferenceId: response?.inferenceId,
-          status: AsyncTaskStatus.Processing,
-        });
       }
     } catch (e) {
       console.error('Failed to submit video generation task:', e);
