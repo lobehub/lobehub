@@ -3,6 +3,7 @@ import type { RuntimeSelectedSkill } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
+import { CONTEXT_INSTRUCTION, SYSTEM_CONTEXT_END, SYSTEM_CONTEXT_START } from '../base/constants';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
@@ -21,11 +22,11 @@ export interface SelectedSkillInjectorConfig {
   selectedSkills?: RuntimeSelectedSkill[];
 }
 
-const formatSelectedSkills = (selectedSkills: RuntimeSelectedSkill[]): string | null => {
+export const formatSelectedSkills = (selectedSkills: RuntimeSelectedSkill[]): string | null => {
   if (selectedSkills.length === 0) return null;
 
   const lines = [
-    'The user explicitly selected these skills for this request. Prefer them when relevant.',
+    'The user explicitly selected these skills for this request. Their full instructions are already loaded below — do NOT call activateSkill for these skills, use the provided content directly.',
     '<selected_skills>',
   ];
 
@@ -46,6 +47,26 @@ const formatSelectedSkills = (selectedSkills: RuntimeSelectedSkill[]): string | 
   lines.push('</selected_skills>');
 
   return lines.join('\n');
+};
+
+/**
+ * Format selected skills as a complete system-context block for message content persistence.
+ * Returns null if no skills with content are provided.
+ */
+export const formatSelectedSkillsContext = (
+  selectedSkills: RuntimeSelectedSkill[],
+): string | null => {
+  const inner = formatSelectedSkills(selectedSkills);
+  if (!inner) return null;
+
+  return [
+    SYSTEM_CONTEXT_START,
+    CONTEXT_INSTRUCTION,
+    `<selected_skill_context>`,
+    inner,
+    `</selected_skill_context>`,
+    SYSTEM_CONTEXT_END,
+  ].join('\n');
 };
 
 /**

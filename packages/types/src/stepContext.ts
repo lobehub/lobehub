@@ -171,12 +171,35 @@ export interface RuntimeMentionedAgent {
 }
 
 /**
+ * A slim tool manifest injected at runtime by callers (e.g. @mention → callAgent).
+ * Structurally compatible with LobeToolManifest from @lobechat/context-engine
+ * without requiring a cross-package import.
+ */
+export interface InjectedToolManifest {
+  api: Array<{
+    description: string;
+    name: string;
+    parameters: Record<string, any>;
+  }>;
+  identifier: string;
+  meta: { description?: string; title?: string };
+  systemRole?: string;
+  type?: 'builtin' | 'default' | 'markdown' | 'mcp' | 'standalone';
+}
+
+/**
  * Initial Context
  *
  * Contains state captured at operation initialization.
  * Remains constant throughout the operation lifecycle.
  */
 export interface RuntimeInitialContext {
+  /**
+   * Ad-hoc tool manifests injected by callers for the current request.
+   * Merged into the tool resolution output without passing through ToolsEngine.
+   * Deduplication: manifests whose identifier already appears in enabledToolIds are skipped.
+   */
+  injectedManifests?: InjectedToolManifest[];
   /**
    * Agents explicitly @mentioned by the user in the input editor.
    * When present in a non-group conversation, the current agent acts as

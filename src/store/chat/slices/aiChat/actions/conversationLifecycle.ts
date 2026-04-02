@@ -1,7 +1,8 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
+import { formatSelectedSkillsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatImageItem,
@@ -345,10 +346,16 @@ export class ConversationLifecycleActionImpl {
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       const topicId = operationContext.topicId;
+
+      // Persist selected skill context into user message content so it survives across turns.
+      // This avoids ephemeral injection that breaks prompt cache when re-injected later.
+      const skillContext = formatSelectedSkillsContext(enrichedSelectedSkills);
+      const persistedContent = skillContext ? `${message}\n\n${skillContext}` : message;
+
       data = await aiChatService.sendMessageInServer(
         {
           newUserMessage: {
-            content: message,
+            content: persistedContent,
             editorData,
             files: fileIdList,
             pageSelections,
@@ -564,34 +571,25 @@ export class ConversationLifecycleActionImpl {
       )(this.#get());
 
       try {
-        // When agents are @mentioned in non-group context, auto-enable agent-management tool
-        // so the supervisor can delegate via callAgent
-        const effectiveSelectedTools =
-          hasMentionedAgents &&
-          !enrichedSelectedTools.some((t) => t.identifier === AgentManagementIdentifier)
-            ? [
-                ...enrichedSelectedTools,
-                { identifier: AgentManagementIdentifier, name: 'Agent Management' },
-              ]
-            : enrichedSelectedTools;
+        // When agents are @mentioned, inject a slim callAgent-only manifest
+        // so the AI can delegate directly without activating the full agent-management tool
+        const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
 
         const hasInitialContext =
-          effectiveSelectedTools.length > 0 ||
-          enrichedSelectedSkills.length > 0 ||
-          hasMentionedAgents;
+          enrichedSelectedTools.length > 0 || hasMentionedAgents || !!injectedManifests;
 
+        // Note: selectedSkills are NOT passed here — they are persisted into the user
+        // message content above so they survive across turns without re-injection.
         const agentRuntimeInitialContext = hasInitialContext
           ? {
               initialContext: {
-                ...(enrichedSelectedSkills.length > 0
-                  ? { selectedSkills: enrichedSelectedSkills }
-                  : undefined),
-                ...(effectiveSelectedTools.length > 0
-                  ? { selectedTools: effectiveSelectedTools }
+                ...(enrichedSelectedTools.length > 0
+                  ? { selectedTools: enrichedSelectedTools }
                   : undefined),
                 // Only inject mentionedAgents in non-group context to avoid
                 // group @member mentions (including ALL_MEMBERS) leaking into agent-management
                 ...(hasMentionedAgents ? { mentionedAgents } : undefined),
+                ...(injectedManifests ? { injectedManifests } : undefined),
               },
               phase: 'init' as const,
             }

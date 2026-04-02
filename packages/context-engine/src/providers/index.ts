@@ -21,7 +21,11 @@ export { HistorySummaryProvider } from './HistorySummary';
 export { KnowledgeInjector } from './KnowledgeInjector';
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
-export { SelectedSkillInjector } from './SelectedSkillInjector';
+export {
+  formatSelectedSkills,
+  formatSelectedSkillsContext,
+  SelectedSkillInjector,
+} from './SelectedSkillInjector';
 export { SelectedToolInjector } from './SelectedToolInjector';
 export { SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
