@@ -71,6 +71,7 @@ describe('lobehubSkillStore actions', () => {
         provider: 'linear',
         toolName: 'createIssue',
         args: { title: 'Test Issue' },
+        topicId: undefined,
       });
     });
 

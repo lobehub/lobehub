@@ -212,6 +212,62 @@ export class TaskModel {
     return result.rows as TaskItem[];
   }
 
+  /**
+   * For a list of task IDs, find all agent IDs (assignee + creator) across their full task trees.
+   * Walks UP to find root, then DOWN to collect all agents.
+   * Returns { [inputTaskId]: agentId[] }
+   */
+  async getTreeAgentIdsForTaskIds(taskIds: string[]): Promise<Record<string, string[]>> {
+    if (taskIds.length === 0) return {};
+
+    const taskIdParams = taskIds.map((id) => sql`${id}`);
+    const taskIdList = sql.join(taskIdParams, sql`, `);
+
+    const result = await this.db.execute(sql`
+      WITH RECURSIVE
+      ancestors AS (
+        SELECT id AS origin_id, id, parent_task_id
+        FROM tasks
+        WHERE id IN (${taskIdList})
+          AND created_by_user_id = ${this.userId}
+        UNION ALL
+        SELECT a.origin_id, t.id, t.parent_task_id
+        FROM tasks t
+        JOIN ancestors a ON t.id = a.parent_task_id
+        WHERE t.created_by_user_id = ${this.userId}
+      ),
+      roots AS (
+        SELECT DISTINCT ON (origin_id) origin_id, id AS root_id
+        FROM ancestors
+        WHERE parent_task_id IS NULL
+      ),
+      descendants AS (
+        SELECT r.origin_id, t.id, t.assignee_agent_id, t.created_by_agent_id
+        FROM tasks t
+        JOIN roots r ON t.id = r.root_id
+        WHERE t.created_by_user_id = ${this.userId}
+        UNION ALL
+        SELECT d.origin_id, t.id, t.assignee_agent_id, t.created_by_agent_id
+        FROM tasks t
+        JOIN descendants d ON t.parent_task_id = d.id
+        WHERE t.created_by_user_id = ${this.userId}
+      )
+      SELECT origin_id, assignee_agent_id, created_by_agent_id
+      FROM descendants
+      WHERE assignee_agent_id IS NOT NULL OR created_by_agent_id IS NOT NULL
+    `);
+
+    const map: Record<string, Set<string>> = {};
+    for (const row of result.rows as any[]) {
+      const originId = row.origin_id as string;
+      if (!map[originId]) map[originId] = new Set();
+      if (row.assignee_agent_id) map[originId].add(row.assignee_agent_id as string);
+      if (row.created_by_agent_id) map[originId].add(row.created_by_agent_id as string);
+    }
+
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, Array.from(v)]));
+  }
+
   // ========== Status ==========
 
   async updateStatus(

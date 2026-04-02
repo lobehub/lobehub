@@ -266,7 +266,7 @@
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.5.0",
     "@lobehub/icons": "^5.0.0",
-    "@lobehub/market-sdk": "0.31.11",
+    "@lobehub/market-sdk": "0.32.2",
     "@lobehub/tts": "^5.1.2",
     "@lobehub/ui": "^5.6.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -341,7 +341,7 @@
     "klavis": "^2.15.0",
     "langfuse": "^3.38.6",
     "langfuse-core": "^3.38.6",
-    "lexical": "^0.42.0",
+    "lexical": "0.42.0",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.1",
@@ -354,7 +354,7 @@
     "next-themes": "^0.4.6",
     "nextjs-toploader": "^3.9.17",
     "node-machine-id": "^1.1.12",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^8.0.4",
     "numeral": "^2.0.6",
     "nuqs": "^2.8.6",
     "officeparser": "5.1.1",
@@ -525,7 +525,7 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^3.2.4"
   },
-  "packageManager": "pnpm@10.20.0",
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"

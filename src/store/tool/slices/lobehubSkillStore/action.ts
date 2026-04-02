@@ -40,7 +40,7 @@ export class LobehubSkillStoreActionImpl {
   callLobehubSkillTool = async (
     params: CallLobehubSkillToolParams,
   ): Promise<CallLobehubSkillToolResult> => {
-    const { provider, toolName, args } = params;
+    const { provider, toolName, args, topicId } = params;
     const toolId = `${provider}:${toolName}`;
 
     this.#set(
@@ -56,6 +56,7 @@ export class LobehubSkillStoreActionImpl {
         args,
         provider,
         toolName,
+        topicId,
       });
 
       this.#set(

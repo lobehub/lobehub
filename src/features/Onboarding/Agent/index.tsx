@@ -2,11 +2,12 @@
 
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { SESSION_CHAT_URL } from '@lobechat/const';
-import { Button, ErrorBoundary, Flexbox, Text } from '@lobehub/ui';
+import { Button, ErrorBoundary, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { History } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
@@ -24,6 +25,19 @@ import AgentOnboardingConversation from './Conversation';
 import AgentOnboardingDebugExportButton from './DebugExportButton';
 import HistoryPanel from './HistoryPanel';
 import OnboardingConversationProvider from './OnboardingConversationProvider';
+
+const CLASSIC_ONBOARDING_PATH = '/onboarding/classic';
+
+const RedirectToClassicOnboarding = memo(() => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    navigate(CLASSIC_ONBOARDING_PATH, { replace: true });
+  }, [navigate]);
+
+  return <Loading debugId="AgentOnboardingRedirectClassic" />;
+});
+RedirectToClassicOnboarding.displayName = 'RedirectToClassicOnboarding';
 
 const AgentOnboardingPage = memo(() => {
   const { t } = useTranslation('onboarding');
@@ -89,13 +103,7 @@ const AgentOnboardingPage = memo(() => {
   if (error) {
     return (
       <OnboardingContainer>
-        <Flexbox gap={16} style={{ maxWidth: 720, width: '100%' }}>
-          <ModeSwitch />
-          <Flexbox gap={8}>
-            <Text weight={'bold'}>Failed to initialize onboarding.</Text>
-            <Button onClick={() => mutate()}>Retry</Button>
-          </Flexbox>
-        </Flexbox>
+        <RedirectToClassicOnboarding />
       </OnboardingContainer>
     );
   }

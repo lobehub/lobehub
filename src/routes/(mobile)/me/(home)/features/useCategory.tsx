@@ -66,7 +66,6 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     },
   ];
 
-  /* ↓ cloud slot ↓ */
   const helps: CellProps[] = [
     showCloudPromotion && {
       icon: Cloudy,
@@ -100,9 +99,6 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     },
     ...(isLoginWithAuth ? profile : []),
     ...(isLoginWithAuth ? settings : []),
-    /* ↓ cloud slot ↓ */
-
-    /* ↑ cloud slot ↑ */
     ...getDesktopApp,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as CellProps[];

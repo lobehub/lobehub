@@ -3,18 +3,17 @@ import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
 } from '@lobechat/builtin-tool-web-onboarding';
+import {
+  createDocumentReadResult,
+  createWebOnboardingToolResult,
+  formatWebOnboardingStateMessage,
+} from '@lobechat/builtin-tool-web-onboarding/utils';
 import { type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
-
-import {
-  createDocumentReadResult,
-  createWebOnboardingToolResult,
-  formatWebOnboardingStateMessage,
-} from '../../../../../utils/webOnboardingToolResult';
 
 const syncUserOnboardingState = async () => {
   try {

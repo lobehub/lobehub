@@ -37,19 +37,11 @@ jobs:
         with:
           token: ${{ secrets.GH_TOKEN }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
         run: bun run lint

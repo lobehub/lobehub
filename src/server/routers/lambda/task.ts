@@ -786,9 +786,14 @@ export const taskRouter = router({
           pluginIds.push(BriefIdentifier);
         }
 
+        // Read per-task model/provider overrides from task.config
+        const taskConfig = (task.config ?? {}) as Record<string, unknown>;
+
         const result = await aiAgentService.execAgent({
           ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
           additionalPluginIds: pluginIds,
+          ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
+          ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
           hooks: [
             {
               handler: async (event) => {
