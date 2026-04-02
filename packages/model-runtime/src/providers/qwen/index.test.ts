@@ -139,7 +139,32 @@ describe('LobeQwenAI - custom features', () => {
       expect(result.preserve_thinking).toBe(false);
     });
 
-    it('should not set preserve_thinking for unsupported models', () => {
+    it('should map preserveThinking for deployment-name aliases when caller provides the param', () => {
+      const payload = {
+        messages: [
+          {
+            content: 'answer',
+            reasoning: { content: 'reasoning content' },
+            role: 'assistant',
+          },
+        ],
+        model: 'my-qwen3.6-plus-deployment',
+        preserveThinking: true,
+      } as any;
+
+      const result = params.chatCompletion!.handlePayload!(payload);
+
+      expect(result.preserve_thinking).toBe(true);
+      expect(result.messages).toEqual([
+        {
+          content: 'answer',
+          reasoning_content: 'reasoning content',
+          role: 'assistant',
+        },
+      ]);
+    });
+
+    it('should not set preserve_thinking when preserveThinking is absent', () => {
       const payload = {
         messages: [
           {
@@ -149,7 +174,6 @@ describe('LobeQwenAI - custom features', () => {
           },
         ],
         model: 'qwen3.5-plus',
-        preserveThinking: true,
       } as any;
 
       const result = params.chatCompletion!.handlePayload!(payload);

@@ -24,9 +24,6 @@ export const QwenLegacyModels = new Set([
   'qwen-1.8b-longcontext-chat',
 ]);
 
-// According to Bailian docs, preserve_thinking is currently supported by Qwen3.6 Plus only.
-export const QwenPreserveThinkingModels = new Set(['qwen3.6-plus', 'qwen3.6-plus-2026-04-02']);
-
 export const params = {
   baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   chatCompletion: {
@@ -59,8 +56,8 @@ export const params = {
         },
       );
 
-      const supportsPreserveThinking = QwenPreserveThinkingModels.has(model);
-      const shouldPreserveThinking = supportsPreserveThinking && preserveThinking === true;
+      // Preserve-thinking support is gated by upstream extendParams resolution.
+      const shouldPreserveThinking = preserveThinking === true;
 
       const messages = (rest.messages || []).map((message: any) => {
         const { reasoning, ...messageRest } = message;
@@ -119,8 +116,7 @@ export const params = {
                   thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
               }
               : {}),
-        ...(supportsPreserveThinking &&
-          typeof preserveThinking === 'boolean' && { preserve_thinking: preserveThinking }),
+        ...(typeof preserveThinking === 'boolean' && { preserve_thinking: preserveThinking }),
         frequency_penalty: undefined,
         messages,
         model,

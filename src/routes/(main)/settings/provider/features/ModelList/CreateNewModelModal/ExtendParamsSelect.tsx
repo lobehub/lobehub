@@ -246,7 +246,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
   opus47Effort: { labelSuffix: ' (Opus 4.7+)', previewWidth: 280, tag: 'output_config.effort' },
-  preserveThinking: { labelSuffix: ' (Qwen3.6 Plus)', previewWidth: 360, tag: 'preserve_thinking' },
+  preserveThinking: { labelSuffix: ' (Qwen3.6+)', previewWidth: 360, tag: 'preserve_thinking' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
