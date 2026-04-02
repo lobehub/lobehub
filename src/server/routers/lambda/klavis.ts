@@ -1,4 +1,4 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { z } from 'zod';
 
 import { PluginModel } from '@/database/models/plugin';
@@ -49,7 +49,7 @@ export const klavisRouter = router({
       const tools = toolsResponse.tools || [];
 
       // Save to database using the provided identifier (format: lowercase, spaces replaced with hyphens)
-      const manifest: LobeChatPluginManifest = {
+      const manifest: ToolManifest = {
         api: tools.map((tool: any) => ({
           description: tool.description || '',
           name: tool.name,
@@ -232,7 +232,7 @@ export const klavisRouter = router({
       const existingPlugin = await ctx.pluginModel.findById(identifier);
 
       // Build manifest containing all tools
-      const manifest: LobeChatPluginManifest = {
+      const manifest: ToolManifest = {
         api: tools.map((tool) => ({
           description: tool.description || '',
           name: tool.name,

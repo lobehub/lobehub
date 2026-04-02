@@ -1,5 +1,5 @@
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
-import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
+import { ToolErrorType } from '@lobechat/types';
 import debug from 'debug';
 import { t } from 'i18next';
 
@@ -241,7 +241,7 @@ export class PluginTypesActionImpl {
             message: '[plugin] your settings is invalid with plugin manifest setting schema',
           },
           message: t('response.PluginSettingsInvalid', { ns: 'error' }),
-          type: PluginErrorType.PluginSettingsInvalid as any,
+          type: ToolErrorType.PluginSettingsInvalid as any,
         },
         {
           agentId: message?.agentId,

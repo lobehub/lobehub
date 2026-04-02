@@ -1,4 +1,4 @@
-import { type PluginSchema } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifestSettings } from '@lobechat/types';
 import { Form, Markdown } from '@lobehub/ui';
 import { Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -10,7 +10,7 @@ import { pluginSelectors } from '@/store/tool/selectors';
 
 import ItemRender from '../../components/JSONSchemaConfig/ItemRender';
 
-export const transformPluginSettings = (pluginSettings: PluginSchema) => {
+export const transformPluginSettings = (pluginSettings: ToolManifestSettings) => {
   if (!pluginSettings?.properties) return [];
 
   return Object.entries(pluginSettings.properties).map(([name, i]) => ({
@@ -28,7 +28,7 @@ export const transformPluginSettings = (pluginSettings: PluginSchema) => {
 
 interface PluginSettingsConfigProps {
   id: string;
-  schema: PluginSchema;
+  schema: ToolManifestSettings;
 }
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

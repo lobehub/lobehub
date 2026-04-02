@@ -6,14 +6,13 @@ import { fetchSSE, getMessageError, standardizeAnimationStyle } from '@lobechat/
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import {
+  type PluginRequestPayload,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
   type UIChatMessage,
 } from '@lobechat/types';
 import { ChatErrorType, TraceTagMap } from '@lobechat/types';
-import { type PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
-import { createHeadersWithPluginSettings } from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
@@ -460,7 +459,7 @@ class ChatService {
     const traceHeader = createTraceHeader(this.mapTrace(options?.trace, TraceTagMap.ToolCalling));
 
     const headers = await createHeaderWithAuth({
-      headers: { ...createHeadersWithPluginSettings(settings), ...traceHeader },
+      headers: traceHeader,
     });
 
     const gatewayURL = manifest?.gateway ?? API_ENDPOINTS.gateway;

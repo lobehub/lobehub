@@ -5,7 +5,7 @@ import { type RuntimeStepContext } from '../stepContext';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 
-interface Meta {
+export interface Meta {
   /**
    * avatar
    * @desc Avatar of the plugin
@@ -35,7 +35,7 @@ interface Meta {
   title: string;
 }
 
-const MetaSchema = z.object({
+export const MetaSchema = z.object({
   avatar: z.string().optional(),
   description: z.string().optional(),
   readme: z.string().optional(),

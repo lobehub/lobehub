@@ -15,7 +15,6 @@ import { type RuntimeExecutorContext } from '@/server/modules/AgentRuntime/Runti
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
-import { PluginGatewayService } from '@/server/services/pluginGateway';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -160,13 +159,11 @@ export class AgentRuntimeService {
     this.messageModel = new MessageModel(db, this.userId);
 
     // Initialize ToolExecutionService with dependencies
-    const pluginGatewayService = new PluginGatewayService();
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
 
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,
       mcpService,
-      pluginGatewayService,
     });
 
     // Setup local execution callback for LocalQueueServiceImpl

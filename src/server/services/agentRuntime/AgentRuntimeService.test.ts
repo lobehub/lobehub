@@ -57,14 +57,6 @@ vi.mock('@/server/services/search', () => ({
   },
 }));
 
-// Mock plugin gateway service to avoid server-side env access
-vi.mock('@/server/services/pluginGateway', () => ({
-  PluginGatewayService: vi.fn().mockImplementation(() => ({
-    getPluginManifest: vi.fn(),
-    executePlugin: vi.fn(),
-  })),
-}));
-
 // Mock factory and redis dependencies to break env import chains,
 // so the barrel can be imported with real AgentRuntimeCoordinator + InMemory backends
 vi.mock('@/server/modules/AgentRuntime/factory', async () => {

@@ -1,4 +1,4 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
 import { t } from 'i18next';
 
@@ -46,7 +46,7 @@ export class CustomPluginActionImpl {
 
     try {
       updateInstallLoadingState(id, true);
-      let manifest: LobeChatPluginManifest;
+      let manifest: ToolManifest;
       // mean this is a mcp plugin
       if (!!plugin.customParams?.mcp) {
         const url = plugin.customParams?.mcp?.url;

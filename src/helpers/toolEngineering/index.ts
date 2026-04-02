@@ -9,8 +9,7 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import { type ChatCompletionTool, type WorkingModel } from '@lobechat/types';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ChatCompletionTool, type ToolManifest, type WorkingModel } from '@lobechat/types';
 
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { getAgentStoreState } from '@/store/agent';
@@ -32,7 +31,7 @@ import { isCanUseFC } from '../isCanUseFC';
  */
 export interface ToolsEngineConfig {
   /** Additional manifests to include beyond the standard ones */
-  additionalManifests?: LobeChatPluginManifest[];
+  additionalManifests?: ToolManifest[];
   /** Default tool IDs that will always be added to the end of the tools list */
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
@@ -51,20 +50,16 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   const pluginManifests = pluginSelectors.installedPluginManifestList(toolStoreState);
 
   // Get all builtin tool manifests
-  const builtinManifests = toolStoreState.builtinTools.map(
-    (tool) => tool.manifest as LobeChatPluginManifest,
-  );
+  const builtinManifests = toolStoreState.builtinTools.map((tool) => tool.manifest as ToolManifest);
 
   // Get Klavis tool manifests
   const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
-  const klavisManifests = klavisTools
-    .map((tool) => tool.manifest as LobeChatPluginManifest)
-    .filter(Boolean);
+  const klavisManifests = klavisTools.map((tool) => tool.manifest as ToolManifest).filter(Boolean);
 
   // Get LobeHub Skill tool manifests
   const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
   const lobehubSkillManifests = lobehubSkillTools
-    .map((tool) => tool.manifest as LobeChatPluginManifest)
+    .map((tool) => tool.manifest as ToolManifest)
     .filter(Boolean);
 
   // Combine all manifests

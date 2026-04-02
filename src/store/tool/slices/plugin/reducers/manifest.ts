@@ -1,9 +1,9 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { produce } from 'immer';
 
 import { type PluginManifestMap } from '@/types/tool/plugin';
 
-type AddManifestDispatch = { id: string; plugin: LobeChatPluginManifest; type: 'addManifest' };
+type AddManifestDispatch = { id: string; plugin: ToolManifest; type: 'addManifest' };
 type DeleteManifestDispatch = { id: string; type: 'deleteManifest' };
 // type UpdateManifestDispatch = {
 //   id: string;

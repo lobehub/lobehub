@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolService } from '../tool';
-import OpenAIPlugin from './openai/plugin.json';
 
 // Mocking modules and functions
 
@@ -31,7 +30,6 @@ describe('ToolService', () => {
       const manifestUrl = 'http://fake-url.com/manifest.json';
 
       const fakeManifest = {
-        $schema: '../node_modules/@lobehub/chat-plugin-sdk/schema.json',
         api: [
           {
             url: 'https://realtime-weather.chat-plugin.lobehub.com/api/v1',
@@ -135,11 +133,5 @@ describe('ToolService', () => {
         expect(e).toEqual(new TypeError('fetchError'));
       }
     });
-  });
-
-  it('can parse the OpenAI plugin', async () => {
-    const manifest = toolService['convertOpenAIManifestToLobeManifest'](OpenAIPlugin as any);
-
-    expect(manifest).toMatchSnapshot();
   });
 });

@@ -1,8 +1,8 @@
-import type { LobeChatPluginManifest, Meta } from '@lobehub/chat-plugin-sdk';
-
+import type { Meta } from './builtin';
+import type { ToolManifest } from './manifest';
 import type { LobeToolType } from './tool';
 
-export type PluginManifestMap = Record<string, LobeChatPluginManifest>;
+export type PluginManifestMap = Record<string, ToolManifest>;
 
 export interface CustomPluginMetadata {
   avatar?: string;
@@ -53,7 +53,7 @@ export interface CustomPluginParams {
 export interface LobeToolCustomPlugin {
   customParams?: CustomPluginParams;
   identifier: string;
-  manifest?: LobeChatPluginManifest;
+  manifest?: ToolManifest;
   settings?: any;
   type: 'customPlugin';
 }
@@ -70,4 +70,13 @@ export interface InstallPluginMeta extends Partial<Meta> {
 export interface PluginInstallError {
   cause?: string;
   message: 'noManifest' | 'fetchError' | 'manifestInvalid' | 'urlError';
+}
+
+export interface PluginRequestPayload {
+  apiName: string;
+  arguments?: string;
+  identifier: string;
+  indexUrl?: string;
+  manifest?: ToolManifest;
+  type?: string;
 }

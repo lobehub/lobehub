@@ -37,14 +37,6 @@ vi.mock('@/server/services/search', () => ({
   },
 }));
 
-// Mock plugin gateway service
-vi.mock('@/server/services/pluginGateway', () => ({
-  PluginGatewayService: vi.fn().mockImplementation(() => ({
-    executePlugin: vi.fn(),
-    getPluginManifest: vi.fn(),
-  })),
-}));
-
 // Mock MCP service
 vi.mock('@/server/services/mcp', () => ({
   mcpService: {

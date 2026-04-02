@@ -1,4 +1,3 @@
-import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
@@ -129,5 +128,5 @@ export const ChatToolPayloadSchema = z.object({
 export interface ChatMessagePluginError {
   body?: any;
   message: string;
-  type: IPluginErrorType;
+  type: string;
 }

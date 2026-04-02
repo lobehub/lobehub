@@ -29,9 +29,6 @@ vi.mock('@/server/modules/AgentRuntime/RuntimeExecutors', () => ({
   createRuntimeExecutors: vi.fn(() => ({})),
 }));
 vi.mock('@/server/services/mcp', () => ({ mcpService: {} }));
-vi.mock('@/server/services/pluginGateway', () => ({
-  PluginGatewayService: vi.fn().mockImplementation(() => ({})),
-}));
 vi.mock('@/server/services/queue', () => ({
   QueueService: vi.fn().mockImplementation(() => ({
     getImpl: vi.fn(() => ({})),

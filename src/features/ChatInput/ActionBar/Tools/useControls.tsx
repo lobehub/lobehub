@@ -59,20 +59,17 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
   const [
-    useFetchPluginStore,
     useFetchUserKlavisServers,
     useFetchLobehubSkillConnections,
     useFetchUninstalledBuiltinTools,
     useFetchAgentSkills,
   ] = useToolStore((s) => [
-    s.useFetchPluginStore,
     s.useFetchUserKlavisServers,
     s.useFetchLobehubSkillConnections,
     s.useFetchUninstalledBuiltinTools,
     s.useFetchAgentSkills,
   ]);
 
-  useFetchPluginStore();
   useFetchInstalledPlugins();
   useFetchUninstalledBuiltinTools(true);
   useFetchAgentSkills(true);

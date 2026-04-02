@@ -41,7 +41,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
       mcpStoreSelectors.isMCPInstalling(identifier)(s),
       s.installMCPPlugin,
       s.cancelInstallMCPPlugin,
-      s.uninstallPlugin,
+      s.uninstallMCPPlugin,
       mcpStoreSelectors.getPluginById(identifier)(s),
     ]);
 
