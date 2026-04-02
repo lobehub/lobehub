@@ -77,6 +77,7 @@ export interface TaskDetailData {
   activities?: TaskDetailActivity[];
   agentId?: string | null;
   checkpoint?: CheckpointConfig;
+  config?: Record<string, unknown>;
   createdAt?: string;
   dependencies?: Array<{ dependsOn: string; type: string }>;
   description?: string | null;

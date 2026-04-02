@@ -125,6 +125,7 @@ export class TaskService {
     return {
       agentId: task.assigneeAgentId,
       checkpoint: this.taskModel.getCheckpointConfig(task),
+      config: task.config ? (task.config as Record<string, unknown>) : undefined,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
       dependencies: dependencies.map((d) => {
         const info = depIdToInfo.get(d.dependsOnId);
