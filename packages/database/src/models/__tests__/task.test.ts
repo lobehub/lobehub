@@ -599,6 +599,95 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('updateTaskConfig', () => {
+    it('should merge partial config into empty config', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      const updated = await model.updateTaskConfig(task.id, { model: 'gpt-4', provider: 'openai' });
+      expect(updated).not.toBeNull();
+      expect((updated!.config as Record<string, unknown>).model).toBe('gpt-4');
+      expect((updated!.config as Record<string, unknown>).provider).toBe('openai');
+    });
+
+    it('should deep merge into existing config', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set initial config with checkpoint
+      await model.updateTaskConfig(task.id, {
+        checkpoint: { onAgentRequest: true, topic: { after: true } },
+      });
+
+      // Merge review config — checkpoint should be preserved
+      const updated = await model.updateTaskConfig(task.id, {
+        review: { enabled: true },
+      });
+
+      const config = updated!.config as Record<string, any>;
+      expect(config.checkpoint).toEqual({ onAgentRequest: true, topic: { after: true } });
+      expect(config.review).toEqual({ enabled: true });
+    });
+
+    it('should deep merge nested fields within a config key', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set initial checkpoint config
+      await model.updateTaskConfig(task.id, {
+        checkpoint: { onAgentRequest: true, topic: { after: true } },
+      });
+
+      // Update checkpoint with additional nested field — deep merge should preserve existing fields
+      const updated = await model.updateTaskConfig(task.id, {
+        checkpoint: { topic: { before: true } },
+      });
+
+      const config = updated!.config as Record<string, any>;
+      expect(config.checkpoint.onAgentRequest).toBe(true);
+      expect(config.checkpoint.topic.after).toBe(true);
+      expect(config.checkpoint.topic.before).toBe(true);
+    });
+
+    it('should return null for non-existent task', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const result = await model.updateTaskConfig('non-existent-id', { model: 'gpt-4' });
+      expect(result).toBeNull();
+    });
+
+    it('should work with updateCheckpointConfig delegating to updateTaskConfig', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set some initial non-checkpoint config
+      await model.updateTaskConfig(task.id, { model: 'gpt-4' });
+
+      // Use updateCheckpointConfig — should preserve other config keys
+      await model.updateCheckpointConfig(task.id, { onAgentRequest: true });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      expect(config.model).toBe('gpt-4');
+      expect(config.checkpoint).toEqual({ onAgentRequest: true });
+    });
+
+    it('should work with updateReviewConfig delegating to updateTaskConfig', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set some initial non-review config
+      await model.updateTaskConfig(task.id, { provider: 'anthropic' });
+
+      // Use updateReviewConfig — should preserve other config keys
+      await model.updateReviewConfig(task.id, { enabled: true, maxIterations: 3 });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      expect(config.provider).toBe('anthropic');
+      expect(config.review).toEqual({ enabled: true, maxIterations: 3 });
+    });
+  });
+
   describe('topic management', () => {
     it('should increment topic count', async () => {
       const model = new TaskModel(serverDB, userId);

@@ -6,6 +6,8 @@ import type {
 } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 
+import { merge } from '@/utils/merge';
+
 import type { NewTask, NewTaskComment, TaskCommentItem, TaskItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
@@ -299,7 +301,7 @@ export class TaskModel {
     if (!task) return null;
 
     const current = (task.config as Record<string, unknown>) || {};
-    const config = { ...current, ...partial };
+    const config = merge(current, partial);
     return this.update(id, { config });
   }
 
