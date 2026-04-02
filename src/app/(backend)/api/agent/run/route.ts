@@ -22,7 +22,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Parse body after verification
-  const body = JSON.parse(rawBody);
+  let body: any;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   const externalRetryCount = Number(request.headers.get('Upstash-Retried') ?? 0) || 0;
   try {
     const {

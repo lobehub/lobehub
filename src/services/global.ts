@@ -18,6 +18,9 @@ class GlobalService extends BusinessGlobalService {
    */
   getLatestVersion = async (): Promise<string> => {
     const res = await fetch(VERSION_URL);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch latest version: ${res.status} ${res.statusText}`);
+    }
     const data = await res.json();
 
     return data['version'];

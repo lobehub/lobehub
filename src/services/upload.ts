@@ -211,6 +211,9 @@ class UploadService {
    */
   getImageFileByUrlWithCORS = async (url: string, filename: string, fileType = 'image/png') => {
     const res = await fetch(API_ENDPOINTS.proxy, { body: url, method: 'POST' });
+    if (!res.ok) {
+      throw new Error(`Image proxy request failed: ${res.status} ${res.statusText}`);
+    }
     const data = await res.arrayBuffer();
 
     return new File([data], filename, { lastModified: Date.now(), type: fileType });
