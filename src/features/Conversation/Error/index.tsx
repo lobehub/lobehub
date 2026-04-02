@@ -121,6 +121,16 @@ interface ErrorExtraProps {
 const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) => {
   const error = data.error;
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
+
+  // Diagnostic log for debugging production rendering fallback (remove after investigation)
+  if (error?.type) {
+    console.info('[ErrorMessageExtra]', {
+      ENABLE_BUSINESS_FEATURES,
+      errorType: error.type,
+      hasBusinessComponent: !!businessChatErrorMessageExtra,
+    });
+  }
+
   if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
     return businessChatErrorMessageExtra;
 
