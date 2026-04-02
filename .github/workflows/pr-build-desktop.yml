@@ -27,15 +27,11 @@ jobs:
       - name: Checkout base
         uses: actions/checkout@v6
 
-      - name: Setup Node & Bun
-        uses: ./.github/actions/setup-node-bun
-        with:
-          node-version: 24.11.1
-          bun-version: latest
-          package-manager-cache: 'false'
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
@@ -93,29 +89,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node & pnpm
-        uses: ./.github/actions/setup-node-pnpm
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
         with:
           node-version: 24.11.1
-          package-manager-cache: 'false'
-
-      # node-linker=hoisted 模式将可以确保 asar 压缩可用
-      - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      # 移除国内 electron 镜像配置，GitHub Actions 使用官方源更快
-      - name: Remove China electron mirror from .npmrc
-        shell: bash
-        run: |
-          NPMRC_FILE="./apps/desktop/.npmrc"
-          if [ -f "$NPMRC_FILE" ]; then
-            sed -i.bak '/^electron_mirror=/d; /^electron_builder_binaries_mirror=/d' "$NPMRC_FILE"
-            rm -f "${NPMRC_FILE}.bak"
-            echo "✅ Removed electron mirror config from .npmrc"
-          fi
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
 
       # 设置 package.json 的版本号
       - name: Set package version
@@ -228,12 +205,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node & Bun
-        uses: ./.github/actions/setup-node-bun
-        with:
-          node-version: 24.11.1
-          bun-version: latest
-          package-manager-cache: 'false'
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       # 下载所有平台的构建产物
       - name: Download artifacts
@@ -251,13 +224,11 @@ jobs:
       - name: Install yaml only for merge step
         run: |
           cd scripts/electronWorkflow
-          # 在脚本目录创建最小 package.json，防止 bun 向上寻找根 package.json
           if [ ! -f package.json ]; then
             echo '{"name":"merge-mac-release","private":true}' > package.json
           fi
           bun add --no-save yaml@2.8.1
 
-      # 合并 macOS YAML 文件 (使用 bun 运行 JavaScript)
       - name: Merge latest-mac.yml files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 

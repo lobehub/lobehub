@@ -216,6 +216,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
           modelsDisableInstuction.has(model) || model.toLowerCase().includes('learnlm')
             ? undefined
             : thinkingConfig,
+        // https://ai.google.dev/gemini-api/docs/tool-combination
+        toolConfig: this.needsServerSideToolInvocations(payload)
+          ? { includeServerSideToolInvocations: true }
+          : undefined,
         tools: this.buildGoogleToolsWithSearch(payload.tools, payload),
         topP: payload.top_p,
       };
@@ -461,6 +465,21 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       messages: user_messages,
       system: system_message?.content,
     };
+  }
+
+  /**
+   * Returns true when Gemini 3+ tools array combines built-in tools (googleSearch / urlContext)
+   * with functionDeclarations — the API requires `toolConfig.includeServerSideToolInvocations`
+   * in that case.
+   * @see https://ai.google.dev/gemini-api/docs/tool-combination
+   */
+  private needsServerSideToolInvocations(payload?: ChatStreamPayload): boolean {
+    if (!isGemini3OrAbove(payload?.model)) return false;
+
+    const hasBuiltIn = payload?.enabledSearch || payload?.urlContext;
+    const hasFunctions = payload?.tools && payload.tools.length > 0;
+
+    return !!(hasBuiltIn && hasFunctions);
   }
 
   private buildGoogleToolsWithSearch(

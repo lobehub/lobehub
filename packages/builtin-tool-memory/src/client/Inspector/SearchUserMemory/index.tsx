@@ -15,7 +15,7 @@ export const SearchUserMemoryInspector = memo<
 >(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const query = args?.query || partialArgs?.query;
+  const query = args?.queries?.join(', ') || partialArgs?.queries?.join(', ');
 
   // Initial streaming state
   if (isArgumentsStreaming && !query) {
@@ -26,11 +26,12 @@ export const SearchUserMemoryInspector = memo<
     );
   }
 
-  // pluginState is SearchMemoryResult directly (activities, contexts, experiences, preferences)
+  // pluginState is SearchMemoryResult directly.
   const resultCount = pluginState
     ? (pluginState.activities?.length ?? 0) +
       (pluginState.contexts?.length ?? 0) +
       (pluginState.experiences?.length ?? 0) +
+      (pluginState.identities?.length ?? 0) +
       (pluginState.preferences?.length ?? 0)
     : 0;
   const hasResults = resultCount > 0;

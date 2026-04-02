@@ -117,7 +117,7 @@ export class CredsExecutionRuntime {
       const providerConfig = getLobehubSkillProviderById(provider);
       if (!providerConfig) {
         return {
-          content: `Unknown OAuth provider: ${provider}. Available providers: github, linear, microsoft, twitter`,
+          content: `Unknown OAuth provider: ${provider}. Available providers: github, linear, microsoft, twitter, vercel`,
           error: {
             message: `Unknown OAuth provider: ${provider}`,
             type: 'UnknownProvider',

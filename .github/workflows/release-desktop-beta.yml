@@ -62,19 +62,13 @@ jobs:
       - name: Checkout base
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
         run: bun run lint
@@ -168,16 +162,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       # 下载所有平台的构建产物
       - name: Download artifacts
@@ -195,13 +183,11 @@ jobs:
       - name: Install yaml only for merge step
         run: |
           cd scripts/electronWorkflow
-          # 在脚本目录创建最小 package.json，防止 bun 向上寻找根 package.json
           if [ ! -f package.json ]; then
             echo '{"name":"merge-mac-release","private":true}' > package.json
           fi
           bun add --no-save yaml@2.8.1
 
-      # 合并 macOS YAML 文件 (使用 bun 运行 JavaScript)
       - name: Merge latest-mac.yml files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 

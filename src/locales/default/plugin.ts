@@ -219,6 +219,7 @@ export default {
   'builtins.lobe-user-memory.apiName.addExperienceMemory': 'Add experience memory',
   'builtins.lobe-user-memory.apiName.addIdentityMemory': 'Add identity memory',
   'builtins.lobe-user-memory.apiName.addPreferenceMemory': 'Add preference memory',
+  'builtins.lobe-user-memory.apiName.queryTaxonomyOptions': 'Query taxonomy',
   'builtins.lobe-user-memory.apiName.removeIdentityMemory': 'Delete identity memory',
   'builtins.lobe-user-memory.apiName.searchUserMemory': 'Search memory',
   'builtins.lobe-user-memory.apiName.updateIdentityMemory': 'Update identity memory',

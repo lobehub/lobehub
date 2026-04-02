@@ -16,52 +16,188 @@ import { MemoryApiName } from './types';
 
 export const MemoryIdentifier = 'lobe-user-memory';
 
+const timeIntentSelectorEnum = [
+  'today',
+  'yesterday',
+  'currentWeek',
+  'lastWeek',
+  'lastWeekend',
+  'lastWeekdays',
+  'currentMonth',
+  'lastMonth',
+  'currentYear',
+  'lastYear',
+  'day',
+  'month',
+  'year',
+  'relativeDay',
+  'range',
+] as const;
+
+const searchMemoryTimeIntentSchema: JSONSchema7 = {
+  additionalProperties: false,
+  properties: {
+    anchor: {
+      description:
+        'Anchor for relativeDay. Supports the legacy string values "today" and "yesterday", or another timeIntent object such as { "selector": "day", "date": "2025-12-15T00:00:00.000Z" }.',
+      oneOf: [
+        {
+          enum: ['today', 'yesterday'],
+          type: 'string',
+        },
+        {
+          $ref: '#/definitions/searchMemoryTimeIntent',
+        },
+      ],
+    },
+    date: { format: 'date-time', type: 'string' },
+    end: { format: 'date-time', type: 'string' },
+    month: { maximum: 12, minimum: 1, type: 'integer' },
+    offsetDays: { type: 'integer' },
+    selector: {
+      enum: [...timeIntentSelectorEnum],
+      type: 'string',
+    },
+    start: { format: 'date-time', type: 'string' },
+    year: { maximum: 9999, minimum: 1970, type: 'integer' },
+  },
+  required: ['selector'],
+  type: 'object',
+};
+
 export const MemoryManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Retrieve memories based on a search query. Use this to recall previously saved information.',
+        'Retrieve memories using one or more search queries plus optional filters for categories, tags, labels, relationships, and time range.',
       name: MemoryApiName.searchUserMemory,
       parameters: {
         additionalProperties: false,
+        definitions: {
+          searchMemoryTimeIntent: searchMemoryTimeIntentSchema,
+        },
         properties: {
-          query: {
-            description: 'The search query to find relevant memories',
-            type: 'string',
+          categories: {
+            description: 'Optional memory categories to constrain retrieval.',
+            items: { type: 'string' },
+            type: 'array',
           },
-          topK: {
+          labels: {
+            description: 'Optional extracted labels to constrain retrieval.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          layers: {
+            description:
+              'Optional memory layers to search. Must be an array even for one layer, for example ["preference"].',
+            items: {
+              enum: ['activity', 'context', 'experience', 'identity', 'preference'],
+              type: 'string',
+            },
+            type: 'array',
+          },
+          queries: {
+            description: 'One or more search queries to retrieve relevant memories.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          relationships: {
+            description: 'Optional identity relationships to constrain retrieval.',
+            items: { enum: RELATIONSHIPS, type: 'string' },
+            type: 'array',
+          },
+          status: {
+            description: 'Optional status values for activity or context memories.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          tags: {
+            description: 'Optional user or system tags to constrain retrieval.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          timeIntent: {
+            description:
+              'Optional calendar-friendly time selector that the server always resolves into an exact createdAt timeRange. Prefer this for prompts like "December 2025", "last month", or "yesterday".',
+            allOf: [{ $ref: '#/definitions/searchMemoryTimeIntent' }],
+          },
+          timeRange: {
             additionalProperties: false,
             description:
-              'Optional. Limits on number of memories to return per layer. If omitted entirely, uses defaults (3 activities, 3 preferences). Set a layer to 0 to exclude it.',
+              'Optional exact time range filter applied to the selected field. Use this when you already know precise boundaries; otherwise prefer timeIntent.',
             properties: {
-              activities: {
-                description: 'Number of activity memories (what happened, when, where). Default: 3',
-                minimum: 0,
-                type: 'integer',
+              end: { format: 'date-time', type: 'string' },
+              field: {
+                enum: [
+                  'capturedAt',
+                  'createdAt',
+                  'endsAt',
+                  'episodicDate',
+                  'startsAt',
+                  'updatedAt',
+                ],
+                type: 'string',
               },
-              contexts: {
-                description:
-                  'Number of context memories (ongoing situations, projects). Default: 0',
-                minimum: 0,
-                type: 'integer',
-              },
-              experiences: {
-                description:
-                  'Number of experience memories (lessons learned, insights). Default: 0',
-                minimum: 0,
-                type: 'integer',
-              },
-              preferences: {
-                description:
-                  'Number of preference memories (user preferences, directives). Default: 3',
-                minimum: 0,
-                type: 'integer',
-              },
+              start: { format: 'date-time', type: 'string' },
             },
             type: 'object',
           },
+          topK: {
+            additionalProperties: false,
+            description: 'Optional limits on number of memories to return per layer.',
+            properties: {
+              activities: { minimum: 0, type: 'integer' },
+              contexts: { minimum: 0, type: 'integer' },
+              experiences: { minimum: 0, type: 'integer' },
+              identities: { minimum: 0, type: 'integer' },
+              preferences: { minimum: 0, type: 'integer' },
+            },
+            type: 'object',
+          },
+          types: {
+            description: 'Optional memory types to constrain retrieval.',
+            items: { type: 'string' },
+            type: 'array',
+          },
         },
-        required: ['query'],
+        type: 'object',
+      } satisfies JSONSchema7,
+    },
+    {
+      description:
+        'List existing taxonomy options such as categories, tags, labels, statuses, roles, and relationships so memory retrieval and extraction can use the current vocabulary.',
+      name: MemoryApiName.queryTaxonomyOptions,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          include: {
+            description:
+              'Select which taxonomy buckets to return. Must be an array even for one bucket.',
+            items: {
+              enum: ['categories', 'labels', 'relationships', 'roles', 'statuses', 'tags', 'types'],
+              type: 'string',
+            },
+            type: 'array',
+          },
+          layers: {
+            description:
+              'Optional memory layers to scope the taxonomy lookup. Must be an array even for one layer.',
+            items: {
+              enum: ['activity', 'context', 'experience', 'identity', 'preference'],
+              type: 'string',
+            },
+            type: 'array',
+          },
+          limit: {
+            description: 'Maximum number of options to return for each bucket.',
+            minimum: 1,
+            type: 'integer',
+          },
+          q: {
+            description: 'Optional keyword used to filter taxonomy options.',
+            type: 'string',
+          },
+        },
         type: 'object',
       } satisfies JSONSchema7,
     },

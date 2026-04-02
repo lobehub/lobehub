@@ -1,3 +1,4 @@
+import { EMPTY_DOCUMENT_MESSAGES } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
 import {
   type UserInitializationState,
@@ -29,7 +30,6 @@ import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { OnboardingService } from '@/server/services/onboarding';
-import { EMPTY_DOCUMENT_MESSAGES } from '@/utils/webOnboardingToolResult';
 
 const usernameSchema = z
   .string()

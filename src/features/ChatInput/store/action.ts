@@ -41,6 +41,9 @@ export const store: CreateStore = (publicState) => (set, get) => ({
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
     });
+    if (get().expand) {
+      set({ _savedEditorState: undefined, expand: false });
+    }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         editor.focus();
@@ -59,7 +62,9 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   setExpand: (expand) => {
-    set({ expand });
+    const editor = get().editor;
+    const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
+    set({ _savedEditorState, expand });
   },
 
   setJSONState: (content) => {

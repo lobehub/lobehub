@@ -476,7 +476,14 @@ export const createAgentExecutors = (context: {
           traceName: TraceNameMap.Conversation,
         },
         onErrorHandle: async (error) => {
-          const localizedError = localizeError(error);
+          const enrichedError = {
+            ...error,
+            body: {
+              ...error.body,
+              traceId,
+            },
+          };
+          const localizedError = localizeError(enrichedError);
 
           await context.get().optimisticUpdateMessageError(assistantMessageId, localizedError, {
             operationId: context.operationId,

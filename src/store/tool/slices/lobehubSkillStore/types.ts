@@ -83,6 +83,8 @@ export interface CallLobehubSkillToolParams {
   provider: string;
   /** Tool name */
   toolName: string;
+  /** Topic ID from message context (not global active state) */
+  topicId?: string;
 }
 
 /**
