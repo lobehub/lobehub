@@ -6,6 +6,7 @@ import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import AgentTaskList from '@/features/AgentTaskList';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -65,6 +66,7 @@ const InboxWelcome = memo(() => {
           <OpeningQuestions mobile={mobile} questions={openingQuestions} />
         )}
         <ToolAuthAlert />
+        <AgentTaskList />
       </Flexbox>
     </>
   );
