@@ -185,16 +185,6 @@ export class PluginTypesActionImpl {
     };
   };
 
-  invokeDefaultTypePlugin = async (id: string, payload: any): Promise<string | undefined> => {
-    const { internal_callPluginApi } = this.#get();
-
-    const data = await internal_callPluginApi(id, payload);
-
-    if (!data) return;
-
-    return data;
-  };
-
   invokeKlavisTypePlugin = async (
     id: string,
     payload: ChatToolPayload,

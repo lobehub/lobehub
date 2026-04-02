@@ -1,7 +1,8 @@
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { type ChatPluginPayload } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-
-import { type ChatPluginPayload } from '@/types/index';
 
 interface CustomRenderProps {
   content: string;
@@ -17,13 +18,27 @@ interface CustomRenderProps {
   toolCallId: string;
 }
 
-const CustomRender = memo<CustomRenderProps>(({ toolCallId }) => {
-  return (
-    <Flexbox gap={12} id={toolCallId} width={'100%'}>
-      {null}
-    </Flexbox>
-  );
-});
+const CustomRender = memo<CustomRenderProps>(
+  ({ content, messageId, plugin, pluginState, toolCallId }) => {
+    const Render = getBuiltinRender(plugin?.identifier, plugin?.apiName);
+
+    if (!Render) return null;
+
+    return (
+      <Flexbox gap={12} id={toolCallId} width={'100%'}>
+        <Render
+          apiName={plugin?.apiName}
+          args={safeParseJSON(plugin?.arguments)}
+          content={content}
+          identifier={plugin?.identifier}
+          messageId={messageId!}
+          pluginState={pluginState}
+          toolCallId={toolCallId}
+        />
+      </Flexbox>
+    );
+  },
+);
 
 CustomRender.displayName = 'GroupCustomRender';
 

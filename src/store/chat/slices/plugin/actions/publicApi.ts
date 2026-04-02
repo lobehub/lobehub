@@ -100,18 +100,15 @@ export class PluginPublicApiActionImpl {
         return await this.#get().invokeMarkdownTypePlugin(id, payload);
       }
 
-      case 'builtin': {
-        // Pass stepContext to builtin tools for dynamic state access
-        return await this.#get().invokeBuiltinTool(id, payload, stepContext);
-      }
-
       // @ts-ignore
       case 'mcp': {
         return await this.#get().invokeMCPTypePlugin(id, payload);
       }
 
+      case 'builtin':
       default: {
-        return await this.#get().invokeDefaultTypePlugin(id, payload);
+        // Pass stepContext to builtin tools for dynamic state access
+        return await this.#get().invokeBuiltinTool(id, payload, stepContext);
       }
     }
   };

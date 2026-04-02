@@ -79,22 +79,14 @@ export class ToolExecutionService {
       const typeStr = type as string;
       let data: ToolExecutionResult;
       switch (typeStr) {
-        case 'builtin': {
-          data = await this.builtinToolsExecutor.execute(payload, context);
-          break;
-        }
-
         case 'mcp': {
           data = await this.executeMCPTool(payload, context);
           break;
         }
 
+        case 'builtin':
         default: {
-          data = {
-            content: `Unsupported tool type: ${typeStr}`,
-            error: { code: 'UNSUPPORTED_TOOL_TYPE', message: `Unsupported tool type: ${typeStr}` },
-            success: false,
-          };
+          data = await this.builtinToolsExecutor.execute(payload, context);
           break;
         }
       }
