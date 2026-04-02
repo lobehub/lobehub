@@ -198,7 +198,6 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       }}
       onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
       onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
-      onInit={(editor) => storeApi.setState({ editor })}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
       }}
@@ -220,11 +219,28 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       onFocus={() => {
         enableScope(HotkeyEnum.AddUserMessage);
       }}
+      onInit={(editor) => {
+        const saved = storeApi.getState()._savedEditorState;
+        storeApi.setState({ _savedEditorState: undefined, editor });
+        if (saved) {
+          requestAnimationFrame(() => {
+            editor.setDocument('json', saved);
+          });
+        }
+      }}
       onPressEnter={({ event: e }) => {
         if (e.shiftKey || isComposingRef.current) return;
         // when user like alt + enter to add ai message
         if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
         const commandKey = isCommandPressed(e);
+        // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
+        if (expand) {
+          if (commandKey) {
+            send();
+            return true;
+          }
+          return;
+        }
         // when user like cmd + enter to send message
         if (useCmdEnterToSend) {
           if (commandKey) {

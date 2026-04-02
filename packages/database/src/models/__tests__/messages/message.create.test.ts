@@ -463,7 +463,7 @@ describe('MessageModel Create Tests', () => {
         content: 'test message',
       });
 
-      // 调用 createMessageQuery 方法
+      // Call createMessageQuery method
       const result = await messageModel.createMessageQuery({
         messageId: 'msg1',
         userQuery: 'original query',
@@ -479,7 +479,7 @@ describe('MessageModel Create Tests', () => {
       expect(result.rewriteQuery).toBe('rewritten query');
       expect(result.userId).toBe(userId);
 
-      // 验证数据库中的记录
+      // Verify records in the database
       const dbResult = await serverDB
         .select()
         .from(messageQueries)
@@ -500,7 +500,7 @@ describe('MessageModel Create Tests', () => {
         content: 'test message',
       });
 
-      // 调用 createMessageQuery 方法
+      // Call createMessageQuery method
       const result = await messageModel.createMessageQuery({
         messageId: 'msg2',
         userQuery: 'test query',
@@ -512,7 +512,7 @@ describe('MessageModel Create Tests', () => {
       expect(result).toBeDefined();
       expect(result.embeddingsId).toBe(embeddingsId);
 
-      // 验证数据库中的记录
+      // Verify records in the database
       const dbResult = await serverDB
         .select()
         .from(messageQueries)
@@ -530,7 +530,7 @@ describe('MessageModel Create Tests', () => {
         content: 'test message',
       });
 
-      // 连续创建两个消息查询
+      // Create two message queries consecutively
       const result1 = await messageModel.createMessageQuery({
         messageId: 'msg3',
         userQuery: 'query 1',

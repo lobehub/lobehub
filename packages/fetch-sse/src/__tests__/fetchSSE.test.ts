@@ -598,6 +598,42 @@ describe('fetchSSE', () => {
       expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
     });
 
+    it('should NOT inject contextBody into structured provider errors (regression)', async () => {
+      const mockOnErrorHandle = vi.fn();
+      const mockError: ChatMessageError = {
+        body: {
+          error: {
+            type: 'invalid_request_error',
+            message: 'Invalid signature in thinking block',
+          },
+          provider: 'lobehub',
+          errorType: 'ProviderBizError',
+        },
+        message: 'ProviderBizError',
+        type: 'ProviderBizError',
+      };
+
+      (fetchEventSource as any).mockImplementationOnce(
+        (url: string, options: FetchEventSourceInit) => {
+          options.onerror!(mockError);
+        },
+      );
+
+      try {
+        await fetchSSE('/', {
+          onErrorHandle: mockOnErrorHandle,
+          requestContext: { provider: 'openai', model: 'gpt-4o' },
+        });
+      } catch (e) {}
+
+      expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
+      const receivedError = mockOnErrorHandle.mock.calls[0][0];
+      expect(receivedError.body).not.toHaveProperty('elapsedMs');
+      expect(receivedError.body).not.toHaveProperty('networkStatus');
+      expect(receivedError.body).not.toHaveProperty('model');
+      expect(receivedError.body.provider).toBe('lobehub');
+    });
+
     it('should call onErrorHandle when Unknown error is thrown', async () => {
       const mockOnErrorHandle = vi.fn();
       const mockError = new Error('Unknown error');
@@ -609,7 +645,10 @@ describe('fetchSSE', () => {
       );
 
       try {
-        await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
+        await fetchSSE('/', {
+          onErrorHandle: mockOnErrorHandle,
+          requestContext: { provider: 'openai', model: 'gpt-4o' },
+        });
       } catch (e) {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith({
@@ -618,7 +657,10 @@ describe('fetchSSE', () => {
         body: {
           message: 'Unknown error',
           name: 'Error',
-          stack: expect.any(String),
+          provider: 'openai',
+          model: 'gpt-4o',
+          elapsedMs: expect.any(Number),
+          networkStatus: expect.any(Boolean),
         },
       });
     });

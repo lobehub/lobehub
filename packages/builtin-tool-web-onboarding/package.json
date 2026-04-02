@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./utils": "./src/ExecutionRuntime/utils.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
