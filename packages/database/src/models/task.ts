@@ -234,6 +234,7 @@ export class TaskModel {
         SELECT a.origin_id, t.id, t.parent_task_id
         FROM tasks t
         JOIN ancestors a ON t.id = a.parent_task_id
+        WHERE t.created_by_user_id = ${this.userId}
       ),
       roots AS (
         SELECT DISTINCT ON (origin_id) origin_id, id AS root_id
@@ -244,10 +245,12 @@ export class TaskModel {
         SELECT r.origin_id, t.id, t.assignee_agent_id, t.created_by_agent_id
         FROM tasks t
         JOIN roots r ON t.id = r.root_id
+        WHERE t.created_by_user_id = ${this.userId}
         UNION ALL
         SELECT d.origin_id, t.id, t.assignee_agent_id, t.created_by_agent_id
         FROM tasks t
         JOIN descendants d ON t.parent_task_id = d.id
+        WHERE t.created_by_user_id = ${this.userId}
       )
       SELECT origin_id, assignee_agent_id, created_by_agent_id
       FROM descendants
