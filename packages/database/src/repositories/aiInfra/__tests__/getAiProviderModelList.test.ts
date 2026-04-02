@@ -709,5 +709,87 @@ describe('AiInfraRepos', () => {
       // 无 settings
       expect(merged?.settings).toBeUndefined();
     });
+
+    it('should preserve builtin model type when DB record has wrong type (e.g. video model stored as chat)', async () => {
+      const providerId = 'openai';
+
+      // DB record from remote fetch incorrectly defaulted to 'chat'
+      const userModels: AiProviderModelListItem[] = [
+        {
+          id: 'sora-2',
+          type: 'chat',
+          enabled: true,
+        },
+      ];
+
+      // Builtin correctly defines it as 'video'
+      const builtinModels: AiProviderModelListItem[] = [
+        {
+          id: 'sora-2',
+          type: 'video',
+          enabled: true,
+        } as AiProviderModelListItem,
+      ];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId);
+
+      const merged = result.find((m) => m.id === 'sora-2');
+      expect(merged).toBeDefined();
+      expect(merged!.type).toBe('video');
+    });
+
+    it('should preserve builtin type for all model types (image, embedding, tts, stt)', async () => {
+      const providerId = 'openai';
+
+      // DB records all incorrectly stored as 'chat'
+      const userModels: AiProviderModelListItem[] = [
+        { id: 'dall-e-3', type: 'chat', enabled: true },
+        { id: 'text-embedding-3-small', type: 'chat', enabled: true },
+        { id: 'tts-1', type: 'chat', enabled: true },
+        { id: 'whisper-1', type: 'chat', enabled: true },
+      ] as AiProviderModelListItem[];
+
+      const builtinModels: AiProviderModelListItem[] = [
+        { id: 'dall-e-3', type: 'image', enabled: true },
+        { id: 'text-embedding-3-small', type: 'embedding', enabled: true },
+        { id: 'tts-1', type: 'tts', enabled: true },
+        { id: 'whisper-1', type: 'stt', enabled: true },
+      ] as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId);
+
+      expect(result.find((m) => m.id === 'dall-e-3')!.type).toBe('image');
+      expect(result.find((m) => m.id === 'text-embedding-3-small')!.type).toBe('embedding');
+      expect(result.find((m) => m.id === 'tts-1')!.type).toBe('tts');
+      expect(result.find((m) => m.id === 'whisper-1')!.type).toBe('stt');
+    });
+
+    it('should keep user type for custom models not in builtin list', async () => {
+      const providerId = 'openai';
+
+      const userModels: AiProviderModelListItem[] = [
+        { id: 'my-custom-model', type: 'chat', enabled: true },
+      ] as AiProviderModelListItem[];
+
+      // Builtin list does not contain this model
+      const builtinModels: AiProviderModelListItem[] = [
+        { id: 'gpt-4', type: 'chat', enabled: true },
+      ] as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId);
+
+      const custom = result.find((m) => m.id === 'my-custom-model');
+      expect(custom).toBeDefined();
+      expect(custom!.type).toBe('chat');
+    });
   });
 });
