@@ -55,5 +55,5 @@ jobs:
           # Security: Allow only specific safe commands - no gh commands to prevent token exfiltration
           # These tools are restricted to code analysis and build operations only
           claude_args: |
-            --allowedTools "Bash(git:*),Bash(gh:*),Bash(bun run:*),Bash(pnpm run:*),Bash(npm run:*),Bash(npx:*),Bash(bunx:*),Bash(vitest:*),Bash(rg:*),Bash(find:*),Bash(sed:*),Bash(grep:*),Bash(awk:*),Bash(wc:*),Bash(xargs:*)"
+            --allowedTools "Bash(git:*),Bash(gh:*),Bash(bun run:*),Bash(bunx:*),Bash(pnpm:*),Bash(npm run:*),Bash(npx:*),Bash(vitest:*),Bash(rg:*),Bash(find:*),Bash(sed:*),Bash(grep:*),Bash(awk:*),Bash(wc:*),Bash(xargs:*)"
             --append-system-prompt "$(cat /tmp/claude-prompts/security-rules.md)"

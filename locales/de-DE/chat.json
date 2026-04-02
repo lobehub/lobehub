@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Ansehen",
   "tool.intervention.toolAbort": "Du hast diesen Skill-Aufruf abgebrochen",
   "tool.intervention.toolRejected": "Dieser Skill-Aufruf wurde abgelehnt",
+  "tool.intervention.viewParameters": "Parameter anzeigen ({{count}})",
   "toolAuth.authorize": "Autorisieren",
   "toolAuth.authorizing": "Autorisierung läuft...",
   "toolAuth.hint": "Ohne Autorisierung oder Konfiguration funktionieren Skills möglicherweise nicht. Dies kann den Agenten einschränken oder zu Fehlern führen.",

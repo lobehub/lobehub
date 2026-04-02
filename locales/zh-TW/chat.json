@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "查看",
   "tool.intervention.toolAbort": "本次工具呼叫已被使用者取消",
   "tool.intervention.toolRejected": "本次工具調用被主動拒絕",
+  "tool.intervention.viewParameters": "檢視參數（{{count}}）",
   "toolAuth.authorize": "授權",
   "toolAuth.authorizing": "授權中...",
   "toolAuth.hint": "若未授權或設定，這些工具將無法正常使用，可能導致助手功能缺失或發生錯誤。",

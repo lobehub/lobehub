@@ -41,6 +41,7 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
+  GTDManifest.identifier,
 ];
 
 /**

@@ -46,6 +46,15 @@ const modelsWithModalities = new Set([
 
 const modelsWithImageSearch = new Set(['gemini-3.1-flash-image-preview']);
 
+// Gemini 3+ models support combined tools (search + urlContext + functionDeclarations)
+const isGemini3OrAbove = (model?: string): boolean => {
+  if (!model) return false;
+  // Match gemini-X or gemini-X.Y patterns, extract major version
+  const match = /gemini-(\d+)/.exec(model);
+  if (!match) return false;
+  return Number.parseInt(match[1], 10) >= 3;
+};
+
 const modelsDisableInstuction = new Set([
   'gemini-2.0-flash-exp',
   'gemini-2.0-flash-exp-image-generation',
@@ -207,6 +216,10 @@ export class LobeGoogleAI implements LobeRuntimeAI {
           modelsDisableInstuction.has(model) || model.toLowerCase().includes('learnlm')
             ? undefined
             : thinkingConfig,
+        // https://ai.google.dev/gemini-api/docs/tool-combination
+        toolConfig: this.needsServerSideToolInvocations(payload)
+          ? { includeServerSideToolInvocations: true }
+          : undefined,
         tools: this.buildGoogleToolsWithSearch(payload.tools, payload),
         topP: payload.top_p,
       };
@@ -454,19 +467,27 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     };
   }
 
+  /**
+   * Returns true when Gemini 3+ tools array combines built-in tools (googleSearch / urlContext)
+   * with functionDeclarations — the API requires `toolConfig.includeServerSideToolInvocations`
+   * in that case.
+   * @see https://ai.google.dev/gemini-api/docs/tool-combination
+   */
+  private needsServerSideToolInvocations(payload?: ChatStreamPayload): boolean {
+    if (!isGemini3OrAbove(payload?.model)) return false;
+
+    const hasBuiltIn = payload?.enabledSearch || payload?.urlContext;
+    const hasFunctions = payload?.tools && payload.tools.length > 0;
+
+    return !!(hasBuiltIn && hasFunctions);
+  }
+
   private buildGoogleToolsWithSearch(
     tools: ChatCompletionTool[] | undefined,
     payload?: ChatStreamPayload,
   ): GoogleFunctionCallTool[] | undefined {
-    const hasToolCalls = payload?.messages?.some((m) => m.tool_calls?.length);
     const hasSearch = payload?.enabledSearch;
     const hasUrlContext = payload?.urlContext;
-    const hasFunctionTools = tools && tools.length > 0;
-
-    // If tool_calls already exist, prioritize handling function declarations
-    if (hasToolCalls && hasFunctionTools) {
-      return buildGoogleTools(tools);
-    }
 
     // Build GoogleSearch tool config with optional image search support
     const googleSearchTool = hasSearch
@@ -477,7 +498,35 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         }
       : undefined;
 
-    // Build and return search-related tools (search tools cannot be used with FunctionCall simultaneously)
+    // Gemini 3+ models support combined tools (search + urlContext + functionDeclarations)
+    if (isGemini3OrAbove(payload?.model)) {
+      const result: GoogleFunctionCallTool[] = [];
+
+      if (hasUrlContext) {
+        result.push({ urlContext: {} });
+      }
+      if (googleSearchTool) {
+        result.push(googleSearchTool);
+      }
+
+      const functionTools = buildGoogleTools(tools);
+      if (functionTools) {
+        result.push(...functionTools);
+      }
+
+      return result.length > 0 ? result : undefined;
+    }
+
+    // For older models, search tools cannot be used with FunctionCall simultaneously.
+    // If tool_calls already exist in conversation, prioritize function declarations
+    // to maintain multi-turn tool-calling sessions.
+    const hasToolCalls = payload?.messages?.some((m) => m.tool_calls?.length);
+    const hasFunctionTools = tools && tools.length > 0;
+
+    if (hasToolCalls && hasFunctionTools) {
+      return buildGoogleTools(tools);
+    }
+
     if (hasUrlContext && hasSearch) {
       return [{ urlContext: {} }, googleSearchTool!];
     }
@@ -488,7 +537,6 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       return [googleSearchTool!];
     }
 
-    // Finally consider function declarations
     return buildGoogleTools(tools);
   }
 }

@@ -74,22 +74,13 @@ jobs:
           git checkout main
           git pull --rebase origin main
 
-      - name: Setup Node.js
+      - name: Setup environment
         if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      - name: Install bun
-        if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
         if: steps.release.outputs.should_tag == 'true' || steps.patch.outputs.should_tag == 'true'
-        run: bun i
+        run: pnpm install
 
       - name: Resolve patch version (patch bump)
         id: patch-version

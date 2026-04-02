@@ -1,5 +1,4 @@
 {
-  "desc": "Hier findest du gelegentliche Updates zu neuen Funktionen, die wir gerade testen – probiere sie gerne aus!",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",

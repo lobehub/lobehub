@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "عرض",
   "tool.intervention.toolAbort": "لقد ألغيت استدعاء المهارة",
   "tool.intervention.toolRejected": "تم رفض استدعاء المهارة",
+  "tool.intervention.viewParameters": "عرض المعلمات ({{count}})",
   "toolAuth.authorize": "تفويض",
   "toolAuth.authorizing": "جارٍ التفويض...",
   "toolAuth.hint": "بدون التفويض أو الإعداد، قد لا تعمل المهارات. قد يؤدي ذلك إلى تقييد الوكيل أو حدوث أخطاء.",

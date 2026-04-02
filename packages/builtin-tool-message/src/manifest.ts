@@ -1,8 +1,3 @@
-import {
-  DEFAULT_BOT_HISTORY_LIMIT,
-  MAX_BOT_HISTORY_LIMIT,
-  MIN_BOT_HISTORY_LIMIT,
-} from '@lobechat/const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
@@ -75,7 +70,7 @@ export const MessageManifest: BuiltinToolManifest = {
       },
     },
     {
-      description: `Read recent messages from a channel or conversation. Returns messages in chronological order. Default limit is ${DEFAULT_BOT_HISTORY_LIMIT}. Only pass a different limit if the user explicitly asks for more or fewer messages.`,
+      description: `Read recent messages from a channel or conversation. Returns messages in chronological order.`,
       name: MessageApiName.readMessages,
       parameters: {
         additionalProperties: false,
@@ -101,13 +96,6 @@ export const MessageManifest: BuiltinToolManifest = {
             description:
               'End time as Unix second timestamp. Used by Feishu/Lark to filter messages before this time.',
             type: 'string',
-          },
-          limit: {
-            default: DEFAULT_BOT_HISTORY_LIMIT,
-            description: `Maximum number of messages to fetch (default: ${DEFAULT_BOT_HISTORY_LIMIT}, max: ${MAX_BOT_HISTORY_LIMIT})`,
-            maximum: MAX_BOT_HISTORY_LIMIT,
-            minimum: MIN_BOT_HISTORY_LIMIT,
-            type: 'integer',
           },
           platform: {
             description: 'Target messaging platform',

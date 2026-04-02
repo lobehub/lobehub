@@ -19,15 +19,16 @@ const ArtifactsUI = memo(() => {
     isArtifactTagClosed,
   ] = useChatStore((s) => {
     const messageId = chatPortalSelectors.artifactMessageId(s) || '';
+    const identifier = chatPortalSelectors.artifactIdentifier(s);
 
     return [
       messageId,
       s.portalArtifactDisplayMode,
       messageStateSelectors.isMessageGenerating(messageId)(s),
       chatPortalSelectors.artifactType(s),
-      chatPortalSelectors.artifactCode(messageId)(s),
+      chatPortalSelectors.artifactCode(messageId, identifier)(s),
       chatPortalSelectors.artifactCodeLanguage(s),
-      chatPortalSelectors.isArtifactTagClosed(messageId)(s),
+      chatPortalSelectors.isArtifactTagClosed(messageId, identifier)(s),
     ];
   });
 

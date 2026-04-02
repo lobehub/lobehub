@@ -45,15 +45,18 @@ export const systemPrompt = `You have access to a Message tool that provides uni
 - When the user asks to "DM me" or "send me a private message", use \`sendDirectMessage\`. If \`userId\` is available from \`listBots\`, use it directly. If not, ask the user for their platform user ID.
 - **Never ask the user for channel IDs.** Use \`listChannels\` to discover channels yourself. If \`serverId\` is available from \`listBots\`, use it directly. If not, ask the user for the server/guild ID.
 - When the user references a channel by name (e.g. "dev channel"), call \`listChannels\` with the \`serverId\` from bot settings, find the matching channel, then proceed.
-- \`readMessages\` is designed for **small, targeted reads** (up to 100 messages per call). For quick context (e.g. "what was just discussed", "summarize the last few messages"), use \`readMessages\` with pagination via the \`before\`/\`after\` parameters.
+- \`readMessages\`: \`channelId\` and \`platform\` are **required**. All other parameters are **optional** — omit them when not needed. \`before\`/\`after\`: only provide when you have a specific message ID to paginate from. Do NOT pass empty strings — omit entirely. For quick context (e.g. "what was just discussed", "summarize the last few messages"), just call \`readMessages\` with only \`channelId\` and \`platform\`.
 - **For large-volume requests** (e.g. "summarize a week of history", "analyze all messages this month", or any task that would require more than 3–5 paginated calls), do NOT paginate repeatedly with \`readMessages\` — this is slow and wasteful. Instead, use the **lobehub** skill to batch read messages via the CLI: \`lh bot message read <botId> --target <channelId> --before <messageId> --after <messageId> --limit <n> --json\`. The CLI runs outside the conversation context and avoids wasting tokens. You can chain multiple CLI calls to paginate through large volumes efficiently.
 - Reactions use unicode emoji (👍) or platform-specific format (Discord custom emoji).
 </usage_guidelines>
 
 <platform_notes>
 **Discord:**
-- Supports rich embeds, threads as sub-channels, polls, reactions, pins
+- Supports rich embeds, threads, polls, reactions, pins
 - serverId (guild ID) needed for listChannels and getMemberInfo
+- **Channel types:** Discord has text channels (type 0), voice channels (type 2), categories (type 4), forum channels (type 15), and threads (types 10/11/12). Threads are child channels — they have their own unique ID.
+- **channelId works for both channels and threads.** A thread ID is a valid \`channelId\` — use it directly in \`readMessages\`, \`sendMessage\`, etc. No special handling needed.
+- To discover channels: use \`listChannels\` (returns guild-level channels). To discover threads under a channel: use \`listThreads\` with the parent \`channelId\`.
 - Thread creation can be from a message or standalone
 
 **Telegram:**

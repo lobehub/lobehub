@@ -357,7 +357,9 @@ export class PluginTypesActionImpl {
     );
 
     try {
-      data = await executor(payload);
+      // Pass topicId from message context, not global active state
+      // This ensures tool calls use the correct topic even if user switches topics
+      data = await executor(payload, { topicId: message?.topicId });
     } catch (error) {
       console.error(`[${logPrefix}] Error:`, error);
 

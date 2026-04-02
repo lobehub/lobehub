@@ -1,5 +1,5 @@
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
-import { type ToolIntervention } from '@lobechat/types';
+import type { ToolIntervention } from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
@@ -7,6 +7,7 @@ import { memo } from 'react';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 
+import ExecutionTime from './ExecutionTime';
 import StatusIndicator from './StatusIndicator';
 import ToolTitle from './ToolTitle';
 
@@ -30,9 +31,11 @@ const Inspectors = memo<InspectorProps>(
 
     const isPending = intervention?.status === 'pending';
     const isAborted = intervention?.status === 'aborted';
+    const isRejected = intervention?.status === 'rejected';
 
     // Distinguish between arguments streaming and tool executing
-    const isToolExecuting = !hasResult && !isPending && !isAborted && !isArgumentsStreaming;
+    const isToolExecuting =
+      !hasResult && !isPending && !isAborted && !isRejected && !isArgumentsStreaming;
     const isTitleLoading = isArgumentsStreaming || isToolExecuting;
 
     // Check for custom inspector renderer
@@ -56,6 +59,7 @@ const Inspectors = memo<InspectorProps>(
               result={result}
             />
           </SafeBoundary>
+          <ExecutionTime isExecuting={isToolExecuting} />
         </Flexbox>
       );
     }
@@ -74,6 +78,7 @@ const Inspectors = memo<InspectorProps>(
           isLoading={isTitleLoading}
           partialArgs={partialJson || undefined}
         />
+        <ExecutionTime isExecuting={isToolExecuting} />
       </Flexbox>
     );
   },

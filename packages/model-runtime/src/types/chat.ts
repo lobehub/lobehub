@@ -7,13 +7,13 @@ export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
-      json_schema: {
-        name: string;
-        schema: Record<string, any>;
-        strict?: boolean;
-      };
-      type: 'json_schema';
+    json_schema: {
+      name: string;
+      schema: Record<string, any>;
+      strict?: boolean;
     };
+    type: 'json_schema';
+  };
 
 interface UserMessageContentPartThinking {
   signature: string;
@@ -80,9 +80,9 @@ export interface ChatStreamPayload {
    */
   imageAspectRatio?: string;
   /**
-   * @title Image resolution for image generation (e.g., '1K', '2K', '4K')
+   * @title Image resolution for image generation (e.g., '512px', '1K', '2K', '4K')
    */
-  imageResolution?: '1K' | '2K' | '4K';
+  imageResolution?: '512px' | '1K' | '2K' | '4K';
   logprobs?: boolean;
   /**
    * @title Maximum length of generated text

@@ -28,6 +28,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
       payload,
       delay = 50,
       priority = 'normal',
+      retryDelay,
       retries = 3,
     } = message;
 
@@ -51,6 +52,7 @@ export class QStashQueueServiceImpl implements QueueServiceImpl {
           'X-Agent-Priority': priority,
           'X-Agent-Step-Index': stepIndex.toString(),
         },
+        retryDelay,
         retries,
         url: endpoint,
       });

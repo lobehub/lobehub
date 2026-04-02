@@ -16,12 +16,13 @@ const Title = () => {
   const [displayMode, artifactType, artifactTitle, isArtifactTagClosed, closeArtifact] =
     useChatStore((s) => {
       const messageId = chatPortalSelectors.artifactMessageId(s) || '';
+      const identifier = chatPortalSelectors.artifactIdentifier(s);
 
       return [
         s.portalArtifactDisplayMode,
         chatPortalSelectors.artifactType(s),
         chatPortalSelectors.artifactTitle(s),
-        chatPortalSelectors.isArtifactTagClosed(messageId)(s),
+        chatPortalSelectors.isArtifactTagClosed(messageId, identifier)(s),
         s.closeArtifact,
       ];
     });

@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Преглед",
   "tool.intervention.toolAbort": "Отменихте това извикване на умение",
   "tool.intervention.toolRejected": "Това извикване на умение беше отхвърлено",
+  "tool.intervention.viewParameters": "Преглед на параметри ({{count}})",
   "toolAuth.authorize": "Упълномощи",
   "toolAuth.authorizing": "Упълномощаване...",
   "toolAuth.hint": "Без упълномощаване или конфигурация, уменията може да не работят. Това може да ограничи агента или да доведе до грешки.",

@@ -61,13 +61,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
-      - name: Install dependencies (bun)
-        run: bun install
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Install Playwright browsers (with system deps)
         run: bunx playwright install --with-deps chromium

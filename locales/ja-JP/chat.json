@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "表示",
   "tool.intervention.toolAbort": "あなたが今回のスキル呼び出しをキャンセルしました",
   "tool.intervention.toolRejected": "今回のスキル呼び出しは拒否されました",
+  "tool.intervention.viewParameters": "パラメーターを表示 ({{count}})",
   "toolAuth.authorize": "承認",
   "toolAuth.authorizing": "承認中…",
   "toolAuth.hint": "未承認または未設定の場合、関連スキルは使用できません。これによりアシスタントの機能が制限されたりエラーが発生したりする可能性があります",

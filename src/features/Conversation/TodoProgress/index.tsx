@@ -24,10 +24,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
 
     margin-block-end: 8px;
+    margin-inline: 10px;
     padding-block: 8px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
+    border-start-start-radius: 12px;
+    border-start-end-radius: 12px;
 
     background: ${cssVar.colorBgElevated};
 

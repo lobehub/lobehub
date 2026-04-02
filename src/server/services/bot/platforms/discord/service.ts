@@ -77,8 +77,8 @@ export class DiscordMessageService implements MessageRuntimeService {
 
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
     const messages = await this.api.getMessages(params.channelId, {
-      after: params.after,
-      before: params.before,
+      after: params.after || undefined,
+      before: params.before || undefined,
       limit: Math.min(params.limit ?? DEFAULT_BOT_HISTORY_LIMIT, MAX_DISCORD_HISTORY_LIMIT),
     });
     const items = messages.map(toMessageItem);

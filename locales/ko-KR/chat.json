@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "보기",
   "tool.intervention.toolAbort": "당신이 이번 기능 호출을 취소했습니다",
   "tool.intervention.toolRejected": "이번 기능 호출이 거부되었습니다",
+  "tool.intervention.viewParameters": "매개변수 보기 ({{count}})",
   "toolAuth.authorize": "승인",
   "toolAuth.authorizing": "승인 중…",
   "toolAuth.hint": "승인 또는 설정을 하지 않으면 이 기능들을 정상적으로 사용할 수 없어 도우미 기능 누락이나 오류가 발생할 수 있습니다",

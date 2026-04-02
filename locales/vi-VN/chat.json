@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Xem",
   "tool.intervention.toolAbort": "Bạn đã hủy lệnh gọi kỹ năng này",
   "tool.intervention.toolRejected": "Lệnh gọi kỹ năng này đã bị từ chối",
+  "tool.intervention.viewParameters": "Xem các tham số ({{count}})",
   "toolAuth.authorize": "Ủy quyền",
   "toolAuth.authorizing": "Đang ủy quyền...",
   "toolAuth.hint": "Nếu không có ủy quyền hoặc cấu hình, kỹ năng có thể không hoạt động. Điều này có thể giới hạn tác nhân hoặc gây lỗi.",

@@ -58,6 +58,8 @@ export interface ServerCreateAgentToolsEngineParams {
   hasAgentDocuments?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
+  /** Whether the request originates from a bot conversation (auto-enables message tool) */
+  isBotConversation?: boolean;
   /** Model name for function calling compatibility check */
   model: string;
   /** Provider name for function calling compatibility check */

@@ -143,10 +143,10 @@ describe('LobeSiliconCloudAI - custom features', () => {
       expect(calledPayload.thinking_budget).toBe(1000);
     });
 
-    it('should only set thinking_budget when type is not provided', async () => {
+    it('should only set thinking_budget for budget-only models when type is not provided', async () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'Qwen/Qwen3-8B',
+        model: 'Pro/MiniMaxAI/MiniMax-M2.5',
         thinking: {
           budget_tokens: 1500,
         },
@@ -155,6 +155,20 @@ describe('LobeSiliconCloudAI - custom features', () => {
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
       expect(calledPayload.enable_thinking).toBeUndefined();
       expect(calledPayload.thinking_budget).toBe(1500);
+    });
+
+    it('should not send enable_thinking for DeepSeek R1 budget-only models without type', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-R1',
+        thinking: {
+          budget_tokens: 2048,
+        },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.enable_thinking).toBeUndefined();
+      expect(calledPayload.thinking_budget).toBe(2048);
     });
   });
 

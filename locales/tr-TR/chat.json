@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Görüntüle",
   "tool.intervention.toolAbort": "Bu Yetenek çağrısını iptal ettiniz",
   "tool.intervention.toolRejected": "Bu Yetenek çağrısı reddedildi",
+  "tool.intervention.viewParameters": "Parametreleri görüntüle ({{count}})",
   "toolAuth.authorize": "Yetkilendir",
   "toolAuth.authorizing": "Yetkilendiriliyor...",
   "toolAuth.hint": "Yetkilendirme veya yapılandırma olmadan, Yetenekler çalışmayabilir. Bu, Ajan'ı sınırlayabilir veya hatalara neden olabilir.",

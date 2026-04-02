@@ -79,7 +79,7 @@ export class DiscordApi {
     return (await this.rest.get(Routes.channelMessages(channelId), {
       query: new URLSearchParams(
         Object.entries(query ?? {})
-          .filter(([, v]) => v !== undefined)
+          .filter(([, v]) => v !== undefined && v !== '')
           .map(([k, v]) => [k, String(v)]),
       ),
     })) as RESTGetAPIChannelMessagesResult;

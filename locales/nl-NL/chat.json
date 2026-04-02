@@ -421,6 +421,7 @@
   "tool.intervention.scrollToIntervention": "Bekijken",
   "tool.intervention.toolAbort": "Je hebt deze Skill-oproep geannuleerd",
   "tool.intervention.toolRejected": "Deze Skill-oproep is afgewezen",
+  "tool.intervention.viewParameters": "Bekijk parameters ({{count}})",
   "toolAuth.authorize": "Autoriseren",
   "toolAuth.authorizing": "Bezig met autoriseren...",
   "toolAuth.hint": "Zonder autorisatie of configuratie werken Skills mogelijk niet. Dit kan de agent beperken of fouten veroorzaken.",

@@ -3,7 +3,6 @@ import {
   ILitexmlService,
   IMarkdownShortCutService,
 } from '@lobehub/editor';
-import type { IEditorPlugin } from '@lobehub/editor/es/types/kernel';
 import type { LexicalEditor, LexicalNode } from 'lexical';
 
 import { $isActionTagNode, ActionTagNode, type SerializedActionTagNode } from './ActionTagNode';
@@ -18,13 +17,7 @@ export interface ActionTagPluginOptions {
   theme?: { actionTag?: string };
 }
 
-/**
- * Editor plugin for ActionTagNode. Implements {@link IEditorPlugin}.
- * - Constructor: registers node, decorator, theme
- * - onInit: called by kernel after Lexical editor creation; registers command, selection observer, markdown/litexml
- * - destroy: cleanup
- */
-export class ActionTagPlugin implements IEditorPlugin<ActionTagPluginOptions> {
+export class ActionTagPlugin {
   static pluginName = 'ActionTagPlugin';
 
   config?: ActionTagPluginOptions;
@@ -82,16 +75,13 @@ export class ActionTagPlugin implements IEditorPlugin<ActionTagPluginOptions> {
     });
 
     xmlService?.registerXMLReader('action', (xmlElement: any) => {
-      try {
-        const { INodeHelper } = require('@lobehub/editor/es/editor-kernel/inode/helper');
-        return INodeHelper.createElementNode(ActionTagNode.getType(), {
-          actionCategory: (xmlElement.getAttribute('category') || 'skill') as ActionTagCategory,
-          actionLabel: xmlElement.getAttribute('label') || '',
-          actionType: (xmlElement.getAttribute('type') || 'translate') as ActionTagType,
-        } satisfies Partial<SerializedActionTagNode>);
-      } catch {
-        return false;
-      }
+      return {
+        actionCategory: (xmlElement.getAttribute('category') || 'skill') as ActionTagCategory,
+        actionLabel: xmlElement.getAttribute('label') || '',
+        actionType: (xmlElement.getAttribute('type') || 'translate') as ActionTagType,
+        type: ActionTagNode.getType(),
+        version: 1,
+      } satisfies SerializedActionTagNode;
     });
   }
 

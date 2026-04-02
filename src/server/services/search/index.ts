@@ -1,5 +1,6 @@
 import type { SearchParams, SearchQuery } from '@lobechat/types';
 import type { Crawler, CrawlImplType, CrawlUniformResult } from '@lobechat/web-crawler';
+import debug from 'debug';
 import pMap from 'p-map';
 
 import { toolsEnv } from '@/envs/tools';
@@ -9,11 +10,22 @@ import { createSearchServiceImpl } from './impls';
 
 const DEFAULT_CRAWL_CONCURRENCY = 3;
 const DEFAULT_CRAWLER_RETRY = 1;
+const log = debug('lobe-oom:web-browsing:search-service');
 
 const parseImplEnv = (envString: string = '') => {
   // Handle full-width commas and extra whitespace
   const envValue = envString.replaceAll('，', ',').trim();
   return envValue.split(',').filter(Boolean);
+};
+
+const getMemorySnapshot = () => {
+  if (typeof process === 'undefined' || typeof process.memoryUsage !== 'function') {
+    return 'non-node';
+  }
+
+  const { heapUsed, rss } = process.memoryUsage();
+
+  return `rss=${(rss / 1024 / 1024).toFixed(1)}MB heap=${(heapUsed / 1024 / 1024).toFixed(1)}MB`;
 };
 
 /**
@@ -44,6 +56,17 @@ export class SearchService {
   }
 
   async crawlPages(input: { impls?: CrawlImplType[]; urls: string[] }) {
+    try {
+      if (log.enabled) {
+        log(
+          'crawlPages:start urls=%d impls=%s mem=%s',
+          input.urls.length,
+          (input.impls || this.crawlerImpls).join(',') || '-',
+          getMemorySnapshot(),
+        );
+      }
+    } catch {}
+
     const { Crawler } = await import('@lobechat/web-crawler');
     const crawler = new Crawler({ impls: this.crawlerImpls });
 
@@ -70,6 +93,11 @@ export class SearchService {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const result = await crawler.crawl({ impls, url });
+        try {
+          if (log.enabled) {
+            log('crawlWithRetry:result crawler=%s mem=%s', result.crawler, getMemorySnapshot());
+          }
+        } catch {}
         lastResult = result;
 
         if (!this.isFailedCrawlResult(result)) {
@@ -133,7 +161,30 @@ export class SearchService {
   }
 
   async webSearch({ query, searchCategories, searchEngines, searchTimeRange }: SearchQuery) {
+    try {
+      if (log.enabled) {
+        log(
+          'webSearch:start providers=%d q=%d c=%d e=%d mem=%s',
+          this.searchImpList.length,
+          query.length,
+          searchCategories?.length || 0,
+          searchEngines?.length || 0,
+          getMemorySnapshot(),
+        );
+      }
+    } catch {}
+
     for (const impl of this.searchImpList) {
+      try {
+        if (log.enabled) {
+          log(
+            'webSearch:impl impl=%s mem=%s',
+            impl.constructor.name || 'UnknownSearchImpl',
+            getMemorySnapshot(),
+          );
+        }
+      } catch {}
+
       let data = await this.queryWithImpl(impl, query, {
         searchCategories,
         searchEngines,

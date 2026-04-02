@@ -1,6 +1,5 @@
 {
   "actions.confirmRemoveThread": "Bạn sắp xóa chủ đề phụ này. Sau khi xóa, sẽ không thể khôi phục lại. Vui lòng tiến hành cẩn thận.",
   "newPortalThread.includeContext": "Bao gồm ngữ cảnh chủ đề",
-  "newPortalThread.title": "Bắt đầu chủ đề phụ mới",
-  "notSupportMultiModals": "Hiện tại, các chủ đề phụ không hỗ trợ tải lên tệp/hình ảnh. Nếu bạn có yêu cầu, vui lòng để lại tin nhắn tại: <1>💬 Khu vực thảo luận</1>"
+  "newPortalThread.title": "Bắt đầu chủ đề phụ mới"
 }

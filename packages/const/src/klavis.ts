@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiCaldotcom, SiGithub } from '@icons-pack/react-simple-icons';
+import { SiCaldotcom } from '@icons-pack/react-simple-icons';
 import { Klavis } from 'klavis';
 
 export interface KlavisServerType {
@@ -95,17 +95,6 @@ export const KLAVIS_SERVER_TYPES: KlavisServerType[] = [
       'Integrate with Google Docs to create, edit, and manage documents. Write content, format text, collaborate in real-time, and access your documents through natural conversation.',
     label: 'Google Docs',
     serverName: Klavis.McpServerName.GoogleDocs,
-  },
-  {
-    author: 'Klavis',
-    authorUrl: 'https://klavis.io',
-    description: 'Enhanced GitHub MCP Server',
-    icon: SiGithub,
-    identifier: 'github',
-    readme:
-      'Connect to GitHub to manage repositories, issues, pull requests, and code. Search code, review changes, create branches, and collaborate on software development projects through conversational AI.',
-    label: 'GitHub',
-    serverName: Klavis.McpServerName.Github,
   },
   {
     author: 'Klavis',
