@@ -138,6 +138,78 @@ export class TaskModel {
 
   // ========== Query ==========
 
+  async groupList(options: {
+    assigneeAgentId?: string;
+    groups: Array<{
+      key: string;
+      limit?: number;
+      offset?: number;
+      statuses: string[];
+    }>;
+    parentTaskId?: string | null;
+  }): Promise<
+    Array<{
+      hasMore: boolean;
+      key: string;
+      limit: number;
+      offset: number;
+      tasks: TaskItem[];
+      total: number;
+    }>
+  > {
+    const { groups, assigneeAgentId, parentTaskId } = options;
+
+    const baseConditions = [eq(tasks.createdByUserId, this.userId)];
+    if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (parentTaskId === null) {
+      baseConditions.push(isNull(tasks.parentTaskId));
+    } else if (parentTaskId) {
+      baseConditions.push(eq(tasks.parentTaskId, parentTaskId));
+    }
+
+    // Collect all statuses for a single aggregated count query
+    const allStatuses = Array.from(new Set(groups.flatMap((g) => g.statuses)));
+    const countResult = await this.db
+      .select({ count: sql<number>`count(*)`, status: tasks.status })
+      .from(tasks)
+      .where(and(...baseConditions, inArray(tasks.status, allStatuses)))
+      .groupBy(tasks.status);
+
+    const countByStatus: Record<string, number> = {};
+    for (const row of countResult) {
+      countByStatus[row.status] = Number(row.count);
+    }
+
+    // Query each group's tasks in parallel
+    const results = await Promise.all(
+      groups.map(async (group) => {
+        const limit = group.limit ?? 50;
+        const offset = group.offset ?? 0;
+
+        const groupTasks = await this.db
+          .select()
+          .from(tasks)
+          .where(and(...baseConditions, inArray(tasks.status, group.statuses)))
+          .orderBy(desc(tasks.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        const total = group.statuses.reduce((sum, s) => sum + (countByStatus[s] || 0), 0);
+
+        return {
+          hasMore: offset + groupTasks.length < total,
+          key: group.key,
+          limit,
+          offset,
+          tasks: groupTasks,
+          total,
+        };
+      }),
+    );
+
+    return results;
+  }
+
   async list(options?: {
     assigneeAgentId?: string;
     limit?: number;

@@ -264,6 +264,97 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('groupList', () => {
+    it('should return grouped tasks by status', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      // Create tasks with different statuses
+      const t1 = await model.create({ instruction: 'Backlog task' });
+      const t2 = await model.create({ instruction: 'Running task' });
+      await model.updateStatus(t2.id, 'running', { startedAt: new Date() });
+      const t3 = await model.create({ instruction: 'Paused task' });
+      await model.updateStatus(t3.id, 'paused');
+      const t4 = await model.create({ instruction: 'Failed task' });
+      await model.updateStatus(t4.id, 'failed', { error: 'err' });
+      const t5 = await model.create({ instruction: 'Completed task' });
+      await model.updateStatus(t5.id, 'completed', { completedAt: new Date() });
+
+      const result = await model.groupList({
+        groups: [
+          { key: 'backlog', statuses: ['backlog'] },
+          { key: 'running', statuses: ['running'] },
+          { key: 'needsInput', statuses: ['paused', 'failed'] },
+          { key: 'done', statuses: ['completed'] },
+        ],
+      });
+
+      expect(result).toHaveLength(4);
+
+      const backlog = result.find((g) => g.key === 'backlog')!;
+      expect(backlog.total).toBe(1);
+      expect(backlog.tasks).toHaveLength(1);
+      expect(backlog.hasMore).toBe(false);
+
+      const running = result.find((g) => g.key === 'running')!;
+      expect(running.total).toBe(1);
+      expect(running.tasks).toHaveLength(1);
+
+      const needsInput = result.find((g) => g.key === 'needsInput')!;
+      expect(needsInput.total).toBe(2);
+      expect(needsInput.tasks).toHaveLength(2);
+
+      const done = result.find((g) => g.key === 'done')!;
+      expect(done.total).toBe(1);
+      expect(done.tasks).toHaveLength(1);
+    });
+
+    it('should support per-group pagination', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      // Create 3 backlog tasks
+      await model.create({ instruction: 'Backlog 1' });
+      await model.create({ instruction: 'Backlog 2' });
+      await model.create({ instruction: 'Backlog 3' });
+
+      const result = await model.groupList({
+        groups: [{ key: 'backlog', limit: 2, offset: 0, statuses: ['backlog'] }],
+      });
+
+      const backlog = result[0];
+      expect(backlog.total).toBe(3);
+      expect(backlog.tasks).toHaveLength(2);
+      expect(backlog.hasMore).toBe(true);
+      expect(backlog.limit).toBe(2);
+      expect(backlog.offset).toBe(0);
+
+      // Fetch next page
+      const page2 = await model.groupList({
+        groups: [{ key: 'backlog', limit: 2, offset: 2, statuses: ['backlog'] }],
+      });
+
+      const backlogP2 = page2[0];
+      expect(backlogP2.tasks).toHaveLength(1);
+      expect(backlogP2.hasMore).toBe(false);
+      expect(backlogP2.offset).toBe(2);
+    });
+
+    it('should filter by assigneeAgentId', async () => {
+      const agentId = await createAgent('group-list-agent');
+      const model = new TaskModel(serverDB, userId);
+
+      await model.create({ assigneeAgentId: agentId, instruction: 'Assigned' });
+      await model.create({ instruction: 'Unassigned' });
+
+      const result = await model.groupList({
+        assigneeAgentId: agentId,
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+      });
+
+      expect(result[0].total).toBe(1);
+      expect(result[0].tasks).toHaveLength(1);
+    });
+  });
+
   describe('findSubtasks', () => {
     it('should find direct subtasks', async () => {
       const model = new TaskModel(serverDB, userId);

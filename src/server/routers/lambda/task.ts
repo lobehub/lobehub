@@ -68,6 +68,19 @@ const listSchema = z.object({
   status: z.string().optional(),
 });
 
+const groupListSchema = z.object({
+  assigneeAgentId: z.string().optional(),
+  groups: z.array(
+    z.object({
+      key: z.string(),
+      limit: z.number().min(1).max(100).default(50),
+      offset: z.number().min(0).default(0),
+      statuses: z.array(z.string()).min(1),
+    }),
+  ),
+  parentTaskId: z.string().nullable().optional(),
+});
+
 // Helper: build task prompt with handoff context from previous topics
 async function buildTaskPrompt(
   task: Awaited<ReturnType<TaskModel['findById']>> & {},
@@ -682,6 +695,21 @@ export const taskRouter = router({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Watchdog check failed',
+      });
+    }
+  }),
+
+  groupList: taskProcedure.input(groupListSchema).query(async ({ input, ctx }) => {
+    try {
+      const model = ctx.taskModel;
+      const groups = await model.groupList(input);
+      return { data: groups, success: true };
+    } catch (error) {
+      console.error('[task:groupList]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch grouped tasks',
       });
     }
   }),
