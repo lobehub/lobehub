@@ -443,6 +443,8 @@ export default {
   'task.status.fetchingDetails': 'Fetching details...',
   'task.status.initializing': 'Initializing task...',
   'task.subtask': 'Subtask',
+  'taskList.title': 'Tasks',
+  'taskList.viewAll': 'View All Tasks',
   'thread.closeSubagentThread': 'Collapse subagent conversation',
   'thread.divider': 'Subtopic',
   'thread.openSubagentThread': 'View full subagent conversation',
