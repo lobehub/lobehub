@@ -149,7 +149,7 @@
   "extendParams.enableReasoning.title": "开启深度思考",
   "extendParams.imageAspectRatio.title": "图片宽高比",
   "extendParams.imageResolution.title": "图片分辨率",
-  "extendParams.preserveThinking.desc": "开启后会将历史助手思考过程作为上下文回传给兼容模型（如 Qwen3.6 Plus），可能增加 Token 消耗。",
+  "extendParams.preserveThinking.desc": "开启后会将历史助手思考过程作为上下文回传给模型，可能增加 Token 消耗。",
   "extendParams.preserveThinking.title": "传递历史思考过程",
   "extendParams.reasoningBudgetToken.title": "思考 Token 预算",
   "extendParams.reasoningEffort.title": "推理强度",
