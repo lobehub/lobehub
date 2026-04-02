@@ -70,14 +70,17 @@ const listSchema = z.object({
 
 const groupListSchema = z.object({
   assigneeAgentId: z.string().optional(),
-  groups: z.array(
-    z.object({
-      key: z.string(),
-      limit: z.number().min(1).max(100).default(50),
-      offset: z.number().min(0).default(0),
-      statuses: z.array(z.string()).min(1),
-    }),
-  ),
+  groups: z
+    .array(
+      z.object({
+        key: z.string(),
+        limit: z.number().min(1).max(100).default(50),
+        offset: z.number().min(0).default(0),
+        statuses: z.array(z.string()).min(1).max(10),
+      }),
+    )
+    .min(1)
+    .max(20),
   parentTaskId: z.string().nullable().optional(),
 });
 
