@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/shared-tool-ui",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./renders": "./src/Render/index.ts",
+    "./inspectors": "./src/Inspector/index.ts"
+  },
+  "dependencies": {
+    "@lobechat/tool-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "path-browserify-esm": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

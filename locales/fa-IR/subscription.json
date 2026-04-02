@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "پاداش من",
   "referral.table.columns.rewardedAt": "زمان دریافت پاداش",
   "referral.table.columns.status": "وضعیت",
-  "referral.table.columns.suspectedReason": "دلیل مشکوک بودن",
   "referral.table.status.pending_reward": "پاداش در انتظار",
   "referral.table.status.registered": "ثبت‌نام شده",
   "referral.table.status.revoked": "لغو شده",

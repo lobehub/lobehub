@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "Моя награда",
   "referral.table.columns.rewardedAt": "Дата награды",
   "referral.table.columns.status": "Статус",
-  "referral.table.columns.suspectedReason": "Причина подозрения",
   "referral.table.status.pending_reward": "Ожидаемое вознаграждение",
   "referral.table.status.registered": "Зарегистрирован",
   "referral.table.status.revoked": "Отменено",

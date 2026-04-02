@@ -1,12 +1,14 @@
 import type { EditLocalFileState } from '@lobechat/builtin-tool-local-system';
-import type { EditLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Alert, Flexbox, PatchDiff, Skeleton } from '@lobehub/ui';
 import React, { memo } from 'react';
 
-const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFileState>>(
+const EditLocalFile = memo<BuiltinRenderProps<any, EditLocalFileState>>(
   ({ args, pluginState, pluginError }) => {
     if (!args) return <Skeleton active />;
+
+    // Support both IPC format (file_path) and ComputerRuntime format (path)
+    const filePath = args.file_path || args.path || '';
 
     return (
       <Flexbox gap={12}>
@@ -19,7 +21,7 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
           />
         ) : pluginState?.diffText ? (
           <PatchDiff
-            fileName={args.file_path}
+            fileName={filePath}
             patch={pluginState.diffText}
             showHeader={false}
             variant="borderless"

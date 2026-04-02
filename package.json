@@ -256,6 +256,7 @@
     "@lobechat/openapi": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/python-interpreter": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",

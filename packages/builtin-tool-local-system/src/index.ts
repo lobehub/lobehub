@@ -4,10 +4,8 @@ export { systemPrompt } from './systemRole';
 export {
   type EditLocalFileState,
   type FileResult,
-  type GetCommandOutputState,
   type GlobFilesState,
   type GrepContentState,
-  type KillCommandState,
   type LocalFileListState,
   type LocalFileSearchState,
   type LocalMoveFilesState,

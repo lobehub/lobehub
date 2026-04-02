@@ -1,4 +1,4 @@
-import type { SaveUserQuestionField, UserAgentOnboardingContext } from '@lobechat/types';
+import type { SaveUserQuestionField } from '@lobechat/types';
 
 interface WebOnboardingToolActionResult {
   content?: string;
@@ -7,9 +7,9 @@ interface WebOnboardingToolActionResult {
     type?: string;
   };
   ignoredFields?: string[];
-  savedFields?: SaveUserQuestionField[];
+  savedFields?: string[];
   success: boolean;
-  unchangedFields?: SaveUserQuestionField[];
+  unchangedFields?: string[];
 }
 
 const FIELD_LABELS: Record<SaveUserQuestionField, string> = {
@@ -38,7 +38,17 @@ const PHASE_GUIDANCE: Record<string, string> = {
     'Phase: User Identity. The agent has an identity. Now learn who the user is — their name, role, and what they do. Save fullName via saveUserQuestion when learned. Start building the persona document.',
 };
 
-export const formatWebOnboardingStateMessage = (state: UserAgentOnboardingContext) => {
+interface OnboardingStateContext {
+  discoveryUserMessageCount?: number;
+  finished: boolean;
+  missingStructuredFields: string[];
+  phase: string;
+  remainingDiscoveryExchanges?: number;
+  topicId?: string;
+  version?: number;
+}
+
+export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) => {
   if (state.finished) return 'Onboarding is complete.';
 
   const phaseGuidance = PHASE_GUIDANCE[state.phase] || '';
@@ -55,7 +65,9 @@ export const formatWebOnboardingStateMessage = (state: UserAgentOnboardingContex
 
   if (state.missingStructuredFields.length > 0) {
     const missingFields = formatNaturalList(
-      state.missingStructuredFields.map((field) => FIELD_LABELS[field]),
+      state.missingStructuredFields.map(
+        (field) => FIELD_LABELS[field as SaveUserQuestionField] || field,
+      ),
     );
     parts.push(`Structured fields still needed: ${missingFields}.`);
   }

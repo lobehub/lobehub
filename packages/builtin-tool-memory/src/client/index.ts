@@ -5,6 +5,7 @@ export {
   AddExperienceMemoryInspector,
   AddIdentityMemoryInspector,
   AddPreferenceMemoryInspector,
+  QueryTaxonomyOptionsInspector,
   RemoveIdentityMemoryInspector,
   SearchUserMemoryInspector,
   UpdateIdentityMemoryInspector,

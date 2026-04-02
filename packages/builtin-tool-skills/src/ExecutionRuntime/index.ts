@@ -1,20 +1,20 @@
-import { resourcesTreePrompt } from '@lobechat/prompts';
-import {
-  type BuiltinServerRuntimeOutput,
-  type BuiltinSkill,
-  type SkillItem,
-  type SkillListItem,
-  type SkillResourceContent,
+import { formatCommandResult, resourcesTreePrompt } from '@lobechat/prompts';
+import type {
+  BuiltinServerRuntimeOutput,
+  BuiltinSkill,
+  SkillItem,
+  SkillListItem,
+  SkillResourceContent,
 } from '@lobechat/types';
 
-import {
-  type ActivateSkillParams,
-  type CommandResult,
-  type ExecScriptParams,
-  type ExportFileParams,
-  type ReadReferenceParams,
-  type RunCommandOptions,
-  type RunCommandParams,
+import type {
+  ActivateSkillParams,
+  CommandResult,
+  ExecScriptParams,
+  ExportFileParams,
+  ReadReferenceParams,
+  RunCommandOptions,
+  RunCommandParams,
 } from '../types';
 
 /**
@@ -77,17 +77,7 @@ export class SkillsExecutionRuntime {
           description,
         });
 
-        const output = [result.output, result.stderr].filter(Boolean).join('\n');
-
-        return {
-          content: output || '(no output)',
-          state: {
-            command,
-            exitCode: result.exitCode,
-            success: result.success,
-          },
-          success: result.success,
-        };
+        return this.formatCommandOutput(command, result);
       } catch (e) {
         return {
           content: `Failed to execute command: ${(e as Error).message}`,
@@ -106,18 +96,7 @@ export class SkillsExecutionRuntime {
 
     try {
       const result = await this.service.runCommand({ command });
-
-      const output = [result.output, result.stderr].filter(Boolean).join('\n');
-
-      return {
-        content: output || '(no output)',
-        state: {
-          command,
-          exitCode: result.exitCode,
-          success: result.success,
-        },
-        success: result.success,
-      };
+      return this.formatCommandOutput(command, result);
     } catch (e) {
       return {
         content: `Failed to execute command: ${(e as Error).message}`,
@@ -138,17 +117,7 @@ export class SkillsExecutionRuntime {
 
     try {
       const result = await this.service.runCommand({ command });
-      const output = [result.output, result.stderr].filter(Boolean).join('\n');
-
-      return {
-        content: output || '(no output)',
-        state: {
-          command,
-          exitCode: result.exitCode,
-          success: result.success,
-        },
-        success: result.success,
-      };
+      return this.formatCommandOutput(command, result);
     } catch (e) {
       return {
         content: `Failed to execute command: ${(e as Error).message}`,
@@ -318,6 +287,29 @@ export class SkillsExecutionRuntime {
         name: skill.name,
       },
       success: true,
+    };
+  }
+
+  /**
+   * Format command result using the shared formatCommandResult from @lobechat/prompts.
+   * This ensures consistent content format across all runtimes.
+   */
+  private formatCommandOutput(command: string, result: CommandResult): BuiltinServerRuntimeOutput {
+    const content = formatCommandResult({
+      stderr: result.stderr,
+      stdout: result.output,
+      success: result.success,
+      exitCode: result.exitCode,
+    });
+
+    return {
+      content,
+      state: {
+        command,
+        exitCode: result.exitCode,
+        success: result.success,
+      },
+      success: result.success,
     };
   }
 }

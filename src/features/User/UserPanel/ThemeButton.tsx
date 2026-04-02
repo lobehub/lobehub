@@ -2,9 +2,10 @@ import { type DropdownMenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { type FC } from 'react';
-import { useMemo } from 'react';
+import { type FC, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { electronStylish } from '@/styles/electron';
 
 const themeIcons = {
   dark: Moon,
@@ -45,7 +46,11 @@ const ThemeButton: FC<{ placement?: DropdownMenuProps['placement']; size?: numbe
   );
 
   return (
-    <DropdownMenu items={items} placement={placement}>
+    <DropdownMenu
+      items={items}
+      placement={placement}
+      popupProps={{ className: electronStylish.nodrag }}
+    >
       <ActionIcon
         icon={themeIcons[(theme as 'dark' | 'light' | 'system') || 'system']}
         size={size || { blockSize: 32, size: 16 }}

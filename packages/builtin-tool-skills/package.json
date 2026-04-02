@@ -10,10 +10,11 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/const": "workspace:*"
+    "@lobechat/const": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*"
   },
   "devDependencies": {
-    "@lobechat/prompts": "workspace:*",
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
