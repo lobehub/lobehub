@@ -176,7 +176,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
               result += chunk.text;
             }
           },
-          params: merge(config, chainParams, { stream: false }),
+          params: merge(config, chainParams),
         });
       } catch {
         return null;
