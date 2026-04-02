@@ -13,6 +13,127 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-5V-Turbo is Zhipu’s multimodal Coding foundation model for visual programming tasks. It natively handles images, video, text, and files, and is optimized for long-horizon planning, complex coding, and agent execution in multimodal workflows.',
+    displayName: 'GLM-5V-Turbo',
+    enabled: true,
+    id: 'glm-5v-turbo',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.2,
+              '[0.032, infinity]': 1.8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 5,
+              '[0.032, infinity]': 7,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 22,
+              '[0.032, infinity]': 26,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-5-Turbo is Zhipu’s next-generation flagship foundation model, optimized for long-horizon Agentic Engineering tasks. It strengthens tool calling, instruction following, timed and persistent execution, and long-chain task completion for complex business workflows.',
+    displayName: 'GLM-5-Turbo',
+    id: 'glm-5-turbo',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.2,
+              '[0.032, infinity]': 1.8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 5,
+              '[0.032, infinity]': 7,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 22,
+              '[0.032, infinity]': 26,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     contextWindowTokens: 200_000,
     description:

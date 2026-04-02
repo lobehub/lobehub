@@ -1752,7 +1752,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Qwen 3.6-Plus introduces major upgrades in coding capabilities, with a focus on Agentic Coding and front-end development, significantly enhancing the Vibe Coding experience. Its reasoning ability across general scenarios has been further improved. In terms of multimodality, capabilities such as universal recognition, OCR, and object localization have been substantially enhanced. It also fixes known issues from the Qwen 3.5-Plus release. Usage remains the same as Qwen 3.5-Plus.',
+      'Qwen3.6 Plus supports text, image, and video input. It delivers a balanced performance across quality, speed, and cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.6 Plus',
     enabled: true,
     id: 'qwen3.6-plus',
@@ -1764,32 +1764,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.256]': 2 * 0.1,
-              '[0.256, infinity]': 8 * 0.1,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 2 * 1.25,
-              '[0.256, infinity]': 8 * 1.25,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
               '[0, 0.256]': 2,
-              '[0.256, infinity]': 8,
+              '[0.256, 1]': 8,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1801,7 +1777,7 @@ const qwenChatModels: AIChatModelCard[] = [
           lookup: {
             prices: {
               '[0, 0.256]': 12,
-              '[0.256, infinity]': 48,
+              '[0.256, 1]': 48,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1809,6 +1785,18 @@ const qwenChatModels: AIChatModelCard[] = [
           strategy: 'lookup',
           unit: 'millionTokens',
         },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2 * 0.2,
+              '[0.256, 1]': 8 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        }
       ],
     },
     releasedAt: '2026-04-02',
