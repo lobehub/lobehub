@@ -6,6 +6,7 @@ import type { SearchMemoryResult } from '@lobechat/types';
 type ContextResult = SearchMemoryResult['contexts'][number];
 type ActivityResult = SearchMemoryResult['activities'][number];
 type ExperienceResult = SearchMemoryResult['experiences'][number];
+type IdentityResult = NonNullable<SearchMemoryResult['identities']>[number];
 type PreferenceResult = SearchMemoryResult['preferences'][number];
 
 const formatDate = (value?: string | Date | null) => {
@@ -19,7 +20,7 @@ const formatDate = (value?: string | Date | null) => {
  * Format: attributes for metadata, description as text content
  */
 const formatContextResult = (item: ContextResult): string => {
-  const attrs: string[] = [`id="${item.id}"`];
+  const attrs: string[] = [`id="${item.id || ''}"`];
 
   if (item.title) {
     attrs.push(`title="${item.title}"`);
@@ -76,7 +77,7 @@ const formatContextResult = (item: ContextResult): string => {
  * Includes scheduling attributes and feedback
  */
 const formatActivityResult = (item: ActivityResult): string => {
-  const attrs: string[] = [`id="${item.id}"`];
+  const attrs: string[] = [`id="${item.id || ''}"`];
 
   if (item.type) {
     attrs.push(`type="${item.type}"`);
@@ -118,7 +119,7 @@ const formatActivityResult = (item: ActivityResult): string => {
  * Format: attributes for metadata, situation and keyLearning as child elements
  */
 const formatExperienceResult = (item: ExperienceResult): string => {
-  const attrs: string[] = [`id="${item.id}"`];
+  const attrs: string[] = [`id="${item.id || ''}"`];
 
   if (item.type) {
     attrs.push(`type="${item.type}"`);
@@ -146,7 +147,7 @@ const formatExperienceResult = (item: ExperienceResult): string => {
  * Format: attributes for metadata, directives as text content
  */
 const formatPreferenceResult = (item: PreferenceResult): string => {
-  const attrs: string[] = [`id="${item.id}"`];
+  const attrs: string[] = [`id="${item.id || ''}"`];
 
   if (item.type) {
     attrs.push(`type="${item.type}"`);
@@ -158,6 +159,18 @@ const formatPreferenceResult = (item: PreferenceResult): string => {
   const content = item.conclusionDirectives || '';
 
   return `  <preference ${attrs.join(' ')}>${content}</preference>`;
+};
+
+const formatIdentityResult = (item: IdentityResult): string => {
+  const attrs: string[] = [`id="${item.id || ''}"`];
+
+  if (item.type) attrs.push(`type="${item.type}"`);
+  if (item.relationship) attrs.push(`relationship="${item.relationship}"`);
+  if (item.role) attrs.push(`role="${item.role}"`);
+
+  const content = item.description || '';
+
+  return `  <identity ${attrs.join(' ')}>${content}</identity>`;
 };
 
 export interface FormatSearchResultsOptions {
@@ -179,7 +192,13 @@ export const formatMemorySearchResults = ({
   results,
 }: FormatSearchResultsOptions): string => {
   const { activities, contexts, experiences, preferences } = results;
-  const total = activities.length + contexts.length + experiences.length + preferences.length;
+  const identities = results.identities ?? [];
+  const total =
+    activities.length +
+    contexts.length +
+    experiences.length +
+    identities.length +
+    preferences.length;
 
   if (total === 0) {
     return `<memories query="${query}">
@@ -204,6 +223,11 @@ export const formatMemorySearchResults = ({
   if (experiences.length > 0) {
     const experiencesXml = experiences.map(formatExperienceResult).join('\n');
     sections.push(`<experiences count="${experiences.length}">\n${experiencesXml}\n</experiences>`);
+  }
+
+  if (identities.length > 0) {
+    const identitiesXml = identities.map(formatIdentityResult).join('\n');
+    sections.push(`<identities count="${identities.length}">\n${identitiesXml}\n</identities>`);
   }
 
   // Add preferences section

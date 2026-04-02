@@ -25,6 +25,8 @@ import type {
   AddExperienceMemoryResult,
   AddIdentityMemoryResult,
   AddPreferenceMemoryResult,
+  QueryTaxonomyOptionsParams,
+  QueryTaxonomyOptionsResult,
   RemoveIdentityMemoryResult,
   SearchMemoryParams,
   SearchMemoryResult,
@@ -42,6 +44,7 @@ import {
 import { userSettings } from '@/database/schemas';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { normalizeSearchMemoryParams } from '@/server/services/memory/userMemory/searchParams';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -54,92 +57,24 @@ const normalizeMemoryEffort = (value: unknown): MemoryEffort => {
 
 const applySearchLimitsByEffort = (
   effort: MemoryEffort,
-  requested: { activities: number; contexts: number; experiences: number; preferences: number },
+  requested: {
+    activities: number;
+    contexts: number;
+    experiences: number;
+    identities: number;
+    preferences: number;
+  },
 ) => {
   const limit = MEMORY_SEARCH_TOP_K_LIMITS[effort];
+  const identityLimit = effort === 'high' ? 4 : effort === 'low' ? 1 : 2;
 
   return {
     activities: Math.min(requested.activities, limit.activities),
     contexts: Math.min(requested.contexts, limit.contexts),
     experiences: Math.min(requested.experiences, limit.experiences),
+    identities: Math.min(requested.identities, identityLimit),
     preferences: Math.min(requested.preferences, limit.preferences),
   };
-};
-
-const mapMemorySearchResult = (
-  layeredResults: Awaited<ReturnType<UserMemoryModel['searchWithEmbedding']>>,
-): SearchMemoryResult => {
-  return {
-    activities: layeredResults.activities.map((activity) => ({
-      accessedAt: activity.accessedAt,
-      associatedLocations: activity.associatedLocations,
-      associatedObjects: activity.associatedObjects,
-      associatedSubjects: activity.associatedSubjects,
-      capturedAt: activity.capturedAt,
-      createdAt: activity.createdAt,
-      endsAt: activity.endsAt,
-      feedback: activity.feedback,
-      id: activity.id,
-      metadata: activity.metadata,
-      narrative: activity.narrative,
-      notes: activity.notes,
-      startsAt: activity.startsAt,
-      status: activity.status,
-      tags: activity.tags,
-      timezone: activity.timezone,
-      type: activity.type,
-      updatedAt: activity.updatedAt,
-      userMemoryId: activity.userMemoryId,
-    })),
-    contexts: layeredResults.contexts.map((context) => ({
-      accessedAt: context.accessedAt,
-      associatedObjects: context.associatedObjects,
-      associatedSubjects: context.associatedSubjects,
-      createdAt: context.createdAt,
-      currentStatus: context.currentStatus,
-      description: context.description,
-      id: context.id,
-      metadata: context.metadata,
-      scoreImpact: context.scoreImpact,
-      scoreUrgency: context.scoreUrgency,
-      tags: context.tags,
-      title: context.title,
-      type: context.type,
-      updatedAt: context.updatedAt,
-      userMemoryIds: Array.isArray(context.userMemoryIds)
-        ? (context.userMemoryIds as string[])
-        : null,
-    })),
-    experiences: layeredResults.experiences.map((experience) => ({
-      accessedAt: experience.accessedAt,
-      action: experience.action,
-      createdAt: experience.createdAt,
-      id: experience.id,
-      keyLearning: experience.keyLearning,
-      metadata: experience.metadata,
-      possibleOutcome: experience.possibleOutcome,
-      reasoning: experience.reasoning,
-      scoreConfidence: experience.scoreConfidence,
-      situation: experience.situation,
-      tags: experience.tags,
-      type: experience.type,
-      updatedAt: experience.updatedAt,
-      userMemoryId: experience.userMemoryId,
-    })),
-    preferences: layeredResults.preferences.map((preference) => ({
-      accessedAt: preference.accessedAt,
-      conclusionDirectives: preference.conclusionDirectives,
-      createdAt: preference.createdAt,
-      id: preference.id,
-      metadata: preference.metadata,
-      scorePriority: preference.scorePriority,
-      suggestions: preference.suggestions,
-      tags: preference.tags,
-      type: preference.type,
-      updatedAt: preference.updatedAt,
-      userMemoryId: preference.userMemoryId,
-    })),
-  } satisfies SearchMemoryResult;
 };
 
 const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
@@ -191,38 +126,51 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   }
 
   searchMemory = async (params: SearchMemoryParams): Promise<SearchMemoryResult> => {
+    const normalizedParams = normalizeSearchMemoryParams(params);
     const { provider, model: embeddingModel } =
       getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
 
     const modelRuntime = await initModelRuntimeFromDB(this.serverDB, this.userId, provider);
+    const normalizedQueries = [
+      ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
+    ];
 
-    const queryEmbeddings = await modelRuntime.embeddings(
-      {
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: params.query,
-        model: embeddingModel,
-      },
-      { metadata: { trigger: RequestTrigger.Memory }, user: this.userId },
-    );
+    const queryEmbeddings =
+      normalizedQueries.length > 0
+        ? await modelRuntime.embeddings(
+            {
+              dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+              input: normalizedQueries,
+              model: embeddingModel,
+            },
+            { metadata: { trigger: RequestTrigger.Memory }, user: this.userId },
+          )
+        : [];
 
-    const effectiveEffort = normalizeMemoryEffort(params.effort ?? this.memoryEffort);
+    const effectiveEffort = normalizeMemoryEffort(normalizedParams.effort ?? this.memoryEffort);
     const effortDefaults = MEMORY_SEARCH_TOP_K_LIMITS[effectiveEffort];
 
     const requestedLimits = {
-      activities: params.topK?.activities ?? effortDefaults.activities,
-      contexts: params.topK?.contexts ?? effortDefaults.contexts,
-      experiences: params.topK?.experiences ?? effortDefaults.experiences,
-      preferences: params.topK?.preferences ?? effortDefaults.preferences,
+      activities: normalizedParams.topK?.activities ?? effortDefaults.activities,
+      contexts: normalizedParams.topK?.contexts ?? effortDefaults.contexts,
+      experiences: normalizedParams.topK?.experiences ?? effortDefaults.experiences,
+      identities:
+        normalizedParams.topK?.identities ??
+        (effectiveEffort === 'high' ? 4 : effectiveEffort === 'low' ? 1 : 2),
+      preferences: normalizedParams.topK?.preferences ?? effortDefaults.preferences,
     };
 
     const effortConstrainedLimits = applySearchLimitsByEffort(effectiveEffort, requestedLimits);
+    return this.memoryModel.searchMemory(
+      { ...normalizedParams, queries: normalizedQueries, topK: effortConstrainedLimits },
+      queryEmbeddings,
+    ) as Promise<SearchMemoryResult>;
+  };
 
-    const layeredResults = await this.memoryModel.searchWithEmbedding({
-      embedding: queryEmbeddings?.[0],
-      limits: effortConstrainedLimits,
-    });
-
-    return mapMemorySearchResult(layeredResults);
+  queryTaxonomyOptions = async (
+    params: QueryTaxonomyOptionsParams,
+  ): Promise<QueryTaxonomyOptionsResult> => {
+    return this.memoryModel.queryTaxonomyOptions(params);
   };
 
   addContextMemory = async (

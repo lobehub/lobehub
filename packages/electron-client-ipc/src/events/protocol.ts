@@ -13,7 +13,7 @@ export interface ProtocolBroadcastEvents {
     marketId?: string;
     /** Plugin ID */
     pluginId: string;
-    /** MCP Schema 对象 */
+    /** MCP Schema object */
     schema: McpInstallSchema;
   }) => void;
 }

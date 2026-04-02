@@ -1,5 +1,4 @@
 {
-  "desc": "这里会不定期更新我们正在探索的新功能，欢迎试用！",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
   "features.groupChat.desc": "启用多代理协同群聊功能。",

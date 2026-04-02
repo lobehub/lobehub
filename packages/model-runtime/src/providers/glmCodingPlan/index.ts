@@ -4,7 +4,7 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export const LobeGLMCodingPlanAI = createOpenAICompatibleRuntime({
-  baseURL: 'https://api.z.ai/api/paas/v4',
+  baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
   chatCompletion: {
     handlePayload: (payload) => {
       const { model, thinking, ...rest } = payload;

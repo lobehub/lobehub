@@ -9,9 +9,11 @@ export interface ExecutionSnapshot {
     | 'cost_limit'
     | 'waiting_for_human';
   error?: { type: string; message: string };
+  externalRetryCount?: number;
   model?: string;
   operationId: string;
   provider?: string;
+  retryDelayExpression?: string;
   startedAt: number;
   steps: StepSnapshot[];
   topicId?: string;
@@ -39,6 +41,7 @@ export interface StepSnapshot {
   events?: Array<{ type: string; [key: string]: unknown }>;
 
   executionTimeMs: number;
+  externalRetryCount?: number;
 
   inputTokens?: number;
 

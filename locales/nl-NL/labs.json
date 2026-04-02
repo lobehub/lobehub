@@ -1,5 +1,4 @@
 {
-  "desc": "Hier vind je af en toe updates over nieuwe functies die we aan het verkennen zijn—voel je vrij om ze uit te proberen!",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",

@@ -11,10 +11,10 @@ import {
 } from '@lobechat/types';
 import { produce } from 'immer';
 import useSWR, { mutate, type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { agentSkillService } from '@/services/skill';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -27,36 +27,31 @@ export interface AgentSkillDetailData {
   skillDetail?: SkillItem;
 }
 
-export interface AgentSkillsAction {
-  createAgentSkill: (params: CreateSkillInput) => Promise<SkillItem | undefined>;
-  deleteAgentSkill: (id: string) => Promise<void>;
-  fetchAgentSkillDetail: (id: string) => Promise<SkillItem | undefined>;
-  importAgentSkillFromGitHub: (params: ImportGitHubInput) => Promise<SkillImportResult | undefined>;
-  importAgentSkillFromUrl: (params: ImportUrlInput) => Promise<SkillImportResult | undefined>;
-  importAgentSkillFromZip: (params: ImportZipInput) => Promise<SkillImportResult | undefined>;
-  refreshAgentSkills: () => Promise<void>;
-  updateAgentSkill: (params: UpdateSkillInput) => Promise<SkillItem | undefined>;
-  useFetchAgentSkillDetail: (skillId?: string) => SWRResponse<AgentSkillDetailData>;
-  useFetchAgentSkills: (enabled: boolean) => SWRResponse<SkillListItem[]>;
-}
+type Setter = StoreSetter<ToolStore>;
 
-export const createAgentSkillsSlice: StateCreator<
-  ToolStore,
-  [['zustand/devtools', never]],
-  [],
-  AgentSkillsAction
-> = (set, get) => ({
-  createAgentSkill: async (params) => {
+export const createAgentSkillsSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new AgentSkillsActionImpl(set, get, _api);
+
+export class AgentSkillsActionImpl {
+  readonly #get: () => ToolStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createAgentSkill = async (params: CreateSkillInput): Promise<SkillItem | undefined> => {
     const result = await agentSkillService.createSkill(params);
-    await get().refreshAgentSkills();
+    await this.#get().refreshAgentSkills();
     return result;
-  },
+  };
 
-  deleteAgentSkill: async (id) => {
+  deleteAgentSkill = async (id: string): Promise<void> => {
     await agentSkillService.deleteSkill(id);
 
-    // Clean up detail map
-    set(
+    this.#set(
       produce((draft: AgentSkillsState) => {
         delete draft.agentSkillDetailMap[id];
       }),
@@ -64,19 +59,18 @@ export const createAgentSkillsSlice: StateCreator<
       n('deleteAgentSkill'),
     );
 
-    // Clear SWR cache
     await mutate(['fetchAgentSkillDetail', id].join('-'), undefined, { revalidate: false });
 
-    await get().refreshAgentSkills();
-  },
+    await this.#get().refreshAgentSkills();
+  };
 
-  fetchAgentSkillDetail: async (id) => {
-    const cached = get().agentSkillDetailMap[id];
+  fetchAgentSkillDetail = async (id: string): Promise<SkillItem | undefined> => {
+    const cached = this.#get().agentSkillDetailMap[id];
     if (cached) return cached;
 
     const detail = await agentSkillService.getById(id);
     if (detail) {
-      set(
+      this.#set(
         produce((draft: AgentSkillsState) => {
           draft.agentSkillDetailMap[id] = detail;
         }),
@@ -85,37 +79,42 @@ export const createAgentSkillsSlice: StateCreator<
       );
     }
     return detail;
-  },
+  };
 
-  importAgentSkillFromGitHub: async (params) => {
+  importAgentSkillFromGitHub = async (
+    params: ImportGitHubInput,
+  ): Promise<SkillImportResult | undefined> => {
     const result = await agentSkillService.importFromGitHub(params);
-    await get().refreshAgentSkills();
+    await this.#get().refreshAgentSkills();
     return result;
-  },
+  };
 
-  importAgentSkillFromUrl: async (params) => {
+  importAgentSkillFromUrl = async (
+    params: ImportUrlInput,
+  ): Promise<SkillImportResult | undefined> => {
     const result = await agentSkillService.importFromUrl(params);
-    await get().refreshAgentSkills();
+    await this.#get().refreshAgentSkills();
     return result;
-  },
+  };
 
-  importAgentSkillFromZip: async (params) => {
+  importAgentSkillFromZip = async (
+    params: ImportZipInput,
+  ): Promise<SkillImportResult | undefined> => {
     const result = await agentSkillService.importFromZip(params);
-    await get().refreshAgentSkills();
+    await this.#get().refreshAgentSkills();
     return result;
-  },
+  };
 
-  refreshAgentSkills: async () => {
+  refreshAgentSkills = async (): Promise<void> => {
     const { data } = await agentSkillService.list();
-    set({ agentSkills: data }, false, n('refreshAgentSkills'));
-  },
+    this.#set({ agentSkills: data }, false, n('refreshAgentSkills'));
+  };
 
-  updateAgentSkill: async (params) => {
+  updateAgentSkill = async (params: UpdateSkillInput): Promise<SkillItem | undefined> => {
     const result = await agentSkillService.updateSkill(params);
 
-    // Update detail map if cached
     if (result) {
-      set(
+      this.#set(
         produce((draft: AgentSkillsState) => {
           draft.agentSkillDetailMap[params.id] = result;
         }),
@@ -124,14 +123,13 @@ export const createAgentSkillsSlice: StateCreator<
       );
     }
 
-    // Clear SWR cache so next open refetches instead of showing stale data
     await mutate(['fetchAgentSkillDetail', params.id].join('-'), undefined, { revalidate: false });
 
-    await get().refreshAgentSkills();
+    await this.#get().refreshAgentSkills();
     return result;
-  },
+  };
 
-  useFetchAgentSkillDetail: (skillId) =>
+  useFetchAgentSkillDetail = (skillId?: string): SWRResponse<AgentSkillDetailData> =>
     useClientDataSWR<AgentSkillDetailData>(
       skillId ? ['fetchAgentSkillDetail', skillId].join('-') : null,
       async () => {
@@ -141,7 +139,7 @@ export const createAgentSkillsSlice: StateCreator<
         ]);
 
         if (detail) {
-          set(
+          this.#set(
             produce((draft: AgentSkillsState) => {
               draft.agentSkillDetailMap[skillId!] = detail;
             }),
@@ -153,9 +151,9 @@ export const createAgentSkillsSlice: StateCreator<
         return { resourceTree, skillDetail: detail };
       },
       { revalidateOnFocus: false },
-    ),
+    );
 
-  useFetchAgentSkills: (enabled) =>
+  useFetchAgentSkills = (enabled: boolean): SWRResponse<SkillListItem[]> =>
     useSWR<SkillListItem[]>(
       enabled ? 'fetchAgentSkills' : null,
       async () => {
@@ -165,9 +163,11 @@ export const createAgentSkillsSlice: StateCreator<
       {
         fallbackData: [],
         onSuccess: (data) => {
-          set({ agentSkills: data }, false, n('useFetchAgentSkills'));
+          this.#set({ agentSkills: data }, false, n('useFetchAgentSkills'));
         },
         revalidateOnFocus: false,
       },
-    ),
-});
+    );
+}
+
+export type AgentSkillsAction = Pick<AgentSkillsActionImpl, keyof AgentSkillsActionImpl>;

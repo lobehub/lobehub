@@ -25,10 +25,9 @@ function extractChatId(platformThreadId: string): string {
   return platformThreadId.split(':')[1];
 }
 
-/** Resolve the Lark/Feishu domain from settings, defaulting to 'feishu'. */
-function resolveDomain(settings: Record<string, unknown>): 'lark' | 'feishu' {
-  const domain = settings.domain;
-  return domain === 'lark' ? 'lark' : 'feishu';
+/** Resolve the Lark/Feishu domain from the platform id. */
+function resolveDomain(platform: string): 'lark' | 'feishu' {
+  return platform === 'lark' ? 'lark' : 'feishu';
 }
 
 class FeishuWebhookClient implements PlatformClient {
@@ -42,7 +41,7 @@ class FeishuWebhookClient implements PlatformClient {
     this.config = config;
     this.id = config.platform;
     this.applicationId = config.applicationId;
-    this.domain = resolveDomain(config.settings);
+    this.domain = resolveDomain(config.platform);
   }
 
   // --- Lifecycle ---
@@ -94,7 +93,7 @@ class FeishuWebhookClient implements PlatformClient {
 
   createAdapter(): Record<string, any> {
     return {
-      feishu: createLarkAdapter({
+      [this.config.platform]: createLarkAdapter({
         appId: this.config.applicationId,
         appSecret: this.config.credentials.appSecret,
         encryptKey: this.config.credentials.encryptKey,
@@ -146,6 +145,7 @@ export class FeishuClientFactory extends ClientFactory {
     credentials: Record<string, string>,
     _settings?: Record<string, unknown>,
     applicationId?: string,
+    platform?: string,
   ): Promise<ValidationResult> {
     const errors: Array<{ field: string; message: string }> = [];
 
@@ -156,7 +156,7 @@ export class FeishuClientFactory extends ClientFactory {
     if (errors.length > 0) return { errors, valid: false };
 
     try {
-      const domain = 'feishu'; // default domain for validation
+      const domain = resolveDomain(platform || 'feishu');
       const api = new LarkApiClient(applicationId!, credentials.appSecret, domain);
       await api.getTenantAccessToken();
       return { valid: true };

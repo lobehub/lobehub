@@ -1,4 +1,6 @@
-import { MAX_DEBOUNCE_MS } from '../const';
+import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
+
+import { userIdField } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -50,7 +52,7 @@ export const schema: FieldSchema[] = [
         default: 5000,
         description: 'channel.debounceMsHint',
         label: 'channel.debounceMs',
-        maximum: MAX_DEBOUNCE_MS,
+        maximum: MAX_BOT_DEBOUNCE_MS,
         minimum: 100,
         type: 'number',
         visibleWhen: { field: 'concurrency', value: 'debounce' },
@@ -62,6 +64,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      userIdField,
       // TODO: DM schema - not implemented yet
       // {
       //   key: 'dm',

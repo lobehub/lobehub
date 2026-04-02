@@ -1,6 +1,11 @@
 import { createStyles } from 'antd-style';
 
 export const useStyles = createStyles(({ css, token }) => ({
+  actions: css`
+    padding-block: 8px;
+    padding-inline: 16px;
+    border-block-start: 1px solid ${token.colorBorderSecondary};
+  `,
   container: css`
     overflow: hidden;
     display: flex;

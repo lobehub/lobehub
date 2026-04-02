@@ -454,6 +454,7 @@ export default {
   'tool.intervention.rejectedWithReason': 'This Skill call was rejected: {{reason}}',
   'tool.intervention.pending': 'Pending',
   'tool.intervention.scrollToIntervention': 'View',
+  'tool.intervention.viewParameters': 'View parameters ({{count}})',
   'tool.intervention.toolAbort': 'You canceled this Skill call',
   'tool.intervention.toolRejected': 'This Skill call was rejected',
   'toolAuth.authorize': 'Authorize',

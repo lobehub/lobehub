@@ -37,7 +37,7 @@ export const createMemorySearchParams = (
   if (!query) return undefined;
 
   return {
-    query,
+    queries: [query],
     topK: {
       ...DEFAULT_SEARCH_USER_MEMORY_TOP_K,
     },

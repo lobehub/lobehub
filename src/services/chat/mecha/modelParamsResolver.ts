@@ -22,7 +22,7 @@ export interface ModelExtendParams {
   reasoning_effort?: string;
   thinking?: {
     budget_tokens?: number;
-    type: string;
+    type?: string;
   };
   thinkingBudget?: number;
   thinkingLevel?: string;
@@ -95,7 +95,6 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     // For models that only have reasoningBudgetToken without enableReasoning
     extendParams.thinking = {
       budget_tokens: chatConfig.reasoningBudgetToken || 1024,
-      type: 'enabled',
     };
   }
 

@@ -1075,10 +1075,19 @@ export class MemoryExtractionExecutor {
 
     const vector = embeddings?.[0];
     if (vector) {
-      const retrieved = await userMemoryModel.searchWithEmbedding({
-        embedding: vector,
-        limits: { activities: topK, contexts: topK, experiences: topK, preferences: topK },
-      });
+      const retrieved = await userMemoryModel.searchMemory(
+        {
+          queries: [aggregatedContent],
+          topK: {
+            activities: topK,
+            contexts: topK,
+            experiences: topK,
+            identities: topK,
+            preferences: topK,
+          },
+        },
+        [vector],
+      );
 
       return retrieved;
     }
@@ -1087,6 +1096,18 @@ export class MemoryExtractionExecutor {
       activities: [],
       contexts: [],
       experiences: [],
+      identities: [],
+      meta: {
+        appliedFilters: {},
+        appliedQueries: [],
+        layers: {
+          activities: { hasMore: false, returned: 0, total: 0 },
+          contexts: { hasMore: false, returned: 0, total: 0 },
+          experiences: { hasMore: false, returned: 0, total: 0 },
+          identities: { hasMore: false, returned: 0, total: 0 },
+          preferences: { hasMore: false, returned: 0, total: 0 },
+        },
+      },
       preferences: [],
     };
   }
@@ -1260,7 +1281,7 @@ export class MemoryExtractionExecutor {
             traceId: span.spanContext().traceId,
           });
 
-          const retrievedMemories = await this.listRelevantUserMemories(
+          const searchResult = await this.listRelevantUserMemories(
             extractionJob,
             runtimes.embeddings,
             this.modelConfig.embeddingsModel,
@@ -1269,7 +1290,14 @@ export class MemoryExtractionExecutor {
             embeddingContextLimit,
           );
           const retrievedMemoryContextProvider = new RetrievalUserMemoryContextProvider({
-            retrievedMemories,
+            retrievedMemories: {
+              activities: searchResult.activities,
+              contexts: searchResult.contexts,
+              experiences: searchResult.experiences,
+              preferences: searchResult.preferences,
+            } as ConstructorParameters<
+              typeof RetrievalUserMemoryContextProvider
+            >[0]['retrievedMemories'],
           });
           const retrievalMemoryContext = await retrievedMemoryContextProvider.buildContext(
             extractionJob.userId,
@@ -1298,6 +1326,10 @@ export class MemoryExtractionExecutor {
             retrievedIdentityContext.context,
             extractorContextLimit,
           );
+          const taxonomyOptions = await new UserMemoryModel(db, job.userId).queryTaxonomyOptions({
+            include: ['categories', 'labels', 'tags'],
+            limit: 20,
+          });
 
           const agentCalls: Partial<
             Record<MemoryExtractionAgent, MemoryExtractionAgentCallTrace<GenerateObjectPayload>>
@@ -1343,7 +1375,7 @@ export class MemoryExtractionExecutor {
             extractionJob,
             memories: {
               identities: retrievedMemoryIdentities,
-              layers: retrievedMemories,
+              layers: searchResult,
             },
             source: {
               chatTopic: {
@@ -1382,6 +1414,9 @@ export class MemoryExtractionExecutor {
             gatekeeperLanguage: this.privateConfig.agentGateKeeper.language || 'English',
             language,
             resultRecorder: resultRecorder as any,
+            availableCategories: taxonomyOptions.categories.map((item) => item.value),
+            availableLabels: taxonomyOptions.labels.map((item) => item.value),
+            availableTags: taxonomyOptions.tags.map((item) => item.value),
             retrievedContexts: trimmedRetrievedContexts,
             retrievedIdentitiesContext: trimmedRetrievedIdentitiesContext,
 

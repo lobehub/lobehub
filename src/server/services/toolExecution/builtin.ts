@@ -39,6 +39,9 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     if (source === 'lobehubSkill') {
       return this.marketService.executeLobehubSkill({
         args,
+        context: {
+          topicId: context.topicId,
+        },
         provider: identifier,
         toolName: apiName,
       });

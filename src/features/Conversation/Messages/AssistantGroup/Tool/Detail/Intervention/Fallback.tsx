@@ -1,9 +1,14 @@
+import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { safeParseJSON } from '@lobechat/utils';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Edit3Icon } from 'lucide-react';
-import { memo, Suspense, useCallback, useState } from 'react';
+import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { ChevronDown, ChevronRight, Edit3Icon } from 'lucide-react';
+import { memo, Suspense, useCallback, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { pluginHelpers, useToolStore } from '@/store/tool';
+import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -12,8 +17,37 @@ import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  collapseHeader: css`
+    cursor: pointer;
+    user-select: none;
+
+    padding-block: 6px;
+    padding-inline: 16px;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+    }
+  `,
+  avatar: css`
+    font-size: 16px;
+    line-height: 1;
+  `,
+  description: css`
+    padding-block: 8px;
+    padding-inline: 16px;
+    font-size: 14px;
+    color: ${cssVar.colorText};
+  `,
+}));
+
 interface FallbackInterventionProps {
+  actionsPortalTarget?: HTMLDivElement | null;
   apiName: string;
+  assistantGroupId?: string;
   id: string;
   identifier: string;
   requestArgs: string;
@@ -21,11 +55,26 @@ interface FallbackInterventionProps {
 }
 
 const FallbackIntervention = memo<FallbackInterventionProps>(
-  ({ requestArgs, id, identifier, apiName, toolCallId }) => {
-    const { t } = useTranslation('chat');
+  ({ requestArgs, id, identifier, apiName, toolCallId, assistantGroupId, actionsPortalTarget }) => {
+    const { t } = useTranslation(['chat', 'plugin', 'common']);
     const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
     const [isEditing, setIsEditing] = useState(false);
+    const [showArgs, setShowArgs] = useState(false);
     const updatePluginArguments = useConversationStore((s) => s.updatePluginArguments);
+
+    const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier));
+    const isBuiltin = builtinToolIdentifiers.includes(identifier);
+
+    const toolTitle = isBuiltin
+      ? t(`builtins.${identifier}.title`, { defaultValue: identifier, ns: 'plugin' })
+      : (pluginHelpers.getPluginTitle(pluginMeta) ?? identifier);
+
+    const actionTitle = isBuiltin
+      ? t(`builtins.${identifier}.apiName.${apiName}`, { defaultValue: apiName, ns: 'plugin' })
+      : apiName;
+
+    const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
+    const argCount = typeof parsedArgs === 'object' ? Object.keys(parsedArgs).length : 0;
 
     const handleCancel = useCallback(() => {
       setIsEditing(false);
@@ -60,31 +109,61 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
         </Suspense>
       );
 
-    return (
-      <Flexbox gap={12}>
-        <Arguments
-          arguments={requestArgs}
-          actions={
-            <ActionIcon
-              icon={Edit3Icon}
-              size={'small'}
-              title={t('edit', { ns: 'common' })}
-              onClick={() => {
-                setIsEditing(true);
-              }}
-            />
-          }
+    const actions = (
+      <Flexbox horizontal justify={'flex-end'}>
+        <ApprovalActions
+          apiName={apiName}
+          approvalMode={approvalMode}
+          assistantGroupId={assistantGroupId}
+          identifier={identifier}
+          messageId={id}
+          toolCallId={toolCallId}
         />
+      </Flexbox>
+    );
 
-        <Flexbox horizontal justify={'flex-end'}>
-          <ApprovalActions
-            apiName={apiName}
-            approvalMode={approvalMode}
-            identifier={identifier}
-            messageId={id}
-            toolCallId={toolCallId}
-          />
+    return (
+      <Flexbox gap={4}>
+        <Flexbox horizontal align="center" className={styles.description} gap={6}>
+          {pluginMeta?.avatar && <span className={styles.avatar}>{pluginMeta.avatar}</span>}
+          <span>
+            {toolTitle} → {actionTitle}
+          </span>
         </Flexbox>
+
+        {argCount > 0 && (
+          <>
+            <Flexbox
+              horizontal
+              align="center"
+              className={styles.collapseHeader}
+              gap={4}
+              onClick={() => setShowArgs(!showArgs)}
+            >
+              <Icon icon={showArgs ? ChevronDown : ChevronRight} size={14} />
+              <span>
+                {t('tool.intervention.viewParameters', {
+                  count: argCount,
+                  defaultValue: 'View parameters ({{count}})',
+                })}
+              </span>
+              {showArgs && (
+                <ActionIcon
+                  icon={Edit3Icon}
+                  size={'small'}
+                  title={t('edit', { ns: 'common' })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditing(true);
+                  }}
+                />
+              )}
+            </Flexbox>
+            {showArgs && <Arguments arguments={requestArgs} />}
+          </>
+        )}
+
+        {actionsPortalTarget ? createPortal(actions, actionsPortalTarget) : actions}
       </Flexbox>
     );
   },

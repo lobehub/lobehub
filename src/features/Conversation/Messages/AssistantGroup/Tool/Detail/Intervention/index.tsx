@@ -3,6 +3,7 @@ import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
@@ -17,7 +18,9 @@ import SecurityBlacklistWarning from './SecurityBlacklistWarning';
 export type { ApprovalMode } from '@/store/user/slices/settings/selectors';
 
 interface InterventionProps {
+  actionsPortalTarget?: HTMLDivElement | null;
   apiName: string;
+  assistantGroupId?: string;
   id: string;
   identifier: string;
   requestArgs: string;
@@ -25,7 +28,7 @@ interface InterventionProps {
 }
 
 const Intervention = memo<InterventionProps>(
-  ({ requestArgs, id, identifier, apiName, toolCallId }) => {
+  ({ requestArgs, id, identifier, apiName, toolCallId, assistantGroupId, actionsPortalTarget }) => {
     const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
     const [isEditing, setIsEditing] = useState(false);
     const updatePluginArguments = useConversationStore((s) => s.updatePluginArguments);
@@ -147,6 +150,20 @@ const Intervention = memo<InterventionProps>(
         );
       }
 
+      const actions = (
+        <Flexbox horizontal justify={'flex-end'}>
+          <ApprovalActions
+            apiName={apiName}
+            approvalMode={approvalMode}
+            assistantGroupId={assistantGroupId}
+            identifier={identifier}
+            messageId={id}
+            toolCallId={toolCallId}
+            onBeforeApprove={handleBeforeApprove}
+          />
+        </Flexbox>
+      );
+
       return (
         <Flexbox gap={12}>
           <SecurityBlacklistWarning args={parsedArgs} />
@@ -158,16 +175,7 @@ const Intervention = memo<InterventionProps>(
             registerBeforeApprove={registerBeforeApprove}
             onArgsChange={handleArgsChange}
           />
-          <Flexbox horizontal justify={'flex-end'}>
-            <ApprovalActions
-              apiName={apiName}
-              approvalMode={approvalMode}
-              identifier={identifier}
-              messageId={id}
-              toolCallId={toolCallId}
-              onBeforeApprove={handleBeforeApprove}
-            />
-          </Flexbox>
+          {actionsPortalTarget ? createPortal(actions, actionsPortalTarget) : actions}
         </Flexbox>
       );
     }
@@ -176,7 +184,9 @@ const Intervention = memo<InterventionProps>(
       <Flexbox gap={12}>
         <SecurityBlacklistWarning args={parsedArgs} />
         <Fallback
+          actionsPortalTarget={actionsPortalTarget}
           apiName={apiName}
+          assistantGroupId={assistantGroupId}
           id={id}
           identifier={identifier}
           requestArgs={requestArgs}

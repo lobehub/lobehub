@@ -124,5 +124,13 @@ export default {
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
+  'channel.historyLimit': 'History Message Limit',
+  'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
+  'channel.serverId': 'Default Server / Guild ID',
+  'channel.serverIdHint':
+    'Your default server or guild ID on this platform. The AI uses it to list channels without asking.',
+  'channel.userId': 'Your Platform User ID',
+  'channel.userIdHint':
+    'Your user ID on this platform. The AI can use it to send you direct messages.',
   'channel.runtimeDisconnected': 'Bot disconnected',
 } as const;

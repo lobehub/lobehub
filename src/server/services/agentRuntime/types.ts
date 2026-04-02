@@ -1,5 +1,5 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
-import type { LobeToolManifest, OperationSkillSet } from '@lobechat/context-engine';
+import type { LobeToolManifest, OperationSkillSet, ToolSource } from '@lobechat/context-engine';
 import { type UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -11,7 +11,7 @@ import { type AgentHook } from './hooks/types';
 export interface OperationToolSet {
   enabledToolIds?: string[];
   manifestMap: Record<string, LobeToolManifest>;
-  sourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
+  sourceMap?: Record<string, ToolSource>;
   tools?: any[];
 }
 
@@ -111,6 +111,7 @@ export type StepCompletionReason =
 export interface AgentExecutionParams {
   approvedToolCall?: any;
   context?: AgentRuntimeContext;
+  externalRetryCount?: number;
   humanInput?: any;
   operationId: string;
   rejectionReason?: string;
@@ -169,6 +170,8 @@ export interface OperationCreationParams {
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;
+  queueRetries?: number;
+  queueRetryDelay?: string;
   /** Abort startup before the first step is scheduled */
   signal?: AbortSignal;
   /**

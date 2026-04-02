@@ -1,5 +1,4 @@
 {
-  "desc": "Aqui você encontrará atualizações ocasionais sobre novos recursos que estamos explorando — sinta-se à vontade para testá-los!",
   "features.assistantMessageGroup.desc": "Agrupe mensagens do agente e os resultados das chamadas de ferramentas para exibição conjunta",
   "features.assistantMessageGroup.title": "Agrupamento de Mensagens do Agente",
   "features.groupChat.desc": "Ative a coordenação de bate-papo em grupo com múltiplos agentes.",

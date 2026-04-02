@@ -1,5 +1,4 @@
 export default {
-  'Artifacts': 'Artifacts',
   'FilePreview.tabs.chunk': 'Chunk',
   'FilePreview.tabs.file': 'File',
   'Plugins': 'Skills',

@@ -435,6 +435,12 @@ class ChatService {
       onErrorHandle: options?.onErrorHandle,
       onFinish: options?.onFinish,
       onMessageHandle: options?.onMessageHandle,
+      requestContext: {
+        apiMode,
+        fetchOnClient: enableFetchOnClient,
+        model,
+        provider,
+      },
       responseAnimation: mergedResponseAnimation,
       signal,
     });

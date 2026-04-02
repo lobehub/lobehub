@@ -21,6 +21,7 @@ import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
+import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
 import { chunkRouter } from './chunk';
 import { comfyuiRouter } from './comfyui';
@@ -62,6 +63,7 @@ import { videoRouter } from './video';
 export const lambdaRouter = router({
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
+  botMessage: botMessageRouter,
   agentCronJob: agentCronJobRouter,
   agentDocument: agentDocumentRouter,
   agentEval: agentEvalRouter,

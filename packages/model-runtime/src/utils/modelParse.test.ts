@@ -302,6 +302,44 @@ describe('modelParse', () => {
       });
     });
 
+    it('xiaomimimo: should infer multimodal abilities for omni', async () => {
+      const out = await processModelList(
+        [{ id: 'mimo-v2-flash' }, { id: 'mimo-v2-pro' }, { id: 'mimo-v2-omni' }],
+        MODEL_LIST_CONFIGS.xiaomimimo,
+        'xiaomimimo',
+      );
+
+      expect(out).toHaveLength(3);
+
+      const flash = out.find((m) => m.id === 'mimo-v2-flash')!;
+      const pro = out.find((m) => m.id === 'mimo-v2-pro')!;
+      const omni = out.find((m) => m.id === 'mimo-v2-omni')!;
+
+      expect(flash.functionCall).toBe(true);
+      expect(flash.reasoning).toBe(true);
+      expect(flash.vision).toBe(false);
+
+      expect(pro.functionCall).toBe(true);
+      expect(pro.reasoning).toBe(true);
+      expect(pro.vision).toBe(false);
+
+      expect(omni.functionCall).toBe(true);
+      expect(omni.reasoning).toBe(true);
+      expect(omni.vision).toBe(true);
+
+      const tts = await processModelList(
+        [{ id: 'mimo-v2-tts' }],
+        MODEL_LIST_CONFIGS.xiaomimimo,
+        'xiaomimimo',
+      );
+
+      expect(tts).toHaveLength(1);
+      expect(tts[0].functionCall).toBe(false);
+      expect(tts[0].reasoning).toBe(false);
+      expect(tts[0].search).toBe(false);
+      expect(tts[0].vision).toBe(false);
+    });
+
     describe('Detailed capability and property processing in processModelList', () => {
       const config = MODEL_LIST_CONFIGS.openai;
 

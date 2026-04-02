@@ -2,7 +2,7 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -71,6 +71,32 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     // When external messages are provided, mark as initialized
     useStoreUpdater('messagesInit', skipFetch ? true : (hasInitMessages ?? false));
+
+    // Reset store state before paint when context changes.
+    // useLayoutEffect fires after commit but before browser paint, and React processes
+    // store updates triggered here synchronously — so subscribers re-render before paint.
+    const prevContextKeyRef = useRef(contextKey);
+    useLayoutEffect(() => {
+      if (prevContextKeyRef.current !== contextKey) {
+        prevContextKeyRef.current = contextKey;
+        prevMessagesRef.current = undefined;
+
+        // Update context first so replaceMessages uses the correct context
+        // when calling onMessagesChange (otherwise writes to the old topic key)
+        storeApi.setState({
+          context,
+          dbMessages: messages ?? [],
+          displayMessages: [],
+          messagesInit: false,
+        });
+
+        // If messages are already available, sync them immediately
+        if (messages) {
+          storeApi.getState().replaceMessages(messages);
+          storeApi.setState({ messagesInit: true });
+        }
+      }
+    }, [contextKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Sync external messages into store
     useEffect(() => {

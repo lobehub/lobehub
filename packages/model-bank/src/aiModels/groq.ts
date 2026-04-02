@@ -149,19 +149,6 @@ const groqChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 131_072,
-    displayName: 'Llama Guard 4 12B',
-    id: 'meta-llama/llama-guard-4-12b',
-    maxOutput: 1024,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 512,
     displayName: 'Llama Prompt Guard 2 22M',
     id: 'meta-llama/llama-prompt-guard-2-22m',
