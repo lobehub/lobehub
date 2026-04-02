@@ -1,3 +1,4 @@
+import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
@@ -18,6 +19,9 @@ import {
 import { KlavisServerStatus } from './types';
 
 const n = setNamespace('klavisStore');
+
+// Set of valid Klavis server identifiers (for cleanup of deprecated servers)
+const VALID_KLAVIS_IDENTIFIERS = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
 
 /**
  * Klavis Store Actions
@@ -338,9 +342,29 @@ export class KlavisStoreActionImpl {
 
         if (klavisPlugins.length === 0) return [];
 
-        // Convert to KlavisServer objects
-        return klavisPlugins
-          .filter((plugin) => plugin.customParams?.klavis)
+        // Filter plugins with klavis params
+        const validPlugins = klavisPlugins.filter((plugin) => plugin.customParams?.klavis);
+
+        // Clean up deprecated Klavis servers (e.g., 'github' moved to LobeHub Skill)
+        const deprecatedPlugins = validPlugins.filter(
+          (plugin) => !VALID_KLAVIS_IDENTIFIERS.has(plugin.identifier),
+        );
+
+        // Silently remove deprecated plugins from database
+        for (const plugin of deprecatedPlugins) {
+          try {
+            await lambdaClient.klavis.removeKlavisPlugin.mutate({
+              identifier: plugin.identifier,
+            });
+            console.info(`[Klavis] Cleaned up deprecated server: ${plugin.identifier}`);
+          } catch (error) {
+            console.error(`[Klavis] Failed to clean up ${plugin.identifier}:`, error);
+          }
+        }
+
+        // Only return valid plugins
+        return validPlugins
+          .filter((plugin) => VALID_KLAVIS_IDENTIFIERS.has(plugin.identifier))
           .map((plugin) => {
             const klavisParams = plugin.customParams!.klavis!;
             const tools: KlavisTool[] = (plugin.manifest?.api || []).map((api) => ({
