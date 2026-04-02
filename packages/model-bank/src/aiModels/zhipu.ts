@@ -13,6 +13,67 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-5.1 is Zhipu’s latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. It excels at long-horizon tasks, able to autonomously plan, execute, and iterate for up to 8 hours in a single task, making it an ideal foundation for Autonomous Agents and long-horizon Coding Agents.',
+    displayName: 'GLM-5.1',
+    enabled: true,
+    id: 'glm-5.1',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.3,
+              '[0.032, infinity]': 2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 6,
+              '[0.032, infinity]': 8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 24,
+              '[0.032, infinity]': 28,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-03-27',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
       video: true,
       vision: true,
     },
@@ -64,126 +125,6 @@ const zhipuChatModels: AIChatModelCard[] = [
         },
       ],
     },
-    settings: {
-      extendParams: ['enableReasoning'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'GLM-5-Turbo is Zhipu’s next-generation flagship foundation model, optimized for long-horizon Agentic Engineering tasks. It strengthens tool calling, instruction following, timed and persistent execution, and long-chain task completion for complex business workflows.',
-    displayName: 'GLM-5-Turbo',
-    id: 'glm-5-turbo',
-    maxOutput: 131_072,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.2,
-              '[0.032, infinity]': 1.8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 5,
-              '[0.032, infinity]': 7,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 22,
-              '[0.032, infinity]': 26,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'GLM-5.1 is Zhipu’s latest flagship model, aligned with Claude Opus 4.6 on overall and coding capabilities. It excels at long-horizon tasks, able to autonomously plan, execute, and iterate for up to 8 hours in a single task, making it an ideal foundation for Autonomous Agents and long-horizon Coding Agents.',
-    displayName: 'GLM-5.1',
-    enabled: true,
-    id: 'glm-5.1',
-    maxOutput: 131_072,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.3,
-              '[0.032, infinity]': 2,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 6,
-              '[0.032, infinity]': 8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 24,
-              '[0.032, infinity]': 28,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-03-27',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -423,69 +364,6 @@ const zhipuChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-01-19',
-    settings: {
-      extendParams: ['enableReasoning'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'GLM-5V-Turbo is Zhipu’s first multimodal coding foundation model, designed for visual programming tasks. It can natively process multimodal inputs such as images, videos, and text, while excelling in long-horizon planning, complex programming, and action execution. Deeply integrated with agent workflows, it can collaborate seamlessly with agents like Claude Code and OpenClaw to complete a full closed loop of “understanding the environment → planning actions → executing tasks.”',
-    displayName: 'GLM-5V-Turbo',
-    enabled: true,
-    id: 'glm-5v-turbo',
-    maxOutput: 131_072,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.2,
-              '[0.032, infinity]': 1.8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 5,
-              '[0.032, infinity]': 7,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 22,
-              '[0.032, infinity]': 26,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-04-02',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
