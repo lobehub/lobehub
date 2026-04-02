@@ -169,15 +169,14 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       let result = '';
 
       try {
-        // Call getChatCompletion directly to skip contextEngineering
-        // (avoids unnecessary agentDocument.getDocuments calls on every keystroke)
-        await chatService.getChatCompletion(merge(config, chainParams, { stream: false }), {
+        await chatService.fetchPresetTaskResult({
+          abortController,
           onMessageHandle: (chunk) => {
             if (chunk.type === 'text') {
               result += chunk.text;
             }
           },
-          signal: abortController.signal,
+          params: merge(config, chainParams),
         });
       } catch {
         return null;
