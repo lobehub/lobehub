@@ -98,6 +98,9 @@ export default {
   'extendParams.enableReasoning.desc':
     'Let the model reason before answering. Use it for complex tasks.',
   'extendParams.enableReasoning.title': 'Enable Deep Thinking',
+  'extendParams.preserveThinking.desc':
+    'When enabled, assistant historical reasoning will be sent back as context for compatible models (e.g., Qwen3.6 Plus). This may increase token usage.',
+  'extendParams.preserveThinking.title': 'Preserve Historical Thinking',
   'extendParams.imageAspectRatio.title': 'Image Aspect Ratio',
   'extendParams.imageResolution.title': 'Image Resolution',
   'extendParams.reasoningBudgetToken.title': 'Thinking Consumption Token',

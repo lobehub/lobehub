@@ -1,5 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
 import { QwenAIStream } from '../../core/streams';
@@ -23,7 +24,10 @@ export const QwenLegacyModels = new Set([
   'qwen-1.8b-longcontext-chat',
 ]);
 
-export const LobeQwenAI = createOpenAICompatibleRuntime({
+// According to Bailian docs, preserve_thinking is currently supported by Qwen3.6 Plus only.
+export const QwenPreserveThinkingModels = new Set(['qwen3.6-plus', 'qwen3.6-plus-2026-04-02']);
+
+export const params = {
   baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   chatCompletion: {
     handlePayload: (payload) => {
@@ -35,6 +39,7 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
         thinking,
         top_p,
         enabledSearch,
+        preserveThinking,
         ...rest
       } = payload;
       const isDeepSeekV4Model = model.startsWith('deepseek-v4');
@@ -54,31 +59,70 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
         },
       );
 
+      const supportsPreserveThinking = QwenPreserveThinkingModels.has(model);
+      const shouldPreserveThinking = supportsPreserveThinking && preserveThinking === true;
+
+      const messages = (rest.messages || []).map((message: any) => {
+        const { reasoning, ...messageRest } = message;
+
+        const reasoningContent =
+          typeof messageRest.reasoning_content === 'string'
+            ? messageRest.reasoning_content
+            : typeof reasoning?.content === 'string'
+              ? reasoning.content
+              : undefined;
+
+        // For preserve_thinking, convert assistant reasoning into reasoning_content.
+        if (
+          message.role === 'assistant' &&
+          shouldPreserveThinking &&
+          reasoningContent !== undefined
+        ) {
+          return {
+            ...messageRest,
+            reasoning_content: reasoningContent,
+          };
+        }
+
+        // Keep explicitly provided reasoning_content to avoid dropping caller data.
+        if (messageRest.reasoning_content !== undefined && reasoningContent !== undefined) {
+          return {
+            ...messageRest,
+            reasoning_content: reasoningContent,
+          };
+        }
+
+        return messageRest;
+      });
+
       return {
         ...rest,
         ...(isDeepSeekV4Model
           ? {
-              ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
-                ? { enable_thinking: !thinkingExplicitlyDisabled }
-                : {}),
-              ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
-            }
+            ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
+              ? { enable_thinking: !thinkingExplicitlyDisabled }
+              : {}),
+            ...(!thinkingExplicitlyDisabled && reasoning_effort && { reasoning_effort }),
+          }
           : model.includes('-thinking')
             ? {
-                enable_thinking: true,
+              enable_thinking: true,
+              thinking_budget:
+                thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
+            }
+            : thinking
+              ? {
+                ...(thinking.type !== undefined && {
+                  enable_thinking: thinking.type === 'enabled',
+                }),
                 thinking_budget:
                   thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
               }
-            : thinking
-              ? {
-                  ...(thinking.type !== undefined && {
-                    enable_thinking: thinking.type === 'enabled',
-                  }),
-                  thinking_budget:
-                    thinking?.budget_tokens === 0 ? 0 : thinking?.budget_tokens || undefined,
-                }
               : {}),
+        ...(supportsPreserveThinking &&
+          typeof preserveThinking === 'boolean' && { preserve_thinking: preserveThinking }),
         frequency_penalty: undefined,
+        messages,
         model,
         presence_penalty: resolvedParams.presence_penalty,
         stream: true,
@@ -118,4 +162,6 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
     return processMultiProviderModelList(modelList, 'qwen');
   },
   provider: ModelProvider.Qwen,
-});
+} satisfies OpenAICompatibleFactoryOptions;
+
+export const LobeQwenAI = createOpenAICompatibleRuntime(params);

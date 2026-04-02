@@ -149,6 +149,8 @@
   "extendParams.enableReasoning.title": "Enable Deep Thinking",
   "extendParams.imageAspectRatio.title": "Image Aspect Ratio",
   "extendParams.imageResolution.title": "Image Resolution",
+  "extendParams.preserveThinking.desc": "When enabled, assistant historical reasoning will be sent back as context for compatible models (e.g., Qwen3.6 Plus). This may increase token usage.",
+  "extendParams.preserveThinking.title": "Preserve Historical Thinking",
   "extendParams.reasoningBudgetToken.title": "Thinking Consumption Token",
   "extendParams.reasoningEffort.title": "Reasoning Intensity",
   "extendParams.textVerbosity.title": "Output Text Detail Level",
