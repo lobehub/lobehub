@@ -6,22 +6,34 @@ import type {
 import { readableFromAsyncIterable } from '../protocol';
 
 const chatStreamable = async function* (stream: AsyncIterable<ResponseStream>) {
+  const decoder = new TextDecoder();
+  let buffer = '';
+
   for await (const response of stream) {
     if (response.chunk) {
-      const decoder = new TextDecoder();
+      buffer += decoder.decode(response.chunk.bytes, { stream: true });
 
-      const value = decoder.decode(response.chunk.bytes, { stream: true });
+      // Bedrock sends one JSON object per chunk, but TextDecoder with
+      // stream: true may split a multi-byte character across boundaries.
+      // Buffer until we can parse a complete JSON value.
       try {
-        const chunk = JSON.parse(value);
-
+        const chunk = JSON.parse(buffer);
+        buffer = '';
         yield chunk;
-      } catch (e) {
-        console.log('bedrock stream parser error:', e);
-
-        yield value;
+      } catch {
+        // Incomplete JSON — keep buffering until the next chunk completes it
       }
     } else {
       yield response;
+    }
+  }
+
+  // Flush any remaining buffered data
+  if (buffer.trim()) {
+    try {
+      yield JSON.parse(buffer);
+    } catch (e) {
+      console.error('bedrock stream: unable to parse final buffered chunk:', e);
     }
   }
 };
