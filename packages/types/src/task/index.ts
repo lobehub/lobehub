@@ -77,10 +77,12 @@ export interface TaskDetailData {
   activities?: TaskDetailActivity[];
   agentId?: string | null;
   checkpoint?: CheckpointConfig;
+  config?: Record<string, unknown>;
   createdAt?: string;
   dependencies?: Array<{ dependsOn: string; type: string }>;
   description?: string | null;
   error?: string | null;
+  // heartbeat.interval: 周期执行间隔 | heartbeat.timeout+lastAt: watchdog 监控（检测卡死）
   heartbeat?: {
     interval?: number | null;
     lastAt?: string | null;
