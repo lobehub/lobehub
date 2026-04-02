@@ -897,6 +897,9 @@ When I am ___, I need ___
   'systemAgent.inputCompletion.modelDesc':
     'Model used for input auto-completion suggestions (like GitHub Copilot ghost text)',
   'systemAgent.inputCompletion.title': 'Input Auto-Completion Agent',
+  'systemAgent.promptRewrite.label': 'Model',
+  'systemAgent.promptRewrite.modelDesc': 'Specify the model used to rewrite creation prompts',
+  'systemAgent.promptRewrite.title': 'Creation Prompt Rewrite Agent',
   'systemAgent.queryRewrite.label': 'Model',
   'systemAgent.queryRewrite.modelDesc': 'Specify the model used to optimize user inquiries',
   'systemAgent.queryRewrite.title': 'Library query rewrite Agent',

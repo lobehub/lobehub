@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import PromptTransformAction from '@/features/PromptRewrite/PromptTransformAction';
 import { useFetchAiImageConfig } from '@/hooks/useFetchAiImageConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -51,7 +52,7 @@ const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam
 
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
-  const { t } = useTranslation('image');
+  const { t } = useTranslation(['image', 'common']);
   const { value, setValue } = useGenerationConfigParam('prompt');
   const { value: imageUrl, setValue: setImageUrl } = useGenerationConfigParam('imageUrl');
   const {
@@ -283,6 +284,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         }
         placeholder={
           hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
+        }
+        rightActions={
+          <PromptTransformAction mode={'image'} prompt={value} onPromptChange={setValue as any} />
         }
         onGenerate={handleGenerate}
         onValueChange={setValue}

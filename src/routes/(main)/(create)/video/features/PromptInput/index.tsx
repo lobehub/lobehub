@@ -11,6 +11,7 @@ import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import PromptTransformAction from '@/features/PromptRewrite/PromptTransformAction';
 import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -129,7 +130,7 @@ const DurationItem = memo(() => {
 });
 
 const SeedItem = memo(() => {
-  const { t } = useTranslation('video');
+  const { t } = useTranslation(['video', 'common']);
   const { value, setValue } = useVideoGenerationConfigParam('seed');
 
   const handleRandomize = useCallback(() => {
@@ -376,6 +377,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           }
           placeholder={
             hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
+          }
+          rightActions={
+            <PromptTransformAction mode={'video'} prompt={value} onPromptChange={setValue as any} />
           }
           onGenerate={handleGenerate}
           onValueChange={setValue}
