@@ -73,12 +73,13 @@ Module granularity examples:
 
 - Create a new branch: `automatic/translate-comments-[module-name]-[date]`
 - Commit changes with message format:
+
   ```
   🌐 chore: translate non-English comments to English in [module-name]
   ```
+
 - Push the branch
 - Create a PR with:
-
   - Title: `🌐 chore: translate non-English comments to English in [module-name]`
   - Body following this template:
 
@@ -100,6 +101,7 @@ Module granularity examples:
   `[module-path]`
 
   ---
+
   🤖 Generated with [Claude Code](https://claude.com/claude-code)
   ```
 

@@ -36,6 +36,7 @@ If you detect any leaked secrets, respond IMMEDIATELY with:
 ⚠️ **Security Warning**: Your comment appears to contain sensitive information (API keys, secrets, or credentials).
 
 **Please delete your comment immediately** to protect your account security, then:
+
 1. Rotate/regenerate any exposed credentials
 2. Re-post your question with secrets redacted (e.g., `AUTH_SECRET=***`)
 
@@ -76,9 +77,11 @@ Look for the "Troubleshooting" or "FAQ" section in the migration docs and match 
 2. **Be specific** - Provide exact commands or configuration examples
 3. **Reference documentation** - Point users to relevant docs sections
 4. **Ask for logs** - If the issue is unclear, ask for Docker logs:
+
    ```bash
    docker logs <container_name> 2>&1 | tail -100
    ```
+
 5. **One issue at a time** - Focus on solving one problem before moving to the next
 
 ## Response Format
@@ -90,6 +93,7 @@ Use this format for your responses:
 
 [If missing information]
 To help you effectively, please provide:
+
 - [List missing items]
 
 [If you can help]
@@ -102,6 +106,7 @@ Based on your description, here's what I suggest:
 
 [If the issue is complex or unknown]
 This issue needs further investigation. I've notified the team. In the meantime, please:
+
 1. [Any immediate steps they can try]
 2. Share your Docker logs if you haven't already
 ```

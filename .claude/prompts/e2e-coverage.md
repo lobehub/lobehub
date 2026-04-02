@@ -13,16 +13,16 @@ Before starting, read the following documents:
 
 Based on the product architecture, prioritize modules by coverage status:
 
-| Module           | Sub-features                                        | Priority | Status |
-| ---------------- | --------------------------------------------------- | -------- | ------ |
-| **Agent**        | Builder, Conversation, Task                         | P0       | 🚧     |
-| **Agent Group**  | Builder, Group Chat                                 | P0       | ⏳      |
+| Module           | Sub-features                                           | Priority | Status |
+| ---------------- | ------------------------------------------------------ | -------- | ------ |
+| **Agent**        | Builder, Conversation, Task                            | P0       | 🚧     |
+| **Agent Group**  | Builder, Group Chat                                    | P0       | ⏳     |
 | **Page (Docs)**  | Sidebar CRUD ✅, Title/Emoji ✅, Rich Text ✅, Copilot | P0       | 🚧     |
-| **Knowledge**    | Create, Upload, RAG Conversation                    | P1       | ⏳      |
-| **Memory**       | View, Edit, Associate                               | P2       | ⏳      |
-| **Home Sidebar** | Agent Mgmt, Group Mgmt                              | P1       | ✅      |
-| **Community**    | Browse, Interactions, Detail Pages                  | P1       | ✅      |
-| **Settings**     | User Settings, Model Provider                       | P2       | ⏳      |
+| **Knowledge**    | Create, Upload, RAG Conversation                       | P1       | ⏳     |
+| **Memory**       | View, Edit, Associate                                  | P2       | ⏳     |
+| **Home Sidebar** | Agent Mgmt, Group Mgmt                                 | P1       | ✅     |
+| **Community**    | Browse, Interactions, Detail Pages                     | P1       | ✅     |
+| **Settings**     | User Settings, Model Provider                          | P2       | ⏳     |
 
 ## Workflow
 
@@ -77,20 +77,24 @@ Create `e2e/src/features/{module-name}/README.md` with:
 # {Module} 模块 E2E 测试覆盖
 
 ## 模块概述
+
 **路由**: `/module`, `/module/[id]`
 
 ## 功能清单与测试覆盖
 
 ### 1. 功能分组名称
 
-| 功能点 | 描述 | 优先级 | 状态 | 测试文件 |
-| ------ | ---- | ------ | ---- | -------- |
+| 功能点 | 描述 | 优先级 | 状态 | 测试文件      |
+| ------ | ---- | ------ | ---- | ------------- |
 | 功能A  | xxx  | P0     | ✅   | `xxx.feature` |
-| 功能B  | xxx  | P1     | ⏳   |          |
+| 功能B  | xxx  | P1     | ⏳   |               |
 
 ## 测试文件结构
+
 ## 测试执行
+
 ## 已知问题
+
 ## 更新记录
 ```
 
@@ -228,7 +232,7 @@ const testId = pickle.tags.find(
     tag.name.startsWith('@COMMUNITY-') ||
     tag.name.startsWith('@AGENT-') ||
     tag.name.startsWith('@HOME-') ||
-    tag.name.startsWith('@PAGE-') ||    // Add new prefix
+    tag.name.startsWith('@PAGE-') || // Add new prefix
     tag.name.startsWith('@ROUTES-'),
 );
 ```
@@ -301,9 +305,11 @@ HEADLESS=true BASE_URL=http://localhost:3006 \
 
 - Branch name: `test/e2e-{module-name}`
 - Commit message format:
+
   ```
   ✅ test: add E2E tests for {module-name}
   ```
+
 - PR title: `✅ test: add E2E tests for {module-name}`
 - PR body template:
 
