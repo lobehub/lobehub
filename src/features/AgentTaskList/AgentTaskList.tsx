@@ -1,5 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useAgentStore } from '@/store/agent';
 import { useTaskStore } from '@/store/task';
@@ -13,11 +14,16 @@ const MAX_DISPLAY = 5;
 
 const AgentTaskList = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
+  const navigate = useNavigate();
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList(agentId);
 
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
+
+  const handleViewAll = useCallback(() => {
+    if (agentId) navigate(`/agent/${agentId}/tasks`);
+  }, [agentId, navigate]);
 
   if (!isInit || tasks.length === 0) return null;
 
@@ -25,7 +31,7 @@ const AgentTaskList = memo(() => {
 
   return (
     <div className={styles.container}>
-      <TaskListHeader />
+      <TaskListHeader onViewAll={handleViewAll} />
       <Flexbox gap={8}>
         {displayTasks.map((task) => (
           <TaskItem key={task.identifier} task={task} />

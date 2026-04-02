@@ -423,6 +423,8 @@ export default {
   'task.status.fetchingDetails': 'Fetching details...',
   'task.status.initializing': 'Initializing task...',
   'task.subtask': 'Subtask',
+  'taskList.activeTasks': 'Active Tasks',
+  'taskList.breadcrumb.task': 'Task',
   'taskList.title': 'Tasks',
   'taskList.viewAll': 'View All Tasks',
   'thread.divider': 'Subtopic',

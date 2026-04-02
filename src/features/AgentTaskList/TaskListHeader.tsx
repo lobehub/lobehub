@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 import { styles } from './style';
 
-const TaskListHeader = memo(() => {
+interface TaskListHeaderProps {
+  onViewAll?: () => void;
+}
+
+const TaskListHeader = memo<TaskListHeaderProps>(({ onViewAll }) => {
   const { t } = useTranslation('chat');
 
   return (
@@ -14,7 +18,9 @@ const TaskListHeader = memo(() => {
         <Icon icon={ClipboardList} size={16} />
         <Text weight="bold">{t('taskList.title')}</Text>
       </Flexbox>
-      <span className={styles.viewAll}>{t('taskList.viewAll')}</span>
+      <span className={styles.viewAll} onClick={onViewAll}>
+        {t('taskList.viewAll')}
+      </span>
     </div>
   );
 });
