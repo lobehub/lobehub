@@ -51,7 +51,7 @@ describe('createVolcengineVideo', () => {
 
       const result = await createVolcengineVideo(payload, options);
 
-      expect(result.useWebhook).toBe(true);
+      expect((result as any).useWebhook).toBe(true);
     });
 
     it('should send minimal body with only prompt', async () => {

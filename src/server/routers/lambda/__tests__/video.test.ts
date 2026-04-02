@@ -50,7 +50,7 @@ vi.mock('@/business/server/video-generation/chargeAfterGenerate', () => ({
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
 }));
-vi.mock('next/server', () => ({ after: (...args: any[]) => mockAfter(...args) }));
+vi.mock('next/server', () => ({ after: (cb: () => void) => mockAfter(cb) }));
 vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
   processBackgroundVideoPolling: mockProcessBackgroundVideoPolling,
 }));
@@ -220,7 +220,7 @@ describe('videoRouter', () => {
         await import('@/business/server/video-generation/chargeBeforeGenerate');
       vi.mocked(chargeBeforeGenerate).mockResolvedValueOnce({
         errorBatch: { error: 'insufficient_balance' } as any,
-        prechargeResult: null,
+        prechargeResult: undefined,
       });
 
       const caller = videoRouter.createCaller(mockCtx);
