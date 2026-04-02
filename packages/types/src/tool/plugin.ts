@@ -1,5 +1,5 @@
 import type { Meta } from './builtin';
-import type { ToolManifest } from './manifest';
+import type { ToolManifest, ToolManifestType } from './manifest';
 import type { LobeToolType } from './tool';
 
 export type PluginManifestMap = Record<string, ToolManifest>;
@@ -63,7 +63,7 @@ export interface InstallPluginMeta extends Partial<Meta> {
   createdAt?: string;
   homepage?: string;
   identifier: string;
-  runtimeType?: 'mcp' | 'default' | 'markdown' | 'standalone' | undefined;
+  runtimeType?: ToolManifestType;
   type: LobeToolType;
 }
 

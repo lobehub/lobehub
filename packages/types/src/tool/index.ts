@@ -9,7 +9,7 @@ export interface LobeTool {
   /**
    * use for runtime
    */
-  runtimeType?: 'mcp' | 'default' | 'markdown' | 'standalone';
+  runtimeType?: ToolManifestType;
   settings?: any;
   // TODO: remove type and then make it required
   source?: LobeToolType;
