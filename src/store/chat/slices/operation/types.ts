@@ -253,12 +253,13 @@ const mergeQueuedEditorData = (messages: QueuedMessage[]): Record<string, any> |
 
   for (const message of messages) {
     const editorData = normalizeQueuedEditorData(message);
-    const children = editorData?.root?.children;
+    const root = editorData?.root;
+    const children = root?.children;
 
     if (!Array.isArray(children) || children.length === 0) continue;
 
     if (!baseRoot) {
-      baseRoot = structuredClone(editorData.root);
+      baseRoot = structuredClone(root);
     }
 
     if (mergedChildren.length > 0) {

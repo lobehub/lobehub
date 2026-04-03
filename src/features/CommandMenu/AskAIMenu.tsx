@@ -34,7 +34,7 @@ const AskAIMenu = memo(() => {
     closeCommandMenu(); // Close immediately
     if (trimmedSearch) {
       // Use sendAsAgent to create a blank agent and open agent builder
-      useHomeStore.getState().sendAsAgent(trimmedSearch);
+      useHomeStore.getState().sendAsAgent({ message: trimmedSearch });
     }
   };
 
@@ -43,7 +43,7 @@ const AskAIMenu = memo(() => {
     closeCommandMenu(); // Close immediately
     if (trimmedSearch) {
       // Use sendAsGroup to create a blank group and open group builder
-      useHomeStore.getState().sendAsGroup(trimmedSearch);
+      useHomeStore.getState().sendAsGroup({ message: trimmedSearch });
     }
   };
 

@@ -295,7 +295,7 @@ describe('contextEngineering', () => {
     expect(Object.keys(systemMessage!).length).toEqual(2);
   });
 
-  it('should strip raw action tags from user messages before sending to model', async () => {
+  it('should preserve normalized skill and tool tags in user messages before sending to model', async () => {
     vi.spyOn(isCanUseFCModule, 'isCanUseFC').mockReturnValue(true);
 
     const messages: UIChatMessage[] = [
@@ -321,8 +321,8 @@ describe('contextEngineering', () => {
     });
     expect(result[1].role).toBe('user');
     expect(result[1].content).toContain('hi');
-    expect(result[1].content).not.toContain('<skill name="grep"');
-    expect(result[1].content).not.toContain('<tool name="lobe-notebook"');
+    expect(result[1].content).toContain('<skill name="grep" label="Grep" />');
+    expect(result[1].content).toContain('<tool name="lobe-notebook" label="Notebook" />');
   });
 
   describe('getAssistantContent', () => {

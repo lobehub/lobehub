@@ -33,17 +33,17 @@ export const useSend = () => {
       try {
         switch (inputActiveMode) {
           case 'agent': {
-            await sendAsAgent(inputMessage, editorData);
+            await sendAsAgent({ editorData, message: inputMessage });
             break;
           }
 
           case 'group': {
-            await sendAsGroup(inputMessage, editorData);
+            await sendAsGroup({ editorData, message: inputMessage });
             break;
           }
 
           case 'write': {
-            await sendAsWrite(inputMessage, editorData);
+            await sendAsWrite({ editorData, message: inputMessage });
             break;
           }
 

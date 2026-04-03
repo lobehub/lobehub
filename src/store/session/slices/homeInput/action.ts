@@ -9,6 +9,11 @@ import { type StarterMode } from './initialState';
 
 const n = setNamespace('homeInput');
 
+interface SendMessageWithEditorParams {
+  editorData?: Record<string, any>;
+  message: string;
+}
+
 type Setter = StoreSetter<SessionStore>;
 export const createHomeInputSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
   new HomeInputActionImpl(set, get, _api);
@@ -27,7 +32,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
   };
 
-  sendAsAgent = async (message: string, editorData?: Record<string, any>): Promise<string> => {
+  sendAsAgent = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
@@ -82,7 +87,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
   };
 
-  sendAsWrite = async (message: string, editorData?: Record<string, any>): Promise<string> => {
+  sendAsWrite = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
