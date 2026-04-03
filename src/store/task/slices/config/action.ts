@@ -93,11 +93,14 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // Configures the periodic execution interval (heartbeatInterval field, in seconds; null or 0 disables it)
-  // Backend periodic execution logic will take effect automatically once LOBE-6587 is ready; the frontend UI config can be completed in advance
+  // 配置周期执行间隔（heartbeatInterval 字段，单位：秒）
+  // TODO: 清除间隔需要后端 schema 支持 nullable（当前 z.number().min(1).optional() 不接受 null/0）
   updatePeriodicInterval = async (id: string, interval: number | null): Promise<void> => {
+    // 后端不支持 null/0，清除时跳过请求
+    if (!interval) return;
+
     try {
-      await taskService.update(id, { heartbeatInterval: interval ?? 0 });
+      await taskService.update(id, { heartbeatInterval: interval });
       await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update periodic interval:', error);

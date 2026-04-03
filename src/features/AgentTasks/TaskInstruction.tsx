@@ -1,15 +1,11 @@
-import { Flexbox, Markdown, Text } from '@lobehub/ui';
-import { useDebounceFn } from 'ahooks';
-import { Input } from 'antd';
-import { memo, useCallback, useState } from 'react';
+import { useEditor } from '@lobehub/editor/react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { EditorCanvas } from '@/features/EditorCanvas';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
-
-const { TextArea } = Input;
 const DEBOUNCE_MS = 300;
 
 const TaskInstruction = memo(() => {
@@ -17,50 +13,29 @@ const TaskInstruction = memo(() => {
   const instruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const editor = useEditor();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const [editing, setEditing] = useState(false);
-  const [localValue, setLocalValue] = useState(instruction ?? '');
+  const editorData = useMemo(() => ({ content: instruction ?? '' }), [instruction]);
 
-  // Sync from store
-  if (!editing && instruction !== undefined && instruction !== localValue) {
-    setLocalValue(instruction);
-  }
+  const handleContentChange = useCallback(() => {
+    if (!editor || !taskId) return;
 
-  const { run: debouncedSave } = useDebounceFn(
-    (value: string) => {
-      if (taskId) updateTask(taskId, { instruction: value });
-    },
-    { wait: DEBOUNCE_MS },
-  );
-
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setLocalValue(e.target.value);
-      debouncedSave(e.target.value);
-    },
-    [debouncedSave],
-  );
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const markdown = String(editor.getDocument('markdown') ?? '');
+      updateTask(taskId, { instruction: markdown });
+    }, DEBOUNCE_MS);
+  }, [editor, taskId, updateTask]);
 
   return (
-    <div className={styles.section}>
-      <Text className={styles.sectionTitle}>{t('taskDetail.instruction')}</Text>
-      {editing ? (
-        <TextArea
-          autoSize={{ minRows: 4 }}
-          value={localValue}
-          onBlur={() => setEditing(false)}
-          onChange={handleChange}
-        />
-      ) : (
-        <Flexbox style={{ cursor: 'pointer', minHeight: 60 }} onClick={() => setEditing(true)}>
-          {localValue ? (
-            <Markdown variant="chat">{localValue}</Markdown>
-          ) : (
-            <Text type="secondary">{t('taskDetail.instructionPlaceholder')}</Text>
-          )}
-        </Flexbox>
-      )}
-    </div>
+    <EditorCanvas
+      editor={editor}
+      editorData={editorData}
+      entityId={taskId}
+      placeholder={t('taskDetail.instructionPlaceholder')}
+      onContentChange={handleContentChange}
+    />
   );
 });
 
