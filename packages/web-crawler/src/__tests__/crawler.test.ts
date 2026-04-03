@@ -187,6 +187,40 @@ describe('Crawler', () => {
     });
   });
 
+  it('should fall back to configured impls when rule impls are not in user-configured impls', async () => {
+    const mockResult = {
+      content: 'test content'.padEnd(101, ' '),
+      contentType: 'text' as const,
+      url: 'https://example.com',
+    };
+
+    // Create crawler with only 'naive' configured
+    const naiveCrawler = new Crawler({ impls: ['naive'] });
+
+    const { crawlImpls } = await import('../crawImpl');
+    vi.mocked(crawlImpls.naive).mockResolvedValue(mockResult);
+
+    const { applyUrlRules } = await import('../utils/appUrlRules');
+    // URL rule says to use 'jina', but user hasn't configured jina
+    vi.mocked(applyUrlRules).mockReturnValue({
+      transformedUrl: 'https://example.com',
+      filterOptions: {},
+      impls: ['jina'],
+    });
+
+    const result = await naiveCrawler.crawl({
+      url: 'https://example.com',
+    });
+
+    // Should use 'naive' (user-configured) instead of 'jina' (rule-specified but not configured)
+    expect(result).toEqual({
+      crawler: 'naive',
+      data: mockResult,
+      originalUrl: 'https://example.com',
+      transformedUrl: undefined,
+    });
+  });
+
   it('should skip results with content length <= 100', async () => {
     const mockResult = {
       content: 'short content', // Content length <= 100
