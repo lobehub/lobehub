@@ -1,6 +1,17 @@
+import { ARTIFACT_TAG, ARTIFACT_THINKING_TAG, LOCAL_FILE_TAG } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { processWithArtifact } from './markdown';
+import { IMAGE_SEARCH_REF_TAG } from '../Markdown/plugins/ImageSearchRef/rehypePlugin';
+import {
+  getActiveAssistantMarkdownElements,
+  normalizeThinkTags,
+  processWithArtifact,
+  shouldEnableImageSearchRefTags,
+  shouldEnableLocalFileTags,
+  shouldProcessArtifactTags,
+  shouldProcessArtifactThinkingTags,
+  shouldProcessThinkTags,
+} from './markdown';
 
 describe('processWithArtifact', () => {
   it('should removeLineBreaks with closed tag', () => {
@@ -20,7 +31,7 @@ describe('processWithArtifact', () => {
 </svg>
 </lobeArtifact>`;
 
-    const output = processWithArtifact(input);
+    const output = processWithArtifact(input, true);
 
     expect(output).toEqual(`好的
 
@@ -39,7 +50,7 @@ describe('processWithArtifact', () => {
   </defs>
 `;
 
-    const output = processWithArtifact(input);
+    const output = processWithArtifact(input, true);
 
     expect(output).toEqual(`好的
 
@@ -324,6 +335,123 @@ Content 2 still going`;
   });
 });
 
+describe('think tag helpers', () => {
+  describe('shouldProcessThinkTags', () => {
+    it('should only enable think tags for leading completed think blocks', () => {
+      expect(shouldProcessThinkTags('<think>thinking</think>\n\nanswer')).toBe(true);
+      expect(shouldProcessThinkTags('Answer with <think>literal</think> text')).toBe(false);
+    });
+
+    it('should only enable unfinished think blocks while generating', () => {
+      expect(shouldProcessThinkTags('<think>thinking', false)).toBe(false);
+      expect(shouldProcessThinkTags('<think>thinking', true)).toBe(true);
+    });
+  });
+
+  describe('normalizeThinkTags', () => {
+    it('should normalize leading think tags for reasoning blocks', () => {
+      expect(normalizeThinkTags('<think>思考</think>回答')).toEqual(
+        '<think>\n\n思考\n\n</think>\n\n回答',
+      );
+    });
+
+    it('should leave literal think tags in regular content unchanged', () => {
+      const input = '模型会输出<think>这样的标签来举例说明';
+
+      expect(normalizeThinkTags(input)).toEqual(input);
+    });
+  });
+});
+
+describe('assistant markdown activation helpers', () => {
+  it('should only process standalone artifact blocks', () => {
+    expect(
+      shouldProcessArtifactTags(
+        'Here is an artifact example: <lobeArtifact identifier="demo">literal</lobeArtifact>.',
+      ),
+    ).toBe(false);
+    expect(
+      shouldProcessArtifactTags(
+        'Intro text\n\n<lobeArtifact identifier="demo" type="text/html">body</lobeArtifact>',
+      ),
+    ).toBe(true);
+  });
+
+  it('should keep artifact parsing enabled for truncated responses after generation stops', () => {
+    const truncated =
+      'Intro\n\n<lobeArtifact identifier="demo" type="text/html" title="Test">\n<html>partial';
+
+    expect(shouldProcessArtifactTags(truncated, false)).toBe(true);
+    expect(shouldProcessArtifactTags(truncated, true)).toBe(true);
+  });
+
+  it('should only process lobeThinking when it is tied to artifact flow', () => {
+    expect(
+      shouldProcessArtifactThinkingTags(
+        '<lobeThinking>This is a literal example tag.</lobeThinking>',
+      ),
+    ).toBe(false);
+    expect(
+      shouldProcessArtifactThinkingTags(
+        'Intro\n\n<lobeThinking>plan</lobeThinking>\n\n<lobeArtifact identifier="demo" type="text/html">body</lobeArtifact>',
+      ),
+    ).toBe(true);
+  });
+
+  it('should only enable local file tags when local system context exists', () => {
+    expect(
+      shouldEnableLocalFileTags({
+        isGenerating: false,
+        isLocalSystemEnabled: false,
+        tools: [{ identifier: 'lobe-local-system' }],
+      }),
+    ).toBe(false);
+    expect(
+      shouldEnableLocalFileTags({
+        isGenerating: false,
+        isLocalSystemEnabled: true,
+        tools: [{ identifier: 'lobe-local-system' }],
+      }),
+    ).toBe(true);
+  });
+
+  it('should only enable image search refs when image search results exist', () => {
+    expect(shouldEnableImageSearchRefTags(false)).toBe(false);
+    expect(shouldEnableImageSearchRefTags(true)).toBe(true);
+  });
+
+  it('should filter assistant markdown elements by message context', () => {
+    const elements = [
+      { Component: (() => null) as any, scope: 'assistant', tag: ARTIFACT_TAG },
+      { Component: (() => null) as any, scope: 'assistant', tag: ARTIFACT_THINKING_TAG },
+      { Component: (() => null) as any, scope: 'assistant', tag: LOCAL_FILE_TAG },
+      { Component: (() => null) as any, scope: 'assistant', tag: IMAGE_SEARCH_REF_TAG },
+      { Component: (() => null) as any, scope: 'assistant', tag: 'plain' },
+    ];
+
+    expect(
+      getActiveAssistantMarkdownElements(elements as any, {
+        content: 'The answer literally mentions <lobeArtifact>example</lobeArtifact>.',
+        hasImageSearchResults: false,
+        isGenerating: false,
+        isLocalSystemEnabled: false,
+        tools: [],
+      }).map((element) => element.tag),
+    ).toEqual(['plain']);
+
+    expect(
+      getActiveAssistantMarkdownElements(elements as any, {
+        content:
+          'Intro\n\n<lobeThinking>plan</lobeThinking>\n\n<lobeArtifact identifier="demo" type="text/html">body</lobeArtifact>',
+        hasImageSearchResults: true,
+        isGenerating: false,
+        isLocalSystemEnabled: true,
+        tools: [{ identifier: 'lobe-local-system' }],
+      }).map((element) => element.tag),
+    ).toEqual([ARTIFACT_TAG, ARTIFACT_THINKING_TAG, LOCAL_FILE_TAG, IMAGE_SEARCH_REF_TAG, 'plain']);
+  });
+});
+
 describe('outer code block removal', () => {
   it('should remove outer html code block', () => {
     const input = `\`\`\`html
@@ -542,6 +670,19 @@ This HTML document includes the temperature converter with the requested feature
       // Should still have the space and not convert it to newlines
       expect(output).toContain('</lobeThinking> <lobeArtifact');
       expect(output).not.toContain('</lobeThinking>\n\n<lobeArtifact');
+    });
+
+    it('should keep literal lobeThinking tags unchanged when no artifact follows', () => {
+      const input = 'The model literally prints <lobeThinking>example</lobeThinking> here.';
+
+      expect(processWithArtifact(input)).toEqual(input);
+    });
+
+    it('should keep inline lobeArtifact examples unchanged when they are not block content', () => {
+      const input =
+        'Use <lobeArtifact identifier="demo" type="text/html">example</lobeArtifact> only as a literal tag example.';
+
+      expect(processWithArtifact(input)).toEqual(input);
     });
   });
 });

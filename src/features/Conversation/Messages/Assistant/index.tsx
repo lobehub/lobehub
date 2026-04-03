@@ -13,7 +13,7 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
 import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
+import { processWithArtifact } from '../../utils/markdown';
 import MessageBranch from '../components/MessageBranch';
 import {
   useSetMessageItemActionElementPortialContext,
@@ -72,7 +72,7 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
     );
 
   // remove line breaks in artifact tag to make the ast transform easier
-  const message = !editing ? normalizeThinkTags(processWithArtifact(content)) : content;
+  const message = !editing ? processWithArtifact(content, generating) : content;
 
   const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();

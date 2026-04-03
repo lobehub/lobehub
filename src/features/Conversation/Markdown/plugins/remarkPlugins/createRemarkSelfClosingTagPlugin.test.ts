@@ -246,9 +246,8 @@ describe('createRemarkSelfClosingTagPlugin', () => {
     const tree = processMarkdown(markdown, tagName);
     const localFiles = collectNodesByType(tree, tagName);
 
-    expect(localFiles).toHaveLength(8);
+    expect(localFiles).toHaveLength(7);
     expect(localFiles.map((n) => n.data?.hProperties?.name)).toEqual([
-      'Desktop',
       'CleanShot 2025-12-17 at 17.56.33@2x.jpg',
       'CleanShot 2025-12-17 at 17.56.39@2x.jpg',
       'CleanShot 2025-12-17 at 21.49.12@2x.jpg',
@@ -333,13 +332,9 @@ describe('createRemarkSelfClosingTagPlugin', () => {
     expect(paragraphChildren[0].type).toBe('text');
     expect(paragraphChildren[0].value).toBe('Use this file: ');
 
-    // The tag should be parsed even inside backticks
-    const tagNode = paragraphChildren[1];
-    expect(tagNode.type).toBe(tagName);
-    expect(tagNode.data?.hProperties).toEqual({
-      name: 'config.json',
-      path: '/app/config.json',
-    });
+    const inlineCodeNode = paragraphChildren[1];
+    expect(inlineCodeNode.type).toBe('inlineCode');
+    expect(inlineCodeNode.value).toBe(`<${tagName} name="config.json" path="/app/config.json" />`);
 
     expect(paragraphChildren[2].type).toBe('text');
     expect(paragraphChildren[2].value).toBe(' in your code.');

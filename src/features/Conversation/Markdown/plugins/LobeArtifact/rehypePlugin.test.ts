@@ -215,4 +215,47 @@ describe('rehypePlugin', () => {
     expect((tree.children[0] as any).tagName).toBe('lobeArtifact');
     expect((tree.children[1] as any).tagName).toBe('lobeArtifact');
   });
+
+  it('should keep inline literal artifact tags untouched when they are not leading content', () => {
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'element',
+          tagName: 'p',
+          children: [
+            { type: 'text', value: 'Literal example ' },
+            {
+              type: 'raw',
+              value: '<lobeArtifact identifier="demo" type="text/plain" title="Demo">',
+            },
+            { type: 'text', value: 'body' },
+            { type: 'raw', value: '</lobeArtifact>' },
+          ],
+        },
+      ],
+    };
+
+    const plugin = rehypePlugin();
+    plugin(tree);
+
+    expect(tree).toEqual({
+      type: 'root',
+      children: [
+        {
+          type: 'element',
+          tagName: 'p',
+          children: [
+            { type: 'text', value: 'Literal example ' },
+            {
+              type: 'raw',
+              value: '<lobeArtifact identifier="demo" type="text/plain" title="Demo">',
+            },
+            { type: 'text', value: 'body' },
+            { type: 'raw', value: '</lobeArtifact>' },
+          ],
+        },
+      ],
+    });
+  });
 });

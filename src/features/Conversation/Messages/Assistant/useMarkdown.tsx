@@ -5,14 +5,14 @@ import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
 import { HtmlPreviewAction } from '@/components/HtmlPreview';
+import { useAgentStore } from '@/store/agent';
+import { agentChatConfigSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { markdownElements } from '../../Markdown/plugins';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-
-const rehypePlugins = markdownElements.map((element) => element.rehypePlugin).filter(Boolean);
-const remarkPlugins = markdownElements.map((element) => element.remarkPlugin).filter(Boolean);
+import { getActiveAssistantMarkdownElements } from '../../utils/markdown';
 
 const isHtmlCode = (content: string, language: string) => {
   return (
@@ -24,20 +24,49 @@ const isHtmlCode = (content: string, language: string) => {
 
 export const useMarkdown = (id: string): Partial<MarkdownProps> => {
   const item = useConversationStore(dataSelectors.getDbMessageById(id), isEqual)!;
-  const { role, search } = item || {};
+  const { content, search, tools } = item || {};
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
+  const isLocalSystemEnabled = useAgentStore(agentChatConfigSelectors.isLocalSystemEnabled);
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const animated = transitionMode === 'fadeIn' && generating;
+  const activeMarkdownElements = useMemo(
+    () =>
+      getActiveAssistantMarkdownElements(markdownElements, {
+        content,
+        hasImageSearchResults: !!search?.imageResults?.length,
+        isGenerating: generating,
+        isLocalSystemEnabled,
+        tools,
+      }),
+    [content, generating, isLocalSystemEnabled, search?.imageResults?.length, tools],
+  );
+
+  // Derive a stable key from the set of active tags so that plugins/components
+  // only get recreated when the *set* of enabled elements changes, not on every
+  // content token during streaming.
+  const activeTagsKey = activeMarkdownElements.map((e) => e.tag).join(',');
 
   const components = useMemo(
     () =>
       Object.fromEntries(
-        markdownElements.map((element) => {
+        activeMarkdownElements.map((element) => {
           const Component = element.Component;
           return [element.tag, (props: any) => <Component {...props} id={id} />];
         }),
       ),
-    [id],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTagsKey, id],
+  );
+
+  const rehypePlugins = useMemo(
+    () => activeMarkdownElements.map((element) => element.rehypePlugin).filter(Boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTagsKey],
+  );
+  const remarkPlugins = useMemo(
+    () => activeMarkdownElements.map((element) => element.remarkPlugin).filter(Boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeTagsKey],
   );
 
   return useMemo(
@@ -70,6 +99,6 @@ export const useMarkdown = (id: string): Partial<MarkdownProps> => {
           // if the citations's url and title are all the same, we should not show the citations
           search?.citations.every((item) => item.title !== item.url),
       }) satisfies Partial<MarkdownProps>,
-    [animated, components, role, search],
+    [animated, components, rehypePlugins, remarkPlugins, search],
   );
 };

@@ -14,7 +14,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { useAgentMeta, useIsBuiltinAgent } from '../../../hooks';
-import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
+import { processWithArtifact } from '../../../utils/markdown';
 import { styles as containerStyles } from '../style';
 import { styles } from './style';
 import { type FieldType } from './type';
@@ -36,7 +36,7 @@ const Preview = memo<PreviewProps>(
     const isBuiltinAgent = useIsBuiltinAgent();
 
     // Process message content for proper rendering
-    const processedContent = normalizeThinkTags(processWithArtifact(message.content));
+    const processedContent = processWithArtifact(message.content);
 
     const { t } = useTranslation('chat');
 

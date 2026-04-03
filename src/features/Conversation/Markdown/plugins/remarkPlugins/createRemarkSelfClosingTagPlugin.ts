@@ -188,38 +188,5 @@ export const createRemarkSelfClosingTagPlugin =
           return [SKIP, index + newChildren.length]; // Skip new nodes
         }
       });
-
-      // 3. Visit inlineCode nodes (backtick-wrapped tags like `<localFile ... />`)
-      // @ts-ignore
-      visit(tree, 'inlineCode', (node: any, index: number, parent) => {
-        log('>>> Visiting inlineCode node: "%s"', node.value);
-
-        if (
-          !parent ||
-          typeof index !== 'number' ||
-          typeof node.value !== 'string' ||
-          !node.value.toLowerCase().includes(`<${tagName.toLowerCase()}`)
-        ) {
-          return;
-        }
-
-        const match = node.value.match(exactTagRegex);
-        if (match) {
-          const [, attributesString] = match;
-          const properties = attributesString ? parseAttributes(attributesString.trim()) : {};
-
-          const newNode = {
-            data: {
-              hName: tagName,
-              hProperties: properties,
-            },
-            type: tagName,
-          };
-
-          log('Replacing inlineCode node at index %d with %s node: %o', index, tagName, newNode);
-          parent.children.splice(index, 1, newNode);
-          return [SKIP, index + 1];
-        }
-      });
     };
   };

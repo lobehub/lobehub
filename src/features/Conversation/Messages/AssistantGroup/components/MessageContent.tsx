@@ -5,7 +5,8 @@ import { LOADING_FLAT } from '@/const/message';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
 
-import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
+import { messageStateSelectors, useConversationStore } from '../../../store';
+import { processWithArtifact } from '../../../utils/markdown';
 import { useMarkdown } from '../useMarkdown';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
@@ -23,8 +24,9 @@ interface ContentBlockProps {
 }
 
 const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id, isFirstBlock }) => {
-  const message = normalizeThinkTags(processWithArtifact(content));
   const markdownProps = useMarkdown(id);
+  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const message = processWithArtifact(content, generating);
 
   if (!content && !hasTools) return <ContentLoading id={id} />;
 
