@@ -14,31 +14,28 @@ import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { knowledgeBaseFiles } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 
-const chunkProcedure = authedProcedure
-  .use(serverDatabase)
-  .use(keyVaults)
-  .use(async (opts) => {
-    const { ctx } = opts;
+const chunkProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
 
-    return opts.next({
-      ctx: {
-        asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-        chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
-        chunkService: new ChunkService(ctx.serverDB, ctx.userId),
-        documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
-        documentService: new DocumentService(ctx.serverDB, ctx.userId),
-        embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
-        fileModel: new FileModel(ctx.serverDB, ctx.userId),
-        messageModel: new MessageModel(ctx.serverDB, ctx.userId),
-      },
-    });
+  return opts.next({
+    ctx: {
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
+      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
+      chunkService: new ChunkService(ctx.serverDB, ctx.userId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
+      documentService: new DocumentService(ctx.serverDB, ctx.userId),
+      embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId),
+    },
   });
+});
 
 /**
  * Group chunks by file and calculate relevance scores

@@ -24,27 +24,24 @@ import {
   EvaluationRecordModel,
 } from '@/database/models/ragEval';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createAsyncCaller } from '@/server/routers/async';
 import { FileService } from '@/server/services/file';
 
-const ragEvalProcedure = authedProcedure
-  .use(serverDatabase)
-  .use(keyVaults)
-  .use(async (opts) => {
-    const { ctx } = opts;
+const ragEvalProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
 
-    return opts.next({
-      ctx: {
-        datasetModel: new EvalDatasetModel(ctx.serverDB, ctx.userId),
-        fileModel: new FileModel(ctx.serverDB, ctx.userId),
-        datasetRecordModel: new EvalDatasetRecordModel(ctx.serverDB, ctx.userId),
-        evaluationModel: new EvalEvaluationModel(ctx.serverDB, ctx.userId),
-        evaluationRecordModel: new EvaluationRecordModel(ctx.serverDB, ctx.userId),
-        fileService: new FileService(ctx.serverDB, ctx.userId),
-      },
-    });
+  return opts.next({
+    ctx: {
+      datasetModel: new EvalDatasetModel(ctx.serverDB, ctx.userId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId),
+      datasetRecordModel: new EvalDatasetRecordModel(ctx.serverDB, ctx.userId),
+      evaluationModel: new EvalEvaluationModel(ctx.serverDB, ctx.userId),
+      evaluationRecordModel: new EvaluationRecordModel(ctx.serverDB, ctx.userId),
+      fileService: new FileService(ctx.serverDB, ctx.userId),
+    },
   });
+});
 
 export const ragEvalRouter = router({
   createDataset: ragEvalProcedure
