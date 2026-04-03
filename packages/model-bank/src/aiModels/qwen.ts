@@ -3596,6 +3596,89 @@ const qwenImageModels: AIImageModelCard[] = [
 const qwenVideoModels: AIVideoModelCard[] = [
   {
     description:
+      'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
+    displayName: 'Wan2.7 I2V',
+    enabled: true,
+    id: 'wan2.7-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Reference-to-Video offers more stable references for characters, props, and scenes. It supports up to 5 mixed reference images or videos, along with audio tone referencing. Combined with upgraded core capabilities, it delivers stronger performance and expressive power.',
+    displayName: 'Wan2.7 R2V',
+    enabled: true,
+    id: 'wan2.7-r2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 10, min: 2 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Text-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Enhanced with more dynamic and rhythmically driven shot transitions, it achieves stronger overall acting and storytelling performance.',
+    displayName: 'Wan2.7 T2V',
+    enabled: true,
+    id: 'wan2.7-t2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 2 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
       'Wanxiang 2.6 introduces multi-shot narrative capabilities, while also supporting automatic voiceover generation and the ability to incorporate custom audio files.',
     displayName: 'Wan2.6 I2V Flash',
     enabled: true,

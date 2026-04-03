@@ -31,11 +31,12 @@ const image2VideoModels = [
   /^wanx2\.(0|1)-i2v-/,
   /img2video$/,
   /reference2video$/,
+  /i2v$/,
   /it2v$/,
   /r2v$/,
 ];
 const keyframe2VideoModels = [/^wan2\.(2|5)-kf2v-/, /start-end2video$/, /kf2v$/];
-const reference2VideoModels = [/^wan2\.6-r2v/];
+const reference2VideoModels = [/r2v$/];
 
 /**
  * Query the status of a video generation task
@@ -204,6 +205,31 @@ async function createVideoTask(
         },
       ];
     }
+  } else if (model.startsWith('wan2.7')) {
+    const media = [];
+    if (imageUrl) {
+      if (model.includes('r2v')) {
+        // For Wan2.7 R2V models, treat reference images as "reference_image" type to provide stronger referencing capability
+        media.push({
+          type: 'reference_image',
+          url: imageUrl,
+        });
+      } else {
+        media.push({
+          type: 'first_frame',
+          url: imageUrl,
+        });
+      }
+    }
+    if (endImageUrl) {
+      media.push({
+        type: 'last_frame',
+        url: endImageUrl,
+      });
+    }
+    if (media.length > 0) {
+      input.media = media;
+    }
   } else if (matchesModelPattern(model, reference2VideoModels)) {
     input.reference_urls = [imageUrl];
   } else if (matchesModelPattern(model, keyframe2VideoModels)) {
@@ -218,7 +244,12 @@ async function createVideoTask(
 
   // Add optional parameters
   if (params.aspectRatio) {
-    parameters.aspectRatio = params.aspectRatio;
+    if (model.startsWith('wan2.7')) {
+      // Wan2.7 models use "ratio" parameter instead of "aspectRatio"
+      parameters.ratio = params.aspectRatio;
+    } else {
+      parameters.aspectRatio = params.aspectRatio;
+    }
   }
 
   if (params.size) {
