@@ -52,7 +52,7 @@ const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam
 
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
-  const { t } = useTranslation(['image', 'common']);
+  const { t } = useTranslation('image');
   const { value, setValue } = useGenerationConfigParam('prompt');
   const { value: imageUrl, setValue: setImageUrl } = useGenerationConfigParam('imageUrl');
   const {

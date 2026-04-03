@@ -130,7 +130,7 @@ const DurationItem = memo(() => {
 });
 
 const SeedItem = memo(() => {
-  const { t } = useTranslation(['video', 'common']);
+  const { t } = useTranslation('video');
   const { value, setValue } = useVideoGenerationConfigParam('seed');
 
   const handleRandomize = useCallback(() => {

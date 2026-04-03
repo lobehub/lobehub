@@ -18,28 +18,44 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
   ({ mode, onPromptChange, prompt }) => {
     const { t } = useTranslation('common');
 
-    const { isRewriteDisabled, isRewriting, rewritePrompt, translatePrompt, transformAction } =
-      usePromptRewrite({
-        mode,
-        onPromptChange,
-        prompt,
-      });
+    const {
+      isRewriteDisabled,
+      isRewriteActionEnabled,
+      isRewriting,
+      isTranslateActionEnabled,
+      rewritePrompt,
+      translatePrompt,
+      transformAction,
+    } = usePromptRewrite({
+      mode,
+      onPromptChange,
+      prompt,
+    });
 
     const menuItems = useMemo(
       () => [
         {
+          disabled: !isRewriteActionEnabled,
           key: 'rewrite',
           label: t('promptTransform.actions.rewrite'),
           onClick: rewritePrompt,
         },
         {
+          disabled: !isTranslateActionEnabled,
           key: 'translate',
           label: t('promptTransform.actions.translate'),
           onClick: translatePrompt,
         },
       ],
-      [rewritePrompt, t, translatePrompt],
+      [isRewriteActionEnabled, isTranslateActionEnabled, rewritePrompt, t, translatePrompt],
     );
+
+    const handlePrimaryAction = useMemo(() => {
+      if (isRewriteActionEnabled) return rewritePrompt;
+      if (isTranslateActionEnabled) return translatePrompt;
+
+      return undefined;
+    }, [isRewriteActionEnabled, isTranslateActionEnabled, rewritePrompt, translatePrompt]);
 
     return (
       <Action
@@ -59,7 +75,7 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
               )
             : t('promptTransform.action')
         }
-        onClick={rewritePrompt}
+        onClick={handlePrimaryAction}
       />
     );
   },
