@@ -180,14 +180,26 @@ export class ResponsesService extends BaseService {
       if (msg.role === 'assistant') {
         const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
 
+        // Emit message item for assistant text content (even when tool_calls are present)
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        if (content) {
+          outputText = content;
+          output.push({
+            content: [
+              { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
+            ],
+            id: `msg_${responseId}_${itemCounter++}`,
+            role: 'assistant' as const,
+            status: 'completed' as const,
+            type: 'message' as const,
+          });
+        }
+
         // Handle tool_calls from assistant
         if (hasToolCalls) {
           for (const toolCall of msg.tool_calls) {
-            // Convert internal tool names: lobe-client-fn____get_weather → get_weather
-            let fnName = toolCall.function?.name ?? '';
-            if (fnName.startsWith('lobe-client-fn____')) {
-              fnName = fnName.slice('lobe-client-fn____'.length);
-            }
+            // Decode internal tool name format back to display name
+            const fnName = this.decodeToolName(toolCall.function?.name ?? '');
             output.push({
               arguments: toolCall.function?.arguments ?? '{}',
               call_id: toolCall.id ?? `call_${itemCounter}`,
@@ -195,23 +207,6 @@ export class ResponsesService extends BaseService {
               name: fnName,
               status: 'completed' as const,
               type: 'function_call' as const,
-            });
-          }
-        }
-
-        // Only emit message item for assistant messages WITHOUT tool_calls (i.e., final text response)
-        if (!hasToolCalls) {
-          const content = typeof msg.content === 'string' ? msg.content : '';
-          if (content) {
-            outputText = content;
-            output.push({
-              content: [
-                { annotations: [], logprobs: [], text: content, type: 'output_text' as const },
-              ],
-              id: `msg_${responseId}_${itemCounter++}`,
-              role: 'assistant' as const,
-              status: 'completed' as const,
-              type: 'message' as const,
             });
           }
         }
@@ -227,6 +222,25 @@ export class ResponsesService extends BaseService {
     }
 
     return { output, outputText };
+  }
+
+  /**
+   * Decode internal tool name format to display name.
+   * - lobe-client-fn____get_weather → get_weather
+   * - lobe-cloud-sandbox____executeCode____builtin → lobe-cloud-sandbox/executeCode
+   * - my-plugin____myApi → my-plugin/myApi
+   */
+  private decodeToolName(rawName: string): string {
+    const SEPARATOR = '____';
+    if (rawName.startsWith(`lobe-client-fn${SEPARATOR}`)) {
+      return rawName.slice(`lobe-client-fn${SEPARATOR}`.length);
+    }
+    const parts = rawName.split(SEPARATOR);
+    if (parts.length >= 2) {
+      // parts[0] = identifier, parts[1] = apiName, parts[2+] = type (ignored for display)
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return rawName;
   }
 
   /**
