@@ -382,6 +382,22 @@ describe('Unit Conversion', () => {
     expect(result.content).toBe('2.3026');
   });
 
+  it('should handle ln with complex numbers (ln(-1) = πi)', async () => {
+    const result = await calculatorExecutor.calculate({ expression: 'ln(-1)' });
+    expect(result.success).toBe(true);
+    // ln(-1) = i * π ≈ 3.141592654i
+    expect(result.content).toContain('i');
+    expect(parseFloat(result.content || '0')).not.toBeNaN();
+  });
+
+  it('should handle ln consistent with log(x, e)', async () => {
+    const lnResult = await calculatorExecutor.calculate({ expression: 'ln(5)' });
+    const logResult = await calculatorExecutor.calculate({ expression: 'log(5, e)' });
+    expect(lnResult.success).toBe(true);
+    expect(logResult.success).toBe(true);
+    expect(lnResult.content).toBe(logResult.content);
+  });
+
   it('should handle constants in scientific notation', async () => {
     const result = await calculatorExecutor.calculate({ expression: 'pi * 1e3' });
     expect(result.success).toBe(true);
