@@ -19,7 +19,14 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
   const [transformAction, setTransformAction] = useState<PromptTransformAction>('rewrite');
 
   const rewriteConfig = useUserStore(systemAgentSelectors.promptRewrite);
-  const isEnabled = rewriteConfig?.enabled ?? false;
+  const translateConfig = useUserStore(systemAgentSelectors.translation);
+  const isEnabled = (rewriteConfig?.enabled ?? false) || (translateConfig?.enabled ?? false);
+
+  const getConfigByAction = useCallback(
+    (action: PromptTransformAction) =>
+      action === 'rewrite' ? (rewriteConfig ?? {}) : (translateConfig ?? {}),
+    [rewriteConfig, translateConfig],
+  );
 
   const runTransform = useCallback(
     async (action: PromptTransformAction) => {
@@ -42,7 +49,7 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
             if (chunk.type === 'text') rewrittenPrompt += chunk.text;
           },
           params: merge(
-            rewriteConfig ?? {},
+            getConfigByAction(action),
             action === 'rewrite'
               ? chainRewriteGenerationPrompt({
                   mode,
@@ -56,7 +63,7 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
         setTransformAction('rewrite');
       }
     },
-    [isEnabled, mode, onPromptChange, prompt, rewriteConfig],
+    [getConfigByAction, isEnabled, mode, onPromptChange, prompt],
   );
 
   const rewritePrompt = useCallback(async () => {
