@@ -22,6 +22,16 @@ import {
 // Create a mathjs instance with all functions
 const math = create(all);
 
+// Add ln() as a natural logarithm function (log base e)
+math.import(
+  {
+    ln: function (x: number) {
+      return Math.log(x);
+    },
+  },
+  { override: true },
+);
+
 /**
  * Calculator Tool Executor
  *
@@ -50,6 +60,7 @@ class CalculatorExecutor
     } catch (error) {
       throw new Error(
         `Failed to evaluate expression: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error },
       );
     }
   }

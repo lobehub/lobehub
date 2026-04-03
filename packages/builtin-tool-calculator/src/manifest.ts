@@ -13,7 +13,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
         properties: {
           expression: {
             description:
-              'Mathematical expression to calculate (e.g., "2 + 3 * 4", "sqrt(16)", "sin(30 deg)", "det([[1,2],[3,4]])", "5 cm to inch")',
+              'Mathematical expression to calculate (e.g., "2 + 3 * 4", "sqrt(16)", "ln(10)", "sin(30 deg)", "det([[1,2],[3,4]])", "5 cm to inch")',
             type: 'string',
           },
           precision: {
@@ -35,7 +35,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
         properties: {
           expression: {
             description:
-              'Mathematical expression to evaluate (e.g., "x^2 + 2*x + 1", "det([[a,b],[c,d]])", "sqrt(a^2 + b^2)")',
+              'Mathematical expression to evaluate (e.g., "x^2 + 2*x + 1", "det([[a,b],[c,d]])", "ln(x)", "sqrt(a^2 + b^2)")',
             type: 'string',
           },
           precision: {
