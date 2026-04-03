@@ -1,87 +1,32 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-/**
- * Regression tests for extractOutputItems logic in ResponsesService.
- *
- * These tests reproduce three bugs in the response.completed output:
- * 1. Assistant message with tool_calls is dropped from output (only function_call is kept)
- * 2. Function call names use internal ____-separated format instead of identifier/apiName
- * 3. Function call IDs are inconsistent with streaming (itemCounter doesn't account for message)
- */
+// Now import the real service — only the stubs above are faked
+import { ResponsesService } from '../responses.service';
 
-const SEPARATOR = '____';
+// Stub external dependencies so ResponsesService can be imported in isolation
+vi.mock('@/server/modules/AgentRuntime/InMemoryStreamEventManager', () => ({
+  InMemoryStreamEventManager: class {},
+}));
+vi.mock('@/server/modules/AgentRuntime/StreamEventManager', () => ({}));
+vi.mock('@/server/services/agentRuntime', () => ({ AgentRuntimeService: class {} }));
+vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: class {} }));
+vi.mock('../../common/base.service', () => ({
+  BaseService: class {
+    db: any;
+    userId = '';
+    constructor() {}
+    log() {}
+  },
+}));
 
-function decodeToolName(rawName: string): string {
-  if (rawName.startsWith(`lobe-client-fn${SEPARATOR}`)) {
-    return rawName.slice(`lobe-client-fn${SEPARATOR}`.length);
-  }
-  const parts = rawName.split(SEPARATOR);
-  if (parts.length >= 2) {
-    return `${parts[0]}/${parts[1]}`;
-  }
-  return rawName;
-}
+// Helper: call the private extractOutputItems via bracket notation
+const callExtractOutputItems = (messages: any[], responseId: string) => {
+  const svc = new (ResponsesService as any)(null, null);
+  return svc['extractOutputItems']({ messages }, responseId);
+};
 
-/**
- * Mirrors the fixed extractOutputItems logic from ResponsesService.
- */
-function extractOutputItems(
-  messages: any[],
-  responseId: string,
-): { output: any[]; outputText: string } {
-  if (!messages?.length) return { output: [], outputText: '' };
-
-  const output: any[] = [];
-  let outputText = '';
-  let itemCounter = 0;
-
-  for (const msg of messages) {
-    if (msg.role === 'assistant') {
-      const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
-
-      // Emit message item for assistant text content (even when tool_calls are present)
-      const content = typeof msg.content === 'string' ? msg.content : '';
-      if (content) {
-        outputText = content;
-        output.push({
-          content: [{ annotations: [], logprobs: [], text: content, type: 'output_text' as const }],
-          id: `msg_${responseId}_${itemCounter++}`,
-          role: 'assistant' as const,
-          status: 'completed' as const,
-          type: 'message' as const,
-        });
-      }
-
-      // Handle tool_calls from assistant
-      if (hasToolCalls) {
-        for (const toolCall of msg.tool_calls) {
-          const fnName = decodeToolName(toolCall.function?.name ?? '');
-          output.push({
-            arguments: toolCall.function?.arguments ?? '{}',
-            call_id: toolCall.id ?? `call_${itemCounter}`,
-            id: `fc_${responseId}_${itemCounter++}`,
-            name: fnName,
-            status: 'completed' as const,
-            type: 'function_call' as const,
-          });
-        }
-      }
-    } else if (msg.role === 'tool') {
-      output.push({
-        call_id: msg.tool_call_id ?? '',
-        id: `fco_${responseId}_${itemCounter++}`,
-        output: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-        status: 'completed' as const,
-        type: 'function_call_output' as const,
-      });
-    }
-  }
-
-  return { output, outputText };
-}
-
-describe('ResponsesService.extractOutputItems - regression', () => {
-  describe('Bug 1: assistant message with tool_calls should still emit message item', () => {
+describe('ResponsesService.extractOutputItems', () => {
+  describe('assistant message with tool_calls should still emit message item', () => {
     it('should include both message and function_call when assistant has text + tool_calls', () => {
       const messages = [
         {
@@ -99,37 +44,32 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
 
-      // Should have 2 output items: message + function_call
       expect(output).toHaveLength(2);
 
       expect(output[0]).toMatchObject({
-        type: 'message',
-        role: 'assistant',
         content: [
           {
-            type: 'output_text',
             text: '好的，我来在沙箱中随机生成一个散点图！',
+            type: 'output_text',
           },
         ],
+        role: 'assistant',
+        status: 'completed',
+        type: 'message',
       });
 
       expect(output[1]).toMatchObject({
-        type: 'function_call',
         status: 'completed',
+        type: 'function_call',
       });
     });
 
     it('should still work for assistant messages without tool_calls', () => {
-      const messages = [
-        {
-          content: 'Hello, how can I help?',
-          role: 'assistant',
-        },
-      ];
+      const messages = [{ content: 'Hello, how can I help?', role: 'assistant' }];
 
-      const { output, outputText } = extractOutputItems(messages, 'tpc_test');
+      const { output, outputText } = callExtractOutputItems(messages, 'tpc_test');
 
       expect(output).toHaveLength(1);
       expect(output[0].type).toBe('message');
@@ -141,24 +81,18 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         {
           content: '',
           role: 'assistant',
-          tool_calls: [
-            {
-              function: { arguments: '{}', name: 'my-plugin____myApi' },
-              id: 'call_1',
-            },
-          ],
+          tool_calls: [{ function: { arguments: '{}', name: 'my-plugin____myApi' }, id: 'call_1' }],
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
 
-      // Only function_call, no message (empty content)
       expect(output).toHaveLength(1);
       expect(output[0].type).toBe('function_call');
     });
   });
 
-  describe('Bug 2: function_call name should be decoded from internal ____-separated format', () => {
+  describe('function_call name should be decoded from internal ____-separated format', () => {
     it('should decode builtin tool names: identifier____apiName____builtin → identifier/apiName', () => {
       const messages = [
         {
@@ -176,7 +110,7 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
 
       const fc = output.find((item: any) => item.type === 'function_call');
       expect(fc.name).toBe('lobe-cloud-sandbox/executeCode');
@@ -196,7 +130,8 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
+
       const fc = output.find((item: any) => item.type === 'function_call');
       expect(fc.name).toBe('get_weather');
     });
@@ -207,15 +142,13 @@ describe('ResponsesService.extractOutputItems - regression', () => {
           content: '',
           role: 'assistant',
           tool_calls: [
-            {
-              function: { arguments: '{}', name: 'my-plugin____myApi' },
-              id: 'call_def',
-            },
+            { function: { arguments: '{}', name: 'my-plugin____myApi' }, id: 'call_def' },
           ],
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
+
       const fc = output.find((item: any) => item.type === 'function_call');
       expect(fc.name).toBe('my-plugin/myApi');
     });
@@ -225,22 +158,18 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         {
           content: '',
           role: 'assistant',
-          tool_calls: [
-            {
-              function: { arguments: '{}', name: 'simple_tool' },
-              id: 'call_simple',
-            },
-          ],
+          tool_calls: [{ function: { arguments: '{}', name: 'simple_tool' }, id: 'call_simple' }],
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
+
       const fc = output.find((item: any) => item.type === 'function_call');
       expect(fc.name).toBe('simple_tool');
     });
   });
 
-  describe('Bug 3: function_call id should match streaming output_index', () => {
+  describe('function_call id should match streaming output_index', () => {
     it('should assign index 1 to function_call when message (index 0) precedes it', () => {
       const messages = [
         {
@@ -258,9 +187,8 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
 
-      // message should be index 0, function_call should be index 1
       expect(output[0].id).toBe('msg_tpc_test_0');
       expect(output[1].id).toBe('fc_tpc_test_1');
     });
@@ -270,16 +198,11 @@ describe('ResponsesService.extractOutputItems - regression', () => {
         {
           content: '',
           role: 'assistant',
-          tool_calls: [
-            {
-              function: { arguments: '{}', name: 'plugin____api' },
-              id: 'call_1',
-            },
-          ],
+          tool_calls: [{ function: { arguments: '{}', name: 'plugin____api' }, id: 'call_1' }],
         },
       ];
 
-      const { output } = extractOutputItems(messages, 'tpc_test');
+      const { output } = callExtractOutputItems(messages, 'tpc_test');
       expect(output[0].id).toBe('fc_tpc_test_0');
     });
   });
