@@ -277,14 +277,15 @@ const resolveRefs = (
   }
 
   // If this node IS a $ref, replace it with the referenced definition
+  // Preserve sibling fields (e.g. description) that sit next to $ref
   if (typeof node.$ref === 'string') {
-    const match = node.$ref.match(/^#\/definitions\/(.+)$/);
+    const { $ref: ref, ...siblings } = node;
+    const match = ref.match(/^#\/definitions\/(.+)$/);
     if (match && definitions[match[1]]) {
-      return resolveRefs({ ...definitions[match[1]] }, definitions, depth + 1);
+      return resolveRefs({ ...definitions[match[1]], ...siblings }, definitions, depth + 1);
     }
     // Unknown $ref — return without it so Google doesn't choke
-    const { $ref: _, ...rest } = node;
-    return rest;
+    return siblings;
   }
 
   const result: Record<string, any> = {};

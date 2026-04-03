@@ -1481,6 +1481,48 @@ describe('google contextBuilders', () => {
       });
     });
 
+    it('should preserve sibling fields next to $ref', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with $ref siblings',
+          name: 'siblingTool',
+          parameters: {
+            definitions: {
+              timeIntent: {
+                properties: {
+                  selector: { type: 'string' },
+                },
+                required: ['selector'],
+                type: 'object',
+              },
+            },
+            properties: {
+              timeIntent: {
+                allOf: [{ $ref: '#/definitions/timeIntent' }],
+                description: 'Calendar-friendly time selector',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // description from sibling should be preserved after $ref resolution
+      expect(result.parameters?.properties).toEqual({
+        timeIntent: {
+          description: 'Calendar-friendly time selector',
+          properties: {
+            selector: { type: 'string' },
+          },
+          required: ['selector'],
+          type: 'object',
+        },
+      });
+    });
+
     it('should handle unknown $ref gracefully by stripping it', () => {
       const tool: ChatCompletionTool = {
         function: {
