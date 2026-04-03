@@ -338,7 +338,6 @@ describe('AgentRuntimeService', () => {
           ...mockParams,
           hooks: [{ handler: vi.fn(), id: 'hook-1', type: 'onComplete' }],
           signal: controller.signal,
-          stepCallbacks: { onComplete: vi.fn() },
         }),
       ).rejects.toMatchObject({
         message: 'startup aborted',
@@ -347,7 +346,6 @@ describe('AgentRuntimeService', () => {
 
       expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
       expect(mockCoordinator.deleteAgentOperation).toHaveBeenCalledWith('test-operation-1');
-      expect(service.getStepCallbacks('test-operation-1')).toBeUndefined();
       expect(hookDispatcher.hasHooks('test-operation-1')).toBe(false);
     });
   });
