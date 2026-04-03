@@ -1,12 +1,11 @@
 import type { ChatStreamPayload } from '@lobechat/types';
 
 interface RewriteGenerationPromptParams {
-  locale: string;
   mode: 'image' | 'video' | 'text';
   prompt: string;
 }
 
-const IMAGE_REWRITE_SYSTEM_PROMPT = (locale: string) => `You are an expert image prompt engineer.
+const IMAGE_REWRITE_SYSTEM_PROMPT = () => `You are an expert image prompt engineer.
 
 Rewrite the user prompt into a production-ready image-generation prompt while preserving intent.
 
@@ -21,10 +20,10 @@ Rules:
 - Keep important entities, quantities, and constraints unchanged.
 - Add concrete visual details and physically plausible lighting.
 - Avoid verbosity and avoid contradictory details.
-- Output language must be ${locale}.
+- Preserve the original input language.
 - Output ONLY the final rewritten prompt (single paragraph, no markdown).`;
 
-const VIDEO_REWRITE_SYSTEM_PROMPT = (locale: string) => `You are an expert video prompt engineer.
+const VIDEO_REWRITE_SYSTEM_PROMPT = () => `You are an expert video prompt engineer.
 
 Rewrite the user prompt into a production-ready video-generation prompt while preserving intent.
 
@@ -39,10 +38,10 @@ Rules:
 - Keep important entities, quantities, and constraints unchanged.
 - Prioritize temporal clarity and camera language.
 - Avoid impossible or contradictory motion/physics descriptions.
-- Output language must be ${locale}.
+- Preserve the original input language.
 - Output ONLY the final rewritten prompt (single paragraph, no markdown).`;
 
-const TEXT_REWRITE_SYSTEM_PROMPT = (locale: string) => `You are an expert prompt optimizer.
+const TEXT_REWRITE_SYSTEM_PROMPT = () => `You are an expert prompt optimizer.
 
 Rewrite the user's prompt into a standalone user request for an AI assistant while preserving the original intent, important entities, constraints, and expected output.
 
@@ -55,23 +54,23 @@ Rules:
 - If the user input is already clear, make only minimal improvements.
 - Preserve entity names, numbers, formatting requirements, and visible text exactly.
 - Preserve the original language unless the user explicitly requests translation.
-- Output language must be ${locale}.
+- Preserve the original input language.
 
 If the prompt includes visible text to be rendered, preserve the exact text content and do not rewrite it into a roleplay or instruction block.`;
 
-const getSystemPromptByMode = (mode: RewriteGenerationPromptParams['mode'], locale: string) => {
+const getSystemPromptByMode = (mode: RewriteGenerationPromptParams['mode']) => {
   switch (mode) {
     case 'image': {
-      return IMAGE_REWRITE_SYSTEM_PROMPT(locale);
+      return IMAGE_REWRITE_SYSTEM_PROMPT();
     }
     case 'video': {
-      return VIDEO_REWRITE_SYSTEM_PROMPT(locale);
+      return VIDEO_REWRITE_SYSTEM_PROMPT();
     }
     case 'text': {
-      return TEXT_REWRITE_SYSTEM_PROMPT(locale);
+      return TEXT_REWRITE_SYSTEM_PROMPT();
     }
     default: {
-      return IMAGE_REWRITE_SYSTEM_PROMPT(locale);
+      return IMAGE_REWRITE_SYSTEM_PROMPT();
     }
   }
 };
@@ -79,11 +78,10 @@ const getSystemPromptByMode = (mode: RewriteGenerationPromptParams['mode'], loca
 export const chainRewriteGenerationPrompt = ({
   mode,
   prompt,
-  locale,
 }: RewriteGenerationPromptParams): Partial<ChatStreamPayload> => ({
   messages: [
     {
-      content: getSystemPromptByMode(mode, locale),
+      content: getSystemPromptByMode(mode),
       role: 'system',
     },
     {

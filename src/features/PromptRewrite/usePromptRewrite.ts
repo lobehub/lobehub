@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 
 import { chatService } from '@/services/chat';
 import { useUserStore } from '@/store/user';
-import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { systemAgentSelectors } from '@/store/user/selectors';
 import { merge } from '@/utils/merge';
 
 interface UsePromptRewriteParams {
@@ -19,7 +19,6 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
   const [transformAction, setTransformAction] = useState<PromptTransformAction>('rewrite');
 
   const rewriteConfig = useUserStore(systemAgentSelectors.promptRewrite);
-  const locale = useUserStore(userGeneralSettingsSelectors.currentResponseLanguage);
   const isEnabled = rewriteConfig?.enabled ?? false;
 
   const runTransform = useCallback(
@@ -46,7 +45,6 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
             rewriteConfig ?? {},
             action === 'rewrite'
               ? chainRewriteGenerationPrompt({
-                  locale,
                   mode,
                   prompt,
                 })
@@ -58,7 +56,7 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
         setTransformAction('rewrite');
       }
     },
-    [isEnabled, locale, mode, onPromptChange, prompt, rewriteConfig],
+    [isEnabled, mode, onPromptChange, prompt, rewriteConfig],
   );
 
   const rewritePrompt = useCallback(async () => {
