@@ -96,6 +96,17 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
 }
 
 class ChatService {
+  private resolveAgentDocumentsTargetId = (
+    targetAgentId: string,
+    enabledToolIds: string[] = [],
+  ): string | undefined => {
+    if (enabledToolIds.includes(AgentBuilderIdentifier)) {
+      return getChatStoreState().activeAgentId || targetAgentId || undefined;
+    }
+
+    return targetAgentId || undefined;
+  };
+
   createAssistantMessage = async (
     {
       messages,
@@ -152,7 +163,20 @@ class ChatService {
     // Note: When Agent Builder is active, we need to get the context of the agent being edited,
     // which is stored in chatStore.activeAgentId, not the targetAgentId (which is the Agent Builder itself)
     const isAgentBuilderEnabled = enabledToolIds.includes(AgentBuilderIdentifier);
+    const documentsAgentId = this.resolveAgentDocumentsTargetId(targetAgentId, enabledToolIds);
     let agentBuilderContext;
+    let agentDocuments = documentsAgentId
+      ? agentSelectors.getAgentDocumentsById(documentsAgentId)(getAgentStoreState())
+      : undefined;
+
+    if (documentsAgentId && agentDocuments === undefined) {
+      try {
+        agentDocuments = await getAgentStoreState().ensureAgentDocuments(documentsAgentId);
+      } catch (error) {
+        // Agent documents are optional on the client; keep generation working if hydration fails.
+        console.error('[ChatService] Failed to ensure agent documents:', error);
+      }
+    }
 
     if (isAgentBuilderEnabled) {
       const activeAgentId = getChatStoreState().activeAgentId || '';
@@ -239,6 +263,7 @@ class ChatService {
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
       agentBuilderContext,
+      agentDocuments,
       agentId: targetAgentId,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,

@@ -18,11 +18,7 @@ import type {
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
-import {
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-  MessagesEngine,
-  resolveTopicReferences,
-} from '@lobechat/context-engine';
+import { MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import type {
   OpenAIChatMessage,
@@ -35,7 +31,6 @@ import debug from 'debug';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
-import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -59,22 +54,10 @@ import { stripActionTagsFromText } from './skillPreload';
 
 const log = debug('context-engine:contextEngineering');
 
-const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
-  AGENT_DOCUMENT_INJECTION_POSITIONS,
-);
-
-const normalizeDocumentPosition = (
-  position: string | null | undefined,
-): AgentContextDocument['loadPosition'] | undefined => {
-  if (!position) return undefined;
-  return VALID_DOCUMENT_POSITIONS.has(position as AgentContextDocument['loadPosition'])
-    ? (position as AgentContextDocument['loadPosition'])
-    : undefined;
-};
-
 interface ContextEngineeringContext {
   /** Agent Builder context for injecting current agent info */
   agentBuilderContext?: AgentBuilderContext;
+  agentDocuments?: AgentContextDocument[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
   enableHistoryCount?: boolean;
@@ -157,6 +140,7 @@ export const contextEngineering = async ({
   historyCount,
   historySummary,
   agentBuilderContext,
+  agentDocuments,
   agentId,
   groupId,
   initialContext,
@@ -224,7 +208,6 @@ export const contextEngineering = async ({
 
   // Get agent store state (used for both group agent builder context and file/knowledge base)
   const agentStoreState = getAgentStoreState();
-  const resolvedAgentId = agentId || agentStoreState.activeAgentId;
 
   // Build group agent builder context if Group Agent Builder is enabled
   // Note: Uses activeGroupId from chatStore to get the group being edited
@@ -350,31 +333,6 @@ export const contextEngineering = async ({
   const knowledgeBases = agentKnowledgeBases
     .filter((kb) => kb.enabled)
     .map((kb) => ({ description: kb.description, id: kb.id, name: kb.name }));
-
-  let agentDocuments: AgentContextDocument[] | undefined;
-
-  if (resolvedAgentId) {
-    try {
-      const documents = await agentDocumentService.getDocuments({ agentId: resolvedAgentId });
-      agentDocuments = documents.map((doc) => ({
-        content: doc.content,
-        filename: doc.filename,
-        id: doc.id,
-        loadRules: doc.loadRules,
-        policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
-        loadPosition: normalizeDocumentPosition(
-          doc.policy?.context?.position || doc.policyLoadPosition,
-        ),
-        policyId: doc.templateId,
-        title: doc.title,
-      }));
-
-      log('agentDocuments resolved: %d', agentDocuments.length);
-    } catch (error) {
-      // Agent documents are optional context; failure should not block message processing.
-      log('Failed to resolve agent documents for agent %s: %O', resolvedAgentId, error);
-    }
-  }
 
   // Resolve user memories: topic memories and user persona are independent layers
   // Both functions now read from cache only (no network requests) to avoid blocking sendMessage

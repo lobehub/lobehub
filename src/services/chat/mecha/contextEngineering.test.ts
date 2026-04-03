@@ -2,6 +2,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';
+import { agentDocumentService } from '@/services/agentDocument';
 
 import * as helpers from '../helper';
 import { contextEngineering } from './contextEngineering';
@@ -14,6 +15,12 @@ vi.mock('@/helpers/parserPlaceholder', () => ({
     time: () => '14:30:45',
     username: () => 'TestUser',
     random: () => '12345',
+  },
+}));
+
+vi.mock('@/services/agentDocument', () => ({
+  agentDocumentService: {
+    getDocuments: vi.fn(),
   },
 }));
 
@@ -48,6 +55,55 @@ const getCurrentDateContent = () => {
 };
 
 describe('contextEngineering', () => {
+  it('should not fetch agent documents implicitly when agentId is provided', async () => {
+    const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+    await contextEngineering({
+      agentId: 'agent-1',
+      messages,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
+  });
+
+  it('should use provided agent documents without fetching', async () => {
+    const messages = [{ content: 'Summarize the setup', role: 'user' }] as UIChatMessage[];
+
+    const output = await contextEngineering({
+      agentDocuments: [
+        {
+          content: 'Project setup steps',
+          filename: 'setup.md',
+          id: 'doc-1',
+          title: 'Setup',
+        },
+      ],
+      agentId: 'agent-1',
+      messages,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
+    const documentsMessage = output.find(
+      (message) =>
+        message.role === 'system' &&
+        typeof message.content === 'string' &&
+        message.content.includes('<documents>'),
+    );
+
+    expect(documentsMessage).toEqual({
+      content: expect.stringContaining('<documents>'),
+      role: 'system',
+    });
+    expect(documentsMessage).toEqual({
+      content: expect.stringContaining('setup.md'),
+      role: 'system',
+    });
+  });
+
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
       isServerMode = true;
