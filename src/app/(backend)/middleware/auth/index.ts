@@ -1,4 +1,5 @@
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { context as otContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
