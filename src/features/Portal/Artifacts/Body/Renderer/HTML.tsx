@@ -1,4 +1,4 @@
-import { sanitizeHTMLContent } from '@lobehub/utils/client';
+import { sanitizeHTMLContent } from '@lobechat/utils/client';
 import { memo, useMemo } from 'react';
 
 interface HTMLRendererProps {
