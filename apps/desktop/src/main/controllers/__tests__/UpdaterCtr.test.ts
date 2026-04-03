@@ -14,14 +14,6 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/modules/updater/configs', () => ({
   UPDATE_CHANNEL: 'stable',
-  coerceStoredUpdateChannel: (channel?: string | null) =>
-    channel === 'canary' ? 'canary' : 'stable',
-  resolveUpdateChannelInput: (channel?: string | null) => {
-    if (channel === 'stable' || channel === 'canary') return channel;
-    if (channel === 'nightly') return 'stable';
-
-    return undefined;
-  },
 }));
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
@@ -99,20 +91,16 @@ describe('UpdaterCtr', () => {
   });
 
   describe('update channel', () => {
-    it('should migrate persisted nightly channel to stable', async () => {
-      mockStoreGet.mockReturnValueOnce('nightly');
+    it('should return stored update channel', async () => {
+      mockStoreGet.mockReturnValueOnce('canary');
 
-      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('stable');
-      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'stable');
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('canary');
     });
 
-    it('should normalize legacy nightly input to stable', async () => {
-      await updaterCtr.setUpdateChannel(
-        'nightly' as unknown as Parameters<UpdaterCtr['setUpdateChannel']>[0],
-      );
+    it('should return default update channel when store is empty', async () => {
+      mockStoreGet.mockReturnValueOnce(undefined);
 
-      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'stable');
-      expect(mockSwitchChannel).toHaveBeenCalledWith('stable');
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('stable');
     });
 
     it('should keep canary input unchanged', async () => {
@@ -120,6 +108,15 @@ describe('UpdaterCtr', () => {
 
       expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'canary');
       expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
+    });
+
+    it('should ignore invalid legacy input', async () => {
+      await updaterCtr.setUpdateChannel(
+        'nightly' as unknown as Parameters<UpdaterCtr['setUpdateChannel']>[0],
+      );
+
+      expect(mockStoreSet).not.toHaveBeenCalled();
+      expect(mockSwitchChannel).not.toHaveBeenCalled();
     });
   });
 

@@ -8,13 +8,6 @@ const rawChannel = getDesktopEnv().UPDATE_CHANNEL || 'stable';
 export const coerceStoredUpdateChannel = (channel?: string | null): UpdateChannel =>
   channel === 'canary' ? 'canary' : 'stable';
 
-export const resolveUpdateChannelInput = (channel?: string | null): UpdateChannel | undefined => {
-  if (channel === 'stable' || channel === 'canary') return channel;
-  if (channel === 'nightly') return 'stable';
-
-  return undefined;
-};
-
 /** Raw build channel for display (stable, canary, beta, or legacy nightly). */
 export const BUILD_CHANNEL: string = rawChannel;
 export const UPDATE_CHANNEL: UpdateChannel =

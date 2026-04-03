@@ -22,6 +22,7 @@ import {
   runtimeEnvironmentDetectors,
   type ToolCategory,
 } from '@/modules/toolDetectors';
+import { coerceStoredUpdateChannel } from '@/modules/updater/configs';
 import type { IServiceModule } from '@/services';
 import { createLogger } from '@/utils/logger';
 
@@ -218,6 +219,7 @@ export class App {
     }
 
     this.initDevBranding();
+    this.migrateLegacyStoreData();
 
     //  ==============
     await this.ipcServer.start();
@@ -263,6 +265,16 @@ export class App {
 
     logger.info('Application bootstrap completed');
   };
+
+  private migrateLegacyStoreData() {
+    const storedChannel = this.storeManager.get('updateChannel');
+    const normalizedChannel = coerceStoredUpdateChannel(storedChannel);
+
+    if (storedChannel && storedChannel !== normalizedChannel) {
+      this.storeManager.set('updateChannel', normalizedChannel);
+      logger.info(`Migrated legacy update channel '${storedChannel}' to '${normalizedChannel}'`);
+    }
+  }
 
   getService<T>(serviceClass: Class<T>): T {
     return this.services.get(serviceClass);

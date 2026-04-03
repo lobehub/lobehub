@@ -11,12 +11,7 @@ import { autoUpdater } from 'electron-updater';
 
 import { isDev, isWindows } from '@/const/env';
 import { getDesktopEnv } from '@/env';
-import {
-  coerceStoredUpdateChannel,
-  UPDATE_CHANNEL,
-  UPDATE_SERVER_URL,
-  updaterConfig,
-} from '@/modules/updater/configs';
+import { UPDATE_CHANNEL, UPDATE_SERVER_URL, updaterConfig } from '@/modules/updater/configs';
 import { createLogger } from '@/utils/logger';
 
 import type { App as AppCore } from '../App';
@@ -102,17 +97,8 @@ export class UpdaterManager {
       return;
     }
 
-    // Read persisted channel from store and migrate legacy nightly users to stable.
-    const storedChannel = this.app.storeManager.get('updateChannel');
-    if (storedChannel === undefined) {
-      this.currentChannel = UPDATE_CHANNEL;
-    } else {
-      this.currentChannel = coerceStoredUpdateChannel(storedChannel);
-      if (storedChannel !== this.currentChannel) {
-        logger.info(`Migrating legacy update channel: ${storedChannel} -> ${this.currentChannel}`);
-        this.app.storeManager.set('updateChannel', this.currentChannel);
-      }
-    }
+    // Read persisted channel from store (defaults to build-time UPDATE_CHANNEL)
+    this.currentChannel = this.app.storeManager.get('updateChannel') ?? UPDATE_CHANNEL;
 
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;

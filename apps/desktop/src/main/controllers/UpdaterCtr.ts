@@ -1,10 +1,6 @@
 import type { UpdateChannel, UpdaterState } from '@lobechat/electron-client-ipc';
 
-import {
-  coerceStoredUpdateChannel,
-  resolveUpdateChannelInput,
-  UPDATE_CHANNEL,
-} from '@/modules/updater/configs';
+import { UPDATE_CHANNEL } from '@/modules/updater/configs';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -51,17 +47,7 @@ export default class UpdaterCtr extends ControllerModule {
 
   @IpcMethod()
   async getUpdateChannel(): Promise<UpdateChannel> {
-    const storedChannel = this.app.storeManager.get('updateChannel');
-    if (storedChannel === undefined) return UPDATE_CHANNEL;
-
-    const normalizedChannel = coerceStoredUpdateChannel(storedChannel);
-
-    if (storedChannel !== normalizedChannel) {
-      logger.info(`Migrating legacy update channel: ${storedChannel} -> ${normalizedChannel}`);
-      this.app.storeManager.set('updateChannel', normalizedChannel);
-    }
-
-    return normalizedChannel;
+    return this.app.storeManager.get('updateChannel') ?? UPDATE_CHANNEL;
   }
 
   /**
@@ -76,20 +62,15 @@ export default class UpdaterCtr extends ControllerModule {
 
   @IpcMethod()
   async setUpdateChannel(channel: UpdateChannel): Promise<void> {
-    const normalizedChannel = resolveUpdateChannelInput(channel);
-
-    if (!normalizedChannel) {
+    const validChannels = new Set<UpdateChannel>(['stable', 'canary']);
+    if (!validChannels.has(channel)) {
       logger.warn(`Invalid update channel: ${channel}, ignoring`);
       return;
     }
 
-    if (channel !== normalizedChannel) {
-      logger.info(`Normalizing legacy update channel: ${channel} -> ${normalizedChannel}`);
-    }
-
-    logger.info(`Set update channel requested: ${normalizedChannel}`);
-    this.app.storeManager.set('updateChannel', normalizedChannel);
-    this.app.updaterManager.switchChannel(normalizedChannel);
+    logger.info(`Set update channel requested: ${channel}`);
+    this.app.storeManager.set('updateChannel', channel);
+    this.app.updaterManager.switchChannel(channel);
   }
 
   @IpcMethod()
