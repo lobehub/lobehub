@@ -446,34 +446,6 @@ const googleChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Preview release (September 25th, 2025) of Gemini 2.5 Flash-Lite',
-    displayName: 'Gemini 2.5 Flash-Lite Preview Sep 2025',
-    id: 'gemini-2.5-flash-lite-preview-09-2025',
-    maxOutput: 65_536,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-25',
-    settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       search: true,
       vision: true,
     },
@@ -563,69 +535,8 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_008_192,
-    description:
-      'Gemini 1.5 Flash 002 is an efficient multimodal model built for broad deployment.',
-    displayName: 'Gemini 1.5 Flash 002',
-    id: 'gemini-1.5-flash-002', // Deprecated on 2025-09-24
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.018, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-25',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_008_192,
-    description:
-      'Gemini 1.5 Pro 002 is the latest production-ready model with higher-quality output, especially for math, long context, and vision tasks.',
-    displayName: 'Gemini 1.5 Pro 002',
-    id: 'gemini-1.5-pro-002', // Deprecated on 2025-09-24
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.3125, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-09-24',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_008_192,
-    description: 'Gemini 1.5 Flash 8B is an efficient multimodal model built for broad deployment.',
-    displayName: 'Gemini 1.5 Flash 8B',
-    id: 'gemini-1.5-flash-8b-latest',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.0375, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-10-03',
-    type: 'chat',
-  },
-  {
-    abilities: {
       reasoning: true,
+      search: true,
     },
     contextWindowTokens: 262_144 + 32_768,
     displayName: 'Gemma 4 26B A4B IT',
@@ -640,12 +551,15 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['thinkingLevel4'],
+      searchImpl: 'params',
+      searchProvider: 'google',
     },
     type: 'chat',
   },
   {
     abilities: {
       reasoning: true,
+      search: true,
     },
     contextWindowTokens: 262_144 + 32_768,
     displayName: 'Gemma 4 31B IT',
@@ -660,6 +574,8 @@ const googleChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['thinkingLevel4'],
+      searchImpl: 'params',
+      searchProvider: 'google',
     },
     type: 'chat',
   },
