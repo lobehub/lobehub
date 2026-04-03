@@ -46,7 +46,7 @@ class DingTalkClient implements PlatformClient {
   }
 
   async stop(): Promise<void> {
-    return Promise.resolve();
+    throw this.buildNotImplementedError();
   }
 
   // --- Runtime Operations ---
