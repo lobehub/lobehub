@@ -28,7 +28,7 @@ export class StoreManager {
       defaults: STORE_DEFAULTS,
       name: STORE_NAME,
     });
-    runStoreMigrations(this.store, logger);
+    runStoreMigrations(this.store);
     logger.info('StoreManager initialized with store name:', STORE_NAME);
 
     const storagePath = this.store.get('storagePath');
