@@ -896,7 +896,7 @@ export class AgentRuntimeService {
       const hasAfterStepHooks = stepResult.newState.metadata?._hooks?.some(
         (h: { type: string }) => h.type === 'afterStep',
       );
-      if (hasAfterStepHooks) {
+      if (hasAfterStepHooks && stepResult.newState.metadata) {
         const prevTracking = stepResult.newState.metadata._stepTracking || {};
         const newTotalToolCalls = (prevTracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0);
 
