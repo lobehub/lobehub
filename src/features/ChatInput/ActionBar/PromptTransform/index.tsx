@@ -2,11 +2,11 @@
 
 import { memo, useCallback } from 'react';
 
-import PromptTransformAction from '@/features/PromptRewrite/PromptTransformAction';
+import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
 
 import { useChatInputStore } from '../../store';
 
-const RewritePrompt = memo(() => {
+const PromptTransform = memo(() => {
   const [editor, markdownContent] = useChatInputStore((s) => [s.editor, s.markdownContent]);
 
   const onPromptChange = useCallback(
@@ -22,6 +22,6 @@ const RewritePrompt = memo(() => {
   );
 });
 
-RewritePrompt.displayName = 'RewritePrompt';
+PromptTransform.displayName = 'PromptTransform';
 
-export default RewritePrompt;
+export default PromptTransform;

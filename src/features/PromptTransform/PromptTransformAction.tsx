@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 
-import { usePromptRewrite } from './usePromptRewrite';
+import { usePromptTransform } from './usePromptTransform';
 
 interface PromptTransformActionProps {
   mode: 'image' | 'video' | 'text';
@@ -20,30 +20,29 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
     const { t } = useTranslation('common');
 
     const {
-      isRewriteDisabled,
-      isRewriteActionEnabled,
-      isRewriting,
+      isTransformDisabled,
+      isTransforming,
+      transformAction,
+      isRewriteEnabled,
       rewritePrompt,
       translatePrompt,
-      transformAction,
-    } = usePromptRewrite({
+    } = usePromptTransform({
       mode,
       onPromptChange,
       prompt,
     });
 
-    const isRewriteLoading = isRewriting && transformAction === 'rewrite';
-    const isTranslateLoading = isRewriting && transformAction === 'translate';
+    const isRewriteLoading = isTransforming && transformAction === 'rewrite';
+    const isTranslateLoading = isTransforming && transformAction === 'translate';
 
-    // When rewriting or translating, disable both buttons to prevent multiple simultaneous actions
-    const isRewriteButtonDisabled = isRewriteDisabled || (isRewriting && !isRewriteLoading);
-    const isTranslateButtonDisabled = isRewriteDisabled || (isRewriting && !isTranslateLoading);
+    // Disable all transform buttons while one action is running
+    const isActionDisabled = isTransformDisabled || isTransforming;
 
     return (
       <Flexbox horizontal gap={4}>
-        {isRewriteActionEnabled && (
+        {isRewriteEnabled && (
           <Action
-            disabled={isRewriteButtonDisabled}
+            disabled={isActionDisabled}
             icon={Sparkles}
             loading={isRewriteLoading}
             title={
@@ -55,7 +54,7 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
           />
         )}
         <Action
-          disabled={isTranslateButtonDisabled}
+          disabled={isActionDisabled}
           icon={Languages}
           loading={isTranslateLoading}
           title={

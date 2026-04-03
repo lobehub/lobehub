@@ -6,7 +6,7 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 import { merge } from '@/utils/merge';
 
-interface UsePromptRewriteParams {
+interface UsePromptTransformParams {
   mode: 'image' | 'video' | 'text';
   onPromptChange: (prompt: string) => void;
   prompt?: string | null;
@@ -14,8 +14,8 @@ interface UsePromptRewriteParams {
 
 type PromptTransformAction = 'rewrite' | 'translate';
 
-export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewriteParams) => {
-  const [isRewriting, setIsRewriting] = useState(false);
+export const usePromptTransform = ({ mode, prompt, onPromptChange }: UsePromptTransformParams) => {
+  const [isTransforming, setIsTransforming] = useState(false);
   const [transformAction, setTransformAction] = useState<PromptTransformAction>('rewrite');
 
   const rewriteConfig = useUserStore(systemAgentSelectors.promptRewrite);
@@ -30,24 +30,24 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
 
   const runTransform = useCallback(
     async (action: PromptTransformAction) => {
-      if (isRewriting || !prompt?.trim()) return;
+      if (isTransforming || !prompt?.trim()) return;
       if (action === 'rewrite' && !isRewriteActionEnabled) return;
 
-      let rewrittenPrompt = '';
+      let transformedPrompt = '';
       setTransformAction(action);
 
       try {
         await chatService.fetchPresetTaskResult({
           onError: () => {
-            setIsRewriting(false);
+            setIsTransforming(false);
           },
           onFinish: async (text) => {
-            const nextPrompt = text.trim() || rewrittenPrompt.trim();
+            const nextPrompt = text.trim() || transformedPrompt.trim();
             if (nextPrompt) onPromptChange(nextPrompt);
           },
-          onLoadingChange: setIsRewriting,
+          onLoadingChange: setIsTransforming,
           onMessageHandle: (chunk) => {
-            if (chunk.type === 'text') rewrittenPrompt += chunk.text;
+            if (chunk.type === 'text') transformedPrompt += chunk.text;
           },
           params: merge(
             getConfigByAction(action),
@@ -60,11 +60,11 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
           ),
         });
       } finally {
-        setIsRewriting(false);
+        setIsTransforming(false);
         setTransformAction('rewrite');
       }
     },
-    [getConfigByAction, isRewriteActionEnabled, isRewriting, mode, onPromptChange, prompt],
+    [getConfigByAction, isRewriteActionEnabled, isTransforming, mode, onPromptChange, prompt],
   );
 
   const rewritePrompt = useCallback(async () => {
@@ -76,11 +76,11 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
   }, [runTransform]);
 
   return {
-    isRewriteDisabled: !prompt?.trim(),
-    isRewriteActionEnabled,
-    isRewriting,
+    isRewriteEnabled: isRewriteActionEnabled,
+    isTransformDisabled: !prompt?.trim(),
+    isTransforming,
+    rewritePrompt,
     transformAction,
     translatePrompt,
-    rewritePrompt,
   };
 };
