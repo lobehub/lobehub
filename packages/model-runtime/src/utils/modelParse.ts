@@ -1,13 +1,8 @@
-import { type ChatModelCard } from '@lobechat/types';
-import * as modelBank from 'model-bank';
-import {
-  type AIBaseModelCard,
-  type AiModelSettings,
-  type AiModelType,
-  type ExtendParamsType,
-} from 'model-bank';
+import type { ChatModelCard } from '@lobechat/types';
+import type { AIBaseModelCard, AiModelSettings, AiModelType, ExtendParamsType } from 'model-bank';
+import { AiModelTypeSchema } from 'model-bank';
 
-import { type ModelProviderKey } from '../types';
+import type { ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -196,7 +191,7 @@ export const IMAGE_MODEL_KEYWORDS = [
 // Embedding model keyword configuration
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
-const AI_MODEL_TYPE_SET = new Set<AiModelType>(modelBank.AiModelTypeSchema.options);
+const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
 
 const normalizeModelType = (value: unknown): AiModelType | undefined => {
   if (typeof value !== 'string') return undefined;
