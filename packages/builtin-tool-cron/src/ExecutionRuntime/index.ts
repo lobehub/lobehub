@@ -316,7 +316,18 @@ export class CronExecutionRuntime {
    */
   async deleteCronJob(args: DeleteCronJobParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      await this.cronService.delete(args.id);
+      const result = await this.cronService.delete(args.id);
+
+      if (!result.success) {
+        return {
+          content: `Scheduled task not found: ${args.id}`,
+          error: {
+            message: `Cron job not found: ${args.id}`,
+            type: 'CronJobNotFound',
+          },
+          success: false,
+        };
+      }
 
       return {
         content: `Scheduled task deleted successfully.`,
