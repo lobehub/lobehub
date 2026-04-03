@@ -642,7 +642,7 @@ export const contextEngineering = async ({
     initialContext,
     stepContext,
 
-    // Skills configuration — expose all installed skills so the AI can discover and activate them
+    // Skills configuration — only expose agent-enabled skills (filtered by pluginIds in SkillEngine)
     skillsConfig: {
       enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
     },

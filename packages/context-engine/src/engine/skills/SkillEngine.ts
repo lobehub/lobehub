@@ -32,16 +32,26 @@ export class SkillEngine {
    */
   generate(pluginIds: string[]): OperationSkillSet {
     const allSkills = Array.from(this.skills.values());
+    const enabledPluginIdSet = new Set(pluginIds);
 
-    const filteredSkills = this.enableChecker
-      ? allSkills.filter((skill) => {
-          const enabled = this.enableChecker!(skill);
-          if (!enabled) {
-            log('Skill filtered out by enableChecker: %s', skill.identifier);
-          }
-          return enabled;
-        })
-      : allSkills;
+    const filteredSkills = allSkills.filter((skill) => {
+      // Only include skills that are enabled by the agent (present in pluginIds)
+      if (!enabledPluginIdSet.has(skill.identifier)) {
+        log('Skill filtered out (not in pluginIds): %s', skill.identifier);
+        return false;
+      }
+
+      // Then apply platform/environment enableChecker if provided
+      if (this.enableChecker) {
+        const enabled = this.enableChecker(skill);
+        if (!enabled) {
+          log('Skill filtered out by enableChecker: %s', skill.identifier);
+          return false;
+        }
+      }
+
+      return true;
+    });
 
     log(
       'Generated OperationSkillSet: %d/%d skills, pluginIds=%o',
