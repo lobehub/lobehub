@@ -1,6 +1,7 @@
 // --------------- Core types & utilities ---------------
 // --------------- Registry singleton ---------------
 import { discord } from './discord/definition';
+import { dingtalk } from './dingtalk/definition';
 import { feishu } from './feishu/definitions/feishu';
 import { lark } from './feishu/definitions/lark';
 import { qq } from './qq/definition';
@@ -36,6 +37,7 @@ export {
 
 // --------------- Platform definitions ---------------
 export { discord } from './discord/definition';
+export { dingtalk } from './dingtalk/definition';
 export { feishu } from './feishu/definitions/feishu';
 export { lark } from './feishu/definitions/lark';
 export { qq } from './qq/definition';
@@ -46,6 +48,7 @@ export { wechat } from './wechat/definition';
 export const platformRegistry = new PlatformRegistry();
 
 platformRegistry.register(discord);
+platformRegistry.register(dingtalk);
 platformRegistry.register(telegram);
 platformRegistry.register(slack);
 platformRegistry.register(feishu);
