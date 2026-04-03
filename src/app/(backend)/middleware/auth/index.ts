@@ -11,8 +11,6 @@ import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observabil
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { checkAuthMethod } from './utils';
-
 type RequestOptions = { params: Promise<{ provider?: string }> };
 
 export type RequestHandler = (
@@ -59,9 +57,11 @@ export const checkAuth =
           headers: req.headers,
         });
 
-        checkAuthMethod({ betterAuthAuthorized: !!session?.user?.id });
+        if (!session?.user?.id) {
+          throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
+        }
 
-        userId = session!.user!.id;
+        userId = session.user.id;
       }
     } catch (e) {
       const params = await options.params;
