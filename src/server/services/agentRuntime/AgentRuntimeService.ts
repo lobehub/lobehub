@@ -472,6 +472,9 @@ export class AgentRuntimeService {
 
         const reason = this.determineCompletionReason(agentState);
 
+        // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
+        await this.dispatchCompletionHooks(operationId, agentState, reason);
+
         return {
           nextStepScheduled: false,
           state: agentState,
@@ -776,7 +779,7 @@ export class AgentRuntimeService {
             totalOutputTokens: stepPresentationData.totalOutputTokens,
             totalSteps: stepPresentationData.totalSteps,
             totalTokens: stepPresentationData.totalTokens,
-            totalToolCalls: tracking.totalToolCalls ?? 0,
+            totalToolCalls: (tracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0),
             userId: metadata?.userId || this.userId,
           },
           metadata._hooks,
