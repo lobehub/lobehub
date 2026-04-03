@@ -107,7 +107,7 @@
     "test:update": "vitest -u",
     "test-app": "vitest run",
     "test-app:coverage": "vitest --coverage --silent='passed-only'",
-    "tunnel:cloudflare": "cloudflared tunnel --url http://localhost:3010",
+    "tunnel:cloudflare": "cloudflared tunnel --url http://localhost:3010 --protocol http2",
     "tunnel:ngrok": "ngrok http http://localhost:3010",
     "type-check": "tsgo --noEmit",
     "type-check:tsc": "tsc --noEmit",
