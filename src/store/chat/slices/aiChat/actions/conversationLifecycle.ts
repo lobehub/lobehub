@@ -230,6 +230,7 @@ export class ConversationLifecycleActionImpl {
         {
           id: nanoid(),
           content: message,
+          editorData: editorData ?? undefined,
           files: fileIdList,
           interruptMode: 'soft',
           createdAt: Date.now(),

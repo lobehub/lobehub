@@ -27,7 +27,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
   };
 
-  sendAsAgent = async (message: string): Promise<string> => {
+  sendAsAgent = async (message: string, editorData?: Record<string, any>): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
@@ -50,6 +50,7 @@ export class HomeInputActionImpl {
       const { sendMessage } = useChatStore.getState();
       await sendMessage({
         context: { agentId: newAgentId, scope: 'agent_builder' },
+        editorData,
         message,
       });
 
@@ -81,7 +82,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
   };
 
-  sendAsWrite = async (message: string): Promise<string> => {
+  sendAsWrite = async (message: string, editorData?: Record<string, any>): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
@@ -104,6 +105,7 @@ export class HomeInputActionImpl {
           agentId: newDoc.id,
           scope: 'page',
         },
+        editorData,
         message,
       });
 

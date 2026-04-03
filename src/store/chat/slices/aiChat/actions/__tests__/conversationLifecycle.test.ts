@@ -533,6 +533,68 @@ describe('ConversationLifecycle actions', () => {
           }),
         );
       });
+
+      it('should preserve editorData when enqueueing a queued message', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+        const editorData = {
+          root: {
+            children: [
+              {
+                children: [
+                  {
+                    actionCategory: 'tool',
+                    actionLabel: 'Notebook',
+                    actionType: 'lobe-notebook',
+                    type: 'action-tag',
+                  },
+                  { text: ' queued message', type: 'text' },
+                ],
+                type: 'paragraph',
+              },
+            ],
+            type: 'root',
+          },
+        };
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-running': {
+                childOperationIds: [],
+                context,
+                id: 'op-running',
+                metadata: {},
+                status: 'running',
+                type: 'execAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-running'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            editorData: editorData as any,
+            message: 'queued message',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'queued message',
+            editorData,
+          }),
+          'op-running',
+        );
+      });
     });
 
     describe('group chat supervisor metadata', () => {

@@ -715,7 +715,12 @@ export class StreamingExecutorActionImpl {
         setTimeout(() => {
           useChatStore
             .getState()
-            .sendMessage({ message: mergedContent, files: mergedFiles, context: execContext })
+            .sendMessage({
+              context: execContext,
+              editorData: merged.editorData,
+              files: mergedFiles,
+              message: mergedContent,
+            })
             .catch((e: unknown) => {
               console.error(
                 '[internal_execAgentRuntime] sendMessage for queued content failed:',
