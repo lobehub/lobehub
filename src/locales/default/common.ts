@@ -279,7 +279,6 @@ export default {
   'copy': 'Copy',
   'copyFail': 'Copy failed',
   'copySuccess': 'Copied',
-  'promptTransform.action': 'Prompt Optimization',
   'promptTransform.actions.rewrite': 'Rewrite Prompt',
   'promptTransform.actions.translate': 'Translate Prompt',
   'promptTransform.status.rewrite': 'Rewriting Prompt...',

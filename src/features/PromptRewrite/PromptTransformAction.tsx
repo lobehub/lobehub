@@ -1,7 +1,8 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { Flexbox } from '@lobehub/ui';
+import { Languages, Sparkles } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Action from '@/features/ChatInput/ActionBar/components/Action';
@@ -31,53 +32,40 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
       prompt,
     });
 
-    const menuItems = useMemo(
-      () => [
-        {
-          key: 'rewrite',
-          label: t('promptTransform.actions.rewrite'),
-          onClick: rewritePrompt,
-        },
-        {
-          key: 'translate',
-          label: t('promptTransform.actions.translate'),
-          onClick: translatePrompt,
-        },
-      ],
-      [rewritePrompt, t, translatePrompt],
-    );
+    const isRewriteLoading = isRewriting && transformAction === 'rewrite';
+    const isTranslateLoading = isRewriting && transformAction === 'translate';
 
-    const handlePrimaryAction = useMemo(
-      () => (isRewriteActionEnabled ? rewritePrompt : translatePrompt),
-      [isRewriteActionEnabled, rewritePrompt, translatePrompt],
-    );
-
-    const dropdown = useMemo(() => {
-      if (!isRewriteActionEnabled) return undefined;
-
-      return {
-        menu: { items: menuItems },
-        trigger: 'hover' as const,
-      };
-    }, [isRewriteActionEnabled, menuItems]);
+    // When rewriting or translating, disable both buttons to prevent multiple simultaneous actions
+    const isRewriteButtonDisabled = isRewriteDisabled || (isRewriting && !isRewriteLoading);
+    const isTranslateButtonDisabled = isRewriteDisabled || (isRewriting && !isTranslateLoading);
 
     return (
-      <Action
-        disabled={isRewriteDisabled}
-        dropdown={dropdown}
-        icon={Sparkles}
-        loading={isRewriting}
-        title={
-          isRewriting
-            ? t(
-                transformAction === 'translate'
-                  ? 'promptTransform.status.translate'
-                  : 'promptTransform.status.rewrite',
-              )
-            : t('promptTransform.action')
-        }
-        onClick={handlePrimaryAction}
-      />
+      <Flexbox horizontal gap={4}>
+        {isRewriteActionEnabled && (
+          <Action
+            disabled={isRewriteButtonDisabled}
+            icon={Sparkles}
+            loading={isRewriteLoading}
+            title={
+              isRewriteLoading
+                ? t('promptTransform.status.rewrite')
+                : t('promptTransform.actions.rewrite')
+            }
+            onClick={rewritePrompt}
+          />
+        )}
+        <Action
+          disabled={isTranslateButtonDisabled}
+          icon={Languages}
+          loading={isTranslateLoading}
+          title={
+            isTranslateLoading
+              ? t('promptTransform.status.translate')
+              : t('promptTransform.actions.translate')
+          }
+          onClick={translatePrompt}
+        />
+      </Flexbox>
     );
   },
 );

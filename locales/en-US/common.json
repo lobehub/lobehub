@@ -362,7 +362,6 @@
   "productHunt.actionLabel": "Support us",
   "productHunt.description": "Support us on Product Hunt. Your support means a lot to us!",
   "productHunt.title": "We're on Product Hunt!",
-  "promptTransform.action": "Prompt Optimization",
   "promptTransform.actions.rewrite": "Rewrite Prompt",
   "promptTransform.actions.translate": "Translate Prompt",
   "promptTransform.status.rewrite": "Rewriting Prompt...",
