@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App as AppCore } from '../../App';
 import { StoreManager } from '../StoreManager';
+import { STORE_SCHEMA_VERSION, storeMigrations } from '../storeMigrations';
 
 // Use vi.hoisted to define mocks before hoisting
 const { mockStoreInstance, mockMakeSureDirExist, MockStore } = vi.hoisted(() => {
@@ -46,6 +47,11 @@ vi.mock('@/utils/file-system', () => ({
   makeSureDirExist: mockMakeSureDirExist,
 }));
 
+vi.mock('@/modules/updater/configs', () => ({
+  coerceStoredUpdateChannel: (channel?: string | null) =>
+    channel === 'canary' ? 'canary' : 'stable',
+}));
+
 // Mock store constants
 vi.mock('@/const/store', () => ({
   STORE_DEFAULTS: {
@@ -77,17 +83,32 @@ describe('StoreManager', () => {
 
   describe('constructor', () => {
     it('should create electron-store with correct options', () => {
-      expect(MockStore).toHaveBeenCalledWith({
-        defaults: {
-          locale: 'auto',
-          storagePath: '/default/storage/path',
-        },
-        name: 'test-config',
-      });
+      expect(MockStore).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaults: {
+            locale: 'auto',
+            storagePath: '/default/storage/path',
+          },
+          migrations: storeMigrations,
+          name: 'test-config',
+          projectVersion: STORE_SCHEMA_VERSION,
+        }),
+      );
     });
 
     it('should ensure storage directory exists', () => {
       expect(mockMakeSureDirExist).toHaveBeenCalledWith('/mock/storage/path');
+    });
+
+    it('should migrate legacy nightly channel through versioned store migrations', () => {
+      const store = {
+        get: vi.fn().mockReturnValue('nightly'),
+        set: vi.fn(),
+      } as any;
+
+      storeMigrations['1.0.0'](store);
+
+      expect(store.set).toHaveBeenCalledWith('updateChannel', 'stable');
     });
   });
 

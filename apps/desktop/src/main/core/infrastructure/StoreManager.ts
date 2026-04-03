@@ -6,6 +6,7 @@ import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
+import { STORE_SCHEMA_VERSION, storeMigrations } from './storeMigrations';
 
 // Create logger
 const logger = createLogger('core:StoreManager');
@@ -24,8 +25,15 @@ export class StoreManager {
     logger.debug('Initializing StoreManager');
     this.app = app;
     this.store = new Store<ElectronMainStore>({
+      beforeEachMigration: (_store, context) => {
+        logger.info(
+          `Running store migration: ${context.fromVersion} -> ${context.toVersion} (target: ${context.finalVersion})`,
+        );
+      },
       defaults: STORE_DEFAULTS,
+      migrations: storeMigrations,
       name: STORE_NAME,
+      projectVersion: STORE_SCHEMA_VERSION,
     });
     logger.info('StoreManager initialized with store name:', STORE_NAME);
 

@@ -4,10 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
 
 const mockPathExistsSync = vi.fn();
-const { mockStoreGet, mockStoreSet } = vi.hoisted(() => ({
-  mockStoreGet: vi.fn(),
-  mockStoreSet: vi.fn(),
-}));
 
 // Mock electron modules
 vi.mock('electron', () => ({
@@ -93,12 +89,6 @@ vi.mock('@/env', () => ({
   getDesktopEnv: vi.fn(() => ({ DESKTOP_RENDERER_STATIC: false })),
 }));
 
-vi.mock('@/modules/updater/configs', () => ({
-  coerceStoredUpdateChannel: (channel?: string | null) =>
-    channel === 'canary' ? 'canary' : 'stable',
-  UPDATE_CHANNEL: 'stable',
-}));
-
 vi.mock('@/const/dir', () => ({
   binDir: '/mock/bin',
   buildDir: '/mock/build',
@@ -125,8 +115,11 @@ vi.mock('../infrastructure/I18nManager', () => ({
 
 vi.mock('../infrastructure/StoreManager', () => ({
   StoreManager: vi.fn().mockImplementation(() => ({
-    get: mockStoreGet,
-    set: mockStoreSet,
+    get: vi.fn((key) => {
+      if (key === 'storagePath') return '/mock/storage/path';
+      return undefined;
+    }),
+    set: vi.fn(),
   })),
 }));
 
@@ -186,11 +179,6 @@ describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPathExistsSync.mockReset();
-    mockStoreGet.mockImplementation((key) => {
-      if (key === 'storagePath') return '/mock/storage/path';
-      return undefined;
-    });
-    mockStoreSet.mockReset();
 
     // Mock glob imports to return empty arrays
     import.meta.glob = vi.fn(() => ({}));
@@ -207,21 +195,6 @@ describe('App', () => {
       const storagePath = appInstance.appStoragePath;
 
       expect(storagePath).toBe('/mock/storage/path');
-    });
-  });
-
-  describe('bootstrap', () => {
-    it('should migrate legacy nightly update channel in bootstrap', async () => {
-      mockStoreGet.mockImplementation((key) => {
-        if (key === 'storagePath') return '/mock/storage/path';
-        if (key === 'updateChannel') return 'nightly';
-        return undefined;
-      });
-
-      appInstance = new App();
-      await appInstance.bootstrap();
-
-      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'stable');
     });
   });
 });
