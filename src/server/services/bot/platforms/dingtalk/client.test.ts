@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { BotPlatformRuntimeContext, BotProviderConfig } from '../types';
+import { DingTalkApi } from './api';
 import { DINGTALK_NOT_IMPLEMENTED_MESSAGE, DingTalkClientFactory } from './client';
 
 vi.mock('@/server/services/gateway/runtimeStatus', () => ({
@@ -19,6 +20,8 @@ const baseCredentials = {
   verificationToken: 'token',
   aesKey: 'aes',
 };
+const oauthUrl = 'https://api.dingtalk.com/v1.0/oauth2/accessToken';
+const oToMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend';
 
 function buildConfig(settings: Record<string, unknown> = {}): BotProviderConfig {
   return {
@@ -36,13 +39,82 @@ describe('DingTalkClientFactory', () => {
     expect(result.valid).toBe(false);
     const fields = result.errors?.map((error) => error.field).sort();
     expect(fields).toEqual(['aesKey', 'applicationId', 'clientSecret', 'verificationToken']);
+    expect(result.errors?.find((error) => error.field === 'applicationId')?.message).toBe(
+      'AppKey is required',
+    );
   });
 
-  it('passes validation when required values are present', async () => {
+  it('authenticates against DingTalk OAuth when required values are present', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ accessToken: 'token', expireIn: 7200 }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
     const result = await factory.validateCredentials(baseCredentials, undefined, 'dingtalk-app');
 
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      oauthUrl,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ appKey: 'dingtalk-app', appSecret: baseCredentials.clientSecret }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('returns a credentials error when OAuth authentication fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: vi.fn().mockResolvedValue({ message: 'invalid' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await factory.validateCredentials(baseCredentials, undefined, 'dingtalk-app');
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      { field: 'credentials', message: 'Failed to authenticate with DingTalk API' },
+    ]);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('DingTalkApi', () => {
+  it('sends text via robot API with x-acs-dingtalk-access-token header', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      if (input === oauthUrl) {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({ accessToken: 'token', expireIn: 7200 }),
+        };
+      }
+
+      if (input === oToMessagesUrl) {
+        return { ok: true, json: vi.fn().mockResolvedValue({ messageId: 'mid' }) };
+      }
+
+      throw new Error(`Unexpected fetch to ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
+    await api.sendTextMessage({
+      robotCode: 'robot',
+      userIds: ['uid'],
+      content: 'hello',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      oToMessagesUrl,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'token' }),
+      }),
+    );
+    vi.unstubAllGlobals();
   });
 });
 

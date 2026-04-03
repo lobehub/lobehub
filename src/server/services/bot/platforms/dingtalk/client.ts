@@ -15,6 +15,7 @@ import {
   getRuntimeStatusErrorMessage,
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
+import { DingTalkApi } from './api';
 
 export const DINGTALK_NOT_IMPLEMENTED_MESSAGE = 'DingTalk webhook runtime is not implemented yet';
 
@@ -119,7 +120,7 @@ export class DingTalkClientFactory extends ClientFactory {
     const errors: Array<{ field: string; message: string }> = [];
 
     if (!applicationId) {
-      errors.push({ field: 'applicationId', message: 'Application ID is required' });
+      errors.push({ field: 'applicationId', message: 'AppKey is required' });
     }
     if (!credentials.clientSecret) {
       errors.push({ field: 'clientSecret', message: 'Client Secret is required' });
@@ -135,6 +136,19 @@ export class DingTalkClientFactory extends ClientFactory {
       return { errors, valid: false };
     }
 
-    return { valid: true };
+    try {
+      const api = new DingTalkApi({
+        appKey: applicationId!,
+        appSecret: credentials.clientSecret!,
+      });
+      await api.getAccessToken();
+
+      return { valid: true };
+    } catch {
+      return {
+        valid: false,
+        errors: [{ field: 'credentials', message: 'Failed to authenticate with DingTalk API' }],
+      };
+    }
   }
 }
