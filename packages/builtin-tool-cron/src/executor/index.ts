@@ -2,6 +2,7 @@ import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
+import { mutate } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { CronIdentifier } from '../manifest';
@@ -16,6 +17,8 @@ import {
   type ToggleCronJobParams,
   type UpdateCronJobParams,
 } from '../types';
+
+const FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY = 'cronTopicsWithJobInfo';
 
 const log = debug('lobe-cron:executor');
 
@@ -57,6 +60,9 @@ class CronExecutor extends BaseExecutor<typeof CronApiName> {
       });
 
       const cronJob = result.data as CronJobSummary;
+
+      // Refresh the cron jobs list in sidebar
+      await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, agentId]);
 
       return {
         content: `Scheduled task "${params.name}" created successfully. It will run according to the pattern "${params.cronPattern}" in timezone ${params.timezone || 'UTC'}.`,
@@ -237,6 +243,9 @@ class CronExecutor extends BaseExecutor<typeof CronApiName> {
         );
       }
 
+      // Refresh the cron jobs list in sidebar
+      await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, cronJob.agentId]);
+
       return {
         content: `Scheduled task "${cronJob.name || 'Unnamed'}" updated successfully. Changes: ${updates.join(', ') || 'no changes'}.`,
         state: {
@@ -268,12 +277,17 @@ class CronExecutor extends BaseExecutor<typeof CronApiName> {
    */
   deleteCronJob = async (
     params: DeleteCronJobParams,
-    _ctx?: BuiltinToolContext,
+    ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[CronExecutor] deleteCronJob - id:', params.id);
 
       await lambdaClient.agentCronJob.delete.mutate({ id: params.id });
+
+      // Refresh the cron jobs list in sidebar
+      if (ctx?.agentId) {
+        await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, ctx.agentId]);
+      }
 
       return {
         content: `Scheduled task deleted successfully.`,
@@ -316,6 +330,9 @@ class CronExecutor extends BaseExecutor<typeof CronApiName> {
       });
 
       const cronJob = result.data as CronJobSummary;
+
+      // Refresh the cron jobs list in sidebar
+      await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, cronJob.agentId]);
 
       return {
         content: `Scheduled task "${cronJob.name || 'Unnamed'}" has been ${params.enabled ? 'enabled' : 'disabled'}.`,
@@ -364,6 +381,9 @@ class CronExecutor extends BaseExecutor<typeof CronApiName> {
       });
 
       const cronJob = result.data as CronJobSummary;
+
+      // Refresh the cron jobs list in sidebar
+      await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, cronJob.agentId]);
 
       return {
         content: `Execution count for "${cronJob.name || 'Unnamed'}" has been reset. ${cronJob.maxExecutions ? `New limit: ${cronJob.maxExecutions} executions` : 'Unlimited executions'}.`,
