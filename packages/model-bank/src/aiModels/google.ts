@@ -624,6 +624,46 @@ const googleChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 262_144 + 32_768,
+    displayName: 'Gemma 4 26B A4B IT',
+    id: 'gemma-4-26b-a4b-it',
+    maxOutput: 32_768,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingLevel4'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
+    },
+    contextWindowTokens: 262_144 + 32_768,
+    displayName: 'Gemma 4 31B IT',
+    id: 'gemma-4-31b-it',
+    maxOutput: 32_768,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['thinkingLevel4'],
+    },
+    type: 'chat',
+  },
+  {
     contextWindowTokens: 32_768 + 8192,
     displayName: 'Gemma 3 1B',
     id: 'gemma-3-1b-it',

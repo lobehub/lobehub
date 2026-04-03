@@ -159,9 +159,33 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
+      'ERNIE 4.5 Turbo 20260402 is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
+    displayName: 'ERNIE 4.5 Turbo 20260402',
+    enabled: true,
+    id: 'ernie-4.5-turbo-20260402',
+    maxOutput: 12_288,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      search: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
       'ERNIE 4.5 Turbo 128K is a high-performance general model with search augmentation and tool calling for QA, coding, and agent scenarios.',
     displayName: 'ERNIE 4.5 Turbo 128K',
-    enabled: true,
     id: 'ernie-4.5-turbo-128k',
     maxOutput: 12_288,
     pricing: {
