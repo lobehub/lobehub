@@ -80,19 +80,24 @@ vi.mock('@/server/services/systemAgent', () => ({
   })),
 }));
 
-vi.mock('../platforms', () => ({
-  platformRegistry: {
-    getPlatform: vi.fn().mockImplementation((platform: string) => {
-      if (platform === 'unknown') return undefined;
-      return {
-        clientFactory: { createClient: mockCreateBot },
-        credentials: [],
-        name: platform,
-        id: platform,
-      };
-    }),
-  },
-}));
+vi.mock('../platforms', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    platformRegistry: {
+      getPlatform: vi.fn().mockImplementation((platform: string) => {
+        if (platform === 'unknown') return undefined;
+        return {
+          clientFactory: { createClient: mockCreateBot },
+          credentials: [],
+          name: platform,
+          id: platform,
+          schema: [],
+        };
+      }),
+    },
+  };
+});
 
 // ==================== Helpers ====================
 
