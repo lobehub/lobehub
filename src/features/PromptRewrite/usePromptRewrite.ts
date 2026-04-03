@@ -21,14 +21,6 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
   const rewriteConfig = useUserStore(systemAgentSelectors.promptRewrite);
   const translateConfig = useUserStore(systemAgentSelectors.translation);
   const isRewriteActionEnabled = rewriteConfig?.enabled ?? false;
-  const isTranslateActionEnabled = translateConfig?.enabled ?? false;
-  const isEnabled = isRewriteActionEnabled || isTranslateActionEnabled;
-
-  const isActionEnabled = useCallback(
-    (action: PromptTransformAction) =>
-      action === 'rewrite' ? isRewriteActionEnabled : isTranslateActionEnabled,
-    [isRewriteActionEnabled, isTranslateActionEnabled],
-  );
 
   const getConfigByAction = useCallback(
     (action: PromptTransformAction) =>
@@ -38,7 +30,8 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
 
   const runTransform = useCallback(
     async (action: PromptTransformAction) => {
-      if (isRewriting || !prompt?.trim() || !isEnabled || !isActionEnabled(action)) return;
+      if (isRewriting || !prompt?.trim()) return;
+      if (action === 'rewrite' && !isRewriteActionEnabled) return;
 
       let rewrittenPrompt = '';
       setTransformAction(action);
@@ -71,7 +64,7 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
         setTransformAction('rewrite');
       }
     },
-    [getConfigByAction, isActionEnabled, isEnabled, isRewriting, mode, onPromptChange, prompt],
+    [getConfigByAction, isRewriteActionEnabled, isRewriting, mode, onPromptChange, prompt],
   );
 
   const rewritePrompt = useCallback(async () => {
@@ -83,9 +76,8 @@ export const usePromptRewrite = ({ mode, prompt, onPromptChange }: UsePromptRewr
   }, [runTransform]);
 
   return {
-    isRewriteDisabled: !isEnabled || !prompt?.trim(),
+    isRewriteDisabled: !prompt?.trim(),
     isRewriteActionEnabled,
-    isTranslateActionEnabled,
     isRewriting,
     transformAction,
     translatePrompt,

@@ -22,7 +22,6 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
       isRewriteDisabled,
       isRewriteActionEnabled,
       isRewriting,
-      isTranslateActionEnabled,
       rewritePrompt,
       translatePrompt,
       transformAction,
@@ -35,37 +34,39 @@ const PromptTransformAction = memo<PromptTransformActionProps>(
     const menuItems = useMemo(
       () => [
         {
-          disabled: !isRewriteActionEnabled,
           key: 'rewrite',
           label: t('promptTransform.actions.rewrite'),
           onClick: rewritePrompt,
         },
         {
-          disabled: !isTranslateActionEnabled,
           key: 'translate',
           label: t('promptTransform.actions.translate'),
           onClick: translatePrompt,
         },
       ],
-      [isRewriteActionEnabled, isTranslateActionEnabled, rewritePrompt, t, translatePrompt],
+      [rewritePrompt, t, translatePrompt],
     );
 
-    const handlePrimaryAction = useMemo(() => {
-      if (isRewriteActionEnabled) return rewritePrompt;
-      if (isTranslateActionEnabled) return translatePrompt;
+    const handlePrimaryAction = useMemo(
+      () => (isRewriteActionEnabled ? rewritePrompt : translatePrompt),
+      [isRewriteActionEnabled, rewritePrompt, translatePrompt],
+    );
 
-      return undefined;
-    }, [isRewriteActionEnabled, isTranslateActionEnabled, rewritePrompt, translatePrompt]);
+    const dropdown = useMemo(() => {
+      if (!isRewriteActionEnabled) return undefined;
+
+      return {
+        menu: { items: menuItems },
+        trigger: 'hover' as const,
+      };
+    }, [isRewriteActionEnabled, menuItems]);
 
     return (
       <Action
         disabled={isRewriteDisabled}
+        dropdown={dropdown}
         icon={Sparkles}
         loading={isRewriting}
-        dropdown={{
-          menu: { items: menuItems },
-          trigger: 'hover',
-        }}
         title={
           isRewriting
             ? t(
