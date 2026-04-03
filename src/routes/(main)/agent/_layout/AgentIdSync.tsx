@@ -23,6 +23,8 @@ const AgentIdSync = () => {
   useEffect(() => {
     // Only reset topic when switching between agents (not on initial mount)
     if (prevAgentId !== undefined && prevAgentId !== params.aid) {
+      useChatStore.getState().clearPortalStack();
+
       // Preserve topic if the URL already carries one (e.g. tab navigation)
       const topicFromUrl = searchParamsRef.current.get('topic');
 

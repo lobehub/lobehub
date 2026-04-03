@@ -507,6 +507,10 @@ export class ChatTopicActionImpl {
     // Note: Use == null to match both null and undefined
     const shouldClearNewKey = !id || opts.clearNewKey;
 
+    if (shouldClearNewKey) {
+      this.#get().clearPortalStack();
+    }
+
     if (shouldClearNewKey && activeAgentId) {
       // Determine scope: use explicit scope from options, or infer from activeGroupId
       const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
