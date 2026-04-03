@@ -2,14 +2,15 @@ import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { Button, Input } from 'antd';
 import { cssVar } from 'antd-style';
-import { Play, Square, Trash2 } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from './style';
+import TaskScheduleConfig from './TaskScheduleConfig';
 
 const DEBOUNCE_MS = 300;
 
@@ -45,16 +46,9 @@ const TaskDetailHeader = memo(() => {
 
   const [localName, setLocalName] = useState(name ?? '');
 
-  // Sync from store when task changes
-  const prevName = useTaskStore(taskDetailSelectors.activeTaskName);
-  if (
-    prevName !== undefined &&
-    prevName !== null &&
-    prevName !== localName &&
-    localName === (name ?? '')
-  ) {
-    // Only sync if we haven't made local edits
-  }
+  useEffect(() => {
+    setLocalName(name ?? '');
+  }, [name]);
 
   const { run: debouncedSave } = useDebounceFn(
     (value: string) => {
@@ -78,27 +72,23 @@ const TaskDetailHeader = memo(() => {
   }, [taskId, canRun, canPause, runTask, pauseTask]);
 
   return (
-    <Flexbox gap={12}>
-      <Flexbox horizontal align="center" gap={8}>
-        <Input
-          className={styles.titleInput}
-          placeholder={t('taskDetail.titlePlaceholder')}
-          value={localName}
-          variant="borderless"
-          onChange={handleNameChange}
-        />
-      </Flexbox>
+    <Flexbox gap={16} paddingBlock={16}>
+      {/* Title */}
+      <Input
+        className={styles.titleInput}
+        placeholder={t('taskDetail.titlePlaceholder')}
+        value={localName}
+        variant={'borderless'}
+        onChange={handleNameChange}
+      />
+      {/* Action bar */}
       <Flexbox horizontal align="center" gap={8}>
         {(canRun || canPause) && (
-          <Button
-            icon={canRun ? <Play size={14} /> : <Square size={14} />}
-            size="small"
-            type={canRun ? 'primary' : 'default'}
-            onClick={handleRunOrPause}
-          >
+          <Button size="small" type={canRun ? 'primary' : 'default'} onClick={handleRunOrPause}>
             {canRun ? t('taskDetail.runTask') : t('taskDetail.pauseTask')}
           </Button>
         )}
+        <TaskScheduleConfig />
         {status && <Tag color={statusColorMap[status] ?? 'default'}>{status}</Tag>}
         {priority > 0 && <Tag>{priorityLabelMap[priority] ?? `P${priority}`}</Tag>}
         <Flexbox flex={1} />

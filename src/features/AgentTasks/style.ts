@@ -61,8 +61,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   titleInput: css`
     flex: 1;
-    font-size: 28px;
-    font-weight: 500;
-    line-height: 1.4;
+    padding: 0;
+    font-size: 36px;
+    font-weight: 600;
   `,
 }));
