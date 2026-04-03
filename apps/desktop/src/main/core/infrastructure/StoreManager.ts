@@ -6,7 +6,7 @@ import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
-import { runStoreMigrations } from './storeMigrations';
+import { runStoreMigrations } from './migration';
 
 // Create logger
 const logger = createLogger('core:StoreManager');

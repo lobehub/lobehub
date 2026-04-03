@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App as AppCore } from '../../App';
+import { APPLIED_STORE_MIGRATIONS_KEY, getStoreMigrations, runStoreMigrations } from '../migration';
 import { StoreManager } from '../StoreManager';
-import {
-  runStoreMigrations,
-  STORE_SCHEMA_VERSION,
-  STORE_SCHEMA_VERSION_KEY,
-} from '../storeMigrations';
 
 // Use vi.hoisted to define mocks before hoisting
 const { mockStoreInstance, mockMakeSureDirExist, MockStore } = vi.hoisted(() => {
@@ -102,10 +98,10 @@ describe('StoreManager', () => {
       expect(mockMakeSureDirExist).toHaveBeenCalledWith('/mock/storage/path');
     });
 
-    it('should migrate legacy nightly channel through versioned store migrations', () => {
+    it('should migrate legacy nightly channel and record applied migration ids', () => {
       const store = {
         get: vi.fn((key: string) => {
-          if (key === STORE_SCHEMA_VERSION_KEY) return undefined;
+          if (key === APPLIED_STORE_MIGRATIONS_KEY) return undefined;
           if (key === 'updateChannel') return 'nightly';
         }),
         set: vi.fn(),
@@ -114,7 +110,24 @@ describe('StoreManager', () => {
       runStoreMigrations(store);
 
       expect(store.set).toHaveBeenCalledWith('updateChannel', 'stable');
-      expect(store.set).toHaveBeenCalledWith(STORE_SCHEMA_VERSION_KEY, STORE_SCHEMA_VERSION);
+      expect(store.set).toHaveBeenCalledWith(APPLIED_STORE_MIGRATIONS_KEY, [
+        getStoreMigrations()[0].id,
+      ]);
+    });
+
+    it('should skip already applied migrations', () => {
+      const appliedMigrationId = getStoreMigrations()[0].id;
+      const store = {
+        get: vi.fn((key: string) => {
+          if (key === APPLIED_STORE_MIGRATIONS_KEY) return [appliedMigrationId];
+          if (key === 'updateChannel') return 'nightly';
+        }),
+        set: vi.fn(),
+      } as any;
+
+      runStoreMigrations(store);
+
+      expect(store.set).not.toHaveBeenCalled();
     });
   });
 
