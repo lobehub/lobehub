@@ -94,14 +94,6 @@ interface InternalExecAgentParams extends ExecAgentParams {
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: any;
-  /**
-   * Completion webhook configuration
-   * Persisted in Redis state, triggered via HTTP POST when the operation completes.
-   */
-  completionWebhook?: {
-    body?: Record<string, unknown>;
-    url: string;
-  };
   /** Cron job ID that triggered this execution (if trigger is 'cron') */
   cronJobId?: string;
   /** Disable all tools (no plugins, no system manifests). Useful for eval/benchmark scenarios. */
@@ -136,16 +128,6 @@ interface InternalExecAgentParams extends ExecAgentParams {
   resume?: boolean;
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
-  /** Step lifecycle callbacks for operation tracking (server-side only) */
-  stepCallbacks?: StepLifecycleCallbacks;
-  /**
-   * Step webhook configuration
-   * Persisted in Redis state, triggered via HTTP POST after each step completes.
-   */
-  stepWebhook?: {
-    body?: Record<string, unknown>;
-    url: string;
-  };
   /**
    * Whether the LLM call should use streaming.
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
@@ -166,12 +148,6 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
-  /**
-   * Webhook delivery method.
-   * - 'fetch': plain HTTP POST (default)
-   * - 'qstash': deliver via QStash publishJSON for guaranteed delivery
-   */
-  webhookDelivery?: 'fetch' | 'qstash';
 }
 
 /**
@@ -247,7 +223,6 @@ export class AiAgentService {
       instructions,
       model: modelOverride,
       provider: providerOverride,
-      stepCallbacks,
       stream,
       title,
       trigger,
@@ -258,11 +233,8 @@ export class AiAgentService {
       initialStepCount,
       signal,
       userInterventionConfig,
-      completionWebhook,
       queueRetries,
       queueRetryDelay,
-      stepWebhook,
-      webhookDelivery,
       parentMessageId,
       resume,
     } = params;
@@ -1026,7 +998,6 @@ export class AiAgentService {
         },
         autoStart,
         botPlatformContext,
-        completionWebhook,
         discordContext,
         evalContext,
         initialContext,
@@ -1037,8 +1008,6 @@ export class AiAgentService {
         hooks,
         operationId,
         signal,
-        stepCallbacks,
-        stepWebhook,
         queueRetries,
         queueRetryDelay,
         stream,
@@ -1052,7 +1021,6 @@ export class AiAgentService {
         userId: this.userId,
         userInterventionConfig,
         userMemory,
-        webhookDelivery,
       });
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
