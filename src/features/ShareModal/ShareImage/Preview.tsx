@@ -32,6 +32,7 @@ const Preview = memo<PreviewProps>(
     messages,
     previewId = 'preview',
     title,
+    withPluginInfo,
     withSystemRole,
     withBackground,
     withFooter,
@@ -48,7 +49,7 @@ const Preview = memo<PreviewProps>(
       headerMeta,
       headerModel,
       headerPlugins,
-      isHeaderBuiltin,
+      isHeaderInbox,
     ] = useAgentStore((s) => {
       const resolvedHeaderAgentId =
         headerAgentId && s.agentMap[headerAgentId] ? headerAgentId : undefined;
@@ -71,13 +72,13 @@ const Preview = memo<PreviewProps>(
           ? filterToolIds(agentByIdSelectors.getAgentPluginsById(resolvedHeaderAgentId)(s))
           : undefined,
         resolvedHeaderAgentId
-          ? Object.values(s.builtinAgentIdMap).includes(resolvedHeaderAgentId)
+          ? builtinAgentSelectors.inboxAgentId(s) === resolvedHeaderAgentId
           : undefined,
       ];
     });
 
     const displayTitle =
-      (isHeaderBuiltin ?? isInbox) ? 'Lobe AI' : headerMeta?.title || title || currentTitle;
+      (isHeaderInbox ?? isInbox) ? 'Lobe AI' : headerMeta?.title || title || currentTitle;
     const displayAvatar = headerMeta?.avatar || currentAvatar;
     const displayBackgroundColor = headerMeta?.backgroundColor || currentBackgroundColor;
     const displayModel = headerModel || currentModel;
@@ -111,7 +112,9 @@ const Preview = memo<PreviewProps>(
                 </Text>
                 <Flexbox horizontal gap={4}>
                   <ModelTag model={displayModel} />
-                  {displayPlugins?.length > 0 && <PluginTag plugins={displayPlugins} />}
+                  {withPluginInfo && displayPlugins?.length > 0 && (
+                    <PluginTag plugins={displayPlugins} />
+                  )}
                 </Flexbox>
               </Flexbox>
               {withSystemRole && systemRole && (

@@ -49,7 +49,7 @@ export const usePdfGeneration = (): PdfGenerationState => {
         setError(error instanceof Error ? error.message : 'Failed to generate PDF');
       }
     },
-    [exportPdfMutation.mutateAsync, exportPdfMutation.isPending],
+    [exportPdfMutation.mutateAsync],
   );
 
   const downloadPdf = useCallback(async () => {
