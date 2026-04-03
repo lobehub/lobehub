@@ -722,6 +722,43 @@ describe('buildGoogleToolsWithSearch', () => {
     expect(config.toolConfig).toEqual({ includeServerSideToolInvocations: true });
   });
 
+  it('should not set includeServerSideToolInvocations for Vertex AI', async () => {
+    const vertexInstance = new LobeGoogleAI({ apiKey: 'test', isVertexAi: true });
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.1-pro-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(vertexInstance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await vertexInstance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.1-pro-preview',
+      temperature: 0,
+      enabledSearch: true,
+      tools: [{ type: 'function', function: { name: 'test_tool', description: 'A test tool' } }],
+    });
+
+    const callArgs = (vertexInstance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    // Vertex AI does not support includeServerSideToolInvocations
+    expect(config.toolConfig).toBeUndefined();
+  });
+
   it('should not set toolConfig when Gemini 3+ has only search tools without function declarations', async () => {
     const mockStream = new ReadableStream({
       start(controller) {

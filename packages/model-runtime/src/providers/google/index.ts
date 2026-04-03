@@ -219,9 +219,11 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             ? undefined
             : thinkingConfig,
         // https://ai.google.dev/gemini-api/docs/tool-combination
-        toolConfig: this.needsServerSideToolInvocations(payload)
-          ? { includeServerSideToolInvocations: true }
-          : undefined,
+        // Vertex AI does not support includeServerSideToolInvocations
+        toolConfig:
+          !this.isVertexAi && this.needsServerSideToolInvocations(payload)
+            ? { includeServerSideToolInvocations: true }
+            : undefined,
         tools: this.buildGoogleToolsWithSearch(payload.tools, payload),
         topP: payload.top_p,
       };

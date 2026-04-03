@@ -255,16 +255,66 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default']);
 
 /**
+ * Resolve all `$ref` pointers in a JSON Schema tree by inlining definitions.
+ * Only handles internal `#/definitions/…` references (the kind produced by our manifests).
+ * Recursive references are guarded by a depth limit to avoid infinite loops.
+ */
+const resolveRefs = (
+  node: Record<string, any>,
+  definitions: Record<string, any>,
+  depth = 0,
+): Record<string, any> => {
+  if (!node || typeof node !== 'object' || depth > 10) return node;
+
+  if (Array.isArray(node)) {
+    return node.map((item) => resolveRefs(item, definitions, depth));
+  }
+
+  // Unwrap single-element allOf (common pattern: allOf: [{ $ref: '...' }])
+  if (Array.isArray(node.allOf) && node.allOf.length === 1) {
+    const { allOf, ...rest } = node;
+    return resolveRefs({ ...rest, ...allOf[0] }, definitions, depth);
+  }
+
+  // If this node IS a $ref, replace it with the referenced definition
+  if (typeof node.$ref === 'string') {
+    const match = node.$ref.match(/^#\/definitions\/(.+)$/);
+    if (match && definitions[match[1]]) {
+      return resolveRefs({ ...definitions[match[1]] }, definitions, depth + 1);
+    }
+    // Unknown $ref — return without it so Google doesn't choke
+    const { $ref: _, ...rest } = node;
+    return rest;
+  }
+
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(node)) {
+    // Drop definitions key after resolving — Google doesn't understand it
+    if (key === 'definitions') continue;
+
+    if (value && typeof value === 'object') {
+      result[key] = resolveRefs(value, definitions, depth);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+};
+
+/**
  * Sanitize JSON Schema for Google GenAI compatibility
  * Google's API doesn't support certain JSON Schema keywords like 'const'
  * This function recursively processes the schema and converts unsupported keywords
  */
-const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, any> => {
+const sanitizeSchemaForGoogle = (
+  schema: Record<string, any>,
+  rootDefinitions?: Record<string, any>,
+): Record<string, any> => {
   if (!schema || typeof schema !== 'object') return schema;
 
   // Handle arrays
   if (Array.isArray(schema)) {
-    return schema.map((item) => sanitizeSchemaForGoogle(item));
+    return schema.map((item) => sanitizeSchemaForGoogle(item, rootDefinitions));
   }
 
   const result: Record<string, any> = {};
@@ -272,6 +322,9 @@ const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, an
   for (const [key, value] of Object.entries(schema)) {
     // Strip unsupported JSON Schema keywords (e.g. examples, default, $schema)
     if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
+
+    // Drop definitions — already resolved by resolveRefs
+    if (key === 'definitions') continue;
 
     // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
     if (key === 'const') {
@@ -291,7 +344,7 @@ const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, an
 
     // Recursively process nested objects
     if (value && typeof value === 'object') {
-      result[key] = sanitizeSchemaForGoogle(value);
+      result[key] = sanitizeSchemaForGoogle(value, rootDefinitions);
     } else {
       result[key] = value;
     }
@@ -312,8 +365,10 @@ export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration =
       ? parameters.properties
       : { dummy: { type: 'string' } }; // dummy property to avoid empty object
 
-  // Sanitize properties to remove unsupported JSON Schema keywords for Google
-  const properties = sanitizeSchemaForGoogle(rawProperties);
+  // Resolve $ref references first, then sanitize for Google compatibility
+  const definitions = (parameters as any)?.definitions ?? {};
+  const resolved = resolveRefs(rawProperties, definitions);
+  const properties = sanitizeSchemaForGoogle(resolved, definitions);
 
   return {
     description: functionDeclaration.description,
