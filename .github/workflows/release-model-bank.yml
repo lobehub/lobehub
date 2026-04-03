@@ -32,8 +32,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.20.0
 
       - name: Install dependencies
         run: pnpm install
@@ -61,8 +59,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.20.0
 
       - name: Install dependencies
         run: pnpm install
@@ -86,8 +82,8 @@ jobs:
         env:
           MODEL_BANK_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "lobehubbot"
+          git config user.email "i@lobehub.com"
           git add packages/model-bank/package.json
           git commit -m "🔖 chore(model-bank): release v${MODEL_BANK_VERSION}"
           git push
