@@ -188,7 +188,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
 
       if (abortSignal.aborted) return null;
 
-      return result || null;
+      return result.trimEnd() || null;
     },
     [],
   );
