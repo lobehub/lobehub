@@ -21,6 +21,7 @@ import {
   type PlatformDefinition,
   platformRegistry,
 } from './platforms';
+import { DINGTALK_NOT_IMPLEMENTED_MESSAGE } from './platforms/dingtalk/client';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -113,7 +114,17 @@ export class BotMessageRouter {
   private async handleWebhook(req: Request, platform: string, appId: string): Promise<Response> {
     log('handleWebhook: platform=%s, appId=%s', platform, appId);
 
-    const bot = await this.getOrCreateBot(platform, appId);
+    let bot: RegisteredBot | null = null;
+    try {
+      bot = await this.getOrCreateBot(platform, appId);
+    } catch (error) {
+      if (error instanceof Error && error.message === DINGTALK_NOT_IMPLEMENTED_MESSAGE) {
+        return new Response(error.message, { status: 501 });
+      }
+      log('handleWebhook failed for %s/%s: %O', platform, appId, error);
+      return new Response(`No bot configured for ${platform}`, { status: 404 });
+    }
+
     if (!bot) {
       return new Response(`No bot configured for ${platform}`, { status: 404 });
     }
@@ -185,6 +196,9 @@ export class BotMessageRouter {
       return registered;
     } catch (error) {
       log('Failed to load bot %s: %O', key, error);
+      if (error instanceof Error && error.message === DINGTALK_NOT_IMPLEMENTED_MESSAGE) {
+        throw error;
+      }
       return null;
     }
   }

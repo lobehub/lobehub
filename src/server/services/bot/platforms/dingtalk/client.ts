@@ -9,8 +9,16 @@ import type {
 import { ClientFactory } from '../types';
 import { formatUsageStats } from '../utils';
 import { stripMarkdown } from '../stripMarkdown';
+import debug from 'debug';
+import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
 
-const NOT_IMPLEMENTED_MESSAGE = 'DingTalk webhook runtime is not implemented yet';
+export const DINGTALK_NOT_IMPLEMENTED_MESSAGE = 'DingTalk webhook runtime is not implemented yet';
+
+const log = debug('bot-platform:dingtalk:bot');
 
 class DingTalkClient implements PlatformClient {
   readonly id = 'dingtalk';
@@ -32,7 +40,7 @@ class DingTalkClient implements PlatformClient {
   }
 
   private buildNotImplementedError(): Error {
-    return new Error(NOT_IMPLEMENTED_MESSAGE);
+    return new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
   }
 
   private rejectNotImplemented<T = never>(): Promise<T> {
@@ -42,7 +50,22 @@ class DingTalkClient implements PlatformClient {
   // --- Lifecycle ---
 
   async start(): Promise<void> {
-    throw this.buildNotImplementedError();
+    log('Starting DingTalkBot appId=%s', this.applicationId);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
+
+    const error = this.buildNotImplementedError();
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.failed,
+      errorMessage: getRuntimeStatusErrorMessage(error),
+    });
+
+    throw error;
   }
 
   async stop(): Promise<void> {
