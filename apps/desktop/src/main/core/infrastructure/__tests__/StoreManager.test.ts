@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App as AppCore } from '../../App';
 import { StoreManager } from '../StoreManager';
-import { STORE_SCHEMA_VERSION, storeMigrations } from '../storeMigrations';
+import {
+  runStoreMigrations,
+  STORE_SCHEMA_VERSION,
+  STORE_SCHEMA_VERSION_KEY,
+} from '../storeMigrations';
 
 // Use vi.hoisted to define mocks before hoisting
 const { mockStoreInstance, mockMakeSureDirExist, MockStore } = vi.hoisted(() => {
@@ -89,9 +93,7 @@ describe('StoreManager', () => {
             locale: 'auto',
             storagePath: '/default/storage/path',
           },
-          migrations: storeMigrations,
           name: 'test-config',
-          projectVersion: STORE_SCHEMA_VERSION,
         }),
       );
     });
@@ -102,13 +104,17 @@ describe('StoreManager', () => {
 
     it('should migrate legacy nightly channel through versioned store migrations', () => {
       const store = {
-        get: vi.fn().mockReturnValue('nightly'),
+        get: vi.fn((key: string) => {
+          if (key === STORE_SCHEMA_VERSION_KEY) return undefined;
+          if (key === 'updateChannel') return 'nightly';
+        }),
         set: vi.fn(),
       } as any;
 
-      storeMigrations['1.0.0'](store);
+      runStoreMigrations(store);
 
       expect(store.set).toHaveBeenCalledWith('updateChannel', 'stable');
+      expect(store.set).toHaveBeenCalledWith(STORE_SCHEMA_VERSION_KEY, STORE_SCHEMA_VERSION);
     });
   });
 
