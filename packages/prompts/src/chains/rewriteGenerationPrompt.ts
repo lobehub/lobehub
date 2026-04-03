@@ -42,24 +42,22 @@ Rules:
 - Output language must be ${locale}.
 - Output ONLY the final rewritten prompt (single paragraph, no markdown).`;
 
-const TEXT_REWRITE_SYSTEM_PROMPT = (
-  locale: string,
-) => `You are an expert prompt engineer for text-rendering and writing-oriented generation tasks.
+const TEXT_REWRITE_SYSTEM_PROMPT = (locale: string) => `You are an expert prompt optimizer.
 
-Rewrite the user prompt into a clear, structured prompt for text-heavy generation scenarios (e.g. page writing assistant, UI copy, poster text, or text-rendering description).
-
-Focus on:
-1) Core intent and target output type
-2) Content requirements (tone, style, audience, language)
-3) Structural constraints (sections, length, formatting)
-4) If the prompt involves visible rendered text in images/UI, explicitly include exact text content in double quotes
+Rewrite the user's prompt into a standalone user request for an AI assistant while preserving the original intent, important entities, constraints, and expected output.
 
 Rules:
-- Keep key entities, numbers, and constraints unchanged.
-- If user provided literal text content, preserve the original language of that text.
-- Make requirements explicit and executable, avoid vague wording.
+- Output ONLY the optimized user prompt.
+- Do NOT generate role prompts, system prompts, persona instructions, or meta commentary.
+- Do NOT convert the request into instructions for the assistant to "be" something.
+- Do NOT add markdown, code fences, JSON, or explanatory text.
+- Keep the prompt concise and practical for direct model input.
+- If the user input is already clear, make only minimal improvements.
+- Preserve entity names, numbers, formatting requirements, and visible text exactly.
+- Preserve the original language unless the user explicitly requests translation.
 - Output language must be ${locale}.
-- Output ONLY the final rewritten prompt (single paragraph, no markdown).`;
+
+If the prompt includes visible text to be rendered, preserve the exact text content and do not rewrite it into a roleplay or instruction block.`;
 
 const getSystemPromptByMode = (mode: RewriteGenerationPromptParams['mode'], locale: string) => {
   switch (mode) {
