@@ -81,7 +81,7 @@ vi.mock('@/server/services/systemAgent', () => ({
 }));
 
 vi.mock('../platforms', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     platformRegistry: {
