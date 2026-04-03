@@ -70,7 +70,6 @@ async function createLegacySynthesisTask(
   payload: CreateImagePayload,
   apiKey: string,
   endpoint: 'text2image' | 'image2image',
-  provider: string,
   baseUrl: string,
 ): Promise<string> {
   const { model, params } = payload;
@@ -99,11 +98,7 @@ async function createLegacySynthesisTask(
     }
 
     if (!images || images.length === 0) {
-      throw AgentRuntimeError.createImage({
-        error: new Error('imageUrls or imageUrl is required for image-to-image models'),
-        errorType: 'ProviderBizError',
-        provider,
-      });
+      throw new Error('imageUrls or imageUrl is required for image-to-image models');
     }
 
     input.images = images;
@@ -153,6 +148,13 @@ async function createHTTPAsyncGenerationTask(
   const { model, params } = payload;
   const endpoint = `${baseUrl}/api/v1/services/aigc/image-generation/generation`;
   log('Creating async generation task with model: %s, endpoint: %s', model, endpoint);
+
+  // Check if this model requires an image
+  const requiresImage = matchesModel(model, imageRequiredModels);
+
+  if (requiresImage && !params.imageUrl && (!params.imageUrls || params.imageUrls.length === 0)) {
+    throw new Error(`imageUrl or imageUrls is required for model ${model}`);
+  }
 
   const content: Array<{ image: string } | { text: string }> = [{ text: params.prompt }];
 
@@ -227,7 +229,6 @@ async function createHTTPSyncGeneration(
   payload: CreateImagePayload,
   apiKey: string,
   baseUrl: string,
-  provider: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
   const endpoint = `${baseUrl}/api/v1/services/aigc/multimodal-generation/generation`;
@@ -237,11 +238,7 @@ async function createHTTPSyncGeneration(
   const requiresImage = matchesModel(model, imageRequiredModels);
 
   if (requiresImage && !params.imageUrl && (!params.imageUrls || params.imageUrls.length === 0)) {
-    throw AgentRuntimeError.createImage({
-      error: new Error(`imageUrl or imageUrls is required for model ${model}`),
-      errorType: 'ProviderBizError',
-      provider,
-    });
+    throw new Error(`imageUrl or imageUrls is required for model ${model}`);
   }
 
   const content: Array<{ image: string } | { text: string }> = [{ text: params.prompt }];
@@ -414,20 +411,14 @@ export async function createQwenImage(
       const endpoint = isImage2Image ? 'image2image' : 'text2image';
       log('Using %s API for model: %s', endpoint, model);
 
-      const taskId = await createLegacySynthesisTask(
-        payload,
-        apiKey,
-        endpoint,
-        provider,
-        dashscopeURL,
-      );
+      const taskId = await createLegacySynthesisTask(payload, apiKey, endpoint, dashscopeURL);
 
       return await pollTaskToImageResponse(taskId, apiKey, dashscopeURL, model);
     }
 
     if (isSyncGeneration) {
       log('Using multimodal-generation API for model: %s', model);
-      return await createHTTPSyncGeneration(payload, apiKey, dashscopeURL, provider);
+      return await createHTTPSyncGeneration(payload, apiKey, dashscopeURL);
     }
 
     log('Using image-generation async API for model: %s', model);

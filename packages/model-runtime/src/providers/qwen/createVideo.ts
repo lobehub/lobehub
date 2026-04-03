@@ -33,7 +33,6 @@ const image2VideoModels = [
   /reference2video$/,
   /i2v$/,
   /it2v$/,
-  /r2v$/,
 ];
 const keyframe2VideoModels = [/^wan2\.(2|5)-kf2v-/, /start-end2video$/, /kf2v$/];
 const reference2VideoModels = [/r2v$/];

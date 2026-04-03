@@ -823,6 +823,36 @@ describe('createQwenImage', () => {
   });
 
   describe('new image-generation route coverage', () => {
+    it('should throw helpful validation error when image is missing for wan2.6-image model', async () => {
+      const payload: CreateImagePayload = {
+        model: 'wan2.6-image-pro',
+        params: {
+          prompt: '参考输入图生成新图',
+        },
+      };
+
+      try {
+        await createQwenImage(payload, mockOptions);
+      } catch (error) {
+        const runtimeError = error as any;
+
+        expect(runtimeError).toEqual(
+          expect.objectContaining({
+            errorType: 'ProviderBizError',
+            provider: 'qwen',
+          }),
+        );
+
+        const errorMessage = runtimeError?.error?.message ?? runtimeError?.error?.error?.message;
+        expect(errorMessage).toBe('imageUrl or imageUrls is required for model wan2.6-image-pro');
+
+        expect(fetch).not.toHaveBeenCalled();
+        return;
+      }
+
+      throw new Error('Expected createQwenImage to throw for missing image on wan2.6-image');
+    });
+
     it('should use image-generation async API for kling model and parse choices result', async () => {
       const mockTaskId = 'task-kling-123';
       const mockImageUrl = 'https://p4-fdl.klingai.com/xxx.png?token=abc';
