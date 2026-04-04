@@ -75,7 +75,12 @@ export const composeToolPolicyUpdate = (
   } satisfies AgentDocumentPolicy;
 
   return {
-    policyLoad: loadMode === 'always' ? PolicyLoad.ALWAYS : PolicyLoad.DISABLED,
+    policyLoad:
+      loadMode === 'always'
+        ? PolicyLoad.ALWAYS
+        : loadMode === 'progressive'
+          ? PolicyLoad.PROGRESSIVE
+          : PolicyLoad.DISABLED,
     policy,
     policyLoadFormat,
     policyLoadRule: documentLoadRule,

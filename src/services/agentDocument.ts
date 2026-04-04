@@ -132,6 +132,7 @@ export const mapAgentDocumentsToContext = (
 ): AgentContextDocument[] =>
   documents.map((doc) => ({
     content: doc.content,
+    description: doc.description ?? undefined,
     filename: doc.filename,
     id: doc.id,
     loadPosition: normalizeAgentDocumentPosition(
@@ -139,6 +140,7 @@ export const mapAgentDocumentsToContext = (
     ),
     loadRules: doc.loadRules,
     policyId: doc.templateId,
+    policyLoad: doc.policyLoad as 'always' | 'progressive',
     policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat || undefined,
     title: doc.title,
   }));

@@ -146,10 +146,7 @@ const executeToolWithRetry = async (
   throw new Error('Tool execution retry loop exited unexpectedly');
 };
 
-const buildToolDiscoveryConfig = (
-  operationToolSet: OperationToolSet,
-  enabledToolIds: string[],
-) => {
+const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToolIds: string[]) => {
   const enabledToolSet = new Set(enabledToolIds);
 
   if (!enabledToolSet.has(LobeActivatorIdentifier)) return undefined;
@@ -164,7 +161,7 @@ const buildToolDiscoveryConfig = (
 
   if (availableTools.length === 0) return undefined;
 
-  return { availableTools }
+  return { availableTools };
 };
 
 const formatErrorEventData = (error: unknown, phase: string) => {
@@ -385,6 +382,7 @@ export const createRuntimeExecutors = (
             if (docs.length > 0) {
               agentDocuments = docs.map((doc) => ({
                 content: doc.content,
+                description: doc.description ?? undefined,
                 filename: doc.filename,
                 id: doc.id,
                 loadPosition: normalizeDocumentPosition(
@@ -392,6 +390,7 @@ export const createRuntimeExecutors = (
                 ),
                 loadRules: doc.loadRules,
                 policyId: doc.templateId,
+                policyLoad: doc.policyLoad as 'always' | 'progressive',
                 policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
                 title: doc.title,
               }));

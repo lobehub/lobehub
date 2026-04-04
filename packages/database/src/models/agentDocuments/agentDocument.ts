@@ -131,7 +131,7 @@ export class AgentDocumentModel {
         accessShared: 0,
         agentId,
         createdAt,
-        policyLoad: PolicyLoad.ALWAYS,
+        policyLoad: PolicyLoad.PROGRESSIVE,
         deleteReason: null,
         deletedAt: null,
         deletedByAgentId: null,

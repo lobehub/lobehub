@@ -110,4 +110,28 @@ describe('agentDocuments checks', () => {
 
     expect(isLoadableDocument(noReadDoc)).toBe(false);
   });
+
+  it('treats progressive policyLoad as auto-loadable', () => {
+    const progressiveDoc = {
+      accessSelf:
+        AgentAccess.EXECUTE |
+        AgentAccess.LIST |
+        AgentAccess.READ |
+        AgentAccess.WRITE |
+        AgentAccess.DELETE,
+      policyLoad: PolicyLoad.PROGRESSIVE,
+    };
+
+    expect(canAutoLoadDocument(progressiveDoc)).toBe(true);
+    expect(isLoadableDocument(progressiveDoc)).toBe(true);
+  });
+
+  it('composes tool policy update with progressive mode', () => {
+    const composed = composeToolPolicyUpdate(null, {
+      mode: 'progressive',
+      rule: 'always',
+    });
+
+    expect(composed.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+  });
 });

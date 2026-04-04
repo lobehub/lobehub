@@ -80,7 +80,7 @@ describe('AgentDocumentModel', () => {
       expect(result.policy?.context?.position).toBe(DocumentLoadPosition.BEFORE_FIRST_USER);
       expect(result.policy?.context?.rule).toBe(DocumentLoadRule.ALWAYS);
       expect(result.policyLoadFormat).toBe(DocumentLoadFormat.RAW);
-      expect(result.policyLoad).toBe(PolicyLoad.ALWAYS);
+      expect(result.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
       expect(result.accessShared).toBe(0);
       expect(result.accessPublic).toBe(0);
     });
