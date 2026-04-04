@@ -115,8 +115,10 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
     },
     contextWindowTokens: 262_144 + 32_768,
     displayName: 'Gemma 4 26B A4B IT',
@@ -138,8 +140,10 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
     },
     contextWindowTokens: 262_144 + 32_768,
     displayName: 'Gemma 4 31B IT',
