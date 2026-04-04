@@ -7,6 +7,7 @@ import content from './SKILL.md';
 export const TaskIdentifier = 'task';
 
 export const TaskSkill: BuiltinSkill = {
+  avatar: '📋',
   content,
   description: 'Task management and execution — create, track, review, and complete tasks via CLI.',
   identifier: TaskIdentifier,
