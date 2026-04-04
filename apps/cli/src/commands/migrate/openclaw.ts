@@ -4,9 +4,9 @@ import path from 'node:path';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
-import { getTrpcClient } from '../api/client';
-import { confirm } from '../utils/format';
-import { log } from '../utils/logger';
+import { getTrpcClient } from '../../api/client';
+import { confirm } from '../../utils/format';
+import { log } from '../../utils/logger';
 
 // Directories and files to exclude when scanning the workspace
 const EXCLUDED_NAMES = new Set([
@@ -42,9 +42,7 @@ function collectFiles(dir: string, baseDir: string): string[] {
   return results;
 }
 
-export function registerMigrateCommand(program: Command) {
-  const migrate = program.command('migrate').description('Migrate data from external tools');
-
+export function registerOpenClawMigration(migrate: Command) {
   migrate
     .command('openclaw')
     .description('Import OpenClaw workspace files as agent documents into LobeHub inbox')
@@ -133,7 +131,6 @@ export function registerMigrateCommand(program: Command) {
         for (const relativePath of files) {
           const fullPath = path.join(workspacePath, relativePath);
           const content = fs.readFileSync(fullPath, 'utf8');
-          // Use the relative path as the filename (with path separators preserved)
           const filename = relativePath;
 
           try {
