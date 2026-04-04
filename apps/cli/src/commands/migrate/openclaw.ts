@@ -112,11 +112,24 @@ const DEFAULT_IGNORE_RULES = [
   '*.log',
   'logs',
 
+  // Databases
+  '*.sqlite',
+  '*.sqlite3',
+  '*.db',
+  '*.db-shm',
+  '*.db-wal',
+  '*.ldb',
+  '*.mdb',
+  '*.accdb',
+
   // Archives / binaries
   '*.zip',
   '*.tar',
   '*.tar.gz',
   '*.tgz',
+  '*.gz',
+  '*.bz2',
+  '*.xz',
   '*.rar',
   '*.7z',
   '*.jar',
@@ -125,6 +138,44 @@ const DEFAULT_IGNORE_RULES = [
   '*.so',
   '*.dylib',
   '*.exe',
+  '*.bin',
+  '*.o',
+  '*.a',
+  '*.lib',
+  '*.class',
+
+  // Images / media / fonts
+  '*.png',
+  '*.jpg',
+  '*.jpeg',
+  '*.gif',
+  '*.bmp',
+  '*.ico',
+  '*.webp',
+  '*.svg',
+  '*.mp3',
+  '*.mp4',
+  '*.wav',
+  '*.avi',
+  '*.mov',
+  '*.mkv',
+  '*.flac',
+  '*.ogg',
+  '*.pdf',
+  '*.woff',
+  '*.woff2',
+  '*.ttf',
+  '*.otf',
+  '*.eot',
+
+  // Lock files
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'Gemfile.lock',
+  'Cargo.lock',
+  'poetry.lock',
+  'composer.lock',
 ];
 
 interface AgentProfile {
@@ -155,7 +206,11 @@ function readAgentProfile(workspacePath: string): AgentProfile {
 
     // Try to extract **Emoji:** value (single emoji)
     const emojiMatch = content.match(/\*{0,2}Emoji:?\*{0,2}\s*(.+)/i);
-    const avatar = emojiMatch ? emojiMatch[1].trim() : undefined;
+    const rawAvatar = emojiMatch ? emojiMatch[1].trim() : undefined;
+    // Filter out placeholder text like （待定）, _(待定)_, (TBD), N/A, etc.
+    const isPlaceholder =
+      rawAvatar && /^[_*（(].*[)）_*]$|^(?:tbd|todo|n\/?a|none|待定|未定)$/i.test(rawAvatar);
+    const avatar = rawAvatar && !isPlaceholder ? rawAvatar : undefined;
 
     return { avatar, description, title };
   }
@@ -205,6 +260,24 @@ function collectFiles(dir: string, baseDir: string, ig: ReturnType<typeof ignore
   }
 
   return results;
+}
+
+/**
+ * Quick check: read the first 8KB and look for null bytes.
+ * If found, the file is likely binary and should be skipped.
+ */
+function isBinaryFile(filePath: string): boolean {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    const buf = Buffer.alloc(8192);
+    const bytesRead = fs.readSync(fd, buf, 0, 8192, 0);
+    for (let i = 0; i < bytesRead; i++) {
+      if (buf[i] === 0) return true;
+    }
+    return false;
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function formatAgentLabel(profile: AgentProfile): string {
@@ -342,8 +415,18 @@ export function registerOpenClawMigration(migrate: Command) {
         let success = 0;
         let failed = 0;
 
+        let skipped = 0;
+
         for (const relativePath of files) {
           const fullPath = path.join(workspacePath, relativePath);
+
+          // Skip binary files that slipped through the extension filter
+          if (isBinaryFile(fullPath)) {
+            console.log(`  ${pc.dim('○')} ${relativePath} ${pc.dim('(binary, skipped)')}`);
+            skipped++;
+            continue;
+          }
+
           const content = fs.readFileSync(fullPath, 'utf8');
 
           try {
@@ -361,14 +444,15 @@ export function registerOpenClawMigration(migrate: Command) {
         }
 
         const agentUrl = `${resolveServerUrl()}/agent/${agentId}`;
+        const skippedInfo = skipped > 0 ? `, ${skipped} skipped` : '';
         console.log();
         if (failed === 0) {
           console.log(
-            `${pc.green('✓')} Migration complete! ${pc.bold(String(success))} file(s) imported to ${pc.bold(label)}.`,
+            `${pc.green('✓')} Migration complete! ${pc.bold(String(success))} file(s) imported to ${pc.bold(label)}.${skippedInfo}`,
           );
         } else {
           console.log(
-            `${pc.yellow('⚠')} Migration finished with issues: ${pc.bold(String(success))} imported, ${pc.red(String(failed))} failed.`,
+            `${pc.yellow('⚠')} Migration finished with issues: ${pc.bold(String(success))} imported, ${pc.red(String(failed))} failed${skippedInfo}.`,
           );
         }
         console.log(`\n  ${pc.dim('→')} ${pc.underline(agentUrl)}`);

@@ -133,6 +133,36 @@ describe('migrate openclaw', () => {
       });
     });
 
+    it('should filter out placeholder emoji like （待定）', async () => {
+      writeFile(
+        'IDENTITY.md',
+        ['# IDENTITY.md', '- **Name:** TestBot', '- **Emoji:**', '  _(待定)_'].join('\n'),
+      );
+      writeFile('hello.md', 'hello');
+
+      mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({ agentId: 'agt_test' });
+      mockTrpcClient.agentDocument.upsertDocument.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'migrate',
+        'openclaw',
+        '--source',
+        tmpDir,
+        '--yes',
+      ]);
+
+      expect(mockTrpcClient.agent.createAgent.mutate).toHaveBeenCalledWith({
+        config: {
+          avatar: undefined,
+          description: undefined,
+          title: 'TestBot',
+        },
+      });
+    });
+
     it('should fall back to "OpenClaw" when no identity files exist', async () => {
       writeFile('doc.md', 'content');
 
@@ -240,6 +270,61 @@ describe('migrate openclaw', () => {
       expect(filenames).toContain('README.md');
       expect(filenames).not.toContain('secret.txt');
       expect(filenames).not.toContain('data/dump.sql');
+    });
+
+    it('should skip binary files during import', async () => {
+      writeFile('readme.md', 'text content');
+      // Write a file with null bytes (binary)
+      const binPath = path.join(tmpDir, 'image.dat');
+      fs.writeFileSync(binPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00, 0x01]));
+
+      mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({ agentId: 'agt_test' });
+      mockTrpcClient.agentDocument.upsertDocument.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'migrate',
+        'openclaw',
+        '--source',
+        tmpDir,
+        '--yes',
+      ]);
+
+      // Only the text file should be upserted
+      expect(mockTrpcClient.agentDocument.upsertDocument.mutate).toHaveBeenCalledTimes(1);
+      expect(mockTrpcClient.agentDocument.upsertDocument.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: 'readme.md' }),
+      );
+      // Binary file should show as skipped in output
+      const allOutput = consoleSpy.mock.calls.map((c: any[]) => c[0]).join('\n');
+      expect(allOutput).toContain('skipped');
+    });
+
+    it('should exclude database files by extension', async () => {
+      writeFile('data.md', 'notes');
+      writeFile('local.sqlite', 'fake-sqlite');
+      writeFile('app.db', 'fake-db');
+
+      mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({ agentId: 'agt_test' });
+      mockTrpcClient.agentDocument.upsertDocument.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'migrate',
+        'openclaw',
+        '--source',
+        tmpDir,
+        '--yes',
+      ]);
+
+      expect(mockTrpcClient.agentDocument.upsertDocument.mutate).toHaveBeenCalledTimes(1);
+      expect(mockTrpcClient.agentDocument.upsertDocument.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: 'data.md' }),
+      );
     });
 
     it('should collect files in subdirectories', async () => {
