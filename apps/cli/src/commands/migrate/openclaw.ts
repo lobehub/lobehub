@@ -18,6 +18,7 @@ const EXCLUDED_NAMES = new Set([
   'node_modules',
   '.git',
   '.vscode',
+  '.venv',
   '__pycache__',
   '.cache',
 ]);
