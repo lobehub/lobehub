@@ -134,4 +134,42 @@ describe('agentDocuments checks', () => {
 
     expect(composed.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
   });
+
+  it('preserves existing policyLoad when rule.mode is omitted', () => {
+    const composed = composeToolPolicyUpdate(
+      { context: { loadMode: undefined } },
+      { rule: 'by-keywords', keywords: ['test'] },
+      PolicyLoad.PROGRESSIVE,
+    );
+
+    expect(composed.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+    expect(composed.policyLoadRule).toBe(DocumentLoadRule.BY_KEYWORDS);
+  });
+
+  it('preserves existing progressive loadMode in policy context', () => {
+    const composed = composeToolPolicyUpdate(
+      { context: { loadMode: 'progressive' } },
+      { rule: 'by-keywords', keywords: ['test'] },
+    );
+
+    expect(composed.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+    expect(composed.policy.context?.loadMode).toBe('progressive');
+  });
+
+  it('overrides policyLoad when rule.mode is explicitly set', () => {
+    const composed = composeToolPolicyUpdate(
+      { context: { loadMode: 'progressive' } },
+      { mode: 'always', rule: 'always' },
+      PolicyLoad.PROGRESSIVE,
+    );
+
+    expect(composed.policyLoad).toBe(PolicyLoad.ALWAYS);
+    expect(composed.policy.context?.loadMode).toBe('always');
+  });
+
+  it('defaults to ALWAYS when no mode, no context, no existingPolicyLoad', () => {
+    const composed = composeToolPolicyUpdate(null, { rule: 'always' });
+
+    expect(composed.policyLoad).toBe(PolicyLoad.ALWAYS);
+  });
 });

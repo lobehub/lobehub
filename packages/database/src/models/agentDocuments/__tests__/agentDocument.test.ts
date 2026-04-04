@@ -326,6 +326,20 @@ describe('AgentDocumentModel', () => {
       expect(context).not.toContain('--- manual.md ---');
     });
 
+    it('should preserve progressive policyLoad when updating load rule without mode', async () => {
+      const doc = await agentDocumentModel.create(agentId, 'progressive.md', 'content');
+      expect(doc.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+
+      const updated = await agentDocumentModel.updateToolLoadRule(doc.id, {
+        rule: 'by-keywords',
+        keywords: ['test'],
+      });
+
+      expect(updated?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+      expect(updated?.policy?.context?.keywords).toEqual(['test']);
+      expect(updated?.policyLoadRule).toBe(DocumentLoadRule.BY_KEYWORDS);
+    });
+
     it('should group docs by position and sort by priority ascending', async () => {
       await agentDocumentModel.create(
         agentId,

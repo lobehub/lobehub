@@ -272,7 +272,7 @@ export class AgentDocumentModel {
   ): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
-    const composedPolicy = composeToolPolicyUpdate(existing.policy, rule);
+    const composedPolicy = composeToolPolicyUpdate(existing.policy, rule, existing.policyLoad);
 
     await this.db
       .update(agentDocuments)
