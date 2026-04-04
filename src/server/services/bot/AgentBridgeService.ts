@@ -30,6 +30,10 @@ const log = debug('lobe-server:bot:agent-bridge');
 
 const EXECUTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
+// If the last activity in a bot topic is older than this threshold,
+// create a new topic instead of continuing in the stale one.
+const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000; // 4 hours
+
 // PostgreSQL error code for foreign key constraint violations.
 // See: https://www.postgresql.org/docs/current/errcodes-appendix.html
 const PG_FOREIGN_KEY_VIOLATION = '23503';
@@ -338,6 +342,23 @@ export class AgentBridgeService {
     if (!topicId) {
       log('handleSubscribedMessage: no topicId in thread state, treating as new mention');
       return this.handleMention(thread, message, opts);
+    }
+
+    // Check if the topic is stale (no activity for 4+ hours).
+    // If so, clear the cached topicId and start a fresh conversation.
+    const topicModel = new TopicModel(this.db, this.userId);
+    const existingTopic = await topicModel.findById(topicId);
+    if (existingTopic) {
+      const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
+      if (elapsed > TOPIC_STALE_THRESHOLD) {
+        log(
+          'handleSubscribedMessage: topic=%s is stale (%.1fh since last activity), creating new topic',
+          topicId,
+          elapsed / (60 * 60 * 1000),
+        );
+        await thread.setState({ ...threadState, topicId: undefined });
+        return this.handleMention(thread, message, opts);
+      }
     }
 
     // Skip if there's already an active execution for this thread
