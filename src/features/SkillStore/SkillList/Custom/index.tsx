@@ -13,7 +13,8 @@ import Item from './Item';
 
 export const CustomList = memo(() => {
   const customPlugins = useToolStore(pluginSelectors.installedCustomPluginMetaList, isEqual);
-  const agentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
+  const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
+  const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const searchKeywords = useToolStore((s) => s.customPluginSearchKeywords || '');
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
   useFetchAgentSkills(true);
@@ -28,6 +29,11 @@ export const CustomList = memo(() => {
       return title.includes(lowerKeywords) || identifier.includes(lowerKeywords);
     });
   }, [customPlugins, searchKeywords]);
+
+  const agentSkills = useMemo(
+    () => [...userAgentSkills, ...marketAgentSkills],
+    [userAgentSkills, marketAgentSkills],
+  );
 
   const filteredAgentSkills = useMemo(() => {
     const lowerKeywords = searchKeywords.toLowerCase().trim();
