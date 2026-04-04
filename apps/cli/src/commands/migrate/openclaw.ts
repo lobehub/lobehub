@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { Command } from 'commander';
@@ -331,7 +332,7 @@ export function registerOpenClawMigration(migrate: Command) {
     .option(
       '--source <path>',
       'Path to OpenClaw workspace',
-      path.join(process.env.HOME || '~', '.openclaw', 'workspace'),
+      path.join(os.homedir(), '.openclaw', 'workspace'),
     )
     .option('--agent-id <id>', 'Import into an existing agent by ID')
     .option('--slug <slug>', 'Import into an existing agent by slug (e.g. "inbox")')
@@ -420,17 +421,17 @@ export function registerOpenClawMigration(migrate: Command) {
         for (const relativePath of files) {
           const fullPath = path.join(workspacePath, relativePath);
 
-          // Skip binary files that slipped through the extension filter
-          if (isBinaryFile(fullPath)) {
-            console.log(`  ${pc.dim('○')} ${relativePath} ${pc.dim('(binary, skipped)')}`);
-            skipped++;
-            continue;
-          }
-
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const stat = fs.statSync(fullPath);
-
           try {
+            // Skip binary files that slipped through the extension filter
+            if (isBinaryFile(fullPath)) {
+              console.log(`  ${pc.dim('○')} ${relativePath} ${pc.dim('(binary, skipped)')}`);
+              skipped++;
+              continue;
+            }
+
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const stat = fs.statSync(fullPath);
+
             await client.agentDocument.upsertDocument.mutate({
               agentId,
               content,
