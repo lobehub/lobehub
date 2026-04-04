@@ -35,8 +35,6 @@ export const params = {
         ...rest
       } = payload;
 
-      const shouldPreserveThinking = preserveThinking === true;
-
       const messages = (rest.messages || []).map((message: any) => {
         const { reasoning, ...messageRest } = message;
 
@@ -47,18 +45,7 @@ export const params = {
               ? reasoning.content
               : undefined;
 
-        if (
-          message.role === 'assistant' &&
-          shouldPreserveThinking &&
-          reasoningContent !== undefined
-        ) {
-          return {
-            ...messageRest,
-            reasoning_content: reasoningContent,
-          };
-        }
-
-        if (messageRest.reasoning_content !== undefined && reasoningContent !== undefined) {
+        if (reasoningContent !== undefined) {
           return {
             ...messageRest,
             reasoning_content: reasoningContent,

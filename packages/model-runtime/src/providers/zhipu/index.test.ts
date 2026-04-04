@@ -436,6 +436,30 @@ describe('LobeZhipuAI - custom features', () => {
         ]);
       });
 
+      it('should still convert reasoning to reasoning_content when preserveThinking is absent', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toBeUndefined();
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
       it('should map preserveThinking=false to clear_thinking=true', () => {
         const payload = {
           messages: [{ content: 'hello', role: 'user' }],
