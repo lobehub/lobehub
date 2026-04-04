@@ -284,7 +284,7 @@ export default {
   'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint':
     'For Claude Opus 4.7 and later; controls effort level (low/medium/high/xhigh/max).',
   'providerModels.item.modelConfig.extendParams.options.preserveThinking.hint':
-    'For Qwen3.6 Plus; sends historical assistant reasoning back to model context (preserve_thinking).',
+    'For Qwen3.6 Plus, GLM-5 and GLM-4.7; sends historical assistant reasoning back to model context (preserve_thinking / clear_thinking=false).',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
     'For Claude, Qwen3 and similar; controls token budget for reasoning.',
   'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint':

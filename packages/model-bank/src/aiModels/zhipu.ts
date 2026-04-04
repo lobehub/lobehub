@@ -247,7 +247,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-12',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['enableReasoning', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -310,7 +310,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-22',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['enableReasoning', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',
