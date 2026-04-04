@@ -56,9 +56,6 @@ export const params = {
         },
       );
 
-      // Preserve-thinking support is gated by upstream extendParams resolution.
-      const shouldPreserveThinking = preserveThinking === true;
-
       const messages = (rest.messages || []).map((message: any) => {
         const { reasoning, ...messageRest } = message;
 
@@ -69,20 +66,7 @@ export const params = {
               ? reasoning.content
               : undefined;
 
-        // For preserve_thinking, convert assistant reasoning into reasoning_content.
-        if (
-          message.role === 'assistant' &&
-          shouldPreserveThinking &&
-          reasoningContent !== undefined
-        ) {
-          return {
-            ...messageRest,
-            reasoning_content: reasoningContent,
-          };
-        }
-
-        // Keep explicitly provided reasoning_content to avoid dropping caller data.
-        if (messageRest.reasoning_content !== undefined && reasoningContent !== undefined) {
+        if (reasoningContent !== undefined) {
           return {
             ...messageRest,
             reasoning_content: reasoningContent,

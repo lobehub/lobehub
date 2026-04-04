@@ -164,7 +164,7 @@ describe('LobeQwenAI - custom features', () => {
       ]);
     });
 
-    it('should not set preserve_thinking when preserveThinking is absent', () => {
+    it('should not set preserve_thinking when preserveThinking is absent but still keep reasoning_content', () => {
       const payload = {
         messages: [
           {
@@ -179,7 +179,13 @@ describe('LobeQwenAI - custom features', () => {
       const result = params.chatCompletion!.handlePayload!(payload);
 
       expect(result.preserve_thinking).toBeUndefined();
-      expect(result.messages).toEqual([{ content: 'answer', role: 'assistant' }]);
+      expect(result.messages).toEqual([
+        {
+          content: 'answer',
+          reasoning_content: 'reasoning content',
+          role: 'assistant',
+        },
+      ]);
     });
 
     it('should keep caller-provided reasoning_content', () => {
