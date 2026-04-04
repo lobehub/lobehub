@@ -1,55 +1,103 @@
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { Badge } from 'antd';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Progress } from 'antd';
 import { cssVar } from 'antd-style';
-import { memo } from 'react';
+import { Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors, taskListSelectors } from '@/store/task/selectors';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from './style';
 
-const statusBadgeMap: Record<string, 'success' | 'processing' | 'warning' | 'default'> = {
-  backlog: 'default',
-  completed: 'success',
-  failed: 'warning',
-  paused: 'warning',
-  running: 'processing',
-};
-
 const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
+  const navigate = useNavigate();
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
+  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const completedCount = useMemo(
+    () => subtasks.filter((s) => s.status === 'completed').length,
+    [subtasks],
+  );
+
+  const handleClick = useCallback(
+    (identifier: string) => {
+      if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
+    },
+    [agentId, navigate],
+  );
 
   if (subtasks.length === 0) return null;
 
+  const percent = Math.round((completedCount / subtasks.length) * 100);
+
   return (
-    <div className={styles.section}>
-      <Flexbox horizontal align="center" gap={8}>
-        <Text className={styles.sectionTitle}>{t('taskDetail.subtasks')}</Text>
-        <Tag>{`${subtasks.length}`}</Tag>
+    <Flexbox gap={0} style={{ marginBlockStart: 16 }}>
+      <Flexbox
+        horizontal
+        align="center"
+        className={styles.subtaskHeader}
+        gap={8}
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <Icon
+          icon={collapsed ? ChevronRight : ChevronDown}
+          size={12}
+          style={{ color: cssVar.colorTextTertiary }}
+        />
+        <Text style={{ fontSize: cssVar.fontSizeSM }} weight="bold">
+          {t('taskDetail.subtasks')}
+        </Text>
+        <Progress
+          percent={percent}
+          showInfo={false}
+          size={14}
+          strokeColor={cssVar.colorPrimary}
+          type="circle"
+        />
+        <Text style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
+          {completedCount}/{subtasks.length}
+        </Text>
       </Flexbox>
-      <Flexbox>
-        {subtasks.map((sub) => (
-          <div className={styles.subtaskItem} key={sub.identifier}>
-            <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-              <Text ellipsis weight="bold">
+
+      {!collapsed &&
+        subtasks.map((sub) => {
+          const done = sub.status === 'completed';
+          return (
+            <div
+              className={styles.subtaskRow}
+              key={sub.identifier}
+              onClick={() => handleClick(sub.identifier)}
+            >
+              {done ? (
+                <div className={styles.subtaskCircleDone}>
+                  <Check color={cssVar.colorTextLightSolid} size={10} strokeWidth={3} />
+                </div>
+              ) : (
+                <div className={styles.subtaskCircle} />
+              )}
+              <Text
+                ellipsis
+                style={{
+                  color: done ? cssVar.colorTextQuaternary : undefined,
+                  flex: 1,
+                  textDecoration: done ? 'line-through' : undefined,
+                }}
+              >
                 {sub.name || sub.identifier}
               </Text>
               {sub.blockedBy && (
-                <Text style={{ color: cssVar.colorTextTertiary, fontSize: cssVar.fontSizeSM }}>
-                  Blocked by {sub.blockedBy}
+                <Text style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
+                  {t('taskDetail.blockedBy', { id: sub.blockedBy })}
                 </Text>
               )}
-            </Flexbox>
-            <Badge
-              status={statusBadgeMap[sub.status] ?? 'default'}
-              text={taskListSelectors.getDisplayStatus(sub.status)}
-            />
-          </div>
-        ))}
-      </Flexbox>
-    </div>
+            </div>
+          );
+        })}
+    </Flexbox>
   );
 });
 
