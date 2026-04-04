@@ -11,6 +11,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
+import { marketApiService } from '@/services/marketApi';
 import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
@@ -151,7 +152,7 @@ const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
   const [zipContentMap, setZipContentMap] = useState<Record<string, string>>({});
   const [zipTree, setZipTree] = useState<SkillResourceTreeNode[]>([]);
 
-  const downloadUrl = `https://market.lobehub.com/api/v1/skills/${encodeURIComponent(identifier)}/download`;
+  const downloadUrl = marketApiService.getSkillDownloadUrl(encodeURIComponent(identifier));
 
   useEffect(() => {
     if (installedSkill) return;
