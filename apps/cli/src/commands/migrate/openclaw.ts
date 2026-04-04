@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
+import type { TrpcClient } from '../../api/client';
 import { getTrpcClient } from '../../api/client';
 import { confirm } from '../../utils/format';
 import { log } from '../../utils/logger';
@@ -40,6 +41,20 @@ function collectFiles(dir: string, baseDir: string): string[] {
   }
 
   return results;
+}
+
+async function resolveInboxAgentId(
+  client: TrpcClient,
+  opts: { agentId?: string; slug: string },
+): Promise<string> {
+  if (opts.agentId) return opts.agentId;
+
+  const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
+  if (!agent) {
+    log.error(`Agent not found for slug: ${opts.slug}`);
+    process.exit(1);
+  }
+  return agent.id;
 }
 
 export function registerOpenClawMigration(migrate: Command) {
@@ -111,19 +126,9 @@ export function registerOpenClawMigration(migrate: Command) {
         const client = await getTrpcClient();
 
         // Resolve agent ID
-        let agentId = options.agentId;
-        if (!agentId) {
-          const agent = await (client as any).agent.getBuiltinAgent.query({
-            slug: options.slug,
-          });
-          if (!agent) {
-            log.error(`Agent not found for slug: ${options.slug}`);
-            process.exit(1);
-          }
-          agentId = (agent as any).id || (agent as any).agentId;
-        }
+        const agentId = await resolveInboxAgentId(client, options);
 
-        console.log(`\nImporting to agent ${pc.bold(agentId!)}...\n`);
+        console.log(`\nImporting to agent ${pc.bold(agentId)}...\n`);
 
         let success = 0;
         let failed = 0;
@@ -134,7 +139,7 @@ export function registerOpenClawMigration(migrate: Command) {
           const filename = relativePath;
 
           try {
-            await (client as any).agentDocument.upsertDocument.mutate({
+            await client.agentDocument.upsertDocument.mutate({
               agentId,
               content,
               filename,
