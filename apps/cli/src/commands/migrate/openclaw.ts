@@ -120,7 +120,8 @@ async function resolveAgentId(
     process.exit(1);
   }
 
-  console.log(`${pc.green('✓')} Agent created: ${pc.bold(profile.title)} (${id})`);
+  const label = profile.avatar ? `${profile.avatar} ${profile.title}` : profile.title;
+  console.log(`${pc.green('✓')} Agent created: ${pc.bold(label)}`);
   return id;
 }
 
@@ -189,11 +190,12 @@ export function registerOpenClawMigration(migrate: Command) {
 
         // Confirm
         if (!options.yes) {
+          const agentLabel = profile.avatar ? `${profile.avatar} ${profile.title}` : profile.title;
           const target = options.agentId
             ? `agent ${pc.bold(options.agentId)}`
             : options.slug
               ? `agent slug "${pc.bold(options.slug)}"`
-              : `a new "${profile.title}" agent`;
+              : `a new ${pc.bold(agentLabel)} agent`;
           const confirmed = await confirm(
             `Import ${files.length} file(s) as agent documents into ${target}?`,
           );
@@ -208,7 +210,8 @@ export function registerOpenClawMigration(migrate: Command) {
         // Create or reuse agent
         const agentId = await resolveAgentId(client, options, profile);
 
-        console.log(`\nImporting to agent ${pc.bold(agentId)}...\n`);
+        const displayName = profile.avatar ? `${profile.avatar} ${profile.title}` : profile.title;
+        console.log(`\nImporting to ${pc.bold(displayName)}...\n`);
 
         let success = 0;
         let failed = 0;
