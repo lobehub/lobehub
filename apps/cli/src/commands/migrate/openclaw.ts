@@ -46,11 +46,23 @@ function collectFiles(dir: string, baseDir: string): string[] {
 }
 
 /**
- * Resolve the target agent ID. If --agent-id is given, use it directly.
- * Otherwise, create a new "OpenClaw" agent.
+ * Resolve the target agent ID.
+ * Priority: --agent-id > --slug > create new "OpenClaw" agent.
  */
-async function resolveAgentId(client: TrpcClient, agentId?: string): Promise<string> {
-  if (agentId) return agentId;
+async function resolveAgentId(
+  client: TrpcClient,
+  opts: { agentId?: string; slug?: string },
+): Promise<string> {
+  if (opts.agentId) return opts.agentId;
+
+  if (opts.slug) {
+    const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
+    if (!agent) {
+      log.error(`Agent not found for slug: ${opts.slug}`);
+      process.exit(1);
+    }
+    return agent.id;
+  }
 
   log.info(`Creating new agent "${OPENCLAW_AGENT_NAME}"...`);
   const result = await client.agent.createAgent.mutate({
@@ -76,11 +88,18 @@ export function registerOpenClawMigration(migrate: Command) {
       'Path to OpenClaw workspace',
       path.join(process.env.HOME || '~', '.openclaw', 'workspace'),
     )
-    .option('--agent-id <id>', 'Import into an existing agent instead of creating a new one')
+    .option('--agent-id <id>', 'Import into an existing agent by ID')
+    .option('--slug <slug>', 'Import into an existing agent by slug (e.g. "inbox")')
     .option('--dry-run', 'Preview files without importing')
     .option('--yes', 'Skip confirmation prompt')
     .action(
-      async (options: { agentId?: string; dryRun?: boolean; source: string; yes?: boolean }) => {
+      async (options: {
+        agentId?: string;
+        dryRun?: boolean;
+        slug?: string;
+        source: string;
+        yes?: boolean;
+      }) => {
         const workspacePath = path.resolve(options.source);
 
         // Validate source directory
@@ -119,7 +138,9 @@ export function registerOpenClawMigration(migrate: Command) {
         if (!options.yes) {
           const target = options.agentId
             ? `agent ${pc.bold(options.agentId)}`
-            : `a new "${OPENCLAW_AGENT_NAME}" agent`;
+            : options.slug
+              ? `agent slug "${pc.bold(options.slug)}"`
+              : `a new "${OPENCLAW_AGENT_NAME}" agent`;
           const confirmed = await confirm(
             `Import ${files.length} file(s) as agent documents into ${target}?`,
           );
@@ -132,7 +153,7 @@ export function registerOpenClawMigration(migrate: Command) {
         const client = await getTrpcClient();
 
         // Create or reuse agent
-        const agentId = await resolveAgentId(client, options.agentId);
+        const agentId = await resolveAgentId(client, options);
 
         console.log(`\nImporting to agent ${pc.bold(agentId)}...\n`);
 
