@@ -22,7 +22,46 @@ const EXCLUDED_NAMES = new Set([
   '.cache',
 ]);
 
-const OPENCLAW_AGENT_NAME = 'OpenClaw';
+const DEFAULT_AGENT_NAME = 'OpenClaw';
+
+// Files to look for agent identity (tried in order)
+const IDENTITY_FILES = ['IDENTITY.md', 'SOUL.md'];
+
+interface AgentProfile {
+  avatar?: string;
+  description?: string;
+  title: string;
+}
+
+/**
+ * Try to extract the agent name, description, and avatar emoji from
+ * IDENTITY.md or SOUL.md. Falls back to "OpenClaw" if neither file
+ * exists or parsing fails.
+ */
+function readAgentProfile(workspacePath: string): AgentProfile {
+  for (const filename of IDENTITY_FILES) {
+    const filePath = path.join(workspacePath, filename);
+    if (!fs.existsSync(filePath)) continue;
+
+    const content = fs.readFileSync(filePath, 'utf8');
+
+    // Try to extract **Name:** value
+    const nameMatch = content.match(/\*{0,2}Name:?\*{0,2}\s*(.+)/i);
+    const title = nameMatch ? nameMatch[1].trim() : DEFAULT_AGENT_NAME;
+
+    // Try to extract **Creature:** or **Vibe:** or **Description:** as description
+    const descMatch = content.match(/\*{0,2}(?:Creature|Vibe|Description):?\*{0,2}\s*(.+)/i);
+    const description = descMatch ? descMatch[1].trim() : undefined;
+
+    // Try to extract **Emoji:** value (single emoji)
+    const emojiMatch = content.match(/\*{0,2}Emoji:?\*{0,2}\s*(.+)/i);
+    const avatar = emojiMatch ? emojiMatch[1].trim() : undefined;
+
+    return { avatar, description, title };
+  }
+
+  return { title: DEFAULT_AGENT_NAME };
+}
 
 /**
  * Recursively collect all files under `dir`, skipping excluded directories/files.
@@ -48,11 +87,12 @@ function collectFiles(dir: string, baseDir: string): string[] {
 
 /**
  * Resolve the target agent ID.
- * Priority: --agent-id > --slug > create new "OpenClaw" agent.
+ * Priority: --agent-id > --slug > create new agent from workspace profile.
  */
 async function resolveAgentId(
   client: TrpcClient,
   opts: { agentId?: string; slug?: string },
+  profile: AgentProfile,
 ): Promise<string> {
   if (opts.agentId) return opts.agentId;
 
@@ -65,9 +105,13 @@ async function resolveAgentId(
     return agent.id;
   }
 
-  log.info(`Creating new agent "${OPENCLAW_AGENT_NAME}"...`);
+  log.info(`Creating new agent "${profile.title}"...`);
   const result = await client.agent.createAgent.mutate({
-    config: { title: OPENCLAW_AGENT_NAME },
+    config: {
+      avatar: profile.avatar,
+      description: profile.description,
+      title: profile.title,
+    },
   });
 
   const id = result.agentId;
@@ -76,7 +120,7 @@ async function resolveAgentId(
     process.exit(1);
   }
 
-  console.log(`${pc.green('✓')} Agent created: ${pc.bold(id)}`);
+  console.log(`${pc.green('✓')} Agent created: ${pc.bold(profile.title)} (${id})`);
   return id;
 }
 
@@ -119,6 +163,9 @@ export function registerOpenClawMigration(migrate: Command) {
           process.exit(1);
         }
 
+        // Read agent profile from workspace identity files
+        const profile = readAgentProfile(workspacePath);
+
         // Collect files
         const files = collectFiles(workspacePath, workspacePath);
 
@@ -146,7 +193,7 @@ export function registerOpenClawMigration(migrate: Command) {
             ? `agent ${pc.bold(options.agentId)}`
             : options.slug
               ? `agent slug "${pc.bold(options.slug)}"`
-              : `a new "${OPENCLAW_AGENT_NAME}" agent`;
+              : `a new "${profile.title}" agent`;
           const confirmed = await confirm(
             `Import ${files.length} file(s) as agent documents into ${target}?`,
           );
@@ -159,7 +206,7 @@ export function registerOpenClawMigration(migrate: Command) {
         const client = await getTrpcClient();
 
         // Create or reuse agent
-        const agentId = await resolveAgentId(client, options);
+        const agentId = await resolveAgentId(client, options, profile);
 
         console.log(`\nImporting to agent ${pc.bold(agentId)}...\n`);
 
