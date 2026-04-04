@@ -495,6 +495,52 @@ describe('RuntimeExecutors', () => {
         );
       });
 
+      it('should persist reasoning for unknown custom deployments on supported providers', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onThinking?.('custom deployment reasoning');
+          await options?.callback?.onText?.('answer');
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { preserveThinking: true },
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({
+          modelRuntimeConfig: {
+            model: 'my-qwen-custom-deployment',
+            provider: 'qwen',
+          },
+        });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'my-qwen-custom-deployment',
+            provider: 'qwen',
+          },
+          type: 'call_llm' as const,
+        };
+
+        const result = await executors.call_llm!(instruction, state);
+        const assistant = result.newState.messages.at(-1) as any;
+
+        expect(assistant.reasoning).toEqual({
+          content: 'custom deployment reasoning',
+        });
+        expect(mockChat).toHaveBeenCalledWith(
+          expect.objectContaining({ preserveThinking: true }),
+          expect.anything(),
+        );
+      });
+
       it('should not persist reasoning when model does not declare preserveThinking capability', async () => {
         const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
           await options?.callback?.onThinking?.('reasoning that should not be saved');

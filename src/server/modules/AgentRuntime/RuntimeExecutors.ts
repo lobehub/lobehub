@@ -565,8 +565,13 @@ export const createRuntimeExecutors = (
             ? (modelCard.settings as { extendParams?: string[] }).extendParams
             : undefined;
 
-        const modelSupportsPreserveThinking =
+        const modelSupportsPreserveThinkingFromCard =
           Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
+        const providerSupportsPreserveThinkingFallback =
+          provider === 'qwen' || provider === 'zhipu';
+        const modelSupportsPreserveThinking =
+          modelSupportsPreserveThinkingFromCard ||
+          (!modelCard && providerSupportsPreserveThinkingFallback);
 
         shouldPersistAssistantReasoning =
           preserveThinkingRequested && modelSupportsPreserveThinking;
