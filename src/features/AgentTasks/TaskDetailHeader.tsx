@@ -1,6 +1,6 @@
 import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
-import { Button, Input } from 'antd';
+import { App, Button, Input } from 'antd';
 import { cssVar } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -33,6 +33,7 @@ const priorityLabelMap: Record<number, string> = {
 
 const TaskDetailHeader = memo(() => {
   const { t } = useTranslation('chat');
+  const { modal } = App.useApp();
   const name = useTaskStore(taskDetailSelectors.activeTaskName);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
@@ -72,8 +73,7 @@ const TaskDetailHeader = memo(() => {
   }, [taskId, canRun, canPause, runTask, pauseTask]);
 
   return (
-    <Flexbox gap={16} paddingBlock={16}>
-      {/* Title */}
+    <Flexbox gap={8}>
       <Input
         className={styles.titleInput}
         placeholder={t('taskDetail.titlePlaceholder')}
@@ -81,7 +81,6 @@ const TaskDetailHeader = memo(() => {
         variant={'borderless'}
         onChange={handleNameChange}
       />
-      {/* Action bar */}
       <Flexbox horizontal align="center" gap={8}>
         {(canRun || canPause) && (
           <Button size="small" type={canRun ? 'primary' : 'default'} onClick={handleRunOrPause}>
@@ -97,7 +96,17 @@ const TaskDetailHeader = memo(() => {
             icon={Trash2}
             size="small"
             style={{ color: cssVar.colorTextTertiary }}
-            onClick={() => deleteTask(taskId)}
+            onClick={() => {
+              modal.confirm({
+                centered: true,
+                content: t('taskDetail.deleteConfirm.content'),
+                okButtonProps: { danger: true },
+                okText: t('taskDetail.deleteConfirm.ok'),
+                onOk: () => deleteTask(taskId),
+                title: t('taskDetail.deleteConfirm.title'),
+                type: 'error',
+              });
+            }}
           />
         )}
       </Flexbox>

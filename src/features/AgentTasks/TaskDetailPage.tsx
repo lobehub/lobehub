@@ -1,5 +1,4 @@
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
 import { memo, useEffect } from 'react';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
@@ -14,6 +13,7 @@ import TaskActivities from './TaskActivities';
 import TaskDetailHeader from './TaskDetailHeader';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
+import TaskParentBar from './TaskParentBar';
 import TaskSubtasks from './TaskSubtasks';
 
 interface TaskDetailPageProps {
@@ -45,19 +45,11 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
           <Loading debugId="TaskDetail" />
         ) : (
           <div className={styles.detailContent}>
-            <Flexbox style={{ marginBottom: 12 }}>
-              <TaskDetailHeader />
-              <Flexbox
-                horizontal
-                align={'center'}
-                gap={8}
-                justify={'flex-start'}
-                style={{ marginBottom: 12 }}
-              >
-                <TaskModelConfig />
-              </Flexbox>
-            </Flexbox>
-            <Divider style={{ marginBlock: 0 }} />
+            <TaskDetailHeader />
+            <TaskParentBar />
+            <div style={{ paddingBlock: 8 }}>
+              <TaskModelConfig />
+            </div>
             <TaskInstruction />
             <TaskSubtasks />
             <TaskActivities />
