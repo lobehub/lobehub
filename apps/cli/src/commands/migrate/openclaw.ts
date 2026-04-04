@@ -12,15 +12,63 @@ import { log } from '../../utils/logger';
 
 // Directories and files to exclude when scanning the workspace
 const EXCLUDED_NAMES = new Set([
+  // IDE / editor
   '.idea',
-  '.DS_Store',
-  '.openclaw',
-  'node_modules',
-  '.git',
   '.vscode',
+  '.fleet',
+  '.cursor',
+  '.zed',
+
+  // VCS
+  '.git',
+  '.svn',
+  '.hg',
+
+  // OS artifacts
+  '.DS_Store',
+  'Thumbs.db',
+  'desktop.ini',
+
+  // OpenClaw internal
+  '.openclaw',
+
+  // Dependencies
+  'node_modules',
+  '.pnp',
+  'bower_components',
+  'vendor',
+
+  // Python
   '.venv',
+  'venv',
   '__pycache__',
+  '.mypy_cache',
+  '.ruff_cache',
+  '.pytest_cache',
+  '.tox',
+  '.eggs',
+  '*.egg-info',
+
+  // Build / cache
   '.cache',
+  '.parcel-cache',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  'dist',
+  'build',
+  'out',
+  '.output',
+
+  // Misc
+  '.env',
+  '.env.local',
+  'coverage',
+  '.nyc_output',
+  '.terraform',
+  '.sass-cache',
+  'tmp',
+  '.tmp',
 ]);
 
 const DEFAULT_AGENT_NAME = 'OpenClaw';
