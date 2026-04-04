@@ -57,6 +57,7 @@ export interface QQWebhookPayload {
 }
 
 export interface QQWebhookEventData {
+  attachments?: QQAttachment[];
   author?: QQAuthor;
   channel_id?: string;
   content?: string;

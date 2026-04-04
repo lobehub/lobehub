@@ -1,6 +1,7 @@
 import type {
   Adapter,
   AdapterPostableMessage,
+  Attachment,
   Author,
   ChatInstance,
   EmojiValue,
@@ -141,21 +142,32 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       return Response.json({ ok: true });
     }
 
-    // Only handle text messages for now
-    if (message.message_type !== 'text') {
-      return Response.json({ ok: true });
-    }
-
-    // Extract text content
+    // Extract text content (for text messages) or media description
+    const messageType = message.message_type;
     let messageText = '';
+    let hasMedia = false;
+
     try {
       const content = JSON.parse(message.content);
-      messageText = content.text || '';
+      switch (messageType) {
+        case 'text': {
+          messageText = content.text || '';
+          break;
+        }
+        case 'image':
+        case 'file':
+        case 'audio':
+        case 'media':
+        case 'sticker': {
+          hasMedia = true;
+          break;
+        }
+      }
     } catch {
       // malformed content
     }
 
-    if (!messageText.trim()) {
+    if (!messageText.trim() && !hasMedia) {
       return Response.json({ ok: true });
     }
 
@@ -277,8 +289,11 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       platform: this.platform,
     });
 
+    // parseMessage is synchronous — create lazy-loading attachments via fetchData
+    const attachments = this.buildLazyAttachments(raw);
+
     return new Message({
-      attachments: [],
+      attachments,
       author: {
         fullName: 'Unknown',
         isBot: false,
@@ -296,6 +311,90 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       text: cleanText,
       threadId,
     });
+  }
+
+  /**
+   * Build attachments with lazy fetchData for synchronous parseMessage.
+   * Actual download happens when fetchData() is called.
+   */
+  private buildLazyAttachments(raw: LarkRawMessage): Attachment[] {
+    const messageType = raw.message_type;
+    if (messageType === 'text' || messageType === 'post') return [];
+
+    let content: Record<string, string>;
+    try {
+      content = JSON.parse(raw.content);
+    } catch {
+      return [];
+    }
+
+    const messageId = raw.message_id;
+
+    switch (messageType) {
+      case 'image': {
+        const imageKey = content.image_key;
+        if (!imageKey) return [];
+        return [
+          {
+            fetchData: () => this.api.downloadResource(messageId, imageKey, 'image'),
+            mimeType: 'image/jpeg',
+            name: 'image.jpg',
+            type: 'image',
+          } as Attachment,
+        ];
+      }
+      case 'file': {
+        const fileKey = content.file_key;
+        if (!fileKey) return [];
+        return [
+          {
+            fetchData: () => this.api.downloadResource(messageId, fileKey, 'file'),
+            mimeType: 'application/octet-stream',
+            name: content.file_name || 'file',
+            type: 'file',
+          } as Attachment,
+        ];
+      }
+      case 'audio': {
+        const fileKey = content.file_key;
+        if (!fileKey) return [];
+        return [
+          {
+            fetchData: () => this.api.downloadResource(messageId, fileKey, 'file'),
+            mimeType: 'audio/ogg',
+            name: 'audio.ogg',
+            type: 'audio',
+          } as Attachment,
+        ];
+      }
+      case 'media': {
+        const fileKey = content.file_key;
+        if (!fileKey) return [];
+        return [
+          {
+            fetchData: () => this.api.downloadResource(messageId, fileKey, 'file'),
+            mimeType: 'video/mp4',
+            name: 'video.mp4',
+            type: 'video',
+          } as Attachment,
+        ];
+      }
+      case 'sticker': {
+        const fileKey = content.file_key;
+        if (!fileKey) return [];
+        return [
+          {
+            fetchData: () => this.api.downloadResource(messageId, fileKey, 'image'),
+            mimeType: 'image/png',
+            name: 'sticker.png',
+            type: 'image',
+          } as Attachment,
+        ];
+      }
+      default: {
+        return [];
+      }
+    }
   }
 
   // ------------------------------------------------------------------
@@ -399,8 +498,11 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       userName: displayName,
     };
 
+    // Download media attachments for non-text messages
+    const attachments = await this.downloadMediaAttachments(message);
+
     return new Message({
-      attachments: [],
+      attachments,
       author,
       formatted,
       id: message.message_id,
@@ -412,6 +514,103 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       text: cleanText,
       threadId,
     });
+  }
+
+  /**
+   * Download media attachments from a Feishu/Lark message.
+   *
+   * Supported message types: image, file, audio, media (video), sticker.
+   * Uses the Lark resource download API to fetch binary data.
+   */
+  private async downloadMediaAttachments(message: LarkMessageBody): Promise<Attachment[]> {
+    const messageType = message.message_type;
+    if (messageType === 'text' || messageType === 'post') return [];
+
+    let content: Record<string, string>;
+    try {
+      content = JSON.parse(message.content);
+    } catch {
+      return [];
+    }
+
+    const attachments: Attachment[] = [];
+    const messageId = message.message_id;
+
+    try {
+      switch (messageType) {
+        case 'image': {
+          const imageKey = content.image_key;
+          if (!imageKey) break;
+          const buffer = await this.api.downloadResource(messageId, imageKey, 'image');
+          attachments.push({
+            buffer,
+            mimeType: 'image/jpeg',
+            name: 'image.jpg',
+            type: 'image',
+          } as Attachment);
+          break;
+        }
+        case 'file': {
+          const fileKey = content.file_key;
+          const fileName = content.file_name;
+          if (!fileKey) break;
+          const buffer = await this.api.downloadResource(messageId, fileKey, 'file');
+          attachments.push({
+            buffer,
+            mimeType: 'application/octet-stream',
+            name: fileName || 'file',
+            type: 'file',
+          } as Attachment);
+          break;
+        }
+        case 'audio': {
+          const fileKey = content.file_key;
+          if (!fileKey) break;
+          const buffer = await this.api.downloadResource(messageId, fileKey, 'file');
+          attachments.push({
+            buffer,
+            mimeType: 'audio/ogg',
+            name: 'audio.ogg',
+            type: 'audio',
+          } as Attachment);
+          break;
+        }
+        case 'media': {
+          // Video: has file_key (video) and image_key (thumbnail)
+          const fileKey = content.file_key;
+          if (!fileKey) break;
+          const buffer = await this.api.downloadResource(messageId, fileKey, 'file');
+          attachments.push({
+            buffer,
+            mimeType: 'video/mp4',
+            name: 'video.mp4',
+            type: 'video',
+          } as Attachment);
+          break;
+        }
+        case 'sticker': {
+          const fileKey = content.file_key;
+          if (!fileKey) break;
+          const buffer = await this.api.downloadResource(messageId, fileKey, 'image');
+          attachments.push({
+            buffer,
+            mimeType: 'image/png',
+            name: 'sticker.png',
+            type: 'image',
+          } as Attachment);
+          break;
+        }
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Failed to download %s media for message %s: %s',
+        messageType,
+        messageId,
+        error,
+      );
+    }
+
+    return attachments;
   }
 
   private async resolveSenderName(openId: string): Promise<string | undefined> {
