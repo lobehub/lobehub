@@ -20,6 +20,7 @@ const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 interface UpsertDocumentParams {
   agentId: string;
   content: string;
+  createdAt?: Date;
   filename: string;
   loadPosition?: DocumentLoadPosition;
   loadRules?: DocumentLoadRules;
@@ -207,6 +208,7 @@ export class AgentDocumentsService {
     templateId,
     metadata,
     policy,
+    createdAt,
   }: UpsertDocumentParams) {
     return this.agentDocumentModel.upsert(
       agentId,
@@ -217,6 +219,7 @@ export class AgentDocumentsService {
       templateId,
       metadata,
       policy,
+      createdAt,
     );
   }
 

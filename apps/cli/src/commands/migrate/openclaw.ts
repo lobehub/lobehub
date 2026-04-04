@@ -428,11 +428,13 @@ export function registerOpenClawMigration(migrate: Command) {
           }
 
           const content = fs.readFileSync(fullPath, 'utf8');
+          const createdAt = fs.statSync(fullPath).mtime;
 
           try {
             await client.agentDocument.upsertDocument.mutate({
               agentId,
               content,
+              createdAt,
               filename: relativePath,
             });
             console.log(`  ${pc.green('✓')} ${relativePath}`);

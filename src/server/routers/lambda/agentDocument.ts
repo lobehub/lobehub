@@ -85,6 +85,7 @@ export const agentDocumentRouter = router({
       z.object({
         agentId: z.string(),
         content: z.string(),
+        createdAt: z.date().optional(),
         filename: z.string(),
         metadata: metadataSchema.optional(),
       }),
@@ -93,6 +94,7 @@ export const agentDocumentRouter = router({
       return ctx.agentDocumentService.upsertDocument({
         agentId: input.agentId,
         content: input.content,
+        createdAt: input.createdAt,
         filename: input.filename,
         metadata: input.metadata,
       });
