@@ -10,6 +10,7 @@ import { VirtuosoGrid } from 'react-virtuoso';
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverService } from '@/services/discover';
 import { globalHelpers } from '@/store/global/helpers';
+import { useToolStore } from '@/store/tool';
 import { type DiscoverSkillItem, SkillSorts } from '@/types/discover';
 
 import MarketSkillItem from '../Community/MarketSkillItem';
@@ -26,7 +27,11 @@ interface MarketSkillListProps {
 const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
   const { t } = useTranslation('setting');
 
-  // Pagination state
+  // Ensure agent skills are fetched so install status is available
+  const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
+  useFetchAgentSkills(true);
+
+  // Market skills pagination state
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<DiscoverSkillItem[]>([]);
   const [totalPages, setTotalPages] = useState<number>();
