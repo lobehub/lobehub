@@ -27,6 +27,7 @@ interface UpsertDocumentParams {
   metadata?: Record<string, any>;
   policy?: AgentDocumentPolicy;
   templateId?: string;
+  updatedAt?: Date;
 }
 
 /**
@@ -209,6 +210,7 @@ export class AgentDocumentsService {
     metadata,
     policy,
     createdAt,
+    updatedAt,
   }: UpsertDocumentParams) {
     return this.agentDocumentModel.upsert(
       agentId,
@@ -220,6 +222,7 @@ export class AgentDocumentsService {
       metadata,
       policy,
       createdAt,
+      updatedAt,
     );
   }
 

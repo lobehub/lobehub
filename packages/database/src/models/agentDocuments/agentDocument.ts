@@ -95,6 +95,7 @@ export class AgentDocumentModel {
     metadata?: Record<string, any>,
     policy?: AgentDocumentPolicy,
     createdAt?: Date,
+    updatedAt?: Date,
   ): Promise<AgentDocument> {
     const title = filename.replace(/\.[^.]+$/, '');
     const stats = this.getDocumentStats(content);
@@ -113,7 +114,7 @@ export class AgentDocumentModel {
         title,
         totalCharCount: stats.totalCharCount,
         totalLineCount: stats.totalLineCount,
-        updatedAt: createdAt,
+        updatedAt: updatedAt ?? createdAt,
         userId: this.userId,
       };
 
@@ -142,7 +143,7 @@ export class AgentDocumentModel {
           normalizedPolicy.context?.position || DocumentLoadPosition.BEFORE_FIRST_USER,
         policyLoadRule: normalizedPolicy.context?.rule || DocumentLoadRule.ALWAYS,
         templateId,
-        updatedAt: createdAt,
+        updatedAt: updatedAt ?? createdAt,
         userId: this.userId,
       };
 
@@ -321,6 +322,7 @@ export class AgentDocumentModel {
     metadata?: Record<string, any>,
     policy?: AgentDocumentPolicy,
     createdAt?: Date,
+    updatedAt?: Date,
   ): Promise<AgentDocument> {
     const existing = await this.findByFilename(agentId, filename);
 
@@ -346,6 +348,7 @@ export class AgentDocumentModel {
       metadata,
       policy,
       createdAt,
+      updatedAt,
     );
   }
 

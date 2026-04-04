@@ -88,6 +88,7 @@ export const agentDocumentRouter = router({
         createdAt: z.date().optional(),
         filename: z.string(),
         metadata: metadataSchema.optional(),
+        updatedAt: z.date().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -97,6 +98,7 @@ export const agentDocumentRouter = router({
         createdAt: input.createdAt,
         filename: input.filename,
         metadata: input.metadata,
+        updatedAt: input.updatedAt,
       });
     }),
 
