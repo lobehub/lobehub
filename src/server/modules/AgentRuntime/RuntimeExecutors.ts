@@ -65,6 +65,7 @@ import {
 } from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
+import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 
 import { klavisEnv } from '@/config/klavis';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
@@ -529,6 +530,8 @@ export const createRuntimeExecutors = (
 
     try {
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
+      let shouldPersistAssistantReasoning = false;
+      let preserveThinkingForPayload: boolean | undefined;
 
       // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
       // Rebuild params from agentConfig at execution time (capabilities built dynamically)
@@ -537,6 +540,40 @@ export const createRuntimeExecutors = (
       if (agentConfig) {
         const { loadModels } = await import('@/business/client/model-bank/loadModels');
         const builtinModels = await loadModels();
+
+        const preserveThinkingFromPayload = (llmPayload as { preserveThinking?: boolean })
+          .preserveThinking;
+        const preserveThinkingConfigured =
+          typeof preserveThinkingFromPayload === 'boolean'
+            ? preserveThinkingFromPayload
+            : typeof agentConfig.chatConfig?.preserveThinking === 'boolean'
+              ? agentConfig.chatConfig.preserveThinking
+              : undefined;
+        const preserveThinkingRequested = preserveThinkingConfigured === true;
+
+        const modelCard = LOBE_DEFAULT_MODEL_LIST.find(
+          (item) =>
+            item.providerId === provider &&
+            (item.id === model || item.config?.deploymentName === model),
+        );
+        const modelExtendParams =
+          modelCard &&
+          'settings' in modelCard &&
+          modelCard.settings &&
+          typeof modelCard.settings === 'object' &&
+          'extendParams' in modelCard.settings
+            ? (modelCard.settings as { extendParams?: string[] }).extendParams
+            : undefined;
+
+        const modelSupportsPreserveThinking =
+          Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
+
+        shouldPersistAssistantReasoning =
+          preserveThinkingRequested && modelSupportsPreserveThinking;
+        preserveThinkingForPayload =
+          modelSupportsPreserveThinking && typeof preserveThinkingConfigured === 'boolean'
+            ? preserveThinkingConfigured
+            : undefined;
 
         // Extract <refer_topic> tags from messages and fetch summaries.
         // Skip if messages already contain injected topic_reference_context
@@ -935,7 +972,15 @@ export const createRuntimeExecutors = (
 
       // Construct ChatStreamPayload
       const stream = ctx.stream ?? true;
-      const chatPayload = { messages: processedMessages, model, stream, tools };
+      const chatPayload = {
+        messages: processedMessages,
+        model,
+        stream,
+        tools,
+        ...(typeof preserveThinkingForPayload === 'boolean' && {
+          preserveThinking: preserveThinkingForPayload,
+        }),
+      };
 
       // Buffer: accumulate text and reasoning, send every 50ms
       const BUFFER_INTERVAL = 50;
@@ -1307,6 +1352,8 @@ export const createRuntimeExecutors = (
                 };
               }
 
+              const persistedReasoning = shouldPersistAssistantReasoning ? finalReasoning : undefined;
+
               try {
                 // Build metadata object
                 const metadata: Record<string, any> = {};
@@ -1339,7 +1386,7 @@ export const createRuntimeExecutors = (
                   content: finalContent,
                   imageList: imageList.length > 0 ? imageList : undefined,
                   metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-                  reasoning: finalReasoning,
+                  reasoning: persistedReasoning,
                   search: grounding,
                   tools: persistedTools,
                 });
@@ -1372,7 +1419,7 @@ export const createRuntimeExecutors = (
               newState.messages.push({
                 content,
                 id: assistantMessageItem.id,
-                reasoning: finalReasoning,
+                reasoning: persistedReasoning,
                 role: 'assistant',
                 tool_calls: stateToolCalls,
               });
