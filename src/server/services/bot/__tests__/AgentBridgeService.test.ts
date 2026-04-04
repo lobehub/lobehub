@@ -7,7 +7,9 @@ const mockGetPlatform = vi.hoisted(() => vi.fn());
 const mockIsQueueAgentRuntimeEnabled = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(),
+  TopicModel: vi.fn().mockImplementation(() => ({
+    findById: vi.fn().mockResolvedValue(undefined),
+  })),
 }));
 
 vi.mock('@/database/models/user', () => ({
