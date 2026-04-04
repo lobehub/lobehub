@@ -8,6 +8,7 @@ import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useSessionStore } from '@/store/session';
@@ -569,6 +570,8 @@ describe('topic action', () => {
           messagesMap: {
             [newKey]: [{ id: 'msg-1' }, { id: 'msg-2' }] as any,
           },
+          portalStack: [{ type: PortalViewType.Home }],
+          showPortal: true,
         });
       });
 
@@ -592,6 +595,8 @@ describe('topic action', () => {
 
       // Verify activeTopicId is now null
       expect(useChatStore.getState().activeTopicId).toBeNull();
+      expect(useChatStore.getState().portalStack).toEqual([]);
+      expect(useChatStore.getState().showPortal).toBe(false);
     });
 
     it('should clear new key data when switching to null (group scope)', async () => {

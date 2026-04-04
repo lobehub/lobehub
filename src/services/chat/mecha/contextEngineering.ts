@@ -50,7 +50,6 @@ import {
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { resolveClientSkills } from './skillEngineering';
-import { stripActionTagsFromText } from './skillPreload';
 
 const log = debug('context-engine:contextEngineering');
 
@@ -93,39 +92,6 @@ interface ContextEngineeringContext {
   topicId?: string;
 }
 
-type TextContentPart = {
-  text?: string;
-  type?: string;
-  [key: string]: unknown;
-};
-
-const preprocessActionTags = (messages: UIChatMessage[]): UIChatMessage[] =>
-  messages.map((message) => {
-    if (message.role !== 'user') return message;
-
-    if (typeof message.content === 'string') {
-      return {
-        ...message,
-        content: stripActionTagsFromText(message.content),
-      };
-    }
-
-    if (Array.isArray(message.content)) {
-      const contentParts = message.content as TextContentPart[];
-
-      return {
-        ...message,
-        content: contentParts.map((part) =>
-          part?.type === 'text' && typeof part.text === 'string'
-            ? { ...part, text: stripActionTagsFromText(part.text) }
-            : part,
-        ),
-      } as unknown as UIChatMessage;
-    }
-
-    return message;
-  });
-
 // REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
 export const contextEngineering = async ({
   messages = [],
@@ -149,8 +115,6 @@ export const contextEngineering = async ({
   topicId,
   memoryContext,
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
-  messages = preprocessActionTags(messages);
-
   log('tools: %o', tools);
 
   // Check if Agent Builder tool is enabled
@@ -599,6 +563,10 @@ export const contextEngineering = async ({
     // runtime context
     initialContext,
     stepContext,
+
+    // Selected skills/tools from user for this request
+    selectedSkills: initialContext?.selectedSkills,
+    selectedTools: initialContext?.selectedTools,
 
     // Skills configuration — expose all installed skills so the AI can discover and activate them
     skillsConfig: {

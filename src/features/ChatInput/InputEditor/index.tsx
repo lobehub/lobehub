@@ -25,7 +25,11 @@ import {
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore, useStoreApi } from '../store';
-import { useSlashActionItems } from './ActionTag';
+import {
+  INSERT_ACTION_TAG_COMMAND,
+  type InsertActionTagPayload,
+  useSlashActionItems,
+} from './ActionTag';
 import { createMentionMenu } from './MentionMenu';
 import type { MentionMenuState } from './MentionMenu/types';
 import Placeholder from './Placeholder';
@@ -249,6 +253,13 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
                     topicId: option.metadata.topicId as string,
                     topicTitle: String(option.metadata.topicTitle ?? option.label),
                   });
+                } else if (option.metadata?.type === 'skill' || option.metadata?.type === 'tool') {
+                  const payload: InsertActionTagPayload = {
+                    category: option.metadata.actionCategory as 'skill' | 'tool',
+                    label: String(option.label),
+                    type: String(option.metadata.actionType),
+                  };
+                  editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
                 } else {
                   editor.dispatchCommand(INSERT_MENTION_COMMAND, {
                     label: String(option.label),

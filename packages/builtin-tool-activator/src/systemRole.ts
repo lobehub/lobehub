@@ -20,6 +20,7 @@ export const systemPrompt = `You have access to a Tools & Skills Activator that 
   - Provide the exact skill name
   - Returns the skill content (instructions, templates, guidelines) that you should follow
   - If the skill is not found, you'll receive a list of available skills
+  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
 </tool_selection_guidelines>
 
 <skill_store_discovery>

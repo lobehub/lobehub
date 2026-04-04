@@ -997,35 +997,39 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
+            tools: seoTools,
             top_p: 1,
-            tools: [
-              {
-                type: 'function',
-                function: {
-                  description: 'Get data from users',
-                  name: 'seo____getData',
-                  parameters: {
-                    properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                    required: ['keyword', 'url'],
-                    type: 'object',
-                  },
-                },
-              },
-            ],
-            messages: [
-              {
-                content: expect.stringContaining(getCurrentDateContent()),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain(
+          'Use the runSkill tool to activate a skill when needed.',
+        );
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
 
@@ -1142,35 +1146,36 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
+            tools: seoTools,
             top_p: 1,
-            tools: [
-              {
-                type: 'function',
-                function: {
-                  description: 'Get data from users',
-                  name: 'seo____getData',
-                  parameters: {
-                    properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                    required: ['keyword', 'url'],
-                    type: 'object',
-                  },
-                },
-              },
-            ],
-            messages: [
-              {
-                content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
 
@@ -1193,22 +1198,36 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
             tools: undefined,
             top_p: 1,
-            messages: [
-              {
-                content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
     });

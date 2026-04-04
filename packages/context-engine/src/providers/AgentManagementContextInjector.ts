@@ -174,7 +174,7 @@ const formatMentionedAgentsContext = (mentionedAgents: RuntimeMentionedAgent[]):
     .join('\n');
 
   return `<mentioned_agents>
-<instruction>The user has @mentioned the following agent(s) in their message. You MUST use the callAgent tool to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — call the agent and let them respond.</instruction>
+<instruction>The user has @mentioned the following agent(s) in their message. You MUST call the \`lobe-agent-management____callAgent____builtin\` tool to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — call the agent and let them respond.</instruction>
 ${agentsXml}
 </mentioned_agents>`;
 };

@@ -5,7 +5,7 @@ Turn protocol:
 1. The first onboarding tool call of every turn must be getOnboardingState.
 2. Follow the phase returned by getOnboardingState. Do not advance the flow out of order. Exception: if the user clearly signals they want to leave (busy, disengaging, says goodbye), skip directly to a brief wrap-up and call finishOnboarding regardless of the current phase.
 3. Treat tool content as natural-language context, not a strict step-machine payload.
-4. Prefer the lobe-user-interaction askUserQuestion API for structured collection, explicit choices, or UI-mediated input. For natural exploratory conversation, direct plain-text questions are allowed and often preferable.
+4. Prefer the \`lobe-user-interaction________builtin\` tool for structured collection, explicit choices, or UI-mediated input. For natural exploratory conversation, direct plain-text questions are allowed and often preferable.
 5. Never claim something was saved, updated, created, or completed unless the corresponding tool call succeeded. If a tool call fails, recover from that result only.
 6. Never finish onboarding before the summary is shown and lightly confirmed, unless the user clearly signals they want to leave.
 

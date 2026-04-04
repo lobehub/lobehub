@@ -1,7 +1,8 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
+import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatImageItem,
@@ -18,7 +19,8 @@ import { t } from 'i18next';
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
-import { prepareSelectedSkillPreload } from '@/services/chat/mecha/skillPreload';
+import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
+import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -196,9 +198,16 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
-    const preloadMessages = await prepareSelectedSkillPreload({
+
+    // Enrich selected skills/tools with preloaded content, injected directly
+    // via SelectedSkillInjector/SelectedToolInjector — no fake tool-call preload messages
+    const enrichedSelectedSkills = await resolveSelectedSkillsWithContent({
       message,
       selectedSkills,
+    });
+    const enrichedSelectedTools = resolveSelectedToolsWithContent({
+      message,
+      selectedTools,
     });
 
     const hasFile = !!fileIdList && fileIdList.length > 0;
@@ -221,6 +230,7 @@ export class ConversationLifecycleActionImpl {
         {
           id: nanoid(),
           content: message,
+          editorData: editorData ?? undefined,
           files: fileIdList,
           interruptMode: 'soft',
           createdAt: Date.now(),
@@ -337,16 +347,43 @@ export class ConversationLifecycleActionImpl {
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       const topicId = operationContext.topicId;
+
+      // Persist selected skill/tool context into user message content so it survives across turns.
+      // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
+      const previouslyMentionedSkills = new Set<string>();
+      const previouslyMentionedTools = new Set<string>();
+
+      for (const m of messages) {
+        if (m.role !== 'user') continue;
+        for (const s of parseSelectedSkillsFromEditorData(m.editorData ?? undefined)) {
+          previouslyMentionedSkills.add(s.identifier);
+        }
+        for (const t of parseSelectedToolsFromEditorData(m.editorData ?? undefined)) {
+          previouslyMentionedTools.add(t.identifier);
+        }
+      }
+      const dedupedSkills = enrichedSelectedSkills.filter(
+        (s) => !previouslyMentionedSkills.has(s.identifier),
+      );
+      const dedupedTools = enrichedSelectedTools.filter(
+        (t) => !previouslyMentionedTools.has(t.identifier),
+      );
+
+      const skillContext = formatSelectedSkillsContext(dedupedSkills);
+      const toolContext = formatSelectedToolsContext(dedupedTools);
+      const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
+      const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
+
       data = await aiChatService.sendMessageInServer(
         {
           newUserMessage: {
-            content: message,
+            content: persistedContent,
             editorData,
             files: fileIdList,
             pageSelections,
             parentId,
           },
-          preloadMessages: preloadMessages.length > 0 ? preloadMessages : undefined,
+          preloadMessages: undefined,
           // if there is topicId，then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,
@@ -556,30 +593,22 @@ export class ConversationLifecycleActionImpl {
       )(this.#get());
 
       try {
-        // When agents are @mentioned in non-group context, auto-enable agent-management tool
-        // so the supervisor can delegate via callAgent
-        const effectiveSelectedTools =
-          hasMentionedAgents &&
-          !selectedTools.some((t) => t.identifier === AgentManagementIdentifier)
-            ? [
-                ...selectedTools,
-                { identifier: AgentManagementIdentifier, name: 'Agent Management' },
-              ]
-            : selectedTools;
+        // When agents are @mentioned, inject a slim callAgent-only manifest
+        // so the AI can delegate directly without activating the full agent-management tool
+        const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
 
-        const hasInitialContext =
-          effectiveSelectedTools.length > 0 || selectedSkills.length > 0 || hasMentionedAgents;
+        const hasInitialContext = hasMentionedAgents || !!injectedManifests;
 
+        // Note: selectedSkills and selectedTools are NOT passed here — they are
+        // persisted into the user message content above so they survive across
+        // turns without re-injection.
         const agentRuntimeInitialContext = hasInitialContext
           ? {
               initialContext: {
-                ...(selectedSkills.length > 0 ? { selectedSkills } : undefined),
-                ...(effectiveSelectedTools.length > 0
-                  ? { selectedTools: effectiveSelectedTools }
-                  : undefined),
                 // Only inject mentionedAgents in non-group context to avoid
                 // group @member mentions (including ALL_MEMBERS) leaking into agent-management
                 ...(hasMentionedAgents ? { mentionedAgents } : undefined),
+                ...(injectedManifests ? { injectedManifests } : undefined),
               },
               phase: 'init' as const,
             }

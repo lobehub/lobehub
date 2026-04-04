@@ -54,7 +54,7 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
   const phaseGuidance = PHASE_GUIDANCE[state.phase] || '';
   const parts: string[] = [
     phaseGuidance,
-    'Questioning rule: use lobe-user-interaction askUserQuestion for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
+    'Questioning rule: use `lobe-user-interaction________builtin` tool for structured collection or explicit UI input. For natural exploratory questions, plain text is allowed.',
   ];
 
   if (state.remainingDiscoveryExchanges !== undefined && state.remainingDiscoveryExchanges > 0) {
