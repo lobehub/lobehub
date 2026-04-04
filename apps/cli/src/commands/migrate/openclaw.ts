@@ -21,6 +21,8 @@ const EXCLUDED_NAMES = new Set([
   '.cache',
 ]);
 
+const OPENCLAW_AGENT_NAME = 'OpenClaw';
+
 /**
  * Recursively collect all files under `dir`, skipping excluded directories/files.
  * Returns paths relative to `baseDir`.
@@ -43,41 +45,42 @@ function collectFiles(dir: string, baseDir: string): string[] {
   return results;
 }
 
-async function resolveInboxAgentId(
-  client: TrpcClient,
-  opts: { agentId?: string; slug: string },
-): Promise<string> {
-  if (opts.agentId) return opts.agentId;
+/**
+ * Resolve the target agent ID. If --agent-id is given, use it directly.
+ * Otherwise, create a new "OpenClaw" agent.
+ */
+async function resolveAgentId(client: TrpcClient, agentId?: string): Promise<string> {
+  if (agentId) return agentId;
 
-  const agent = await client.agent.getBuiltinAgent.query({ slug: opts.slug });
-  if (!agent) {
-    log.error(`Agent not found for slug: ${opts.slug}`);
+  log.info(`Creating new agent "${OPENCLAW_AGENT_NAME}"...`);
+  const result = await client.agent.createAgent.mutate({
+    config: { title: OPENCLAW_AGENT_NAME },
+  });
+
+  const id = result.agentId;
+  if (!id) {
+    log.error('Failed to create agent — no agentId returned.');
     process.exit(1);
   }
-  return agent.id;
+
+  console.log(`${pc.green('✓')} Agent created: ${pc.bold(id)}`);
+  return id;
 }
 
 export function registerOpenClawMigration(migrate: Command) {
   migrate
     .command('openclaw')
-    .description('Import OpenClaw workspace files as agent documents into LobeHub inbox')
+    .description('Import OpenClaw workspace files as agent documents into a new "OpenClaw" agent')
     .option(
       '--source <path>',
       'Path to OpenClaw workspace',
       path.join(process.env.HOME || '~', '.openclaw', 'workspace'),
     )
-    .option('--agent-id <id>', 'Target agent ID (defaults to inbox agent)')
-    .option('--slug <slug>', 'Target agent slug (defaults to "inbox")', 'inbox')
+    .option('--agent-id <id>', 'Import into an existing agent instead of creating a new one')
     .option('--dry-run', 'Preview files without importing')
     .option('--yes', 'Skip confirmation prompt')
     .action(
-      async (options: {
-        agentId?: string;
-        dryRun?: boolean;
-        slug: string;
-        source: string;
-        yes?: boolean;
-      }) => {
+      async (options: { agentId?: string; dryRun?: boolean; source: string; yes?: boolean }) => {
         const workspacePath = path.resolve(options.source);
 
         // Validate source directory
@@ -114,8 +117,11 @@ export function registerOpenClawMigration(migrate: Command) {
 
         // Confirm
         if (!options.yes) {
+          const target = options.agentId
+            ? `agent ${pc.bold(options.agentId)}`
+            : `a new "${OPENCLAW_AGENT_NAME}" agent`;
           const confirmed = await confirm(
-            `Import ${files.length} file(s) as agent documents to the inbox?`,
+            `Import ${files.length} file(s) as agent documents into ${target}?`,
           );
           if (!confirmed) {
             console.log('Cancelled.');
@@ -125,8 +131,8 @@ export function registerOpenClawMigration(migrate: Command) {
 
         const client = await getTrpcClient();
 
-        // Resolve agent ID
-        const agentId = await resolveInboxAgentId(client, options);
+        // Create or reuse agent
+        const agentId = await resolveAgentId(client, options.agentId);
 
         console.log(`\nImporting to agent ${pc.bold(agentId)}...\n`);
 
