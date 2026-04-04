@@ -4,11 +4,13 @@ import type { Message, SentMessage, Thread } from 'chat';
 import { emoji } from 'chat';
 import debug from 'debug';
 
+import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
@@ -90,18 +92,6 @@ interface ThreadState {
 }
 
 interface BridgeHandlerOpts {
-  /**
-   * Internal: when true, the caller already holds the `activeThreads` flag
-   * for this thread, so the callee must skip its own activeThreads check /
-   * add / delete (the parent caller owns the lifecycle).
-   *
-   * Used by `handleSubscribedMessage` when it recursively calls
-   * `handleMention` on a stale-topic reset or FK violation. Without this,
-   * the recursive call would either (a) trip its own activeThreads check
-   * and silently skip the message (race-prone) or (b) try to delete the
-   * flag in its finally and leave the parent's finally double-deleting.
-   */
-  _activeFlagHeldByCaller?: boolean;
   agentId: string;
   botContext?: ChatTopicBotContext;
   charLimit?: number;
@@ -525,13 +515,41 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+    // When the message-gateway is configured, skip the ack/progress message and
+    // rely on the gateway's alarm-based typing indicator throughout AI generation.
+    // Posting an ack message cancels platform-level typing (e.g. Discord), and the
+    // gateway typing makes ack redundant as user feedback.
+    const gwClient = getMessageGatewayClient();
+    const useGatewayTyping = gwClient.isConfigured;
 
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithCallback: failed to post initial placeholder message: %O', error);
+    if (useGatewayTyping) {
+      log('executeWithWebhooks: using gateway typing, skipping ack message');
+
+      // Platform typing (best-effort, must not block AI generation)
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+
+      // Start gateway typing immediately so the alarm keeps it alive through
+      // the entire AI generation (platform typing expires after ~10s).
+      if (botContext?.platformThreadId && botContext?.applicationId) {
+        const platform = botContext.platformThreadId.split(':')[0];
+        AgentBotProviderModel.findByPlatformAndAppId(this.db, platform, botContext.applicationId)
+          .then((row) => {
+            if (row?.id) {
+              return gwClient.startTyping(row.id, botContext.platformThreadId!);
+            }
+          })
+          .catch((err) => {
+            log('executeWithWebhooks: gateway startTyping failed: %O', err);
+          });
+      }
+    } else {
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+      }
     }
 
     const files = await this.resolveFiles(userMessage, client);

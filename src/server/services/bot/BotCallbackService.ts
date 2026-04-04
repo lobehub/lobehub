@@ -88,8 +88,12 @@ export class BotCallbackService {
       if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
         await this.handleStep(body, messenger, progressMessageId, client);
       }
-      // Renew typing on the gateway (resets the 30s timeout)
-      this.renewGatewayTyping(connectionId, platformThreadId);
+      // Only renew typing when more steps are expected. The final step
+      // (shouldContinue=false) may arrive after the completion callback
+      // via async delivery (QStash), which would restart typing after stop.
+      if (body.shouldContinue) {
+        this.renewGatewayTyping(connectionId, platformThreadId);
+      }
     } else if (type === 'completion') {
       // Stop typing on the gateway
       this.stopGatewayTyping(connectionId, platformThreadId);
