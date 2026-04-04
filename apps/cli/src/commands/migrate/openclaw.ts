@@ -101,6 +101,11 @@ export function registerOpenClawMigration(migrate: Command) {
         source: string;
         yes?: boolean;
       }) => {
+        // Check auth early so users don't scan files only to find out they're not logged in
+        if (!options.dryRun) {
+          await getTrpcClient();
+        }
+
         const workspacePath = path.resolve(options.source);
 
         // Validate source directory
