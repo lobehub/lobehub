@@ -159,6 +159,9 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       input: string;
       selectionType: string;
     }): Promise<string | null> => {
+      // Skip autocomplete during IME composition (e.g. Chinese input method)
+      if (isComposingRef.current) return null;
+
       if (!input.trim()) return null;
 
       const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
