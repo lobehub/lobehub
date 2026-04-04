@@ -6,6 +6,7 @@ import pc from 'picocolors';
 
 import type { TrpcClient } from '../../api/client';
 import { getTrpcClient } from '../../api/client';
+import { resolveServerUrl } from '../../settings';
 import { confirm } from '../../utils/format';
 import { log } from '../../utils/logger';
 
@@ -184,6 +185,9 @@ export function registerOpenClawMigration(migrate: Command) {
           `${pc.green('✓')} Done: ${pc.bold(String(success))} imported` +
             (failed > 0 ? `, ${pc.red(String(failed))} failed` : ''),
         );
+
+        const agentUrl = `${resolveServerUrl()}/agent/${agentId}`;
+        console.log(`\n${pc.bold('Open agent:')} ${pc.underline(agentUrl)}`);
       },
     );
 }
