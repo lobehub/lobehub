@@ -35,6 +35,13 @@ export const schema: FieldSchema[] = [
         required: true,
         type: 'password',
       },
+      {
+        key: 'appToken',
+        description: 'channel.slack.appTokenHint',
+        label: 'channel.slack.appToken',
+        placeholder: 'xapp-...',
+        type: 'password',
+      },
     ],
     type: 'object',
   },
@@ -42,6 +49,15 @@ export const schema: FieldSchema[] = [
     key: 'settings',
     label: 'channel.settings',
     properties: [
+      {
+        key: 'connectionMode',
+        default: 'webhook',
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
       {
         key: 'charLimit',
         default: 4000,

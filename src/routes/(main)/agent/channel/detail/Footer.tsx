@@ -167,6 +167,26 @@ const Footer = memo<FooterProps>(
           />
         )}
 
+        {hasConfig && showWebhookUrl && platformId === 'qq' && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.qq.webhookMigrationDesc')}
+            message={t('channel.qq.webhookMigrationTitle')}
+            type="warning"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && platformId === 'slack' && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.slack.webhookMigrationDesc')}
+            message={t('channel.slack.webhookMigrationTitle')}
+            type="warning"
+          />
+        )}
+
         {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>

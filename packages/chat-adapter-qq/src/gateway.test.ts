@@ -13,7 +13,7 @@ class MockWebSocket {
 
   readyState = MockWebSocket.OPEN;
   url: string;
-  private listeners: Map<string, (...args: any[]) => void[]> = new Map();
+  private listeners: Map<string, Array<(...args: any[]) => void>> = new Map();
   sentMessages: string[] = [];
 
   constructor(url: string) {
