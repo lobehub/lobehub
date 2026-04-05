@@ -103,7 +103,7 @@ const StarterList = memo(() => {
       }
 
       if (key === 'image') {
-        navigate?.('/image?model=gemini-3.1-flash-image-preview:image');
+        navigate?.('/image');
         return;
       }
 
