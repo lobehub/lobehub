@@ -5,13 +5,13 @@ import { schema } from './schema';
 export const qq: PlatformDefinition = {
   id: 'qq',
   name: 'QQ',
+  connectionMode: 'websocket',
   description: 'Connect a QQ bot',
   documentation: {
     portalUrl: 'https://q.qq.com/',
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/qq',
   },
   schema,
-  showWebhookUrl: true,
   supportsMarkdown: false,
   supportsMessageEdit: false,
   clientFactory: new QQClientFactory(),

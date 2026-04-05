@@ -258,10 +258,11 @@ export interface PlatformDefinition {
   /**
    * Connection mode: how the platform communicates with the server.
    * - 'webhook': stateless HTTP callbacks (can run in serverless)
-   * - 'persistent': requires a long-running client (e.g. websocket or long-polling)
+   * - 'websocket': persistent WebSocket connection (e.g. Discord, QQ)
+   * - 'polling': persistent long-polling connection (e.g. WeChat)
    * Defaults to 'webhook'.
    */
-  connectionMode?: 'persistent' | 'webhook';
+  connectionMode?: 'polling' | 'webhook' | 'websocket';
 
   /** The description of the platform. */
   description?: string;

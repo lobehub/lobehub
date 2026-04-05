@@ -84,6 +84,10 @@ const Footer = memo<FooterProps>(
     const platformId = platformDef.id;
     const applicationId = AntdForm.useWatch('applicationId', form);
 
+    const settingsConnectionMode = AntdForm.useWatch(['settings', 'connectionMode'], form);
+
+    const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
+
     const webhookUrl = applicationId
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
       : `${origin}/api/agent/webhooks/${platformId}`;
@@ -163,7 +167,7 @@ const Footer = memo<FooterProps>(
           />
         )}
 
-        {hasConfig && platformDef.showWebhookUrl && (
+        {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>
               <span style={{ fontWeight: 600 }}>{t('channel.endpointUrl')}</span>

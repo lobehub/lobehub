@@ -40,7 +40,7 @@ export class GatewayService {
       const definition = platformRegistry.getPlatform(platform);
       const connectionMode = definition?.connectionMode || 'webhook';
 
-      if (connectionMode === 'persistent') {
+      if (connectionMode !== 'webhook') {
         // Persistent platforms (e.g. Discord gateway or WeChat long-polling) cannot run in a
         // serverless function — queue for the long-running cron gateway.
         const queue = new BotConnectQueue();
@@ -83,7 +83,7 @@ export class GatewayService {
     if (isVercel) {
       const definition = platformRegistry.getPlatform(platform);
       const connectionMode = definition?.connectionMode || 'webhook';
-      if (connectionMode === 'persistent') {
+      if (connectionMode !== 'webhook') {
         const queue = new BotConnectQueue();
         await queue.remove(platform, applicationId);
       }

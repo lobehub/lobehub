@@ -98,6 +98,11 @@ export default {
 
   'channel.appSecretHint':
     'The App Secret of your bot application. It will be encrypted and stored securely.',
+  'channel.connectionMode': 'Connection Mode',
+  'channel.connectionModeHint':
+    'WebSocket is recommended for new bots. Use Webhook if your bot already has a callback URL configured on QQ Open Platform.',
+  'channel.connectionModeWebSocket': 'WebSocket',
+  'channel.connectionModeWebhook': 'Webhook',
   'channel.charLimit': 'Character Limit',
   'channel.charLimitHint': 'Maximum number of characters per message',
   'channel.concurrency': 'Concurrency Mode',

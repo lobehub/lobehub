@@ -31,7 +31,7 @@ const waitUntil = (task: Promise<unknown>) => {
 function getGatewayPlatforms(): PlatformDefinition[] {
   return platformRegistry
     .listPlatforms()
-    .filter((platform) => (platform.connectionMode ?? 'webhook') === 'persistent');
+    .filter((platform) => (platform.connectionMode ?? 'webhook') !== 'webhook');
 }
 
 function createRuntimeContext(): BotPlatformRuntimeContext {

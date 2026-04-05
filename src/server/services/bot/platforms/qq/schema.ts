@@ -30,6 +30,15 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       {
+        key: 'connectionMode',
+        default: 'websocket',
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
+      {
         key: 'charLimit',
         default: 2000,
         description: 'channel.charLimitHint',

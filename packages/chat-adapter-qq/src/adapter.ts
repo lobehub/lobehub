@@ -18,6 +18,7 @@ import { Message, parseMarkdown } from 'chat';
 import { QQApiClient } from './api';
 import { signWebhookResponse } from './crypto';
 import { QQFormatConverter } from './format-converter';
+import { QQGatewayConnection } from './gateway';
 import type {
   QQAdapterConfig,
   QQAttachment,
@@ -179,6 +180,33 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
         return null;
       }
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Gateway listener (WebSocket mode)
+  // ------------------------------------------------------------------
+
+  /**
+   * Start a persistent WebSocket gateway connection.
+   * Dispatch events are forwarded to the webhookUrl as HTTP POSTs,
+   * preserving compatibility with the existing handleWebhook() pipeline.
+   */
+  async startGatewayListener(
+    options: { waitUntil: (task: Promise<any>) => void },
+    durationMs: number,
+    abortSignal: AbortSignal,
+    webhookUrl: string,
+  ): Promise<void> {
+    const gateway = new QQGatewayConnection(this.api, {
+      abortSignal,
+      durationMs,
+      log: (msg: string, ...rest: any[]) => this.logger.info(msg, ...rest),
+      webhookUrl,
+    });
+
+    const gatewayTask = gateway.connect();
+    options.waitUntil(gatewayTask);
+    await gatewayTask;
   }
 
   // ------------------------------------------------------------------
