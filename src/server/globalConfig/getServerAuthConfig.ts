@@ -19,6 +19,7 @@ export const getServerAuthConfig = (): GlobalServerConfig => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
+    isQStashConfigured: appEnv.isQStashConfigured,
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     telemetry: {},
   };

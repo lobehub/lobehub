@@ -21,7 +21,7 @@ const ProfileEditor = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const enableCronJobs = useServerConfigStore(serverConfigSelectors.enableCronJobs);
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
   const updateHeterogeneousCommand = async (command: string) => {
     if (!heterogeneousProvider) return;
@@ -80,7 +80,7 @@ const ProfileEditor = memo(() => {
       {/* Main Content: Prompt Editor */}
       <EditorCanvas />
       {/* Agent Cron Jobs Display (only show if jobs exist) */}
-      {enableBusinessFeatures && <AgentCronJobs />}
+      {enableCronJobs && <AgentCronJobs />}
       {/* Advanced Settings Modal */}
       <AgentSettings />
     </>

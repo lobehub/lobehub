@@ -4,8 +4,13 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentCronJobModel } from '@/database/models/agentCronJob';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import {
+  deleteCronJobSchedule,
+  upsertCronJobSchedule,
+} from '@/server/services/agentCron/qstashSchedule';
 
 const agentCronJobProcedure = authedProcedure.use(serverDatabase);
 
@@ -79,12 +84,43 @@ export const agentCronJobRouter = router({
         const cronJobData = { ...input, userId };
         const cronJob = await cronJobModel.create(cronJobData as InsertAgentCronJob);
 
+        if (appEnv.isQStashConfigured && cronJob.enabled) {
+          try {
+            await upsertCronJobSchedule(cronJob);
+          } catch (scheduleError) {
+            console.error(
+              '[agentCronJob:create] schedule provisioning failed, compensating delete',
+              {
+                cronJobId: cronJob.id,
+                error: scheduleError,
+              },
+            );
+
+            try {
+              await cronJobModel.delete(cronJob.id);
+            } catch (compensationError) {
+              console.error('[agentCronJob:create] compensation delete failed', {
+                compensationError,
+                cronJobId: cronJob.id,
+              });
+            }
+
+            throw new TRPCError({
+              cause: scheduleError,
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to create cron job schedule',
+            });
+          }
+        }
+
         return {
           data: cronJob,
           message: 'Cron job created successfully',
           success: true,
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
         console.error('[agentCronJob:create]', error);
         throw new TRPCError({
           cause: error,
@@ -105,6 +141,18 @@ export const agentCronJobRouter = router({
 
       try {
         const cronJobModel = new AgentCronJobModel(db, userId);
+        const existing = await cronJobModel.findById(id);
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Cron job not found or access denied',
+          });
+        }
+
+        if (appEnv.isQStashConfigured) {
+          await deleteCronJobSchedule(existing.id);
+        }
+
         const deleted = await cronJobModel.delete(id);
 
         if (!deleted) {
@@ -300,6 +348,10 @@ export const agentCronJobRouter = router({
           });
         }
 
+        if (appEnv.isQStashConfigured && cronJob.enabled) {
+          await upsertCronJobSchedule(cronJob);
+        }
+
         return {
           data: cronJob,
           message: 'Execution counts reset successfully',
@@ -333,6 +385,15 @@ export const agentCronJobRouter = router({
 
       try {
         const cronJobModel = new AgentCronJobModel(db, userId);
+        const existing = await cronJobModel.findById(id);
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Cron job not found or access denied',
+          });
+        }
+
         const cronJob = await cronJobModel.update(id, data as UpdateAgentCronJob);
 
         if (!cronJob) {
@@ -340,6 +401,12 @@ export const agentCronJobRouter = router({
             code: 'NOT_FOUND',
             message: 'Cron job not found or access denied',
           });
+        }
+
+        if (appEnv.isQStashConfigured && !cronJob.enabled) {
+          await deleteCronJobSchedule(existing.id);
+        } else if (appEnv.isQStashConfigured) {
+          await upsertCronJobSchedule(cronJob);
         }
 
         return {

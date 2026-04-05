@@ -1,5 +1,54 @@
 import { z } from 'zod';
 
+const CRON_SHORTCUTS = new Set([
+  '@annually',
+  '@yearly',
+  '@monthly',
+  '@weekly',
+  '@daily',
+  '@hourly',
+  '@reboot',
+]);
+
+const cronEveryPattern = /^@every (?:\d+(?:ns|us|µs|ms|[hms]))+$/;
+const cronFieldPattern = /^(?:\*|\d+)(?:[/-]\d+)?(?:,\d+(?:[/-]\d+)?)*$/;
+const validQuarterMinutes = new Set(['0', '15', '30', '45']);
+
+const parseStepValue = (value: string) => {
+  if (!value.startsWith('*/')) {
+    return null;
+  }
+
+  const stepText = value.slice(2);
+  if (!/^\d+$/.test(stepText)) {
+    return null;
+  }
+
+  const step = Number.parseInt(stepText, 10);
+  if (Number.isNaN(step)) {
+    return null;
+  }
+
+  return step;
+};
+
+const isValidCronPattern = (pattern: string) => {
+  if (CRON_SHORTCUTS.has(pattern)) {
+    return true;
+  }
+
+  if (cronEveryPattern.test(pattern)) {
+    return true;
+  }
+
+  const fields = pattern.trim().split(/\s+/);
+  if (fields.length < 5 || fields.length > 7) {
+    return false;
+  }
+
+  return fields.every((field) => cronFieldPattern.test(field));
+};
+
 // Execution conditions type
 export interface ExecutionConditions {
   maxExecutionsPerDay?: number;
@@ -11,65 +60,52 @@ export interface ExecutionConditions {
 }
 
 // Cron pattern validation schema
-export const cronPatternSchema = z
-  .string()
-  .regex(
-    /^(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|[hms]))+)|((((\d+,)+\d+|(\d+([/-])\d+)|\d+|\*) ?){5,7})$/,
-    'Invalid cron pattern',
-  );
+export const cronPatternSchema = z.string().refine(isValidCronPattern, 'Invalid cron pattern');
 
-// Minimum 30 minutes validation (using standard cron format)
+// Minimum 15 minutes validation (using standard cron format)
 export const minimumIntervalSchema = z.string().refine((pattern) => {
   // Standard cron format: minute hour day month weekday
-  // Parse pattern to validate minimum 30-minute interval
-  const parts = pattern.split(' ');
+  // Parse pattern to validate minimum 15-minute interval
+  const parts = pattern.trim().split(/\s+/);
   if (parts.length !== 5) {
     return false;
   }
 
   const [minute, hour] = parts;
 
-  // Validate minute is 0 or 30 (we only allow 30-minute intervals)
-  const isValidMinute = minute === '0' || minute === '30' || minute === '*/30';
+  // Allow minute intervals >= 15 (e.g., */15, */30, */45, */60)
+  const minuteStep = parseStepValue(minute);
+  if (minuteStep !== null) {
+    return minuteStep >= 15;
+  }
 
-  if (!isValidMinute) {
+  // Validate minute is 0, 15, 30 or 45 (we only allow 15-minute intervals)
+  if (!validQuarterMinutes.has(minute)) {
     return false;
   }
 
-  // Allow minute intervals >= 30 (e.g., */30, */45, */60)
-  if (minute.startsWith('*/')) {
-    const interval = parseInt(minute.slice(2));
-    if (!isNaN(interval) && interval >= 30) {
-      return true;
-    }
-    return false;
+  // Allow hourly patterns: {0|15|30|45} */N * * * where N >= 1
+  const hourStep = parseStepValue(hour);
+  if (hourStep !== null) {
+    return hourStep >= 1;
   }
 
-  // Allow hourly patterns: {0|30} */N * * * where N >= 1
-  if ((minute === '0' || minute === '30') && hour.startsWith('*/')) {
-    const interval = parseInt(hour.slice(2));
-    if (!isNaN(interval) && interval >= 1) {
-      return true;
-    }
-    return false;
-  }
-
-  // Allow hourly patterns: {0|30} * * * * (every hour at :00 or :30)
-  if ((minute === '0' || minute === '30') && hour === '*') {
+  // Allow hourly patterns: {0|15|30|45} * * * * (every hour at :00, :15, :30 or :45)
+  if (hour === '*') {
     return true;
   }
 
-  // Allow specific hour patterns: {0|30} N * * * (runs once per day)
-  // or {0|30} N * * {weekdays} (runs on specific weekdays)
-  if ((minute === '0' || minute === '30') && /^\d+$/.test(hour)) {
-    const h = parseInt(hour);
-    if (!isNaN(h) && h >= 0 && h <= 23) {
+  // Allow specific hour patterns: {0|15|30|45} N * * * (runs once per day)
+  // or {0|15|30|45} N * * {weekdays} (runs on specific weekdays)
+  if (/^\d{1,2}$/.test(hour)) {
+    const h = Number.parseInt(hour, 10);
+    if (!Number.isNaN(h) && h >= 0 && h <= 23) {
       return true;
     }
   }
 
   return false;
-}, 'Minimum execution interval is 30 minutes');
+}, 'Minimum execution interval is 15 minutes');
 
 // Execution conditions schema
 export const ExecutionConditionsSchema = z

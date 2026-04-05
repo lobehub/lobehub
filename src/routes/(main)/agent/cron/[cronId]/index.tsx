@@ -87,7 +87,7 @@ const CronJobDetailPage = memo(() => {
   const router = useQueryRoute();
   const { modal } = App.useApp();
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const enableCronJobs = useServerConfigStore(serverConfigSelectors.enableCronJobs);
 
   const isNewJob = cronId === 'new';
 
@@ -118,7 +118,7 @@ const CronJobDetailPage = memo(() => {
   const cronListAgentId = activeAgentId || aid;
 
   const { data: cronJob, isLoading } = useSWR(
-    enableBusinessFeatures && cronId && !isNewJob ? ['cronJob', cronId] : null,
+    enableCronJobs && cronId && !isNewJob ? ['cronJob', cronId] : null,
     async () => {
       if (!cronId || isNewJob) return null;
       const result = await agentCronJobService.getById(cronId);
@@ -455,7 +455,7 @@ const CronJobDetailPage = memo(() => {
     flushPendingSave();
   }, [cronJob, flushPendingSave]);
 
-  if (!enableBusinessFeatures) {
+  if (!enableCronJobs) {
     return null;
   }
 

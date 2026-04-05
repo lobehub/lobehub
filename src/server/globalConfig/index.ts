@@ -84,6 +84,7 @@ export const getServerGlobalConfig = async () => {
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
+    isQStashConfigured: appEnv.isQStashConfigured,
 
     // Expose Agent Gateway URL to client when queue-based agent runtime is enabled
     ...(appEnv.enableQueueAgentRuntime && appEnv.AGENT_GATEWAY_URL

@@ -20,9 +20,9 @@ const AgentCronJobs = memo(() => {
   const { t } = useTranslation('setting');
   const agentId = useAgentStore((s) => s.activeAgentId);
   const router = useQueryRoute();
-  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const enableCronJobs = useServerConfigStore(serverConfigSelectors.enableCronJobs);
 
-  const { cronJobs, loading, deleteCronJob } = useAgentCronJobs(agentId, enableBusinessFeatures);
+  const { cronJobs, loading, deleteCronJob } = useAgentCronJobs(agentId, enableCronJobs);
 
   // Edit: Navigate to cron job detail page
   const handleEdit = useCallback(
@@ -41,7 +41,7 @@ const AgentCronJobs = memo(() => {
     [deleteCronJob],
   );
 
-  if (!enableBusinessFeatures) return null;
+  if (!enableCronJobs) return null;
 
   if (!agentId) {
     return null;

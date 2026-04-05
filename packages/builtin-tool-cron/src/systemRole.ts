@@ -47,21 +47,24 @@ Cron patterns use the format: "minute hour day month weekday"
 
 **Common Patterns:**
 - \`0 9 * * *\` - Every day at 9:00 AM
+- \`15 9 * * *\` - Every day at 9:15 AM
 - \`30 9 * * *\` - Every day at 9:30 AM
+- \`45 9 * * *\` - Every day at 9:45 AM
 - \`0 */2 * * *\` - Every 2 hours at :00
+- \`15 */2 * * *\` - Every 2 hours at :15
 - \`30 */2 * * *\` - Every 2 hours at :30
 - \`0 9 * * 1-5\` - Weekdays at 9:00 AM
 - \`0 9 * * 1,3,5\` - Monday, Wednesday, Friday at 9:00 AM
 - \`0 9 * * 0\` - Every Sunday at 9:00 AM
 
 **Field Values:**
-- Minute: 0-59 (only 0 or 30 for minimum 30-minute interval)
+- Minute: 0-59 (recommended: 0, 15, 30, 45 for minimum 15-minute interval)
 - Hour: 0-23 or */N for every N hours
 - Day: 1-31 or * for every day
 - Month: 1-12 or * for every month
 - Weekday: 0-6 (0=Sunday, 1=Monday, etc.) or * for every day
 
-**Important:** Minimum execution interval is 30 minutes. Patterns like \`*/5 * * * *\` (every 5 minutes) are not allowed.
+**Important:** Minimum execution interval is 15 minutes. Patterns like \`*/5 * * * *\` (every 5 minutes) are not allowed.
 </cron_pattern_guide>
 
 <timezone_guide>

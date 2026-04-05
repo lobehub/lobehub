@@ -45,6 +45,13 @@ export class AgentCronJobModel {
     return result[0] || null;
   }
 
+  // Find cron job by ID (without ownership check, for system execution)
+  static async findById(db: LobeChatDatabase, id: string): Promise<AgentCronJob | null> {
+    const result = await db.select().from(agentCronJobs).where(eq(agentCronJobs.id, id)).limit(1);
+
+    return result[0] || null;
+  }
+
   // Find all cron jobs for a specific agent
   async findByAgentId(agentId: string): Promise<AgentCronJob[]> {
     return this.db
@@ -136,7 +143,7 @@ export class AgentCronJobModel {
       .set({
         lastExecutedAt: new Date(),
         remainingExecutions: sql`
-          CASE 
+          CASE
             WHEN ${agentCronJobs.remainingExecutions} IS NULL THEN NULL
             ELSE ${agentCronJobs.remainingExecutions} - 1
           END
