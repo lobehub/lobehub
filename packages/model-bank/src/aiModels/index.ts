@@ -14,6 +14,7 @@ import { default as bailiancodingplan } from './bailianCodingPlan';
 import { default as bedrock } from './bedrock';
 import { default as bfl } from './bfl';
 import { default as cerebras } from './cerebras';
+import { default as chuizi } from './chuizi';
 import { default as cloudflare } from './cloudflare';
 import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
@@ -113,6 +114,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   bedrock,
   bfl,
   cerebras,
+  chuizi,
   cloudflare,
   cohere,
   cometapi,
@@ -193,6 +195,7 @@ export { default as bailiancodingplan } from './bailianCodingPlan';
 export { default as bedrock } from './bedrock';
 export { default as bfl } from './bfl';
 export { default as cerebras } from './cerebras';
+export { default as chuizi } from './chuizi';
 export { default as cloudflare } from './cloudflare';
 export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
