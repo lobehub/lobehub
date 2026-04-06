@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
-import type { BotPlatformRuntimeContext, BotProviderConfig } from '../types';
+import type { BotPlatformRuntimeContext, BotProviderConfig, PlatformClient } from '../types';
 import { DingTalkApi } from './api';
 import { DingTalkClientFactory } from './client';
 import {
@@ -37,6 +37,10 @@ const oToMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/oToMessages/batchSen
 const groupMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/groupMessages/send';
 
 const updateRuntimeStatusMock = vi.mocked(updateBotRuntimeStatus);
+type DingTalkClientUnderTest = PlatformClient & {
+  formatMarkdown: NonNullable<PlatformClient['formatMarkdown']>;
+  formatReply: NonNullable<PlatformClient['formatReply']>;
+};
 
 function buildConfig(settings: Record<string, unknown> = {}): BotProviderConfig {
   return {
@@ -45,6 +49,10 @@ function buildConfig(settings: Record<string, unknown> = {}): BotProviderConfig 
     credentials: { ...baseCredentials },
     settings,
   };
+}
+
+function createClient(settings: Record<string, unknown> = {}): DingTalkClientUnderTest {
+  return factory.createClient(buildConfig(settings), baseContext) as DingTalkClientUnderTest;
 }
 
 const createChatStub = () => {
@@ -92,7 +100,13 @@ const createCheckUrlRequest = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  updateRuntimeStatusMock.mockResolvedValue(undefined);
+  updateRuntimeStatusMock.mockImplementation(async ({ applicationId, errorMessage, platform, status }) => ({
+    applicationId,
+    errorMessage,
+    platform,
+    status,
+    updatedAt: 0,
+  }));
 });
 
 afterEach(() => {
@@ -290,7 +304,7 @@ describe('DingTalkApi', () => {
 
 describe('DingTalkClient', () => {
   it('creates a DingTalk adapter with the encrypted callback credentials wired through', async () => {
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     const adapters = client.createAdapter();
     expect(adapters).toHaveProperty('dingtalk');
@@ -321,7 +335,7 @@ describe('DingTalkClient', () => {
     const getAccessTokenSpy = vi.spyOn(DingTalkApi.prototype, 'getAccessToken').mockResolvedValue(
       'token',
     );
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     await client.start();
 
@@ -340,7 +354,7 @@ describe('DingTalkClient', () => {
 
   it('marks runtime failed when start credential validation fails', async () => {
     vi.spyOn(DingTalkApi.prototype, 'getAccessToken').mockRejectedValue(new Error('bad auth'));
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     await expect(client.start()).rejects.toThrow('bad auth');
 
@@ -358,7 +372,7 @@ describe('DingTalkClient', () => {
   });
 
   it('marks runtime disconnected on stop', async () => {
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     await client.stop();
 
@@ -373,7 +387,7 @@ describe('DingTalkClient', () => {
     const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
       {},
     );
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     await client.getMessenger('dingtalk:group:cid-group').createMessage('hello');
 
@@ -389,7 +403,7 @@ describe('DingTalkClient', () => {
     const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
       {},
     );
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     await client.getMessenger('dingtalk:dm:user-1').createMessage('hello');
 
@@ -405,10 +419,7 @@ describe('DingTalkClient', () => {
     const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
       {},
     );
-    const client = factory.createClient(
-      buildConfig({ messageType: 'text' }),
-      baseContext,
-    );
+    const client = createClient({ messageType: 'text' });
 
     expect(client.formatMarkdown('**hello** `world`')).toBe('hello world');
 
@@ -426,10 +437,7 @@ describe('DingTalkClient', () => {
     const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
       {},
     );
-    const client = factory.createClient(
-      buildConfig({ charLimit: 5, messageType: 'text' }),
-      baseContext,
-    );
+    const client = createClient({ charLimit: 5, messageType: 'text' });
 
     await client.getMessenger('dingtalk:group:cid-group').createMessage('a'.repeat(150));
 
@@ -442,7 +450,7 @@ describe('DingTalkClient', () => {
   });
 
   it('rejects malformed platformThreadId values before routing outbound messages', () => {
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     expect(() => client.getMessenger('oops')).toThrow('Invalid DingTalk threadId: oops');
   });
@@ -451,7 +459,7 @@ describe('DingTalkClient', () => {
     const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
       {},
     );
-    const client = factory.createClient(buildConfig(), baseContext);
+    const client = createClient();
 
     await client.getMessenger('dingtalk:group:cid-group').editMessage('mid-1', 'hello again');
 
@@ -472,7 +480,7 @@ describe('DingTalkClient', () => {
       totalTokens: 123,
     };
 
-    const statsClient = factory.createClient(buildConfig({ showUsageStats: true }), baseContext);
+    const statsClient = createClient({ showUsageStats: true });
 
     const replyWithStats = statsClient.formatReply('hello', stats);
     expect(replyWithStats).toContain('hello');
@@ -480,7 +488,7 @@ describe('DingTalkClient', () => {
     expect(replyWithStats).toContain('llm×1');
     expect(replyWithStats).toContain('tools×2');
 
-    const silentClient = factory.createClient(buildConfig({ showUsageStats: false }), baseContext);
+    const silentClient = createClient({ showUsageStats: false });
     expect(silentClient.formatReply('hello', stats)).toBe('hello');
   });
 });
