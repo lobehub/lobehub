@@ -7,7 +7,7 @@ import {
 
 import { displayToolCallsField, serverIdField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
-import { MAX_SLACK_HISTORY_LIMIT } from './const';
+import { DEFAULT_SLACK_CONNECTION_MODE, MAX_SLACK_HISTORY_LIMIT } from './const';
 
 export const schema: FieldSchema[] = [
   {
@@ -51,7 +51,7 @@ export const schema: FieldSchema[] = [
     properties: [
       {
         key: 'connectionMode',
-        default: 'webhook',
+        default: DEFAULT_SLACK_CONNECTION_MODE,
         description: 'channel.connectionModeHint',
         enum: ['websocket', 'webhook'],
         enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],

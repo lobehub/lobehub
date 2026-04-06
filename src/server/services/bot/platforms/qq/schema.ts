@@ -2,6 +2,7 @@ import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
 import { displayToolCallsField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
+import { DEFAULT_QQ_CONNECTION_MODE } from './const';
 
 export const schema: FieldSchema[] = [
   {
@@ -31,7 +32,7 @@ export const schema: FieldSchema[] = [
     properties: [
       {
         key: 'connectionMode',
-        default: 'websocket',
+        default: DEFAULT_QQ_CONNECTION_MODE,
         description: 'channel.connectionModeHint',
         enum: ['websocket', 'webhook'],
         enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],

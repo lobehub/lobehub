@@ -7,7 +7,7 @@ import {
 
 import { displayToolCallsField, userIdField } from '../../const';
 import type { FieldSchema } from '../../types';
-import { MAX_FEISHU_HISTORY_LIMIT } from '../const';
+import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
 
 export const sharedSchema: FieldSchema[] = [
   {
@@ -51,7 +51,7 @@ export const sharedSchema: FieldSchema[] = [
     properties: [
       {
         key: 'connectionMode',
-        default: 'webhook',
+        default: DEFAULT_FEISHU_CONNECTION_MODE,
         description: 'channel.connectionModeHint',
         enum: ['websocket', 'webhook'],
         enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
