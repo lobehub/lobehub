@@ -1,4 +1,4 @@
-import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { App, Button, Input } from 'antd';
 import { cssVar } from 'antd-style';
@@ -14,29 +14,10 @@ import TaskScheduleConfig from './TaskScheduleConfig';
 
 const DEBOUNCE_MS = 300;
 
-const statusColorMap: Record<string, string> = {
-  backlog: 'default',
-  canceled: 'default',
-  completed: 'success',
-  failed: 'warning',
-  paused: 'warning',
-  running: 'processing',
-};
-
-const priorityLabelMap: Record<number, string> = {
-  0: 'None',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Normal',
-  4: 'Low',
-};
-
 const TaskDetailHeader = memo(() => {
   const { t } = useTranslation('chat');
   const { modal } = App.useApp();
   const name = useTaskStore(taskDetailSelectors.activeTaskName);
-  const status = useTaskStore(taskDetailSelectors.activeTaskStatus);
-  const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
   const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
@@ -88,8 +69,6 @@ const TaskDetailHeader = memo(() => {
           </Button>
         )}
         <TaskScheduleConfig />
-        {status && <Tag color={statusColorMap[status] ?? 'default'}>{status}</Tag>}
-        {priority > 0 && <Tag>{priorityLabelMap[priority] ?? `P${priority}`}</Tag>}
         <Flexbox flex={1} />
         {taskId && (
           <ActionIcon

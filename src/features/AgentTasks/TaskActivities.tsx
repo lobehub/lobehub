@@ -1,8 +1,8 @@
-import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Input } from 'antd';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { ArrowUp, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -125,7 +125,8 @@ const TaskActivities = memo(() => {
 
   return (
     <Flexbox gap={0}>
-      <Flexbox horizontal align="center" className={styles.activityDivider}>
+      <Flexbox horizontal align="center" className={styles.activityDivider} gap={8}>
+        <Icon icon={BotMessageSquare} size={18} style={{ color: cssVar.colorTextSecondary }} />
         <Text style={{ fontSize: cssVar.fontSize }} weight="bold">
           {t('taskDetail.activities')}
         </Text>

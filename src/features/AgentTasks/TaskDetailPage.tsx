@@ -14,6 +14,7 @@ import TaskDetailHeader from './TaskDetailHeader';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
+import TaskProperties from './TaskProperties';
 import TaskSubtasks from './TaskSubtasks';
 
 interface TaskDetailPageProps {
@@ -44,15 +45,18 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         {isLoading ? (
           <Loading debugId="TaskDetail" />
         ) : (
-          <div className={styles.detailContent}>
-            <TaskDetailHeader />
-            <TaskParentBar />
-            <div style={{ paddingBlock: 8 }}>
-              <TaskModelConfig />
+          <div className={styles.detailLayout}>
+            <div className={styles.detailMain}>
+              <TaskDetailHeader />
+              <TaskParentBar />
+              <div style={{ paddingBlock: 8 }}>
+                <TaskModelConfig />
+              </div>
+              <TaskInstruction />
+              <TaskSubtasks />
+              <TaskActivities />
             </div>
-            <TaskInstruction />
-            <TaskSubtasks />
-            <TaskActivities />
+            <TaskProperties />
           </div>
         )}
       </div>

@@ -12,10 +12,11 @@ export const createTaskLifecycleSlice = (set: Setter, get: () => TaskStore, _api
 
 export class TaskLifecycleSliceActionImpl {
   readonly #get: () => TaskStore;
+  readonly #set: Setter;
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
-    void set;
+    this.#set = set;
     this.#get = get;
   }
 
@@ -79,13 +80,16 @@ export class TaskLifecycleSliceActionImpl {
       type: 'updateTaskDetail',
       value: { status, ...extraUpdate },
     });
+    this.#set({ taskSaveStatus: 'saving' }, false, 'transitionStatus/saving');
 
     try {
       await taskService.updateStatus(id, status);
+      this.#set({ taskSaveStatus: 'saved' }, false, 'transitionStatus/saved');
       await this.#get().internal_refreshTaskDetail(id);
       await this.#get().refreshTaskList();
     } catch (error) {
       console.error(`[TaskStore] Failed to transition task to ${status}:`, error);
+      this.#set({ taskSaveStatus: 'idle' }, false, 'transitionStatus/error');
       await this.#get().internal_refreshTaskDetail(id);
     }
   };
