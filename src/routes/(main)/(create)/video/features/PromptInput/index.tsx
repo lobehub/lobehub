@@ -172,6 +172,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { t } = useTranslation('video');
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const { value: imageUrl, setValue: setImageUrl } = useVideoGenerationConfigParam('imageUrl');
+  const {
+    value: imageUrls,
+    setValue: setImageUrls,
+    maxCount: imageUrlsMaxCount,
+    maxFileSize: imageUrlsMaxFileSize,
+  } = useVideoGenerationConfigParam('imageUrls');
+  const { maxFileSize: imageUrlMaxFileSize } = useVideoGenerationConfigParam('imageUrl');
   const { value: endImageUrl, setValue: setEndImageUrl } =
     useVideoGenerationConfigParam('endImageUrl');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
@@ -182,6 +189,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
   const isInit = useVideoStore((s) => s.isInit);
   const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
+  const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
   const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
   const isSupportAspectRatio = useVideoStore(isSupportedParamSelector('aspectRatio'));
   const isSupportResolution = useVideoStore(isSupportedParamSelector('resolution'));
@@ -224,19 +232,54 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     }
   }, [promptParam, isLogin, setValue, setPromptParam, createVideo]);
 
-  const showInlineFrames = isSupportImageUrl || isSupportEndImageUrl;
-  const hasRefImages = Boolean(imageUrl || endImageUrl);
+  const showInlineFrames = isSupportImageUrl || isSupportImageUrls || isSupportEndImageUrl;
+  const framePreviewUrls = useMemo(
+    () => [imageUrl, ...(imageUrls ?? [])].filter(Boolean) as string[],
+    [imageUrl, imageUrls],
+  );
+  const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const maxCount = useMemo(() => {
+    let count = 0;
+    if (isSupportImageUrl) count += 1;
+    if (isSupportImageUrls) count += imageUrlsMaxCount ?? 4;
+    return count;
+  }, [isSupportImageUrl, isSupportImageUrls, imageUrlsMaxCount]);
 
-  const handleImageChange = useCallback(
-    (data: string | { dimensions?: { height: number; width: number }; url: string } | null) => {
-      if (data === null) {
-        setImageUrl(null as any);
-        return;
-      }
+  const handleAddImage = useCallback(
+    (data: string | { dimensions?: { height: number; width: number }; url: string }) => {
       const url = typeof data === 'string' ? data : data?.url;
-      setImageUrl((url ?? null) as any);
+      if (!url) return;
+      if (framePreviewUrls.length >= maxCount) return;
+
+      if (isSupportImageUrl && !imageUrl) {
+        setImageUrl(url);
+      } else if (isSupportImageUrls) {
+        setImageUrls([...(imageUrls ?? []), url] as any);
+      } else if (isSupportImageUrl) {
+        setImageUrl(url);
+      }
     },
-    [setImageUrl],
+    [
+      isSupportImageUrl,
+      isSupportImageUrls,
+      imageUrl,
+      imageUrls,
+      setImageUrl,
+      setImageUrls,
+      framePreviewUrls.length,
+      maxCount,
+    ],
+  );
+
+  const handleRemoveImage = useCallback(
+    (url: string) => {
+      if (url === imageUrl) {
+        setImageUrl(null);
+      } else {
+        setImageUrls((imageUrls ?? []).filter((item) => item !== url) as any);
+      }
+    },
+    [imageUrl, imageUrls, setImageUrl, setImageUrls],
   );
 
   const handleEndImageChange = useCallback(
@@ -267,9 +310,20 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
               <InlineVideoFrames
                 endImageUrl={endImageUrl}
                 imageUrl={imageUrl}
+                imageUrls={imageUrls}
                 isSupportEndImage={isSupportEndImageUrl}
+                maxCount={maxCount}
+                maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
                 onEndImageChange={handleEndImageChange}
-                onImageChange={handleImageChange}
+                onImageUrlsChange={handleAddImage}
+                onRemoveImageUrl={handleRemoveImage}
+                onImageChange={(data) => {
+                  if (data === null) {
+                    handleRemoveImage(imageUrl || '');
+                    return;
+                  }
+                  handleAddImage(data);
+                }}
               />
             ) : undefined
           }

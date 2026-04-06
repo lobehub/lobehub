@@ -41,6 +41,20 @@ export const VideoModelParamsMetaSchema = z.object({
     })
     .optional(),
 
+  imageUrls: z
+    .object({
+      /** Aspect ratio (width/height) constraints */
+      aspectRatio: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
+      default: z.array(z.string()),
+      description: z.string().optional(),
+      height: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
+      maxCount: z.number().optional(),
+      maxFileSize: z.number().optional(),
+      type: z.literal('array').optional(),
+      width: z.object({ max: z.number().optional(), min: z.number().optional() }).optional(),
+    })
+    .optional(),
+
   endImageUrl: z
     .object({
       /** Aspect ratio (width/height) constraints */
@@ -140,8 +154,13 @@ type VideoTypeMapping<T> = T extends 'string'
 type VideoTypeType<K extends VideoModelParamsKeys> = NonNullable<
   VideoModelParamsOutputSchema[K]
 >['type'];
+type VideoDefaultType<K extends VideoModelParamsKeys> = NonNullable<
+  VideoModelParamsOutputSchema[K]
+>['default'];
 type _StandardVideoGenerationParameters<P extends VideoModelParamsKeys = VideoModelParamsKeys> = {
-  [key in P]: VideoTypeMapping<VideoTypeType<key>>;
+  [key in P]: NonNullable<VideoTypeType<key>> extends 'array'
+    ? VideoDefaultType<key>
+    : VideoTypeMapping<VideoTypeType<key>>;
 };
 
 export type RuntimeVideoGenParams = Pick<_StandardVideoGenerationParameters, 'prompt'> &

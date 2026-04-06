@@ -52,6 +52,7 @@ function preserveVideoInputParams(
   const result = preserveSupportedParams(previousParameters, nextDefaultValues, nextSchema, [
     'prompt',
     'imageUrl',
+    'imageUrls',
     'endImageUrl',
   ]);
 

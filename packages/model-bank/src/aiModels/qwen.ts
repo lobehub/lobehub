@@ -3634,8 +3634,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
       },
       duration: { default: 5, max: 10, min: 2 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 5,
       },
       prompt: { default: '' },
       resolution: {
@@ -3736,8 +3737,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     parameters: {
       duration: { default: 5, max: 10, min: 2 },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 5,
       },
       prompt: { default: '' },
       size: {
@@ -3771,8 +3773,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     id: 'wan2.6-r2v',
     parameters: {
       duration: { default: 5, max: 10, min: 2 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 5,
       },
       prompt: { default: '' },
       size: {
@@ -4154,8 +4157,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
@@ -4501,8 +4505,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     id: 'vidu/viduq2-pro_reference2video',
     parameters: {
       duration: { default: 5, max: 10, min: 1 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
@@ -4544,8 +4549,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     id: 'vidu/viduq2_reference2video',
     parameters: {
       duration: { default: 5, max: 10, min: 1 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
@@ -4789,8 +4795,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     parameters: {
       duration: { default: 5, enum: [5, 8, 10] },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       seed: { default: null },

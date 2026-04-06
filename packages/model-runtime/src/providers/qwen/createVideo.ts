@@ -117,7 +117,7 @@ async function createVideoTask(
   baseUrl: string,
 ): Promise<string> {
   const { model, params } = payload;
-  const { prompt, imageUrl, endImageUrl } = params;
+  const { prompt, imageUrl, imageUrls, endImageUrl } = params;
 
   // Determine the endpoint based on task type
   const url = `${baseUrl}/api/v1/services/aigc/${taskType}/video-synthesis`;
@@ -158,6 +158,14 @@ async function createVideoTask(
         url: imageUrl,
       });
     }
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url) =>
+        media.push({
+          type: 'image',
+          url,
+        }),
+      );
+    }
     if (endImageUrl) {
       media.push({
         type: 'image',
@@ -175,6 +183,21 @@ async function createVideoTask(
         url: imageUrl,
       });
     }
+    if (imageUrls && imageUrls.length > 0) {
+      if (imageUrls.length === 1 && endImageUrl) {
+        media.push({
+          type: 'first_frame',
+          url: imageUrls[0],
+        });
+      } else {
+        imageUrls.forEach((url) =>
+          media.push({
+            type: 'refer',
+            url,
+          }),
+        );
+      }
+    }
     if (endImageUrl) {
       media.push({
         type: 'last_frame',
@@ -185,6 +208,14 @@ async function createVideoTask(
       input.media = media;
     }
   } else if (model.startsWith('pixverse/')) {
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url) =>
+        input.media.push({
+          type: 'image_url',
+          url,
+        }),
+      );
+    }
     if (imageUrl && !endImageUrl) {
       input.media = [
         {
@@ -207,18 +238,18 @@ async function createVideoTask(
   } else if (model.startsWith('wan2.7')) {
     const media = [];
     if (imageUrl) {
-      if (model.includes('r2v')) {
-        // For Wan2.7 R2V models, treat reference images as "reference_image" type to provide stronger referencing capability
+      media.push({
+        type: 'first_frame',
+        url: imageUrl,
+      });
+    }
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url) =>
         media.push({
           type: 'reference_image',
-          url: imageUrl,
-        });
-      } else {
-        media.push({
-          type: 'first_frame',
-          url: imageUrl,
-        });
-      }
+          url,
+        }),
+      );
     }
     if (endImageUrl) {
       media.push({
@@ -230,11 +261,20 @@ async function createVideoTask(
       input.media = media;
     }
   } else if (matchesModelPattern(model, reference2VideoModels)) {
-    input.reference_urls = [imageUrl];
+    if (imageUrl) {
+      input.reference_urls = [imageUrl];
+    }
+    if (imageUrls && imageUrls.length > 0) {
+      input.reference_urls = imageUrls;
+    }
   } else if (matchesModelPattern(model, keyframe2VideoModels)) {
-    input.first_frame_url = imageUrl;
-    input.last_frame_url = endImageUrl;
-  } else if (matchesModelPattern(model, image2VideoModels)) {
+    if (imageUrl) {
+      input.first_frame_url = imageUrl;
+    }
+    if (endImageUrl) {
+      input.last_frame_url = endImageUrl;
+    }
+  } else if (matchesModelPattern(model, image2VideoModels) && imageUrl) {
     input.img_url = imageUrl;
   }
 

@@ -1276,12 +1276,112 @@ const volcengineImageModels: AIImageModelCard[] = [
 const volcengineVideoModels: AIVideoModelCard[] = [
   {
     description:
+      'Seedance 2.0 Fast is a next-generation multimodal video creation model launched by the Doubao large model team. It inherits the core features and advantages of the Seedance 2.0 model, with significantly faster generation speed.',
+    displayName: 'Seedance 2.0 Fast',
+    id: 'doubao-seedance-2-0-fast-260128',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: 'adaptive',
+        enum: ['adaptive', '21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
+      },
+      duration: { default: 4, max: 15, min: 4 },
+      endImageUrl: {
+        aspectRatio: { max: 2.5, min: 0.4 },
+        default: null,
+        height: { max: 6000, min: 300 },
+        maxFileSize: 30 * 1024 * 1024,
+        requiresImageUrl: true,
+        width: { max: 6000, min: 300 },
+      },
+      generateAudio: { default: true },
+      imageUrls: {
+        aspectRatio: { max: 2.5, min: 0.4 },
+        default: [],
+        height: { max: 6000, min: 300 },
+        maxCount: 9,
+        maxFileSize: 30 * 1024 * 1024,
+        width: { max: 6000, min: 300 },
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['480p', '720p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 37, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+  {
+    description:
+      'Seedance 2.0 is a next-generation professional-grade multimodal video creation model developed by the Doubao large model team. It supports using images, videos, audio, and other multimodal inputs as references to generate video, and also offers capabilities such as video editing and extension. The model can accurately reproduce fine details and maintain stable character features, delivering highly realistic audiovisual consistency. It is deeply suited for core scenarios including commercial advertising, film and TV production, and social media marketing.',
+    displayName: 'Seedance 2.0',
+    id: 'doubao-seedance-2-0-260128',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: 'adaptive',
+        enum: ['adaptive', '21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
+      },
+      duration: { default: 4, max: 15, min: 4 },
+      endImageUrl: {
+        aspectRatio: { max: 2.5, min: 0.4 },
+        default: null,
+        height: { max: 6000, min: 300 },
+        maxFileSize: 30 * 1024 * 1024,
+        requiresImageUrl: true,
+        width: { max: 6000, min: 300 },
+      },
+      generateAudio: { default: true },
+      imageUrls: {
+        aspectRatio: { max: 2.5, min: 0.4 },
+        default: [],
+        height: { max: 6000, min: 300 },
+        maxCount: 9,
+        maxFileSize: 30 * 1024 * 1024,
+        width: { max: 6000, min: 300 },
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['480p', '720p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 46, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+  {
+    description:
       'Seedance 1.5 Pro by ByteDance supports text-to-video, image-to-video (first frame, first+last frame), and audio generation synchronized with visuals.',
     displayName: 'Seedance 1.5 Pro',
     enabled: true,
     id: 'doubao-seedance-1-5-pro-251215',
     organization: 'ByteDance',
     parameters: seedance15ProParams,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            pricingParams: ['generateAudio'],
+            prices: { false: 8, true: 16 },
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
     releasedAt: '2025-12-15',
     type: 'video',
   },
@@ -1311,6 +1411,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 4.2, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2025-10-15',
     type: 'video',
@@ -1350,6 +1454,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
       },
       seed: { default: null },
     },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 15, strategy: 'fixed', unit: 'millionTokens' }],
+    },
     releasedAt: '2025-05-28',
     type: 'video',
   },
@@ -1373,11 +1481,12 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         requiresImageUrl: true,
         width: { max: 6000, min: 300 },
       },
-      imageUrl: {
+      imageUrls: {
         aspectRatio: { max: 2.5, min: 0.4 },
-        default: null,
+        default: [],
         height: { max: 6000, min: 300 },
         maxFileSize: 30 * 1024 * 1024,
+        maxCount: 4,
         width: { max: 6000, min: 300 },
       },
       duration: { default: 5, max: 12, min: 2 },
@@ -1387,6 +1496,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 10, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2025-04-28',
     type: 'video',
@@ -1410,6 +1523,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 10, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2025-04-28',
     type: 'video',

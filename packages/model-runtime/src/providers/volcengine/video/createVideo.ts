@@ -17,6 +17,7 @@ export async function createVolcengineVideo(
   const {
     prompt,
     imageUrl,
+    imageUrls,
     endImageUrl,
     aspectRatio,
     duration,
@@ -35,6 +36,16 @@ export async function createVolcengineVideo(
 
   if (imageUrl) {
     content.push({ image_url: { url: imageUrl }, role: 'first_frame', type: 'image_url' });
+  }
+
+  if (imageUrls && imageUrls.length > 0) {
+    if (imageUrls.length === 1 && endImageUrl) {
+      content.push({ image_url: { url: imageUrls[0] }, role: 'first_frame', type: 'image_url' });
+    } else {
+      imageUrls.forEach((url) =>
+        content.push({ image_url: { url }, role: 'reference_image', type: 'image_url' }),
+      );
+    }
   }
 
   if (endImageUrl) {

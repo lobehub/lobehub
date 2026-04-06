@@ -1334,12 +1334,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         enum: ['16:9', '9:16', '1:1'],
       },
       duration: { default: 4, enum: [4] },
-      endImageUrl: {
-        default: null,
-      },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 3,
       },
       prompt: { default: '' },
       size: {
