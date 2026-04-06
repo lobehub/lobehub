@@ -2,9 +2,11 @@ import crypto from 'node:crypto';
 
 import type {
   DingTalkInboundMessagePayload,
+  DingTalkDecryptedEvent,
   DingTalkNormalizedInboundMessage,
   DingTalkNormalizeOptions,
   DingTalkThreadId,
+  DingTalkWebhookEncryptedResponse,
   DingTalkWebhookCryptoInput,
 } from './types';
 
@@ -53,10 +55,17 @@ export const stripLeadingBotMention = (text: string, botName: string): string =>
   const leftTrimmed = text.replace(/^\s+/, '');
   if (!botName) return leftTrimmed;
 
-  const pattern = new RegExp(`^@${escapeRegExp(botName)}\\b[\\s\\u00A0]*`, 'i');
-  if (!pattern.test(leftTrimmed)) return leftTrimmed;
+  // Avoid ASCII-centric `\b` word boundaries (Chinese bot names, emojis, etc.).
+  // Only strip when "@botName" is followed by whitespace (or end-of-string).
+  if (!leftTrimmed.startsWith('@')) return leftTrimmed;
 
-  return leftTrimmed.replace(pattern, '').replace(/^\s+/, '');
+  const nameCandidate = leftTrimmed.slice(1, 1 + botName.length);
+  if (nameCandidate.toLowerCase() !== botName.toLowerCase()) return leftTrimmed;
+
+  const after = leftTrimmed.slice(1 + botName.length);
+  if (after && !/^[\s\u00A0]/u.test(after)) return leftTrimmed;
+
+  return after.replace(/^[\s\u00A0]+/u, '');
 };
 
 export const buildDingTalkThreadId = (payload: DingTalkInboundMessagePayload): string | null => {
@@ -128,10 +137,15 @@ export const verifyDingTalkWebhookSignature = (
   input: DingTalkWebhookCryptoInput & { signature: string },
 ): boolean => buildDingTalkWebhookSignature(input) === input.signature;
 
+const padBase64 = (input: string): string => {
+  const mod = input.length % 4;
+  if (mod === 0) return input;
+  return input + '='.repeat(4 - mod);
+};
+
 const decodeAesKey = (aesKey: string): Buffer => {
   // DingTalk's encodingAESKey is typically 43 chars base64 (no padding).
-  const padded = aesKey.endsWith('=') ? aesKey : `${aesKey}=`;
-  return Buffer.from(padded, 'base64');
+  return Buffer.from(padBase64(aesKey), 'base64');
 };
 
 /**
@@ -143,7 +157,7 @@ const decodeAesKey = (aesKey: string): Buffer => {
  *   msg (utf8)
  *   corpId/appKey (utf8, trailing)
  */
-export const decryptDingTalkEvent = (encrypt: string, aesKey: string): string => {
+export const decryptDingTalkEventWithReceiver = (encrypt: string, aesKey: string): DingTalkDecryptedEvent => {
   const key = decodeAesKey(aesKey);
   const iv = key.subarray(0, 16);
 
@@ -162,6 +176,56 @@ export const decryptDingTalkEvent = (encrypt: string, aesKey: string): string =>
   const end = start + msgLen;
   if (end > decrypted.length) throw new Error('Invalid decrypted msg length');
 
-  return decrypted.subarray(start, end).toString('utf8');
+  const message = decrypted.subarray(start, end).toString('utf8');
+  const receiverId = decrypted.subarray(end).toString('utf8');
+
+  return { message, receiverId };
 };
 
+export const decryptDingTalkEvent = (encrypt: string, aesKey: string): string =>
+  decryptDingTalkEventWithReceiver(encrypt, aesKey).message;
+
+/**
+ * Encrypt plaintext for DingTalk callbacks.
+ *
+ * DingTalk requires appending the owner/app key (receiverId) to the plaintext before encrypting.
+ */
+export const encryptDingTalkEvent = (plaintext: string, aesKey: string, receiverId: string): string => {
+  const key = decodeAesKey(aesKey);
+  const iv = key.subarray(0, 16);
+
+  const random16 = crypto.randomBytes(16);
+  const msg = Buffer.from(plaintext, 'utf8');
+  const receiver = Buffer.from(receiverId, 'utf8');
+  const msgLen = Buffer.alloc(4);
+  msgLen.writeUInt32BE(msg.length, 0);
+
+  const payload = Buffer.concat([random16, msgLen, msg, receiver]);
+
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  cipher.setAutoPadding(true);
+
+  return Buffer.concat([cipher.update(payload), cipher.final()]).toString('base64');
+};
+
+export const buildDingTalkEncryptedResponse = (params: {
+  aesKey: string;
+  nonce: string;
+  receiverId: string;
+  timestamp: string;
+  token: string;
+}): DingTalkWebhookEncryptedResponse => {
+  const encrypt = encryptDingTalkEvent('success', params.aesKey, params.receiverId);
+
+  return {
+    encrypt,
+    msg_signature: buildDingTalkWebhookSignature({
+      encrypt,
+      nonce: params.nonce,
+      timestamp: params.timestamp,
+      token: params.token,
+    }),
+    nonce: params.nonce,
+    timeStamp: params.timestamp,
+  };
+};

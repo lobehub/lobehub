@@ -15,8 +15,9 @@ import type {
 import { Message, NotImplementedError, parseMarkdown, stringifyMarkdown } from 'chat';
 
 import {
+  buildDingTalkEncryptedResponse,
   decodeDingTalkThreadId,
-  decryptDingTalkEvent,
+  decryptDingTalkEventWithReceiver,
   encodeDingTalkThreadId,
   normalizeDingTalkInboundMessage,
   verifyDingTalkWebhookSignature,
@@ -28,6 +29,7 @@ import type {
 } from './types';
 
 export interface DingTalkAdapterConfig {
+  applicationId?: string;
   aesKey?: string;
   botName?: string;
   verificationToken?: string;
@@ -36,6 +38,7 @@ export interface DingTalkAdapterConfig {
 
 export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboundMessagePayload> {
   readonly name = 'dingtalk';
+  private readonly applicationId?: string;
   private readonly aesKey?: string;
   private readonly verificationToken?: string;
   private _userName: string;
@@ -50,6 +53,7 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
   constructor(config: DingTalkAdapterConfig = {}) {
     this._userName = config.userName || 'dingtalk-bot';
     this.botName = config.botName;
+    this.applicationId = config.applicationId;
     this.aesKey = config.aesKey;
     this.verificationToken = config.verificationToken;
   }
@@ -79,8 +83,8 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
 
     // Decrypt encrypted events if needed (DingTalk callback mode).
     if (typeof body.encrypt === 'string' && body.encrypt) {
-      if (!this.aesKey || !this.verificationToken) {
-        return new Response('Encrypted event but no aesKey/verificationToken configured', {
+      if (!this.aesKey || !this.verificationToken || !this.applicationId) {
+        return new Response('Encrypted event but no aesKey/verificationToken/applicationId configured', {
           status: 401,
         });
       }
@@ -107,11 +111,29 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
       if (!ok) return new Response('Invalid signature', { status: 401 });
 
       try {
-        const decrypted = decryptDingTalkEvent(body.encrypt, this.aesKey);
-        body = JSON.parse(decrypted);
+        const decrypted = decryptDingTalkEventWithReceiver(body.encrypt, this.aesKey);
+        if (decrypted.receiverId !== this.applicationId) {
+          return new Response('Invalid receiverId', { status: 401 });
+        }
+
+        body = JSON.parse(decrypted.message);
       } catch (error) {
         this.logger.error('Event decryption failed: %s', String(error));
         return new Response('Decryption failed', { status: 401 });
+      }
+
+      // Callback URL verification handshake (EventType: check_url).
+      // DingTalk expects an encrypted payload for plaintext "success".
+      if ((body as Record<string, unknown>).EventType === 'check_url') {
+        return Response.json(
+          buildDingTalkEncryptedResponse({
+            aesKey: this.aesKey,
+            nonce,
+            receiverId: this.applicationId,
+            timestamp,
+            token: this.verificationToken,
+          }),
+        );
       }
     }
 

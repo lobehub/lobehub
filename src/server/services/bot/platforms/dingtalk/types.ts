@@ -66,3 +66,14 @@ export interface DingTalkWebhookCryptoInput {
   token: string;
 }
 
+export interface DingTalkWebhookEncryptedResponse {
+  encrypt: string;
+  msg_signature: string;
+  nonce: string;
+  timeStamp: string;
+}
+
+export interface DingTalkDecryptedEvent {
+  message: string;
+  receiverId: string;
+}
