@@ -13,7 +13,6 @@ export interface DingTalkApiOptions {
 }
 
 export interface DingTalkSendTextMessageParams {
-  robotCode: string;
   content: string;
   openConversationId?: string;
   userIds?: string[];
@@ -48,19 +47,38 @@ export class DingTalkApi {
   }
 
   async sendTextMessage(params: DingTalkSendTextMessageParams): Promise<unknown> {
+    const openConversationId =
+      typeof params.openConversationId === 'string' ? params.openConversationId.trim() : '';
+    const userIds = Array.isArray(params.userIds)
+      ? params.userIds.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim())
+      : [];
+
+    const hasGroupTarget = Boolean(openConversationId);
+    const hasUserTargets = userIds.length > 0;
+
+    if (hasGroupTarget === hasUserTargets) {
+      const reason = hasGroupTarget
+        ? 'received both openConversationId and userIds'
+        : 'received neither openConversationId nor userIds';
+      throw new Error(
+        `sendTextMessage requires exactly one target: openConversationId (group) or userIds (direct); ${reason}`,
+      );
+    }
+
     const token = await this.getAccessToken();
 
-    const isGroup = Boolean(params.openConversationId);
+    const isGroup = hasGroupTarget;
     const url = isGroup ? ROBOT_GROUP_MESSAGES_URL : ROBOT_O_TO_MESSAGES_URL;
 
     // DingTalk proactive robot API uses message templates (sampleText / sampleMarkdown).
     const payload = {
-      robotCode: params.robotCode,
+      // DingTalk contract: robotCode is the appKey (a.k.a clientId).
+      robotCode: this.appKey,
       msgKey: 'sampleText',
       msgParam: JSON.stringify({ content: params.content }),
       ...(isGroup
-        ? { openConversationId: params.openConversationId }
-        : { userIds: params.userIds ?? [] }),
+        ? { openConversationId }
+        : { userIds }),
     };
 
     const res = await fetch(url, {

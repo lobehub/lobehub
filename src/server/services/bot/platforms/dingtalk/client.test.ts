@@ -22,6 +22,7 @@ const baseCredentials = {
 };
 const oauthUrl = 'https://api.dingtalk.com/v1.0/oauth2/accessToken';
 const oToMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend';
+const groupMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/groupMessages/send';
 
 function buildConfig(settings: Record<string, unknown> = {}): BotProviderConfig {
   return {
@@ -83,7 +84,7 @@ describe('DingTalkClientFactory', () => {
 });
 
 describe('DingTalkApi', () => {
-  it('sends text via robot API with x-acs-dingtalk-access-token header', async () => {
+  it('sends direct text via robot API with x-acs-dingtalk-access-token header', async () => {
     const fetchMock = vi.fn().mockImplementation(async (input: string) => {
       if (input === oauthUrl) {
         return {
@@ -102,7 +103,6 @@ describe('DingTalkApi', () => {
 
     const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
     await api.sendTextMessage({
-      robotCode: 'robot',
       userIds: ['uid'],
       content: 'hello',
     });
@@ -114,6 +114,83 @@ describe('DingTalkApi', () => {
         headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'token' }),
       }),
     );
+    vi.unstubAllGlobals();
+  });
+
+  it('selects group-send URL and payload when openConversationId is provided', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input === oauthUrl) {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({ accessToken: 'token', expireIn: 7200 }),
+        };
+      }
+
+      if (input === groupMessagesUrl) {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        expect(body.robotCode).toBe('appKey');
+        expect(body.openConversationId).toBe('cid123');
+        expect(body.userIds).toBeUndefined();
+        return { ok: true, json: vi.fn().mockResolvedValue({ messageId: 'mid' }) };
+      }
+
+      throw new Error(`Unexpected fetch to ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
+    await api.sendTextMessage({ openConversationId: 'cid123', content: 'hello' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      groupMessagesUrl,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'token' }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects missing or conflicting targets before making any network request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
+
+    await expect(api.sendTextMessage({ content: 'hello' })).rejects.toThrow(
+      'sendTextMessage requires exactly one target',
+    );
+    await expect(
+      api.sendTextMessage({ openConversationId: 'cid', userIds: ['uid'], content: 'hello' }),
+    ).rejects.toThrow('sendTextMessage requires exactly one target');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('reuses cached access token for multiple sends', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: string) => {
+      if (input === oauthUrl) {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({ accessToken: 'token', expireIn: 7200 }),
+        };
+      }
+
+      if (input === oToMessagesUrl) {
+        return { ok: true, json: vi.fn().mockResolvedValue({ messageId: 'mid' }) };
+      }
+
+      throw new Error(`Unexpected fetch to ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
+    await api.sendTextMessage({ userIds: ['uid'], content: 'hello' });
+    await api.sendTextMessage({ userIds: ['uid'], content: 'hello again' });
+
+    const oauthCalls = fetchMock.mock.calls.filter(([input]) => input === oauthUrl);
+    expect(oauthCalls).toHaveLength(1);
     vi.unstubAllGlobals();
   });
 });
