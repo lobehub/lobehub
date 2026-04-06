@@ -286,6 +286,33 @@ describe('GenerationConfigAction', () => {
       expect(storeResult.current.parameters?.prompt).toBe('test prompt');
       expect(storeResult.current.parameters?.imageUrl).toBeUndefined();
     });
+
+    it('should migrate imageUrl when target model has empty imageUrls default', () => {
+      const singleImageSchema: ModelParamsSchema = {
+        prompt: { default: '' },
+        imageUrl: { default: '' },
+      };
+
+      useImageStore.setState({
+        model: 'single-image-model',
+        provider: 'single-image-provider',
+        parameters: {
+          prompt: 'keep this prompt',
+          imageUrl: 'from-single-model.png',
+        },
+        parametersSchema: singleImageSchema,
+      });
+
+      const { result } = renderHook(() => useImageStore());
+
+      // custom-model schema defines imageUrls default as []
+      act(() => {
+        result.current.setModelAndProviderOnSelect('custom-model', 'custom-provider');
+      });
+
+      expect(result.current.parameters?.imageUrls).toEqual(['from-single-model.png']);
+      expect(result.current.parameters?.prompt).toBe('keep this prompt');
+    });
   });
 
   describe('Settings Reuse', () => {

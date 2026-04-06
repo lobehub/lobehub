@@ -98,7 +98,7 @@ function preserveImageInputParams(
     imageUrl.length > 0 &&
     !supportsImageUrl &&
     supportsImageUrls &&
-    !result.imageUrls
+    !(Array.isArray(result.imageUrls) && result.imageUrls.length > 0)
   ) {
     (result as RuntimeImageGenParams).imageUrls = [imageUrl];
   }
