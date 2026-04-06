@@ -2,8 +2,8 @@
 title: Channels Overview
 description: >-
   Connect your LobeHub agents to external messaging platforms like Discord,
-  Slack, Telegram, QQ, WeChat, Feishu, and Lark, allowing users to interact with
-  AI assistants directly in their favorite chat apps.
+  Slack, Telegram, QQ, WeChat, Feishu, Lark, and DingTalk, allowing users to
+  interact with AI assistants directly in their favorite chat apps.
 tags:
   - Channels
   - Message Channels
@@ -15,6 +15,7 @@ tags:
   - WeChat
   - Feishu
   - Lark
+  - DingTalk
 ---
 
 # Channels
@@ -32,13 +33,14 @@ Channels allow you to connect your LobeHub agents to external messaging platform
 | [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for private and group chats     |
 | [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)      |
 | [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)  |
+| [DingTalk (钉钉)](/docs/usage/channels/dingtalk) | Connect to DingTalk enterprise bots for private chats and mention-only group conversations |
 
 ## How It Works
 
 Each channel integration works by linking a bot account on the target platform to a LobeHub agent. When a user sends a message to the bot, LobeHub processes it through the agent and sends the response back to the same conversation.
 
 - **Per-agent configuration** — Each agent can have its own set of channel connections, so different agents can serve different platforms or communities.
-- **Multiple channels simultaneously** — A single agent can be connected to Discord, Slack, Telegram, QQ, WeChat, Feishu, and Lark at the same time. LobeHub routes messages to the correct agent automatically.
+- **Multiple channels simultaneously** — A single agent can be connected to Discord, Slack, Telegram, QQ, WeChat, Feishu, Lark, and DingTalk at the same time. LobeHub routes messages to the correct agent automatically.
 - **Secure credential storage** — All bot tokens and app secrets are encrypted before being stored.
 
 ## Getting Started
@@ -52,15 +54,16 @@ Each channel integration works by linking a bot account on the target platform t
    - [WeChat (微信)](/docs/usage/channels/wechat)
    - [Feishu (飞书)](/docs/usage/channels/feishu)
    - [Lark](/docs/usage/channels/lark)
+   - [DingTalk (钉钉)](/docs/usage/channels/dingtalk)
 
 ## Feature Support
 
 Text messages are supported across all platforms. Some features vary by platform:
 
-| Feature                | Discord | Slack | Telegram | QQ  | WeChat | Feishu  | Lark    |
-| ---------------------- | ------- | ----- | -------- | --- | ------ | ------- | ------- |
-| Text messages          | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     |
-| Direct messages        | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     |
-| Group chats            | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     |
-| Reactions              | Yes     | Yes   | Yes      | No  | No     | Partial | Partial |
-| Image/file attachments | Yes     | Yes   | Yes      | Yes | No     | Yes     | Yes     |
+| Feature                | Discord | Slack | Telegram | QQ  | WeChat | Feishu  | Lark    | DingTalk |
+| ---------------------- | ------- | ----- | -------- | --- | ------ | ------- | ------- | -------- |
+| Text messages          | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     | Yes      |
+| Direct messages        | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     | Yes      |
+| Group chats            | Yes     | Yes   | Yes      | Yes | Yes    | Yes     | Yes     | Yes      |
+| Reactions              | Yes     | Yes   | Yes      | No  | No     | Partial | Partial | No       |
+| Image/file attachments | Yes     | Yes   | Yes      | Yes | No     | Yes     | Yes     | No       |

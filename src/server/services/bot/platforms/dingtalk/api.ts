@@ -14,9 +14,24 @@ export interface DingTalkApiOptions {
 
 export interface DingTalkSendTextMessageParams {
   content: string;
+  messageType?: 'markdown' | 'text';
   openConversationId?: string;
+  title?: string;
   userIds?: string[];
 }
+
+const DEFAULT_MARKDOWN_TITLE = 'LobeHub';
+
+const buildMarkdownTitle = (content: string, title?: string): string => {
+  if (title?.trim()) return title.trim();
+
+  const firstLine = content
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  return firstLine ? firstLine.slice(0, 64) : DEFAULT_MARKDOWN_TITLE;
+};
 
 /**
  * Minimal DingTalk API helper.
@@ -70,12 +85,20 @@ export class DingTalkApi {
     const isGroup = hasGroupTarget;
     const url = isGroup ? ROBOT_GROUP_MESSAGES_URL : ROBOT_O_TO_MESSAGES_URL;
 
+    const messageType = params.messageType === 'markdown' ? 'markdown' : 'text';
+
     // DingTalk proactive robot API uses message templates (sampleText / sampleMarkdown).
     const payload = {
       // DingTalk contract: robotCode is the appKey (a.k.a clientId).
       robotCode: this.appKey,
-      msgKey: 'sampleText',
-      msgParam: JSON.stringify({ content: params.content }),
+      msgKey: messageType === 'markdown' ? 'sampleMarkdown' : 'sampleText',
+      msgParam:
+        messageType === 'markdown'
+          ? JSON.stringify({
+              text: params.content,
+              title: buildMarkdownTitle(params.content, params.title),
+            })
+          : JSON.stringify({ content: params.content }),
       ...(isGroup
         ? { openConversationId }
         : { userIds }),

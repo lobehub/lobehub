@@ -16,20 +16,44 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 import { DingTalkApi } from './api';
+import { createDingTalkAdapter } from './adapter';
+import { decodeDingTalkThreadId } from './helpers';
 
 export const DINGTALK_NOT_IMPLEMENTED_MESSAGE = 'DingTalk webhook runtime is not implemented yet';
 
+const DINGTALK_DEFAULT_MARKDOWN_TITLE = 'LobeHub';
+const DINGTALK_MAX_CHAR_LIMIT = 40_000;
+const DINGTALK_MIN_CHAR_LIMIT = 100;
+
 const log = debug('bot-platform:dingtalk:bot');
+
+const parseDingTalkThreadId = (platformThreadId: string): ReturnType<typeof decodeDingTalkThreadId> => {
+  const parts = platformThreadId.split(':');
+  if (parts.length < 3 || parts[0] !== 'dingtalk') {
+    throw new Error(`Invalid DingTalk threadId: ${platformThreadId}`);
+  }
+
+  if (parts[1] !== 'dm' && parts[1] !== 'group') {
+    throw new Error(`Invalid DingTalk threadId: ${platformThreadId}`);
+  }
+
+  return decodeDingTalkThreadId(platformThreadId);
+};
 
 class DingTalkClient implements PlatformClient {
   readonly id = 'dingtalk';
   readonly applicationId: string;
 
   private readonly config: BotProviderConfig;
+  private readonly api: DingTalkApi;
 
   constructor(config: BotProviderConfig, _context: BotPlatformRuntimeContext) {
     this.config = config;
     this.applicationId = config.applicationId;
+    this.api = new DingTalkApi({
+      appKey: config.applicationId,
+      appSecret: config.credentials.clientSecret,
+    });
   }
 
   private get messageType(): 'markdown' | 'text' {
@@ -40,12 +64,16 @@ class DingTalkClient implements PlatformClient {
     return Boolean(this.config.settings?.showUsageStats);
   }
 
-  private buildNotImplementedError(): Error {
-    return new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
+  private get charLimit(): number | undefined {
+    const limit = Number(this.config.settings?.charLimit);
+    if (!Number.isFinite(limit)) return undefined;
+
+    return Math.min(Math.max(Math.trunc(limit), DINGTALK_MIN_CHAR_LIMIT), DINGTALK_MAX_CHAR_LIMIT);
   }
 
-  private rejectNotImplemented<T = never>(): Promise<T> {
-    return Promise.reject(this.buildNotImplementedError());
+  private formatOutboundContent(content: string): string {
+    const formatted = this.formatMarkdown(content);
+    return this.charLimit ? formatted.slice(0, this.charLimit) : formatted;
   }
 
   // --- Lifecycle ---
@@ -58,39 +86,83 @@ class DingTalkClient implements PlatformClient {
       status: BOT_RUNTIME_STATUSES.starting,
     });
 
-    const error = this.buildNotImplementedError();
-    await updateBotRuntimeStatus({
-      applicationId: this.applicationId,
-      platform: this.id,
-      status: BOT_RUNTIME_STATUSES.failed,
-      errorMessage: getRuntimeStatusErrorMessage(error),
-    });
+    try {
+      await this.api.getAccessToken();
 
-    throw error;
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.connected,
+      });
+
+      log('DingTalkBot appId=%s credentials verified', this.applicationId);
+    } catch (error) {
+      await updateBotRuntimeStatus({
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.failed,
+        errorMessage: getRuntimeStatusErrorMessage(error),
+      });
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
-    throw this.buildNotImplementedError();
+    log('Stopping DingTalkBot appId=%s', this.applicationId);
+    await updateBotRuntimeStatus({
+      applicationId: this.applicationId,
+      platform: this.id,
+      status: BOT_RUNTIME_STATUSES.disconnected,
+    });
   }
 
   // --- Runtime Operations ---
 
   createAdapter(): Record<string, any> {
-    throw this.buildNotImplementedError();
+    return {
+      dingtalk: createDingTalkAdapter({
+        applicationId: this.applicationId,
+        aesKey: this.config.credentials.aesKey,
+        verificationToken: this.config.credentials.verificationToken,
+      }),
+    };
   }
 
-  getMessenger(): PlatformMessenger {
-    const reject = () => this.rejectNotImplemented();
+  getMessenger(platformThreadId: string): PlatformMessenger {
+    const thread = parseDingTalkThreadId(platformThreadId);
+
+    const send = async (content: string): Promise<void> => {
+      const formattedContent = this.formatOutboundContent(content);
+      const basePayload = {
+        content: formattedContent,
+        messageType: this.messageType,
+        title: DINGTALK_DEFAULT_MARKDOWN_TITLE,
+      } as const;
+
+      if (thread.type === 'group') {
+        await this.api.sendTextMessage({
+          ...basePayload,
+          openConversationId: thread.id,
+        });
+        return;
+      }
+
+      await this.api.sendTextMessage({
+        ...basePayload,
+        userIds: [thread.id],
+      });
+    };
+
     return {
-      createMessage: () => reject(),
-      editMessage: () => reject(),
-      removeReaction: () => reject(),
-      triggerTyping: () => reject(),
+      createMessage: send,
+      editMessage: (_messageId, content) => send(content),
+      removeReaction: () => Promise.resolve(),
+      triggerTyping: () => Promise.resolve(),
     };
   }
 
   extractChatId(platformThreadId: string): string {
-    return platformThreadId.split(':').slice(2).join(':');
+    return parseDingTalkThreadId(platformThreadId).id;
   }
 
   formatMarkdown(markdown: string): string {

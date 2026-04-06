@@ -1,11 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import type { BotPlatformRuntimeContext, BotProviderConfig } from '../types';
 import { DingTalkApi } from './api';
-import { DINGTALK_NOT_IMPLEMENTED_MESSAGE, DingTalkClientFactory } from './client';
+import { DingTalkClientFactory } from './client';
+import {
+  buildDingTalkWebhookSignature,
+  decryptDingTalkEventWithReceiver,
+  encryptDingTalkEvent,
+} from './helpers';
 
 vi.mock('@/server/services/gateway/runtimeStatus', () => ({
   BOT_RUNTIME_STATUSES: {
+    connected: 'connected',
+    disconnected: 'disconnected',
     failed: 'failed',
     starting: 'starting',
   },
@@ -15,23 +24,81 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
 
 const factory = new DingTalkClientFactory();
 const baseContext = {} as BotPlatformRuntimeContext;
+const baseApplicationId = 'dingtalk-app';
 const baseCredentials = {
+  aesKey: Buffer.from('0123456789abcdef0123456789abcdef', 'utf8')
+    .toString('base64')
+    .replace(/=+$/u, ''),
   clientSecret: 'secret',
-  verificationToken: 'token',
-  aesKey: 'aes',
+  verificationToken: 'token_123',
 };
 const oauthUrl = 'https://api.dingtalk.com/v1.0/oauth2/accessToken';
 const oToMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend';
 const groupMessagesUrl = 'https://api.dingtalk.com/v1.0/robot/groupMessages/send';
 
+const updateRuntimeStatusMock = vi.mocked(updateBotRuntimeStatus);
+
 function buildConfig(settings: Record<string, unknown> = {}): BotProviderConfig {
   return {
-    applicationId: 'dingtalk-app',
+    applicationId: baseApplicationId,
     platform: 'dingtalk',
     credentials: { ...baseCredentials },
     settings,
   };
 }
+
+const createChatStub = () => {
+  const logger = {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  };
+
+  return {
+    chat: {
+      getLogger: () => logger,
+      getUserName: () => 'lobehub-bot',
+      processMessage: vi.fn(),
+    } as any,
+    logger,
+  };
+};
+
+const createCheckUrlRequest = () => {
+  const plaintext = JSON.stringify({ EventType: 'check_url' });
+  const encrypt = encryptDingTalkEvent(plaintext, baseCredentials.aesKey, baseApplicationId);
+  const timestamp = '1783610513';
+  const nonce = 'w2WPvWGOmIB';
+  const signature = buildDingTalkWebhookSignature({
+    encrypt,
+    nonce,
+    timestamp,
+    token: baseCredentials.verificationToken,
+  });
+
+  return {
+    nonce,
+    request: new Request(
+      `https://example.com/webhook?msg_signature=${signature}&timestamp=${timestamp}&nonce=${nonce}`,
+      {
+        body: JSON.stringify({ encrypt }),
+        method: 'POST',
+      },
+    ),
+    timestamp,
+  };
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  updateRuntimeStatusMock.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('DingTalkClientFactory', () => {
   it('requires applicationId and credentials before validating', async () => {
@@ -52,18 +119,17 @@ describe('DingTalkClientFactory', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await factory.validateCredentials(baseCredentials, undefined, 'dingtalk-app');
+    const result = await factory.validateCredentials(baseCredentials, undefined, baseApplicationId);
 
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
       oauthUrl,
       expect.objectContaining({
+        body: JSON.stringify({ appKey: baseApplicationId, appSecret: baseCredentials.clientSecret }),
         method: 'POST',
-        body: JSON.stringify({ appKey: 'dingtalk-app', appSecret: baseCredentials.clientSecret }),
       }),
     );
-    vi.unstubAllGlobals();
   });
 
   it('returns a credentials error when OAuth authentication fails', async () => {
@@ -73,13 +139,12 @@ describe('DingTalkClientFactory', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await factory.validateCredentials(baseCredentials, undefined, 'dingtalk-app');
+    const result = await factory.validateCredentials(baseCredentials, undefined, baseApplicationId);
 
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual([
       { field: 'credentials', message: 'Failed to authenticate with DingTalk API' },
     ]);
-    vi.unstubAllGlobals();
   });
 });
 
@@ -103,18 +168,17 @@ describe('DingTalkApi', () => {
 
     const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
     await api.sendTextMessage({
-      userIds: ['uid'],
       content: 'hello',
+      userIds: ['uid'],
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
       oToMessagesUrl,
       expect.objectContaining({
-        method: 'POST',
         headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'token' }),
+        method: 'POST',
       }),
     );
-    vi.unstubAllGlobals();
   });
 
   it('selects group-send URL and payload when openConversationId is provided', async () => {
@@ -139,16 +203,47 @@ describe('DingTalkApi', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
-    await api.sendTextMessage({ openConversationId: 'cid123', content: 'hello' });
+    await api.sendTextMessage({ content: 'hello', openConversationId: 'cid123' });
 
     expect(fetchMock).toHaveBeenCalledWith(
       groupMessagesUrl,
       expect.objectContaining({
-        method: 'POST',
         headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'token' }),
+        method: 'POST',
       }),
     );
-    vi.unstubAllGlobals();
+  });
+
+  it('uses DingTalk markdown templates when markdown mode is requested', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input === oauthUrl) {
+        return {
+          ok: true,
+          json: vi.fn().mockResolvedValue({ accessToken: 'token', expireIn: 7200 }),
+        };
+      }
+
+      if (input === groupMessagesUrl) {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        expect(body.msgKey).toBe('sampleMarkdown');
+        expect(JSON.parse(body.msgParam)).toEqual({
+          text: '# Title\n\nBody',
+          title: 'Greeting',
+        });
+        return { ok: true, json: vi.fn().mockResolvedValue({ messageId: 'mid' }) };
+      }
+
+      throw new Error(`Unexpected fetch to ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
+    await api.sendTextMessage({
+      content: '# Title\n\nBody',
+      messageType: 'markdown',
+      openConversationId: 'cid123',
+      title: 'Greeting',
+    });
   });
 
   it('rejects missing or conflicting targets before making any network request', async () => {
@@ -161,11 +256,10 @@ describe('DingTalkApi', () => {
       'sendTextMessage requires exactly one target',
     );
     await expect(
-      api.sendTextMessage({ openConversationId: 'cid', userIds: ['uid'], content: 'hello' }),
+      api.sendTextMessage({ content: 'hello', openConversationId: 'cid', userIds: ['uid'] }),
     ).rejects.toThrow('sendTextMessage requires exactly one target');
 
     expect(fetchMock).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
   });
 
   it('reuses cached access token for multiple sends', async () => {
@@ -186,53 +280,199 @@ describe('DingTalkApi', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const api = new DingTalkApi({ appKey: 'appKey', appSecret: 'secret' });
-    await api.sendTextMessage({ userIds: ['uid'], content: 'hello' });
-    await api.sendTextMessage({ userIds: ['uid'], content: 'hello again' });
+    await api.sendTextMessage({ content: 'hello', userIds: ['uid'] });
+    await api.sendTextMessage({ content: 'hello again', userIds: ['uid'] });
 
     const oauthCalls = fetchMock.mock.calls.filter(([input]) => input === oauthUrl);
     expect(oauthCalls).toHaveLength(1);
-    vi.unstubAllGlobals();
   });
 });
 
 describe('DingTalkClient', () => {
-  it('fails loudly on lifecycle operations and message helpers', async () => {
+  it('creates a DingTalk adapter with the encrypted callback credentials wired through', async () => {
     const client = factory.createClient(buildConfig(), baseContext);
 
-    await expect(client.start()).rejects.toThrow(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
-    expect(() => client.createAdapter()).toThrow(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
+    const adapters = client.createAdapter();
+    expect(adapters).toHaveProperty('dingtalk');
 
-    const messenger = client.getMessenger();
-    await expect(messenger.createMessage('hi')).rejects.toThrow(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
+    const { chat } = createChatStub();
+    await adapters.dingtalk.initialize(chat);
+
+    const { nonce, request, timestamp } = createCheckUrlRequest();
+    const res = await adapters.dingtalk.handleWebhook(request);
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body).toEqual(
+      expect.objectContaining({
+        encrypt: expect.any(String),
+        msg_signature: expect.any(String),
+        nonce,
+        timeStamp: timestamp,
+      }),
+    );
+
+    const decrypted = decryptDingTalkEventWithReceiver(body.encrypt, baseCredentials.aesKey);
+    expect(decrypted.receiverId).toBe(baseApplicationId);
+    expect(decrypted.message).toBe('success');
   });
 
-  it('strips markdown when messageType is text and preserves markdown otherwise', () => {
-    const textClient = factory.createClient(
+  it('marks runtime connected after a successful start', async () => {
+    const getAccessTokenSpy = vi.spyOn(DingTalkApi.prototype, 'getAccessToken').mockResolvedValue(
+      'token',
+    );
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    await client.start();
+
+    expect(getAccessTokenSpy).toHaveBeenCalledTimes(1);
+    expect(updateRuntimeStatusMock).toHaveBeenNthCalledWith(1, {
+      applicationId: baseApplicationId,
+      platform: 'dingtalk',
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
+    expect(updateRuntimeStatusMock).toHaveBeenNthCalledWith(2, {
+      applicationId: baseApplicationId,
+      platform: 'dingtalk',
+      status: BOT_RUNTIME_STATUSES.connected,
+    });
+  });
+
+  it('marks runtime failed when start credential validation fails', async () => {
+    vi.spyOn(DingTalkApi.prototype, 'getAccessToken').mockRejectedValue(new Error('bad auth'));
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    await expect(client.start()).rejects.toThrow('bad auth');
+
+    expect(updateRuntimeStatusMock).toHaveBeenNthCalledWith(1, {
+      applicationId: baseApplicationId,
+      platform: 'dingtalk',
+      status: BOT_RUNTIME_STATUSES.starting,
+    });
+    expect(updateRuntimeStatusMock).toHaveBeenNthCalledWith(2, {
+      applicationId: baseApplicationId,
+      errorMessage: 'bad auth',
+      platform: 'dingtalk',
+      status: BOT_RUNTIME_STATUSES.failed,
+    });
+  });
+
+  it('marks runtime disconnected on stop', async () => {
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    await client.stop();
+
+    expect(updateRuntimeStatusMock).toHaveBeenCalledWith({
+      applicationId: baseApplicationId,
+      platform: 'dingtalk',
+      status: BOT_RUNTIME_STATUSES.disconnected,
+    });
+  });
+
+  it('sends group replies through openConversationId', async () => {
+    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
+      {},
+    );
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    await client.getMessenger('dingtalk:group:cid-group').createMessage('hello');
+
+    expect(sendTextMessageSpy).toHaveBeenCalledWith({
+      content: 'hello',
+      messageType: 'markdown',
+      openConversationId: 'cid-group',
+      title: 'LobeHub',
+    });
+  });
+
+  it('sends direct replies through userIds', async () => {
+    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
+      {},
+    );
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    await client.getMessenger('dingtalk:dm:user-1').createMessage('hello');
+
+    expect(sendTextMessageSpy).toHaveBeenCalledWith({
+      content: 'hello',
+      messageType: 'markdown',
+      title: 'LobeHub',
+      userIds: ['user-1'],
+    });
+  });
+
+  it('falls back to plain text before sending when messageType is text', async () => {
+    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
+      {},
+    );
+    const client = factory.createClient(
       buildConfig({ messageType: 'text' }),
       baseContext,
     );
-    const markdownClient = factory.createClient(
-      buildConfig({ messageType: 'markdown' }),
+
+    expect(client.formatMarkdown('**hello** `world`')).toBe('hello world');
+
+    await client.getMessenger('dingtalk:group:cid-group').createMessage('**hello** `world`');
+
+    expect(sendTextMessageSpy).toHaveBeenCalledWith({
+      content: 'hello world',
+      messageType: 'text',
+      openConversationId: 'cid-group',
+      title: 'LobeHub',
+    });
+  });
+
+  it('clamps invalid low charLimit values to the schema minimum before sending', async () => {
+    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
+      {},
+    );
+    const client = factory.createClient(
+      buildConfig({ charLimit: 5, messageType: 'text' }),
       baseContext,
     );
 
-    expect(textClient.formatMarkdown('**bold**')).toBe('bold');
-    expect(markdownClient.formatMarkdown('**bold**')).toBe('**bold**');
+    await client.getMessenger('dingtalk:group:cid-group').createMessage('a'.repeat(150));
+
+    expect(sendTextMessageSpy).toHaveBeenCalledWith({
+      content: 'a'.repeat(100),
+      messageType: 'text',
+      openConversationId: 'cid-group',
+      title: 'LobeHub',
+    });
+  });
+
+  it('rejects malformed platformThreadId values before routing outbound messages', () => {
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    expect(() => client.getMessenger('oops')).toThrow('Invalid DingTalk threadId: oops');
+  });
+
+  it('edits by sending a new message as fallback', async () => {
+    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
+      {},
+    );
+    const client = factory.createClient(buildConfig(), baseContext);
+
+    await client.getMessenger('dingtalk:group:cid-group').editMessage('mid-1', 'hello again');
+
+    expect(sendTextMessageSpy).toHaveBeenCalledWith({
+      content: 'hello again',
+      messageType: 'markdown',
+      openConversationId: 'cid-group',
+      title: 'LobeHub',
+    });
   });
 
   it('appends usage stats when enabled and leaves replies untouched otherwise', () => {
     const stats = {
-      totalTokens: 123,
-      totalCost: 1,
       elapsedMs: 2000,
       llmCalls: 1,
       toolCalls: 2,
+      totalCost: 1,
+      totalTokens: 123,
     };
 
-    const statsClient = factory.createClient(
-      buildConfig({ showUsageStats: true }),
-      baseContext,
-    );
+    const statsClient = factory.createClient(buildConfig({ showUsageStats: true }), baseContext);
 
     const replyWithStats = statsClient.formatReply('hello', stats);
     expect(replyWithStats).toContain('hello');
