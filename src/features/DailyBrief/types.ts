@@ -1,1 +1,1 @@
-export type { BriefItem } from '@/store/brief/types';
+export type { AgentAvatarInfo, BriefItem } from '@/store/brief/types';

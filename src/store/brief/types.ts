@@ -1,6 +1,14 @@
+export interface AgentAvatarInfo {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  title: string | null;
+}
+
 export interface BriefItem {
   actions: unknown;
   agentId: string | null;
+  agents: AgentAvatarInfo[];
   artifacts: unknown;
   createdAt: Date | string;
   cronJobId: string | null;
