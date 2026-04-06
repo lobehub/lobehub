@@ -38,6 +38,48 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 16px;
     padding-inline: 16px;
   `,
+  detailLayout: css`
+    display: flex;
+    gap: 24px;
+    align-self: center;
+
+    width: min(100%, 1280px);
+    padding-block: 16px;
+    padding-inline: 16px;
+  `,
+  detailMain: css`
+    flex: 1;
+    min-width: 0;
+  `,
+
+  // Properties sidebar
+  propertiesPanel: css`
+    flex-shrink: 0;
+    align-self: flex-start;
+
+    width: 240px;
+    padding: 8px;
+    border: 1px solid ${cssVar.colorFillTertiary};
+    border-radius: 10px;
+  `,
+  propertiesHeader: css`
+    cursor: pointer;
+    padding-block: 4px;
+    padding-inline: 6px;
+  `,
+  propertyRow: css`
+    cursor: pointer;
+
+    padding-block: 6px;
+    padding-inline: 6px;
+    border-radius: 6px;
+
+    transition: background 0.2s ${cssVar.motionEaseInOut};
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
+  `,
   titleInput: css`
     flex: 1;
 
@@ -50,24 +92,27 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
   // Parent bar
   parentBar: css`
+    padding-block: 6px;
+  `,
+  parentLink: css`
     cursor: pointer;
 
-    width: fit-content;
-    padding-block: 4px;
-    padding-inline: 10px;
+    padding-block: 2px;
+    padding-inline: 8px;
     border-radius: 6px;
 
     transition: background 0.2s ${cssVar.motionEaseInOut};
 
     &:hover {
-      background: ${cssVar.colorFillQuaternary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   navItem: css`
     cursor: pointer;
 
+    min-height: 34px;
     padding-block: 6px;
-    padding-inline: 12px;
+    padding-inline: 10px;
     border-radius: 6px;
 
     transition: background 0.2s ${cssVar.motionEaseInOut};
