@@ -61,6 +61,8 @@
   "channel.endpointUrlHint": "请复制此 URL 并粘贴到 {{name}} 开发者门户的 <bold>{{fieldName}}</bold> 字段中。",
   "channel.exportConfig": "导出平台配置",
   "channel.feishu.description": "将助手连接到飞书，支持私聊和群聊。",
+  "channel.feishu.webhookMigrationDesc": "WebSocket 模式提供实时事件推送，无需配置公网回调地址。如需迁移，在高级设置中将连接模式切换为 WebSocket 即可，无需在飞书/Lark 开放平台进行额外配置。",
+  "channel.feishu.webhookMigrationTitle": "建议迁移到 WebSocket 模式",
   "channel.historyLimit": "历史消息条数",
   "channel.historyLimitHint": "读取频道历史消息时默认获取的消息数量",
   "channel.importConfig": "导入平台配置",

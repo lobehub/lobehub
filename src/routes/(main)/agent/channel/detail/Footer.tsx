@@ -187,6 +187,16 @@ const Footer = memo<FooterProps>(
           />
         )}
 
+        {hasConfig && showWebhookUrl && (platformId === 'feishu' || platformId === 'lark') && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.feishu.webhookMigrationDesc')}
+            message={t('channel.feishu.webhookMigrationTitle')}
+            type="warning"
+          />
+        )}
+
         {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>

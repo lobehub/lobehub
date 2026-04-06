@@ -1,4 +1,5 @@
 import { createLarkAdapter, LarkApiClient } from '@lobechat/chat-adapter-feishu';
+import type { Chat as ChatBot } from 'chat';
 import debug from 'debug';
 
 import {
@@ -18,8 +19,17 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { FeishuWSConnection } from './gateway';
 
 const log = debug('bot-platform:feishu:client');
+
+const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
+const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+export interface GatewayListenerOptions {
+  durationMs?: number;
+  waitUntil?: (task: Promise<any>) => void;
+}
 
 function extractChatId(platformThreadId: string): string {
   return platformThreadId.split(':')[1];
@@ -29,6 +39,25 @@ function extractChatId(platformThreadId: string): string {
 function resolveDomain(platform: string): 'lark' | 'feishu' {
   return platform === 'lark' ? 'lark' : 'feishu';
 }
+
+// ---------- Shared runtime operations ----------
+
+function createMessenger(
+  config: BotProviderConfig,
+  domain: 'lark' | 'feishu',
+  platformThreadId: string,
+): PlatformMessenger {
+  const api = new LarkApiClient(config.applicationId, config.credentials.appSecret, domain);
+  const chatId = extractChatId(platformThreadId);
+  return {
+    createMessage: (content) => api.sendMessage(chatId, content).then(() => {}),
+    editMessage: (messageId, content) => api.editMessage(messageId, content).then(() => {}),
+    removeReaction: () => Promise.resolve(),
+    triggerTyping: () => Promise.resolve(),
+  };
+}
+
+// ---------- Webhook Client (existing behavior) ----------
 
 class FeishuWebhookClient implements PlatformClient {
   readonly id: string;
@@ -44,10 +73,8 @@ class FeishuWebhookClient implements PlatformClient {
     this.domain = resolveDomain(config.platform);
   }
 
-  // --- Lifecycle ---
-
   async start(): Promise<void> {
-    log('Starting FeishuClient appId=%s domain=%s', this.applicationId, this.domain);
+    log('Starting FeishuClient (webhook) appId=%s domain=%s', this.applicationId, this.domain);
     await updateBotRuntimeStatus({
       applicationId: this.applicationId,
       platform: this.id,
@@ -68,7 +95,7 @@ class FeishuWebhookClient implements PlatformClient {
         status: BOT_RUNTIME_STATUSES.connected,
       });
 
-      log('FeishuClient appId=%s credentials verified', this.applicationId);
+      log('FeishuClient (webhook) appId=%s credentials verified', this.applicationId);
     } catch (error) {
       await updateBotRuntimeStatus({
         applicationId: this.applicationId,
@@ -81,15 +108,13 @@ class FeishuWebhookClient implements PlatformClient {
   }
 
   async stop(): Promise<void> {
-    log('Stopping FeishuClient appId=%s', this.applicationId);
+    log('Stopping FeishuClient (webhook) appId=%s', this.applicationId);
     await updateBotRuntimeStatus({
       applicationId: this.applicationId,
       platform: this.id,
       status: BOT_RUNTIME_STATUSES.disconnected,
     });
   }
-
-  // --- Runtime Operations ---
 
   createAdapter(): Record<string, any> {
     return {
@@ -104,18 +129,7 @@ class FeishuWebhookClient implements PlatformClient {
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
-    const api = new LarkApiClient(
-      this.config.applicationId,
-      this.config.credentials.appSecret,
-      this.domain,
-    );
-    const chatId = extractChatId(platformThreadId);
-    return {
-      createMessage: (content) => api.sendMessage(chatId, content).then(() => {}),
-      editMessage: (messageId, content) => api.editMessage(messageId, content).then(() => {}),
-      removeReaction: () => Promise.resolve(),
-      triggerTyping: () => Promise.resolve(),
-    };
+    return createMessenger(this.config, this.domain, platformThreadId);
   }
 
   extractChatId(platformThreadId: string): string {
@@ -136,8 +150,193 @@ class FeishuWebhookClient implements PlatformClient {
   }
 }
 
+// ---------- WebSocket Client (persistent, using Lark SDK WSClient) ----------
+
+class FeishuWSClientImpl implements PlatformClient {
+  readonly id: string;
+  readonly applicationId: string;
+
+  private config: BotProviderConfig;
+  private context: BotPlatformRuntimeContext;
+  private domain: 'lark' | 'feishu';
+  private gateway: FeishuWSConnection | null = null;
+  private bot: ChatBot<any> | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
+
+  constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
+    this.config = config;
+    this.context = context;
+    this.id = config.platform;
+    this.applicationId = config.applicationId;
+    this.domain = resolveDomain(config.platform);
+  }
+
+  async start(options?: GatewayListenerOptions): Promise<void> {
+    log('Starting FeishuClient (ws) appId=%s domain=%s', this.applicationId, this.domain);
+
+    this.stopped = false;
+    const durationMs = options?.durationMs ?? DEFAULT_DURATION_MS;
+    const runtimeStatusTtlMs = durationMs + CONNECTED_STATUS_TTL_BUFFER_MS;
+    await updateBotRuntimeStatus(
+      {
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.starting,
+      },
+      { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
+    );
+
+    try {
+      if (this.bot) {
+        await this.bot.shutdown().catch(() => {});
+        this.bot = null;
+      }
+
+      const adapter = createLarkAdapter({
+        appId: this.config.applicationId,
+        appSecret: this.config.credentials.appSecret,
+        encryptKey: this.config.credentials.encryptKey,
+        platform: this.domain,
+        verificationToken: this.config.credentials.verificationToken,
+      });
+
+      const { Chat, ConsoleLogger } = await import('chat');
+
+      const chatConfig: any = {
+        adapters: { [this.config.platform]: adapter },
+        userName: `lobehub-gateway-${this.applicationId}`,
+      };
+
+      if (this.context.redisClient) {
+        const { createIoRedisState } = await import('@chat-adapter/state-ioredis');
+        chatConfig.state = createIoRedisState({
+          client: this.context.redisClient as any,
+          logger: new ConsoleLogger(),
+        });
+      }
+
+      const bot = new Chat(chatConfig);
+      this.bot = bot;
+      await bot.initialize();
+
+      const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/${this.config.platform}/${this.applicationId}`;
+
+      this.gateway = new FeishuWSConnection({
+        appId: this.config.applicationId,
+        appSecret: this.config.credentials.appSecret,
+        domain: this.domain,
+        webhookUrl,
+      });
+
+      await this.gateway.start();
+
+      if (!options) {
+        this.refreshTimer = setTimeout(() => {
+          if (this.stopped) return;
+
+          log(
+            'FeishuClient appId=%s duration elapsed (%dh), refreshing...',
+            this.applicationId,
+            durationMs / 3_600_000,
+          );
+          this.gateway?.close();
+          this.start().catch((err) => {
+            log('Failed to refresh FeishuClient appId=%s: %O', this.applicationId, err);
+          });
+        }, durationMs);
+      }
+
+      await updateBotRuntimeStatus(
+        {
+          applicationId: this.applicationId,
+          platform: this.id,
+          status: BOT_RUNTIME_STATUSES.connected,
+        },
+        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
+      );
+
+      log('FeishuClient (ws) appId=%s started', this.applicationId);
+    } catch (error) {
+      await updateBotRuntimeStatus(
+        {
+          applicationId: this.applicationId,
+          errorMessage: getRuntimeStatusErrorMessage(error),
+          platform: this.id,
+          status: BOT_RUNTIME_STATUSES.failed,
+        },
+        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
+      );
+      throw error;
+    }
+  }
+
+  async stop(): Promise<void> {
+    log('Stopping FeishuClient (ws) appId=%s', this.applicationId);
+    this.stopped = true;
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    this.gateway?.close();
+    this.gateway = null;
+    if (this.bot) {
+      await this.bot.shutdown().catch(() => {});
+      this.bot = null;
+    }
+    await updateBotRuntimeStatus(
+      {
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.disconnected,
+      },
+      { redisClient: this.context.redisClient as any },
+    );
+  }
+
+  createAdapter(): Record<string, any> {
+    return {
+      [this.config.platform]: createLarkAdapter({
+        appId: this.config.applicationId,
+        appSecret: this.config.credentials.appSecret,
+        encryptKey: this.config.credentials.encryptKey,
+        platform: this.domain,
+        verificationToken: this.config.credentials.verificationToken,
+      }),
+    };
+  }
+
+  getMessenger(platformThreadId: string): PlatformMessenger {
+    return createMessenger(this.config, this.domain, platformThreadId);
+  }
+
+  extractChatId(platformThreadId: string): string {
+    return extractChatId(platformThreadId);
+  }
+
+  formatMarkdown(markdown: string): string {
+    return stripMarkdown(markdown);
+  }
+
+  formatReply(body: string, stats?: UsageStats): string {
+    if (!stats || !this.config.settings?.showUsageStats) return body;
+    return `${body}\n\n${formatUsageStats(stats)}`;
+  }
+
+  parseMessageId(compositeId: string): string {
+    return compositeId;
+  }
+}
+
+// ---------- Factory ----------
+
 export class FeishuClientFactory extends ClientFactory {
   createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
+    // Default to 'webhook' for backward compatibility with existing users
+    const mode = (config.settings?.connectionMode as string) || 'webhook';
+    if (mode === 'websocket') {
+      return new FeishuWSClientImpl(config, context);
+    }
     return new FeishuWebhookClient(config, context);
   }
 

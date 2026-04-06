@@ -50,6 +50,15 @@ export const sharedSchema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       {
+        key: 'connectionMode',
+        default: 'webhook',
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
+      {
         key: 'charLimit',
         default: 4000,
         description: 'channel.charLimitHint',

@@ -46,6 +46,9 @@ export default {
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
   'channel.feishu.description': 'Connect this assistant to Feishu for private and group chats.',
+  'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
+  'channel.feishu.webhookMigrationDesc':
+    'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
