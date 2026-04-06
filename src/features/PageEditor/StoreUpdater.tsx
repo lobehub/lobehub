@@ -1,5 +1,6 @@
 'use client';
 
+import { useEditor } from '@lobehub/editor/react';
 import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -37,9 +38,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
 
-    const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
-    const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
+
+    // Read the editor directly from the EditorProvider context so that the runtime
+    // always receives the latest editor instance, even if the store was created
+    // before the editor finished initializing.
+    const editorFromContext = useEditor();
+    const pageAgentEditor = editorFromContext as unknown as PageAgentEditor | undefined;
 
     // Update store with props
     useStoreUpdater('documentId', pageId);
@@ -57,7 +62,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
       initMeta(title, emoji);
     }, [pageId, title, emoji]);
 
-    // Connect editor to page agent runtime
+    // Connect editor to page agent runtime using the live context value so the
+    // runtime is updated as soon as the editor is available, regardless of when
+    // the store was initialized.
     useEffect(() => {
       if (pageAgentEditor) {
         pageAgentRuntime.setEditor(pageAgentEditor);
