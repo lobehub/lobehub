@@ -195,7 +195,7 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
       channelId: threadId,
       id: threadId,
       isDM: decoded.type === 'dm',
-      metadata: decoded,
+      metadata: { id: decoded.id, type: decoded.type },
     };
   }
 
