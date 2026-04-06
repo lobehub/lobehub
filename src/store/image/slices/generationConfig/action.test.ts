@@ -195,7 +195,10 @@ describe('GenerationConfigAction', () => {
 
       expect(result.current.model).toBe('flux/schnell');
       expect(result.current.provider).toBe('fal');
-      expect(result.current.parameters).toEqual(fluxSchnellDefaultValues);
+      expect(result.current.parameters).toEqual({
+        ...fluxSchnellDefaultValues,
+        prompt: 'initial prompt',
+      });
       expect(result.current.parametersSchema).toEqual(fluxSchnellParamsSchema);
     });
 
@@ -208,7 +211,10 @@ describe('GenerationConfigAction', () => {
 
       expect(result.current.model).toBe('custom-model');
       expect(result.current.provider).toBe('custom-provider');
-      expect(result.current.parameters).toEqual(customModelDefaultValues);
+      expect(result.current.parameters).toEqual({
+        ...customModelDefaultValues,
+        prompt: 'initial prompt',
+      });
       expect(result.current.parametersSchema).toEqual(customModelSchema);
     });
 

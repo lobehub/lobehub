@@ -14,7 +14,10 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 
-import { preserveSupportedParams } from '../../../utils/preserveSupportedParams';
+import {
+  normalizeImageInputOnSchemaSwitch,
+  preserveSupportedParams,
+} from '../../../utils/preserveSupportedParams';
 import { type ImageStore } from '../../store';
 import { calculateInitialAspectRatio } from '../../utils/aspectRatio';
 import { adaptSizeToRatio, parseRatio } from '../../utils/size';
@@ -76,34 +79,7 @@ function preserveImageInputParams(
     'imageUrls',
   ]);
 
-  // Smart conversion: multi-image ↔ single-image model switching
-  const { imageUrl, imageUrls } = previousParameters;
-  const supportsImageUrl = 'imageUrl' in nextSchema;
-  const supportsImageUrls = 'imageUrls' in nextSchema;
-
-  // Case 1: Multi-image → Single-image (imageUrls[0] → imageUrl)
-  if (
-    Array.isArray(imageUrls) &&
-    imageUrls.length > 0 &&
-    !supportsImageUrls &&
-    supportsImageUrl &&
-    !result.imageUrl
-  ) {
-    (result as RuntimeImageGenParams).imageUrl = imageUrls[0];
-  }
-
-  // Case 2: Single-image → Multi-image (imageUrl → [imageUrl])
-  if (
-    typeof imageUrl === 'string' &&
-    imageUrl.length > 0 &&
-    !supportsImageUrl &&
-    supportsImageUrls &&
-    !(Array.isArray(result.imageUrls) && result.imageUrls.length > 0)
-  ) {
-    (result as RuntimeImageGenParams).imageUrls = [imageUrl];
-  }
-
-  return result;
+  return normalizeImageInputOnSchemaSwitch(previousParameters, nextSchema, result);
 }
 
 type Setter = StoreSetter<ImageStore>;

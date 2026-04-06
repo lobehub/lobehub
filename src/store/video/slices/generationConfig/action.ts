@@ -13,7 +13,10 @@ import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import { preserveSupportedParams } from '../../../utils/preserveSupportedParams';
+import {
+  normalizeImageInputOnSchemaSwitch,
+  preserveSupportedParams,
+} from '../../../utils/preserveSupportedParams';
 import type { VideoStore } from '../../store';
 
 export function getVideoModelAndDefaults(model: string, provider: string) {
@@ -46,11 +49,13 @@ function preserveVideoInputParams(
   nextDefaultValues: RuntimeVideoGenParams,
   nextSchema: VideoModelParamsSchema,
 ) {
-  return preserveSupportedParams(previousParameters, nextDefaultValues, nextSchema, [
+  const result = preserveSupportedParams(previousParameters, nextDefaultValues, nextSchema, [
     'prompt',
     'imageUrl',
     'endImageUrl',
   ]);
+
+  return normalizeImageInputOnSchemaSwitch(previousParameters, nextSchema, result);
 }
 
 type Setter = StoreSetter<VideoStore>;

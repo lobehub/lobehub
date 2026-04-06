@@ -22,3 +22,42 @@ export function preserveSupportedParams<
     ...Object.fromEntries(supportedPreservedEntries),
   };
 }
+
+export function normalizeImageInputOnSchemaSwitch<
+  TParams extends Record<string, unknown> & {
+    imageUrl?: unknown;
+    imageUrls?: unknown;
+  },
+  TSchema extends Record<string, unknown>,
+>(previousParameters: TParams, nextSchema: TSchema, preservedResult: TParams): TParams {
+  const result = { ...preservedResult };
+
+  const imageUrl = previousParameters.imageUrl;
+  const imageUrls = previousParameters.imageUrls;
+  const supportsImageUrl = 'imageUrl' in nextSchema;
+  const supportsImageUrls = 'imageUrls' in nextSchema;
+
+  // Multi-image -> Single-image
+  if (
+    Array.isArray(imageUrls) &&
+    imageUrls.length > 0 &&
+    !supportsImageUrls &&
+    supportsImageUrl &&
+    !result.imageUrl
+  ) {
+    result.imageUrl = imageUrls[0];
+  }
+
+  // Single-image -> Multi-image
+  if (
+    typeof imageUrl === 'string' &&
+    imageUrl &&
+    supportsImageUrls &&
+    !supportsImageUrl &&
+    !(Array.isArray(result.imageUrls) && result.imageUrls.length > 0)
+  ) {
+    result.imageUrls = [imageUrl];
+  }
+
+  return result;
+}
