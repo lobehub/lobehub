@@ -153,7 +153,7 @@ const SeedItem = memo(() => {
 
 interface SwitchItemProps {
   label: string;
-  paramName: 'cameraFixed' | 'generateAudio';
+  paramName: 'cameraFixed' | 'generateAudio' | 'watermark' | 'webSearch';
 }
 
 const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
@@ -162,6 +162,36 @@ const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{label}</Text>
+      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+    </Flexbox>
+  );
+});
+
+const PromptExtendItem = memo(() => {
+  const { t } = useTranslation('video');
+  const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
+
+  const options = enumValues?.map((item) => ({ label: item, value: item })) ?? [];
+
+  if (options.length > 0) {
+    return (
+      <Flexbox gap={6}>
+        <Text weight={500}>{t('config.promptExtend.label')}</Text>
+        <Segmented
+          block
+          options={options}
+          style={{ width: '100%' }}
+          value={value as string}
+          variant="filled"
+          onChange={(next) => setValue(String(next) as any)}
+        />
+      </Flexbox>
+    );
+  }
+
+  return (
+    <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
+      <Text weight={500}>{t('config.promptExtend.label')}</Text>
       <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
     </Flexbox>
   );
@@ -197,7 +227,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportDuration = useVideoStore(isSupportedParamSelector('duration'));
   const isSupportSeed = useVideoStore(isSupportedParamSelector('seed'));
   const isSupportGenerateAudio = useVideoStore(isSupportedParamSelector('generateAudio'));
+  const isSupportPromptExtend = useVideoStore(isSupportedParamSelector('promptExtend'));
+  const isSupportWatermark = useVideoStore(isSupportedParamSelector('watermark'));
   const isSupportCameraFixed = useVideoStore(isSupportedParamSelector('cameraFixed'));
+  const isSupportWebSearch = useVideoStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const { value: duration } = useVideoGenerationConfigParam('duration');
   useFetchAiVideoConfig();
@@ -226,9 +259,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
       setPromptParam(null);
 
-      setTimeout(async () => {
+      const timeoutId = window.setTimeout(async () => {
         await createVideo();
       }, 100);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
   }, [promptParam, isLogin, setValue, setPromptParam, createVideo]);
 
@@ -378,9 +415,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                         <SeedItem />
                       </Flexbox>
                     )}
-                    {(isSupportGenerateAudio || isSupportCameraFixed) && (
-                      <Divider style={{ marginBlock: 4 }} />
-                    )}
+                    {(isSupportGenerateAudio ||
+                      isSupportCameraFixed ||
+                      isSupportWatermark ||
+                      isSupportPromptExtend ||
+                      isSupportWebSearch) && <Divider style={{ marginBlock: 4 }} />}
                     {isSupportGenerateAudio && (
                       <SwitchItem
                         label={t('config.generateAudio.label')}
@@ -389,6 +428,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     )}
                     {isSupportCameraFixed && (
                       <SwitchItem label={t('config.cameraFixed.label')} paramName={'cameraFixed'} />
+                    )}
+                    {isSupportWatermark && (
+                      <SwitchItem label={t('config.watermark.label')} paramName={'watermark'} />
+                    )}
+                    {isSupportPromptExtend && <PromptExtendItem />}
+                    {isSupportWebSearch && (
+                      <SwitchItem label={t('config.webSearch.label')} paramName={'webSearch'} />
                     )}
                   </Flexbox>
                 }

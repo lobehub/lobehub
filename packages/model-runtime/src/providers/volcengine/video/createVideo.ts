@@ -22,6 +22,8 @@ export async function createVolcengineVideo(
     aspectRatio,
     duration,
     generateAudio,
+    webSearch,
+    watermark,
     seed,
     resolution,
     cameraFixed,
@@ -56,7 +58,8 @@ export async function createVolcengineVideo(
   const body: Record<string, unknown> = {
     content,
     model,
-    watermark: false,
+    watermark: watermark ?? false,
+    ...(webSearch && { tools: [{ type: 'web_search' }] }),
   };
 
   if (aspectRatio !== undefined) body.ratio = aspectRatio;

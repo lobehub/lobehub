@@ -1165,11 +1165,14 @@ const volcengineImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      promptExtend: { default: 'off', enum: ['off', 'standard'] },
+      watermark: { default: false },
+      webSearch: { default: false },
       width: { default: 2048, max: 16_384, min: 480, step: 1 },
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.22, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-01-28',
     type: 'image',
@@ -1186,6 +1189,8 @@ const volcengineImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      promptExtend: { default: 'off', enum: ['off', 'standard'] },
+      watermark: { default: false },
       width: { default: 2048, max: 16_384, min: 480, step: 1 },
     },
     pricing: {
@@ -1196,12 +1201,6 @@ const volcengineImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    /*
-    // TODO: AIImageModelCard does not support config.deploymentName
-    config: {
-      deploymentName: 'doubao-seedream-3-0-t2i-250415',
-    },
-    */
     description:
       'Seedream 4.0 is an image generation model from ByteDance Seed, supporting text and image inputs with highly controllable, high-quality image generation. It generates images from text prompts.',
     displayName: 'Seedream 4.0',
@@ -1213,6 +1212,8 @@ const volcengineImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      promptExtend: { default: 'off', enum: ['off', 'standard', 'fast'] },
+      watermark: { default: false },
       width: { default: 2048, max: 16_384, min: 240, step: 1 },
     },
     pricing: {
@@ -1223,16 +1224,9 @@ const volcengineImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    /*
-    // TODO: AIImageModelCard does not support config.deploymentName
-    config: {
-      deploymentName: 'doubao-seedream-3-0-t2i-250415',
-    },
-    */
     description:
       'Seedream 3.0 is an image generation model from ByteDance Seed, supporting text and image inputs with highly controllable, high-quality image generation. It generates images from text prompts.',
     displayName: 'Seedream 3.0 Text-to-Image',
-    enabled: true,
     id: 'doubao-seedream-3-0-t2i-250415',
     parameters: {
       cfg: { default: 2.5, max: 10, min: 1, step: 0.1 },
@@ -1241,6 +1235,7 @@ const volcengineImageModels: AIImageModelCard[] = [
         default: '',
       },
       seed: { default: null },
+      watermark: { default: false },
       width: { default: 1024, max: 3549, min: 296, step: 1 },
     },
     pricing: {
@@ -1250,15 +1245,10 @@ const volcengineImageModels: AIImageModelCard[] = [
     releasedAt: '2025-04-15',
     type: 'image',
   },
-  // Note: Doubao image-to-image and text-to-image models share the same Endpoint, currently switches to edit endpoint if imageUrl exists
   {
-    // config: {
-    //   deploymentName: 'doubao-seededit-3-0-i2i-250628',
-    // },
     description:
       'The Doubao image model from ByteDance Seed supports text and image inputs with highly controllable, high-quality image generation. It supports text-guided image editing, with output sizes between 512 and 1536 on the long side.',
     displayName: 'SeedEdit 3.0 Image-to-Image',
-    enabled: true,
     id: 'doubao-seededit-3-0-i2i-250628',
     parameters: {
       cfg: { default: 5.5, max: 10, min: 1, step: 0.1 },
@@ -1267,6 +1257,11 @@ const volcengineImageModels: AIImageModelCard[] = [
         default: '',
       },
       seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.259, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-06-28',
     type: 'image',
@@ -1308,6 +1303,8 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['480p', '720p'],
       },
+      watermark: { default: false },
+      webSearch: { default: false },
       seed: { default: null },
     },
     pricing: {
@@ -1351,6 +1348,8 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         default: '720p',
         enum: ['480p', '720p'],
       },
+      watermark: { default: false },
+      webSearch: { default: false },
       seed: { default: null },
     },
     pricing: {
@@ -1367,7 +1366,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
     enabled: true,
     id: 'doubao-seedance-1-5-pro-251215',
     organization: 'ByteDance',
-    parameters: seedance15ProParams,
+    parameters: {
+      ...seedance15ProParams,
+      watermark: { default: false },
+    },
     pricing: {
       currency: 'CNY',
       units: [
@@ -1411,6 +1413,7 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1453,6 +1456,7 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1496,6 +1500,7 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1523,6 +1528,7 @@ const volcengineVideoModels: AIVideoModelCard[] = [
         enum: ['480p', '720p', '1080p'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',

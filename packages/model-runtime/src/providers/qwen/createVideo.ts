@@ -313,6 +313,14 @@ async function createVideoTask(
     }
   }
 
+  if (params.promptExtend) {
+    parameters.prompt_extend = params.promptExtend;
+  }
+
+  if (params.watermark) {
+    parameters.watermark = params.watermark;
+  }
+
   const response = await fetch(url, {
     body: JSON.stringify({
       input,

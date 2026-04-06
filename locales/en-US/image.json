@@ -24,6 +24,7 @@
   "config.size.label": "Size",
   "config.steps.label": "Steps",
   "config.title": "Configuration",
+  "config.webSearch.label": "Web Search",
   "config.width.label": "Width",
   "generation.actions.applySeed": "Apply Seed",
   "generation.actions.copyError": "Copy Error Message",

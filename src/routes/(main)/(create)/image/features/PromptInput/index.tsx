@@ -1,9 +1,10 @@
 'use client';
 
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { Divider, Switch } from 'antd';
 import { Images } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
@@ -49,6 +50,52 @@ interface PromptInputProps {
 
 const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam;
 
+interface SwitchItemProps {
+  label: string;
+  paramName: 'watermark' | 'webSearch';
+}
+
+const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
+  const { value, setValue } = useGenerationConfigParam(paramName);
+
+  return (
+    <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
+      <Text weight={500}>{label}</Text>
+      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+    </Flexbox>
+  );
+});
+
+const PromptExtendItem = () => {
+  const { t } = useTranslation('image');
+  const { value, setValue, enumValues } = useGenerationConfigParam('promptExtend');
+
+  if (enumValues && enumValues.length > 0) {
+    const options = enumValues.map((item) => ({ label: item, value: item }));
+
+    return (
+      <Flexbox gap={6}>
+        <Text weight={500}>{t('config.promptExtend.label')}</Text>
+        <Segmented
+          block
+          options={options}
+          style={{ width: '100%' }}
+          value={value as string}
+          variant="filled"
+          onChange={(next) => setValue(String(next) as any)}
+        />
+      </Flexbox>
+    );
+  }
+
+  return (
+    <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
+      <Text weight={500}>{t('config.promptExtend.label')}</Text>
+      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+    </Flexbox>
+  );
+};
+
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('image');
@@ -75,6 +122,9 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportSeed = useImageStore(isSupportedParamSelector('seed'));
   const isSupportSteps = useImageStore(isSupportedParamSelector('steps'));
   const isSupportCfg = useImageStore(isSupportedParamSelector('cfg'));
+  const isSupportPromptExtend = useImageStore(isSupportedParamSelector('promptExtend'));
+  const isSupportWatermark = useImageStore(isSupportedParamSelector('watermark'));
+  const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
   const { showDimensionControl } = useDimensionControl();
@@ -120,9 +170,13 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       hasProcessedPrompt.current = true;
       setPromptParam(null);
 
-      setTimeout(async () => {
+      const timeoutId = window.setTimeout(async () => {
         await createImage();
       }, 100);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
   }, [promptParam, isLogin, setValue, setPromptParam, createImage]);
 
@@ -265,6 +319,16 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                       <Text fontSize={12}>{t('config.seed.label')}</Text>
                       <SeedNumberInput />
                     </Flexbox>
+                  )}
+                  {(isSupportWatermark || isSupportPromptExtend || isSupportWebSearch) && (
+                    <Divider style={{ marginBlock: 4 }} />
+                  )}
+                  {isSupportWatermark && (
+                    <SwitchItem label={t('config.watermark.label')} paramName={'watermark'} />
+                  )}
+                  {isSupportPromptExtend && <PromptExtendItem />}
+                  {isSupportWebSearch && (
+                    <SwitchItem label={t('config.webSearch.label')} paramName={'webSearch'} />
                   )}
                 </Flexbox>
               }
