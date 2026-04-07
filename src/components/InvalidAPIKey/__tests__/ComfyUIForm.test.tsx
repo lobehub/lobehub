@@ -123,15 +123,6 @@ vi.mock('@/features/ChatList/Error/style', () => ({
 }));
 
 describe('ComfyUIForm Integration', () => {
-  const mockProps = {
-    bedrockDescription: 'bedrock.description',
-    description: 'comfyui.description',
-    id: 'test-batch-id',
-    onClose: vi.fn(),
-    onRecreate: vi.fn(),
-    provider: ModelProvider.ComfyUI,
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
