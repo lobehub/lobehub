@@ -203,7 +203,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   }
   if (hasAgents) {
     instructionParts.push(
-      "The <available_agents> section lists the user's existing agents. When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+      "The `available_agents` section lists the user's existing agents. When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
     );
   }
 
