@@ -33,7 +33,7 @@ import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
@@ -400,8 +400,43 @@ export const contextEngineering = async ({
     }
   }
 
-  // Build Agent Management context if Agent Management tool is enabled
+  // Build Agent Management context.
+  // - availableAgents is injected whenever the user is in auto skill mode (so the
+  //   supervisor can decide to activate agent-management on its own) OR when the tool
+  //   is explicitly enabled.
+  // - availableProviders / availablePlugins are only built when the tool is explicitly
+  //   enabled, since they're solely needed for createAgent / updateAgent.
   let agentManagementContext: AgentManagementContext | undefined;
+
+  const isInAutoSkillMode =
+    agentChatConfigSelectors.skillActivateMode(agentStoreState) !== 'manual';
+  const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
+
+  if (shouldInjectAvailableAgents) {
+    try {
+      // Over-fetch by 1 to detect overflow.
+      const AVAILABLE_AGENTS_LIMIT = 10;
+      const recentAgents = await lambdaClient.agent.queryAgents.query({
+        limit: AVAILABLE_AGENTS_LIMIT + 1,
+      });
+      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+        description: a.description ?? undefined,
+        id: a.id,
+        title: a.title ?? 'Untitled',
+      }));
+
+      agentManagementContext = {
+        availableAgents,
+        availableAgentsHasMore: hasMoreAgents,
+      };
+      log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
+    } catch (error) {
+      // Silently fail - availableAgents context is optional
+      log('Failed to fetch availableAgents: %O', error);
+    }
+  }
+
   if (isAgentManagementEnabled) {
     // Get enabled providers and models from aiInfra store
     const aiProviderState = getAiInfraStoreState();
@@ -484,14 +519,16 @@ export const contextEngineering = async ({
     }
 
     agentManagementContext = {
+      ...agentManagementContext,
       availablePlugins,
       availableProviders,
     };
 
     log(
-      'agentManagementContext built: %d providers, %d plugins',
+      'agentManagementContext built: %d providers, %d plugins, %d agents',
       agentManagementContext.availableProviders?.length ?? 0,
       agentManagementContext.availablePlugins?.length ?? 0,
+      agentManagementContext.availableAgents?.length ?? 0,
     );
   }
 
@@ -597,7 +634,7 @@ export const contextEngineering = async ({
     // Extended contexts - only pass when enabled
     ...(isAgentBuilderEnabled && { agentBuilderContext }),
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
-    ...((isAgentManagementEnabled || hasMentionedAgents) && { agentManagementContext }),
+    ...(agentManagementContext && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
     ...(gtdConfig && { gtd: gtdConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),

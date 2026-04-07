@@ -134,7 +134,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
       })
       .join('\n');
     const hasMoreNote = context.availableAgentsHasMore
-      ? `\n  <note>Only the ${context.availableAgents.length} most recently updated agents are listed here. The user has more agents — call \`searchAgent\` with source="user" and a keyword to find others.</note>`
+      ? `\n  <note>Only the ${context.availableAgents.length} most recently updated agents are listed here. The user has more agents — use the Agent Management \`searchAgent\` tool (source="user" + keyword) to find others.</note>`
       : '';
     parts.push(`<available_agents>${hasMoreNote}\n${agentsXml}\n</available_agents>`);
   }
@@ -188,8 +188,27 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     return '';
   }
 
+  // Build instruction dynamically based on which sections are actually present.
+  // (e.g. in "auto" mode we may inject only <available_agents> without models/plugins.)
+  const hasModelsOrPlugins =
+    (context.availableProviders && context.availableProviders.length > 0) ||
+    (context.availablePlugins && context.availablePlugins.length > 0);
+  const hasAgents = context.availableAgents && context.availableAgents.length > 0;
+
+  const instructionParts: string[] = [];
+  if (hasModelsOrPlugins) {
+    instructionParts.push(
+      'When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.',
+    );
+  }
+  if (hasAgents) {
+    instructionParts.push(
+      "The <available_agents> section lists the user's existing agents. When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+    );
+  }
+
   return `<agent_management_context>
-<instruction>When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters. The <available_agents> section lists the user's existing agents — you may reference them by id with callAgent without first running searchAgent. If the user's request does not clearly match any of these agents, use searchAgent to look further (including marketplace).</instruction>
+<instruction>${instructionParts.join(' ')}</instruction>
 ${parts.join('\n')}
 </agent_management_context>`;
 };

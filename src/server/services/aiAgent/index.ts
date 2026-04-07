@@ -10,7 +10,11 @@ import {
 } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { LobeToolManifest, ToolSource } from '@lobechat/context-engine';
+import type {
+  AgentManagementContext,
+  LobeToolManifest,
+  ToolSource,
+} from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
@@ -676,9 +680,34 @@ export class AiAgentService {
       }
     }
 
-    // 9.5. Build Agent Management context if agent-management tool is enabled
+    // 9.5. Build Agent Management context
+    // - availableAgents is injected whenever the user is in auto mode (so the supervisor
+    //   can decide to activate agent-management on its own) OR when the tool is explicitly enabled.
+    // - availableProviders / availablePlugins are only built when the tool is explicitly
+    //   enabled, since they're solely needed for createAgent / updateAgent.
     const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
-    let agentManagementContext;
+    const isInAutoSkillMode = agentConfig.chatConfig?.skillActivateMode !== 'manual';
+    const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
+    let agentManagementContext: AgentManagementContext | undefined;
+
+    if (shouldInjectAvailableAgents) {
+      // Query user's most recently updated agents. Over-fetch by 1 to detect overflow.
+      const AVAILABLE_AGENTS_LIMIT = 10;
+      const agentModel = new AgentModel(this.db, this.userId);
+      const recentAgents = await agentModel.queryAgents({ limit: AVAILABLE_AGENTS_LIMIT + 1 });
+      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+        description: a.description ?? undefined,
+        id: a.id,
+        title: a.title ?? 'Untitled',
+      }));
+
+      agentManagementContext = {
+        availableAgents,
+        availableAgentsHasMore: hasMoreAgents,
+      };
+    }
+
     if (isAgentManagementEnabled) {
       // Query user's enabled models from database
       const aiModelModel = new AiModelModel(this.db, this.userId);
@@ -755,32 +784,26 @@ export class AiAgentService {
         })),
       ];
 
-      // Query user's most recently updated agents so the model has them in context
-      // without needing to call searchAgent first. Over-fetch by 1 to detect overflow.
-      const AVAILABLE_AGENTS_LIMIT = 10;
-      const agentModel = new AgentModel(this.db, this.userId);
-      const recentAgents = await agentModel.queryAgents({ limit: AVAILABLE_AGENTS_LIMIT + 1 });
-      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
-      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
-        description: a.description ?? undefined,
-        id: a.id,
-        title: a.title ?? 'Untitled',
-      }));
-
+      // Merge models / plugins into the (already-initialized) agentManagementContext.
+      // availableAgents was populated above by `shouldInjectAvailableAgents`, which is
+      // always true when isAgentManagementEnabled.
       agentManagementContext = {
-        availableAgents,
-        availableAgentsHasMore: hasMoreAgents,
+        ...agentManagementContext!,
         availablePlugins,
         // Limit to first 5 providers to avoid context bloat
         availableProviders: Array.from(providerMap.values()).slice(0, 5),
       };
 
       log(
-        'execAgent: built agentManagementContext with %d providers, %d plugins, %d agents (hasMore=%s)',
-        agentManagementContext.availableProviders.length,
-        agentManagementContext.availablePlugins.length,
-        agentManagementContext.availableAgents.length,
-        hasMoreAgents,
+        'execAgent: built agentManagementContext with %d providers, %d plugins, %d agents',
+        agentManagementContext.availableProviders!.length,
+        agentManagementContext.availablePlugins!.length,
+        agentManagementContext.availableAgents?.length ?? 0,
+      );
+    } else if (agentManagementContext) {
+      log(
+        'execAgent: injected availableAgents only (auto mode, agent-management tool not enabled): %d agents',
+        agentManagementContext.availableAgents?.length ?? 0,
       );
     }
 
