@@ -2,7 +2,12 @@ import debug from 'debug';
 import pMap from 'p-map';
 
 import { fileEnv } from '@/envs/file';
-import { type AudioContent, type ImageContent, type ToolCallContent } from '@/libs/mcp';
+import {
+  type AudioContent,
+  type ImageContent,
+  type ResourceContent,
+  type ToolCallContent,
+} from '@/libs/mcp';
 import { type FileService } from '@/server/services/file';
 import { nanoid } from '@/utils/uuid';
 
@@ -33,7 +38,9 @@ export const processContentBlocks = async (
       const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/mcp/images/${today}/${nanoid()}.${fileExtension}`;
 
       // Upload base64 image and get proxy URL
-      const { url } = await fileService.uploadBase64(imageBlock.data, pathname);
+      const { url } = await fileService.uploadBase64(imageBlock.data, pathname, {
+        fileType: imageBlock.mimeType,
+      });
 
       log(`Image uploaded, proxy URL: ${url}`);
 
@@ -50,11 +57,46 @@ export const processContentBlocks = async (
       const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/mcp/audio/${today}/${nanoid()}.${fileExtension}`;
 
       // Upload base64 audio and get proxy URL
-      const { url } = await fileService.uploadBase64(audioBlock.data, pathname);
+      const { url } = await fileService.uploadBase64(audioBlock.data, pathname, {
+        fileType: audioBlock.mimeType,
+      });
 
       log(`Audio uploaded, proxy URL: ${url}`);
 
       return { ...block, data: url };
+    }
+
+    // Handle resource blocks that contain binary image/audio data
+    if (block.type === 'resource') {
+      const resourceBlock = block as ResourceContent;
+      const { blob, mimeType, uri } = resourceBlock.resource;
+
+      if (blob && mimeType) {
+        if (mimeType.startsWith('image/')) {
+          const fileExtension = mimeType.split('/')[1] || 'png';
+          const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/mcp/images/${today}/${nanoid()}.${fileExtension}`;
+          const { url } = await fileService.uploadBase64(blob, pathname, {
+            fileType: mimeType,
+          });
+
+          log(`Resource image uploaded (${uri}), proxy URL: ${url}`);
+
+          // Convert to ImageContent so it renders visually for the LLM
+          return { data: url, mimeType, type: 'image' } as ImageContent;
+        }
+
+        if (mimeType.startsWith('audio/')) {
+          const fileExtension = mimeType.split('/')[1] || 'mp3';
+          const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/mcp/audio/${today}/${nanoid()}.${fileExtension}`;
+          const { url } = await fileService.uploadBase64(blob, pathname, {
+            fileType: mimeType,
+          });
+
+          log(`Resource audio uploaded (${uri}), proxy URL: ${url}`);
+
+          return { data: url, mimeType, type: 'audio' } as AudioContent;
+        }
+      }
     }
 
     return block;
