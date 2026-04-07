@@ -2,11 +2,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { knowledgeEnv } from '@/envs/knowledge';
 import { ChunkingLoader } from '@/libs/document-loaders';
+import { DocumentOcrService } from '@/server/services/document/ocr';
 
 import { ContentChunk } from './index';
 
 // Mock the dependencies
 vi.mock('@/libs/document-loaders');
+vi.mock('@/server/services/document/ocr', () => ({
+  DocumentOcrService: vi.fn(),
+  isImageFileForOcr: vi.fn((fileType?: string, filename?: string) => {
+    if (fileType?.startsWith('image/')) return true;
+    return !!filename && /\.(?:png|jpe?g|webp|gif)$/i.test(filename);
+  }),
+  isPdfFileForOcr: vi.fn((fileType?: string, filename?: string) => {
+    if (fileType === 'application/pdf') return true;
+    return !!filename && /\.pdf$/i.test(filename);
+  }),
+  shouldUsePdfChunkOcrFallback: vi.fn((chunks: Array<{ text?: string }>) =>
+    chunks.every((chunk) => !chunk.text?.trim()),
+  ),
+}));
 vi.mock('@/envs/knowledge', () => ({
   knowledgeEnv: {
     FILE_TYPE_CHUNKING_RULES: '',
@@ -18,6 +33,7 @@ vi.mock('@/envs/knowledge', () => ({
 describe('ContentChunk', () => {
   let contentChunk: ContentChunk;
   let mockLangChainPartition: ReturnType<typeof vi.fn>;
+  let mockOcrService: { extractFileDocument: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -27,6 +43,11 @@ describe('ContentChunk', () => {
     (ChunkingLoader as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
       partitionContent: mockLangChainPartition,
     }));
+
+    mockOcrService = {
+      extractFileDocument: vi.fn(),
+    };
+    vi.mocked(DocumentOcrService).mockImplementation(() => mockOcrService as any);
 
     contentChunk = new ContentChunk();
   });
@@ -243,6 +264,107 @@ describe('ContentChunk', () => {
         metadata: {},
         text: 'Content with no metadata',
         type: 'DocumentChunk',
+      });
+    });
+
+    it('should use OCR directly for image files when OCR service is available', async () => {
+      const ocrChunk = new ContentChunk({} as any, 'test-user-id');
+
+      mockOcrService.extractFileDocument.mockResolvedValue({
+        content: 'Image OCR text',
+        pages: [
+          {
+            metadata: { ocr: true, pageNumber: 1 },
+            pageContent: 'Image OCR text',
+          },
+        ],
+      });
+
+      const result = await ocrChunk.chunkContent({
+        content: new Uint8Array([1, 2, 3]),
+        fileType: 'image/png',
+        filename: 'scan.png',
+      });
+
+      expect(mockLangChainPartition).not.toHaveBeenCalled();
+      expect(mockOcrService.extractFileDocument).toHaveBeenCalledWith({
+        content: new Uint8Array([1, 2, 3]),
+        fileType: 'image/png',
+        filename: 'scan.png',
+        reason: 'image',
+      });
+      expect(result.chunks).toEqual([
+        {
+          index: 0,
+          metadata: { ocr: true, pageNumber: 1 },
+          text: 'Image OCR text',
+          type: 'DocumentChunk',
+        },
+      ]);
+    });
+
+    it('should fallback to OCR when pdf chunks are empty', async () => {
+      const ocrChunk = new ContentChunk({} as any, 'test-user-id');
+
+      mockLangChainPartition.mockResolvedValue([
+        {
+          id: 'chunk-1',
+          metadata: { page: 1 },
+          pageContent: '',
+        },
+      ]);
+      mockOcrService.extractFileDocument.mockResolvedValue({
+        content: '<page pageNumber="1">\nOCR page\n</page>',
+        pages: [
+          {
+            metadata: { ocr: true, pageNumber: 1 },
+            pageContent: 'OCR page',
+          },
+        ],
+      });
+
+      const result = await ocrChunk.chunkContent({
+        content: new Uint8Array([1, 2, 3]),
+        fileType: 'application/pdf',
+        filename: 'scan.pdf',
+      });
+
+      expect(mockLangChainPartition).toHaveBeenCalledWith('scan.pdf', new Uint8Array([1, 2, 3]));
+      expect(mockOcrService.extractFileDocument).toHaveBeenCalledWith({
+        content: new Uint8Array([1, 2, 3]),
+        fileType: 'application/pdf',
+        filename: 'scan.pdf',
+        reason: 'pdf-low-text',
+      });
+      expect(result.chunks[0]).toMatchObject({
+        index: 0,
+        metadata: { ocr: true, pageNumber: 1 },
+        text: 'OCR page',
+        type: 'DocumentChunk',
+      });
+    });
+
+    it('should keep default pdf chunks when OCR fallback fails', async () => {
+      const ocrChunk = new ContentChunk({} as any, 'test-user-id');
+
+      mockLangChainPartition.mockResolvedValue([
+        {
+          id: 'chunk-1',
+          metadata: { page: 1 },
+          pageContent: '',
+        },
+      ]);
+      mockOcrService.extractFileDocument.mockRejectedValue(new Error('OCR failed'));
+
+      const result = await ocrChunk.chunkContent({
+        content: new Uint8Array([1, 2, 3]),
+        fileType: 'application/pdf',
+        filename: 'scan.pdf',
+      });
+
+      expect(result.chunks[0]).toMatchObject({
+        id: 'chunk-1',
+        text: '',
       });
     });
   });

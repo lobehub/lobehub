@@ -3,12 +3,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { DocumentOcrService } from '@/server/services/document/ocr';
 
 import { FileService } from '../../file';
 import { DocumentService } from '../index';
 
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/file');
+vi.mock('@/server/services/document/ocr', () => ({
+  DocumentOcrService: vi.fn(),
+  isImageFileForOcr: vi.fn((fileType?: string, filename?: string) => {
+    if (fileType?.startsWith('image/')) return true;
+    return !!filename && /\.(?:png|jpe?g|webp|gif)$/i.test(filename);
+  }),
+  isPdfFileForOcr: vi.fn((fileType?: string, filename?: string) => {
+    if (fileType === 'application/pdf') return true;
+    return !!filename && /\.pdf$/i.test(filename);
+  }),
+  shouldUsePdfDocumentOcrFallback: vi.fn((fileDocument: any) => !fileDocument.content?.trim()),
+}));
 vi.mock('../../file');
 vi.mock('@lobechat/file-loaders', () => ({
   loadFile: vi.fn(),
@@ -25,6 +38,7 @@ describe('DocumentService', () => {
   let mockDocumentModel: any;
   let mockFileModel: any;
   let mockFileService: any;
+  let mockOcrService: any;
   const userId = 'test-user-id';
 
   beforeEach(() => {
@@ -59,9 +73,14 @@ describe('DocumentService', () => {
       downloadFileToLocal: vi.fn(),
     };
 
+    mockOcrService = {
+      extractFileDocument: vi.fn(),
+    };
+
     vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
     vi.mocked(FileModel).mockImplementation(() => mockFileModel);
     vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(DocumentOcrService).mockImplementation(() => mockOcrService);
 
     service = new DocumentService(mockDb, userId);
   });
@@ -647,7 +666,12 @@ describe('DocumentService', () => {
     beforeEach(() => {
       mockFileService.downloadFileToLocal.mockResolvedValue({
         filePath: '/tmp/test.md',
-        file: { name: 'readme.md', url: 's3://bucket/readme.md', parentId: null },
+        file: {
+          fileType: 'text/markdown',
+          name: 'readme.md',
+          url: 's3://bucket/readme.md',
+          parentId: null,
+        },
         cleanup: mockCleanup,
       });
     });
@@ -724,7 +748,12 @@ describe('DocumentService', () => {
       mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
       mockFileService.downloadFileToLocal.mockResolvedValue({
         filePath: '/tmp/doc.pdf',
-        file: { name: 'doc.pdf', url: 's3://bucket/doc.pdf', parentId: null },
+        file: {
+          fileType: 'application/pdf',
+          name: 'doc.pdf',
+          url: 's3://bucket/doc.pdf',
+          parentId: null,
+        },
         cleanup: mockCleanup,
       });
 
@@ -734,6 +763,121 @@ describe('DocumentService', () => {
       expect(mockDocumentModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           content: contentWithPageTags,
+        }),
+      );
+    });
+
+    it('should use OCR directly for image files', async () => {
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/scan.png',
+        file: {
+          fileType: 'image/png',
+          name: 'scan.png',
+          url: 's3://bucket/scan.png',
+          parentId: null,
+        },
+        cleanup: mockCleanup,
+      });
+      mockOcrService.extractFileDocument.mockResolvedValue({
+        content: 'OCR text',
+        fileType: 'image/png',
+        metadata: { ocr: { fallback: true } },
+        pages: [{ pageContent: 'OCR text' }],
+        totalCharCount: 8,
+        totalLineCount: 1,
+      });
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-ocr' });
+
+      await service.parseFile('file-1');
+
+      expect(loadFile).not.toHaveBeenCalled();
+      expect(mockOcrService.extractFileDocument).toHaveBeenCalledWith({
+        filePath: '/tmp/scan.png',
+        fileType: 'image/png',
+        filename: 'scan.png',
+        reason: 'image',
+      });
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'OCR text',
+          pages: [{ pageContent: 'OCR text' }],
+        }),
+      );
+    });
+
+    it('should fallback to OCR when pdf text extraction is empty', async () => {
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/scan.pdf',
+        file: {
+          fileType: 'application/pdf',
+          name: 'scan.pdf',
+          url: 's3://bucket/scan.pdf',
+          parentId: null,
+        },
+        cleanup: mockCleanup,
+      });
+      vi.mocked(loadFile).mockResolvedValue({
+        content: '',
+        fileType: 'pdf',
+        metadata: {},
+        pages: [{ pageContent: '' }],
+        totalCharCount: 0,
+        totalLineCount: 0,
+      } as any);
+      mockOcrService.extractFileDocument.mockResolvedValue({
+        content: '<page pageNumber="1">\nOCR page\n</page>',
+        fileType: 'application/pdf',
+        metadata: { ocr: { fallback: true } },
+        pages: [{ metadata: { pageNumber: 1 }, pageContent: 'OCR page' }],
+        totalCharCount: 8,
+        totalLineCount: 1,
+      });
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-ocr-pdf' });
+
+      await service.parseFile('file-1');
+
+      expect(loadFile).toHaveBeenCalledWith('/tmp/scan.pdf');
+      expect(mockOcrService.extractFileDocument).toHaveBeenCalledWith({
+        filePath: '/tmp/scan.pdf',
+        fileType: 'application/pdf',
+        filename: 'scan.pdf',
+        reason: 'pdf-low-text',
+      });
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '<page pageNumber="1">\nOCR page\n</page>',
+        }),
+      );
+    });
+
+    it('should keep original pdf content when OCR fallback fails', async () => {
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/scan.pdf',
+        file: {
+          fileType: 'application/pdf',
+          name: 'scan.pdf',
+          url: 's3://bucket/scan.pdf',
+          parentId: null,
+        },
+        cleanup: mockCleanup,
+      });
+      vi.mocked(loadFile).mockResolvedValue({
+        content: '',
+        fileType: 'pdf',
+        metadata: {},
+        pages: [{ pageContent: '' }],
+        totalCharCount: 0,
+        totalLineCount: 0,
+      } as any);
+      mockOcrService.extractFileDocument.mockRejectedValue(new Error('OCR unavailable'));
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-fallback-error' });
+
+      await service.parseFile('file-1');
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '',
+          metadata: { ocrFallbackError: 'OCR unavailable' },
         }),
       );
     });

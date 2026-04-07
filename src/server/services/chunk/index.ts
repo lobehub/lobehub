@@ -20,7 +20,7 @@ export class ChunkService {
   constructor(serverDB: LobeChatDatabase, userId: string) {
     this.userId = userId;
 
-    this.chunkClient = new ContentChunk();
+    this.chunkClient = new ContentChunk(serverDB, userId);
 
     this.fileModel = new FileModel(serverDB, userId);
     this.asyncTaskModel = new AsyncTaskModel(serverDB, userId);
