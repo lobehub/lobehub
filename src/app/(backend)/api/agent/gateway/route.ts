@@ -11,7 +11,11 @@ import type {
   BotProviderConfig,
   PlatformDefinition,
 } from '@/server/services/bot/platforms';
-import { getEffectiveConnectionMode, platformRegistry } from '@/server/services/bot/platforms';
+import {
+  getEffectiveConnectionMode,
+  mergeWithDefaults,
+  platformRegistry,
+} from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
 const log = debug('lobe-server:bot:gateway:cron');
@@ -47,19 +51,26 @@ function createRuntimeContext(): BotPlatformRuntimeContext {
 }
 
 function createGatewayBot(
-  platform: string,
+  definition: PlatformDefinition,
   applicationId: string,
   credentials: Record<string, string>,
-  settings: Record<string, unknown>,
+  settings: Record<string, unknown> | null | undefined,
 ) {
+  // Merge schema defaults so factories see canonical settings (notably
+  // `connectionMode`) when the provider row hasn't persisted any settings yet.
+  const mergedSettings = mergeWithDefaults(
+    definition.schema,
+    settings as Record<string, unknown> | undefined,
+  );
+
   const config: BotProviderConfig = {
     applicationId,
     credentials,
-    platform,
-    settings,
+    platform: definition.id,
+    settings: mergedSettings,
   };
 
-  return platformRegistry.createClient(platform, config, createRuntimeContext());
+  return platformRegistry.createClient(definition.id, config, createRuntimeContext());
 }
 
 async function processConnectQueue(remainingMs: number): Promise<number> {
@@ -104,10 +115,10 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
       }
 
       const bot = createGatewayBot(
-        item.platform,
+        definition,
         provider.applicationId,
         provider.credentials,
-        provider.settings ?? {},
+        provider.settings,
       );
 
       await bot.start({
@@ -174,7 +185,7 @@ export async function GET(request: NextRequest) {
       total++;
 
       try {
-        const bot = createGatewayBot(platform.id, applicationId, credentials, settings ?? {});
+        const bot = createGatewayBot(platform, applicationId, credentials, settings);
 
         await bot.start({
           durationMs: GATEWAY_DURATION_MS,

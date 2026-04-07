@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { SLACK_API_BASE, SlackApi } from './api';
+import { DEFAULT_SLACK_CONNECTION_MODE } from './const';
 import { SlackSocketModeConnection } from './gateway';
 import { markdownToSlackMrkdwn } from './markdownToMrkdwn';
 
@@ -325,8 +326,9 @@ class SlackSocketModeClient implements PlatformClient {
 
 export class SlackClientFactory extends ClientFactory {
   createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
-    // Default to 'webhook' for backward compatibility with existing users
-    const mode = (config.settings?.connectionMode as string) || 'webhook';
+    // Fall back to the schema default so callers that bypass `mergeWithDefaults`
+    // still see the same canonical mode the rest of the app uses.
+    const mode = (config.settings?.connectionMode as string) || DEFAULT_SLACK_CONNECTION_MODE;
     if (mode === 'websocket' && config.credentials.appToken) {
       return new SlackSocketModeClient(config, context);
     }
