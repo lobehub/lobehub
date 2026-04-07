@@ -1,9 +1,13 @@
 import debug from 'debug';
+import urlJoin from 'url-join';
 
 import type { StreamChunkData, StreamEvent } from './StreamEventManager';
 import type { IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
+
+const POST_TIMEOUT = 5000; // 5s per request
+const MAX_INFLIGHT = 20; // bounded concurrency
 
 /**
  * Decorator that wraps an IStreamEventManager and additionally
@@ -13,6 +17,8 @@ const log = debug('lobe-server:agent-runtime:gateway-notifier');
  * The Gateway is an additional push channel for WebSocket delivery.
  */
 export class GatewayStreamNotifier implements IStreamEventManager {
+  private inflight = 0;
+
   constructor(
     private inner: IStreamEventManager,
     private gatewayUrl: string,
@@ -135,14 +141,24 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   }
 
   private async httpPost(path: string, body: Record<string, unknown>): Promise<void> {
+    if (this.inflight >= MAX_INFLIGHT) {
+      log('Gateway %s dropped: max inflight (%d) reached', path, MAX_INFLIGHT);
+      return;
+    }
+
+    this.inflight++;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), POST_TIMEOUT);
+
     try {
-      const res = await fetch(`${this.gatewayUrl}${path}`, {
+      const res = await fetch(urlJoin(this.gatewayUrl, path), {
         body: JSON.stringify(body),
         headers: {
           'Authorization': `Bearer ${this.serviceToken}`,
           'Content-Type': 'application/json',
         },
         method: 'POST',
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -150,6 +166,9 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       }
     } catch (error) {
       log('Gateway %s failed: %O', path, error);
+    } finally {
+      clearTimeout(timer);
+      this.inflight--;
     }
   }
 }

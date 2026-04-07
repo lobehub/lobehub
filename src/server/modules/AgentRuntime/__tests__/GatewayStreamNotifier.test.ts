@@ -256,4 +256,64 @@ describe('GatewayStreamNotifier', () => {
       expect(inner.calls.publishAgentRuntimeEnd).toHaveLength(1);
     });
   });
+
+  // ─── Timeout and concurrency ───
+
+  describe('timeout and concurrency control', () => {
+    it('passes AbortSignal to fetch', async () => {
+      await notifier.publishStreamEvent('op-1', {
+        data: {},
+        stepIndex: 0,
+        type: 'step_start' as const,
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const fetchCall = mockFetch.mock.calls[0];
+      expect(fetchCall[1].signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('drops requests when max inflight is reached', async () => {
+      // Hold all fetches pending
+      const resolvers: Array<() => void> = [];
+      mockFetch.mockImplementation(
+        () =>
+          new Promise<{ ok: boolean }>((resolve) => {
+            resolvers.push(() => resolve({ ok: true }));
+          }),
+      );
+
+      // Fire 25 events (max inflight is 20)
+      for (let i = 0; i < 25; i++) {
+        notifier.publishStreamEvent(`op-${i}`, {
+          data: {},
+          stepIndex: 0,
+          type: 'step_start' as const,
+        });
+      }
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Only 20 should have actually called fetch
+      expect(mockFetch).toHaveBeenCalledTimes(20);
+
+      // Release all pending
+      for (const r of resolvers) r();
+    });
+
+    it('uses url-join for URL construction', async () => {
+      await notifier.publishStreamEvent('op-1', {
+        data: {},
+        stepIndex: 0,
+        type: 'step_start' as const,
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toBe(`${gatewayUrl}/api/operations/push-event`);
+      // No double slashes
+      expect(url).not.toContain('//api');
+    });
+  });
 });
