@@ -12,6 +12,7 @@ export enum ModelProvider {
   Bedrock = 'bedrock',
   Bfl = 'bfl',
   Cerebras = 'cerebras',
+  Chutes = 'chutes',
   Cloudflare = 'cloudflare',
   Cohere = 'cohere',
   CometAPI = 'cometapi',

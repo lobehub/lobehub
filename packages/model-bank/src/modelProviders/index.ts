@@ -15,6 +15,7 @@ import BailianCodingPlanProvider from './bailianCodingPlan';
 import BedrockProvider from './bedrock';
 import BflProvider from './bfl';
 import CerebrasProvider from './cerebras';
+import ChutesProvider from './chutes';
 import CloudflareProvider from './cloudflare';
 import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
@@ -92,6 +93,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   DeepSeekProvider.chatModels,
   GoogleProvider.chatModels,
   GroqProvider.chatModels,
+  ChutesProvider.chatModels,
   GithubProvider.chatModels,
   MinimaxProvider.chatModels,
   MistralProvider.chatModels,
@@ -212,6 +214,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   CometAPIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
+  ChutesProvider,
   ZenMuxProvider,
   StraicoProvider,
   XiaomiMiMoProvider,
@@ -242,6 +245,7 @@ export { default as BailianCodingPlanProviderCard } from './bailianCodingPlan';
 export { default as BedrockProviderCard } from './bedrock';
 export { default as BflProviderCard } from './bfl';
 export { default as CerebrasProviderCard } from './cerebras';
+export { default as ChutesProviderCard } from './chutes';
 export { default as CloudflareProviderCard } from './cloudflare';
 export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
