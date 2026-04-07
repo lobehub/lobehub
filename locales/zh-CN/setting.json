@@ -652,7 +652,7 @@
   "settingSystem.oauth.signout.confirm": "确认退出？",
   "settingSystem.oauth.signout.success": "退出登录成功",
   "settingSystem.title": "系统设置",
-  "settingSystemTools.appEnvironment.chrome.desc": "Chromium 浏览器引擎版本",
+  "settingSystemTools.appEnvironment.chromium.desc": "Chromium 浏览器引擎版本",
   "settingSystemTools.appEnvironment.desc": "桌面应用内置的运行时版本",
   "settingSystemTools.appEnvironment.electron.desc": "Electron 框架版本",
   "settingSystemTools.appEnvironment.node.desc": "内嵌 Node.js 版本",

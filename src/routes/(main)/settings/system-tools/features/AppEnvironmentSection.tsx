@@ -14,8 +14,8 @@ const APP_ENVIRONMENT_ITEMS = [
     versionKey: 'electronVersion',
   },
   {
-    descKey: 'settingSystemTools.appEnvironment.chrome.desc',
-    name: 'Chrome',
+    descKey: 'settingSystemTools.appEnvironment.chromium.desc',
+    name: 'Chromium',
     versionKey: 'chromeVersion',
   },
   {
@@ -54,7 +54,15 @@ const AppEnvironmentSection = memo(() => {
     },
   ];
 
-  return <Form collapsible={false} items={formItems} itemsType={'group'} variant={'filled'} {...FORM_STYLE} />;
+  return (
+    <Form
+      collapsible={false}
+      items={formItems}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
+  );
 });
 
 export default AppEnvironmentSection;
