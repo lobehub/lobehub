@@ -4,8 +4,8 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
-import type { PlatformDefinition } from '../bot/platforms';
-import { platformRegistry } from '../bot/platforms';
+import type { ConnectionMode } from '../bot/platforms';
+import { getEffectiveConnectionMode, platformRegistry } from '../bot/platforms';
 import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
@@ -13,18 +13,6 @@ import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
 const log = debug('lobe-server:service:gateway');
 
 const isVercel = !!process.env.VERCEL_ENV;
-
-/**
- * Resolve the effective connection mode for a single provider.
- * Provider settings (`settings.connectionMode`) override the platform default.
- */
-function getEffectiveConnectionMode(
-  platform: PlatformDefinition | undefined,
-  settings: Record<string, unknown> | null | undefined,
-): 'polling' | 'webhook' | 'websocket' {
-  const fromSettings = settings?.connectionMode as 'polling' | 'webhook' | 'websocket' | undefined;
-  return fromSettings ?? platform?.connectionMode ?? 'webhook';
-}
 
 export class GatewayService {
   async ensureRunning(): Promise<void> {
@@ -109,7 +97,7 @@ export class GatewayService {
       // Without a userId we cannot resolve per-provider settings; fall back to the
       // platform default to decide if a queue cleanup is even worth attempting.
       // queue.remove is a no-op for absent keys, so a stale check is harmless.
-      let connectionMode: 'polling' | 'webhook' | 'websocket';
+      let connectionMode: ConnectionMode;
       const definition = platformRegistry.getPlatform(platform);
       if (userId) {
         const serverDB = await getServerDB();

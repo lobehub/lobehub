@@ -4,6 +4,16 @@ import type { Chat } from 'chat';
 // Bot Platform Core Types
 // ============================================================================
 
+// --------------- Connection Mode ---------------
+
+/**
+ * How the platform communicates with the server.
+ * - 'webhook': stateless HTTP callbacks (can run in serverless)
+ * - 'websocket': persistent WebSocket connection (e.g. Discord, QQ)
+ * - 'polling': persistent long-polling connection (e.g. WeChat)
+ */
+export type ConnectionMode = 'polling' | 'webhook' | 'websocket';
+
 // --------------- Field Schema ---------------
 
 /**
@@ -262,7 +272,7 @@ export interface PlatformDefinition {
    * - 'polling': persistent long-polling connection (e.g. WeChat)
    * Defaults to 'webhook'.
    */
-  connectionMode?: 'polling' | 'webhook' | 'websocket';
+  connectionMode?: ConnectionMode;
 
   /** The description of the platform. */
   description?: string;

@@ -11,7 +11,7 @@ import type {
   BotProviderConfig,
   PlatformDefinition,
 } from '@/server/services/bot/platforms';
-import { platformRegistry } from '@/server/services/bot/platforms';
+import { getEffectiveConnectionMode, platformRegistry } from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
 const log = debug('lobe-server:bot:gateway:cron');
@@ -37,18 +37,6 @@ function getGatewayPlatforms(): PlatformDefinition[] {
   return platformRegistry
     .listPlatforms()
     .filter((platform) => (platform.connectionMode ?? 'webhook') !== 'webhook');
-}
-
-/**
- * Resolve the effective connection mode for a single provider.
- * Provider settings (`settings.connectionMode`) override the platform default.
- */
-function getEffectiveConnectionMode(
-  platform: PlatformDefinition,
-  settings: Record<string, unknown> | null | undefined,
-): 'polling' | 'webhook' | 'websocket' {
-  const fromSettings = settings?.connectionMode as 'polling' | 'webhook' | 'websocket' | undefined;
-  return fromSettings ?? platform.connectionMode ?? 'webhook';
 }
 
 function createRuntimeContext(): BotPlatformRuntimeContext {

@@ -1,6 +1,6 @@
 import { merge } from '@lobechat/utils';
 
-import type { FieldSchema, UsageStats } from './types';
+import type { ConnectionMode, FieldSchema, PlatformDefinition, UsageStats } from './types';
 
 // --------------- Settings defaults ---------------
 
@@ -48,6 +48,25 @@ export function mergeWithDefaults(
   const defaults = extractDefaults(settingsSchema);
   if (!userSettings) return defaults;
   return merge(defaults, userSettings) as Record<string, unknown>;
+}
+
+// --------------- Connection mode resolution ---------------
+
+/**
+ * Resolve the effective connection mode for a single provider.
+ *
+ * Per-provider `settings.connectionMode` overrides the platform default,
+ * because users can configure (for example) a Slack bot for either webhook
+ * or websocket mode regardless of which one the platform ships as default.
+ *
+ * Falls back to `'webhook'` when neither side specifies a mode.
+ */
+export function getEffectiveConnectionMode(
+  platform: PlatformDefinition | undefined,
+  settings: Record<string, unknown> | null | undefined,
+): ConnectionMode {
+  const fromSettings = settings?.connectionMode as ConnectionMode | undefined;
+  return fromSettings ?? platform?.connectionMode ?? 'webhook';
 }
 
 // --------------- Runtime key helpers ---------------
