@@ -5,11 +5,8 @@ import useSWR from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { remoteServerService } from '@/services/electron/remoteServer';
-import { useChatStore } from '@/store/chat';
-import { useSessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { stores } from '@/store/utils/userDataStores';
 
 import { type ElectronStore } from '../store';
 
@@ -80,6 +77,7 @@ export class ElectronRemoteServerActionImpl {
       // Must use clearRemoteServerConfig (not only set active: false): main process
       // clears encrypted OIDC access/refresh tokens; otherwise sign-out still leaves auth state.
       await remoteServerService.clearRemoteServerConfig();
+      const { stores } = await import('@/store/utils/userDataStores');
       stores.reset();
       await this.#get().refreshServerConfig();
     } catch (error) {
@@ -97,7 +95,13 @@ export class ElectronRemoteServerActionImpl {
   };
 
   refreshUserData = async (): Promise<void> => {
+    const { stores } = await import('@/store/utils/userDataStores');
     stores.reset();
+
+    const [{ useSessionStore }, { useChatStore }] = await Promise.all([
+      import('@/store/session'),
+      import('@/store/chat'),
+    ]);
 
     await useSessionStore.getState().refreshSessions();
     await useChatStore.getState().refreshMessages();
