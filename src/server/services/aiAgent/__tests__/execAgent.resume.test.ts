@@ -28,7 +28,9 @@ vi.mock('@/database/models/message', () => ({
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({})),
+  AgentModel: vi.fn().mockImplementation(() => ({
+    queryAgents: vi.fn().mockResolvedValue([]),
+  })),
 }));
 
 vi.mock('@/server/services/agent', () => ({

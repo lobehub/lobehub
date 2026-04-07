@@ -693,8 +693,9 @@ export class AiAgentService {
     if (shouldInjectAvailableAgents) {
       // Query user's most recently updated agents. Over-fetch by 1 to detect overflow.
       const AVAILABLE_AGENTS_LIMIT = 10;
-      const agentModel = new AgentModel(this.db, this.userId);
-      const recentAgents = await agentModel.queryAgents({ limit: AVAILABLE_AGENTS_LIMIT + 1 });
+      const recentAgents = await this.agentModel.queryAgents({
+        limit: AVAILABLE_AGENTS_LIMIT + 1,
+      });
       const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
       const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
         description: a.description ?? undefined,
