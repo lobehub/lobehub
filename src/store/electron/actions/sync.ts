@@ -5,7 +5,11 @@ import useSWR from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { remoteServerService } from '@/services/electron/remoteServer';
+import { useChatStore } from '@/store/chat';
+import { useSessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { stores } from '@/store/utils/userDataStores';
 
 import { type ElectronStore } from '../store';
 
@@ -76,8 +80,7 @@ export class ElectronRemoteServerActionImpl {
       // Must use clearRemoteServerConfig (not only set active: false): main process
       // clears encrypted OIDC access/refresh tokens; otherwise sign-out still leaves auth state.
       await remoteServerService.clearRemoteServerConfig();
-      // Match persisted config until SWR refetches
-      this.#set({ dataSyncConfig: { active: false, storageMode: 'cloud' } });
+      stores.reset();
       await this.#get().refreshServerConfig();
     } catch (error) {
       console.error('Disconnect failed:', error);
@@ -94,14 +97,12 @@ export class ElectronRemoteServerActionImpl {
   };
 
   refreshUserData = async (): Promise<void> => {
-    const { getSessionStoreState } = await import('@/store/session');
-    const { getChatStoreState } = await import('@/store/chat');
-    const { getUserStoreState } = await import('@/store/user');
+    stores.reset();
 
-    await getSessionStoreState().refreshSessions();
-    await getChatStoreState().refreshMessages();
-    await getChatStoreState().refreshTopic();
-    await getUserStoreState().refreshUserState();
+    await useSessionStore.getState().refreshSessions();
+    await useChatStore.getState().refreshMessages();
+    await useChatStore.getState().refreshTopic();
+    await useUserStore.getState().refreshUserState();
   };
 
   useDataSyncConfig = (): SWRResponse => {
@@ -118,7 +119,11 @@ export class ElectronRemoteServerActionImpl {
       {
         onSuccess: (data) => {
           if (!isEqual(data, this.#get().dataSyncConfig)) {
-            this.#get().refreshUserData();
+            void this.#get()
+              .refreshUserData()
+              .catch((error) => {
+                console.error('Failed to refresh user data:', error);
+              });
           }
 
           this.#set({ dataSyncConfig: data, isInitRemoteServerConfig: true });
