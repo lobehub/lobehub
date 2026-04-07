@@ -7,7 +7,6 @@ import { mutate } from '@/libs/swr';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { type StoreSetter } from '@/store/types';
 
-import { initialState } from '../initialState';
 import { type ElectronStore } from '../store';
 
 /**
@@ -74,10 +73,11 @@ export class ElectronRemoteServerActionImpl {
     this.#set({ isConnectingServer: false });
     this.#get().clearRemoteServerSyncError();
     try {
-      await remoteServerService.setRemoteServerConfig({ active: false, storageMode: 'cloud' });
-      // Update form URL to empty
-      this.#set({ dataSyncConfig: initialState.dataSyncConfig });
-      // Refresh state
+      // Must use clearRemoteServerConfig (not only set active: false): main process
+      // clears encrypted OIDC access/refresh tokens; otherwise sign-out still leaves auth state.
+      await remoteServerService.clearRemoteServerConfig();
+      // Match persisted config until SWR refetches
+      this.#set({ dataSyncConfig: { active: false, storageMode: 'cloud' } });
       await this.#get().refreshServerConfig();
     } catch (error) {
       console.error('Disconnect failed:', error);
