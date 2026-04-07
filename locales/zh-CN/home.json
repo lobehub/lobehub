@@ -12,7 +12,7 @@
   "brief.resolved": "已处理",
   "brief.title": "Daily Brief",
   "project.create": "新建项目",
-  "project.deleteConfirm": "即将删除该项目，删除后将无法找回，请确认你的操作",
+  "project.deleteConfirm": "此项目将被删除且无法恢复。确认继续操作。",
   "starter.createAgent": "创建助理",
   "starter.createGroup": "创建群组",
   "starter.deepResearch": "探究",

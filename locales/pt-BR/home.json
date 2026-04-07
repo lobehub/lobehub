@@ -4,7 +4,6 @@
   "agentSelection.noSelected": "Nenhum agente selecionado",
   "agentSelection.search": "Nenhum agente correspondente encontrado",
   "project.create": "Novo projeto",
-  "project.deleteConfirm": "Este projeto será excluído e não poderá ser recuperado. Confirme para continuar.",
   "starter.createAgent": "Criar Agente",
   "starter.createGroup": "Criar Grupo",
   "starter.deepResearch": "Pesquisa Aprofundada",
