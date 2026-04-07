@@ -7,6 +7,12 @@ export interface FeishuWSOptions {
   appSecret: string;
   /** 'feishu' or 'lark' — determines the API domain */
   domain: 'feishu' | 'lark';
+  /**
+   * Verification token configured by the user. When provided, it is injected
+   * into the forwarded webhook payload's `header.token` so the downstream
+   * webhook handler's token check passes.
+   */
+  verificationToken?: string;
   /** URL to forward events to (POST) */
   webhookUrl: string;
 }
@@ -70,14 +76,24 @@ export class FeishuWSConnection {
   /**
    * Forward an event to the webhook URL.
    * The webhook handler expects the Lark event payload wrapped in the standard format.
+   *
+   * Note: events received via WebSocket are pre-authenticated by the SDK, but the
+   * downstream webhook handler still validates `header.token` against the user's
+   * configured `verificationToken`. We inject the configured token into the payload
+   * so the check passes.
    */
   private async forwardEvent(eventType: string, data: any): Promise<void> {
     // Construct a webhook-compatible payload matching what handleWebhook() expects
+    const header: Record<string, string> = {
+      event_type: eventType,
+    };
+    if (this.options.verificationToken) {
+      header.token = this.options.verificationToken;
+    }
+
     const webhookPayload = {
       event: data,
-      header: {
-        event_type: eventType,
-      },
+      header,
       schema: '2.0',
     };
 

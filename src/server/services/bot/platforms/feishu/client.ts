@@ -226,6 +226,7 @@ class FeishuWSClientImpl implements PlatformClient {
         appId: this.config.applicationId,
         appSecret: this.config.credentials.appSecret,
         domain: this.domain,
+        verificationToken: this.config.credentials.verificationToken,
         webhookUrl,
       });
 
