@@ -20,6 +20,13 @@ interface BriefCardActionsProps {
 
 type CommentMode = { type: 'feedback' } | { key: string; type: 'comment' };
 
+const SuccessTag = memo<{ label: string }>(({ label }) => (
+  <Flexbox horizontal align={'center'} gap={4}>
+    <Icon icon={Check} size={14} />
+    <Text className={styles.resolvedTag}>{label}</Text>
+  </Flexbox>
+));
+
 const BriefCardActions = memo<BriefCardActionsProps>(
   ({ briefId, briefType, resolvedAction, taskId }) => {
     const { t } = useTranslation('home');
@@ -61,7 +68,6 @@ const BriefCardActions = memo<BriefCardActionsProps>(
         if (!commentMode) return;
 
         if (commentMode.type === 'comment') {
-          // comment action → resolve brief with comment
           setLoadingKey(commentMode.key);
           try {
             await resolveBrief(briefId, commentMode.key, text);
@@ -69,7 +75,6 @@ const BriefCardActions = memo<BriefCardActionsProps>(
             setLoadingKey(null);
           }
         } else {
-          // feedback → just add comment, don't resolve
           if (taskId) await addComment(briefId, taskId, text);
           setFeedbackSent(true);
         }
@@ -79,32 +84,12 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       [addComment, briefId, commentMode, resolveBrief, taskId],
     );
 
-    // Resolved state
-    if (resolvedAction) {
-      return (
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Icon icon={Check} size={14} />
-          <Text className={styles.resolvedTag}>{t('brief.resolved')}</Text>
-        </Flexbox>
-      );
-    }
-
-    // Feedback sent success state
-    if (feedbackSent) {
-      return (
-        <Flexbox horizontal align={'center'} gap={4}>
-          <Icon icon={Check} size={14} />
-          <Text className={styles.resolvedTag}>{t('brief.feedbackSent')}</Text>
-        </Flexbox>
-      );
-    }
-
-    // Comment input mode — replaces entire actions area
+    if (resolvedAction) return <SuccessTag label={t('brief.resolved')} />;
+    if (feedbackSent) return <SuccessTag label={t('brief.feedbackSent')} />;
     if (commentMode) {
       return <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />;
     }
 
-    // Default: action buttons
     return (
       <Flexbox horizontal gap={8} wrap={'wrap'}>
         {actions.map((action, index) => {
@@ -122,7 +107,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                       window.open(action.url, '_blank', 'noopener,noreferrer');
                     }
                   } catch {
-                    // invalid URL, ignore
+                    // invalid URL
                   }
                 }}
               >
@@ -144,7 +129,6 @@ const BriefCardActions = memo<BriefCardActionsProps>(
             );
           }
 
-          // resolve type
           return (
             <button
               className={cx(styles.actionBtn, index === 0 && styles.actionBtnPrimary)}

@@ -1,3 +1,4 @@
+import { DEFAULT_AVATAR } from '@lobechat/const';
 import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Lightbulb } from 'lucide-react';
@@ -34,7 +35,7 @@ const AgentAvatars = memo<AgentAvatarsProps>(({ agents }) => {
     <Flexbox horizontal align={'center'} style={{ paddingInlineEnd: 4 }}>
       {agents.map((agent, index) => (
         <Avatar
-          avatar={agent.avatar || '🤖'}
+          avatar={agent.avatar || DEFAULT_AVATAR}
           background={agent.backgroundColor || undefined}
           key={agent.id}
           shape={'circle'}
