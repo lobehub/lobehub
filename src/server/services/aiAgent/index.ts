@@ -755,16 +755,32 @@ export class AiAgentService {
         })),
       ];
 
+      // Query user's most recently updated agents so the model has them in context
+      // without needing to call searchAgent first. Over-fetch by 1 to detect overflow.
+      const AVAILABLE_AGENTS_LIMIT = 10;
+      const agentModel = new AgentModel(this.db, this.userId);
+      const recentAgents = await agentModel.queryAgents({ limit: AVAILABLE_AGENTS_LIMIT + 1 });
+      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+        description: a.description ?? undefined,
+        id: a.id,
+        title: a.title ?? 'Untitled',
+      }));
+
       agentManagementContext = {
+        availableAgents,
+        availableAgentsHasMore: hasMoreAgents,
         availablePlugins,
         // Limit to first 5 providers to avoid context bloat
         availableProviders: Array.from(providerMap.values()).slice(0, 5),
       };
 
       log(
-        'execAgent: built agentManagementContext with %d providers and %d plugins',
+        'execAgent: built agentManagementContext with %d providers, %d plugins, %d agents (hasMore=%s)',
         agentManagementContext.availableProviders.length,
         agentManagementContext.availablePlugins.length,
+        agentManagementContext.availableAgents.length,
+        hasMoreAgents,
       );
     }
 

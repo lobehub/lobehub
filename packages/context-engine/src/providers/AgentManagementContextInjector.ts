@@ -45,6 +45,18 @@ export interface AvailableProviderInfo {
 }
 
 /**
+ * Available agent info for Agent Management context
+ */
+export interface AvailableAgentInfo {
+  /** Agent description */
+  description?: string;
+  /** Agent ID */
+  id: string;
+  /** Agent display name */
+  title: string;
+}
+
+/**
  * Available plugin info for Agent Management context
  */
 export interface AvailablePluginInfo {
@@ -62,6 +74,10 @@ export interface AvailablePluginInfo {
  * Agent Management context
  */
 export interface AgentManagementContext {
+  /** User's recently updated agents — surfaced so the model can callAgent without searchAgent first */
+  availableAgents?: AvailableAgentInfo[];
+  /** Whether the user has more agents than the ones listed in `availableAgents` */
+  availableAgentsHasMore?: boolean;
   /** Available plugins (all types) */
   availablePlugins?: AvailablePluginInfo[];
   /** Available providers and models */
@@ -107,6 +123,20 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
       .join('\n');
 
     parts.push(`<available_models>\n${providersXml}\n</available_models>`);
+  }
+
+  // Add available agents section (user's existing agents)
+  if (context.availableAgents && context.availableAgents.length > 0) {
+    const agentsXml = context.availableAgents
+      .map((agent) => {
+        const desc = agent.description ? ` - ${escapeXml(agent.description)}` : '';
+        return `    <agent id="${escapeXml(agent.id)}">${escapeXml(agent.title)}${desc}</agent>`;
+      })
+      .join('\n');
+    const hasMoreNote = context.availableAgentsHasMore
+      ? `\n  <note>Only the ${context.availableAgents.length} most recently updated agents are listed here. The user has more agents — call \`searchAgent\` with source="user" and a keyword to find others.</note>`
+      : '';
+    parts.push(`<available_agents>${hasMoreNote}\n${agentsXml}\n</available_agents>`);
   }
 
   // Add available plugins section
@@ -159,7 +189,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   }
 
   return `<agent_management_context>
-<instruction>When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.</instruction>
+<instruction>When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters. The <available_agents> section lists the user's existing agents — you may reference them by id with callAgent without first running searchAgent. If the user's request does not clearly match any of these agents, use searchAgent to look further (including marketplace).</instruction>
 ${parts.join('\n')}
 </agent_management_context>`;
 };
@@ -214,6 +244,8 @@ export class AgentManagementContextInjector extends BaseProvider {
     // Format context (excluding mentionedAgents — those are injected separately after the last user message)
     const contextWithoutMentions: AgentManagementContext = hasMentionedAgents
       ? {
+          availableAgents: this.config.context.availableAgents,
+          availableAgentsHasMore: this.config.context.availableAgentsHasMore,
           availablePlugins: this.config.context.availablePlugins,
           availableProviders: this.config.context.availableProviders,
         }
