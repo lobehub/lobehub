@@ -16,6 +16,11 @@ const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 60_000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
+// Heartbeat interval bounds — sanitize values from gateway to avoid unbounded timers
+const HEARTBEAT_MIN_INTERVAL_MS = 1_000;
+const HEARTBEAT_MAX_INTERVAL_MS = 300_000;
+const HEARTBEAT_DEFAULT_INTERVAL_MS = 45_000;
+
 /**
  * Default intents for message-handling bots:
  * - PUBLIC_GUILD_MESSAGES: @bot mentions in public guild channels
@@ -247,8 +252,14 @@ export class QQGatewayConnection {
   }
 
   private handleHello(data: QQGatewayHelloData, isResume: boolean): void {
-    this.log('Hello received, heartbeat_interval=%dms', data.heartbeat_interval);
-    this.startHeartbeat(data.heartbeat_interval);
+    // Clamp gateway-provided interval into a safe range to prevent resource exhaustion
+    const rawInterval = data.heartbeat_interval;
+    const safeInterval = Number.isFinite(rawInterval)
+      ? Math.min(Math.max(rawInterval, HEARTBEAT_MIN_INTERVAL_MS), HEARTBEAT_MAX_INTERVAL_MS)
+      : HEARTBEAT_DEFAULT_INTERVAL_MS;
+
+    this.log('Hello received, heartbeat_interval=%dms (effective=%dms)', rawInterval, safeInterval);
+    this.startHeartbeat(safeInterval);
 
     if (isResume && this.sessionId) {
       this.sendResume();
