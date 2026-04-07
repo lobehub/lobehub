@@ -20,6 +20,8 @@ const {
   })),
   MockStreamEventManager: vi.fn(() => ({ kind: 'redis-stream-event-manager' })),
   mockAppEnv: {
+    AGENT_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
+    AGENT_GATEWAY_URL: undefined as string | undefined,
     enableQueueAgentRuntime: false,
   },
   mockGetAgentRuntimeRedisClient: vi.fn(),
@@ -100,15 +102,9 @@ describe('AgentRuntime factory', () => {
   });
 
   describe('createStreamEventManager', () => {
-    const originalEnv = { ...process.env };
-
     beforeEach(() => {
-      delete process.env.AGENT_GATEWAY_SERVICE_TOKEN;
-      delete process.env.AGENT_GATEWAY_URL;
-    });
-
-    afterEach(() => {
-      process.env = { ...originalEnv };
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = undefined;
+      mockAppEnv.AGENT_GATEWAY_URL = undefined;
     });
 
     it('prefers Redis-backed streams when Redis is available in local mode', () => {
@@ -132,7 +128,7 @@ describe('AgentRuntime factory', () => {
     });
 
     it('wraps with GatewayStreamNotifier when AGENT_GATEWAY_SERVICE_TOKEN is set', () => {
-      process.env.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
       mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
 
       const result = createStreamEventManager() as any;
@@ -144,8 +140,8 @@ describe('AgentRuntime factory', () => {
     });
 
     it('uses custom AGENT_GATEWAY_URL when set', () => {
-      process.env.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
-      process.env.AGENT_GATEWAY_URL = 'https://custom-gateway.example.com';
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      mockAppEnv.AGENT_GATEWAY_URL = 'https://custom-gateway.example.com';
       mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
 
       const result = createStreamEventManager() as any;
@@ -155,7 +151,7 @@ describe('AgentRuntime factory', () => {
     });
 
     it('wraps in-memory manager with gateway when no Redis', () => {
-      process.env.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
 
       const result = createStreamEventManager() as any;
 

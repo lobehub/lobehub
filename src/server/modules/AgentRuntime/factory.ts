@@ -72,11 +72,10 @@ export const createStreamEventManager = (): IStreamEventManager => {
   }
 
   // Wrap with Gateway notifier when configured
-  const gatewayToken = process.env.AGENT_GATEWAY_SERVICE_TOKEN;
-  if (gatewayToken) {
-    const gatewayUrl = process.env.AGENT_GATEWAY_URL || 'https://agent-gateway.lobehub.com';
+  if (appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
+    const gatewayUrl = appEnv.AGENT_GATEWAY_URL || 'https://agent-gateway.lobehub.com';
     log('Wrapping with GatewayStreamNotifier (%s)', gatewayUrl);
-    return new GatewayStreamNotifier(manager, gatewayUrl, gatewayToken);
+    return new GatewayStreamNotifier(manager, gatewayUrl, appEnv.AGENT_GATEWAY_SERVICE_TOKEN);
   }
 
   return manager;
