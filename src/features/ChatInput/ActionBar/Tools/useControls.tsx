@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentChatConfigSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -42,7 +42,18 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
     s.togglePlugin,
   ]);
-  const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
+  // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
+  // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
+  // In auto mode the activator handles those tools transparently, so they remain hidden.
+  const isManualSkillMode = useAgentStore(
+    (s) => agentChatConfigSelectors.skillActivateMode(s) === 'manual',
+  );
+  const builtinList = useToolStore(
+    isManualSkillMode
+      ? builtinToolSelectors.metaListIncludingHidden
+      : builtinToolSelectors.metaList,
+    isEqual,
+  );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   // Klavis-related state

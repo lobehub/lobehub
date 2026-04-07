@@ -68,17 +68,28 @@ const getKlavisMetasWithAvailability = (s: ToolStoreState): LobeToolMetaWithAvai
   getKlavisMetas(s).map((meta) => ({ ...meta, availableInWeb: true }));
 
 /**
- * Get visible builtin tools meta list (excludes hidden tools)
- * Used for general tool display in chat input bar
- * Only returns tools that are not in the uninstalledBuiltinTools list
+ * Shared list builder for the chat-input Tools popover.
+ * @param includeHidden When true, includes builtin tools whose `hidden` flag is set
+ * (e.g. web-browsing, cloud-sandbox). Used by the manual skill-activate mode so users
+ * can explicitly toggle the otherwise auto-activated tools.
+ *
+ * Tools marked `discoverable: false` are still excluded even when `includeHidden`
+ * is true — that flag is the project-wide signal for "infrastructure / internal
+ * tool, not user-facing" (the activator and `availableToolsForDiscovery` selector
+ * both honor it).
  */
-const metaList = (s: ToolStoreState): LobeToolMeta[] => {
+const buildVisibleMetaList = (
+  s: ToolStoreState,
+  { includeHidden }: { includeHidden: boolean },
+): LobeToolMeta[] => {
   const { uninstalledBuiltinTools } = s;
 
   const builtinMetas = s.builtinTools
     .filter((item) => {
-      // Filter hidden tools
-      if (item.hidden) return false;
+      // Filter hidden tools (unless caller opts in)
+      if (item.hidden && !includeHidden) return false;
+      // Even when `includeHidden` is true, never expose pure infra tools.
+      if (includeHidden && item.discoverable === false) return false;
 
       // Filter platform-specific tools (e.g., LocalSystem desktop-only)
       if (!isBuiltinToolAvailableInCurrentEnv(item.identifier)) return false;
@@ -104,6 +115,26 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
 
   return [...skillMetas, ...agentSkillMetas, ...builtinMetas, ...getKlavisMetas(s)];
 };
+
+/**
+ * Get visible builtin tools meta list (excludes hidden tools)
+ * Used for general tool display in chat input bar
+ * Only returns tools that are not in the uninstalledBuiltinTools list
+ */
+const metaList = (s: ToolStoreState): LobeToolMeta[] =>
+  buildVisibleMetaList(s, { includeHidden: false });
+
+/**
+ * Same as `metaList` but also surfaces builtin tools that are normally hidden
+ * (e.g. web-browsing, cloud-sandbox). Used by the chat-input Tools popover when
+ * the agent is in manual skill-activate mode so users can explicitly enable or
+ * disable tools the activator would otherwise auto-activate.
+ *
+ * Pure infrastructure tools (the activator itself, agent-builder helpers, etc.)
+ * are still excluded — they are never user-toggleable.
+ */
+const metaListIncludingHidden = (s: ToolStoreState): LobeToolMeta[] =>
+  buildVisibleMetaList(s, { includeHidden: true });
 
 // Tools that should never be exposed in agent profile configuration
 const EXCLUDED_TOOLS = new Set([
@@ -183,5 +214,6 @@ export const builtinToolSelectors = {
   installedBuiltinSkills,
   isBuiltinToolInstalled,
   metaList,
+  metaListIncludingHidden,
   uninstalledBuiltinTools,
 };
