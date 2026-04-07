@@ -1,3 +1,4 @@
+import { runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 
 import {
@@ -67,16 +68,23 @@ const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
 const getKlavisMetasWithAvailability = (s: ToolStoreState): LobeToolMetaWithAvailability[] =>
   getKlavisMetas(s).map((meta) => ({ ...meta, availableInWeb: true }));
 
+// Set form for O(1) lookup inside the filter loop.
+const RUNTIME_MANAGED_TOOL_IDS = new Set(runtimeManagedToolIds);
+
 /**
  * Shared list builder for the chat-input Tools popover.
  * @param includeHidden When true, includes builtin tools whose `hidden` flag is set
- * (e.g. web-browsing, cloud-sandbox). Used by the manual skill-activate mode so users
+ * (e.g. memory, agent-management). Used by the manual skill-activate mode so users
  * can explicitly toggle the otherwise auto-activated tools.
  *
- * Tools marked `discoverable: false` are still excluded even when `includeHidden`
- * is true — that flag is the project-wide signal for "infrastructure / internal
- * tool, not user-facing" (the activator and `availableToolsForDiscovery` selector
- * both honor it).
+ * Two categories of hidden tools are STILL excluded even when `includeHidden` is true:
+ * 1. Tools with `discoverable: false` — the project-wide signal for "infrastructure /
+ *    internal, never user-facing" (the activator and `availableToolsForDiscovery`
+ *    selector both honor it).
+ * 2. Tools listed in `runtimeManagedToolIds` — these have their enabled state forced
+ *    by `AgentToolsEngine` runtime rules (e.g. cloud-sandbox is on iff cloud runtime,
+ *    web-browsing is on iff search enabled, agent-documents is on iff agent has docs).
+ *    Showing a toggle the user can't actually affect would be a UI lie.
  */
 const buildVisibleMetaList = (
   s: ToolStoreState,
@@ -90,6 +98,10 @@ const buildVisibleMetaList = (
       if (item.hidden && !includeHidden) return false;
       // Even when `includeHidden` is true, never expose pure infra tools.
       if (includeHidden && item.discoverable === false) return false;
+      // Even when `includeHidden` is true, never expose runtime-rule-controlled tools
+      // (their enabled state is forced by AgentToolsEngine rules; user toggles would
+      // be a no-op and create UI/state mismatch).
+      if (includeHidden && RUNTIME_MANAGED_TOOL_IDS.has(item.identifier)) return false;
 
       // Filter platform-specific tools (e.g., LocalSystem desktop-only)
       if (!isBuiltinToolAvailableInCurrentEnv(item.identifier)) return false;
