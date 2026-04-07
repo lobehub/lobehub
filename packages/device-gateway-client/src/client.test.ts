@@ -506,18 +506,25 @@ describe('GatewayClient', () => {
   });
 
   describe('closeWebSocket edge cases', () => {
-    it('should handle ws in CONNECTING state without uncaught error', async () => {
+    it('should keep suppressing close errors until the socket closes', async () => {
       client.connect();
       await vi.advanceTimersByTimeAsync(1);
 
       const ws = (client as any).ws;
       ws.readyState = 0; // CONNECTING
       ws.close = vi.fn(() => {
-        ws.emit('error', new Error('WebSocket was closed before the connection was established'));
+        setTimeout(() => {
+          ws.emit('error', new Error('WebSocket was closed before the connection was established'));
+          ws.emit('close', 1006, Buffer.from(''));
+        }, 0);
       });
 
       expect(() => (client as any).closeWebSocket()).not.toThrow();
+      await vi.advanceTimersByTimeAsync(1);
       expect(ws.close).toHaveBeenCalled();
+      expect(() => ws.emit('error', new Error('listener should be removed after close'))).toThrow(
+        'listener should be removed after close',
+      );
     });
 
     it('should handle ws.close throwing synchronously', async () => {

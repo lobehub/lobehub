@@ -369,6 +369,10 @@ export class GatewayClient extends EventEmitter {
     const suppressCloseError = (error: Error) => {
       this.logger.debug(`Ignoring WebSocket error during close: ${error.message}`);
     };
+    const cleanupCloseErrorSuppression = () => {
+      ws.off('close', cleanupCloseErrorSuppression);
+      ws.off('error', suppressCloseError);
+    };
 
     // Remove only listeners registered by this client.
     // Keep a temporary error handler while closing to avoid unhandled
@@ -378,6 +382,7 @@ export class GatewayClient extends EventEmitter {
     ws.off('close', this.handleClose);
     ws.off('error', this.handleError);
     ws.on('error', suppressCloseError);
+    ws.once('close', cleanupCloseErrorSuppression);
 
     try {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
@@ -386,8 +391,6 @@ export class GatewayClient extends EventEmitter {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Failed to close WebSocket gracefully: ${errorMsg}`);
-    } finally {
-      ws.off('error', suppressCloseError);
     }
 
     this.ws = null;
