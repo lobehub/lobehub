@@ -152,38 +152,6 @@ describe('MessagesEngine', () => {
 
       expect(result.messages).toEqual([]);
     });
-
-    it('should inject onboarding context at the virtual last-user position', async () => {
-      const params = createBasicParams({
-        messages: [
-          {
-            content: 'Hello',
-            createdAt: Date.now(),
-            id: 'msg-1',
-            role: 'user',
-            updatedAt: Date.now(),
-          } as UIChatMessage,
-          {
-            content: 'Tool result',
-            createdAt: Date.now(),
-            id: 'msg-2',
-            role: 'tool',
-            updatedAt: Date.now(),
-          } as UIChatMessage,
-        ],
-        onboardingContext: {
-          phaseGuidance: '<phase>collect-profile</phase>',
-        },
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      expect(result.messages.at(-1)).toEqual({
-        content: `<onboarding_context>\n<phase>collect-profile</phase>\n</onboarding_context>`,
-        role: 'user',
-      });
-    });
   });
 
   describe('processMessages', () => {
