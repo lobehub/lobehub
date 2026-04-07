@@ -126,6 +126,7 @@ export class AgentStreamClient extends TypedEmitter {
     this.intentionalDisconnect = true;
     this.cleanup();
     this.setStatus('disconnected');
+    this.emit('disconnected');
   }
 
   /**
