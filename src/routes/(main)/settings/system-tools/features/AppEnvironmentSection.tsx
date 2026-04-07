@@ -11,19 +11,19 @@ const APP_ENVIRONMENT_ITEMS = [
   {
     descKey: 'settingSystemTools.appEnvironment.electron.desc',
     name: 'Electron',
-    versionKey: 'electronVersion' as const,
+    versionKey: 'electronVersion',
   },
   {
     descKey: 'settingSystemTools.appEnvironment.chrome.desc',
     name: 'Chrome',
-    versionKey: 'chromeVersion' as const,
+    versionKey: 'chromeVersion',
   },
   {
     descKey: 'settingSystemTools.appEnvironment.node.desc',
     name: 'Node.js',
-    versionKey: 'nodeVersion' as const,
+    versionKey: 'nodeVersion',
   },
-];
+] as const;
 
 const AppEnvironmentSection = memo(() => {
   const { t } = useTranslation('setting');
