@@ -162,7 +162,8 @@ describe('GatewayStreamNotifier', () => {
       const statusCall = mockFetch.mock.calls.find(
         (c: any[]) => c[0] === `${gatewayUrl}/api/operations/update-status`,
       );
-      const body = JSON.parse(statusCall[1].body);
+      expect(statusCall).toBeDefined();
+      const body = JSON.parse(statusCall![1].body);
       expect(body.status).toBe('error');
     });
   });
