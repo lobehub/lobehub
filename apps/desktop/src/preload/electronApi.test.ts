@@ -70,11 +70,16 @@ describe('setupElectronApi', () => {
     expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'platform')).toBe(true);
     expect(['darwin', 'linux', 'win32'].includes(exposedEnv.platform)).toBe(true);
 
+    // electronVersion and chromeVersion may be undefined in Node.js test env
     expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'electronVersion')).toBe(true);
-    expect(typeof exposedEnv.electronVersion).toBe('string');
+    expect(
+      exposedEnv.electronVersion === undefined || typeof exposedEnv.electronVersion === 'string',
+    ).toBe(true);
 
     expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'chromeVersion')).toBe(true);
-    expect(typeof exposedEnv.chromeVersion).toBe('string');
+    expect(
+      exposedEnv.chromeVersion === undefined || typeof exposedEnv.chromeVersion === 'string',
+    ).toBe(true);
 
     expect(Object.prototype.hasOwnProperty.call(exposedEnv, 'nodeVersion')).toBe(true);
     expect(typeof exposedEnv.nodeVersion).toBe('string');
