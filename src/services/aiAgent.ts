@@ -89,11 +89,21 @@ export interface UpdateClientTaskThreadStatusParams {
   threadId: string;
 }
 
+export interface ExecAgentResult {
+  agentId: string;
+  assistantMessageId: string;
+  autoStarted: boolean;
+  operationId: string;
+  topicId: string;
+  userMessageId: string;
+}
+
 class AiAgentService {
   /**
-   * Execute a single Agent task
+   * Execute a single Agent task.
+   * Returns the operationId needed to connect to the Agent Gateway.
    */
-  async execAgentTask(params: ExecAgentTaskParams) {
+  async execAgentTask(params: ExecAgentTaskParams): Promise<ExecAgentResult> {
     return await lambdaClient.aiAgent.execAgent.mutate(params);
   }
 
