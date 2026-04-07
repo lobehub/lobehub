@@ -44,7 +44,7 @@ agent-browser fill @e1 "user@example.com"
 agent-browser fill @e2 "password123"
 agent-browser click @e3
 agent-browser wait --load networkidle
-agent-browser snapshot -i  # Check result
+agent-browser snapshot -i # Check result
 ```
 
 ## Command Chaining
@@ -162,8 +162,8 @@ agent-browser auth login myapp
 
 # Option 2: Session name (auto-save/restore cookies + localStorage)
 agent-browser --session-name myapp open https://app.example.com/login
-agent-browser close  # State auto-saved
-agent-browser --session-name myapp open https://app.example.com/dashboard  # Auto-restored
+agent-browser close                                                       # State auto-saved
+agent-browser --session-name myapp open https://app.example.com/dashboard # Auto-restored
 
 # Option 3: Persistent profile
 agent-browser --profile ~/.myapp open https://app.example.com/login
@@ -190,7 +190,7 @@ agent-browser find testid "submit-btn" click
 agent-browser eval 'document.title'
 
 # Complex JS: use --stdin with heredoc (RECOMMENDED)
-agent-browser eval --stdin <<'EVALEOF'
+agent-browser eval --stdin << 'EVALEOF'
 JSON.stringify(
   Array.from(document.querySelectorAll("img"))
     .filter(i => !i.alt)
@@ -213,7 +213,7 @@ agent-browser screenshot --annotate
 # Output includes the image path and a legend:
 #   [1] @e1 button "Submit"
 #   [2] @e2 link "Home"
-agent-browser click @e2  # Click using ref from annotated screenshot
+agent-browser click @e2 # Click using ref from annotated screenshot
 ```
 
 ## Parallel Sessions
@@ -227,8 +227,8 @@ agent-browser session list
 ## Connect to Existing Chrome
 
 ```bash
-agent-browser --auto-connect snapshot            # Auto-discover running Chrome
-agent-browser --cdp 9222 snapshot                # Explicit CDP port
+agent-browser --auto-connect snapshot # Auto-discover running Chrome
+agent-browser --cdp 9222 snapshot     # Explicit CDP port
 ```
 
 ## iOS Simulator (Mobile Safari)
@@ -247,7 +247,7 @@ agent-browser -p ios close
 
 ```bash
 agent-browser dashboard install
-agent-browser dashboard start      # Background server on port 4848
+agent-browser dashboard start # Background server on port 4848
 agent-browser dashboard stop
 ```
 
@@ -258,37 +258,43 @@ Use `-p <provider>` to run against cloud browsers: `agentcore`, `browserbase`, `
 ## Browser Engine Selection
 
 ```bash
-agent-browser --engine lightpanda open example.com   # 10x faster, 10x less memory
+agent-browser --engine lightpanda open example.com # 10x faster, 10x less memory
 ```
 
 ## Electron (LobeHub Desktop)
 
-### Setup
+### Setup / Teardown
+
+Use the `electron-dev.sh` script to manage the Electron dev environment. It handles process lifecycle, waits for SPA readiness, and reliably kills all child processes (main + helpers + vite).
 
 ```bash
-# 1. Kill existing instances
-pkill -f "Electron" 2> /dev/null
-pkill -f "electron-vite" 2> /dev/null
-pkill -f "agent-browser" 2> /dev/null
-sleep 3
+SCRIPT=".agents/skills/local-testing/scripts/electron-dev.sh"
 
-# 2. Start Electron with CDP (MUST cd to apps/desktop first)
-cd apps/desktop && ELECTRON_ENABLE_LOGGING=1 npx electron-vite dev -- --remote-debugging-port=9222 > /tmp/electron-dev.log 2>&1 &
+# Start Electron dev with CDP (idempotent — skips if already running)
+$SCRIPT start
 
-# 3. Wait for startup
-for i in $(seq 1 12); do
-  sleep 5
-  if strings /tmp/electron-dev.log 2> /dev/null | grep -q "starting electron"; then
-    echo "ready"
-    break
-  fi
-done
+# Check if Electron is running and CDP is reachable
+$SCRIPT status
 
-# 4. Wait for renderer, then connect
-sleep 15 && agent-browser --cdp 9222 wait 3000
+# Kill all Electron-related processes (main + helper + vite)
+$SCRIPT stop
+
+# Force fresh restart
+$SCRIPT restart
 ```
 
-**Critical:** `npx electron-vite dev` MUST run from `apps/desktop/` directory, not project root.
+After `start` succeeds, connect with: `agent-browser --cdp 9222 snapshot -i`
+
+**Always run `$SCRIPT stop` when done testing** — `pkill -f "Electron"` alone won't catch all helper processes.
+
+#### Environment Variables
+
+| Variable          | Default                 | Description                              |
+| ----------------- | ----------------------- | ---------------------------------------- |
+| `CDP_PORT`        | `9222`                  | Chrome DevTools Protocol port            |
+| `ELECTRON_LOG`    | `/tmp/electron-dev.log` | Electron process log                     |
+| `ELECTRON_WAIT_S` | `60`                    | Max seconds to wait for Electron process |
+| `RENDERER_WAIT_S` | `60`                    | Max seconds to wait for SPA to load      |
 
 ### LobeHub-Specific Patterns
 
@@ -995,16 +1001,17 @@ echo "Result saved to /tmp/${APP_NAME,,}-bot-test.png"
 
 Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 
-| Script                    | Usage                                         |
-| ------------------------- | --------------------------------------------- |
-| `capture-app-window.sh`   | Capture screenshot of a specific app window   |
-| `record-electron-demo.sh` | Record Electron app demo with ffmpeg          |
-| `test-discord-bot.sh`     | Send message to Discord bot via osascript     |
-| `test-slack-bot.sh`       | Send message to Slack bot via osascript       |
-| `test-telegram-bot.sh`    | Send message to Telegram bot via osascript    |
-| `test-wechat-bot.sh`      | Send message to WeChat bot via osascript      |
-| `test-lark-bot.sh`        | Send message to Lark / 飞书 bot via osascript |
-| `test-qq-bot.sh`          | Send message to QQ bot via osascript          |
+| Script                    | Usage                                               |
+| ------------------------- | --------------------------------------------------- |
+| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart) |
+| `capture-app-window.sh`   | Capture screenshot of a specific app window         |
+| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                |
+| `test-discord-bot.sh`     | Send message to Discord bot via osascript           |
+| `test-slack-bot.sh`       | Send message to Slack bot via osascript             |
+| `test-telegram-bot.sh`    | Send message to Telegram bot via osascript          |
+| `test-wechat-bot.sh`      | Send message to WeChat bot via osascript            |
+| `test-lark-bot.sh`        | Send message to Lark / 飞书 bot via osascript       |
+| `test-qq-bot.sh`          | Send message to QQ bot via osascript                |
 
 ### Window Screenshot Utility
 
@@ -1098,7 +1105,8 @@ The script automatically:
 
 ### Electron-specific
 
-- **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently
+- **Always use `electron-dev.sh stop` to clean up** — `pkill -f "Electron"` only kills the main process; helper processes (GPU, renderer, network) survive. The script finds and kills all of them via PID matching against the project's electron binary path.
+- **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently. The `electron-dev.sh` script handles this automatically.
 - **Don't resize the Electron window after load** — resizing triggers full SPA reload
 - **Store is at `window.__LOBE_STORES`** not `window.__ZUSTAND_STORES__`
 
