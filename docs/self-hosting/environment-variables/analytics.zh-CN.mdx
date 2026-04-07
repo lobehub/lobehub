@@ -77,3 +77,42 @@ tags:
 - 描述：Umami 脚本的网址，默认为 Umami Cloud 提供的脚本网址
 - 默认值：`https://analytics.umami.is/script.js`
 - 示例：`https://umami.your-site.com/script.js`
+
+## Langfuse 可观测性
+
+[Langfuse](https://langfuse.com/) 是一个 [开源](https://github.com/langfuse/langfuse) 的 LLM 可观测性平台。启用 Langfuse 集成后，你可以将聊天追踪数据发送到 Langfuse，用于开发、监控和评估 LobeHub 的使用情况。
+
+### `ENABLE_LANGFUSE`
+
+- 类型：必选
+- 描述：用于控制是否启用 Langfuse 分析能力。
+- 默认值：`1`
+- 示例：`1`
+
+### `LANGFUSE_SECRET_KEY`
+
+- 类型：必选
+- 描述：Langfuse API Secret Key。你可以通过注册 [Langfuse Cloud](https://cloud.langfuse.com) 或自托管 Langfuse 获取。
+- 默认值：` `
+- 示例：`sk-lf-...`
+
+### `LANGFUSE_PUBLIC_KEY`
+
+- 类型：必选
+- 描述：Langfuse API Public Key。你可以通过注册 [Langfuse Cloud](https://cloud.langfuse.com) 或自托管 Langfuse 获取。
+- 默认值：` `
+- 示例：`pk-lf-...`
+
+### `LANGFUSE_HOST`
+
+- 类型：必选
+- 描述：Langfuse 服务地址。如果你的 Langfuse 项目在美国数据区，请使用 `https://us.cloud.langfuse.com`。
+- 默认值：`https://cloud.langfuse.com`
+- 示例：`https://cloud.langfuse.com`
+
+### `LANGFUSE_TRACE_DATA`
+
+- 类型：可选
+- 描述：用于配置请求中的用户字段如何映射到 Langfuse trace 字段。当前格式为 `field:value_field;field:value_field`，目前仅支持配置 `userId` 字段；可选映射值为 `userId`、`email`。若映射字段的值为空，则会回退为使用原始的 `userId` 值。
+- 默认值：`userId:userId`
+- 示例：`userId:email`

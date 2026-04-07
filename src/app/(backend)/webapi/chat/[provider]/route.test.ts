@@ -5,9 +5,12 @@ import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { UserModel } from '@/database/models/user';
 import type * as EnvsAuthModule from '@/envs/auth';
 import { LOBE_CHAT_AUTH_HEADER } from '@/envs/auth';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { getLangfuseConfig } from '@/envs/langfuse';
+import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { getTracePayload } from '@/utils/trace';
 
 import { POST } from './route';
 
@@ -22,6 +25,20 @@ vi.mock('@lobechat/utils/server', () => ({
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
   createTraceOptions: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    findById: vi.fn(),
+  },
+}));
+
+vi.mock('@/envs/langfuse', () => ({
+  getLangfuseConfig: vi.fn().mockReturnValue({ LANGFUSE_TRACE_DATA: { userId: 'userId' } }),
+}));
+
+vi.mock('@/utils/trace', () => ({
+  getTracePayload: vi.fn(),
 }));
 
 vi.mock('@/envs/auth', async (importOriginal) => {
@@ -54,6 +71,10 @@ beforeEach(() => {
 afterEach(() => {
   // 清除模拟调用历史
   vi.clearAllMocks();
+  vi.mocked(getLangfuseConfig).mockReturnValue({
+    LANGFUSE_TRACE_DATA: { userId: 'userId' },
+  } as any);
+  vi.mocked(getTracePayload).mockReturnValue(undefined);
 });
 
 describe('POST handler', () => {
@@ -203,6 +224,55 @@ describe('POST handler', () => {
         },
         errorType: 500,
       });
+    });
+
+    it('should resolve request user profile when trace mapping uses email', async () => {
+      vi.mocked(getXorPayload).mockReturnValueOnce({
+        apiKey: 'test-api-key',
+        userId: 'user-1',
+      });
+
+      vi.mocked(getLangfuseConfig).mockReturnValue({
+        LANGFUSE_TRACE_DATA: { userId: 'email' },
+      } as any);
+
+      vi.mocked(getTracePayload).mockReturnValue({ enabled: true, traceId: 'trace-1' } as any);
+      vi.mocked(UserModel.findById).mockResolvedValue({
+        email: 'test@example.com',
+      } as any);
+
+      const mockParams = Promise.resolve({ provider: 'test-provider' });
+      const mockChatPayload = { message: 'Hello, world!' };
+
+      request = new Request(new URL('https://test.com'), {
+        headers: { [LOBE_CHAT_AUTH_HEADER]: 'Bearer some-valid-token' },
+        method: 'POST',
+        body: JSON.stringify(mockChatPayload),
+      });
+
+      const mockChatResponse = new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockResolvedValue(mockChatResponse),
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      await POST(request as unknown as Request, { params: mockParams });
+
+      expect(UserModel.findById).toHaveBeenCalledWith(expect.anything(), 'user-1');
+      expect(createTraceOptions).toHaveBeenCalledWith(
+        mockChatPayload,
+        expect.objectContaining({
+          provider: 'test-provider',
+          traceData: {
+            email: 'test@example.com',
+          },
+        }),
+      );
     });
   });
 });

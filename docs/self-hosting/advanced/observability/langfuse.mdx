@@ -34,13 +34,14 @@ tags:
 
   <Tabs items={["Environment Variables", "Example in Docker Desktop"]}>
     <Tab>
-      Before deploying LobeHub, set the following four environment variables with the Langfuse API keys you created in the previous step.
+      Before deploying LobeHub, set the following environment variables with the Langfuse API keys you created in the previous step.
 
       ```sh
       ENABLE_LANGFUSE = '1'
       LANGFUSE_SECRET_KEY = 'sk-lf...'
       LANGFUSE_PUBLIC_KEY = 'pk-lf...'
       LANGFUSE_HOST = 'https://cloud.langfuse.com'
+      LANGFUSE_TRACE_DATA = 'userId:userId'
       ```
     </Tab>
 

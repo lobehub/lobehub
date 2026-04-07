@@ -3,6 +3,8 @@ import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
+import { UserModel } from '@/database/models/user';
+import { getLangfuseConfig } from '@/envs/langfuse';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
@@ -36,7 +38,16 @@ export const POST = checkAuth(
       let traceOptions = {};
       // If user enable trace
       if (tracePayload?.enabled) {
-        traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
+        const { LANGFUSE_TRACE_DATA } = getLangfuseConfig();
+        const shouldResolveTraceUser = ['email'].includes(LANGFUSE_TRACE_DATA.userId);
+
+        const traceData = shouldResolveTraceUser
+          ? await UserModel.findById(serverDB, userId).then((user) => ({
+              email: user?.email,
+            }))
+          : undefined;
+
+        traceOptions = createTraceOptions(data, { provider, trace: tracePayload, traceData });
       }
 
       return await modelRuntime.chat(data, {

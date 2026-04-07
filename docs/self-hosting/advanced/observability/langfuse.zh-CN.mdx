@@ -31,13 +31,14 @@ tags:
 
   <Tabs items={["环境变量", "Docker Desktop 示例"]}>
     <Tab>
-      在部署 LobeHub 之前，使用你在上一步创建的 Langfuse API 密钥设置以下四个环境变量。
+      在部署 LobeHub 之前，使用你在上一步创建的 Langfuse API 密钥设置以下环境变量。
 
       ```sh
       ENABLE_LANGFUSE = '1'
       LANGFUSE_SECRET_KEY = 'sk-lf...'
       LANGFUSE_PUBLIC_KEY = 'pk-lf...'
       LANGFUSE_HOST = 'https://cloud.langfuse.com'
+      LANGFUSE_TRACE_DATA = 'userId:userId'
       ```
     </Tab>
 

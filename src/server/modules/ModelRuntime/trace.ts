@@ -4,34 +4,48 @@ import { type TracePayload } from '@lobechat/types';
 import { TraceTagMap } from '@lobechat/types';
 import { after } from 'next/server';
 
+import { getLangfuseConfig } from '@/envs/langfuse';
 import { TraceClient } from '@/libs/traces';
+
+export interface LangfuseTraceDataPayload {
+  email?: string | null;
+  userId?: string;
+}
 
 export interface AgentChatOptions {
   enableTrace?: boolean;
   provider: string;
   trace?: TracePayload;
+  traceData?: LangfuseTraceDataPayload;
 }
 
 export const createTraceOptions = (
   payload: ChatStreamPayload,
-  { trace: tracePayload, provider }: AgentChatOptions,
+  { trace: tracePayload, traceData, provider }: AgentChatOptions,
 ) => {
   const { messages, model, tools, ...parameters } = payload;
   // create a trace to monitor the completion
   const traceClient = new TraceClient();
+  const { LANGFUSE_TRACE_DATA } = getLangfuseConfig();
   const messageLength = messages.length;
   const systemRole = messages.find((message) => message.role === 'system')?.content;
+
+  const traceDataMap: Record<string, string | undefined | null> = {
+    email: traceData?.email,
+    userId: traceData?.userId ?? tracePayload?.userId,
+  };
+
+  const originalUserId = traceData?.userId ?? tracePayload?.userId;
+  const traceUserId = traceDataMap[LANGFUSE_TRACE_DATA.userId] || originalUserId;
 
   const trace = traceClient.createTrace({
     id: tracePayload?.traceId,
     input: messages,
     metadata: { messageLength, model, provider, systemRole, tools },
     name: tracePayload?.traceName,
-    sessionId: tracePayload?.topicId
-      ? tracePayload.topicId
-      : `${tracePayload?.sessionId || INBOX_SESSION_ID}@default`,
+    sessionId: tracePayload?.topicId || `${tracePayload?.sessionId || INBOX_SESSION_ID}@default`,
     tags: tracePayload?.tags,
-    userId: tracePayload?.userId,
+    userId: traceUserId,
   });
 
   const generation = trace?.generation({

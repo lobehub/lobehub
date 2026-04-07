@@ -111,3 +111,10 @@ We have integrated several free/open-source data analytics services in LobeHub f
 - Description: Langfuse host address. Use `https://us.cloud.langfuse.com` if your Langfuse project is in the US data region.
 - Default: `https://cloud.langfuse.com`
 - Example: `https://cloud.langfuse.com`
+
+### `LANGFUSE_TRACE_DATA`
+
+- Type: Optional
+- Description: Configure which request user field is mapped into Langfuse trace fields. Current supported format is `field:value_field;field:value_field`, and only `userId` field is configurable for now. Supported source values are `userId` and `email`. If the mapped field value is empty, it will fall back to the original `userId` value.
+- Default: `userId:userId`
+- Example: `userId:email`
