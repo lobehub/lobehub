@@ -21,7 +21,7 @@ const {
   MockStreamEventManager: vi.fn(() => ({ kind: 'redis-stream-event-manager' })),
   mockAppEnv: {
     AGENT_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
-    AGENT_GATEWAY_URL: undefined as string | undefined,
+    AGENT_GATEWAY_URL: 'https://agent-gateway.lobehub.com',
     enableQueueAgentRuntime: false,
   },
   mockGetAgentRuntimeRedisClient: vi.fn(),
@@ -104,7 +104,7 @@ describe('AgentRuntime factory', () => {
   describe('createStreamEventManager', () => {
     beforeEach(() => {
       mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = undefined;
-      mockAppEnv.AGENT_GATEWAY_URL = undefined;
+      mockAppEnv.AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
     });
 
     it('prefers Redis-backed streams when Redis is available in local mode', () => {
