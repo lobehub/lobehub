@@ -127,7 +127,48 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
     padding-block: 6px;
   `,
-  subtaskRow: css`
+  /* Tree branch: non-last child — vertical line extends full height */
+  treeBranch: css`
+    position: relative;
+    margin-inline-start: 8px;
+
+    /* Vertical line: aligned with the center of the circle (8px from left) */
+    padding-inline-start: 24px;
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    /* Horizontal connector: from vertical line to circle */
+    &::before {
+      content: '';
+
+      position: absolute;
+      inset-block-start: 18px;
+      inset-inline-start: 0;
+
+      width: 16px;
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  /* Tree branch: last child — L-shape connector, vertical line stops */
+  treeBranchLast: css`
+    position: relative;
+    margin-inline-start: 8px;
+    padding-inline-start: 24px;
+
+    /* L-shape: vertical from top to row center + horizontal to circle */
+    &::before {
+      content: '';
+
+      position: absolute;
+      inset-block-start: 0;
+      inset-inline-start: 0;
+
+      width: 16px;
+      height: 18px;
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
+  `,
+  treeRow: css`
     cursor: pointer;
 
     display: flex;
@@ -136,7 +177,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     min-height: 36px;
     padding-block: 6px;
-    padding-inline-start: 22px;
     border-radius: 6px;
 
     transition: background 0.2s ${cssVar.motionEaseInOut};
