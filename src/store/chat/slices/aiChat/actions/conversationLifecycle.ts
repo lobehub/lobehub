@@ -17,6 +17,7 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
@@ -48,6 +49,7 @@ import {
   parseSelectedToolsFromEditorData,
   processCommands,
 } from './commandBus';
+import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /**
  * Extended params for sendMessage with context
@@ -585,55 +587,97 @@ export class ConversationLifecycleActionImpl {
 
     // ── AI execution ──
     {
-      const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
-        messageMapKey(execContext),
-      )(this.#get());
+      // Check if server-side Gateway mode is available
+      const agentGatewayUrl =
+        window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
 
-      try {
-        // When agents are @mentioned, inject a slim callAgent-only manifest
-        // so the AI can delegate directly without activating the full agent-management tool
-        const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
+      if (agentGatewayUrl) {
+        // ── Gateway mode: trigger server-side execution, receive events via WebSocket ──
+        try {
+          const result = await aiAgentService.execAgentTask({
+            agentId: execContext.agentId,
+            appContext: {
+              groupId: execContext.groupId,
+              scope: execContext.scope,
+              threadId: execContext.threadId,
+              topicId: execContext.topicId,
+            },
+            existingMessageIds: [data.userMessageId, data.assistantMessageId],
+            prompt: message,
+          });
 
-        const hasInitialContext = hasMentionedAgents || !!injectedManifests;
+          const eventHandler = createGatewayEventHandler(this.#get, {
+            assistantMessageId: data.assistantMessageId,
+            context: execContext,
+            operationId: result.operationId,
+          });
 
-        // Note: selectedSkills and selectedTools are NOT passed here — they are
-        // persisted into the user message content above so they survive across
-        // turns without re-injection.
-        const agentRuntimeInitialContext = hasInitialContext
-          ? {
-              initialContext: {
-                // Only inject mentionedAgents in non-group context to avoid
-                // group @member mentions (including ALL_MEMBERS) leaking into agent-management
-                ...(hasMentionedAgents ? { mentionedAgents } : undefined),
-                ...(injectedManifests ? { injectedManifests } : undefined),
-              },
-              phase: 'init' as const,
-            }
-          : undefined;
-
-        await internal_execAgentRuntime({
-          context: execContext,
-          initialContext: agentRuntimeInitialContext,
-          messages: displayMessages,
-          parentMessageId: data.assistantMessageId,
-          parentMessageType: 'assistant',
-          parentOperationId: operationId,
-          inPortalThread: !!data.createdThreadId,
-          skipCreateFirstMessage: true,
-        });
-
-        const userFiles = dbMessageSelectors
-          .dbUserFiles(this.#get())
-          .map((f) => f?.id)
-          .filter(Boolean) as string[];
-
-        if (userFiles.length > 0) {
-          await getAgentStoreState().addFilesToAgent(userFiles, false);
+          this.#get().connectToGateway({
+            gatewayUrl: agentGatewayUrl,
+            onEvent: eventHandler,
+            onSessionComplete: () => {
+              if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
+            },
+            operationId: result.operationId,
+            token: '', // TODO: inject auth token in Phase 4
+          });
+        } catch (e) {
+          console.error('[Gateway] Failed to start server-side agent:', e);
+          // Fall through to topic loading cleanup
+          if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
+      } else {
+        // ── Client mode: run agent loop locally ──
+        const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
+          messageMapKey(execContext),
+        )(this.#get());
+
+        try {
+          // When agents are @mentioned, inject a slim callAgent-only manifest
+          // so the AI can delegate directly without activating the full agent-management tool
+          const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
+
+          const hasInitialContext = hasMentionedAgents || !!injectedManifests;
+
+          // Note: selectedSkills and selectedTools are NOT passed here — they are
+          // persisted into the user message content above so they survive across
+          // turns without re-injection.
+          const agentRuntimeInitialContext = hasInitialContext
+            ? {
+                initialContext: {
+                  // Only inject mentionedAgents in non-group context to avoid
+                  // group @member mentions (including ALL_MEMBERS) leaking into agent-management
+                  ...(hasMentionedAgents ? { mentionedAgents } : undefined),
+                  ...(injectedManifests ? { injectedManifests } : undefined),
+                },
+                phase: 'init' as const,
+              }
+            : undefined;
+
+          await internal_execAgentRuntime({
+            context: execContext,
+            initialContext: agentRuntimeInitialContext,
+            messages: displayMessages,
+            parentMessageId: data.assistantMessageId,
+            parentMessageType: 'assistant',
+            parentOperationId: operationId,
+            inPortalThread: !!data.createdThreadId,
+            skipCreateFirstMessage: true,
+          });
+
+          const userFiles = dbMessageSelectors
+            .dbUserFiles(this.#get())
+            .map((f) => f?.id)
+            .filter(Boolean) as string[];
+
+          if (userFiles.length > 0) {
+            await getAgentStoreState().addFilesToAgent(userFiles, false);
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
+        }
       }
     }
 
