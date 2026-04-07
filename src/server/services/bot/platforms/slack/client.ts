@@ -213,6 +213,7 @@ class SlackSocketModeClient implements PlatformClient {
         abortSignal: this.abort.signal,
         appToken: this.config.credentials.appToken,
         durationMs,
+        signingSecret: this.config.credentials.signingSecret,
         webhookUrl,
       });
 

@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SlackSocketModeOptions } from './gateway';
@@ -91,6 +93,7 @@ describe('SlackSocketModeConnection', () => {
   function createConnection(overrides?: Partial<SlackSocketModeOptions>) {
     const options: SlackSocketModeOptions = {
       appToken: 'xapp-test-token',
+      signingSecret: 'test-signing-secret',
       webhookUrl: 'http://localhost:3000/api/agent/webhooks/slack/test_app',
       ...overrides,
     };
@@ -139,6 +142,25 @@ describe('SlackSocketModeConnection', () => {
   });
 
   describe('event handling', () => {
+    function getForwardCall() {
+      return vi
+        .mocked(fetch)
+        .mock.calls.find(
+          (call) => typeof call[0] === 'string' && call[0].includes('webhooks/slack'),
+        );
+    }
+
+    function expectSlackSignature(forwardCall: ReturnType<typeof getForwardCall>, body: string) {
+      const headers = forwardCall?.[1]?.headers as Record<string, string>;
+      const timestamp = headers['x-slack-request-timestamp'];
+      const expectedSignature =
+        'v0=' +
+        createHmac('sha256', 'test-signing-secret').update(`v0:${timestamp}:${body}`).digest('hex');
+
+      expect(headers['x-slack-signature']).toBe(expectedSignature);
+      expect(Number(timestamp)).toBeGreaterThan(0);
+    }
+
     it('should acknowledge events by sending envelope_id', async () => {
       const { connectPromise, ws } = await connectAndGetWs();
       ws.simulateMessage({ type: 'hello' });
@@ -169,15 +191,80 @@ describe('SlackSocketModeConnection', () => {
 
       await vi.advanceTimersByTimeAsync(10);
 
-      // Check that fetch was called to forward the event
-      const fetchCalls = vi.mocked(fetch).mock.calls;
-      const forwardCall = fetchCalls.find(
-        (call) => typeof call[0] === 'string' && call[0].includes('webhooks/slack'),
-      );
+      const forwardCall = getForwardCall();
       expect(forwardCall).toBeDefined();
 
-      const body = JSON.parse(forwardCall![1]!.body as string);
-      expect(body).toEqual(eventPayload);
+      const body = forwardCall![1]!.body as string;
+      expect(JSON.parse(body)).toEqual(eventPayload);
+      expect(forwardCall![1]!.headers).toEqual(
+        expect.objectContaining({ 'Content-Type': 'application/json' }),
+      );
+      expectSlackSignature(forwardCall, body);
+    });
+
+    it('should forward slash commands as form-urlencoded payloads', async () => {
+      const { connectPromise, ws } = await connectAndGetWs();
+      ws.simulateMessage({ type: 'hello' });
+      await connectPromise;
+
+      ws.simulateMessage({
+        envelope_id: 'env_cmd',
+        payload: {
+          channel_id: 'C123',
+          command: '/new',
+          text: 'hello world',
+          trigger_id: 'trigger-123',
+          user_id: 'U123',
+        },
+        type: 'slash_commands',
+      });
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      const forwardCall = getForwardCall();
+      expect(forwardCall).toBeDefined();
+
+      const body = forwardCall![1]!.body as string;
+      const params = new URLSearchParams(body);
+
+      expect(forwardCall![1]!.headers).toEqual(
+        expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+      );
+      expect(params.get('command')).toBe('/new');
+      expect(params.get('text')).toBe('hello world');
+      expect(params.get('channel_id')).toBe('C123');
+      expectSlackSignature(forwardCall, body);
+    });
+
+    it('should forward interactive payloads as form-urlencoded payload field', async () => {
+      const { connectPromise, ws } = await connectAndGetWs();
+      ws.simulateMessage({ type: 'hello' });
+      await connectPromise;
+
+      const payload = {
+        actions: [{ action_id: 'retry', value: '1' }],
+        type: 'block_actions',
+      };
+
+      ws.simulateMessage({
+        envelope_id: 'env_int',
+        payload,
+        type: 'interactive',
+      });
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      const forwardCall = getForwardCall();
+      expect(forwardCall).toBeDefined();
+
+      const body = forwardCall![1]!.body as string;
+      const params = new URLSearchParams(body);
+
+      expect(forwardCall![1]!.headers).toEqual(
+        expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+      );
+      expect(JSON.parse(params.get('payload') || '')).toEqual(payload);
+      expectSlackSignature(forwardCall, body);
     });
 
     it('should acknowledge slash_commands', async () => {
