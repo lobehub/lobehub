@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentChatConfigSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -45,8 +45,10 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
   // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
   // In auto mode the activator handles those tools transparently, so they remain hidden.
+  // NOTE: must read by `agentId` (not via the activeAgentId-based selector) so that
+  // embedded / group-member chat inputs render the right agent's mode.
   const isManualSkillMode = useAgentStore(
-    (s) => agentChatConfigSelectors.skillActivateMode(s) === 'manual',
+    (s) => chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s) === 'manual',
   );
   const builtinList = useToolStore(
     isManualSkillMode
