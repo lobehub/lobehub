@@ -1406,7 +1406,6 @@ describe('google contextBuilders', () => {
       expect(result.parameters?.properties).toEqual({
         query: { type: 'string' },
         timeIntent: {
-          additionalProperties: false,
           properties: {
             selector: { enum: ['today', 'yesterday', 'month'], type: 'string' },
             date: { format: 'date-time', type: 'string' },
@@ -1544,6 +1543,77 @@ describe('google contextBuilders', () => {
       expect(result.parameters?.properties).toEqual({
         field: { description: 'some field' },
       });
+    });
+
+    it('should strip additionalProperties from schemas', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with additionalProperties',
+          name: 'apTool',
+          parameters: {
+            properties: {
+              config: {
+                additionalProperties: false,
+                properties: {
+                  nested: {
+                    additionalProperties: { type: 'string' },
+                    type: 'object',
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      expect(result.parameters?.properties).toEqual({
+        config: {
+          properties: {
+            nested: {
+              type: 'object',
+            },
+          },
+          type: 'object',
+        },
+      });
+    });
+
+    it('should strip remaining $ref when resolveRefs exceeds depth limit', () => {
+      // Build a deeply recursive schema that exceeds depth limit of 10
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with deep recursive $ref',
+          name: 'deepRefTool',
+          parameters: {
+            definitions: {
+              node: {
+                properties: {
+                  child: { oneOf: [{ type: 'string' }, { $ref: '#/definitions/node' }] },
+                },
+                type: 'object',
+              },
+            },
+            properties: {
+              root: { $ref: '#/definitions/node' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // Verify no $ref remains anywhere in the output
+      const json = JSON.stringify(result);
+      expect(json).not.toContain('"$ref"');
+      // Also verify no additionalProperties
+      expect(json).not.toContain('"additionalProperties"');
     });
   });
 

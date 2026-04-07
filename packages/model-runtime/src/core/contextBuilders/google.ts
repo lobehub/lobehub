@@ -252,7 +252,7 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
  * JSON Schema keywords that cause Google GenAI / Vertex AI SDK validation errors.
  * Other unsupported keywords are silently ignored by the API, so only strip these.
  */
-const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default']);
+const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default', 'additionalProperties', '$ref']);
 
 /**
  * Resolve all `$ref` pointers in a JSON Schema tree by inlining definitions.
