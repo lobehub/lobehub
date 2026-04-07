@@ -20,6 +20,7 @@ import { registerLogoutCommand } from './commands/logout';
 import { registerManCommand } from './commands/man';
 import { registerMemoryCommand } from './commands/memory';
 import { registerMessageCommand } from './commands/message';
+import { registerMigrateCommand } from './commands/migrate';
 import { registerModelCommand } from './commands/model';
 import { registerPluginCommand } from './commands/plugin';
 import { registerProviderCommand } from './commands/provider';
@@ -72,6 +73,7 @@ export function createProgram() {
   registerUserCommand(program);
   registerConfigCommand(program);
   registerEvalCommand(program);
+  registerMigrateCommand(program);
 
   return program;
 }

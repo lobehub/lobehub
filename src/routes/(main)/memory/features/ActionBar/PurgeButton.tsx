@@ -33,7 +33,7 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
   const handleClick = () => {
     modal.confirm({
       cancelText: translate('cancel', { ns: 'common' }),
-      content: translate('purge.confirm'),
+      content: translate('purge.confirm', { ns: 'memory' }),
       okButtonProps: { danger: true, loading },
       okText: translate('confirm', { ns: 'common' }),
       onOk: async () => {
@@ -47,22 +47,22 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
           }
 
           setSearchParams(nextSearchParams, { replace: true });
-          message.success(translate('purge.success'));
+          message.success(translate('purge.success', { ns: 'memory' }));
         } catch {
-          message.error(translate('purge.error'));
+          message.error(translate('purge.error', { ns: 'memory' }));
           throw new Error('Failed to purge memories');
         } finally {
           setLoading(false);
         }
       },
-      title: translate('purge.title'),
+      title: translate('purge.title', { ns: 'memory' }),
       type: 'warning',
     });
   };
 
   if (iconOnly) {
     return (
-      <Tooltip title={translate('purge.action')}>
+      <Tooltip title={translate('purge.action', { ns: 'memory' })}>
         <ActionIcon
           danger
           icon={Trash2Icon}
@@ -85,7 +85,7 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
       type={'primary'}
       onClick={handleClick}
     >
-      {translate('purge.action')}
+      {translate('purge.action', { ns: 'memory' })}
     </Button>
   );
 });

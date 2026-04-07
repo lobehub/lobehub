@@ -58,7 +58,7 @@ export interface ToolUpdateLoadRule {
   keywords?: string[];
   maxDocuments?: number;
   maxTokens?: number;
-  mode?: 'always' | 'manual' | 'on-demand';
+  mode?: 'always' | 'manual' | 'on-demand' | 'progressive';
   pinnedDocumentIds?: string[];
   policyLoadFormat?: 'file' | 'raw';
   priority?: number;

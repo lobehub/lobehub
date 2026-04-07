@@ -61,7 +61,6 @@ describe('generate command', () => {
       headers: {
         'Content-Type': 'application/json',
         'Oidc-Auth': 'test-token',
-        'X-lobe-chat-auth': 'test-xor-token',
       },
       serverUrl: 'https://app.lobehub.com',
     });

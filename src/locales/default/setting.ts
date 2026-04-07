@@ -796,6 +796,8 @@ export default {
   'skillStore.tabs.community': 'Community',
   'skillStore.tabs.custom': 'Custom',
   'skillStore.tabs.lobehub': 'LobeHub',
+  'skillStore.tabs.mcp': 'MCP',
+  'skillStore.tabs.skills': 'Skills',
   'skillStore.title': 'Skill Store',
   'skillStore.wantMore.action': 'Submit a request →',
   'skillStore.wantMore.feedback.message': `## Skill Name

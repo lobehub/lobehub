@@ -24,7 +24,7 @@ const activeTaskDescription = (s: TaskStoreState) => activeTaskDetail(s)?.descri
 
 const activeTaskAgentId = (s: TaskStoreState) => activeTaskDetail(s)?.agentId;
 
-// TODO [LOBE-6634]: 等后端 getTaskDetail 返回 model/provider 后，改为读 detail.model / detail.provider
+// TODO [LOBE-6634]: Once the backend getTaskDetail returns model/provider, read from detail.model / detail.provider instead
 const activeTaskModel = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.model as string | undefined;
 
@@ -37,7 +37,7 @@ const activeTaskDependencies = (s: TaskStoreState) => activeTaskDetail(s)?.depen
 
 const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
 
-// 周期执行间隔（秒），0 或 undefined 表示未配置
+// Periodic execution interval (seconds); 0 or undefined means not configured
 const activeTaskPeriodicInterval = (s: TaskStoreState) =>
   activeTaskDetail(s)?.heartbeat?.interval ?? 0;
 

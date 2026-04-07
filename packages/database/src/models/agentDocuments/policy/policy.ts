@@ -35,6 +35,7 @@ export interface ToolPolicyCompositionResult {
 export const composeToolPolicyUpdate = (
   existingPolicy: AgentDocumentPolicy | null,
   rule: ToolUpdateLoadRule,
+  existingPolicyLoad?: PolicyLoad,
 ): ToolPolicyCompositionResult => {
   const resolvePolicyLoadFormat = (format?: string): DocumentLoadFormat => {
     if (format === 'file') {
@@ -45,8 +46,7 @@ export const composeToolPolicyUpdate = (
 
   const currentPolicy = existingPolicy || {};
   const existingContext = currentPolicy.context || {};
-  const loadMode =
-    rule.mode ?? (existingContext.loadMode as ToolUpdateLoadRule['mode']) ?? 'always';
+  const loadMode = rule.mode ?? (existingContext.loadMode as ToolUpdateLoadRule['mode']);
   const policyLoadFormat = resolvePolicyLoadFormat(
     rule.policyLoadFormat ??
       (existingContext.policyLoadFormat as DocumentLoadFormat | undefined) ??
@@ -60,7 +60,7 @@ export const composeToolPolicyUpdate = (
     ...currentPolicy,
     context: {
       ...existingContext,
-      loadMode,
+      loadMode: loadMode ?? existingContext.loadMode,
       keywordMatchMode: rule.keywordMatchMode ?? existingContext.keywordMatchMode,
       keywords: rule.keywords ?? existingContext.keywords,
       policyLoadFormat,
@@ -75,7 +75,13 @@ export const composeToolPolicyUpdate = (
   } satisfies AgentDocumentPolicy;
 
   return {
-    policyLoad: loadMode === 'always' ? PolicyLoad.ALWAYS : PolicyLoad.DISABLED,
+    policyLoad: loadMode
+      ? loadMode === 'always'
+        ? PolicyLoad.ALWAYS
+        : loadMode === 'progressive'
+          ? PolicyLoad.PROGRESSIVE
+          : PolicyLoad.DISABLED
+      : (existingPolicyLoad ?? PolicyLoad.ALWAYS),
     policy,
     policyLoadFormat,
     policyLoadRule: documentLoadRule,

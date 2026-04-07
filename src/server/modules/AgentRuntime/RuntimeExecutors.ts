@@ -384,6 +384,7 @@ export const createRuntimeExecutors = (
             if (docs.length > 0) {
               agentDocuments = docs.map((doc) => ({
                 content: doc.content,
+                description: doc.description ?? undefined,
                 filename: doc.filename,
                 id: doc.id,
                 loadPosition: normalizeDocumentPosition(
@@ -391,6 +392,7 @@ export const createRuntimeExecutors = (
                 ),
                 loadRules: doc.loadRules,
                 policyId: doc.templateId,
+                policyLoad: doc.policyLoad as 'always' | 'progressive',
                 policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
                 title: doc.title,
               }));

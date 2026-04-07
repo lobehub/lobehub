@@ -64,7 +64,7 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "anthropic",
   },
   "inputCompletion": {
-    "enabled": true,
+    "enabled": false,
     "model": "gpt-5.4-mini",
     "provider": "openai",
   },

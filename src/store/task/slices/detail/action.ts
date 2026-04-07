@@ -9,11 +9,11 @@ import type { TaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
 import { taskDetailReducer } from './reducer';
 
-// config / heartbeatInterval / heartbeatTimeout 不在此处暴露：
-// - model/provider 走 configSlice.updateTaskModelConfig
-// - checkpoint 走 configSlice.updateCheckpoint
-// - review 走 configSlice.updateReview
-// - heartbeat 配置待 LOBE-6587 上游 infra 完成后新增专用 action
+// config / heartbeatInterval / heartbeatTimeout are not exposed here:
+// - model/provider goes through configSlice.updateTaskModelConfig
+// - checkpoint goes through configSlice.updateCheckpoint
+// - review goes through configSlice.updateReview
+// - heartbeat config will get a dedicated action once the upstream infra in LOBE-6587 is complete
 export interface TaskUpdatePayload {
   assigneeAgentId?: string | null;
   description?: string;

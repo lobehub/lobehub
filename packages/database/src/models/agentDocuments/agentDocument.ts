@@ -94,6 +94,8 @@ export class AgentDocumentModel {
     templateId?: string,
     metadata?: Record<string, any>,
     policy?: AgentDocumentPolicy,
+    createdAt?: Date,
+    updatedAt?: Date,
   ): Promise<AgentDocument> {
     const title = filename.replace(/\.[^.]+$/, '');
     const stats = this.getDocumentStats(content);
@@ -102,6 +104,7 @@ export class AgentDocumentModel {
     return this.db.transaction(async (trx) => {
       const documentPayload: NewDocument = {
         content,
+        createdAt,
         description: metadata?.description,
         fileType: 'agent/document',
         filename,
@@ -111,6 +114,7 @@ export class AgentDocumentModel {
         title,
         totalCharCount: stats.totalCharCount,
         totalLineCount: stats.totalLineCount,
+        updatedAt: updatedAt ?? createdAt,
         userId: this.userId,
       };
 
@@ -126,7 +130,8 @@ export class AgentDocumentModel {
           AgentAccess.DELETE,
         accessShared: 0,
         agentId,
-        policyLoad: PolicyLoad.ALWAYS,
+        createdAt,
+        policyLoad: PolicyLoad.PROGRESSIVE,
         deleteReason: null,
         deletedAt: null,
         deletedByAgentId: null,
@@ -138,6 +143,7 @@ export class AgentDocumentModel {
           normalizedPolicy.context?.position || DocumentLoadPosition.BEFORE_FIRST_USER,
         policyLoadRule: normalizedPolicy.context?.rule || DocumentLoadRule.ALWAYS,
         templateId,
+        updatedAt: updatedAt ?? createdAt,
         userId: this.userId,
       };
 
@@ -266,7 +272,7 @@ export class AgentDocumentModel {
   ): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
-    const composedPolicy = composeToolPolicyUpdate(existing.policy, rule);
+    const composedPolicy = composeToolPolicyUpdate(existing.policy, rule, existing.policyLoad);
 
     await this.db
       .update(agentDocuments)
@@ -315,6 +321,8 @@ export class AgentDocumentModel {
     templateId?: string,
     metadata?: Record<string, any>,
     policy?: AgentDocumentPolicy,
+    createdAt?: Date,
+    updatedAt?: Date,
   ): Promise<AgentDocument> {
     const existing = await this.findByFilename(agentId, filename);
 
@@ -339,6 +347,8 @@ export class AgentDocumentModel {
       templateId,
       metadata,
       policy,
+      createdAt,
+      updatedAt,
     );
   }
 

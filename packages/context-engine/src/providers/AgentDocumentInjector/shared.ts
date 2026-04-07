@@ -23,11 +23,13 @@ export type AgentDocumentLoadFormat = 'file' | 'raw';
 
 export interface AgentContextDocument {
   content?: string;
+  description?: string;
   filename: string;
   id?: string;
   loadPosition?: AgentDocumentInjectionPosition;
   loadRules?: AgentDocumentLoadRules;
   policyId?: string | null;
+  policyLoad?: 'always' | 'progressive';
   policyLoadFormat?: AgentDocumentLoadFormat;
   title?: string;
 }
@@ -104,13 +106,43 @@ export function formatDocument(
 }
 
 /**
- * Combine multiple documents into a single string
+ * Format a single progressive document as an index entry
+ */
+function formatProgressiveEntry(doc: AgentContextDocument): string {
+  const parts: string[] = [];
+  if (doc.id) parts.push(`[${doc.id}]`);
+  parts.push(doc.filename);
+  if (doc.title && doc.title !== doc.filename) parts.push(`— "${doc.title}"`);
+  if (doc.description) parts.push(`: ${doc.description}`);
+  return `- ${parts.join(' ')}`;
+}
+
+/**
+ * Combine multiple documents into a single string.
+ * Progressive documents are grouped into a lightweight index block;
+ * full-content documents are formatted individually.
  */
 export function combineDocuments(
   docs: AgentContextDocument[],
   context: AgentDocumentFilterContext,
 ): string {
-  return docs.map((doc) => formatDocument(doc, context)).join('\n\n');
+  const fullDocs = docs.filter((d) => d.policyLoad !== 'progressive');
+  const progressiveDocs = docs.filter((d) => d.policyLoad === 'progressive');
+
+  const parts: string[] = [];
+
+  if (fullDocs.length > 0) {
+    parts.push(fullDocs.map((doc) => formatDocument(doc, context)).join('\n\n'));
+  }
+
+  if (progressiveDocs.length > 0) {
+    const entries = progressiveDocs.map(formatProgressiveEntry).join('\n');
+    parts.push(
+      `<agent_documents_index>\nThe following documents are available. Use readDocument tool to access full content.\n${entries}\n</agent_documents_index>`,
+    );
+  }
+
+  return parts.join('\n\n');
 }
 
 function approximateTokenTruncate(content: string, maxTokens: number): string {

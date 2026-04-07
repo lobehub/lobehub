@@ -30,6 +30,10 @@ export interface BotCallbackBody {
   elapsedMs?: number;
   errorMessage?: string;
   executionTimeMs?: number;
+  /** Hook ID from HookDispatcher (e.g. 'bot-step-progress', 'bot-completion') */
+  hookId?: string;
+  /** Hook type from HookDispatcher (e.g. 'afterStep', 'onComplete') */
+  hookType?: string;
   lastAssistantContent?: string;
   lastLLMContent?: string;
   lastToolsCalling?: any;

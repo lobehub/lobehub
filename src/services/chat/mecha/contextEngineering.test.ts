@@ -89,18 +89,14 @@ describe('contextEngineering', () => {
     expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
     const documentsMessage = output.find(
       (message) =>
-        message.role === 'system' &&
+        message.role === 'user' &&
         typeof message.content === 'string' &&
-        message.content.includes('<documents>'),
+        message.content.includes('Project setup steps'),
     );
 
     expect(documentsMessage).toEqual({
-      content: expect.stringContaining('<documents>'),
-      role: 'system',
-    });
-    expect(documentsMessage).toEqual({
-      content: expect.stringContaining('setup.md'),
-      role: 'system',
+      content: expect.stringContaining('Project setup steps'),
+      role: 'user',
     });
   });
 

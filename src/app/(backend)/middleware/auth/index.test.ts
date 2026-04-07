@@ -1,9 +1,7 @@
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
-import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as EnvsAuthModule from '@/envs/auth';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { type RequestHandler } from './index';
@@ -17,17 +15,6 @@ vi.mock('@/utils/errorResponse', () => ({
 vi.mock('./utils', () => ({
   checkAuthMethod: vi.fn(),
 }));
-
-vi.mock('@lobechat/utils/server', () => ({
-  getXorPayload: vi.fn(),
-}));
-
-vi.mock('@/envs/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof EnvsAuthModule>();
-  return {
-    ...actual,
-  };
-});
 
 vi.mock('@/auth', () => ({
   auth: {
@@ -50,34 +37,8 @@ describe('checkAuth', () => {
     vi.resetAllMocks();
   });
 
-  it('should return unauthorized error if no authorization header', async () => {
-    await checkAuth(mockHandler)(mockRequest, mockOptions);
-
-    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
-      error: AgentRuntimeError.createError(ChatErrorType.Unauthorized),
-      provider: 'mock',
-    });
-    expect(mockHandler).not.toHaveBeenCalled();
-  });
-
-  it('should return error response on getJWTPayload error', async () => {
+  it('should return error response on checkAuthMethod error (no session)', async () => {
     const mockError = AgentRuntimeError.createError(ChatErrorType.Unauthorized);
-    mockRequest.headers.set('Authorization', 'invalid');
-    vi.mocked(getXorPayload).mockRejectedValueOnce(mockError);
-
-    await checkAuth(mockHandler)(mockRequest, mockOptions);
-
-    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
-      error: mockError,
-      provider: 'mock',
-    });
-    expect(mockHandler).not.toHaveBeenCalled();
-  });
-
-  it('should return error response on checkAuthMethod error', async () => {
-    const mockError = AgentRuntimeError.createError(ChatErrorType.Unauthorized);
-    mockRequest.headers.set('Authorization', 'valid');
-    vi.mocked(getXorPayload).mockResolvedValueOnce({});
     vi.mocked(checkAuthMethod).mockImplementationOnce(() => {
       throw mockError;
     });

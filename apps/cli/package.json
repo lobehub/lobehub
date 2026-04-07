@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.1-canary.15",
+  "version": "0.0.3",
   "type": "module",
   "bin": {
     "lh": "./dist/index.js",
@@ -26,6 +26,9 @@
     "test": "bunx vitest run --config vitest.config.mts --silent='passed-only'",
     "test:coverage": "bunx vitest run --config vitest.config.mts --coverage",
     "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5"
   },
   "devDependencies": {
     "@lobechat/device-gateway-client": "workspace:*",

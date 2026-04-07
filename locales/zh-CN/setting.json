@@ -705,6 +705,8 @@
   "skillStore.tabs.community": "社区",
   "skillStore.tabs.custom": "自定义",
   "skillStore.tabs.lobehub": "LobeHub",
+  "skillStore.tabs.mcp": "MCP",
+  "skillStore.tabs.skills": "技能",
   "skillStore.title": "技能商店",
   "skillStore.wantMore.action": "提交申请 →",
   "skillStore.wantMore.feedback.message": "## 技能名称\n[请填写]\n\n## 使用场景\n当我在___时，我需要___\n\n## 期望功能\n1.\n2.\n3.\n\n## 参考示例\n（可选）是否有类似的工具或功能可供参考？\n\n---\n💡 提示：描述越具体，我们就越能满足您的需求",

@@ -5,7 +5,12 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { getAgentStreamAuthInfo } from '../api/http';
-import { replayAgentEvents, streamAgentEvents } from '../utils/agentStream';
+import { resolveAgentGatewayUrl } from '../settings';
+import {
+  replayAgentEvents,
+  streamAgentEvents,
+  streamAgentEventsViaWebSocket,
+} from '../utils/agentStream';
 import { resolveLocalDeviceId } from '../utils/device';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log, setVerbose } from '../utils/logger';
@@ -256,6 +261,7 @@ export function registerAgentCommand(program: Command) {
     .option('--json', 'Output full JSON event stream')
     .option('-v, --verbose', 'Show detailed tool call info')
     .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
+    .option('--sse', 'Force SSE stream instead of WebSocket gateway')
     .action(
       async (options: {
         agentId?: string;
@@ -265,6 +271,7 @@ export function registerAgentCommand(program: Command) {
         prompt?: string;
         replay?: string;
         slug?: string;
+        sse?: boolean;
         topicId?: string;
         verbose?: boolean;
       }) => {
@@ -347,14 +354,26 @@ export function registerAgentCommand(program: Command) {
           log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
         }
 
-        // 2. Connect to SSE stream
+        // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
         const { serverUrl, headers } = await getAgentStreamAuthInfo();
-        const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+        const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
 
-        await streamAgentEvents(streamUrl, headers, {
-          json: options.json,
-          verbose: options.verbose,
-        });
+        if (agentGatewayUrl) {
+          const token = headers['Oidc-Auth'] || headers['X-API-Key'] || '';
+          await streamAgentEventsViaWebSocket({
+            gatewayUrl: agentGatewayUrl,
+            json: options.json,
+            operationId,
+            token,
+            verbose: options.verbose,
+          });
+        } else {
+          const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
+          await streamAgentEvents(streamUrl, headers, {
+            json: options.json,
+            verbose: options.verbose,
+          });
+        }
       },
     );
 
