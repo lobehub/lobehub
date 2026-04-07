@@ -7,7 +7,7 @@ import {
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
 import { Button, Flexbox } from '@lobehub/ui';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { styles } from './style';
@@ -22,18 +22,24 @@ const PLUGINS = [
 
 interface CommentInputProps {
   onCancel: () => void;
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => Promise<void> | void;
 }
 
 const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
   const { t } = useTranslation('home');
   const editor = useEditor();
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const content = String(editor?.getDocument?.('markdown') ?? '').trim();
-    if (!content) return;
-    onSubmit(content);
-  }, [editor, onSubmit]);
+    if (!content || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(content);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [editor, onSubmit, submitting]);
 
   return (
     <Flexbox gap={8}>
@@ -48,10 +54,10 @@ const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
         />
       </div>
       <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button size={'small'} type={'text'} onClick={onCancel}>
+        <Button disabled={submitting} size={'small'} type={'text'} onClick={onCancel}>
           {t('cancel', { ns: 'common' })}
         </Button>
-        <Button size={'small'} type={'primary'} onClick={handleSubmit}>
+        <Button loading={submitting} size={'small'} type={'primary'} onClick={handleSubmit}>
           {t('brief.commentSubmit')}
         </Button>
       </Flexbox>

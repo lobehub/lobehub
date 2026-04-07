@@ -28,7 +28,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   actionBtnPrimary: css`
-    color: #fff;
+    color: ${cssVar.colorBgBase};
     background: ${cssVar.colorText};
 
     &:hover {
