@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
+import AppEnvironmentSection from './features/AppEnvironmentSection';
 import ToolDetectorSection from './features/ToolDetectorSection';
 
 const Page = () => {
@@ -9,6 +10,7 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.systemTools')} />
+      <AppEnvironmentSection />
       <ToolDetectorSection />
     </>
   );

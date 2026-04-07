@@ -25,8 +25,11 @@ export const setupElectronApi = () => {
   const darwinMajorVersion = Number(osInfo.split('.')[0]);
 
   contextBridge.exposeInMainWorld('lobeEnv', {
+    chromeVersion: process.versions.chrome,
     darwinMajorVersion,
+    electronVersion: process.versions.electron,
     isMacTahoe: process.platform === 'darwin' && darwinMajorVersion >= 25,
+    nodeVersion: process.versions.node,
     platform: process.platform,
   });
 };
