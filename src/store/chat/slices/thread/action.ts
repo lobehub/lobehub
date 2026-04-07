@@ -51,13 +51,18 @@ export class ChatThreadActionImpl {
   };
 
   openThreadCreator = (messageId: string): void => {
-    const { activeAgentId, activeTopicId, newThreadMode, replaceMessages } = this.#get();
+    const { activeAgentId, activeGroupId, activeTopicId, newThreadMode, replaceMessages } =
+      this.#get();
 
     // Always use main scope key to get messages, not activeDisplayMessages,
     // because activeDisplayMessages includes activeThreadId in the key.
     // When inside a subtopic, that would return thread-scoped messages
     // instead of main conversation messages, causing the fork to fail (LOBE-5023).
-    const mainKey = messageMapKey({ agentId: activeAgentId, topicId: activeTopicId });
+    const mainKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      topicId: activeTopicId,
+    });
     const displayMessages = this.#get().messagesMap[mainKey] || [];
     // Filter out messages that have threadId (they belong to other threads)
     const mainMessages = displayMessages.filter((m) => !m.threadId);

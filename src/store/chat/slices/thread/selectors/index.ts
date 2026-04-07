@@ -53,7 +53,11 @@ const hasThreadBySourceMsgId = (id: string) => (s: ChatStoreState) => {
  */
 const getMainScopeMessages = (s: ChatStoreState): UIChatMessage[] => {
   if (!s.activeAgentId) return [];
-  const mainKey = messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
+  const mainKey = messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    topicId: s.activeTopicId,
+  });
   return s.messagesMap[mainKey] || [];
 };
 
