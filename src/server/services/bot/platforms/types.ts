@@ -270,9 +270,18 @@ export interface PlatformDefinition {
    * - 'webhook': stateless HTTP callbacks (can run in serverless)
    * - 'websocket': persistent WebSocket connection (e.g. Discord, QQ)
    * - 'polling': persistent long-polling connection (e.g. WeChat)
-   * Defaults to 'webhook'.
+   *
+   * For single-mode platforms this is the runtime mode. For multi-mode
+   * platforms where users can pick per-provider via `settings.connectionMode`,
+   * this represents the *recommended* default for new providers (form initial
+   * value + cron coarse filter).
+   *
+   * For platforms that added multi-mode support after launch (Slack/Feishu/
+   * Lark/QQ), legacy provider rows without an explicit setting fall back to
+   * `'webhook'` instead — see `LEGACY_WEBHOOK_PLATFORMS` and
+   * `getEffectiveConnectionMode` in `./utils.ts`.
    */
-  connectionMode?: ConnectionMode;
+  connectionMode: ConnectionMode;
 
   /** The description of the platform. */
   description?: string;

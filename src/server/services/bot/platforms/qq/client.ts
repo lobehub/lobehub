@@ -347,7 +347,11 @@ class QQWebhookClient implements PlatformClient {
 
 export class QQClientFactory extends ClientFactory {
   createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
-    const mode = (config.settings?.connectionMode as string) || 'websocket';
+    // Fall back to 'webhook' to preserve behavior for legacy provider rows
+    // that pre-date the connectionMode field (QQ shipped as webhook-only
+    // before websocket support was added). New providers always go through
+    // the form which seeds connectionMode from the schema default.
+    const mode = (config.settings?.connectionMode as string) || 'webhook';
     if (mode === 'webhook') {
       return new QQWebhookClient(config, context);
     }

@@ -8,7 +8,6 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   buildRuntimeKey,
-  mergeWithDefaults,
   type PlatformClient,
   type PlatformDefinition,
 } from '@/server/services/bot/platforms';
@@ -201,18 +200,11 @@ export class GatewayManager {
       return null;
     }
 
-    // Merge schema defaults so factories see canonical settings
-    // (e.g. connectionMode default) even when the provider row stores `{}`.
-    const settings = mergeWithDefaults(
-      def.schema,
-      provider.settings as Record<string, unknown> | undefined,
-    );
-
     const config: BotProviderConfig = {
       applicationId: provider.applicationId,
       credentials: provider.credentials,
       platform,
-      settings,
+      settings: (provider.settings as Record<string, unknown>) || {},
     };
 
     const context: BotPlatformRuntimeContext = {

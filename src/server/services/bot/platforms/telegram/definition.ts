@@ -5,6 +5,7 @@ import { schema } from './schema';
 export const telegram: PlatformDefinition = {
   id: 'telegram',
   name: 'Telegram',
+  connectionMode: 'webhook',
   description: 'Connect a Telegram bot',
   documentation: {
     portalUrl: 'https://t.me/BotFather',
