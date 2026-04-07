@@ -28,10 +28,27 @@ const waitUntil = (task: Promise<unknown>) => {
   after(() => task);
 };
 
+/**
+ * Coarse filter: platforms whose default connection mode is non-webhook are
+ * candidates for the cron gateway. Per-provider mode is still re-evaluated
+ * before each provider is started (see `getEffectiveConnectionMode`).
+ */
 function getGatewayPlatforms(): PlatformDefinition[] {
   return platformRegistry
     .listPlatforms()
     .filter((platform) => (platform.connectionMode ?? 'webhook') !== 'webhook');
+}
+
+/**
+ * Resolve the effective connection mode for a single provider.
+ * Provider settings (`settings.connectionMode`) override the platform default.
+ */
+function getEffectiveConnectionMode(
+  platform: PlatformDefinition,
+  settings: Record<string, unknown> | null | undefined,
+): 'polling' | 'webhook' | 'websocket' {
+  const fromSettings = settings?.connectionMode as 'polling' | 'webhook' | 'websocket' | undefined;
+  return fromSettings ?? platform.connectionMode ?? 'webhook';
 }
 
 function createRuntimeContext(): BotPlatformRuntimeContext {
@@ -45,21 +62,19 @@ function createGatewayBot(
   platform: string,
   applicationId: string,
   credentials: Record<string, string>,
+  settings: Record<string, unknown>,
 ) {
   const config: BotProviderConfig = {
     applicationId,
     credentials,
     platform,
-    settings: {},
+    settings,
   };
 
   return platformRegistry.createClient(platform, config, createRuntimeContext());
 }
 
-async function processConnectQueue(
-  remainingMs: number,
-  gatewayPlatformIds: Set<string>,
-): Promise<number> {
+async function processConnectQueue(remainingMs: number): Promise<number> {
   const queue = new BotConnectQueue();
   const items = await queue.popAll();
 
@@ -73,8 +88,9 @@ async function processConnectQueue(
 
   for (const item of items) {
     try {
-      if (!gatewayPlatformIds.has(item.platform)) {
-        log('Skipping queued non-gateway platform=%s appId=%s', item.platform, item.applicationId);
+      const definition = platformRegistry.getPlatform(item.platform);
+      if (!definition) {
+        log('Skipping queued unknown platform=%s appId=%s', item.platform, item.applicationId);
         await queue.remove(item.platform, item.applicationId);
         continue;
       }
@@ -88,7 +104,23 @@ async function processConnectQueue(
         continue;
       }
 
-      const bot = createGatewayBot(item.platform, provider.applicationId, provider.credentials);
+      const effectiveMode = getEffectiveConnectionMode(definition, provider.settings);
+      if (effectiveMode === 'webhook') {
+        log(
+          'Skipping queued webhook-mode provider platform=%s appId=%s',
+          item.platform,
+          item.applicationId,
+        );
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
+
+      const bot = createGatewayBot(
+        item.platform,
+        provider.applicationId,
+        provider.credentials,
+        provider.settings ?? {},
+      );
 
       await bot.start({
         durationMs: remainingMs,
@@ -119,7 +151,6 @@ export async function GET(request: NextRequest) {
   }
 
   const platforms = getGatewayPlatforms();
-  const gatewayPlatformIds = new Set(platforms.map((platform) => platform.id));
 
   const serverDB = await getServerDB();
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
@@ -138,13 +169,24 @@ export async function GET(request: NextRequest) {
     log('Found %d enabled %s providers', providers.length, platform.name);
 
     let platformStarted = 0;
-    total += providers.length;
+    let platformTotal = 0;
 
     for (const provider of providers) {
-      const { applicationId, credentials } = provider;
+      const { applicationId, credentials, settings } = provider;
+
+      // Per-provider mode overrides the platform default. Webhook providers
+      // never need a persistent listener even if the platform default is gateway.
+      const effectiveMode = getEffectiveConnectionMode(platform, settings);
+      if (effectiveMode === 'webhook') {
+        log('Skipping webhook-mode provider platform=%s appId=%s', platform.id, applicationId);
+        continue;
+      }
+
+      platformTotal++;
+      total++;
 
       try {
-        const bot = createGatewayBot(platform.id, applicationId, credentials);
+        const bot = createGatewayBot(platform.id, applicationId, credentials, settings ?? {});
 
         await bot.start({
           durationMs: GATEWAY_DURATION_MS,
@@ -164,10 +206,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    stats.push({ platform: platform.id, started: platformStarted, total: providers.length });
+    stats.push({ platform: platform.id, started: platformStarted, total: platformTotal });
   }
 
-  const queued = await processConnectQueue(GATEWAY_DURATION_MS, gatewayPlatformIds);
+  const queued = await processConnectQueue(GATEWAY_DURATION_MS);
 
   after(async () => {
     const pollEnd = Date.now() + GATEWAY_DURATION_MS;
@@ -177,7 +219,7 @@ export async function GET(request: NextRequest) {
       if (Date.now() >= pollEnd) break;
 
       const remainingMs = pollEnd - Date.now();
-      await processConnectQueue(remainingMs, gatewayPlatformIds);
+      await processConnectQueue(remainingMs);
     }
   });
 
