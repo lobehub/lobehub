@@ -185,7 +185,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('tool_start', () => {
-    it('should be a no-op', async () => {
+    it('should be a no-op (loading already active from stream_start)', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -198,7 +198,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('tool_end', () => {
-    it('should refresh messages to pull tool results', async () => {
+    it('should refresh messages and re-apply loading', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -206,6 +206,8 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.replaceMessages).toHaveBeenCalled();
+      // Re-apply loading after refresh so UI stays active until next stream_start
+      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-initial');
     });
   });
 

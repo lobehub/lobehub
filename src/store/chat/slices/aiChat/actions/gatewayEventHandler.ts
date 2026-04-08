@@ -142,14 +142,16 @@ export const createGatewayEventHandler = (
       }
 
       case 'tool_start': {
-        // No client-side action needed — server creates tool messages in DB.
-        // They will appear when tool_end triggers fetchAndReplaceMessages.
+        // Server creates tool messages in DB.
+        // Loading is already active from stream_start (not cleared by stream_end).
         break;
       }
 
       case 'tool_end': {
         enqueue(async () => {
           await fetchAndReplaceMessages(get, context).catch(console.error);
+          // Re-apply loading after refresh so UI stays active between tool_end and next stream_start
+          get().internal_toggleMessageLoading(true, currentAssistantMessageId);
         });
         break;
       }

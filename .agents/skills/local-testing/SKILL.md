@@ -1006,6 +1006,7 @@ Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 | `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart) |
 | `capture-app-window.sh`   | Capture screenshot of a specific app window         |
 | `record-electron-demo.sh` | Record Electron app demo with ffmpeg                |
+| `record-gateway-demo.sh`  | Record Gateway streaming demo (agent + web search)  |
 | `test-discord-bot.sh`     | Send message to Discord bot via osascript           |
 | `test-slack-bot.sh`       | Send message to Slack bot via osascript             |
 | `test-telegram-bot.sh`    | Send message to Telegram bot via osascript          |
@@ -1068,25 +1069,51 @@ Each script: activates the app, navigates to the channel/contact, pastes the mes
 
 # Screen Recording
 
-Record automated demos by combining `ffmpeg` screen capture with `agent-browser` automation. The script `.agents/skills/local-testing/scripts/record-electron-demo.sh` handles the full lifecycle for Electron.
+Record automated demos by combining `ffmpeg` screen capture with `agent-browser` automation.
 
-### Usage
+### Gateway Streaming Demo
+
+`record-gateway-demo.sh` records a complete Gateway agent execution flow: Electron startup → agent navigation → message send → streaming response → tool calls → completion.
 
 ```bash
-# Run the built-in demo (queue-edit feature)
-./.agents/skills/local-testing/scripts/record-electron-demo.sh
+# Default: web search demo
+./.agents/skills/local-testing/scripts/record-gateway-demo.sh
 
-# Run a custom automation script
-./.agents/skills/local-testing/scripts/record-electron-demo.sh ./my-demo.sh /tmp/my-demo.mp4
+# Custom message
+./.agents/skills/local-testing/scripts/record-gateway-demo.sh "explain how HTTPS works"
+
+# Custom message + output path
+./.agents/skills/local-testing/scripts/record-gateway-demo.sh "explain DNS" .records/dns-demo.mp4
 ```
+
+Environment variables:
+
+| Variable      | Default                           | Description                              |
+| ------------- | --------------------------------- | ---------------------------------------- |
+| `GATEWAY_URL` | `wss://agent-gateway.lobehub.com` | Gateway WebSocket URL                    |
+| `CDP_PORT`    | `9222`                            | Chrome DevTools Protocol port            |
+| `AGENT_REF`   | (auto-detect)                     | agent-browser ref for the agent link     |
+| `FRAMERATE`   | `15`                              | Recording framerate                      |
+| `MAX_WAIT`    | `120`                             | Max seconds to wait for agent completion |
 
 The script automatically:
 
 1. Starts Electron with CDP and waits for SPA to load
-2. Detects window position, screen, and Retina scale via Swift/CGWindowList
-3. Records only the Electron window region using `ffmpeg -f avfoundation` with crop
-4. Runs the demo (built-in or custom script receiving CDP port as `$1`)
-5. Stops recording and cleans up
+2. Injects the Gateway URL into server config
+3. Auto-detects which screen the Electron window is on (supports external monitors)
+4. Records the screen using `ffmpeg -f avfoundation`
+5. Navigates to an agent, sends the message, waits for completion
+6. Crops the recording to the Electron window region and compresses
+7. Outputs to `.records/` directory (gitignored)
+
+### General Electron Demo
+
+`record-electron-demo.sh` records a custom automation script against the Electron app.
+
+```bash
+# Run a custom automation script
+./.agents/skills/local-testing/scripts/record-electron-demo.sh ./my-demo.sh .records/my-demo.mp4
+```
 
 ---
 
