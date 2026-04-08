@@ -6,7 +6,18 @@ import type {
   StreamChunkData,
   StreamStartData,
 } from '@/libs/agent-stream';
+import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
+
+/**
+ * Fetch messages from DB and replace them in the chat store's dbMessagesMap.
+ * This updates the ConversationArea component via React subscription:
+ *   dbMessagesMap → ConversationArea (messages prop) → ConversationStore → UI
+ */
+const fetchAndReplaceMessages = async (get: () => ChatStore, context: ConversationContext) => {
+  const messages = await messageService.getMessages(context);
+  get().replaceMessages(messages, { context });
+};
 
 /**
  * Creates a handler function that processes Agent Gateway events
@@ -15,10 +26,10 @@ import type { ChatStore } from '@/store/chat/store';
  * Supports multi-step agent execution (LLM → tool calls → next LLM → ...)
  * using a hybrid approach:
  * - Current LLM step: real-time streaming via stream_chunk
- * - Step transitions: refreshMessages() from DB at stream_start / tool_end / step_complete
+ * - Step transitions: fetchAndReplaceMessages from DB at stream_start / tool_end / step_complete
  *
  * The handler queues incoming events and processes them sequentially,
- * ensuring that stream_chunk waits for stream_start's refreshMessages to resolve
+ * ensuring that stream_chunk waits for stream_start's DB fetch to resolve
  * before dispatching updates.
  */
 export const createGatewayEventHandler = (
@@ -41,7 +52,7 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
-  // Sequential processing queue — ensures stream_chunk waits for stream_start's refresh
+  // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
   const enqueue = (fn: () => Promise<void> | void): void => {
@@ -63,8 +74,8 @@ export const createGatewayEventHandler = (
           accumulatedContent = '';
           accumulatedReasoning = '';
 
-          // Await refresh so the new message exists in dbMessagesMap before chunks arrive
-          await get().refreshMessages(context).catch(console.error);
+          // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
+          await fetchAndReplaceMessages(get, context).catch(console.error);
 
           get().internal_toggleMessageLoading(true, currentAssistantMessageId);
         });
@@ -122,9 +133,9 @@ export const createGatewayEventHandler = (
 
       case 'stream_end': {
         enqueue(() => {
-          get().internal_toggleMessageLoading(false, currentAssistantMessageId);
-
-          // Clear tool calling streaming animation
+          // Only clear tool calling streaming — keep message loading active
+          // until agent_runtime_end so users don't think the session ended
+          // during tool execution gaps between steps
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
         });
         break;
@@ -132,13 +143,13 @@ export const createGatewayEventHandler = (
 
       case 'tool_start': {
         // No client-side action needed — server creates tool messages in DB.
-        // They will appear when tool_end triggers refreshMessages.
+        // They will appear when tool_end triggers fetchAndReplaceMessages.
         break;
       }
 
       case 'tool_end': {
         enqueue(async () => {
-          await get().refreshMessages(context).catch(console.error);
+          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }
@@ -149,7 +160,7 @@ export const createGatewayEventHandler = (
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
-            await get().refreshMessages(context).catch(console.error);
+            await fetchAndReplaceMessages(get, context).catch(console.error);
           });
         }
         break;
@@ -158,7 +169,9 @@ export const createGatewayEventHandler = (
       case 'agent_runtime_end': {
         enqueue(async () => {
           get().internal_toggleMessageLoading(false, currentAssistantMessageId);
-          await get().refreshMessages(context).catch(console.error);
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          get().completeOperation(operationId);
+          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }

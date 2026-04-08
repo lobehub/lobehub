@@ -4,14 +4,19 @@ import type { AgentStreamEvent } from '@/libs/agent-stream';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
 
+vi.mock('@/services/message', () => ({
+  messageService: { getMessages: vi.fn().mockResolvedValue([]) },
+}));
+
 // ─── Test Helpers ───
 
 function createMockStore() {
   return {
+    completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     internal_toggleMessageLoading: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
-    refreshMessages: vi.fn().mockResolvedValue(undefined),
+    replaceMessages: vi.fn(),
   };
 }
 
@@ -49,7 +54,7 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
       await flush();
 
-      expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-step2');
     });
 
@@ -163,14 +168,15 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_end', () => {
-    it('should toggle loading off and clear tool streaming', async () => {
+    it('should clear tool streaming but keep message loading active', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_end'));
       await flush();
 
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
+      // Loading stays active until agent_runtime_end
+      expect(store.internal_toggleMessageLoading).not.toHaveBeenCalled();
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
         'msg-initial',
         undefined,
@@ -187,7 +193,7 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
-      expect(store.refreshMessages).not.toHaveBeenCalled();
+      expect(store.replaceMessages).not.toHaveBeenCalled();
     });
   });
 
@@ -199,9 +205,7 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('tool_end', { isSuccess: true }));
       await flush();
 
-      expect(store.refreshMessages).toHaveBeenCalledWith(
-        expect.objectContaining({ agentId: 'agent-1', topicId: 'topic-1' }),
-      );
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
   });
 
@@ -213,7 +217,7 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('step_complete', { phase: 'execution_complete', reason: 'done' }));
       await flush();
 
-      expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
 
     it('should not refresh on other phases', async () => {
@@ -223,12 +227,12 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('step_complete', { phase: 'human_approval' }));
       await flush();
 
-      expect(store.refreshMessages).not.toHaveBeenCalled();
+      expect(store.replaceMessages).not.toHaveBeenCalled();
     });
   });
 
   describe('agent_runtime_end', () => {
-    it('should toggle loading off and refresh messages', async () => {
+    it('should toggle loading off, complete operation, and refresh messages', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -236,7 +240,8 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
-      expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
   });
 
@@ -281,10 +286,12 @@ describe('createGatewayEventHandler', () => {
       const store = createMockStore();
       const callOrder: string[] = [];
 
-      store.refreshMessages.mockImplementation(async () => {
+      const { messageService } = await import('@/services/message');
+      (messageService.getMessages as any).mockImplementation(async () => {
         callOrder.push('refresh_start');
         await new Promise((r) => setTimeout(r, 10));
         callOrder.push('refresh_end');
+        return [];
       });
       store.internal_dispatchMessage.mockImplementation(() => {
         callOrder.push('dispatch');
@@ -330,20 +337,20 @@ describe('createGatewayEventHandler', () => {
 
       handler(makeEvent('stream_end'));
       await flush();
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-1');
+      // Loading stays active between steps — only tool streaming is cleared
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith('msg-1', undefined);
 
       // Tool execution
       handler(makeEvent('tool_start', { parentMessageId: 'msg-1', toolCalling: tools[0] }));
       handler(makeEvent('tool_end', { isSuccess: true }));
       await flush();
-      expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
 
       // Step 2: Next LLM call with new assistant message
       vi.clearAllMocks();
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
       await flush();
-      expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-2');
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Here are the results.' }));

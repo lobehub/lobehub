@@ -606,16 +606,24 @@ export class ConversationLifecycleActionImpl {
             prompt: message,
           });
 
+          // Create a dedicated operation for gateway execution with correct context
+          const { operationId: gatewayOpId } = this.#get().startOperation({
+            context: execContext,
+            parentOperationId: operationId,
+            type: 'execServerAgentRuntime',
+          });
+
           const eventHandler = createGatewayEventHandler(this.#get, {
             assistantMessageId: data.assistantMessageId,
             context: execContext,
-            operationId: result.operationId,
+            operationId: gatewayOpId,
           });
 
           this.#get().connectToGateway({
             gatewayUrl: agentGatewayUrl,
             onEvent: eventHandler,
             onSessionComplete: () => {
+              this.#get().completeOperation(gatewayOpId);
               if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
             },
             operationId: result.operationId,
