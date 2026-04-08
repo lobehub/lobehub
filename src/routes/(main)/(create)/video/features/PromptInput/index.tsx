@@ -194,9 +194,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { value: duration } = useVideoGenerationConfigParam('duration');
   useFetchAiVideoConfig();
 
-  // Read prompt from query parameter
+  // Read query parameters
   const [promptParam, setPromptParam] = useQueryState('prompt');
+  const [modelParam, setModelParam] = useQueryState('model');
   const hasProcessedPrompt = useRef(false);
+  const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
     if (!isLogin) {
@@ -206,6 +208,23 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
     await createVideo();
   };
+
+  useEffect(() => {
+    if (modelParam && !hasProcessedModel.current && isInit) {
+      const targetModel = modelParam;
+
+      for (const providerGroup of enabledVideoModelList) {
+        const found = providerGroup.children.some((m) => m.id === targetModel);
+        if (found) {
+          setModelAndProviderOnSelect(targetModel, providerGroup.id);
+          break;
+        }
+      }
+
+      hasProcessedModel.current = true;
+      setModelParam(null);
+    }
+  }, [modelParam, isInit, enabledVideoModelList, setModelAndProviderOnSelect, setModelParam]);
 
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
