@@ -487,7 +487,7 @@ export class AgentBridgeService {
       log('executeWithCallback: failed to post initial placeholder message: %O', error);
     }
 
-    const files = this.extractFiles(userMessage);
+    const files = await this.extractFiles(userMessage);
     const prompt = this.formatPrompt(userMessage, client);
 
     // Build webhook config for production mode
@@ -1032,8 +1032,16 @@ export class AgentBridgeService {
   /**
    * Extract file attachment metadata from Chat SDK message for passing to execAgent.
    * Includes attachments from both the message itself and any referenced (quoted) message.
+   *
+   * Resolves attachments in this priority order:
+   *   1. `buffer` — already downloaded by the adapter (WeChat / Feishu inbound)
+   *   2. `fetchData()` — adapter-provided lazy download with proper auth
+   *      (Telegram, Slack, Feishu history). Required for Slack/Telegram because
+   *      their URLs are token-protected and `ingestAttachment`'s downstream
+   *      `fetch(url)` has no credentials.
+   *   3. `url` — public CDN fallback (Discord, QQ public attachments)
    */
-  private extractFiles(message: Message):
+  private async extractFiles(message: Message): Promise<
     | Array<{
         buffer?: Buffer;
         mimeType?: string;
@@ -1041,10 +1049,12 @@ export class AgentBridgeService {
         size?: number;
         url: string;
       }>
-    | undefined {
+    | undefined
+  > {
     type AttachmentLike = {
       buffer?: Buffer;
       content_type?: string;
+      fetchData?: () => Promise<Buffer>;
       filename?: string;
       mimeType?: string;
       name?: string;
@@ -1064,16 +1074,45 @@ export class AgentBridgeService {
     // 1. Direct attachments from the message (parsed by Chat SDK)
     const directAttachments = (message as any).attachments as AttachmentLike[] | undefined;
     if (directAttachments?.length) {
-      for (const att of directAttachments) {
-        if (att.url || att.buffer) {
-          files.push({
-            buffer: att.buffer,
-            mimeType: att.mimeType,
-            name: att.name,
-            size: att.size,
-            url: att.url || '',
-          });
-        }
+      const resolved = await Promise.all(
+        directAttachments.map(async (att) => {
+          if (att.buffer) {
+            return {
+              buffer: att.buffer,
+              mimeType: att.mimeType,
+              name: att.name,
+              size: att.size,
+              url: '',
+            };
+          }
+          if (typeof att.fetchData === 'function') {
+            try {
+              const buffer = await att.fetchData();
+              return {
+                buffer,
+                mimeType: att.mimeType,
+                name: att.name,
+                size: att.size,
+                url: '',
+              };
+            } catch (error) {
+              log('extractFiles: fetchData failed for %s: %O', att.name ?? 'attachment', error);
+              return undefined;
+            }
+          }
+          if (att.url) {
+            return {
+              mimeType: att.mimeType,
+              name: att.name,
+              size: att.size,
+              url: att.url,
+            };
+          }
+          return undefined;
+        }),
+      );
+      for (const file of resolved) {
+        if (file) files.push(file);
       }
     }
 

@@ -172,4 +172,123 @@ describe('AgentBridgeService', () => {
       }),
     );
   });
+
+  describe('extractFiles', () => {
+    function callExtract(messageOverrides: Record<string, unknown>) {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const message = { id: MESSAGE_ID, text: 'hi', ...messageOverrides } as any;
+      return (service as any).extractFiles(message) as Promise<
+        Array<{ buffer?: Buffer; mimeType?: string; name?: string; size?: number; url: string }>
+      >;
+    }
+
+    it('uses the pre-downloaded buffer when present (WeChat / Feishu inbound)', async () => {
+      const buffer = Buffer.from('wechat-image');
+      const result = await callExtract({
+        attachments: [
+          { buffer, mimeType: 'image/jpeg', name: 'pic.jpg', size: buffer.length, type: 'image' },
+        ],
+      });
+      expect(result).toEqual([
+        { buffer, mimeType: 'image/jpeg', name: 'pic.jpg', size: buffer.length, url: '' },
+      ]);
+    });
+
+    it('invokes fetchData for token-protected attachments (Telegram / Slack)', async () => {
+      const buffer = Buffer.from('telegram-voice');
+      const fetchData = vi.fn().mockResolvedValue(buffer);
+      const result = await callExtract({
+        attachments: [{ fetchData, mimeType: 'audio/ogg', name: 'voice.ogg', type: 'audio' }],
+      });
+      expect(fetchData).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([
+        { buffer, mimeType: 'audio/ogg', name: 'voice.ogg', size: undefined, url: '' },
+      ]);
+    });
+
+    it('falls back to public url when neither buffer nor fetchData is provided (Discord / QQ)', async () => {
+      const result = await callExtract({
+        attachments: [
+          {
+            mimeType: 'image/png',
+            name: 'discord.png',
+            size: 4321,
+            type: 'image',
+            url: 'https://cdn.discord.example/discord.png',
+          },
+        ],
+      });
+      expect(result).toEqual([
+        {
+          mimeType: 'image/png',
+          name: 'discord.png',
+          size: 4321,
+          url: 'https://cdn.discord.example/discord.png',
+        },
+      ]);
+    });
+
+    it('prefers fetchData over url so Slack-style auth-required URLs are not blindly fetched', async () => {
+      const buffer = Buffer.from('slack-file');
+      const fetchData = vi.fn().mockResolvedValue(buffer);
+      const result = await callExtract({
+        attachments: [
+          {
+            fetchData,
+            mimeType: 'application/pdf',
+            name: 'doc.pdf',
+            size: 9999,
+            type: 'file',
+            url: 'https://files.slack.com/private/doc.pdf',
+          },
+        ],
+      });
+      expect(fetchData).toHaveBeenCalledTimes(1);
+      expect(result?.[0]).toMatchObject({ buffer, mimeType: 'application/pdf', url: '' });
+    });
+
+    it('skips a single failing attachment without dropping the others', async () => {
+      const goodBuffer = Buffer.from('ok');
+      const result = await callExtract({
+        attachments: [
+          { fetchData: vi.fn().mockRejectedValue(new Error('boom')), name: 'bad.bin' },
+          { fetchData: vi.fn().mockResolvedValue(goodBuffer), name: 'good.bin' },
+        ],
+      });
+      expect(result).toEqual([
+        { buffer: goodBuffer, mimeType: undefined, name: 'good.bin', size: undefined, url: '' },
+      ]);
+    });
+
+    it('returns undefined when no attachments are present', async () => {
+      const result = await callExtract({ attachments: [] });
+      expect(result).toBeUndefined();
+    });
+
+    it('still picks up referenced (quoted) message attachments via raw payload', async () => {
+      const result = await callExtract({
+        attachments: [],
+        raw: {
+          referenced_message: {
+            attachments: [
+              {
+                content_type: 'image/png',
+                filename: 'quoted.png',
+                size: 100,
+                url: 'https://cdn.discord.example/quoted.png',
+              },
+            ],
+          },
+        },
+      });
+      expect(result).toEqual([
+        {
+          mimeType: 'image/png',
+          name: 'quoted.png',
+          size: 100,
+          url: 'https://cdn.discord.example/quoted.png',
+        },
+      ]);
+    });
+  });
 });
