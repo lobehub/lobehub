@@ -201,9 +201,9 @@ export class GatewayActionImpl {
       prompt: message,
     });
 
-    // If server created a new topic, switch to it
+    // If server created a new topic, switch to it and clean up the _new key temp messages
     if (isCreateNewTopic && result.topicId) {
-      await this.#get().switchTopic(result.topicId);
+      await this.#get().switchTopic(result.topicId, { clearNewKey: true });
     }
 
     // Use the server-created topicId for the execution context
