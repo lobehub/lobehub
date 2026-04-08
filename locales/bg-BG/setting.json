@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Версия на рамката Electron",
   "settingSystemTools.appEnvironment.node.desc": "Вградена версия на Node.js",
   "settingSystemTools.appEnvironment.title": "Среда на приложението",
-  "settingSystemTools.autoSelectDesc": "Най-добрият наличен инструмент ще бъде избран автоматично",
   "settingSystemTools.category.browserAutomation": "Автоматизация на браузъра",
   "settingSystemTools.category.browserAutomation.desc": "Инструменти за автоматизация на браузъра без графичен интерфейс и уеб взаимодействие",
   "settingSystemTools.category.contentSearch": "Търсене в съдържание",

@@ -739,10 +739,6 @@ export default {
   'settingSystemTools.appEnvironment.electron.desc': 'Electron framework version',
   'settingSystemTools.appEnvironment.node.desc': 'Embedded Node.js version',
   'settingSystemTools.appEnvironment.title': 'Built-in App Tools',
-  'settingSystemTools.autoSelectDesc': 'The best available tool will be automatically selected',
-  'settingSystemTools.cliInPath': 'CLI available in terminal',
-  'settingSystemTools.cliNotInPath': 'CLI not in terminal PATH',
-  'settingSystemTools.installCliToPath': 'Install CLI to PATH',
   'settingSystemTools.category.browserAutomation': 'Browser Automation',
   'settingSystemTools.category.browserAutomation.desc':
     'Tools for headless browser automation and web interaction',

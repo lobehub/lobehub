@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Phiên bản framework Electron",
   "settingSystemTools.appEnvironment.node.desc": "Phiên bản Node.js nhúng",
   "settingSystemTools.appEnvironment.title": "Môi trường ứng dụng",
-  "settingSystemTools.autoSelectDesc": "Công cụ tốt nhất sẽ được tự động chọn",
   "settingSystemTools.category.browserAutomation": "Tự động hóa trình duyệt",
   "settingSystemTools.category.browserAutomation.desc": "Công cụ cho tự động hóa trình duyệt không giao diện và tương tác web",
   "settingSystemTools.category.contentSearch": "Tìm kiếm nội dung",

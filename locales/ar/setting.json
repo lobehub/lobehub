@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "إصدار إطار Electron",
   "settingSystemTools.appEnvironment.node.desc": "إصدار Node.js المدمج",
   "settingSystemTools.appEnvironment.title": "بيئة التطبيق",
-  "settingSystemTools.autoSelectDesc": "سيتم اختيار أفضل أداة متاحة تلقائيًا",
   "settingSystemTools.category.browserAutomation": "أتمتة المتصفح",
   "settingSystemTools.category.browserAutomation.desc": "أدوات لأتمتة المتصفح بدون واجهة والتفاعل مع الويب",
   "settingSystemTools.category.contentSearch": "البحث في المحتوى",

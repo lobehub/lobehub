@@ -56,16 +56,8 @@ class ElectronSystemService {
     return this.ipc.system.hasLegacyLocalDb();
   }
 
-  async isCliInPath(): Promise<boolean> {
-    return this.ipc.system.isCliInPath();
-  }
-
-  async installCliToPath(): Promise<{ message: string; success: boolean }> {
-    return this.ipc.system.installCliToPath();
-  }
-
   async runCliCommand(args: string): Promise<{ exitCode: number; stderr: string; stdout: string }> {
-    return this.ipc.system.runCliCommand(args);
+    return this.ipc.cli.runCliCommand(args);
   }
 
   showContextMenu = async (type: string, data?: any) => {

@@ -1,8 +1,6 @@
-import { exec } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { promisify } from 'node:util';
 
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
@@ -10,7 +8,6 @@ import { macOS } from 'electron-is';
 import { pathExists, readdir } from 'fs-extra';
 
 import { legacyLocalDbDir } from '@/const/dir';
-import { getCliWrapperDir, installCliToPath, isCliInPath } from '@/modules/cliEmbedding';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -235,35 +232,6 @@ export default class SystemController extends ControllerModule {
     } catch {
       // If directory exists but cannot be read, treat as "used" to surface guidance.
       return true;
-    }
-  }
-
-  @IpcMethod()
-  async isCliInPath(): Promise<boolean> {
-    return isCliInPath();
-  }
-
-  @IpcMethod()
-  async installCliToPath(): Promise<{ message: string; success: boolean }> {
-    return installCliToPath();
-  }
-
-  @IpcMethod()
-  async runCliCommand(args: string): Promise<{ exitCode: number; stderr: string; stdout: string }> {
-    const execAsync = promisify(exec);
-    const wrapperDir = getCliWrapperDir();
-    const cmd = process.platform === 'win32' ? 'lobehub.cmd' : 'lobehub';
-    const wrapperPath = path.join(wrapperDir, cmd);
-
-    try {
-      const { stdout, stderr } = await execAsync(`"${wrapperPath}" ${args}`, { timeout: 15_000 });
-      return { exitCode: 0, stderr, stdout };
-    } catch (error: any) {
-      return {
-        exitCode: error.code ?? 1,
-        stderr: error.stderr ?? '',
-        stdout: error.stdout ?? String(error.message),
-      };
     }
   }
 
