@@ -6,11 +6,7 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import type {
-  BotPlatformRuntimeContext,
-  BotProviderConfig,
-  PlatformDefinition,
-} from '@/server/services/bot/platforms';
+import type { BotPlatformRuntimeContext, BotProviderConfig } from '@/server/services/bot/platforms';
 import { getEffectiveConnectionMode, platformRegistry } from '@/server/services/bot/platforms';
 import { BotConnectQueue } from '@/server/services/gateway/botConnectQueue';
 
@@ -27,17 +23,6 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const waitUntil = (task: Promise<unknown>) => {
   after(() => task);
 };
-
-/**
- * Coarse filter: platforms whose default connection mode is non-webhook are
- * candidates for the cron gateway. Per-provider mode is still re-evaluated
- * before each provider is started (see `getEffectiveConnectionMode`).
- */
-function getGatewayPlatforms(): PlatformDefinition[] {
-  return platformRegistry
-    .listPlatforms()
-    .filter((platform) => (platform.connectionMode ?? 'webhook') !== 'webhook');
-}
 
 function createRuntimeContext(): BotPlatformRuntimeContext {
   return {
@@ -138,7 +123,7 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const platforms = getGatewayPlatforms();
+  const platforms = platformRegistry.listPlatforms();
 
   const serverDB = await getServerDB();
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
