@@ -16,6 +16,10 @@ import type { ChatStore } from '@/store/chat/store';
  * using a hybrid approach:
  * - Current LLM step: real-time streaming via stream_chunk
  * - Step transitions: refreshMessages() from DB at stream_start / tool_end / step_complete
+ *
+ * The handler queues incoming events and processes them sequentially,
+ * ensuring that stream_chunk waits for stream_start's refreshMessages to resolve
+ * before dispatching updates.
  */
 export const createGatewayEventHandler = (
   get: () => ChatStore,
@@ -34,70 +38,83 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
+  // Sequential processing queue — ensures stream_chunk waits for stream_start's refresh
+  let processingChain: Promise<void> = Promise.resolve();
+
+  const enqueue = (fn: () => Promise<void> | void): void => {
+    processingChain = processingChain.then(fn, fn);
+  };
+
   return (event: AgentStreamEvent) => {
     switch (event.type) {
       case 'stream_start': {
-        const data = event.data as StreamStartData | undefined;
+        enqueue(async () => {
+          const data = event.data as StreamStartData | undefined;
 
-        // Switch to the new assistant message created by the server for this step
-        if (data?.assistantMessage?.id) {
-          currentAssistantMessageId = data.assistantMessage.id;
-        }
+          // Switch to the new assistant message created by the server for this step
+          if (data?.assistantMessage?.id) {
+            currentAssistantMessageId = data.assistantMessage.id;
+          }
 
-        // Reset accumulators for the new stream
-        accumulatedContent = '';
-        accumulatedReasoning = '';
+          // Reset accumulators for the new stream
+          accumulatedContent = '';
+          accumulatedReasoning = '';
 
-        // Refresh from DB to pick up the new assistant message
-        get().refreshMessages(context).catch(console.error);
+          // Await refresh so the new message exists in dbMessagesMap before chunks arrive
+          await get().refreshMessages(context).catch(console.error);
 
-        get().internal_toggleMessageLoading(true, currentAssistantMessageId);
+          get().internal_toggleMessageLoading(true, currentAssistantMessageId);
+        });
         break;
       }
 
       case 'stream_chunk': {
-        const data = event.data as StreamChunkData | undefined;
-        if (!data) break;
+        enqueue(() => {
+          const data = event.data as StreamChunkData | undefined;
+          if (!data) return;
 
-        if (data.chunkType === 'text' && data.content) {
-          accumulatedContent += data.content;
-          get().internal_dispatchMessage({
-            id: currentAssistantMessageId,
-            type: 'updateMessage',
-            value: { content: accumulatedContent },
-          });
-        }
+          if (data.chunkType === 'text' && data.content) {
+            accumulatedContent += data.content;
+            get().internal_dispatchMessage({
+              id: currentAssistantMessageId,
+              type: 'updateMessage',
+              value: { content: accumulatedContent },
+            });
+          }
 
-        if (data.chunkType === 'reasoning' && data.reasoning) {
-          accumulatedReasoning += data.reasoning;
-          get().internal_dispatchMessage({
-            id: currentAssistantMessageId,
-            type: 'updateMessage',
-            value: { reasoning: { content: accumulatedReasoning } },
-          });
-        }
+          if (data.chunkType === 'reasoning' && data.reasoning) {
+            accumulatedReasoning += data.reasoning;
+            get().internal_dispatchMessage({
+              id: currentAssistantMessageId,
+              type: 'updateMessage',
+              value: { reasoning: { content: accumulatedReasoning } },
+            });
+          }
 
-        if (data.chunkType === 'tools_calling' && data.toolsCalling) {
-          get().internal_dispatchMessage({
-            id: currentAssistantMessageId,
-            type: 'updateMessage',
-            value: { tools: data.toolsCalling },
-          });
+          if (data.chunkType === 'tools_calling' && data.toolsCalling) {
+            get().internal_dispatchMessage({
+              id: currentAssistantMessageId,
+              type: 'updateMessage',
+              value: { tools: data.toolsCalling },
+            });
 
-          // Drive tool calling animation
-          get().internal_toggleToolCallingStreaming(
-            currentAssistantMessageId,
-            data.toolsCalling.map(() => true),
-          );
-        }
+            // Drive tool calling animation
+            get().internal_toggleToolCallingStreaming(
+              currentAssistantMessageId,
+              data.toolsCalling.map(() => true),
+            );
+          }
+        });
         break;
       }
 
       case 'stream_end': {
-        get().internal_toggleMessageLoading(false, currentAssistantMessageId);
+        enqueue(() => {
+          get().internal_toggleMessageLoading(false, currentAssistantMessageId);
 
-        // Clear tool calling streaming animation
-        get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          // Clear tool calling streaming animation
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+        });
         break;
       }
 
@@ -108,8 +125,9 @@ export const createGatewayEventHandler = (
       }
 
       case 'tool_end': {
-        // Refresh from DB to pick up tool execution results
-        get().refreshMessages(context).catch(console.error);
+        enqueue(async () => {
+          await get().refreshMessages(context).catch(console.error);
+        });
         break;
       }
 
@@ -118,28 +136,33 @@ export const createGatewayEventHandler = (
 
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
-          get().refreshMessages(context).catch(console.error);
+          enqueue(async () => {
+            await get().refreshMessages(context).catch(console.error);
+          });
         }
         break;
       }
 
       case 'agent_runtime_end': {
-        // Final refresh to get the complete persisted state
-        get().internal_toggleMessageLoading(false, currentAssistantMessageId);
-        get().refreshMessages(context).catch(console.error);
+        enqueue(async () => {
+          get().internal_toggleMessageLoading(false, currentAssistantMessageId);
+          await get().refreshMessages(context).catch(console.error);
+        });
         break;
       }
 
       case 'error': {
-        const errorMsg = event.data?.message || event.data?.error || 'Unknown error';
-        get().internal_dispatchMessage({
-          id: currentAssistantMessageId,
-          type: 'updateMessage',
-          value: {
-            error: { body: { message: errorMsg }, type: 'AgentRuntimeError' },
-          },
+        enqueue(() => {
+          const errorMsg = event.data?.message || event.data?.error || 'Unknown error';
+          get().internal_dispatchMessage({
+            id: currentAssistantMessageId,
+            type: 'updateMessage',
+            value: {
+              error: { body: { message: errorMsg }, type: 'AgentRuntimeError' },
+            },
+          });
+          get().internal_toggleMessageLoading(false, currentAssistantMessageId);
         });
-        get().internal_toggleMessageLoading(false, currentAssistantMessageId);
         break;
       }
     }

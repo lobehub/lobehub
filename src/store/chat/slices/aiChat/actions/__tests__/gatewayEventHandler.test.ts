@@ -31,36 +31,46 @@ function makeEvent(type: AgentStreamEvent['type'], data?: any): AgentStreamEvent
   return { data, id: '1', operationId: 'op-1', stepIndex: 0, timestamp: Date.now(), type };
 }
 
+/** Flush the async processing queue by draining microtasks + setTimeout queue */
+const flush = async () => {
+  // Multiple rounds to drain chained promises and setTimeout-based delays
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setTimeout(r, 15));
+  }
+};
+
 // ─── Tests ───
 
 describe('createGatewayEventHandler', () => {
   describe('stream_start', () => {
-    it('should switch assistantMessageId from event data', () => {
+    it('should switch assistantMessageId from event data', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
+      await flush();
 
-      // Loading should target the new message ID
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-step2');
       expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-step2');
     });
 
-    it('should keep current ID if event data has no assistantMessage', () => {
+    it('should keep current ID if event data has no assistantMessage', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_start', {}));
+      await flush();
 
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-initial');
     });
 
-    it('should reset accumulators on each stream_start', () => {
+    it('should reset accumulators on each stream_start', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       // Accumulate some content
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hello' }));
+      await flush();
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ value: { content: 'hello' } }),
       );
@@ -68,6 +78,7 @@ describe('createGatewayEventHandler', () => {
       // New stream_start resets
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'world' }));
+      await flush();
 
       // Content should be 'world', not 'helloworld'
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
@@ -80,12 +91,13 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_chunk', () => {
-    it('should accumulate text content', () => {
+    it('should accumulate text content', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' world' }));
+      await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith({
         id: 'msg-initial',
@@ -94,12 +106,13 @@ describe('createGatewayEventHandler', () => {
       });
     });
 
-    it('should accumulate reasoning content', () => {
+    it('should accumulate reasoning content', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'Think' }));
       handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'ing...' }));
+      await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith({
         id: 'msg-initial',
@@ -108,12 +121,13 @@ describe('createGatewayEventHandler', () => {
       });
     });
 
-    it('should dispatch tools and toggle tool calling streaming', () => {
+    it('should dispatch tools and toggle tool calling streaming', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       const toolsCalling = [{ id: 'tc-1' }, { id: 'tc-2' }];
       handler(makeEvent('stream_chunk', { chunkType: 'tools_calling', toolsCalling }));
+      await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith({
         id: 'msg-initial',
@@ -127,22 +141,24 @@ describe('createGatewayEventHandler', () => {
       ]);
     });
 
-    it('should ignore chunk with no data', () => {
+    it('should ignore chunk with no data', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_chunk', undefined));
+      await flush();
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
     });
   });
 
   describe('stream_end', () => {
-    it('should toggle loading off and clear tool streaming', () => {
+    it('should toggle loading off and clear tool streaming', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_end'));
+      await flush();
 
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
@@ -153,11 +169,12 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('tool_start', () => {
-    it('should be a no-op', () => {
+    it('should be a no-op', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('tool_start', { parentMessageId: 'msg-initial', toolCalling: {} }));
+      await flush();
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
       expect(store.refreshMessages).not.toHaveBeenCalled();
@@ -165,11 +182,12 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('tool_end', () => {
-    it('should refresh messages to pull tool results', () => {
+    it('should refresh messages to pull tool results', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('tool_end', { isSuccess: true }));
+      await flush();
 
       expect(store.refreshMessages).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'agent-1', topicId: 'topic-1' }),
@@ -178,31 +196,34 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('step_complete', () => {
-    it('should refresh on execution_complete phase', () => {
+    it('should refresh on execution_complete phase', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('step_complete', { phase: 'execution_complete', reason: 'done' }));
+      await flush();
 
       expect(store.refreshMessages).toHaveBeenCalled();
     });
 
-    it('should not refresh on other phases', () => {
+    it('should not refresh on other phases', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('step_complete', { phase: 'human_approval' }));
+      await flush();
 
       expect(store.refreshMessages).not.toHaveBeenCalled();
     });
   });
 
   describe('agent_runtime_end', () => {
-    it('should toggle loading off and refresh messages', () => {
+    it('should toggle loading off and refresh messages', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('agent_runtime_end'));
+      await flush();
 
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
       expect(store.refreshMessages).toHaveBeenCalled();
@@ -210,11 +231,12 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('error', () => {
-    it('should dispatch error to current message', () => {
+    it('should dispatch error to current message', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('error', { message: 'Something went wrong' }));
+      await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith({
         id: 'msg-initial',
@@ -226,14 +248,14 @@ describe('createGatewayEventHandler', () => {
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
     });
 
-    it('should dispatch error to switched message ID', () => {
+    it('should dispatch error to switched message ID', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       // Switch to step 2
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
-
       handler(makeEvent('error', { error: 'Timeout' }));
+      await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-step2' }),
@@ -241,46 +263,87 @@ describe('createGatewayEventHandler', () => {
     });
   });
 
+  describe('sequential processing', () => {
+    it('should process stream_chunk only after stream_start refresh completes', async () => {
+      const store = createMockStore();
+      const callOrder: string[] = [];
+
+      // Make refreshMessages take some time and track call order
+      store.refreshMessages.mockImplementation(async () => {
+        callOrder.push('refresh_start');
+        await new Promise((r) => setTimeout(r, 10));
+        callOrder.push('refresh_end');
+      });
+      store.internal_dispatchMessage.mockImplementation(() => {
+        callOrder.push('dispatch');
+      });
+      store.internal_toggleMessageLoading.mockImplementation(() => {
+        callOrder.push('loading');
+      });
+
+      const handler = createHandler(store);
+
+      // Fire stream_start and chunk rapidly
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-new' } }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
+      await flush();
+
+      // Dispatch must happen AFTER refresh completes
+      const refreshEndIdx = callOrder.indexOf('refresh_end');
+      const dispatchIdx = callOrder.indexOf('dispatch');
+      expect(refreshEndIdx).toBeGreaterThan(-1);
+      expect(dispatchIdx).toBeGreaterThan(refreshEndIdx);
+    });
+  });
+
   describe('multi-step integration', () => {
-    it('should handle full LLM → tools → LLM cycle', () => {
+    it('should handle full LLM → tools → LLM cycle', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       // Step 1: LLM call
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-1' } }));
+      await flush();
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-1');
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Let me search.' }));
+      await flush();
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-1', value: { content: 'Let me search.' } }),
       );
 
       const tools = [{ id: 'tc-1' }];
       handler(makeEvent('stream_chunk', { chunkType: 'tools_calling', toolsCalling: tools }));
+      await flush();
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith('msg-1', [true]);
 
       handler(makeEvent('stream_end'));
+      await flush();
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-1');
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith('msg-1', undefined);
 
       // Tool execution
       handler(makeEvent('tool_start', { parentMessageId: 'msg-1', toolCalling: tools[0] }));
       handler(makeEvent('tool_end', { isSuccess: true }));
+      await flush();
       expect(store.refreshMessages).toHaveBeenCalled();
 
       // Step 2: Next LLM call with new assistant message
       vi.clearAllMocks();
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
+      await flush();
       expect(store.refreshMessages).toHaveBeenCalled();
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-2');
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Here are the results.' }));
+      await flush();
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-2', value: { content: 'Here are the results.' } }),
       );
 
       handler(makeEvent('stream_end'));
       handler(makeEvent('agent_runtime_end'));
+      await flush();
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-2');
     });
   });
