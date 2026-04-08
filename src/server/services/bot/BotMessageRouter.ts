@@ -257,7 +257,13 @@ export class BotMessageRouter {
 
     const commands = this.buildCommands(serverDB, { agentId, platform, userId });
 
-    const concurrencyStrategy = (settings.concurrency as string) || 'debounce';
+    // Default to 'queue' for legacy providers that don't have `concurrency`
+    // in their saved settings. Historically this defaulted to 'debounce', but
+    // chat-sdk's debounce semantics are "drop all but the latest" (Lodash-style),
+    // which silently evicts media messages when followed by a quick text query.
+    // 'queue' preserves all pending messages and merges them via
+    // `mergeSkippedMessages`, which is the right default for chat UX.
+    const concurrencyStrategy = (settings.concurrency as string) || 'queue';
     const debounceMs = (settings.debounceMs as number) || DEFAULT_BOT_DEBOUNCE_MS;
     const chatBot = this.createChatBot(
       adapters,
@@ -467,6 +473,28 @@ export class BotMessageRouter {
     bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
       if (message.author.isBot === true) return;
       if (await tryDispatch(thread, message.text)) return;
+
+      // Group / channel / thread policy: only respond when the bot is @-mentioned.
+      // DMs are 1:1 conversations, so every message is implicitly addressed to the bot.
+      // Without this guard, the bot would reply to every follow-up in a subscribed
+      // thread — including messages between other users — and hijack the conversation.
+      // Skipped (debounced) messages are also inspected so a mention queued behind a
+      // non-mention still triggers a reply.
+      const isAddressedToBot =
+        thread.isDM ||
+        message.isMention === true ||
+        context?.skipped?.some((m) => m.isMention === true) === true;
+
+      if (!isAddressedToBot) {
+        log(
+          'onSubscribedMessage: skip non-mention in group thread, agent=%s, platform=%s, author=%s, thread=%s',
+          agentId,
+          platform,
+          message.author.userName,
+          thread.id,
+        );
+        return;
+      }
 
       log(
         'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
