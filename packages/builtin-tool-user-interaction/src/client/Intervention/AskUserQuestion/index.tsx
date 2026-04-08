@@ -1,9 +1,10 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Button, Flexbox, Input, Text, TextArea } from '@lobehub/ui';
+import { SendButton } from '@lobehub/editor/react';
+import { Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, PenLine } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +24,7 @@ const FieldInput = memo<{
           autoSize={{ maxRows: 6, minRows: 2 }}
           placeholder={field.placeholder}
           value={value as string}
+          variant={'filled'}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
       );
@@ -34,6 +36,7 @@ const FieldInput = memo<{
           placeholder={field.placeholder}
           style={{ width: '100%' }}
           value={value as string}
+          variant={'filled'}
           onChange={(v) => onChange(field.key, v as string)}
         />
       );
@@ -46,6 +49,7 @@ const FieldInput = memo<{
           placeholder={field.placeholder}
           style={{ width: '100%' }}
           value={value as string[]}
+          variant={'filled'}
           onChange={(v) => onChange(field.key, v as string[])}
         />
       );
@@ -55,6 +59,7 @@ const FieldInput = memo<{
         <Input
           placeholder={field.placeholder}
           value={value as string}
+          variant={'filled'}
           onChange={(e) => onChange(field.key, e.target.value)}
           onPressEnter={onPressEnter}
         />
@@ -163,17 +168,18 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         )}
         {isFreeform ? (
           <TextArea
-            autoSize={{ maxRows: 6, minRows: 2 }}
+            autoSize={{ maxRows: 6, minRows: 3 }}
             placeholder={question.description || ''}
             value={formData['__freeform__'] as string}
+            variant={'filled'}
             onChange={(e) => handleFieldChange('__freeform__', e.target.value)}
           />
         ) : (
           <>
-            {!escapeActive && (
-              <Flexbox gap={8} ref={formContainerRef}>
+            {!escapeActive ? (
+              <Flexbox gap={16} ref={formContainerRef}>
                 {question.fields!.map((field) => (
-                  <Flexbox gap={4} key={field.key}>
+                  <Flexbox gap={6} key={field.key}>
                     <Text style={{ fontSize: 13 }}>
                       {field.label}
                       {field.required && <span style={{ color: 'red' }}> *</span>}
@@ -189,37 +195,34 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
                   </Flexbox>
                 ))}
               </Flexbox>
-            )}
-
-            {/* Escape hatch: bypass form, type freely */}
-            {escapeActive ? (
-              <Flexbox gap={8} ref={escapeContainerRef}>
-                <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
-                  <ArrowLeft size={14} /> {t('form.otherBack')}
-                </Text>
-                <TextArea
-                  autoSize={{ maxRows: 6, minRows: 2 }}
-                  value={escapeText}
-                  onChange={(e) => setEscapeText(e.target.value)}
-                />
-              </Flexbox>
             ) : (
-              <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
-                {t('form.other')} <ArrowRight size={14} />
-              </Text>
+              <TextArea
+                autoSize={{ maxRows: 6, minRows: 3 }}
+                value={escapeText}
+                variant={'filled'}
+                onChange={(e) => setEscapeText(e.target.value)}
+              />
             )}
           </>
         )}
-        <Flexbox horizontal gap={8} justify="flex-end">
-          <Button onClick={handleSkip}>{t('form.skip')}</Button>
-          <Button
-            disabled={isSubmitDisabled}
-            loading={submitting}
-            type="primary"
-            onClick={handleSubmit}
-          >
-            {t('form.submit')}
-          </Button>
+        <Flexbox horizontal gap={8} justify={'space-between'}>
+          <Flexbox horizontal gap={8} justify="flex-start">
+            {escapeActive ? (
+              <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
+                <Icon icon={ArrowLeft} /> {t('form.otherBack')}
+              </Text>
+            ) : (
+              <>
+                <Text className={styles.escapeLink} type="secondary" onClick={handleSkip}>
+                  {t('form.skip')}
+                </Text>
+                <Text className={styles.escapeLink} type="secondary" onClick={handleEscapeToggle}>
+                  {t('form.other')} <Icon icon={PenLine} />
+                </Text>
+              </>
+            )}
+          </Flexbox>
+          <SendButton disabled={isSubmitDisabled} loading={submitting} onClick={handleSubmit} />
         </Flexbox>
       </Flexbox>
     );
