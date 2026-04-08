@@ -76,8 +76,10 @@ export interface AvailablePluginInfo {
 export interface AgentManagementContext {
   /**
    * User's recently updated agents — surfaced so the model can callAgent without
-   * searchAgent first. The current/responding agent (see `currentAgent`) is NEVER
-   * included in this list, so the model cannot accidentally delegate to itself.
+   * searchAgent first. The current/responding agent is NEVER included here, so
+   * the model has no exposure to its own id from this section and cannot
+   * accidentally delegate to itself. Filtering happens at the caller side
+   * (server `aiAgent` and client `contextEngineering`).
    */
   availableAgents?: AvailableAgentInfo[];
   /** Whether the user has more agents than the ones listed in `availableAgents` */
@@ -86,12 +88,6 @@ export interface AgentManagementContext {
   availablePlugins?: AvailablePluginInfo[];
   /** Available providers and models */
   availableProviders?: AvailableProviderInfo[];
-  /**
-   * The agent that is currently responding (i.e. "you", from the model's perspective).
-   * Injected so the model knows its own identity in multi-agent scenarios and to
-   * make explicit that it should not delegate calls back to itself.
-   */
-  currentAgent?: AvailableAgentInfo;
   /** Agents @mentioned by the user — supervisor should delegate to these via callAgent */
   mentionedAgents?: RuntimeMentionedAgent[];
 }
@@ -135,16 +131,8 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     parts.push(`<available_models>\n${providersXml}\n</available_models>`);
   }
 
-  // Add current_agent section (the agent that is responding — i.e. "you")
-  if (context.currentAgent) {
-    const { id, title, description } = context.currentAgent;
-    const descLine = description ? `\n  <description>${escapeXml(description)}</description>` : '';
-    parts.push(
-      `<current_agent>\n  <id>${escapeXml(id)}</id>\n  <title>${escapeXml(title)}</title>${descLine}\n</current_agent>`,
-    );
-  }
-
-  // Add available agents section (user's existing agents — never includes the current agent)
+  // Add available agents section (user's existing agents — never includes the current agent;
+  // the caller filters self out so the model has no exposure to its own id from this section)
   if (context.availableAgents && context.availableAgents.length > 0) {
     const agentsXml = context.availableAgents
       .map((agent) => {
@@ -213,14 +201,8 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     (context.availableProviders && context.availableProviders.length > 0) ||
     (context.availablePlugins && context.availablePlugins.length > 0);
   const hasAgents = context.availableAgents && context.availableAgents.length > 0;
-  const hasCurrentAgent = !!context.currentAgent;
 
   const instructionParts: string[] = [];
-  if (hasCurrentAgent) {
-    instructionParts.push(
-      'You are the agent described in the `current_agent` block above. Treat that as your own identity. Never call yourself via the Agent Management `callAgent` tool — you are not in the `available_agents` list.',
-    );
-  }
   if (hasModelsOrPlugins) {
     instructionParts.push(
       'When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.',
@@ -228,7 +210,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   }
   if (hasAgents) {
     instructionParts.push(
-      "The `available_agents` section lists the user's other existing agents. When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
     );
   }
 

@@ -692,29 +692,19 @@ export class AiAgentService {
 
     if (shouldInjectAvailableAgents) {
       // Query user's most recently updated agents.
-      // Over-fetch by 2: +1 reserved for the current agent (which we filter out
-      // below so the model doesn't try to delegate to itself) and +1 to detect
-      // overflow for the `hasMore` flag.
+      // Over-fetch by 2: +1 reserved for the current agent (filtered out below
+      // so the model has no exposure to its own id and cannot self-delegate)
+      // and +1 to detect overflow for the `hasMore` flag.
       const AVAILABLE_AGENTS_LIMIT = 10;
       const recentAgents = await this.agentModel.queryAgents({
         limit: AVAILABLE_AGENTS_LIMIT + 2,
       });
 
-      // Try to find the current agent inside the recent set so we can reuse its
-      // title/description for the `<current_agent>` block. Fall back to
-      // agentConfig.title when the current agent is not in the recent window
-      // (e.g. it hasn't been updated for a while). `description` is only on
-      // the DB row (not on the LobeAgentConfig type), so it's optional.
-      const currentAgentRow = recentAgents.find((a) => a.id === resolvedAgentId);
-      const currentAgent = {
-        description: currentAgentRow?.description ?? undefined,
-        id: resolvedAgentId,
-        title: currentAgentRow?.title ?? agentConfig.title ?? 'Untitled',
-      };
-
       // Exclude the current agent from `availableAgents` — the model is the current
-      // agent, so listing itself as a delegation target is misleading and would
-      // invite self-calls.
+      // agent. Its persona/identity is already established by `systemRole`, so we
+      // don't re-inject it here, and removing self from the list ensures the model
+      // never sees its own id in the agent-management context (so it can't
+      // accidentally call itself via `callAgent`).
       const otherAgents = recentAgents.filter((a) => a.id !== resolvedAgentId);
       const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
       const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
@@ -726,7 +716,6 @@ export class AiAgentService {
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
-        currentAgent,
       };
     }
 
