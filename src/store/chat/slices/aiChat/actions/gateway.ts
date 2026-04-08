@@ -1,4 +1,4 @@
-import type { ConversationContext } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
 import type {
   AgentStreamClientOptions,
@@ -6,7 +6,7 @@ import type {
   ConnectionStatus,
 } from '@/libs/agent-stream';
 import { AgentStreamClient } from '@/libs/agent-stream/client';
-import { aiAgentService, type ExecAgentResult } from '@/services/aiAgent';
+import { aiAgentService } from '@/services/aiAgent';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
