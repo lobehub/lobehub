@@ -64,6 +64,10 @@ class ElectronSystemService {
     return this.ipc.system.installCliToPath();
   }
 
+  async runCliCommand(args: string): Promise<{ exitCode: number; stderr: string; stdout: string }> {
+    return this.ipc.system.runCliCommand(args);
+  }
+
   showContextMenu = async (type: string, data?: any) => {
     return this.ipc.menu.showContextMenu({ data, type });
   };

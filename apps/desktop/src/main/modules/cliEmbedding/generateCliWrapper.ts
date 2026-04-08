@@ -1,4 +1,4 @@
-import { chmod, mkdir, rename, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { app } from 'electron';
@@ -57,8 +57,15 @@ export async function generateCliWrapper(): Promise<void> {
       `"${electronBin}" "${cliScript}" %*`,
     ].join('\r\n');
 
-    await atomicWrite(path.join(wrapperDir, 'lobehub.cmd'), content);
-    logger.info(`CLI wrapper generated: ${path.join(wrapperDir, 'lobehub.cmd')}`);
+    const cmdPath = path.join(wrapperDir, 'lobehub.cmd');
+    await atomicWrite(cmdPath, content);
+
+    // Create short aliases: lh.cmd, lobe.cmd (copies on Windows, symlinks unreliable)
+    for (const alias of ['lh.cmd', 'lobe.cmd']) {
+      await atomicWrite(path.join(wrapperDir, alias), content);
+    }
+
+    logger.info(`CLI wrapper generated: ${cmdPath}`);
   } else {
     const content = [
       '#!/bin/sh',
@@ -68,6 +75,14 @@ export async function generateCliWrapper(): Promise<void> {
     const wrapperPath = path.join(wrapperDir, 'lobehub');
     await atomicWrite(wrapperPath, content);
     await chmod(wrapperPath, 0o755);
+
+    // Create short aliases: lh, lobe → lobehub
+    for (const alias of ['lh', 'lobe']) {
+      const linkPath = path.join(wrapperDir, alias);
+      await unlink(linkPath).catch(() => {});
+      await symlink('lobehub', linkPath);
+    }
+
     logger.info(`CLI wrapper generated: ${wrapperPath}`);
   }
 }
