@@ -1,3 +1,4 @@
+import { DirectionProvider } from '@base-ui/react/direction-provider';
 import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
@@ -84,7 +85,9 @@ const Locale = memo<LocaleLayoutProps>(({ children, defaultLang, antdLocale }) =
         },
       }}
     >
-      <Editor>{children}</Editor>
+      <DirectionProvider direction={documentDir}>
+        <Editor>{children}</Editor>
+      </DirectionProvider>
     </ConfigProvider>
   );
 });
