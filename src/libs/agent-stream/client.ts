@@ -169,6 +169,12 @@ export class AgentStreamClient extends TypedEmitter {
   }
 
   private buildWsUrl(): string {
+    // If the URL already has a ws/wss protocol, use it directly
+    if (this.gatewayUrl.startsWith('ws://') || this.gatewayUrl.startsWith('wss://')) {
+      const base = this.gatewayUrl.replace(/\/+$/, '');
+      return `${base}/ws?operationId=${encodeURIComponent(this.operationId)}`;
+    }
+    // Otherwise convert http(s) to ws(s)
     const wsProtocol = this.gatewayUrl.startsWith('https') ? 'wss' : 'ws';
     const host = this.gatewayUrl.replace(/^https?:\/\//, '');
     return `${wsProtocol}://${host}/ws?operationId=${encodeURIComponent(this.operationId)}`;
