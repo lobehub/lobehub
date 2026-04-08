@@ -44,6 +44,33 @@ export interface StreamChunkData {
   toolsCalling?: any[];
 }
 
+// ─── Typed Event Data ───
+
+export interface StreamStartData {
+  assistantMessage: { id: string };
+  model?: string;
+  provider?: string;
+}
+
+export interface ToolStartData {
+  parentMessageId: string;
+  toolCalling: Record<string, unknown>;
+}
+
+export interface ToolEndData {
+  executionTime?: number;
+  isSuccess: boolean;
+  payload?: Record<string, unknown>;
+  result?: unknown;
+}
+
+export interface StepCompleteData {
+  finalState?: unknown;
+  phase: string;
+  reason?: string;
+  reasonDetail?: string;
+}
+
 // ─── WebSocket Protocol Messages ───
 
 // Client → Server
