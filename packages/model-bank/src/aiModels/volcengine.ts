@@ -1279,6 +1279,7 @@ const volcengineVideoModels: AIVideoModelCard[] = [
     parameters: {
       ...seedance20Params,
       watermark: { default: false },
+      webSearch: { default: false },
     },
     releasedAt: '2026-01-28',
     type: 'video',
@@ -1293,6 +1294,7 @@ const volcengineVideoModels: AIVideoModelCard[] = [
     parameters: {
       ...seedance20Params,
       watermark: { default: false },
+      webSearch: { default: false },
     },
     releasedAt: '2026-01-28',
     type: 'video',
