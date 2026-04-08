@@ -26,6 +26,12 @@ export class KnowledgeBaseModel {
   };
 
   addFilesToKnowledgeBase = async (id: string, fileIds: string[]) => {
+    // Verify the target knowledge base belongs to the current user
+    const kb = await this.db.query.knowledgeBases.findFirst({
+      where: and(eq(knowledgeBases.id, id), eq(knowledgeBases.userId, this.userId)),
+    });
+    if (!kb) return [];
+
     // Separate document IDs from file IDs
     const documentIds = fileIds.filter((id) => id.startsWith('docs_'));
     const directFileIds = fileIds.filter((id) => !id.startsWith('docs_'));

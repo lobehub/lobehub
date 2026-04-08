@@ -293,6 +293,110 @@ describe('KnowledgeBaseModel', () => {
       expect(addedFiles).toHaveLength(0);
     });
 
+    it("should NOT allow adding files to another user's knowledge base (IDOR)", async () => {
+      // Setup: victim creates a knowledge base
+      const victimModel = new KnowledgeBaseModel(serverDB, 'user2');
+      const { id: victimKbId } = await victimModel.create({ name: 'Victim KB' });
+
+      // Setup: attacker uploads their own file
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash_attacker',
+          url: 'https://example.com/malicious.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file_attacker',
+          name: 'malicious.pdf',
+          url: 'https://example.com/malicious.pdf',
+          fileHash: 'hash_attacker',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId, // attacker's file
+        },
+      ]);
+
+      // Attack: attacker tries to add their file to victim's knowledge base
+      const result = await knowledgeBaseModel.addFilesToKnowledgeBase(victimKbId, [
+        'file_attacker',
+      ]);
+
+      // The operation should be rejected - no files should be inserted
+      expect(result).toHaveLength(0);
+
+      // Verify no files were added to victim's knowledge base
+      const kbFiles = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, victimKbId),
+      });
+      expect(kbFiles).toHaveLength(0);
+    });
+
+    it("should NOT allow adding documents to another user's knowledge base (IDOR)", async () => {
+      // Setup: victim creates a knowledge base
+      const victimModel = new KnowledgeBaseModel(serverDB, 'user2');
+      const { id: victimKbId } = await victimModel.create({ name: 'Victim KB' });
+
+      // Setup: attacker has a document with a mirror file
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash_attacker_doc',
+          url: 'https://example.com/malicious_doc.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file_attacker_doc',
+          name: 'malicious_doc.pdf',
+          url: 'https://example.com/malicious_doc.pdf',
+          fileHash: 'hash_attacker_doc',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+      await serverDB.insert(documents).values([
+        {
+          id: 'docs_attacker',
+          title: 'Malicious Document',
+          content: 'Injected content',
+          fileType: 'application/pdf',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          sourceType: 'file',
+          source: 'malicious.pdf',
+          fileId: 'file_attacker_doc',
+          userId,
+        },
+      ]);
+
+      // Attack: attacker tries to add their document to victim's knowledge base
+      const result = await knowledgeBaseModel.addFilesToKnowledgeBase(victimKbId, [
+        'docs_attacker',
+      ]);
+
+      // The operation should be rejected
+      expect(result).toHaveLength(0);
+
+      // Verify no files were added to victim's knowledge base
+      const kbFiles = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, victimKbId),
+      });
+      expect(kbFiles).toHaveLength(0);
+
+      // Verify the document's knowledgeBaseId was NOT updated to victim's KB
+      const doc = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, 'docs_attacker'),
+      });
+      expect(doc?.knowledgeBaseId).toBeNull();
+    });
+
     it('should handle mixed document IDs and file IDs', async () => {
       await serverDB.insert(globalFiles).values([
         {
