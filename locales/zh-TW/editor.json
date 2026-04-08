@@ -38,7 +38,7 @@
   "math.placeholder": "請輸入 TeX 公式",
   "modifier.accept": "保留",
   "modifier.acceptAll": "全部接受",
-  "modifier.reject": "撤銷",
+  "modifier.reject": "復原",
   "modifier.rejectAll": "全部取消",
   "slash.compact": "壓縮上下文",
   "slash.h1": "一級標題",
