@@ -348,20 +348,29 @@ export interface TasksBatchResultPayload {
 }
 
 /**
+ * Common fields shared across all instruction types.
+ * Agents can set `stepLabel` to label the current step for display in streaming events and hooks.
+ */
+interface AgentInstructionBase {
+  /** Human-readable label for this step (e.g. graph node name). Propagated to stream events and hooks. */
+  stepLabel?: string;
+}
+
+/**
  * A serializable instruction object that the "Agent" (Brain) returns
  * to the "AgentRuntime" (Engine) to execute.
  */
 export type AgentInstruction =
-  | AgentInstructionCallLlm
-  | AgentInstructionCallTool
-  | AgentInstructionCallToolsBatch
-  | AgentInstructionExecTask
-  | AgentInstructionExecTasks
-  | AgentInstructionExecClientTask
-  | AgentInstructionExecClientTasks
-  | AgentInstructionRequestHumanPrompt
-  | AgentInstructionRequestHumanSelect
-  | AgentInstructionRequestHumanApprove
-  | AgentInstructionResolveAbortedTools
-  | AgentInstructionCompressContext
-  | AgentInstructionFinish;
+  | (AgentInstructionCallLlm & AgentInstructionBase)
+  | (AgentInstructionCallTool & AgentInstructionBase)
+  | (AgentInstructionCallToolsBatch & AgentInstructionBase)
+  | (AgentInstructionExecTask & AgentInstructionBase)
+  | (AgentInstructionExecTasks & AgentInstructionBase)
+  | (AgentInstructionExecClientTask & AgentInstructionBase)
+  | (AgentInstructionExecClientTasks & AgentInstructionBase)
+  | (AgentInstructionRequestHumanPrompt & AgentInstructionBase)
+  | (AgentInstructionRequestHumanSelect & AgentInstructionBase)
+  | (AgentInstructionRequestHumanApprove & AgentInstructionBase)
+  | (AgentInstructionResolveAbortedTools & AgentInstructionBase)
+  | (AgentInstructionCompressContext & AgentInstructionBase)
+  | (AgentInstructionFinish & AgentInstructionBase);

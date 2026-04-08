@@ -67,22 +67,23 @@ export interface AgentHookEvent {
   errorDetail?: string;
 
   errorMessage?: string;
+
   /** Step execution time in ms (afterStep only) */
   executionTimeMs?: number;
-
   /**
    * Full AgentState — only available in local mode.
    * Not serialized to webhook payloads.
    * Use for consumers that need deep state access (e.g., SubAgent Thread updates).
    */
   finalState?: any;
+
   lastAssistantContent?: string;
   /** Last LLM content from previous steps — for showing context during tool execution (afterStep only) */
   lastLLMContent?: string;
   /** Last tools calling from previous steps (afterStep only) */
   lastToolsCalling?: any;
-
   llmCalls?: number;
+
   // Caller-provided metadata (from webhook.body)
   metadata?: Record<string, unknown>;
   operationId: string;
@@ -95,8 +96,10 @@ export interface AgentHookEvent {
   status?: string; // 'done' | 'error' | 'interrupted' | 'waiting_for_human'
   /** Step cost (afterStep only, LLM steps) */
   stepCost?: number;
-
   stepIndex?: number;
+
+  /** Step label for display (e.g. graph node name when using GraphAgent) */
+  stepLabel?: string;
   steps?: number;
   stepType?: string; // 'call_llm' | 'call_tool'
   /** Whether next step is LLM thinking (afterStep only) */

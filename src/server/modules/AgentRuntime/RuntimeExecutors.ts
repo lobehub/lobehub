@@ -331,8 +331,14 @@ export const createRuntimeExecutors = (
     }
 
     // Publish stream start event
+    const stepLabel = (instruction as any).stepLabel;
     await streamManager.publishStreamEvent(operationId, {
-      data: { assistantMessage: assistantMessageItem, model, provider },
+      data: {
+        assistantMessage: assistantMessageItem,
+        model,
+        provider,
+        ...(stepLabel && { stepLabel }),
+      },
       stepIndex,
       type: 'stream_start',
     });
@@ -810,6 +816,7 @@ export const createRuntimeExecutors = (
             data: {
               finalContent: content,
               grounding,
+              ...(stepLabel && { stepLabel }),
               imageList: imageList.length > 0 ? imageList : undefined,
               reasoning: thinkingContent || undefined,
               toolsCalling,
@@ -883,6 +890,12 @@ export const createRuntimeExecutors = (
 
             newState.usage = usage;
             if (cost) newState.cost = cost;
+          }
+
+          // Propagate stepLabel from instruction to state metadata for hook consumers
+          if (stepLabel) {
+            if (!newState.metadata) newState.metadata = {};
+            newState.metadata._stepLabel = stepLabel;
           }
 
           return {
