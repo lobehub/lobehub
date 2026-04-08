@@ -329,7 +329,6 @@ export class ConversationLifecycleActionImpl {
       },
       { operationId, tempMessageId: tempAssistantId },
     );
-    this.#get().internal_toggleMessageLoading(true, tempId);
 
     // Associate temp messages with operation
     this.#get().associateMessageWithOperation(tempId, operationId);
@@ -494,8 +493,6 @@ export class ConversationLifecycleActionImpl {
         );
       }
     }
-
-    this.#get().internal_toggleMessageLoading(false, tempId);
 
     // Clear editor temp state after message created
     if (data) {
