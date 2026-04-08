@@ -1001,6 +1001,85 @@ When I am ___, I need ___
   'tools.builtins.lobe-user-memory.readme':
     'Build a personalized knowledge base about you. Remember preferences, track activities and experiences, store identity information, and recall relevant context in future conversations.',
   'tools.builtins.lobe-user-memory.title': 'Memory',
+  // ===== Additional Builtin Tools =====
+  'tools.builtins.lobe-activator.description': 'Discover and activate tools and skills',
+  'tools.builtins.lobe-activator.title': 'Tools & Skills Activator',
+  'tools.builtins.lobe-agent-builder.description':
+    'Configure agent metadata, model settings, plugins, and the system prompt',
+  'tools.builtins.lobe-agent-builder.title': 'Agent Builder',
+  'tools.builtins.lobe-agent-documents.description':
+    'Manage agent-scoped documents (list, create, read, edit, remove, rename) and load rules',
+  'tools.builtins.lobe-agent-documents.title': 'Documents',
+  'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
+  'tools.builtins.lobe-agent-management.title': 'Agent Management',
+  'tools.builtins.lobe-brief.description':
+    'Report progress, deliver results, and request user decisions',
+  'tools.builtins.lobe-brief.title': 'Brief Tools',
+  'tools.builtins.lobe-creds.description':
+    'Manage user credentials for authentication, environment variable injection, and API verification — handle API keys, OAuth tokens, and secrets for third-party integrations.',
+  'tools.builtins.lobe-creds.title': 'Credentials',
+  'tools.builtins.lobe-cron.description':
+    'Manage scheduled tasks that run automatically at specified times. Create, update, enable/disable, and monitor recurring tasks for your agents.',
+  'tools.builtins.lobe-cron.title': 'Scheduled Tasks',
+  'tools.builtins.lobe-group-agent-builder.description':
+    'Configure group metadata, members, and shared content for multi-agent groups',
+  'tools.builtins.lobe-group-agent-builder.title': 'Group Agent Builder',
+  'tools.builtins.lobe-group-management.description':
+    'Orchestrate and manage multi-agent group conversations',
+  'tools.builtins.lobe-group-management.title': 'Group Management',
+  'tools.builtins.lobe-knowledge-base.description':
+    'Search uploaded documents and domain knowledge via semantic vector search — for persistent, reusable reference',
+  'tools.builtins.lobe-knowledge-base.title': 'Knowledge Base',
+  'tools.builtins.lobe-message.description':
+    'Send, read, edit, and manage messages across multiple messaging platforms with a unified interface',
+  'tools.builtins.lobe-message.readme':
+    'Cross-platform messaging tool supporting Discord, Telegram, Slack, Google Chat, and IRC. Provides unified APIs for message operations, reactions, pins, threads, channel management, and platform-specific features like polls.',
+  'tools.builtins.lobe-message.title': 'Message',
+  'tools.builtins.lobe-page-agent.description':
+    'Create, read, update, and delete nodes in XML-structured documents',
+  'tools.builtins.lobe-page-agent.readme':
+    'Create and edit structured documents with precise node-level control. Initialize from Markdown, perform batch insert/modify/remove operations, and find-and-replace text across documents.',
+  'tools.builtins.lobe-page-agent.title': 'Document',
+  'tools.builtins.lobe-remote-device.description':
+    'Discover and manage remote desktop device connections',
+  'tools.builtins.lobe-remote-device.readme':
+    'Manage connections to your desktop devices. List online devices, activate a device for remote operations, and check connection status.',
+  'tools.builtins.lobe-remote-device.title': 'Remote Device',
+  'tools.builtins.lobe-skill-store.description':
+    'Browse and install agent skills from the LobeHub marketplace. Use this when you need extended capabilities or want to install a specific skill.',
+  'tools.builtins.lobe-skill-store.title': 'Skill Store',
+  'tools.builtins.lobe-skills.description': 'Activate and use reusable skill packages',
+  'tools.builtins.lobe-skills.title': 'Skills',
+  'tools.builtins.lobe-task.description':
+    'Create, list, edit, and delete tasks with dependencies and review configuration',
+  'tools.builtins.lobe-task.title': 'Task Tools',
+  'tools.builtins.lobe-topic-reference.description':
+    'Retrieve context from referenced topic conversations',
+  'tools.builtins.lobe-topic-reference.title': 'Topic Reference',
+  'tools.builtins.lobe-user-interaction.description':
+    'Ask users questions through UI interactions and observe their lifecycle outcomes',
+  'tools.builtins.lobe-user-interaction.title': 'User Interaction',
+  'tools.builtins.lobe-web-browsing.description':
+    'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges.',
+  'tools.builtins.lobe-web-browsing.readme':
+    'Search the web for current information and crawl web pages to extract content. Supports multiple search engines, categories, and time ranges for comprehensive research.',
+  'tools.builtins.lobe-web-browsing.title': 'Web Browsing',
+  'tools.builtins.lobe-web-onboarding.description':
+    'Drive the web onboarding flow with a controlled agent runtime',
+  'tools.builtins.lobe-web-onboarding.title': 'Web Onboarding',
+  // ===== Builtin Agent Skills =====
+  'tools.builtins.find-skills.description':
+    'Helps users discover and install agent skills when they ask "how do I do X", "find a skill for X", or want to extend capabilities',
+  'tools.builtins.find-skills.title': 'Find Skills',
+  'tools.builtins.lobe-agent-browser.description':
+    'Browser automation CLI for AI agents. Use when tasks involve website or Electron interaction such as navigation, form filling, clicking, screenshot capture, scraping data, login flows, and end-to-end app testing.',
+  'tools.builtins.lobe-agent-browser.title': 'Agent Browser',
+  'tools.builtins.lobehub.description':
+    'Manage the LobeHub platform via CLI — knowledge bases, memory, agents, files, search, generation, and more.',
+  'tools.builtins.lobehub.title': 'LobeHub',
+  'tools.builtins.task.description':
+    'Task management and execution — create, track, review, and complete tasks via CLI.',
+  'tools.builtins.task.title': 'Task',
   'tools.builtins.notInstalled': 'Not Installed',
   'tools.builtins.uninstall': 'Uninstall',
   'tools.builtins.uninstallConfirm.desc':
@@ -1184,6 +1263,10 @@ When I am ___, I need ___
 
   'tools.lobehubSkill.error': 'Error',
   // LobeHub Skill Providers i18n
+  'tools.lobehubSkill.providers.github.description':
+    'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.',
+  'tools.lobehubSkill.providers.github.readme':
+    'Connect to GitHub to access your repositories, create and manage issues, review pull requests, and collaborate on code—all through natural conversation with your AI assistant.',
   'tools.lobehubSkill.providers.linear.description':
     'Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster',
   'tools.lobehubSkill.providers.linear.readme':
@@ -1196,6 +1279,10 @@ When I am ___, I need ___
     'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
   'tools.lobehubSkill.providers.twitter.readme':
     'Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
+  'tools.lobehubSkill.providers.vercel.description':
+    'Vercel is a cloud platform for frontend developers, providing hosting and serverless functions to deploy web applications with ease.',
+  'tools.lobehubSkill.providers.vercel.readme':
+    'Connect to Vercel to manage your deployments, monitor project status, and control your infrastructure. Deploy applications, check build logs, manage environment variables, and scale your projects through conversational AI.',
 
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
