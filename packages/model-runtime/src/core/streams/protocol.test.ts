@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ABORT_CHUNK,
   convertIterableToStream,
   createCallbacksTransformer,
   createFirstErrorHandleTransformer,
@@ -8,6 +9,7 @@ import {
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
+  readableFromAsyncIterable,
 } from './protocol';
 
 describe('createSSEDataExtractor', () => {
@@ -374,6 +376,153 @@ describe('convertIterableToStream', () => {
     expect(chunks[1].cause).toBeDefined();
     expect(chunks[1].cause.big).toBe('9007199254740993');
     expect(chunks[1].cause.ref.self).toBe('[Circular]');
+  });
+
+  it('should emit ABORT_CHUNK when AbortError occurs during pull', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      const err = new Error('The operation was aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK when "Request was aborted" error occurs during pull', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      throw new Error('Request was aborted.');
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK when abort error occurs during start', async () => {
+    async function* abortingStream(): AsyncGenerator<string> {
+      yield* []; // eslint: require-yield
+      throw new Error('Request was aborted.');
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual([ABORT_CHUNK]);
+  });
+
+  it('should emit ABORT_CHUNK when "cancelled" error occurs during pull', async () => {
+    async function* cancelledStream() {
+      yield 'data';
+      throw new Error('The request was cancelled');
+    }
+
+    const readable = convertIterableToStream(cancelledStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['data', ABORT_CHUNK]);
+  });
+
+  it('should produce stop:abort SSE event through full pipeline when request is aborted', async () => {
+    async function* abortingStream() {
+      yield { type: 'message_start', message: { id: 'msg_1', content: [] } };
+      throw new Error('Request was aborted.');
+    }
+
+    const identity = (chunk: any) => ({ data: chunk, id: 'msg_1', type: 'data' });
+    const readable = convertIterableToStream(abortingStream())
+      .pipeThrough(createTokenSpeedCalculator(identity))
+      .pipeThrough(createSSEProtocolTransformer((c) => c));
+
+    const reader = readable.getReader();
+    const chunks: string[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value as string);
+    }
+
+    // Last 3 chunks should be the stop:abort SSE event
+    const stopLines = chunks.slice(-3);
+    expect(stopLines).toEqual(['id: \n', 'event: stop\n', `data: ${JSON.stringify('abort')}\n\n`]);
+  });
+});
+
+describe('readableFromAsyncIterable', () => {
+  it('should emit ABORT_CHUNK when abort error occurs during pull', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      throw new Error('Request was aborted.');
+    }
+
+    const readable = readableFromAsyncIterable(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should still surface non-abort errors as error chunks', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('rate limit');
+    }
+
+    const readable = readableFromAsyncIterable(erroringStream()).pipeThrough(
+      createFirstErrorHandleTransformer(),
+    );
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+    expect(chunks[1].message).toBe('rate limit');
   });
 });
 
