@@ -1069,48 +1069,16 @@ Each script: activates the app, navigates to the channel/contact, pastes the mes
 
 # Screen Recording
 
-Record automated demos by combining `ffmpeg` + `agent-browser` screenshots.
-
-### record-app-screen.sh (Recommended)
-
-General-purpose screen recording with start/stop lifecycle. Captures CDP screenshots as video frames and gallery snapshots. Works on any screen including external monitors.
+Record automated demos using `record-app-screen.sh` (start/stop lifecycle, CDP screenshots + ffmpeg assembly). See [references/record-app-screen.md](references/record-app-screen.md) for full documentation.
 
 ```bash
-# Start Electron first
 ./.agents/skills/local-testing/scripts/electron-dev.sh start
-
-# Start recording
 ./.agents/skills/local-testing/scripts/record-app-screen.sh start my-demo
-
-# ... run your automation via agent-browser ...
-
-# Stop recording — assembles frames into video
+# ... run automation ...
 ./.agents/skills/local-testing/scripts/record-app-screen.sh stop
-
-# Check status
-./.agents/skills/local-testing/scripts/record-app-screen.sh status
 ```
 
-Outputs to `.records/` directory (gitignored):
-
-- `.records/<name>.mp4` — Video assembled from screenshots (\~2 fps)
-- `.records/<name>/` — Gallery screenshots every 3 seconds
-
-Environment variables:
-
-| Variable               | Default | Description                         |
-| ---------------------- | ------- | ----------------------------------- |
-| `CDP_PORT`             | `9222`  | Chrome DevTools Protocol port       |
-| `SCREENSHOT_INTERVAL`  | `3`     | Seconds between gallery screenshots |
-| `VIDEO_FRAME_INTERVAL` | `0.5`   | Seconds between video frames        |
-
-### record-electron-demo.sh
-
-Records a custom automation script against the Electron app using ffmpeg avfoundation.
-
-```bash
-./.agents/skills/local-testing/scripts/record-electron-demo.sh ./my-demo.sh .records/my-demo.mp4
-```
+Outputs to `.records/` directory (gitignored): `<name>.mp4` (video) + `<name>/` (screenshots every 3s).
 
 ---
 
