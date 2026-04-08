@@ -80,19 +80,24 @@ vi.mock('@/server/services/systemAgent', () => ({
   })),
 }));
 
-vi.mock('../platforms', () => ({
-  platformRegistry: {
-    getPlatform: vi.fn().mockImplementation((platform: string) => {
-      if (platform === 'unknown') return undefined;
-      return {
-        clientFactory: { createClient: mockCreateBot },
-        credentials: [],
-        name: platform,
-        id: platform,
-      };
-    }),
-  },
-}));
+vi.mock('../platforms', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    platformRegistry: {
+      getPlatform: vi.fn().mockImplementation((platform: string) => {
+        if (platform === 'unknown') return undefined;
+        return {
+          clientFactory: { createClient: mockCreateBot },
+          credentials: [],
+          name: platform,
+          id: platform,
+          schema: [],
+        };
+      }),
+    },
+  };
+});
 
 // ==================== Helpers ====================
 
@@ -752,6 +757,75 @@ describe('BotCallbackService', () => {
       expect(mockRemoveReaction).not.toHaveBeenCalled();
       await new Promise((r) => setTimeout(r, 50));
       expect(mockFindById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hook-based webhook payload compatibility', () => {
+    // These tests verify that payloads from HookDispatcher (which include
+    // hookId/hookType fields) are handled correctly by BotCallbackService.
+    // This is the critical contract between the hooks framework and the bot callback.
+
+    it('should handle step payload with hookId and hookType fields', async () => {
+      const body = makeBody({
+        content: 'thinking...',
+        executionTimeMs: 100,
+        hookId: 'bot-step-progress',
+        hookType: 'afterStep',
+        shouldContinue: true,
+        stepType: 'call_llm' as const,
+        thinking: true,
+        totalCost: 0.01,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalSteps: 1,
+        totalTokens: 150,
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith('progress-msg-1', expect.any(String));
+    });
+
+    it('should handle completion payload with hookId and hookType fields', async () => {
+      const body = makeBody({
+        cost: 0.05,
+        duration: 5000,
+        hookId: 'bot-completion',
+        hookType: 'onComplete',
+        lastAssistantContent: 'Here is the answer',
+        llmCalls: 3,
+        reason: 'done',
+        toolCalls: 2,
+        totalTokens: 500,
+        type: 'completion',
+        userId: 'user-1',
+        userPrompt: 'test question',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.stringContaining('Here is the answer'),
+      );
+    });
+
+    it('should handle completion error payload from hooks', async () => {
+      const body = makeBody({
+        errorMessage: 'Rate limit exceeded',
+        hookId: 'bot-completion',
+        hookType: 'onComplete',
+        reason: 'error',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.stringContaining('Rate limit exceeded'),
+      );
     });
   });
 });

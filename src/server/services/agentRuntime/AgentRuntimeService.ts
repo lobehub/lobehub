@@ -1,4 +1,9 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import type {
+  Agent,
+  AgentRuntimeContext,
+  AgentState,
+  GeneralAgentConfig,
+} from '@lobechat/agent-runtime';
 import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
@@ -15,7 +20,6 @@ import { type RuntimeExecutorContext } from '@/server/modules/AgentRuntime/Runti
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
-import { PluginGatewayService } from '@/server/services/pluginGateway';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -33,7 +37,6 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
-  type StepLifecycleCallbacks,
   type StepPresentationData,
 } from './types';
 
@@ -83,6 +86,13 @@ function formatErrorForState(error: unknown): ChatMessageError {
 
 export interface AgentRuntimeServiceOptions {
   /**
+   * Custom agent factory. When provided, this function is called instead of
+   * the default `new GeneralChatAgent(config)` to create the Agent instance.
+   * This allows injecting alternative Agent implementations (e.g. GraphAgent)
+   * without the service needing to know about them.
+   */
+  agentFactory?: (config: GeneralAgentConfig) => Agent;
+  /**
    * Coordinator configuration options
    * Allows injection of custom stateManager and streamEventManager
    */
@@ -123,16 +133,12 @@ export interface AgentRuntimeServiceOptions {
  * ```
  */
 export class AgentRuntimeService {
+  private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private coordinator: AgentRuntimeCoordinator;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
   private snapshotStore: ISnapshotStore | null;
   private toolExecutionService: ToolExecutionService;
-  /**
-   * Step lifecycle callback registry
-   * key: operationId, value: callbacks
-   */
-  private stepCallbacks: Map<string, StepLifecycleCallbacks> = new Map();
   private get baseURL() {
     const baseUrl = process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
 
@@ -155,18 +161,17 @@ export class AgentRuntimeService {
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
     this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
+    this.agentFactory = options?.agentFactory;
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
 
     // Initialize ToolExecutionService with dependencies
-    const pluginGatewayService = new PluginGatewayService();
     const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
 
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,
       mcpService,
-      pluginGatewayService,
     });
 
     // Setup local execution callback for LocalQueueServiceImpl
@@ -187,35 +192,6 @@ export class AgentRuntimeService {
         await this.executeStep({ context, operationId, stepIndex });
       });
     }
-  }
-
-  // ==================== Step Lifecycle Callbacks ====================
-
-  /**
-   * Register step lifecycle callbacks
-   * @param operationId - Operation ID
-   * @param callbacks - Callback function collection
-   */
-  registerStepCallbacks(operationId: string, callbacks: StepLifecycleCallbacks): void {
-    this.stepCallbacks.set(operationId, callbacks);
-    log('[%s] Registered step callbacks', operationId);
-  }
-
-  /**
-   * Remove step lifecycle callbacks
-   * @param operationId - Operation ID
-   */
-  unregisterStepCallbacks(operationId: string): void {
-    this.stepCallbacks.delete(operationId);
-    log('[%s] Unregistered step callbacks', operationId);
-  }
-
-  /**
-   * Get step lifecycle callbacks
-   * @param operationId - Operation ID
-   */
-  getStepCallbacks(operationId: string): StepLifecycleCallbacks | undefined {
-    return this.stepCallbacks.get(operationId);
   }
 
   // ==================== Operation Interruption ====================
@@ -263,14 +239,10 @@ export class AgentRuntimeService {
       initialMessages = [],
       appContext,
       toolSet,
-      stepCallbacks,
       hooks,
       userInterventionConfig,
-      completionWebhook,
-      stepWebhook,
       queueRetries,
       queueRetryDelay,
-      webhookDelivery,
       botPlatformContext,
       discordContext,
       evalContext,
@@ -280,11 +252,11 @@ export class AgentRuntimeService {
       operationSkillSet,
       signal,
       userTimezone,
+      initialStepCount = 0,
     } = params;
 
     const operationToolSet = toolSet;
     let operationCreated = false;
-    let stepCallbacksRegistered = false;
     let hooksRegistered = false;
 
     try {
@@ -317,7 +289,6 @@ export class AgentRuntimeService {
           activeDeviceId,
           agentConfig,
           botPlatformContext,
-          completionWebhook,
           deviceSystemInfo,
           discordContext,
           evalContext,
@@ -325,13 +296,11 @@ export class AgentRuntimeService {
           modelRuntimeConfig,
           queueRetries,
           queueRetryDelay,
-          stepWebhook,
           stream,
           operationSkillSet,
           userId,
           userMemory,
           userTimezone,
-          webhookDelivery,
           workingDirectory: agentConfig?.chatConfig?.runtimeEnv?.workingDirectory,
           ...appContext,
         },
@@ -341,7 +310,7 @@ export class AgentRuntimeService {
         operationId,
         operationToolSet,
         status: 'idle',
-        stepCount: 0,
+        stepCount: initialStepCount,
         // Backward-compat: resolved tool fields read by RuntimeExecutors
         toolManifestMap: operationToolSet.manifestMap,
         toolSourceMap: operationToolSet.sourceMap,
@@ -360,12 +329,6 @@ export class AgentRuntimeService {
 
       // Save initial state
       await this.coordinator.saveAgentState(operationId, initialState as any);
-
-      // Register step lifecycle callbacks
-      if (stepCallbacks) {
-        this.registerStepCallbacks(operationId, stepCallbacks);
-        stepCallbacksRegistered = true;
-      }
 
       // Register external hooks
       if (hooks && hooks.length > 0) {
@@ -405,7 +368,7 @@ export class AgentRuntimeService {
           priority: 'high',
           retryDelay: queueRetryDelay,
           retries: queueRetries,
-          stepIndex: 0,
+          stepIndex: initialStepCount,
         });
         autoStarted = true;
         log('[%s] Scheduled first step (messageId: %s)', operationId, messageId);
@@ -418,10 +381,6 @@ export class AgentRuntimeService {
       return { autoStarted, messageId, operationId, success: true };
     } catch (error) {
       if (isAbortError(error)) {
-        if (stepCallbacksRegistered) {
-          this.unregisterStepCallbacks(operationId);
-        }
-
         if (hooksRegistered) {
           hookDispatcher.unregister(operationId);
         }
@@ -456,8 +415,6 @@ export class AgentRuntimeService {
       rejectionReason,
       externalRetryCount = 0,
     } = params;
-
-    const callbacks = this.getStepCallbacks(operationId);
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
     const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
@@ -529,19 +486,8 @@ export class AgentRuntimeService {
 
         const reason = this.determineCompletionReason(agentState);
 
-        // Trigger completion callback so eval run can finalize properly
-        if (callbacks?.onComplete) {
-          try {
-            await callbacks.onComplete({
-              finalState: agentState,
-              operationId,
-              reason,
-            });
-            this.unregisterStepCallbacks(operationId);
-          } catch (callbackError) {
-            log('[%s] onComplete callback error: %O', operationId, callbackError);
-          }
-        }
+        // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
+        await this.dispatchCompletionHooks(operationId, agentState, reason);
 
         return {
           nextStepScheduled: false,
@@ -549,20 +495,6 @@ export class AgentRuntimeService {
           stepResult: null,
           success: true,
         };
-      }
-
-      // Call onBeforeStep callback (legacy)
-      if (callbacks?.onBeforeStep) {
-        try {
-          await callbacks.onBeforeStep({
-            context,
-            operationId,
-            state: agentState,
-            stepIndex,
-          });
-        } catch (callbackError) {
-          log('[%s] onBeforeStep callback error: %O', operationId, callbackError);
-        }
       }
 
       // Dispatch beforeStep hooks
@@ -825,36 +757,45 @@ export class AgentRuntimeService {
         totalTokens: totalTokensNum,
       };
 
-      // Call onAfterStep callback with presentation data (legacy)
-      if (callbacks?.onAfterStep) {
-        try {
-          await callbacks.onAfterStep({
-            ...stepPresentationData,
-            operationId,
-            shouldContinue,
-            state: stepResult.newState,
-            stepIndex,
-            stepResult,
-          });
-        } catch (callbackError) {
-          log('[%s] onAfterStep callback error: %O', operationId, callbackError);
-        }
-      }
-
-      // Dispatch afterStep hooks
+      // Dispatch afterStep hooks (enriched with step presentation + tracking data)
       try {
         const metadata = stepResult.newState?.metadata || {};
+        const tracking = metadata._stepTracking || {};
+        const elapsedMs = stepResult.newState?.createdAt
+          ? Date.now() - new Date(stepResult.newState.createdAt).getTime()
+          : undefined;
+        const stepLabel = metadata?._stepLabel;
         await hookDispatcher.dispatch(
           operationId,
           'afterStep',
           {
             agentId: metadata?.agentId || '',
+            content,
+            elapsedMs,
+            executionTimeMs: stepPresentationData.executionTimeMs,
             finalState: stepResult.newState,
+            ...(stepLabel && { stepLabel }),
+            lastLLMContent: tracking.lastLLMContent,
+            lastToolsCalling: tracking.lastToolsCalling,
             operationId,
+            reasoning: stepPresentationData.reasoning,
             shouldContinue,
             status: stepResult.newState?.status,
+            stepCost: stepPresentationData.stepCost,
             stepIndex,
+            stepType: stepPresentationData.stepType,
             steps: stepResult.newState?.stepCount || 0,
+            thinking: stepPresentationData.thinking,
+            toolCalls: stepResult.newState?.usage?.tools?.totalCalls,
+            toolsCalling: stepPresentationData.toolsCalling,
+            toolsResult: stepPresentationData.toolsResult,
+            topicId: metadata?.topicId,
+            totalCost: stepPresentationData.totalCost,
+            totalInputTokens: stepPresentationData.totalInputTokens,
+            totalOutputTokens: stepPresentationData.totalOutputTokens,
+            totalSteps: stepPresentationData.totalSteps,
+            totalTokens: stepPresentationData.totalTokens,
+            totalToolCalls: (tracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0),
             userId: metadata?.userId || this.userId,
           },
           metadata._hooks,
@@ -967,12 +908,15 @@ export class AgentRuntimeService {
         }
       }
 
-      // Update step tracking in state metadata and trigger step webhook
-      if (stepResult.newState.metadata?.stepWebhook) {
+      // Update step tracking in state metadata for afterStep hooks (cross-step accumulator)
+      const hasAfterStepHooks = stepResult.newState.metadata?._hooks?.some(
+        (h: { type: string }) => h.type === 'afterStep',
+      );
+      if (hasAfterStepHooks && stepResult.newState.metadata) {
         const prevTracking = stepResult.newState.metadata._stepTracking || {};
         const newTotalToolCalls = (prevTracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0);
 
-        // Truncate content to 1800 chars to match Discord message limits
+        // Truncate content to 1800 chars to keep state small
         const truncatedContent = content
           ? content.length > 1800
             ? content.slice(0, 1800) + '...'
@@ -988,13 +932,6 @@ export class AgentRuntimeService {
         // Persist tracking state for next step
         stepResult.newState.metadata._stepTracking = updatedTracking;
         await this.coordinator.saveAgentState(operationId, stepResult.newState);
-
-        // Fire step webhook (include shouldContinue so the callback knows
-        // whether the agent is still running or about to complete)
-        await this.triggerStepWebhook(stepResult.newState, operationId, {
-          ...stepPresentationData,
-          shouldContinue,
-        } as unknown as Record<string, unknown>);
       }
 
       if (shouldContinue && stepResult.nextContext && this.queueService) {
@@ -1027,26 +964,8 @@ export class AgentRuntimeService {
       if (!shouldContinue) {
         const reason = this.determineCompletionReason(stepResult.newState);
 
-        // Trigger completion webhook (fire-and-forget)
-        await this.triggerCompletionWebhook(stepResult.newState, operationId, reason);
-
         // Dispatch onComplete hooks
         await this.dispatchCompletionHooks(operationId, stepResult.newState, reason);
-
-        // Call onComplete callback (legacy)
-        if (callbacks?.onComplete) {
-          try {
-            await callbacks.onComplete({
-              finalState: stepResult.newState,
-              operationId,
-              reason,
-            });
-            // Clean up callbacks after operation completes
-            this.unregisterStepCallbacks(operationId);
-          } catch (callbackError) {
-            log('[%s] onComplete callback error: %O', operationId, callbackError);
-          }
-        }
 
         // Finalize tracing snapshot via injected snapshot store
         if (this.snapshotStore) {
@@ -1159,29 +1078,8 @@ export class AgentRuntimeService {
         log('[%s] Failed to save error state (infra may be down): %O', operationId, saveError);
       }
 
-      // Trigger completion webhook on error (fire-and-forget)
-      try {
-        await this.triggerCompletionWebhook(finalStateWithError, operationId, 'error');
-      } catch (webhookError) {
-        log('[%s] Failed to trigger completion webhook: %O', operationId, webhookError);
-      }
-
       // Dispatch onComplete + onError hooks
       await this.dispatchCompletionHooks(operationId, finalStateWithError, 'error');
-
-      // Also call onComplete callback when execution fails (legacy)
-      if (callbacks?.onComplete) {
-        try {
-          await callbacks.onComplete({
-            finalState: finalStateWithError,
-            operationId,
-            reason: 'error',
-          });
-          this.unregisterStepCallbacks(operationId);
-        } catch (callbackError) {
-          log('[%s] onComplete callback error in catch: %O', operationId, callbackError);
-        }
-      }
 
       throw error;
     } finally {
@@ -1524,8 +1422,8 @@ export class AgentRuntimeService {
     operationId: string;
     stepIndex: number;
   }) {
-    // Create Durable Agent instance
-    const agent = new GeneralChatAgent({
+    // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
+    const generalConfig = {
       agentConfig: metadata?.agentConfig,
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
@@ -1534,7 +1432,11 @@ export class AgentRuntimeService {
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
       operationId,
       userId: metadata?.userId,
-    });
+    };
+
+    const agent = this.agentFactory
+      ? this.agentFactory(generalConfig)
+      : new GeneralChatAgent(generalConfig);
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
@@ -1651,41 +1553,6 @@ export class AgentRuntimeService {
   }
 
   /**
-   * Deliver a webhook payload via fetch or QStash.
-   * Fire-and-forget: errors are logged but never thrown.
-   */
-  private async deliverWebhook(
-    url: string,
-    payload: Record<string, unknown>,
-    delivery: 'fetch' | 'qstash' = 'fetch',
-    operationId: string,
-  ): Promise<void> {
-    try {
-      if (delivery === 'qstash') {
-        const { Client } = await import('@upstash/qstash');
-        const client = new Client({ token: process.env.QSTASH_TOKEN! });
-        await client.publishJSON({
-          body: payload,
-          headers: {
-            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
-              'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-            }),
-          },
-          url,
-        });
-      } else {
-        await fetch(url, {
-          body: JSON.stringify(payload),
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-      }
-    } catch (error) {
-      console.error('[%s] Webhook delivery failed (%s → %s):', operationId, delivery, url, error);
-    }
-  }
-
-  /**
    * Dispatch onComplete (and onError) hooks via HookDispatcher.
    * Fire-and-forget: errors are logged but never thrown.
    */
@@ -1697,7 +1564,7 @@ export class AgentRuntimeService {
     try {
       const metadata = state?.metadata || {};
 
-      // Extract last assistant content (same as triggerCompletionWebhook)
+      // Extract last assistant content from state messages
       const lastAssistantContent = state?.messages
         ?.slice()
         .reverse()
@@ -1742,101 +1609,6 @@ export class AgentRuntimeService {
     } catch (error) {
       log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     }
-  }
-
-  /**
-   * Trigger completion webhook if configured in state metadata.
-   * Fire-and-forget: errors are logged but never thrown.
-   */
-  private async triggerCompletionWebhook(
-    state: any,
-    operationId: string,
-    reason: StepCompletionReason,
-  ): Promise<void> {
-    const webhook = state.metadata?.completionWebhook;
-    if (!webhook?.url) return;
-
-    log('[%s] Triggering completion webhook: %s', operationId, webhook.url);
-
-    const duration = state.createdAt ? Date.now() - new Date(state.createdAt).getTime() : undefined;
-
-    // Extract last assistant content from state messages
-    const lastAssistantContent = state.messages
-      ?.slice()
-      .reverse()
-      .find(
-        (m: { content?: string; role: string }) => m.role === 'assistant' && m.content,
-      )?.content;
-
-    // Extract first user prompt for downstream consumers (e.g., topic title summarization)
-    const userPrompt = state.messages?.find(
-      (m: { content?: string; role: string }) => m.role === 'user',
-    )?.content;
-
-    const delivery = state.metadata?.webhookDelivery || 'fetch';
-
-    await this.deliverWebhook(
-      webhook.url,
-      {
-        ...webhook.body,
-        cost: state.cost?.total,
-        duration,
-        errorDetail: state.error,
-        errorMessage: this.extractErrorMessage(state.error),
-        lastAssistantContent,
-        llmCalls: state.usage?.llm?.apiCalls,
-        operationId,
-        reason,
-        status: state.status,
-        steps: state.stepCount,
-        toolCalls: state.usage?.tools?.totalCalls,
-        topicId: state.metadata?.topicId,
-        totalTokens: state.usage?.llm?.tokens?.total,
-        type: 'completion',
-        userId: state.metadata?.userId,
-        userPrompt,
-      },
-      delivery,
-      operationId,
-    );
-  }
-
-  /**
-   * Trigger step webhook if configured in state metadata.
-   * Reads accumulated step tracking data and fires webhook with step presentation data.
-   * Fire-and-forget: errors are logged but never thrown.
-   */
-  private async triggerStepWebhook(
-    state: any,
-    operationId: string,
-    presentationData: Record<string, unknown>,
-  ): Promise<void> {
-    const webhook = state.metadata?.stepWebhook;
-    if (!webhook?.url) return;
-
-    log('[%s] Triggering step webhook: %s', operationId, webhook.url);
-
-    const tracking = state.metadata?._stepTracking || {};
-    const delivery = state.metadata?.webhookDelivery || 'fetch';
-    const elapsedMs = state.createdAt
-      ? Date.now() - new Date(state.createdAt).getTime()
-      : undefined;
-
-    await this.deliverWebhook(
-      webhook.url,
-      {
-        ...webhook.body,
-        ...presentationData,
-        elapsedMs,
-        lastLLMContent: tracking.lastLLMContent,
-        lastToolsCalling: tracking.lastToolsCalling,
-        operationId,
-        totalToolCalls: tracking.totalToolCalls ?? 0,
-        type: 'step',
-      },
-      delivery,
-      operationId,
-    );
   }
 
   /**
@@ -2050,20 +1822,10 @@ export class AgentRuntimeService {
 
     if (stepIndex >= maxSteps) {
       log('[%s] Sync execution stopped: reached maxSteps (%d)', operationId, maxSteps);
-      // If stopped due to executeSync's maxSteps limit, need to manually call onComplete
+      // If stopped due to executeSync's maxSteps limit, need to manually dispatch onComplete hooks
       // Note: If stopped due to state.maxSteps being reached, onComplete has already been called in executeStep
-      const callbacks = this.getStepCallbacks(operationId);
-      if (callbacks?.onComplete && state.status !== 'done' && state.status !== 'error') {
-        try {
-          await callbacks.onComplete({
-            finalState: state,
-            operationId,
-            reason: 'max_steps',
-          });
-          this.unregisterStepCallbacks(operationId);
-        } catch (callbackError) {
-          log('[%s] onComplete callback error in executeSync: %O', operationId, callbackError);
-        }
+      if (state.status !== 'done' && state.status !== 'error') {
+        await this.dispatchCompletionHooks(operationId, state, 'max_steps');
       }
     }
 

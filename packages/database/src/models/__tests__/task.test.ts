@@ -264,6 +264,97 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('groupList', () => {
+    it('should return grouped tasks by status', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      // Create tasks with different statuses
+      const t1 = await model.create({ instruction: 'Backlog task' });
+      const t2 = await model.create({ instruction: 'Running task' });
+      await model.updateStatus(t2.id, 'running', { startedAt: new Date() });
+      const t3 = await model.create({ instruction: 'Paused task' });
+      await model.updateStatus(t3.id, 'paused');
+      const t4 = await model.create({ instruction: 'Failed task' });
+      await model.updateStatus(t4.id, 'failed', { error: 'err' });
+      const t5 = await model.create({ instruction: 'Completed task' });
+      await model.updateStatus(t5.id, 'completed', { completedAt: new Date() });
+
+      const result = await model.groupList({
+        groups: [
+          { key: 'backlog', statuses: ['backlog'] },
+          { key: 'running', statuses: ['running'] },
+          { key: 'needsInput', statuses: ['paused', 'failed'] },
+          { key: 'done', statuses: ['completed'] },
+        ],
+      });
+
+      expect(result).toHaveLength(4);
+
+      const backlog = result.find((g) => g.key === 'backlog')!;
+      expect(backlog.total).toBe(1);
+      expect(backlog.tasks).toHaveLength(1);
+      expect(backlog.hasMore).toBe(false);
+
+      const running = result.find((g) => g.key === 'running')!;
+      expect(running.total).toBe(1);
+      expect(running.tasks).toHaveLength(1);
+
+      const needsInput = result.find((g) => g.key === 'needsInput')!;
+      expect(needsInput.total).toBe(2);
+      expect(needsInput.tasks).toHaveLength(2);
+
+      const done = result.find((g) => g.key === 'done')!;
+      expect(done.total).toBe(1);
+      expect(done.tasks).toHaveLength(1);
+    });
+
+    it('should support per-group pagination', async () => {
+      const model = new TaskModel(serverDB, userId);
+
+      // Create 3 backlog tasks
+      await model.create({ instruction: 'Backlog 1' });
+      await model.create({ instruction: 'Backlog 2' });
+      await model.create({ instruction: 'Backlog 3' });
+
+      const result = await model.groupList({
+        groups: [{ key: 'backlog', limit: 2, offset: 0, statuses: ['backlog'] }],
+      });
+
+      const backlog = result[0];
+      expect(backlog.total).toBe(3);
+      expect(backlog.tasks).toHaveLength(2);
+      expect(backlog.hasMore).toBe(true);
+      expect(backlog.limit).toBe(2);
+      expect(backlog.offset).toBe(0);
+
+      // Fetch next page
+      const page2 = await model.groupList({
+        groups: [{ key: 'backlog', limit: 2, offset: 2, statuses: ['backlog'] }],
+      });
+
+      const backlogP2 = page2[0];
+      expect(backlogP2.tasks).toHaveLength(1);
+      expect(backlogP2.hasMore).toBe(false);
+      expect(backlogP2.offset).toBe(2);
+    });
+
+    it('should filter by assigneeAgentId', async () => {
+      const agentId = await createAgent('group-list-agent');
+      const model = new TaskModel(serverDB, userId);
+
+      await model.create({ assigneeAgentId: agentId, instruction: 'Assigned' });
+      await model.create({ instruction: 'Unassigned' });
+
+      const result = await model.groupList({
+        assigneeAgentId: agentId,
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+      });
+
+      expect(result[0].total).toBe(1);
+      expect(result[0].tasks).toHaveLength(1);
+    });
+  });
+
   describe('findSubtasks', () => {
     it('should find direct subtasks', async () => {
       const model = new TaskModel(serverDB, userId);
@@ -596,6 +687,95 @@ describe('TaskModel', () => {
       expect(model.shouldPauseAfterComplete(parentUpdated, 'T-2')).toBe(true);
       expect(model.shouldPauseAfterComplete(parentUpdated, 'T-3')).toBe(true);
       expect(model.shouldPauseAfterComplete(parentUpdated, 'T-4')).toBe(false);
+    });
+  });
+
+  describe('updateTaskConfig', () => {
+    it('should merge partial config into empty config', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      const updated = await model.updateTaskConfig(task.id, { model: 'gpt-4', provider: 'openai' });
+      expect(updated).not.toBeNull();
+      expect((updated!.config as Record<string, unknown>).model).toBe('gpt-4');
+      expect((updated!.config as Record<string, unknown>).provider).toBe('openai');
+    });
+
+    it('should deep merge into existing config', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set initial config with checkpoint
+      await model.updateTaskConfig(task.id, {
+        checkpoint: { onAgentRequest: true, topic: { after: true } },
+      });
+
+      // Merge review config — checkpoint should be preserved
+      const updated = await model.updateTaskConfig(task.id, {
+        review: { enabled: true },
+      });
+
+      const config = updated!.config as Record<string, any>;
+      expect(config.checkpoint).toEqual({ onAgentRequest: true, topic: { after: true } });
+      expect(config.review).toEqual({ enabled: true });
+    });
+
+    it('should deep merge nested fields within a config key', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set initial checkpoint config
+      await model.updateTaskConfig(task.id, {
+        checkpoint: { onAgentRequest: true, topic: { after: true } },
+      });
+
+      // Update checkpoint with additional nested field — deep merge should preserve existing fields
+      const updated = await model.updateTaskConfig(task.id, {
+        checkpoint: { topic: { before: true } },
+      });
+
+      const config = updated!.config as Record<string, any>;
+      expect(config.checkpoint.onAgentRequest).toBe(true);
+      expect(config.checkpoint.topic.after).toBe(true);
+      expect(config.checkpoint.topic.before).toBe(true);
+    });
+
+    it('should return null for non-existent task', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const result = await model.updateTaskConfig('non-existent-id', { model: 'gpt-4' });
+      expect(result).toBeNull();
+    });
+
+    it('should work with updateCheckpointConfig delegating to updateTaskConfig', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set some initial non-checkpoint config
+      await model.updateTaskConfig(task.id, { model: 'gpt-4' });
+
+      // Use updateCheckpointConfig — should preserve other config keys
+      await model.updateCheckpointConfig(task.id, { onAgentRequest: true });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      expect(config.model).toBe('gpt-4');
+      expect(config.checkpoint).toEqual({ onAgentRequest: true });
+    });
+
+    it('should work with updateReviewConfig delegating to updateTaskConfig', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      // Set some initial non-review config
+      await model.updateTaskConfig(task.id, { provider: 'anthropic' });
+
+      // Use updateReviewConfig — should preserve other config keys
+      await model.updateReviewConfig(task.id, { enabled: true, maxIterations: 3 });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      expect(config.provider).toBe('anthropic');
+      expect(config.review).toEqual({ enabled: true, maxIterations: 3 });
     });
   });
 

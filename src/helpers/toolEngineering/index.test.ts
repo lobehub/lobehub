@@ -1,4 +1,4 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
@@ -30,7 +30,7 @@ vi.mock('@/store/tool', () => ({
             avatar: '🔍',
           },
           type: 'builtin',
-        } as unknown as LobeChatPluginManifest,
+        } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
       {
@@ -56,7 +56,7 @@ vi.mock('@/store/tool', () => ({
             avatar: '🌐',
           },
           type: 'builtin',
-        } as unknown as LobeChatPluginManifest,
+        } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
     ],
@@ -64,7 +64,7 @@ vi.mock('@/store/tool', () => ({
 }));
 
 let mockGetInstalledPluginById: (id: string) => () => any = () => () => undefined;
-let mockInstalledPluginManifestList: () => LobeChatPluginManifest[] = () => [];
+let mockInstalledPluginManifestList: () => ToolManifest[] = () => [];
 
 vi.mock('@/store/tool/selectors', () => ({
   pluginSelectors: {
@@ -270,7 +270,7 @@ describe('toolEngineering', () => {
           identifier: 'stdio-mcp-plugin',
           meta: { title: 'Stdio MCP', avatar: '🔧' },
           type: 'default',
-        } as unknown as LobeChatPluginManifest,
+        } as unknown as ToolManifest,
       ];
       mockGetInstalledPluginById = (id: string) => () =>
         id === 'stdio-mcp-plugin'
@@ -305,7 +305,7 @@ describe('toolEngineering', () => {
       identifier: 'stdio-mcp-plugin',
       meta: { title: 'Stdio MCP', avatar: '🔧' },
       type: 'default',
-    } as unknown as LobeChatPluginManifest;
+    } as unknown as ToolManifest;
 
     const httpMcpManifest = {
       api: [
@@ -318,7 +318,7 @@ describe('toolEngineering', () => {
       identifier: 'http-mcp-plugin',
       meta: { title: 'HTTP MCP', avatar: '🌐' },
       type: 'default',
-    } as unknown as LobeChatPluginManifest;
+    } as unknown as ToolManifest;
 
     it('should filter stdio MCP tools in non-desktop environment', () => {
       mockInstalledPluginManifestList = () => [stdioMcpManifest];

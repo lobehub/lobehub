@@ -1266,6 +1266,8 @@ export class MessageModel {
         .insert(messages)
         .values({
           ...normalizedMessage,
+          // Sanitize content to strip null bytes that PostgreSQL rejects
+          content: sanitizeNullBytes(normalizedMessage.content),
           // TODO: remove this when the client is updated
           createdAt: createdAt ? new Date(createdAt) : undefined,
           id,

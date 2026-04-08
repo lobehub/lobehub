@@ -1,8 +1,8 @@
-# Lobe Chat - Contributing Guide 🌟
+# LobeHub - Contributing Guide 🌟
 
-We're thrilled that you want to contribute to Lobe Chat, the future of communication! 😄
+We're thrilled that you want to contribute to LobeHub, the future of communication! 😄
 
-Lobe Chat is an open-source project, and we welcome your collaboration. Before you jump in, let's make sure you're all set to contribute effectively and have loads of fun along the way!
+LobeHub is an open-source project, and we welcome your collaboration. Before you jump in, let's make sure you're all set to contribute effectively and have loads of fun along the way!
 
 ## Table of Contents
 
@@ -69,11 +69,11 @@ git fetch upstream
 git merge upstream/main
 ```
 
-This ensures you're working on the most current version of Lobe Chat. Stay fresh! 💨
+This ensures you're working on the most current version of LobeHub. Stay fresh! 💨
 
 ## Open a Pull Request
 
-🚀 Time to share your contribution! Head over to the original Lobe Chat repository and open a Pull Request (PR). Our maintainers will review your work.
+🚀 Time to share your contribution! Head over to the original LobeHub repository and open a Pull Request (PR). Our maintainers will review your work.
 
 ## Review and Collaboration
 
@@ -81,8 +81,8 @@ This ensures you're working on the most current version of Lobe Chat. Stay fresh
 
 ## Celebrate 🎉
 
-🎈 Congratulations! Your contribution is now part of Lobe Chat. 🥳
+🎈 Congratulations! Your contribution is now part of LobeHub. 🥳
 
-Thank you for making Lobe Chat even more magical. We can't wait to see what you create! 🌠
+Thank you for making LobeHub even more magical. We can't wait to see what you create! 🌠
 
 Happy Coding! 🚀🦄

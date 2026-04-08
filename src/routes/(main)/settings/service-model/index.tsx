@@ -23,6 +23,7 @@ const Page = () => {
       <SystemAgentForm systemAgentKey="translation" />
       <SystemAgentForm systemAgentKey="historyCompress" />
       <SystemAgentForm systemAgentKey="agentMeta" />
+      <SystemAgentForm allowDisable systemAgentKey="inputCompletion" />
       {enableKnowledgeBase && (
         <SystemAgentForm
           allowCustomPrompt

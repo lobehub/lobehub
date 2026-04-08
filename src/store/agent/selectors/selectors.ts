@@ -262,6 +262,9 @@ const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
 
 const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
 
+const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
+  s.agentDocumentsMap[agentId];
+
 export const agentSelectors = {
   currentAgentAvatar,
   currentAgentBackgroundColor,
@@ -285,6 +288,7 @@ export const agentSelectors = {
   currentKnowledgeIds,
   displayableAgentPlugins,
   getAgentConfigById,
+  getAgentDocumentsById,
   getAgentMetaById,
   getAgentSlugById,
   hasEnabledKnowledge,

@@ -10,6 +10,7 @@ export interface ExecAgentTaskParams {
     topicId?: string | null;
   };
   autoStart?: boolean;
+  deviceId?: string;
   existingMessageIds?: string[];
   prompt: string;
   slug?: string;

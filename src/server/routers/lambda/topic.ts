@@ -558,6 +558,7 @@ export const topicRouter = router({
         metadata: z.object({
           model: z.string().optional(),
           provider: z.string().optional(),
+          boundDeviceId: z.string().optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

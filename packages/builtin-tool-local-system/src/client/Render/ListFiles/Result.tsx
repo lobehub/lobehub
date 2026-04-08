@@ -1,21 +1,19 @@
-import type { LocalFileItem } from '@lobechat/electron-client-ipc';
+import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ChatMessagePluginError } from '@lobechat/types';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { useChatStore } from '@/store/chat';
-import { chatToolSelectors } from '@/store/chat/selectors';
-
 import FileItem from '../../components/FileItem';
 
 interface SearchFilesProps {
-  listResults?: LocalFileItem[];
+  listResults?: Array<{ isDirectory: boolean; name: string; path?: string; size?: number }>;
   messageId: string;
   pluginError: ChatMessagePluginError;
 }
 
 const SearchFiles = memo<SearchFilesProps>(({ listResults = [], messageId }) => {
-  const loading = useChatStore(chatToolSelectors.isSearchingLocalFiles(messageId));
+  const { isLoading } = useToolRenderCapabilities();
+  const loading = isLoading?.(messageId);
 
   if (loading) {
     return (
@@ -31,7 +29,7 @@ const SearchFiles = memo<SearchFilesProps>(({ listResults = [], messageId }) => 
   return (
     <Flexbox gap={2} style={{ maxHeight: 140, overflow: 'scroll' }}>
       {listResults.map((item) => (
-        <FileItem key={item.path} {...item} showTime />
+        <FileItem key={item.path || item.name} {...item} showTime />
       ))}
     </Flexbox>
   );

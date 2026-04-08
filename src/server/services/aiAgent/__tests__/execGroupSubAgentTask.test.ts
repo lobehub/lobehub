@@ -25,6 +25,7 @@ vi.mock('@/database/models/thread', () => ({
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
     getAgentConfig: vi.fn(),
+    queryAgents: vi.fn().mockResolvedValue([]),
   })),
 }));
 

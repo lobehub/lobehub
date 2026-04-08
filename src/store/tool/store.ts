@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { initialState, type ToolStoreState } from './initialState';
 import { type AgentSkillsAction, createAgentSkillsSlice } from './slices/agentSkills';
 import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
@@ -15,7 +16,6 @@ import {
   type LobehubSkillStoreAction,
 } from './slices/lobehubSkillStore';
 import { createMCPPluginStoreSlice, type PluginMCPStoreAction } from './slices/mcpStore';
-import { createPluginStoreSlice, type PluginStoreAction } from './slices/oldStore';
 import { createPluginSlice, type PluginAction } from './slices/plugin';
 
 //  ===============  Aggregate createStoreFn ============ //
@@ -23,21 +23,25 @@ import { createPluginSlice, type PluginAction } from './slices/plugin';
 export type ToolStore = ToolStoreState &
   CustomPluginAction &
   PluginAction &
-  PluginStoreAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
   KlavisStoreAction &
   LobehubSkillStoreAction &
-  AgentSkillsAction;
+  AgentSkillsAction &
+  ResetableStore;
 
 type ToolStoreAction = CustomPluginAction &
   PluginAction &
-  PluginStoreAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
   KlavisStoreAction &
   LobehubSkillStoreAction &
-  AgentSkillsAction;
+  AgentSkillsAction &
+  ResetableStore;
+
+class ToolStoreResetAction extends ResetableStoreAction<ToolStore> {
+  protected readonly resetActionName = 'resetToolStore';
+}
 
 const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<ToolStore, [['zustand/devtools', never]]>>
@@ -46,12 +50,12 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
   ...flattenActions<ToolStoreAction>([
     createPluginSlice(...parameters),
     createCustomPluginSlice(...parameters),
-    createPluginStoreSlice(...parameters),
     createBuiltinToolSlice(...parameters),
     createMCPPluginStoreSlice(...parameters),
     createKlavisStoreSlice(...parameters),
     createLobehubSkillStoreSlice(...parameters),
     createAgentSkillsSlice(...parameters),
+    new ToolStoreResetAction(...parameters),
   ]),
 });
 

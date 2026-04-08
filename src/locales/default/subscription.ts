@@ -418,7 +418,6 @@ export default {
   'referral.table.columns.inviterRewardAmount': 'My Reward',
   'referral.table.columns.rewardedAt': 'Reward Time',
   'referral.table.columns.status': 'Status',
-  'referral.table.columns.suspectedReason': 'Anomaly Reason',
   'referral.table.status.pending_reward': 'Under Review',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',

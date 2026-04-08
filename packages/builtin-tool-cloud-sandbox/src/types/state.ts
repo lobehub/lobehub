@@ -1,70 +1,20 @@
-// ==================== File Operations ====================
+// Re-export shared state types from @lobechat/tool-runtime
+export type {
+  EditFileState as EditLocalFileState,
+  GetCommandOutputState,
+  GlobFilesState,
+  GrepContentState,
+  KillCommandState,
+  ListFilesState as ListLocalFilesState,
+  MoveFilesState as MoveLocalFilesState,
+  ReadFileState as ReadLocalFileState,
+  RenameFileState as RenameLocalFileState,
+  RunCommandState,
+  SearchFilesState as SearchLocalFilesState,
+  WriteFileState as WriteLocalFileState,
+} from '@lobechat/tool-runtime';
 
-export interface ListLocalFilesState {
-  files: Array<{
-    isDirectory: boolean;
-    name: string;
-    path: string;
-    size?: number;
-  }>;
-}
-
-export interface ReadLocalFileState {
-  content: string;
-  endLine?: number;
-  path: string;
-  startLine?: number;
-  totalLines?: number;
-}
-
-export interface WriteLocalFileState {
-  bytesWritten?: number;
-  path: string;
-  success: boolean;
-}
-
-export interface EditLocalFileState {
-  diffText?: string;
-  linesAdded?: number;
-  linesDeleted?: number;
-  path: string;
-  replacements: number;
-}
-
-export interface SearchLocalFilesState {
-  results: Array<{
-    isDirectory: boolean;
-    modifiedAt?: string;
-    name: string;
-    path: string;
-    size?: number;
-  }>;
-  totalCount: number;
-}
-
-export interface MoveLocalFilesState {
-  results: Array<{
-    destination: string;
-    error?: string;
-    source: string;
-    success: boolean;
-  }>;
-  successCount: number;
-  totalCount: number;
-}
-
-export interface RenameLocalFileState {
-  error?: string;
-  newPath: string;
-  oldPath: string;
-  success: boolean;
-}
-
-export interface GlobFilesState {
-  files: string[];
-  pattern: string;
-  totalCount: number;
-}
+// ==================== Cloud-Specific State ====================
 
 export interface ExportFileState {
   /** The download URL for the exported file (permanent /f/:id URL) */
@@ -83,18 +33,6 @@ export interface ExportFileState {
   success: boolean;
 }
 
-export interface GrepContentState {
-  matches: Array<{
-    content?: string;
-    lineNumber?: number;
-    path: string;
-  }>;
-  pattern: string;
-  totalMatches: number;
-}
-
-// ==================== Code Execution ====================
-
 export interface ExecuteCodeState {
   /** Error message if execution failed */
   error?: string;
@@ -107,31 +45,6 @@ export interface ExecuteCodeState {
   /** Standard error from execution */
   stderr?: string;
   /** Whether the execution was successful */
-  success: boolean;
-}
-
-// ==================== Shell Commands ====================
-
-export interface RunCommandState {
-  commandId?: string;
-  error?: string;
-  exitCode?: number;
-  isBackground: boolean;
-  output?: string;
-  stderr?: string;
-  success: boolean;
-}
-
-export interface GetCommandOutputState {
-  error?: string;
-  newOutput?: string;
-  running: boolean;
-  success: boolean;
-}
-
-export interface KillCommandState {
-  commandId: string;
-  error?: string;
   success: boolean;
 }
 

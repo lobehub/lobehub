@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "Mi Recompensa",
   "referral.table.columns.rewardedAt": "Fecha de Recompensa",
   "referral.table.columns.status": "Estado",
-  "referral.table.columns.suspectedReason": "Motivo de Anomalía",
   "referral.table.status.pending_reward": "Recompensa Pendiente",
   "referral.table.status.registered": "Registrado",
   "referral.table.status.revoked": "Revocado",

@@ -5,7 +5,7 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
-import { serverIdField, userIdField } from '../const';
+import { displayToolCallsField, serverIdField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
 import { MAX_DISCORD_HISTORY_LIMIT } from './const';
 
@@ -77,6 +77,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      displayToolCallsField,
       {
         key: 'historyLimit',
         default: DEFAULT_BOT_HISTORY_LIMIT,

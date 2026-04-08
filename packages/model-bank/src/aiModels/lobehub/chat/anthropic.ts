@@ -5,7 +5,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -32,7 +31,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -58,7 +56,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -90,7 +87,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 1_000_000,
@@ -118,7 +114,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       structuredOutput: true,
       vision: true,
     },
@@ -151,7 +146,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -183,7 +177,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -215,7 +208,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       structuredOutput: true,
       vision: true,
     },

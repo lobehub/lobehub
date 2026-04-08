@@ -4,7 +4,7 @@ import { exportJSONFile } from '@lobechat/utils/client';
 import { Icon } from '@lobehub/ui';
 import { App, Dropdown, type MenuProps } from 'antd';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
-import { Download, Info, MoreHorizontal, Trash2, Upload } from 'lucide-react';
+import { Book, Download, MoreHorizontal, Trash2, Upload } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -72,12 +72,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorSuccess};
     box-shadow: 0 0 0 1px ${cssVar.colorBgContainer};
-  `,
-  title: css`
-    padding-inline: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextQuaternary};
   `,
 }));
 
@@ -250,24 +244,6 @@ const PlatformList = memo<PlatformListProps>(
     return (
       <aside className={styles.root}>
         <div className={styles.list}>
-          <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
-            <div className={styles.title}>{t('channel.platforms')}</div>
-            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-              <button
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: 4,
-                  color: theme.colorTextQuaternary,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  padding: 4,
-                }}
-              >
-                <Icon icon={MoreHorizontal} size={'small'} />
-              </button>
-            </Dropdown>
-          </div>
           <input
             accept=".json"
             ref={fileInputRef}
@@ -301,7 +277,15 @@ const PlatformList = memo<PlatformListProps>(
             );
           })}
         </div>
-        <div style={{ borderTop: `1px solid ${theme.colorBorder}`, padding: 12 }}>
+        <div
+          style={{
+            alignItems: 'center',
+            borderTop: `1px solid ${theme.colorBorder}`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: 12,
+          }}
+        >
           <a
             href="https://lobehub.com/docs/usage/channels/overview"
             rel="noopener noreferrer"
@@ -314,8 +298,23 @@ const PlatformList = memo<PlatformListProps>(
               gap: 4,
             }}
           >
-            <Icon icon={Info} size={'small'} /> {t('channel.documentation')}
+            <Icon icon={Book} size={'small'} /> {t('channel.documentation')}
           </a>
+          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <button
+              style={{
+                background: 'transparent',
+                border: 'none',
+                borderRadius: 4,
+                color: theme.colorTextQuaternary,
+                cursor: 'pointer',
+                display: 'flex',
+                padding: 4,
+              }}
+            >
+              <Icon icon={MoreHorizontal} size={'small'} />
+            </button>
+          </Dropdown>
         </div>
       </aside>
     );

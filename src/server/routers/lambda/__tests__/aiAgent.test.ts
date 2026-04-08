@@ -165,6 +165,62 @@ describe('AI Agent Router Integration Tests', () => {
       expect(createdTopics[0].title!.length).toBeLessThanOrEqual(53); // 50 + '...'
     });
 
+    it('should persist boundDeviceId when creating a topic with deviceId', async () => {
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      const result = await caller.execAgent({
+        agentId: testAgentId,
+        deviceId: 'device-local-1',
+        prompt: 'Hello, device!',
+      });
+
+      expect(result.success).toBe(true);
+
+      const createdTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.agentId, testAgentId));
+
+      expect(createdTopics).toHaveLength(1);
+      expect(createdTopics[0].metadata).toEqual(
+        expect.objectContaining({ boundDeviceId: 'device-local-1' }),
+      );
+    });
+
+    it('should keep existing topic boundDeviceId when reusing a topic with deviceId', async () => {
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      const [existingTopic] = await serverDB
+        .insert(topics)
+        .values({
+          title: 'Existing Topic',
+          agentId: testAgentId,
+          metadata: { boundDeviceId: 'device-old' },
+          sessionId: testSessionId,
+          userId,
+        })
+        .returning();
+
+      const result = await caller.execAgent({
+        agentId: testAgentId,
+        deviceId: 'device-new',
+        prompt: 'Follow up question',
+        appContext: {
+          topicId: existingTopic.id,
+        },
+      });
+
+      expect(result.success).toBe(true);
+
+      const updatedTopic = await serverDB.query.topics.findFirst({
+        where: eq(topics.id, existingTopic.id),
+      });
+
+      expect(updatedTopic?.metadata).toEqual(
+        expect.objectContaining({ boundDeviceId: 'device-old' }),
+      );
+    });
+
     it('should reuse existing topic when topicId is provided', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 

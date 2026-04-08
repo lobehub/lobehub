@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+import { electronStylish } from '@/styles/electron';
 
 const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: number }>(
   ({ placement, size }) => {
@@ -101,6 +102,7 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
         placement={placement}
         trigger="hover"
         popupProps={{
+          className: electronStylish.nodrag,
           style: {
             maxHeight: 360,
             minWidth: 240,

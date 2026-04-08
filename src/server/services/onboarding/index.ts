@@ -219,7 +219,7 @@ export class OnboardingService {
   private getWelcomeMessageContent = async () => {
     const { t } = await translation('onboarding', await this.getUserLocale());
 
-    return `${t('agent.title')}\n\n${t('agent.welcome')}`;
+    return t('agent.welcome');
   };
 
   private ensureWelcomeMessage = async (topicId: string, agentId: string) => {

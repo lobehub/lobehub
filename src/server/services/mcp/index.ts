@@ -1,10 +1,11 @@
-import { type CheckMcpInstallResult, type CustomPluginMetadata } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
 import {
+  type CheckMcpInstallResult,
+  type CustomPluginMetadata,
   type LobeChatPluginApi,
-  type LobeChatPluginManifest,
-  type PluginSchema,
-} from '@lobehub/chat-plugin-sdk';
+  type ToolManifest,
+  type ToolManifestSettings,
+} from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import { type DeploymentOption } from '@lobehub/market-sdk';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
@@ -111,7 +112,7 @@ export class MCPService {
             // Assuming identifier is the unique name/id
             description: item.description,
             name: item.name,
-            parameters: item.inputSchema as PluginSchema,
+            parameters: item.inputSchema as ToolManifestSettings,
           }));
         } catch (error) {
           // Only retry for NoValidSessionId errors
@@ -355,7 +356,7 @@ export class MCPService {
       type: 'none' | 'bearer' | 'oauth2';
     },
     headers?: Record<string, string>,
-  ): Promise<LobeChatPluginManifest> {
+  ): Promise<ToolManifest> {
     const mcpParams = { name: identifier, type: 'http' as const, url };
 
     // Add authentication info to parameters if available
@@ -390,7 +391,7 @@ export class MCPService {
   async getStdioMcpServerManifest(
     params: Omit<StdioMCPParams, 'type'>,
     metadata?: CustomPluginMetadata,
-  ): Promise<LobeChatPluginManifest> {
+  ): Promise<ToolManifest> {
     const mcpParams = {
       args: params.args,
       command: params.command,
@@ -424,7 +425,7 @@ export class MCPService {
       mcpParams,
       // TODO: temporary
       type: 'mcp' as any,
-    } as LobeChatPluginManifest;
+    } as ToolManifest;
   }
 
   /**
@@ -490,7 +491,7 @@ export class MCPService {
       // Assuming identifier is the unique name/id
       description: item.description,
       name: item.name,
-      parameters: item.inputSchema as PluginSchema,
+      parameters: item.inputSchema as ToolManifestSettings,
     }));
   };
 }

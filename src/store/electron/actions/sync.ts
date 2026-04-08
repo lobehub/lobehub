@@ -6,8 +6,8 @@ import useSWR from 'swr';
 import { mutate } from '@/libs/swr';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
 
-import { initialState } from '../initialState';
 import { type ElectronStore } from '../store';
 
 /**
@@ -74,10 +74,11 @@ export class ElectronRemoteServerActionImpl {
     this.#set({ isConnectingServer: false });
     this.#get().clearRemoteServerSyncError();
     try {
-      await remoteServerService.setRemoteServerConfig({ active: false, storageMode: 'cloud' });
-      // Update form URL to empty
-      this.#set({ dataSyncConfig: initialState.dataSyncConfig });
-      // Refresh state
+      // Must use clearRemoteServerConfig (not only set active: false): main process
+      // clears encrypted OIDC access/refresh tokens; otherwise sign-out still leaves auth state.
+      await remoteServerService.clearRemoteServerConfig();
+      const { stores } = await import('@/store/utils/userDataStores');
+      stores.reset();
       await this.#get().refreshServerConfig();
     } catch (error) {
       console.error('Disconnect failed:', error);
@@ -94,14 +95,18 @@ export class ElectronRemoteServerActionImpl {
   };
 
   refreshUserData = async (): Promise<void> => {
-    const { getSessionStoreState } = await import('@/store/session');
-    const { getChatStoreState } = await import('@/store/chat');
-    const { getUserStoreState } = await import('@/store/user');
+    const { stores } = await import('@/store/utils/userDataStores');
+    stores.reset();
 
-    await getSessionStoreState().refreshSessions();
-    await getChatStoreState().refreshMessages();
-    await getChatStoreState().refreshTopic();
-    await getUserStoreState().refreshUserState();
+    const [{ useSessionStore }, { useChatStore }] = await Promise.all([
+      import('@/store/session'),
+      import('@/store/chat'),
+    ]);
+
+    await useSessionStore.getState().refreshSessions();
+    await useChatStore.getState().refreshMessages();
+    await useChatStore.getState().refreshTopic();
+    await useUserStore.getState().refreshUserState();
   };
 
   useDataSyncConfig = (): SWRResponse => {
@@ -118,7 +123,11 @@ export class ElectronRemoteServerActionImpl {
       {
         onSuccess: (data) => {
           if (!isEqual(data, this.#get().dataSyncConfig)) {
-            this.#get().refreshUserData();
+            void this.#get()
+              .refreshUserData()
+              .catch((error) => {
+                console.error('Failed to refresh user data:', error);
+              });
           }
 
           this.#set({ dataSyncConfig: data, isInitRemoteServerConfig: true });

@@ -116,19 +116,16 @@ const AgentTool = memo<AgentToolProps>(
 
     // Fetch plugins
     const [
-      useFetchPluginStore,
       useFetchUserKlavisServers,
       useFetchLobehubSkillConnections,
       useFetchUninstalledBuiltinTools,
       useFetchAgentSkills,
     ] = useToolStore((s) => [
-      s.useFetchPluginStore,
       s.useFetchUserKlavisServers,
       s.useFetchLobehubSkillConnections,
       s.useFetchUninstalledBuiltinTools,
       s.useFetchAgentSkills,
     ]);
-    useFetchPluginStore();
     useFetchInstalledPlugins();
     useFetchUninstalledBuiltinTools(true);
     useFetchAgentSkills(true);

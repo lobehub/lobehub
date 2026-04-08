@@ -1,5 +1,6 @@
 import { parseDataset } from '@lobechat/eval-dataset-parser';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { z } from 'zod';
 
 import {
@@ -48,6 +49,8 @@ const evalRunInputConfigSchema = z.object({
     .max(6 * 3_600_000)
     .optional(),
 });
+
+const log = debug('lobe-lambda-router:agent-eval');
 
 const agentEvalProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -807,6 +810,55 @@ export const agentEvalRouter = router({
       });
 
       return { runId: input.runId, success: true, testCaseId: input.testCaseId };
+    }),
+
+  resumeRunCase: agentEvalProcedure
+    .input(z.object({ runId: z.string(), testCaseId: z.string(), threadId: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      log(
+        'resumeRunCase: runId=%s testCaseId=%s threadId=%s',
+        input.runId,
+        input.testCaseId,
+        input.threadId,
+      );
+      const result = await ctx.runService.resumeTrajectory({
+        runId: input.runId,
+        testCaseId: input.testCaseId,
+        threadId: input.threadId,
+      });
+      log('resumeRunCase: result %O', result);
+      return result;
+    }),
+
+  batchResumeRunCases: agentEvalProcedure
+    .input(
+      z.object({
+        runId: z.string(),
+        targets: z.array(z.object({ testCaseId: z.string(), threadId: z.string().optional() })),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('batchResumeRunCases: runId=%s count=%d', input.runId, input.targets.length);
+      const results = await Promise.allSettled(
+        input.targets.map((target) =>
+          ctx.runService.resumeTrajectory({
+            runId: input.runId,
+            testCaseId: target.testCaseId,
+            threadId: target.threadId,
+          }),
+        ),
+      );
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      log('batchResumeRunCases: succeeded=%d failed=%d', succeeded, failed);
+      return { failed, succeeded, total: input.targets.length };
+    }),
+
+  getResumableCases: agentEvalProcedure
+    .input(z.object({ runId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('getResumableCases: runId=%s', input.runId);
+      return ctx.runService.getResumableCases(input.runId);
     }),
 
   /**

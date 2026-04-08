@@ -1,0 +1,89 @@
+name: Release ModelBank
+
+permissions:
+  contents: write
+  id-token: write
+
+on:
+  push:
+    branches:
+      - canary
+    paths:
+      - packages/model-bank/**
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ModelBank
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build package
+        run: pnpm --filter model-bank build
+
+  publish:
+    name: Publish ModelBank
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.1
+          registry-url: https://registry.npmjs.org
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Bump patch version
+        id: version
+        run: |
+          npm version patch --no-git-tag-version --prefix packages/model-bank
+          echo "version=$(node -p 'require(\"./packages/model-bank/package.json\").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Build package
+        run: pnpm --filter model-bank build
+
+      - name: Publish to npm
+        run: npm publish --provenance
+        working-directory: packages/model-bank
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit version bump
+        env:
+          MODEL_BANK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "lobehubbot"
+          git config user.email "i@lobehub.com"
+          git add packages/model-bank/package.json
+          git commit -m "🔖 chore(model-bank): release v${MODEL_BANK_VERSION}"
+          git push

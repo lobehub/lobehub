@@ -52,6 +52,7 @@ export default {
   'builtins.lobe-cloud-sandbox.apiName.runCommand': 'Run command',
   'builtins.lobe-cloud-sandbox.apiName.searchLocalFiles': 'Search files',
   'builtins.lobe-cloud-sandbox.apiName.writeLocalFile': 'Write file',
+  'builtins.lobe-cloud-sandbox.inspector.noResults': 'No results',
   'builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
   'builtins.lobe-group-agent-builder.apiName.batchCreateAgents': 'Batch create agents',
   'builtins.lobe-group-agent-builder.apiName.createAgent': 'Create agent',

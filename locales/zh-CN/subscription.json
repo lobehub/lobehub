@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "我的奖励",
   "referral.table.columns.rewardedAt": "奖励时间",
   "referral.table.columns.status": "状态",
-  "referral.table.columns.suspectedReason": "异常原因",
   "referral.table.status.pending_reward": "审核中",
   "referral.table.status.registered": "已注册",
   "referral.table.status.revoked": "已撤销",

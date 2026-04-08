@@ -63,6 +63,11 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "claude-sonnet-4-6",
     "provider": "anthropic",
   },
+  "inputCompletion": {
+    "enabled": false,
+    "model": "gpt-5.4-mini",
+    "provider": "openai",
+  },
   "queryRewrite": {
     "enabled": true,
     "model": "gpt-5.4-mini",

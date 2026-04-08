@@ -153,6 +153,7 @@ export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
   | 'millionCharacters' // per 1M characters
   | 'image' // per image
+  | 'video' // per video
   | 'megapixel' // per megapixel
   | 'second'; // per second
 

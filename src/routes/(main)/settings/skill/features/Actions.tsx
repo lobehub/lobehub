@@ -10,7 +10,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
-import { pluginSelectors, pluginStoreSelectors } from '@/store/tool/selectors';
+import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import EditCustomPlugin from './EditCustomPlugin';
@@ -23,15 +23,12 @@ interface ActionsProps {
 
 const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const [installed, installing, installPlugin, unInstallPlugin, installMCPPlugin] = useToolStore(
-    (s) => [
-      pluginSelectors.isPluginInstalled(identifier)(s),
-      pluginStoreSelectors.isPluginInstallLoading(identifier)(s),
-      s.installPlugin,
-      s.uninstallPlugin,
-      s.installMCPPlugin,
-    ],
-  );
+  const [installed, installing, unInstallPlugin, installMCPPlugin] = useToolStore((s) => [
+    pluginSelectors.isPluginInstalled(identifier)(s),
+    mcpStoreSelectors.isPluginInstallLoading(identifier)(s),
+    s.uninstallCustomPlugin,
+    s.installMCPPlugin,
+  ]);
 
   const isCustomPlugin = type === 'customPlugin';
   const { t } = useTranslation('plugin');
@@ -115,9 +112,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
             onClick={async () => {
               if (isMCP) {
                 await installMCPPlugin(identifier);
-                await togglePlugin(identifier);
-              } else {
-                await installPlugin(identifier);
                 await togglePlugin(identifier);
               }
             }}

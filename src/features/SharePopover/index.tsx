@@ -227,9 +227,11 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
         >
           {t('shareModal.popover.moreOptions')}
         </Button>
-        <Button icon={LinkIcon} size="small" type="primary" onClick={handleCopyLink}>
-          {t('shareModal.copyLink')}
-        </Button>
+        {currentVisibility !== 'private' && (
+          <Button icon={LinkIcon} size="small" type="primary" onClick={handleCopyLink}>
+            {t('shareModal.copyLink')}
+          </Button>
+        )}
       </Flexbox>
     </Flexbox>
   );

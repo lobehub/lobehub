@@ -160,14 +160,13 @@ export class BackendProxyProtocolManager {
         responseHeaders.set('Access-Control-Allow-Headers', '*');
         responseHeaders.set('X-Src-Url', rewrittenUrl);
 
-        // Handle 401 Unauthorized: only notify authorization required for real auth failures
-        // The server sets X-Auth-Required header for real authentication failures (e.g., token expired)
-        // Other 401 errors (e.g., invalid API keys) should not trigger re-authentication
-        if (upstreamResponse.status === 401) {
-          const authRequired = upstreamResponse.headers.get(AUTH_REQUIRED_HEADER) === 'true';
-          if (authRequired) {
-            this.notifyAuthorizationRequired();
-          }
+        // Re-auth prompt: rely on X-Auth-Required (set by tRPC responseMeta for UNAUTHORIZED).
+        // Batched tRPC responses can use HTTP 207 when calls mix success (200) and UNAUTHORIZED (401);
+        // checking only status === 401 misses that case and the login modal never opens.
+        // Other failures keep 401 without this header (e.g., invalid API keys) and must not notify here.
+        const authRequired = upstreamResponse.headers.get(AUTH_REQUIRED_HEADER) === 'true';
+        if (authRequired) {
+          this.notifyAuthorizationRequired();
         }
 
         return new Response(upstreamResponse.body, {

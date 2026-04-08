@@ -23,6 +23,7 @@ function getLogFilePath() {
 
 export interface DaemonStatus {
   connectionStatus: string;
+  deviceId?: string;
   gatewayUrl: string;
   pid: number;
   startedAt: string;

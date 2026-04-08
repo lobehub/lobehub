@@ -1370,6 +1370,251 @@ describe('google contextBuilders', () => {
         },
       });
     });
+
+    it('should resolve $ref references from definitions', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with $ref',
+          name: 'refTool',
+          parameters: {
+            definitions: {
+              timeIntent: {
+                additionalProperties: false,
+                properties: {
+                  selector: { enum: ['today', 'yesterday', 'month'], type: 'string' },
+                  date: { format: 'date-time', type: 'string' },
+                },
+                required: ['selector'],
+                type: 'object',
+              },
+            },
+            properties: {
+              query: { type: 'string' },
+              timeIntent: {
+                allOf: [{ $ref: '#/definitions/timeIntent' }],
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // $ref should be resolved and inlined, allOf with single element unwrapped
+      expect(result.parameters?.properties).toEqual({
+        query: { type: 'string' },
+        timeIntent: {
+          properties: {
+            selector: { enum: ['today', 'yesterday', 'month'], type: 'string' },
+            date: { format: 'date-time', type: 'string' },
+          },
+          required: ['selector'],
+          type: 'object',
+        },
+      });
+    });
+
+    it('should resolve nested $ref in oneOf', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with nested $ref in oneOf',
+          name: 'nestedRefTool',
+          parameters: {
+            definitions: {
+              mySchema: {
+                properties: { value: { type: 'integer' } },
+                type: 'object',
+              },
+            },
+            properties: {
+              anchor: {
+                oneOf: [
+                  { enum: ['today', 'yesterday'], type: 'string' },
+                  { $ref: '#/definitions/mySchema' },
+                ],
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      expect(result.parameters?.properties).toEqual({
+        anchor: {
+          oneOf: [
+            { enum: ['today', 'yesterday'], type: 'string' },
+            { properties: { value: { type: 'integer' } }, type: 'object' },
+          ],
+        },
+      });
+    });
+
+    it('should strip definitions from output', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'Tool with definitions',
+          name: 'defTool',
+          parameters: {
+            definitions: {
+              foo: { type: 'string' },
+            },
+            properties: {
+              bar: { type: 'string' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // definitions should not appear in the output properties
+      expect(result.parameters?.properties).toEqual({
+        bar: { type: 'string' },
+      });
+    });
+
+    it('should preserve sibling fields next to $ref', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with $ref siblings',
+          name: 'siblingTool',
+          parameters: {
+            definitions: {
+              timeIntent: {
+                properties: {
+                  selector: { type: 'string' },
+                },
+                required: ['selector'],
+                type: 'object',
+              },
+            },
+            properties: {
+              timeIntent: {
+                allOf: [{ $ref: '#/definitions/timeIntent' }],
+                description: 'Calendar-friendly time selector',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // description from sibling should be preserved after $ref resolution
+      expect(result.parameters?.properties).toEqual({
+        timeIntent: {
+          description: 'Calendar-friendly time selector',
+          properties: {
+            selector: { type: 'string' },
+          },
+          required: ['selector'],
+          type: 'object',
+        },
+      });
+    });
+
+    it('should handle unknown $ref gracefully by stripping it', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'Tool with unknown ref',
+          name: 'unknownRefTool',
+          parameters: {
+            properties: {
+              field: { $ref: '#/definitions/nonExistent', description: 'some field' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // Unknown $ref should be stripped, other properties kept
+      expect(result.parameters?.properties).toEqual({
+        field: { description: 'some field' },
+      });
+    });
+
+    it('should strip additionalProperties from schemas', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with additionalProperties',
+          name: 'apTool',
+          parameters: {
+            properties: {
+              config: {
+                additionalProperties: false,
+                properties: {
+                  nested: {
+                    additionalProperties: { type: 'string' },
+                    type: 'object',
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      expect(result.parameters?.properties).toEqual({
+        config: {
+          properties: {
+            nested: {
+              type: 'object',
+            },
+          },
+          type: 'object',
+        },
+      });
+    });
+
+    it('should strip remaining $ref when resolveRefs exceeds depth limit', () => {
+      // Build a deeply recursive schema that exceeds depth limit of 10
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with deep recursive $ref',
+          name: 'deepRefTool',
+          parameters: {
+            definitions: {
+              node: {
+                properties: {
+                  child: { oneOf: [{ type: 'string' }, { $ref: '#/definitions/node' }] },
+                },
+                type: 'object',
+              },
+            },
+            properties: {
+              root: { $ref: '#/definitions/node' },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // Verify no $ref remains anywhere in the output
+      const json = JSON.stringify(result);
+      expect(json).not.toContain('"$ref"');
+      // Also verify no additionalProperties
+      expect(json).not.toContain('"additionalProperties"');
+    });
   });
 
   describe('buildGoogleTools', () => {

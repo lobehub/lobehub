@@ -5,9 +5,6 @@ export const API_ENDPOINTS = {
 
   proxy: withElectronProtocolIfElectron('/webapi/proxy'),
 
-  // plugins
-  gateway: withElectronProtocolIfElectron('/webapi/plugin/gateway'),
-
   // trace
   trace: withElectronProtocolIfElectron('/webapi/trace'),
 

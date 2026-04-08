@@ -9,6 +9,11 @@
     "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/builtin-tool-local-system": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*",
+    "@lobechat/tool-runtime": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },

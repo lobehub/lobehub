@@ -9,6 +9,11 @@ import { type StarterMode } from './initialState';
 
 const n = setNamespace('homeInput');
 
+interface SendMessageWithEditorParams {
+  editorData?: Record<string, any>;
+  message: string;
+}
+
 type Setter = StoreSetter<SessionStore>;
 export const createHomeInputSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
   new HomeInputActionImpl(set, get, _api);
@@ -27,7 +32,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
   };
 
-  sendAsAgent = async (message: string): Promise<string> => {
+  sendAsAgent = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
@@ -50,6 +55,7 @@ export class HomeInputActionImpl {
       const { sendMessage } = useChatStore.getState();
       await sendMessage({
         context: { agentId: newAgentId, scope: 'agent_builder' },
+        editorData,
         message,
       });
 
@@ -81,7 +87,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
   };
 
-  sendAsWrite = async (message: string): Promise<string> => {
+  sendAsWrite = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
@@ -104,6 +110,7 @@ export class HomeInputActionImpl {
           agentId: newDoc.id,
           scope: 'page',
         },
+        editorData,
         message,
       });
 

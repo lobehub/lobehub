@@ -1,9 +1,9 @@
 /**
- * Slash action architecture:
+ * Action tag architecture:
  *
- * 1. Command — Built-in, line-start only, executed client-side before send
- * 2. Skill   — Skill package, line-start, can be preloaded before execution
- * 3. Tool    — Explicit tool selection, line-start, separate from skill packages
+ * 1. Command — Built-in, line-start only (slash menu), executed client-side before send
+ * 2. Skill   — Skill package, inserted via @ mention, preloaded before execution
+ * 3. Tool    — Explicit tool selection, inserted via @ mention, context injected directly
  */
 export type ActionTagCategory = 'command' | 'skill' | 'tool';
 

@@ -96,7 +96,7 @@ vi.mock('@lobechat/device-gateway-client', () => ({
 // eslint-disable-next-line import-x/first
 import { resolveToken } from '../auth/resolveToken';
 // eslint-disable-next-line import-x/first
-import { spawnDaemon, stopDaemon } from '../daemon/manager';
+import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
 // eslint-disable-next-line import-x/first
 import { loadSettings, saveSettings } from '../settings';
 // eslint-disable-next-line import-x/first
@@ -129,6 +129,36 @@ describe('connect command', () => {
     registerConnectCommand(program);
     return program;
   }
+
+  it('should persist deviceId in status for foreground connections', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+
+    expect(writeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionStatus: 'connecting', deviceId: 'mock-device-id' }),
+    );
+
+    clientEventHandlers.connected?.();
+
+    expect(writeStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ connectionStatus: 'connected', deviceId: 'mock-device-id' }),
+    );
+  });
+
+  it('should persist deviceId in status for daemon child connections', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect', '--daemon-child']);
+
+    expect(writeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionStatus: 'connecting', deviceId: 'mock-device-id' }),
+    );
+
+    clientEventHandlers.connected?.();
+
+    expect(writeStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ connectionStatus: 'connected', deviceId: 'mock-device-id' }),
+    );
+  });
 
   it('should connect to gateway', async () => {
     const program = createProgram();
@@ -288,6 +318,7 @@ describe('connect command', () => {
     }
 
     expect(cleanupAllProcesses).toHaveBeenCalled();
+    expect(removeStatus).toHaveBeenCalled();
   });
 
   it('should handle auth_expired when refresh fails', async () => {

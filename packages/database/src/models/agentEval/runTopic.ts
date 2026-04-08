@@ -195,7 +195,10 @@ export class AgentEvalRunTopicModel {
   updateByRunAndTopic = async (
     runId: string,
     topicId: string,
-    value: Pick<Partial<AgentEvalRunTopicItem>, 'evalResult' | 'passed' | 'score' | 'status'>,
+    value: Pick<
+      Partial<AgentEvalRunTopicItem>,
+      'createdAt' | 'evalResult' | 'passed' | 'score' | 'status'
+    >,
   ) => {
     const [result] = await this.db
       .update(agentEvalRunTopics)

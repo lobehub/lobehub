@@ -40,7 +40,18 @@ describe('createVolcengineVideo', () => {
 
       const result = await createVolcengineVideo(payload, options);
 
-      expect(result).toEqual({ inferenceId: 'task-abc-123' });
+      expect(result).toEqual({ inferenceId: 'task-abc-123', useWebhook: true });
+    });
+
+    it('should return useWebhook: true to indicate webhook-based async flow', async () => {
+      mockFetch.mockResolvedValue({
+        json: () => Promise.resolve({ id: 'task-webhook' }),
+        ok: true,
+      });
+
+      const result = await createVolcengineVideo(payload, options);
+
+      expect((result as any).useWebhook).toBe(true);
     });
 
     it('should send minimal body with only prompt', async () => {

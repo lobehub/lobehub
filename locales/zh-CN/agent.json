@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "可选。用于将 webhook 请求转发到本地开发服务器的 HTTPS 隧道 URL。",
   "channel.disabled": "已禁用",
   "channel.discord.description": "将助手连接到 Discord 服务器，支持频道聊天和私信。",
+  "channel.displayToolCalls": "展示工具调用",
+  "channel.displayToolCallsHint": "在 AI 回复过程中展示工具调用详情。关闭后仅展示最终回复，获得更简洁的体验。",
   "channel.dm": "私信",
   "channel.dmEnabled": "启用私信",
   "channel.dmEnabledHint": "允许机器人接收和回复私信",

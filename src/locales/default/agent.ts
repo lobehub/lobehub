@@ -124,6 +124,9 @@ export default {
   'channel.signingSecretHint': 'Used to verify webhook requests.',
   'channel.showUsageStats': 'Show Usage Stats',
   'channel.showUsageStatsHint': 'Show token usage, cost, and duration stats in bot replies',
+  'channel.displayToolCalls': 'Display Tool Calls',
+  'channel.displayToolCallsHint':
+    'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
   'channel.historyLimit': 'History Message Limit',
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
   'channel.serverId': 'Default Server / Guild ID',

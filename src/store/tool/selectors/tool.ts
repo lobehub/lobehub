@@ -1,6 +1,5 @@
 import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { type RenderDisplayControl } from '@lobechat/types';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
 
 import {
   isInstalledPluginAvailableInCurrentEnv,
@@ -42,10 +41,10 @@ const getMetaById =
 
 const getManifestById =
   (id: string) =>
-  (s: ToolStoreState): LobeChatPluginManifest | undefined =>
+  (s: ToolStoreState): ToolManifest | undefined =>
     pluginSelectors
       .installedPluginManifestList(s)
-      .concat(s.builtinTools.map((b) => b.manifest as LobeChatPluginManifest))
+      .concat(s.builtinTools.map((b) => b.manifest as ToolManifest))
       .find((i) => i.identifier === id);
 
 // Get plugin manifest loading status

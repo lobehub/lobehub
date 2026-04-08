@@ -734,6 +734,11 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
+  'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
+  'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
+  'settingSystemTools.appEnvironment.electron.desc': 'Electron framework version',
+  'settingSystemTools.appEnvironment.node.desc': 'Embedded Node.js version',
+  'settingSystemTools.appEnvironment.title': 'App Environment',
   'settingSystemTools.autoSelectDesc': 'The best available tool will be automatically selected',
   'settingSystemTools.category.browserAutomation': 'Browser Automation',
   'settingSystemTools.category.browserAutomation.desc':
@@ -796,6 +801,8 @@ export default {
   'skillStore.tabs.community': 'Community',
   'skillStore.tabs.custom': 'Custom',
   'skillStore.tabs.lobehub': 'LobeHub',
+  'skillStore.tabs.mcp': 'MCP',
+  'skillStore.tabs.skills': 'Skills',
   'skillStore.title': 'Skill Store',
   'skillStore.wantMore.action': 'Submit a request →',
   'skillStore.wantMore.feedback.message': `## Skill Name
@@ -886,6 +893,10 @@ When I am ___, I need ___
   'systemAgent.historyCompress.modelDesc':
     'Specify the model used to compress conversation history',
   'systemAgent.historyCompress.title': 'Conversation History Compression Agent',
+  'systemAgent.inputCompletion.label': 'Model',
+  'systemAgent.inputCompletion.modelDesc':
+    'Model used for input auto-completion suggestions (like GitHub Copilot ghost text)',
+  'systemAgent.inputCompletion.title': 'Input Auto-Completion Agent',
   'systemAgent.queryRewrite.label': 'Model',
   'systemAgent.queryRewrite.modelDesc': 'Specify the model used to optimize user inquiries',
   'systemAgent.queryRewrite.title': 'Library query rewrite Agent',
@@ -906,7 +917,7 @@ When I am ___, I need ___
   'tab.advanced.updateChannel.canaryDesc':
     'Triggered on every PR merge, multiple builds per day. Most unstable.',
   'tab.advanced.updateChannel.desc':
-    'By default, get notifications for stable updates. Nightly and Canary channels receive pre-release builds that may be unstable for production work.',
+    'By default, get notifications for stable updates. The Canary channel receives pre-release builds that may be unstable for production work.',
   'tab.advanced.updateChannel.nightly': 'Nightly',
   'tab.advanced.updateChannel.nightlyDesc': 'Automated daily builds with the latest changes.',
   'tab.advanced.updateChannel.stable': 'Stable',

@@ -159,7 +159,7 @@ while (state.status !== 'done' && state.status !== 'error') {
 **Plugin 工具**：传统插件体系，通过 API 网关调用。
 该体系预期将逐步废弃，由 MCP 工具体系替代。
 
-- 前端通过 `invokeDefaultTypePlugin` 方法调用
+- 前端通过 `invokeBuiltinTool` 方法调用
 - 获取插件设置和清单、创建认证请求头、
   发送请求到插件网关
 

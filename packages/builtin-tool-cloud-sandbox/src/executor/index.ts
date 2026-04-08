@@ -90,7 +90,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.listLocalFiles(params);
+    const result = await runtime.listFiles(params);
     return this.toBuiltinResult(result);
   };
 
@@ -99,7 +99,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.readLocalFile(params);
+    const result = await runtime.readFile(params);
     return this.toBuiltinResult(result);
   };
 
@@ -108,7 +108,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.writeLocalFile(params);
+    const result = await runtime.writeFile(params);
     return this.toBuiltinResult(result);
   };
 
@@ -117,7 +117,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.editLocalFile(params);
+    const result = await runtime.editFile(params);
     return this.toBuiltinResult(result);
   };
 
@@ -126,7 +126,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.searchLocalFiles(params);
+    const result = await runtime.searchFiles(params);
     return this.toBuiltinResult(result);
   };
 
@@ -135,7 +135,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.moveLocalFiles(params);
+    const result = await runtime.moveFiles(params);
     return this.toBuiltinResult(result);
   };
 
@@ -144,7 +144,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.renameLocalFile(params);
+    const result = await runtime.renameFile(params);
     return this.toBuiltinResult(result);
   };
 
@@ -204,7 +204,7 @@ class CloudSandboxExecutor extends BaseExecutor<typeof CloudSandboxApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const runtime = this.getRuntime(ctx);
-    const result = await runtime.globLocalFiles(params);
+    const result = await runtime.globFiles(params);
     return this.toBuiltinResult(result);
   };
 

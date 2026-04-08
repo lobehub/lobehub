@@ -80,7 +80,7 @@ describe('AgentDocumentModel', () => {
       expect(result.policy?.context?.position).toBe(DocumentLoadPosition.BEFORE_FIRST_USER);
       expect(result.policy?.context?.rule).toBe(DocumentLoadRule.ALWAYS);
       expect(result.policyLoadFormat).toBe(DocumentLoadFormat.RAW);
-      expect(result.policyLoad).toBe(PolicyLoad.ALWAYS);
+      expect(result.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
       expect(result.accessShared).toBe(0);
       expect(result.accessPublic).toBe(0);
     });
@@ -324,6 +324,20 @@ describe('AgentDocumentModel', () => {
       const context = await agentDocumentModel.getAgentContext(agentId);
       expect(context).toContain('--- always.md ---');
       expect(context).not.toContain('--- manual.md ---');
+    });
+
+    it('should preserve progressive policyLoad when updating load rule without mode', async () => {
+      const doc = await agentDocumentModel.create(agentId, 'progressive.md', 'content');
+      expect(doc.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+
+      const updated = await agentDocumentModel.updateToolLoadRule(doc.id, {
+        rule: 'by-keywords',
+        keywords: ['test'],
+      });
+
+      expect(updated?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+      expect(updated?.policy?.context?.keywords).toEqual(['test']);
+      expect(updated?.policyLoadRule).toBe(DocumentLoadRule.BY_KEYWORDS);
     });
 
     it('should group docs by position and sort by priority ascending', async () => {

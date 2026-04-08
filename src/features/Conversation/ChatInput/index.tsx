@@ -20,8 +20,32 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
 import QueueTray from './QueueTray';
+
+/** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
+const MAX_CONTEXT_MESSAGES = 25;
+
+const useGetMessages = () => {
+  const storeApi = useConversationStoreApi();
+  return useCallback(
+    () =>
+      dataSelectors
+        .dbMessages(storeApi.getState())
+        .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
+        .slice(-MAX_CONTEXT_MESSAGES)
+        .map((m) => ({
+          content: typeof m.content === 'string' ? m.content : '',
+          role: m.role as 'user' | 'assistant' | 'system',
+        })),
+    [storeApi],
+  );
+};
 
 export interface ChatInputProps {
   /**
@@ -107,6 +131,8 @@ const ChatInput = memo<ChatInputProps>(
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
+
+    const getMessages = useGetMessages();
 
     // ConversationStore state
     const context = useConversationStore((s) => s.context);
@@ -249,6 +275,7 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        getMessages={getMessages}
         leftActions={leftActions}
         mentionItems={mentionItems}
         rightActions={rightActions}

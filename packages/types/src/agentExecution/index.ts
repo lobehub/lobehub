@@ -28,6 +28,8 @@ export interface ExecAgentParams {
   appContext?: ExecAgentAppContext;
   /** Whether to auto-start execution after creating operation (default: true) */
   autoStart?: boolean;
+  /** Explicit device ID to bind to the topic and activate for this run */
+  deviceId?: string;
   /** Optional existing message IDs to include in context */
   existingMessageIds?: string[];
   /** Additional system instructions appended after the agent's own system role */
