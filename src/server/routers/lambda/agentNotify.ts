@@ -21,10 +21,12 @@ const agentNotifyProcedure = authedProcedure.use(serverDatabase).use(async (opts
 });
 
 const NotifySchema = z.object({
+  /** Agent ID to trigger (overrides the topic's default agent) */
+  agentId: z.string().optional(),
   /** Message content from the external agent */
   content: z.string(),
-  /** Optional external session ID for tracing */
-  sessionId: z.string().optional(),
+  /** Thread ID for threaded conversations */
+  threadId: z.string().optional(),
   /** Topic ID to send the message to */
   topicId: z.string(),
 });
@@ -35,9 +37,9 @@ export const agentNotifyRouter = router({
    * write it into a topic, and trigger the agent loop to process it.
    */
   notify: agentNotifyProcedure.input(NotifySchema).mutation(async ({ input, ctx }) => {
-    const { topicId, content, sessionId } = input;
+    const { topicId, content, agentId: inputAgentId, threadId } = input;
 
-    log('notify: topicId=%s, sessionId=%s, content=%s', topicId, sessionId, content.slice(0, 80));
+    log('notify: topicId=%s, agentId=%s, content=%s', topicId, inputAgentId, content.slice(0, 80));
 
     // 1. Verify the topic exists and get its agentId
     const topic = await ctx.topicModel.findById(topicId);
@@ -48,11 +50,11 @@ export const agentNotifyRouter = router({
       });
     }
 
-    const agentId = topic.agentId;
+    const agentId = inputAgentId ?? topic.agentId;
     if (!agentId) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
-        message: `Topic ${topicId} has no associated agent`,
+        message: `Topic ${topicId} has no associated agent and no agentId was provided`,
       });
     }
 
@@ -60,13 +62,12 @@ export const agentNotifyRouter = router({
     try {
       const result = await ctx.aiAgentService.execAgent({
         agentId,
-        appContext: { topicId },
+        appContext: { threadId, topicId },
         prompt: content,
       });
 
       return {
         operationId: result.operationId,
-        sessionId,
         topicId,
       };
     } catch (error: any) {

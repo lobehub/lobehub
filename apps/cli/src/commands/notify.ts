@@ -10,18 +10,26 @@ export function registerNotifyCommand(program: Command) {
     .description('Send a callback message to a topic and trigger the agent to process it')
     .requiredOption('--topic <topicId>', 'Target topic ID')
     .requiredOption('-c, --content <content>', 'Message content')
-    .option('--session-id <sessionId>', 'External session ID for tracing')
+    .option('--agent-id <agentId>', 'Agent ID (overrides topic default)')
+    .option('--thread-id <threadId>', 'Thread ID for threaded conversations')
     .option('--json', 'Output JSON')
     .action(
-      async (options: { content: string; json?: boolean; sessionId?: string; topic: string }) => {
-        log.debug('notify: topic=%s, sessionId=%s', options.topic, options.sessionId);
+      async (options: {
+        agentId?: string;
+        content: string;
+        json?: boolean;
+        threadId?: string;
+        topic: string;
+      }) => {
+        log.debug('notify: topic=%s, agentId=%s', options.topic, options.agentId);
 
         const client = await getTrpcClient();
 
         try {
           const result = await client.agentNotify.notify.mutate({
+            agentId: options.agentId,
             content: options.content,
-            sessionId: options.sessionId,
+            threadId: options.threadId,
             topicId: options.topic,
           });
 
