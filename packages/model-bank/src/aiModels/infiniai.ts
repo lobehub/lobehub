@@ -8,6 +8,56 @@ const infiniaiChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
+    contextWindowTokens: 198_000,
+    description:
+      'GLM-5.1 is GLM AI’s new generation flagship text model for Agentic Engineering.Compared with GLM-5, GLM-5.1 is further enhanced in code generation, warehouse-level engineering tasks, terminal execution and long-range agent interaction, and is more suitable for handling complex development workflows that require continuous planning, repeated trials, cross-tool collaboration and multiple rounds of debugging.',
+    displayName: 'GLM-5.1',
+    enabled: true,
+    id: 'glm-5.1',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 28, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-08',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.5 is an open-source native multimodal agent model built on Kimi-K2-Base. It combines vision and language understanding with advanced agent capabilities, instant and thinking modes, and both conversational and agentic workflows.',
+    displayName: 'Kimi K2.5',
+    enabled: true,
+    id: 'kimi-k2.5',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 21, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-02',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
     contextWindowTokens: 204_800,
     description:
       'MiniMax-M2.7 has reached or refreshed the latest SOTA benchmark in programming, tool calling and search, office productivity and many other scenarios, officially starting the journey of model recursive self-improvement.',
@@ -53,7 +103,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3.2 Thinking is the thinking mode variant of DeepSeek-V3.2, focused on reasoning tasks.',
     displayName: 'DeepSeek V3.2 Thinking',
-    enabled: true,
     id: 'deepseek-v3.2-thinking',
     maxOutput: 65_536,
     pricing: {
@@ -98,7 +147,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
     description:
       'A strong reasoning and agentic model from Z.ai with 744B total parameters (40B active), built for complex systems engineering and long-horizon tasks.',
     displayName: 'GLM-5',
-    enabled: true,
     id: 'glm-5',
     pricing: {
       currency: 'CNY',
