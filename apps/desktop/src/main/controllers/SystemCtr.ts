@@ -8,6 +8,7 @@ import { macOS } from 'electron-is';
 import { pathExists, readdir } from 'fs-extra';
 
 import { legacyLocalDbDir } from '@/const/dir';
+import { installCliToPath, isCliInPath } from '@/modules/cliEmbedding';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -233,6 +234,16 @@ export default class SystemController extends ControllerModule {
       // If directory exists but cannot be read, treat as "used" to surface guidance.
       return true;
     }
+  }
+
+  @IpcMethod()
+  async isCliInPath(): Promise<boolean> {
+    return isCliInPath();
+  }
+
+  @IpcMethod()
+  async installCliToPath(): Promise<{ message: string; success: boolean }> {
+    return installCliToPath();
   }
 
   private async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {

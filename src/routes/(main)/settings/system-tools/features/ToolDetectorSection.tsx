@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { electronSystemService } from '@/services/electron/system';
 import { toolDetectorService } from '@/services/electron/toolDetector';
 
 /**
@@ -19,9 +20,14 @@ const TOOL_CATEGORIES = {
     descKey: 'settingSystemTools.category.runtimeEnvironment.desc',
     titleKey: 'settingSystemTools.category.runtimeEnvironment',
     tools: [
+      { descKey: 'settingSystemTools.tools.lobehub.desc', name: 'lobehub' },
       { descKey: 'settingSystemTools.tools.node.desc', name: 'node' },
       { descKey: 'settingSystemTools.tools.python.desc', name: 'python' },
       { descKey: 'settingSystemTools.tools.npm.desc', name: 'npm' },
+      { descKey: 'settingSystemTools.tools.bun.desc', name: 'bun' },
+      { descKey: 'settingSystemTools.tools.bunx.desc', name: 'bunx' },
+      { descKey: 'settingSystemTools.tools.pnpm.desc', name: 'pnpm' },
+      { descKey: 'settingSystemTools.tools.uv.desc', name: 'uv' },
     ],
   },
 
@@ -109,6 +115,8 @@ const ToolDetectorSection = memo(() => {
   const { t } = useTranslation('setting');
   const [toolStatuses, setToolStatuses] = useState<Record<string, ToolStatus>>({});
   const [detecting, setDetecting] = useState(true);
+  const [cliInPath, setCliInPath] = useState<boolean | null>(null);
+  const [installing, setInstalling] = useState(false);
 
   const detectTools = useCallback(async (force = false) => {
     try {
@@ -125,11 +133,29 @@ const ToolDetectorSection = memo(() => {
   // Auto-detect on mount
   useEffect(() => {
     void detectTools(true);
+    electronSystemService
+      .isCliInPath()
+      .then(setCliInPath)
+      .catch(() => setCliInPath(null));
   }, [detectTools]);
 
   const handleRedetect = useCallback(() => {
     detectTools(true);
   }, [detectTools]);
+
+  const handleInstallCli = useCallback(async () => {
+    setInstalling(true);
+    try {
+      const result = await electronSystemService.installCliToPath();
+      if (result?.success) {
+        setCliInPath(true);
+      }
+    } catch (error) {
+      console.error('Failed to install CLI to PATH:', error);
+    } finally {
+      setInstalling(false);
+    }
+  }, []);
 
   const formItems: FormGroupItemType[] = Object.entries(TOOL_CATEGORIES).map(
     ([, categoryConfig]) => ({
@@ -172,6 +198,12 @@ const ToolDetectorSection = memo(() => {
           style={{ marginBlockStart: 8 }}
         >
           <Text type="secondary">{t('settingSystemTools.autoSelectDesc')}</Text>
+          {cliInPath === false && (
+            <Button loading={installing} onClick={handleInstallCli}>
+              {t('settingSystemTools.installCliToPath')}
+            </Button>
+          )}
+          {cliInPath === true && <Tag color="success">{t('settingSystemTools.cliInPath')}</Tag>}
           <Button
             icon={<Icon icon={RefreshCw} spin={detecting} />}
             loading={detecting}
