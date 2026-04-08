@@ -31,6 +31,7 @@ export interface AttachmentSource {
 export interface IngestResult {
   fileId: string;
   isImage: boolean;
+  isVideo: boolean;
   key: string;
   resolvedUrl: string;
 }
@@ -128,14 +129,18 @@ export async function ingestAttachment(
     mimeType = compressed.mimeType;
   }
 
+  // Videos are not compressed, but we still need a resolved URL so the
+  // MessageContentProcessor can pass the video to vision/video-capable models.
+  const isVideo = !isImage && mimeType.startsWith('video/');
+
   // 4. Upload + create record
   const ext = source.name?.split('.').pop() || 'bin';
   const { nanoid } = await import('@lobechat/utils');
   const pathname = `files/${userId}/${nanoid()}/${source.name || `file.${ext}`}`;
   const { fileId, key } = await fileService.uploadFromBuffer(buffer, mimeType, pathname);
 
-  // 5. Resolve full URL for images (presigned or public)
-  const resolvedUrl = isImage ? await fileService.getFullFileUrl(key) : '';
+  // 5. Resolve full URL for images and videos (presigned or public)
+  const resolvedUrl = isImage || isVideo ? await fileService.getFullFileUrl(key) : '';
 
-  return { fileId, isImage, key, resolvedUrl };
+  return { fileId, isImage, isVideo, key, resolvedUrl };
 }

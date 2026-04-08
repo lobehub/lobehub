@@ -20,6 +20,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ChatFileItem,
   ChatTopicBotContext,
+  ChatVideoItem,
   ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
@@ -886,11 +887,13 @@ export class AiAgentService {
     // 12. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+    let videoList: ChatVideoItem[] | undefined;
     let fileList: ChatFileItem[] | undefined;
 
     if (files && files.length > 0) {
       fileIds = [];
       imageList = [];
+      videoList = [];
       fileList = [];
       const documentService = new DocumentService(this.db, this.userId);
 
@@ -910,8 +913,17 @@ export class AiAgentService {
             continue;
           }
 
-          // Non-image: parse file content into the documents table so the
-          // MessageContentProcessor can inject it via filesPrompts(). Mirrors
+          if (result.isVideo) {
+            videoList.push({
+              alt: file.name || 'video',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video: parse file content into the documents table so
+          // the MessageContentProcessor can inject it via filesPrompts(). Mirrors
           // what the web upload path does, ensuring bot-uploaded PDFs / text /
           // JSON / .skill files are actually visible to the LLM (instead of
           // being silently uploaded but never read).
@@ -943,13 +955,15 @@ export class AiAgentService {
 
       if (fileIds.length > 0) {
         log(
-          'execAgent: uploaded %d files to S3 (%d images, %d documents)',
+          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d documents)',
           fileIds.length,
           imageList.length,
+          videoList.length,
           fileList.length,
         );
       }
       if (imageList.length === 0) imageList = undefined;
+      if (videoList.length === 0) videoList = undefined;
       if (fileList.length === 0) fileList = undefined;
     }
 
@@ -988,8 +1002,15 @@ export class AiAgentService {
 
     // Create user message object for processing.
     // - imageList: vision models render these as image_url parts
+    // - videoList: video-capable models render these as video parts
     // - fileList: MessageContentProcessor injects content via filesPrompts() XML
-    const userMessage = { content: prompt, fileList, imageList, role: 'user' as const };
+    const userMessage = {
+      content: prompt,
+      fileList,
+      imageList,
+      role: 'user' as const,
+      videoList,
+    };
 
     // Combine history messages with user message
     const allMessages = resume ? historyMessages : [...historyMessages, userMessage];

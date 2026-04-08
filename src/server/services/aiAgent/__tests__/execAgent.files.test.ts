@@ -170,6 +170,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       mockIngestAttachment.mockResolvedValue({
         fileId: 'file-abc',
         isImage: true,
+        isVideo: false,
         key: 'files/test-user-id/xxx/photo.png',
         resolvedUrl: 'https://s3.example.com/files/test-user-id/xxx/photo.png',
       });
@@ -203,6 +204,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       mockIngestAttachment.mockResolvedValue({
         fileId: 'file-img',
         isImage: true,
+        isVideo: false,
         key: 'files/test-user-id/xxx/screenshot.jpg',
         resolvedUrl: 'https://s3.example.com/files/test-user-id/xxx/screenshot.jpg',
       });
@@ -237,10 +239,56 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       ]);
     });
 
+    it('should route videos to videoList instead of fileList', async () => {
+      mockIngestAttachment.mockResolvedValue({
+        fileId: 'file-vid',
+        isImage: false,
+        isVideo: true,
+        key: 'files/test-user-id/xxx/clip.mp4',
+        resolvedUrl: 'https://s3.example.com/files/test-user-id/xxx/clip.mp4',
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        files: [
+          {
+            mimeType: 'video/mp4',
+            name: 'clip.mp4',
+            size: 67_890,
+            url: 'https://cdn.discordapp.com/attachments/123/456/clip.mp4',
+          },
+        ],
+        prompt: 'Describe this video',
+      });
+
+      // parseFile must NOT be invoked for videos — there is no document content
+      // to extract, only the URL gets passed to video-capable models.
+      expect(mockParseFile).not.toHaveBeenCalled();
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      const lastMessage = createOpArgs.initialMessages.at(-1);
+
+      // Video should land in videoList, not imageList or fileList
+      expect(lastMessage.imageList).toBeUndefined();
+      expect(lastMessage.fileList).toBeUndefined();
+      expect(lastMessage.videoList).toEqual([
+        {
+          alt: 'clip.mp4',
+          id: 'file-vid',
+          url: 'https://s3.example.com/files/test-user-id/xxx/clip.mp4',
+        },
+      ]);
+
+      // The fileId is still tracked on the user message record
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toEqual(['file-vid']);
+    });
+
     it('should parse non-image files and surface them via fileList for the LLM', async () => {
       mockIngestAttachment.mockResolvedValue({
         fileId: 'file-pdf',
         isImage: false,
+        isVideo: false,
         key: 'files/test-user-id/xxx/doc.pdf',
         resolvedUrl: '',
       });
@@ -286,6 +334,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       mockIngestAttachment.mockResolvedValue({
         fileId: 'file-bin',
         isImage: false,
+        isVideo: false,
         key: 'files/test-user-id/xxx/blob.bin',
         resolvedUrl: '',
       });
