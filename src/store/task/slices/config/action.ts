@@ -97,7 +97,6 @@ export class TaskConfigSliceActionImpl {
     try {
       await taskService.updateConfig(id, modelConfig);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTaskModelConfig/saved');
-      await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update task model config:', error);
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTaskModelConfig/error');
