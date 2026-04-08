@@ -2,7 +2,7 @@ import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { InputNumber, Popover, Select } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { TimerIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
@@ -59,6 +59,12 @@ const IntervalTab = memo(() => {
 
   const [localUnit, setLocalUnit] = useState<IntervalUnit>(derived.unit);
   const [localValue, setLocalValue] = useState<number | undefined>(derived.displayValue);
+
+  // Resync local state when active task changes
+  useEffect(() => {
+    setLocalUnit(derived.unit);
+    setLocalValue(derived.displayValue);
+  }, [derived.unit, derived.displayValue]);
 
   const toSeconds = (val: number | null, u: IntervalUnit): number | null => {
     if (!val || val <= 0) return null;
