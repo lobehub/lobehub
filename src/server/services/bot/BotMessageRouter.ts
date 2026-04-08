@@ -24,6 +24,35 @@ import {
 
 const log = debug('lobe-server:bot:message-router');
 
+/**
+ * Compact summary of a Chat SDK Message's attachments for debug logging.
+ * Lets us trace exactly what the platform adapter handed us at the point
+ * where the bot router receives it (before merge / extractFiles run).
+ */
+const summarizeMessageAttachments = (message: Message): Array<Record<string, unknown>> => {
+  const attachments = (message as any).attachments as
+    | Array<{
+        buffer?: Buffer;
+        fetchData?: () => Promise<Buffer>;
+        mimeType?: string;
+        name?: string;
+        size?: number;
+        type?: string;
+        url?: string;
+      }>
+    | undefined;
+  if (!attachments?.length) return [];
+  return attachments.map((att) => ({
+    hasBuffer: !!att.buffer,
+    hasFetchData: typeof att.fetchData === 'function',
+    hasUrl: !!att.url,
+    mimeType: att.mimeType,
+    name: att.name,
+    size: att.size,
+    type: att.type,
+  }));
+};
+
 interface ResolvedAgentInfo {
   agentId: string;
   userId: string;
@@ -395,15 +424,36 @@ export class BotMessageRouter {
     bot.onNewMention(async (thread, message, context?: MessageContext) => {
       if (await tryDispatch(thread, message.text)) return;
 
+      log(
+        'onNewMention raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
+        agentId,
+        platform,
+        message.id,
+        message.text?.length ?? 0,
+        summarizeMessageAttachments(message),
+        context?.skipped?.length ?? 0,
+      );
+      if (context?.skipped?.length) {
+        log(
+          'onNewMention skipped messages: %o',
+          context.skipped.map((m) => ({
+            attachments: summarizeMessageAttachments(m),
+            id: m.id,
+            textLen: m.text?.length ?? 0,
+          })),
+        );
+      }
+
       const merged = BotMessageRouter.mergeSkippedMessages(message, context);
 
       log(
-        'onNewMention: agent=%s, platform=%s, author=%s, thread=%s, merged=%d',
+        'onNewMention: agent=%s, platform=%s, author=%s, thread=%s, merged=%d, mergedAttachments=%d',
         agentId,
         platform,
         message.author.userName,
         thread.id,
         (context?.skipped?.length ?? 0) + 1,
+        ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
       );
       await bridge.handleMention(thread, merged, {
         agentId,
@@ -418,15 +468,36 @@ export class BotMessageRouter {
       if (message.author.isBot === true) return;
       if (await tryDispatch(thread, message.text)) return;
 
+      log(
+        'onSubscribedMessage raw: agent=%s, platform=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
+        agentId,
+        platform,
+        message.id,
+        message.text?.length ?? 0,
+        summarizeMessageAttachments(message),
+        context?.skipped?.length ?? 0,
+      );
+      if (context?.skipped?.length) {
+        log(
+          'onSubscribedMessage skipped messages: %o',
+          context.skipped.map((m) => ({
+            attachments: summarizeMessageAttachments(m),
+            id: m.id,
+            textLen: m.text?.length ?? 0,
+          })),
+        );
+      }
+
       const merged = BotMessageRouter.mergeSkippedMessages(message, context);
 
       log(
-        'onSubscribedMessage: agent=%s, platform=%s, author=%s, thread=%s, merged=%d',
+        'onSubscribedMessage: agent=%s, platform=%s, author=%s, thread=%s, merged=%d, mergedAttachments=%d',
         agentId,
         platform,
         message.author.userName,
         thread.id,
         (context?.skipped?.length ?? 0) + 1,
+        ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
       );
 
       await bridge.handleSubscribedMessage(thread, merged, {
@@ -450,15 +521,36 @@ export class BotMessageRouter {
         // Skip text-based slash commands — already handled by registerCommands
         if (BotMessageRouter.dispatchTextCommand(message.text, commands)) return;
 
+        log(
+          'onNewMessage raw (%s catch-all): agent=%s, msgId=%s, textLen=%d, attachments=%o, skipped=%d',
+          platform,
+          agentId,
+          message.id,
+          message.text?.length ?? 0,
+          summarizeMessageAttachments(message),
+          context?.skipped?.length ?? 0,
+        );
+        if (context?.skipped?.length) {
+          log(
+            'onNewMessage skipped messages: %o',
+            context.skipped.map((m) => ({
+              attachments: summarizeMessageAttachments(m),
+              id: m.id,
+              textLen: m.text?.length ?? 0,
+            })),
+          );
+        }
+
         const merged = BotMessageRouter.mergeSkippedMessages(message, context);
 
         log(
-          'onNewMessage (%s catch-all): agent=%s, author=%s, thread=%s, text=%s',
+          'onNewMessage (%s catch-all): agent=%s, author=%s, thread=%s, text=%s, mergedAttachments=%d',
           platform,
           agentId,
           message.author.userName,
           thread.id,
           message.text?.slice(0, 80),
+          ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
         );
 
         await bridge.handleMention(thread, merged, {

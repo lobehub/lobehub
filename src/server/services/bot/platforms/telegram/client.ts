@@ -143,6 +143,60 @@ class TelegramWebhookClient implements PlatformClient {
     log('TelegramBot appId=%s registered %d commands', this.applicationId, commands.length);
   }
 
+  /**
+   * Re-download a Telegram media attachment whose `fetchData` closure was
+   * stripped during Chat SDK queue/Redis serialization. We dig the
+   * `file_id` out of the original Telegram update payload (`message.raw`)
+   * and call the Bot API ourselves.
+   *
+   * In Telegram, only one media field is populated per message
+   * (`photo` | `video` | `audio` | `voice` | `document`), so the
+   * attachment-list `index` is ignored — there's no ambiguity.
+   */
+  async refetchAttachment(params: {
+    index: number;
+    raw: Record<string, any> | undefined;
+    type: string | undefined;
+  }): Promise<Buffer | undefined> {
+    const fileId = TelegramWebhookClient.resolveTelegramFileId(params.raw, params.type);
+    if (!fileId) {
+      log('refetchAttachment: no file_id for type=%s in raw payload (skipping)', params.type);
+      return undefined;
+    }
+    log('refetchAttachment: type=%s fileId=%s', params.type, fileId);
+    const telegram = new TelegramApi(this.config.credentials.botToken);
+    return telegram.downloadFile(fileId);
+  }
+
+  static resolveTelegramFileId(
+    raw: Record<string, any> | undefined,
+    type: string | undefined,
+  ): string | undefined {
+    if (!raw) return undefined;
+    switch (type) {
+      case 'image': {
+        // Telegram returns photos as an array of size variants — pick the largest.
+        const photos = raw.photo;
+        if (Array.isArray(photos) && photos.length > 0) {
+          return photos.at(-1)?.file_id;
+        }
+        return undefined;
+      }
+      case 'video': {
+        return raw.video?.file_id;
+      }
+      case 'audio': {
+        return raw.audio?.file_id ?? raw.voice?.file_id;
+      }
+      case 'file': {
+        return raw.document?.file_id;
+      }
+      default: {
+        return undefined;
+      }
+    }
+  }
+
   formatMarkdown(markdown: string): string {
     return markdownToTelegramHTML(markdown);
   }

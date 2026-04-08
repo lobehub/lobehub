@@ -66,14 +66,16 @@ function extractErrorMessage(err: unknown): string {
 }
 
 /**
- * Fire-and-forget wrapper for reaction operations.
- * Reactions should never block or fail the main flow.
+ * Fire-and-forget wrapper for non-essential side effects (reactions, typing
+ * indicators, subscribe, etc.). These are UX niceties — a transient platform
+ * network error must NEVER abort the main message flow, because the abort
+ * would skip the cleanup of `activeThreads` and freeze the thread.
  */
-async function safeReaction(fn: () => Promise<void>, label: string): Promise<void> {
+async function safeSideEffect(fn: () => Promise<unknown>, label: string): Promise<void> {
   try {
     await fn();
   } catch (error) {
-    log('safeReaction [%s] failed: %O', label, error);
+    log('safeSideEffect [%s] failed: %O', label, error);
   }
 }
 
@@ -253,10 +255,11 @@ export class AgentBridgeService {
     const { agentId, botContext, charLimit, displayToolCalls } = opts;
 
     log(
-      'handleMention: agentId=%s, user=%s, text=%s',
+      'handleMention: agentId=%s, user=%s, text=%s, attachments=%d',
       agentId,
       this.userId,
       message.text.slice(0, 80),
+      ((message as any).attachments as unknown[] | undefined)?.length ?? 0,
     );
 
     // Skip if there's already an active execution for this thread
@@ -265,54 +268,62 @@ export class AgentBridgeService {
       return;
     }
 
-    AgentBridgeService.activeThreads.add(thread.id);
-
-    // Immediate feedback: mark as received + show typing
     const { client } = opts;
-    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeReaction(
-      () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-      'add eyes',
-    );
-
-    // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
-    const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
-    if (subscribe) {
-      await thread.subscribe();
-    }
-
-    await thread.startTyping();
-
-    // Fetch channel context for Discord context injection
-    const channelContext = await this.fetchChannelContext(thread);
-
     const queueMode = isQueueAgentRuntimeEnabled();
     let queueHandoffSucceeded = false;
 
-    try {
-      // executeWithCallback handles progress message (post + edit at each step)
-      // The final reply is edited into the progress message by onComplete
-      const { topicId } = await this.executeWithCallback(thread, message, {
-        agentId,
-        botContext,
-        channelContext,
-        charLimit,
-        client,
-        displayToolCalls,
-        trigger: RequestTrigger.Bot,
-      });
-      queueHandoffSucceeded = queueMode;
+    // Mark the thread as active and run the rest inside a try/finally so the
+    // active flag is ALWAYS released even if a side-effect call (subscribe /
+    // startTyping / addReaction) throws on a transient platform network error.
+    AgentBridgeService.activeThreads.add(thread.id);
 
-      // Persist topic mapping and channel context in thread state for follow-up messages
-      // Skip if the platform opted out of auto-subscribe (no subscribe = no follow-up)
-      if (topicId && subscribe) {
-        await thread.setState({ channelContext, topicId });
-        log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
+    try {
+      // Immediate feedback: mark as received + show typing. Both are
+      // non-essential UX niceties; a transient platform network error here
+      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+      const reactionThreadId =
+        client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
+      await safeSideEffect(
+        () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
+        'add eyes',
+      );
+
+      // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
+      const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
+      if (subscribe) {
+        await safeSideEffect(() => thread.subscribe(), 'subscribe');
       }
-    } catch (error) {
-      log('handleMention error: %O', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+
+      await safeSideEffect(() => thread.startTyping(), 'startTyping');
+
+      // Fetch channel context for Discord context injection
+      const channelContext = await this.fetchChannelContext(thread);
+
+      try {
+        // executeWithCallback handles progress message (post + edit at each step)
+        // The final reply is edited into the progress message by onComplete
+        const { topicId } = await this.executeWithCallback(thread, message, {
+          agentId,
+          botContext,
+          channelContext,
+          charLimit,
+          client,
+          displayToolCalls,
+          trigger: RequestTrigger.Bot,
+        });
+        queueHandoffSucceeded = queueMode;
+
+        // Persist topic mapping and channel context in thread state for follow-up messages
+        // Skip if the platform opted out of auto-subscribe (no subscribe = no follow-up)
+        if (topicId && subscribe) {
+          await thread.setState({ channelContext, topicId });
+          log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
+        }
+      } catch (error) {
+        log('handleMention error: %O', error);
+        const msg = error instanceof Error ? error.message : String(error);
+        await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+      }
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
@@ -335,7 +346,13 @@ export class AgentBridgeService {
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
 
-    log('handleSubscribedMessage: agentId=%s, thread=%s, topicId=%s', agentId, thread.id, topicId);
+    log(
+      'handleSubscribedMessage: agentId=%s, thread=%s, topicId=%s, attachments=%d',
+      agentId,
+      thread.id,
+      topicId,
+      ((message as any).attachments as unknown[] | undefined)?.length ?? 0,
+    );
 
     if (!topicId) {
       log('handleSubscribedMessage: no topicId in thread state, treating as new mention');
@@ -382,55 +399,64 @@ export class AgentBridgeService {
       );
     }
 
-    AgentBridgeService.activeThreads.add(thread.id);
-
     // Read cached channel context from thread state
     const channelContext = threadState?.channelContext;
 
     const queueMode = isQueueAgentRuntimeEnabled();
     let queueHandoffSucceeded = false;
 
-    // Immediate feedback: mark as received + show typing
-    const reactionThreadId =
-      opts.client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeReaction(
-      () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-      'add eyes',
-    );
-    await thread.startTyping();
+    // Mark the thread as active and run the rest inside a try/finally so the
+    // active flag is ALWAYS released. Earlier this `add` happened outside the
+    // try block, and a network error from `thread.startTyping()` would escape
+    // before we entered the try — leaving the thread permanently locked
+    // ("already has an active execution") until process restart.
+    AgentBridgeService.activeThreads.add(thread.id);
 
     try {
-      // executeWithCallback handles progress message (post + edit at each step)
-      await this.executeWithCallback(thread, message, {
-        agentId,
-        botContext,
-        channelContext,
-        charLimit,
-        client: opts.client,
-        displayToolCalls,
-        topicId,
-        trigger: RequestTrigger.Bot,
-      });
-      queueHandoffSucceeded = queueMode;
-    } catch (error) {
-      // If the cached topicId references a deleted topic (FK violation),
-      // clear thread state and retry as a fresh mention instead of surfacing the DB error.
-      const cause = (error as any)?.cause;
-      const isFKViolation =
-        cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
-      const errMsg = error instanceof Error ? error.message : String(error);
-      if (isFKViolation) {
-        log(
-          'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
-          topicId,
-        );
-        AgentBridgeService.activeThreads.delete(thread.id);
-        await thread.setState({ ...threadState, topicId: undefined });
-        return this.handleMention(thread, message, opts);
-      }
+      // Immediate feedback: mark as received + show typing. Both are
+      // non-essential UX niceties; a transient platform network error here
+      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+      const reactionThreadId =
+        opts.client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
+      await safeSideEffect(
+        () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
+        'add eyes',
+      );
+      await safeSideEffect(() => thread.startTyping(), 'startTyping');
 
-      log('handleSubscribedMessage error: %O', error);
-      await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+      try {
+        // executeWithCallback handles progress message (post + edit at each step)
+        await this.executeWithCallback(thread, message, {
+          agentId,
+          botContext,
+          channelContext,
+          charLimit,
+          client: opts.client,
+          displayToolCalls,
+          topicId,
+          trigger: RequestTrigger.Bot,
+        });
+        queueHandoffSucceeded = queueMode;
+      } catch (error) {
+        // If the cached topicId references a deleted topic (FK violation),
+        // clear thread state and retry as a fresh mention instead of surfacing the DB error.
+        const cause = (error as any)?.cause;
+        const isFKViolation =
+          cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
+        const errMsg = error instanceof Error ? error.message : String(error);
+        if (isFKViolation) {
+          log(
+            'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
+            topicId,
+          );
+          AgentBridgeService.activeThreads.delete(thread.id);
+          await thread.setState({ ...threadState, topicId: undefined });
+          return this.handleMention(thread, message, opts);
+        }
+
+        log('handleSubscribedMessage error: %O', error);
+        await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+      }
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
@@ -478,7 +504,7 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    await thread.startTyping();
+    await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
 
     let progressMessage: SentMessage | undefined;
     try {
@@ -1041,7 +1067,10 @@ export class AgentBridgeService {
    *      `fetch(url)` has no credentials.
    *   3. `url` — public CDN fallback (Discord, QQ public attachments)
    */
-  private async extractFiles(message: Message): Promise<
+  private async extractFiles(
+    message: Message,
+    client?: PlatformClient,
+  ): Promise<
     | Array<{
         buffer?: Buffer;
         mimeType?: string;
@@ -1063,6 +1092,50 @@ export class AgentBridgeService {
       url?: string;
     };
 
+    // Some chat-adapters (notably Telegram for `photo` payloads) emit
+    // attachments with a `type` discriminant but no `mimeType`/`name` —
+    // Telegram's Bot API doesn't return either for photos because they
+    // are always JPEG. Without a usable mimeType, ingestAttachment falls
+    // back to `application/octet-stream`, the file is misclassified as a
+    // document instead of an image, and vision models never see it.
+    //
+    // Honor `att.type` and provide sensible defaults so downstream
+    // detection (`isImage` / `isVideo`) works.
+    const inferMimeType = (att: AttachmentLike): string | undefined => {
+      if (att.mimeType) return att.mimeType;
+      switch (att.type) {
+        case 'image': {
+          return 'image/jpeg';
+        }
+        case 'video': {
+          return 'video/mp4';
+        }
+        case 'audio': {
+          return 'audio/ogg';
+        }
+        default: {
+          return undefined;
+        }
+      }
+    };
+    const inferName = (att: AttachmentLike): string | undefined => {
+      if (att.name) return att.name;
+      switch (att.type) {
+        case 'image': {
+          return 'image.jpg';
+        }
+        case 'video': {
+          return 'video.mp4';
+        }
+        case 'audio': {
+          return 'audio.ogg';
+        }
+        default: {
+          return undefined;
+        }
+      }
+    };
+
     const files: Array<{
       buffer?: Buffer;
       mimeType?: string;
@@ -1073,14 +1146,46 @@ export class AgentBridgeService {
 
     // 1. Direct attachments from the message (parsed by Chat SDK)
     const directAttachments = (message as any).attachments as AttachmentLike[] | undefined;
+    log(
+      'extractFiles: msgId=%s, directAttachments=%d',
+      (message as any).id,
+      directAttachments?.length ?? 0,
+    );
     if (directAttachments?.length) {
+      log(
+        'extractFiles: directAttachments shapes: %o',
+        directAttachments.map((att) => ({
+          hasBuffer: !!att.buffer,
+          hasFetchData: typeof att.fetchData === 'function',
+          hasUrl: !!att.url,
+          mimeType: att.mimeType,
+          name: att.name,
+          size: att.size,
+          type: att.type,
+        })),
+      );
+      const messageRaw = (message as any).raw as Record<string, any> | undefined;
       const resolved = await Promise.all(
-        directAttachments.map(async (att) => {
+        directAttachments.map(async (att, index) => {
+          const mimeType = inferMimeType(att);
+          const name = inferName(att);
+
+          if (mimeType !== att.mimeType || name !== att.name) {
+            log(
+              'extractFiles: inferred from type=%s -> mimeType=%s (was %s), name=%s (was %s)',
+              att.type,
+              mimeType,
+              att.mimeType,
+              name,
+              att.name,
+            );
+          }
+
           if (att.buffer) {
             return {
               buffer: att.buffer,
-              mimeType: att.mimeType,
-              name: att.name,
+              mimeType,
+              name,
               size: att.size,
               url: '',
             };
@@ -1088,25 +1193,64 @@ export class AgentBridgeService {
           if (typeof att.fetchData === 'function') {
             try {
               const buffer = await att.fetchData();
+              log(
+                'extractFiles: fetchData succeeded for %s, %d bytes',
+                name ?? 'attachment',
+                buffer.length,
+              );
               return {
                 buffer,
-                mimeType: att.mimeType,
-                name: att.name,
+                mimeType,
+                name,
                 size: att.size,
                 url: '',
               };
             } catch (error) {
-              log('extractFiles: fetchData failed for %s: %O', att.name ?? 'attachment', error);
+              log('extractFiles: fetchData failed for %s: %O', name ?? 'attachment', error);
               return undefined;
             }
           }
           if (att.url) {
             return {
-              mimeType: att.mimeType,
-              name: att.name,
+              mimeType,
+              name,
               size: att.size,
               url: att.url,
             };
+          }
+          // Last resort: re-download via the platform client. This is the
+          // path Telegram photos take after a debounce/queue round-trip:
+          // their `fetchData` closure was stripped by `Message.toJSON`, and
+          // they have no public URL, but `message.raw` still carries the
+          // original `file_id`. The client knows how to fetch from there.
+          if (typeof client?.refetchAttachment === 'function') {
+            try {
+              const buffer = await client.refetchAttachment({
+                index,
+                raw: messageRaw,
+                type: att.type,
+              });
+              if (buffer) {
+                log(
+                  'extractFiles: client.refetchAttachment succeeded for type=%s, %d bytes',
+                  att.type,
+                  buffer.length,
+                );
+                return {
+                  buffer,
+                  mimeType,
+                  name,
+                  size: att.size,
+                  url: '',
+                };
+              }
+              log(
+                'extractFiles: client.refetchAttachment returned no buffer for type=%s',
+                att.type,
+              );
+            } catch (error) {
+              log('extractFiles: client.refetchAttachment failed for type=%s: %O', att.type, error);
+            }
           }
           return undefined;
         }),
@@ -1120,6 +1264,7 @@ export class AgentBridgeService {
     const raw = (message as any).raw as Record<string, any> | undefined;
     const refAttachments = raw?.referenced_message?.attachments as AttachmentLike[] | undefined;
     if (refAttachments?.length) {
+      log('extractFiles: refAttachments=%d (from quoted message)', refAttachments.length);
       for (const att of refAttachments) {
         if (att.url) {
           files.push({
@@ -1131,6 +1276,19 @@ export class AgentBridgeService {
         }
       }
     }
+
+    log(
+      'extractFiles: resolved %d file(s) for msgId=%s: %o',
+      files.length,
+      (message as any).id,
+      files.map((f) => ({
+        hasBuffer: !!f.buffer,
+        mimeType: f.mimeType,
+        name: f.name,
+        size: f.size,
+        urlSet: !!f.url,
+      })),
+    );
 
     return files.length > 0 ? files : undefined;
   }
@@ -1174,7 +1332,7 @@ export class AgentBridgeService {
     client?: PlatformClient,
   ): Promise<void> {
     const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeReaction(
+    await safeSideEffect(
       () => thread.adapter.removeReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
       'remove eyes',
     );

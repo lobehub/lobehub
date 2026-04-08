@@ -138,6 +138,31 @@ export interface PlatformClient {
   parseMessageId: (compositeId: string) => string | number;
 
   /**
+   * Re-download an attachment's binary data using the platform-native API,
+   * given the original raw message payload.
+   *
+   * This exists because the Chat SDK's `Attachment.fetchData` closure does
+   * NOT survive serialization into the queue/Redis — functions can't be
+   * `JSON.stringify`d, so they're stripped by `Message.toJSON`. Telegram
+   * photos are the canonical victim: the adapter only sets `fetchData`
+   * (no `url`), so once the message round-trips through Redis, the
+   * attachment is unrecoverable from chat-sdk surface alone.
+   *
+   * Optional — only platforms whose attachments expose binary data via an
+   * opaque file ID (Telegram, Slack files API, etc.) need to implement this.
+   * Platforms with public CDN URLs (Discord, QQ public attachments) survive
+   * serialization unchanged and don't need this fallback.
+   */
+  refetchAttachment?: (params: {
+    /** Index within `message.attachments` (used for platforms with multiple media of the same type). */
+    index: number;
+    /** The original platform-native message payload (`message.raw`). */
+    raw: Record<string, any> | undefined;
+    /** Chat SDK attachment type discriminant: 'image' | 'video' | 'audio' | 'file'. */
+    type: string | undefined;
+  }) => Promise<Buffer | undefined>;
+
+  /**
    * Register bot commands with the platform (e.g., Telegram setMyCommands).
    * Called once during bot initialization with the list of available commands.
    * Optional — platforms that don't support command menus can omit this.

@@ -173,11 +173,122 @@ describe('AgentBridgeService', () => {
     );
   });
 
+  describe('activeThreads cleanup on side-effect failure', () => {
+    // Regression test for the "already has an active execution" lockup:
+    // a transient network error from `thread.startTyping()` (or any other
+    // pre-execution side effect) used to escape the handler before the
+    // try/finally cleanup, leaving the thread permanently in `activeThreads`.
+    // After the fix, side-effect errors are swallowed AND the active flag
+    // is released no matter what.
+
+    it('handleSubscribedMessage releases activeThreads when startTyping throws', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      thread.startTyping = vi
+        .fn()
+        .mockRejectedValue(new Error('Network error calling Telegram sendChatAction'));
+      const message = createMessage();
+      const client = createClient();
+
+      await service.handleSubscribedMessage(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      // The error must NOT escape and the active flag must be cleared.
+      // (startTyping is called twice: once at handler entry as a UX hint,
+      // and once inside executeWithWebhooks — both must be safely swallowed.)
+      expect(thread.startTyping).toHaveBeenCalled();
+      expect((AgentBridgeService as any).activeThreads.has(THREAD_ID)).toBe(false);
+    });
+
+    it('handleSubscribedMessage releases activeThreads when addReaction throws', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      thread.adapter.addReaction = vi
+        .fn()
+        .mockRejectedValue(new Error('Network error calling Telegram setMessageReaction'));
+      const message = createMessage();
+      const client = createClient();
+
+      await service.handleSubscribedMessage(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect((AgentBridgeService as any).activeThreads.has(THREAD_ID)).toBe(false);
+    });
+
+    it('handleMention releases activeThreads when subscribe throws', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      thread.subscribe = vi.fn().mockRejectedValue(new Error('subscribe network down'));
+      const message = createMessage();
+      const client = createClient();
+
+      await service.handleMention(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(thread.subscribe).toHaveBeenCalledTimes(1);
+      expect((AgentBridgeService as any).activeThreads.has(THREAD_ID)).toBe(false);
+    });
+
+    it('handleMention releases activeThreads when startTyping throws', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      thread.startTyping = vi.fn().mockRejectedValue(new Error('startTyping network down'));
+      const message = createMessage();
+      const client = createClient();
+
+      await service.handleMention(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(thread.startTyping).toHaveBeenCalled();
+      expect((AgentBridgeService as any).activeThreads.has(THREAD_ID)).toBe(false);
+    });
+
+    it('back-to-back messages on the same thread are not blocked after a side-effect failure', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const client = createClient();
+
+      // First message: startTyping throws → should NOT lock the thread.
+      const thread1 = createThread({ topicId: 'topic-1' });
+      thread1.startTyping = vi.fn().mockRejectedValue(new Error('boom'));
+      await service.handleSubscribedMessage(thread1, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+      // Sanity: the active flag must have been released after thread1.
+      expect((AgentBridgeService as any).activeThreads.has(THREAD_ID)).toBe(false);
+
+      // Second message on the same thread: must be processed, NOT skipped.
+      // (If the thread were locked, the handler would early-return without
+      // ever calling thread2.startTyping.)
+      const thread2 = createThread({ topicId: 'topic-1' });
+      await service.handleSubscribedMessage(thread2, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(thread2.startTyping).toHaveBeenCalled();
+    });
+  });
+
   describe('extractFiles', () => {
-    function callExtract(messageOverrides: Record<string, unknown>) {
+    function callExtract(messageOverrides: Record<string, unknown>, client?: unknown) {
       const service = new AgentBridgeService(FAKE_DB, USER_ID);
       const message = { id: MESSAGE_ID, text: 'hi', ...messageOverrides } as any;
-      return (service as any).extractFiles(message) as Promise<
+      return (service as any).extractFiles(message, client) as Promise<
         Array<{ buffer?: Buffer; mimeType?: string; name?: string; size?: number; url: string }>
       >;
     }
@@ -204,6 +315,156 @@ describe('AgentBridgeService', () => {
       expect(result).toEqual([
         { buffer, mimeType: 'audio/ogg', name: 'voice.ogg', size: undefined, url: '' },
       ]);
+    });
+
+    it('infers mimeType + name for Telegram photos that omit both fields', async () => {
+      // Telegram's Bot API does not return mime_type or file_name for `photo`
+      // payloads (they are always JPEG by spec), so the chat-adapter emits
+      // attachments with only `type: "image"`. Without inference these would
+      // fall through to ingestAttachment as application/octet-stream and end
+      // up in fileList instead of imageList — vision models would never see
+      // the photo. Verify we backfill to image/jpeg + image.jpg.
+      const buffer = Buffer.from('telegram-photo-bytes');
+      const fetchData = vi.fn().mockResolvedValue(buffer);
+      const result = await callExtract({
+        attachments: [{ fetchData, size: buffer.length, type: 'image' }],
+      });
+      expect(fetchData).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([
+        { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: buffer.length, url: '' },
+      ]);
+    });
+
+    it('infers mimeType + name for type-only video and audio attachments', async () => {
+      const videoBuffer = Buffer.from('vid');
+      const audioBuffer = Buffer.from('aud');
+      const result = await callExtract({
+        attachments: [
+          { fetchData: vi.fn().mockResolvedValue(videoBuffer), type: 'video' },
+          { fetchData: vi.fn().mockResolvedValue(audioBuffer), type: 'audio' },
+        ],
+      });
+      expect(result).toEqual([
+        {
+          buffer: videoBuffer,
+          mimeType: 'video/mp4',
+          name: 'video.mp4',
+          size: undefined,
+          url: '',
+        },
+        {
+          buffer: audioBuffer,
+          mimeType: 'audio/ogg',
+          name: 'audio.ogg',
+          size: undefined,
+          url: '',
+        },
+      ]);
+    });
+
+    it('does not overwrite an explicit mimeType / name when type is also set', async () => {
+      const buffer = Buffer.from('explicit');
+      const result = await callExtract({
+        attachments: [
+          {
+            fetchData: vi.fn().mockResolvedValue(buffer),
+            mimeType: 'image/png',
+            name: 'screenshot.png',
+            type: 'image',
+          },
+        ],
+      });
+      expect(result).toEqual([
+        { buffer, mimeType: 'image/png', name: 'screenshot.png', size: undefined, url: '' },
+      ]);
+    });
+
+    it('falls back to client.refetchAttachment when attachment has no buffer/fetchData/url', async () => {
+      // Reproduces the post-Redis state for Telegram photos: the chat-sdk's
+      // `Message.toJSON` strips `fetchData` (functions are not JSON-serializable),
+      // and Telegram photos have no public URL, so by the time the message
+      // reaches us after a debounce round-trip, all three data sources are gone
+      // — we only have `type`, `size`, and the original `raw` payload with file_id.
+      const buffer = Buffer.from('telegram-photo-bytes');
+      const refetchAttachment = vi.fn().mockResolvedValue(buffer);
+      const result = await callExtract(
+        {
+          attachments: [{ size: 16_388, type: 'image' }],
+          raw: {
+            chat: { id: 7019597964 },
+            message_id: 158,
+            photo: [
+              { file_id: 'tg-photo-small', height: 90, width: 90 },
+              { file_id: 'tg-photo-large', height: 1280, width: 1280 },
+            ],
+          },
+        },
+        { refetchAttachment },
+      );
+      expect(refetchAttachment).toHaveBeenCalledWith({
+        index: 0,
+        raw: expect.objectContaining({ photo: expect.any(Array) }),
+        type: 'image',
+      });
+      expect(result).toEqual([
+        {
+          buffer,
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          size: 16_388,
+          url: '',
+        },
+      ]);
+    });
+
+    it('drops the attachment if client.refetchAttachment returns undefined', async () => {
+      const refetchAttachment = vi.fn().mockResolvedValue(undefined);
+      const result = await callExtract(
+        { attachments: [{ size: 100, type: 'image' }], raw: {} },
+        { refetchAttachment },
+      );
+      expect(refetchAttachment).toHaveBeenCalledTimes(1);
+      expect(result).toBeUndefined();
+    });
+
+    it('skips the attachment without throwing when client.refetchAttachment errors', async () => {
+      const refetchAttachment = vi.fn().mockRejectedValue(new Error('telegram getFile 404'));
+      const goodBuffer = Buffer.from('good');
+      const result = await callExtract(
+        {
+          attachments: [
+            { size: 100, type: 'image' },
+            { fetchData: vi.fn().mockResolvedValue(goodBuffer), type: 'image' },
+          ],
+          raw: {},
+        },
+        { refetchAttachment },
+      );
+      // First attachment fails refetch and is dropped; second still resolves.
+      expect(result).toEqual([
+        {
+          buffer: goodBuffer,
+          mimeType: 'image/jpeg',
+          name: 'image.jpg',
+          size: undefined,
+          url: '',
+        },
+      ]);
+    });
+
+    it('does not call refetchAttachment when buffer/fetchData/url is already present', async () => {
+      const refetchAttachment = vi.fn();
+      await callExtract(
+        {
+          attachments: [
+            { buffer: Buffer.from('x'), type: 'image' },
+            { fetchData: vi.fn().mockResolvedValue(Buffer.from('y')), type: 'image' },
+            { type: 'image', url: 'https://cdn.example/z.png' },
+          ],
+        },
+        { refetchAttachment },
+      );
+      expect(refetchAttachment).not.toHaveBeenCalled();
     });
 
     it('falls back to public url when neither buffer nor fetchData is provided (Discord / QQ)', async () => {
