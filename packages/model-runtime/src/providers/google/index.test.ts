@@ -708,11 +708,9 @@ describe('buildGoogleToolsWithSearch', () => {
           {
             name: 'test_tool',
             description: 'A test tool',
-            parameters: {
-              description: undefined,
+            parametersJsonSchema: {
               properties: { dummy: { type: 'string' } },
-              required: undefined,
-              type: 'OBJECT',
+              type: 'object',
             },
           },
         ],
