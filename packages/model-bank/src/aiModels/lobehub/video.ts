@@ -76,11 +76,11 @@ export const lobehubVideoModels: AIVideoModelCard[] = [
     organization: 'ByteDance',
     parameters: seedance20Params,
     pricing: {
-      approximatePricePerVideo: 0.75,
+      approximatePricePerVideo: 0.82,
       units: [
         {
           name: 'videoGeneration',
-          rate: 6.9,
+          rate: 7.56,
           strategy: 'fixed',
           unit: 'millionTokens',
         },
@@ -98,11 +98,11 @@ export const lobehubVideoModels: AIVideoModelCard[] = [
     organization: 'ByteDance',
     parameters: seedance20Params,
     pricing: {
-      approximatePricePerVideo: 0.6,
+      approximatePricePerVideo: 0.66,
       units: [
         {
           name: 'videoGeneration',
-          rate: 5.55,
+          rate: 6.08,
           strategy: 'fixed',
           unit: 'millionTokens',
         },
