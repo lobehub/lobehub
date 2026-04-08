@@ -5,6 +5,7 @@ import { cssVar } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -17,8 +18,10 @@ const DEBOUNCE_MS = 300;
 const TaskDetailHeader = memo(() => {
   const { t } = useTranslation('chat');
   const { modal } = App.useApp();
+  const navigate = useNavigate();
   const name = useTaskStore(taskDetailSelectors.activeTaskName);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
   const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
   const updateTask = useTaskStore((s) => s.updateTask);
@@ -81,7 +84,10 @@ const TaskDetailHeader = memo(() => {
                 content: t('taskDetail.deleteConfirm.content'),
                 okButtonProps: { danger: true },
                 okText: t('taskDetail.deleteConfirm.ok'),
-                onOk: () => deleteTask(taskId),
+                onOk: async () => {
+                  await deleteTask(taskId);
+                  if (agentId) navigate(`/agent/${agentId}/tasks`);
+                },
                 title: t('taskDetail.deleteConfirm.title'),
                 type: 'error',
               });
