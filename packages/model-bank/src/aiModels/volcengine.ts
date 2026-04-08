@@ -1281,6 +1281,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
       watermark: { default: false },
       webSearch: { default: false },
     },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 37, strategy: 'fixed', unit: 'millionTokens' }],
+    },
     releasedAt: '2026-01-28',
     type: 'video',
   },
@@ -1295,6 +1299,10 @@ const volcengineVideoModels: AIVideoModelCard[] = [
       ...seedance20Params,
       watermark: { default: false },
       webSearch: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 46, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2026-01-28',
     type: 'video',
