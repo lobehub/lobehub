@@ -41,6 +41,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
+import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
@@ -1075,6 +1076,14 @@ export class AiAgentService {
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 
+      // Generate a short-lived JWT for Gateway WebSocket authentication
+      let gatewayToken: string | undefined;
+      try {
+        gatewayToken = await signUserJWT(this.userId);
+      } catch {
+        log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
+      }
+
       return {
         agentId: resolvedAgentId,
         assistantMessageId: assistantMessageRecord.id,
@@ -1086,6 +1095,7 @@ export class AiAgentService {
         status: 'created',
         success: true,
         timestamp: new Date().toISOString(),
+        token: gatewayToken,
         topicId,
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };
