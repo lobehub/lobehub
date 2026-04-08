@@ -139,6 +139,14 @@ export class GraphAgent implements Agent {
    */
   private startNode(gc: GraphContext, state: AgentState): AgentInstruction {
     const node = this.graph.states[gc.currentNode];
+    if (!node) {
+      return {
+        reason: 'error_recovery',
+        reasonDetail: `Graph node "${gc.currentNode}" not found in states`,
+        type: 'finish',
+      };
+    }
+
     const visits = (gc.visitCount[gc.currentNode] ?? 0) + 1;
     gc.visitCount[gc.currentNode] = visits;
 
@@ -268,15 +276,17 @@ export class GraphAgent implements Agent {
     currentNodeId: string,
     output: Record<string, any>,
   ): string | null {
-    if (gc.backtrackCount >= this.graph.maxBacktracks) {
-      return this.getNextState(currentNodeId);
-    }
+    const backtrackLimitReached = gc.backtrackCount >= this.graph.maxBacktracks;
 
     for (const t of this.graph.transitions) {
       if (t.from !== currentNodeId) continue;
       try {
         const result = new Function('output', `return (${t.condition})`)(output);
         if (result) {
+          // If the transition target is a backtrack (already visited), only allow it
+          // when within the backtrack limit. Otherwise fall through to linear advance.
+          const isBacktrack = (gc.visitCount[t.to] ?? 0) > 0;
+          if (isBacktrack && backtrackLimitReached) continue;
           return t.to;
         }
       } catch {
