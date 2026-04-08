@@ -1,0 +1,94 @@
+---
+title: Configure the Tigris Storage Service
+description: Step-by-step guide to configure Tigris as an S3-compatible storage backend.
+tags:
+  - Tigris
+  - S3 Storage
+  - File Storage
+---
+
+# Configure the Tigris Storage Service
+
+We need to configure an S3-compatible storage service in the server-side database to store files. [Tigris](https://www.tigrisdata.com) is S3-compatible object storage that automatically caches data at the edge closest to where it's accessed, so there's no region to pick and no replication to configure. It has zero egress fees and a free tier (5 GB), making it a low-friction option for self-hosted deployments.
+
+## Configuration Steps
+
+<Steps>
+  ### Create a Tigris Account and Bucket
+
+  Sign up at [console.tigris.dev](https://console.tigris.dev) and create a new project. Then create a storage bucket for LobeHub.
+
+  You can create a bucket through the Tigris console, or using the AWS CLI:
+
+  ```shell
+  export AWS_ACCESS_KEY_ID=tid_YOUR_ACCESS_KEY
+  export AWS_SECRET_ACCESS_KEY=tsec_YOUR_SECRET_KEY
+  export AWS_ENDPOINT_URL=https://t3.storage.dev
+  export AWS_REGION=auto
+
+  aws s3 mb s3://lobechat
+  ```
+
+  ### Configure Access Keys
+
+  In the Tigris console, navigate to your project and create an access key. You will receive a key ID (prefixed with `tid_`) and a secret (prefixed with `tsec_`).
+
+  The corresponding environment variables are:
+
+  ```shell
+  S3_ACCESS_KEY_ID=tid_YOUR_ACCESS_KEY
+  S3_SECRET_ACCESS_KEY=tsec_YOUR_SECRET_KEY
+  ```
+
+  ### Configure Cross-Origin Resource Sharing (CORS)
+
+  Set a CORS policy on the bucket to allow requests from your LobeHub domain. You can configure this via the Tigris console or the S3 API:
+
+  ```shell
+  aws s3api put-bucket-cors --bucket lobechat --cors-configuration '{
+    "CORSRules": [
+      {
+        "AllowedOrigins": ["https://your-lobechat-domain.com"],
+        "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
+        "AllowedHeaders": ["*"]
+      }
+    ]
+  }' --endpoint-url https://t3.storage.dev
+  ```
+
+  ### Set Environment Variables
+
+  Update the LobeHub `.env` file with the following environment variables:
+
+  ```shell
+  # Tigris Access Key / Secret Key
+  S3_ACCESS_KEY_ID=tid_YOUR_ACCESS_KEY
+  S3_SECRET_ACCESS_KEY=tsec_YOUR_SECRET_KEY
+  # Tigris endpoint
+  S3_ENDPOINT=https://t3.storage.dev
+  # Bucket name
+  S3_BUCKET=lobechat
+  # Region
+  S3_REGION=auto
+  ```
+
+  <Callout type={'info'}>
+    Tigris uses virtual-host-style addressing by default, so `S3_ENABLE_PATH_STYLE` should remain at its default value (`0`). Do not set it to `1`.
+  </Callout>
+
+</Steps>
+
+## Overview of Environment Variables
+
+```shell
+# Tigris Keys
+S3_ACCESS_KEY_ID=tid_YOUR_ACCESS_KEY
+S3_SECRET_ACCESS_KEY=tsec_YOUR_SECRET_KEY
+
+# Bucket Name
+S3_BUCKET=lobechat
+# Tigris Endpoint
+S3_ENDPOINT=https://t3.storage.dev
+# Region
+S3_REGION=auto
+```
