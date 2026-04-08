@@ -12,6 +12,7 @@ vi.mock('@/services/message', () => ({
 
 function createMockStore() {
   return {
+    associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     internal_toggleMessageLoading: vi.fn(),
@@ -47,15 +48,14 @@ const flush = async () => {
 
 describe('createGatewayEventHandler', () => {
   describe('stream_start', () => {
-    it('should show loading on old message immediately, then switch to new after fetch', async () => {
+    it('should associate new message with operation and show loading', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
       await flush();
 
-      // Should have been called twice: first on old msg (optimistic), then on new msg (after fetch)
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-initial');
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-step2');
       expect(store.replaceMessages).toHaveBeenCalled();
     });

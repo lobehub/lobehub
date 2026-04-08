@@ -74,6 +74,8 @@ export const createGatewayEventHandler = (
           // Switch to the new assistant message created by the server for this step
           if (newAssistantMessageId) {
             currentAssistantMessageId = newAssistantMessageId;
+            // Associate the new message with the operation so UI shows generating state
+            get().associateMessageWithOperation(currentAssistantMessageId, operationId);
           }
 
           // Reset accumulators for the new stream

@@ -613,6 +613,10 @@ export class ConversationLifecycleActionImpl {
             type: 'execServerAgentRuntime',
           });
 
+          // Associate the initial assistant message with the gateway operation
+          // so the UI shows loading/generating state via the operation system
+          this.#get().associateMessageWithOperation(data.assistantMessageId, gatewayOpId);
+
           const eventHandler = createGatewayEventHandler(this.#get, {
             assistantMessageId: data.assistantMessageId,
             context: execContext,
