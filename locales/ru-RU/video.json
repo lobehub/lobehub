@@ -12,6 +12,7 @@
   "config.resolution.label": "Разрешение",
   "config.seed.label": "Сид",
   "config.seed.random": "Случайный",
+  "config.size.label": "Размер",
   "generation.actions.copyError": "Скопировать сообщение об ошибке",
   "generation.actions.errorCopied": "Сообщение об ошибке скопировано в буфер обмена",
   "generation.actions.errorCopyFailed": "Не удалось скопировать сообщение об ошибке",

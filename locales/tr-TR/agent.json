@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "Opsiyonel. Webhook isteklerini yerel geliştirme sunucusuna yönlendirmek için HTTPS tünel URL'si.",
   "channel.disabled": "Devre Dışı",
   "channel.discord.description": "Bu asistanı Discord sunucusuna kanal sohbeti ve doğrudan mesajlar için bağlayın.",
+  "channel.displayToolCalls": "Araç Çağrılarını Göster",
+  "channel.displayToolCallsHint": "Yapay zeka yanıtları sırasında araç çağrısı detaylarını göster. Devre dışı bırakıldığında, yalnızca son yanıt daha sade bir deneyim için görüntülenir.",
   "channel.dm": "Doğrudan Mesajlar",
   "channel.dmEnabled": "Doğrudan Mesajları Etkinleştir",
   "channel.dmEnabledHint": "Botun doğrudan mesajları almasına ve yanıtlamasına izin ver",

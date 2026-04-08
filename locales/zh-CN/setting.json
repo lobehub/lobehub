@@ -799,7 +799,7 @@
   "tab.advanced": "高级设置",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "每次 PR 合并触发构建，一天可能多次。最不稳定。",
-  "tab.advanced.updateChannel.desc": "默认接收稳定版更新通知。Nightly 和 Canary 通道将接收预发布版本，可能不适合生产使用。",
+  "tab.advanced.updateChannel.desc": "默认情况下，接收稳定更新的通知。Canary 渠道会接收可能不适合生产环境的预发布版本。",
   "tab.advanced.updateChannel.nightly": "Nightly",
   "tab.advanced.updateChannel.nightlyDesc": "每日自动构建，包含最新更改。",
   "tab.advanced.updateChannel.stable": "稳定版",

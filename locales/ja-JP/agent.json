@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "任意。ローカル開発サーバーへのWebhookリクエストを転送するためのHTTPSトンネルURL。",
   "channel.disabled": "無効",
   "channel.discord.description": "このアシスタントをDiscordサーバーに接続して、チャンネルチャットやダイレクトメッセージを利用します。",
+  "channel.displayToolCalls": "ツールコールを表示",
+  "channel.displayToolCallsHint": "AIの応答中にツールコールの詳細を表示します。無効にすると、最終的な応答のみが表示され、よりスッキリとした体験が得られます。",
   "channel.dm": "ダイレクトメッセージ",
   "channel.dmEnabled": "DMを有効にする",
   "channel.dmEnabledHint": "ボットがダイレクトメッセージを受信し、応答できるようにします",

@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "اختياري. عنوان URL لنفق HTTPS لإعادة توجيه طلبات الويب هوك إلى خادم التطوير المحلي.",
   "channel.disabled": "معطل",
   "channel.discord.description": "قم بتوصيل هذا المساعد بخادم Discord للدردشة في القنوات والرسائل المباشرة.",
+  "channel.displayToolCalls": "عرض استدعاءات الأدوات",
+  "channel.displayToolCallsHint": "عرض تفاصيل استدعاء الأدوات أثناء استجابات الذكاء الاصطناعي. عند التعطيل، يتم عرض الاستجابة النهائية فقط لتجربة أكثر نظافة.",
   "channel.dm": "الرسائل المباشرة",
   "channel.dmEnabled": "تمكين الرسائل المباشرة",
   "channel.dmEnabledHint": "السماح للروبوت بتلقي الرسائل المباشرة والرد عليها",

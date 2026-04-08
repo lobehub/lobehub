@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "可選。HTTPS 隧道 URL，用於將 Webhook 請求轉發到本地開發伺服器。",
   "channel.disabled": "已停用",
   "channel.discord.description": "將此助手連接到 Discord 伺服器以進行頻道聊天和直接消息。",
+  "channel.displayToolCalls": "顯示工具調用",
+  "channel.displayToolCallsHint": "在 AI 回應期間顯示工具調用的詳細資訊。若停用，僅顯示最終回應，以提供更簡潔的體驗。",
   "channel.dm": "私訊",
   "channel.dmEnabled": "啟用私訊",
   "channel.dmEnabledHint": "允許機器人接收並回覆私訊",

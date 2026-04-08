@@ -12,6 +12,7 @@
   "config.resolution.label": "解析度",
   "config.seed.label": "種子",
   "config.seed.random": "隨機",
+  "config.size.label": "尺寸",
   "generation.actions.copyError": "複製錯誤訊息",
   "generation.actions.errorCopied": "錯誤訊息已複製到剪貼簿",
   "generation.actions.errorCopyFailed": "複製錯誤訊息失敗",
