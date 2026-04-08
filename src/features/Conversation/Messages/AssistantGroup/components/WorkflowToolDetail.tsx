@@ -1,32 +1,6 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Highlighter } from '@lobehub/ui';
 import { AnimatePresence, m as motion } from 'motion/react';
-import { memo } from 'react';
-
-const styles = createStaticStyles(({ css }) => ({
-  panel: css`
-    margin-inline-start: 22px;
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-    border-radius: 6px;
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  pre: css`
-    margin: 0;
-    padding: 0;
-
-    font-family: inherit;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    word-break: break-all;
-    white-space: pre-wrap;
-  `,
-}));
+import { memo, useMemo } from 'react';
 
 interface WorkflowToolDetailProps {
   content: string;
@@ -34,6 +8,21 @@ interface WorkflowToolDetailProps {
 }
 
 const WorkflowToolDetail = memo<WorkflowToolDetailProps>(({ content, open }) => {
+  const language = useMemo(() => {
+    const trimmed = content.trimStart();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
+    return 'plaintext';
+  }, [content]);
+
+  const formatted = useMemo(() => {
+    if (language !== 'json') return content;
+    try {
+      return JSON.stringify(JSON.parse(content), null, 2);
+    } catch {
+      return content;
+    }
+  }, [content, language]);
+
   return (
     <AnimatePresence initial={false}>
       {open && (
@@ -42,12 +31,12 @@ const WorkflowToolDetail = memo<WorkflowToolDetailProps>(({ content, open }) => 
           exit={{ height: 0, opacity: 0 }}
           initial={{ height: 0, opacity: 0 }}
           key="tool-detail"
-          style={{ overflow: 'hidden' }}
+          style={{ marginBlock: '4px 8px', overflow: 'hidden', paddingInlineStart: 30 }}
           transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
         >
-          <div className={styles.panel}>
-            <pre className={styles.pre}>{content}</pre>
-          </div>
+          <Highlighter wrap language={language} variant={'filled'}>
+            {formatted}
+          </Highlighter>
         </motion.div>
       )}
     </AnimatePresence>

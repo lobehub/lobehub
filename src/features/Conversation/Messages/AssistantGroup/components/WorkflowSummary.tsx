@@ -1,5 +1,5 @@
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { memo } from 'react';
 
 interface WorkflowSummaryProps {
@@ -15,6 +15,7 @@ const styles = createStaticStyles(({ css }) => ({
   chevron: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextQuaternary};
+    transition: transform 100ms ${cssVar.motionEaseOut};
   `,
   dot: css`
     flex-shrink: 0;
@@ -33,12 +34,12 @@ const styles = createStaticStyles(({ css }) => ({
     user-select: none;
 
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 
-    padding-block: 4px;
+    padding-block: 6px;
     padding-inline: 8px;
-    border-radius: 6px;
+    border-radius: ${cssVar.borderRadius};
 
     transition: background 0.12s;
 
@@ -79,8 +80,11 @@ const WorkflowSummary = memo<WorkflowSummaryProps>(
         <span className={styles.text}>{streaming ? 'Working...' : summaryText}</span>
         {!streaming && duration && <span className={styles.duration}>{duration}</span>}
         {!streaming && (
-          <span className={styles.chevron}>
-            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <span
+            className={styles.chevron}
+            style={{ transform: expanded ? undefined : 'rotate(-90deg)' }}
+          >
+            <ChevronDown size={12} />
           </span>
         )}
       </div>

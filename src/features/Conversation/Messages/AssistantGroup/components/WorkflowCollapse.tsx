@@ -22,6 +22,16 @@ const styles = createStaticStyles(({ css }) => ({
         opacity: 0.35;
       }
     }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
   `,
 }));
 
@@ -55,12 +65,20 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
 
   const [collapsed, setCollapsed] = useState(allComplete);
   const userExpandedRef = useRef(false);
+  const prevCompleteRef = useRef(allComplete);
   const prevToolCountRef = useRef(allTools.length);
 
   useEffect(() => {
-    if (allComplete && !userExpandedRef.current && allTools.length > 0) {
+    // Only auto-collapse on transition: incomplete → complete
+    if (
+      allComplete &&
+      !prevCompleteRef.current &&
+      !userExpandedRef.current &&
+      allTools.length > 0
+    ) {
       setCollapsed(true);
     }
+    prevCompleteRef.current = allComplete;
   }, [allComplete, allTools.length]);
 
   useEffect(() => {

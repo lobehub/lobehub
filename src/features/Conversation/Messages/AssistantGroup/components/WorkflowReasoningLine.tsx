@@ -7,7 +7,7 @@ import { formatReasoningDuration } from '../toolDisplayNames';
 const styles = createStaticStyles(({ css }) => ({
   root: css`
     padding-block: 2px;
-    padding-inline: 22px 8px;
+    padding-inline: 30px 8px;
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
   `,
