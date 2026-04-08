@@ -36,6 +36,7 @@ import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
@@ -587,11 +588,12 @@ export class ConversationLifecycleActionImpl {
 
     // ── AI execution ──
     {
-      // Check if server-side Gateway mode is available
+      // Check if server-side Gateway mode is available AND user has enabled it in Labs
       const agentGatewayUrl =
         window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
+      const enableGatewayMode = useUserStore.getState().preference.lab?.enableGatewayMode;
 
-      if (agentGatewayUrl) {
+      if (agentGatewayUrl && enableGatewayMode) {
         // ── Gateway mode: trigger server-side execution, receive events via WebSocket ──
         try {
           const result = await aiAgentService.execAgentTask({
@@ -631,7 +633,7 @@ export class ConversationLifecycleActionImpl {
               if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
             },
             operationId: result.operationId,
-            token: result.token,
+            token: result.token || '',
           });
         } catch (e) {
           console.error('[Gateway] Failed to start server-side agent:', e);

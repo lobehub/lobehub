@@ -34,11 +34,14 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [isPreferenceInit, enableInputMarkdown, updateLab] = useUserStore((s) => [
-    preferenceSelectors.isPreferenceInit(s),
-    labPreferSelectors.enableInputMarkdown(s),
-    s.updateLab,
-  ]);
+  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, updateLab] = useUserStore(
+    (s) => [
+      preferenceSelectors.isPreferenceInit(s),
+      labPreferSelectors.enableInputMarkdown(s),
+      labPreferSelectors.enableGatewayMode(s),
+      s.updateLab,
+    ],
+  );
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -92,6 +95,19 @@ const Page = memo(() => {
 
   const labsGroup: FormGroupItemType = {
     children: [
+      {
+        children: (
+          <Switch
+            checked={enableGatewayMode}
+            loading={!isPreferenceInit}
+            onChange={(checked) => updateLab({ enableGatewayMode: checked })}
+          />
+        ),
+        className: styles.labItem,
+        desc: tLabs('features.gatewayMode.desc'),
+        label: tLabs('features.gatewayMode.title'),
+        minWidth: undefined,
+      },
       {
         avatar: (
           <img
