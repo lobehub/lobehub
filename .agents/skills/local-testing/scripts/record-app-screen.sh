@@ -2,8 +2,8 @@
 #
 # record-app-screen.sh — Record the Electron app window (video + screenshots)
 #
-# A general-purpose screen recording tool with start/stop lifecycle.
-# The caller starts Electron and drives automation; this script handles recording.
+# Captures screenshots via agent-browser (CDP), then assembles into video on stop.
+# Works on any screen (including external monitors) since it uses CDP, not screen capture.
 #
 # Usage:
 #   ./record-app-screen.sh start [output_name]   # Begin recording
@@ -11,18 +11,18 @@
 #   ./record-app-screen.sh status                 # Check recording state
 #
 # Outputs to .records/ directory:
-#   .records/<name>.mp4   — Cropped video of Electron window
+#   .records/<name>.mp4   — Video assembled from screenshots (~2 fps)
 #   .records/<name>/      — Screenshots every SCREENSHOT_INTERVAL seconds
 #
 # Prerequisites:
 #   - ffmpeg installed (bun add -g ffmpeg-static, or brew install ffmpeg)
-#   - agent-browser CLI installed (for screenshots)
+#   - agent-browser CLI installed
 #   - Electron app already running with CDP enabled
 #
 # Environment variables:
 #   CDP_PORT              — Chrome DevTools Protocol port (default: 9222)
-#   FRAMERATE             — Recording framerate (default: 30)
-#   SCREENSHOT_INTERVAL   — Seconds between screenshots (default: 3)
+#   SCREENSHOT_INTERVAL   — Seconds between gallery screenshots (default: 3)
+#   VIDEO_FRAME_INTERVAL  — Seconds between video frames (default: 0.5)
 #
 # Examples:
 #   ./electron-dev.sh start
@@ -40,55 +40,10 @@ PID_FILE="/tmp/record-app-screen.pids"
 STATE_FILE="/tmp/record-app-screen.state"
 
 CDP_PORT="${CDP_PORT:-9222}"
-FRAMERATE="${FRAMERATE:-30}"
 SCREENSHOT_INTERVAL="${SCREENSHOT_INTERVAL:-3}"
+VIDEO_FRAME_INTERVAL="${VIDEO_FRAME_INTERVAL:-0.5}"
 
 AB="agent-browser --cdp $CDP_PORT"
-
-# ─── Window Detection ───
-
-get_window_and_screen_info() {
-  # Returns: rel_x rel_y width height screen_index backing_scale
-  swift -e '
-    import Cocoa
-    let windowList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as! [[String: Any]]
-    for w in windowList {
-      let owner = w["kCGWindowOwnerName"] as? String ?? ""
-      let layer = w["kCGWindowLayer"] as? Int ?? -1
-      let bounds = w["kCGWindowBounds"] as? [String: Any] ?? [:]
-      let wx = bounds["X"] as? Double ?? 0
-      let wy = bounds["Y"] as? Double ?? 0
-      let ww = bounds["Width"] as? Double ?? 0
-      let wh = bounds["Height"] as? Double ?? 0
-      if (owner == "Electron" || owner == "LobeHub") && layer == 0 && ww > 200 && wh > 200 {
-        let screens = NSScreen.screens
-        var screenIdx = 0
-        let windowCenter = NSPoint(x: wx + ww / 2, y: wy + wh / 2)
-        for (i, screen) in screens.enumerated() {
-          let frame = screen.frame
-          let mainHeight = screens[0].frame.height
-          let screenTop = mainHeight - frame.origin.y - frame.height
-          let screenBottom = screenTop + frame.height
-          let screenLeft = frame.origin.x
-          let screenRight = screenLeft + frame.width
-          if windowCenter.x >= screenLeft && windowCenter.x <= screenRight &&
-             windowCenter.y >= screenTop && windowCenter.y <= screenBottom {
-            screenIdx = i
-            break
-          }
-        }
-        let screen = screens[screenIdx]
-        let mainHeight = screens[0].frame.height
-        let screenTop = mainHeight - screen.frame.origin.y - screen.frame.height
-        let relX = wx - screen.frame.origin.x
-        let relY = wy - screenTop
-        let scale = Int(screen.backingScaleFactor)
-        print("\(Int(relX)) \(Int(relY)) \(Int(ww)) \(Int(wh)) \(screenIdx) \(scale)")
-        break
-      }
-    }
-  '
-}
 
 # ─── Commands ───
 
@@ -96,6 +51,8 @@ cmd_start() {
   local output_name="${1:-recording-$(date +%Y%m%d-%H%M%S)}"
   local output_video="$RECORDS_DIR/${output_name}.mp4"
   local screenshot_dir="$RECORDS_DIR/${output_name}"
+  local frames_dir
+  frames_dir=$(mktemp -d /tmp/record-frames-XXXXXX)
 
   if [ -f "$PID_FILE" ]; then
     echo "[record] A recording is already active. Run '$0 stop' first."
@@ -104,76 +61,40 @@ cmd_start() {
 
   mkdir -p "$RECORDS_DIR" "$screenshot_dir"
 
-  # Detect window
-  echo "[record] Detecting Electron window..."
-  local win_info
-  win_info=$(get_window_and_screen_info)
-  if [ -z "$win_info" ]; then
-    echo "[error] Could not find Electron window. Is the app running?"
-    exit 1
-  fi
-
-  local rel_x rel_y w h screen_idx scale
-  read -r rel_x rel_y w h screen_idx scale <<< "$win_info"
-  echo "[record] Window: ${rel_x},${rel_y} ${w}x${h} on screen ${screen_idx} (${scale}x)"
-
-  # Find ffmpeg capture device
-  local device_idx
-  device_idx=$(ffmpeg -f avfoundation -list_devices true -i "" 2>&1 \
-    | grep "Capture screen ${screen_idx}" \
-    | grep -oE '\[[0-9]+\]' | tr -d '[]' || true)
-  if [ -z "$device_idx" ]; then
-    echo "[warn] Could not find device for screen $screen_idx, trying index 3"
-    device_idx=3
-  fi
-
-  # Crop coordinates at native (Retina) resolution
-  local cx=$((rel_x * scale))
-  local cy=$((rel_y * scale))
-  local cw=$((w * scale))
-  local ch=$((h * scale))
-
-  # Start ffmpeg
-  local raw_video
-  raw_video=$(mktemp /tmp/record-raw-XXXXXX.mp4)
-
-  ffmpeg -y \
-    -f avfoundation -framerate "$FRAMERATE" -capture_cursor 1 -i "${device_idx}:" \
-    -vf "crop=${cw}:${ch}:${cx}:${cy},scale=${w}:${h}" \
-    -c:v libx264 -crf 23 -preset fast -an \
-    "$raw_video" \
-    > /tmp/ffmpeg-record.log 2>&1 &
-  local ffmpeg_pid=$!
-  sleep 2
-
-  if ! kill -0 "$ffmpeg_pid" 2>/dev/null; then
-    echo "[error] ffmpeg failed to start:"
-    cat /tmp/ffmpeg-record.log
-    rm -f "$raw_video"
-    exit 1
-  fi
-
-  # Start screenshot loop
+  # Video frames loop (~2 fps via agent-browser CDP screenshots)
   (
     local idx=0
     while true; do
-      local filename
-      filename=$(printf "%s/%04d.png" "$screenshot_dir" "$idx")
-      $AB screenshot "$filename" 2>/dev/null || true
+      local fname
+      fname=$(printf "%s/frame_%06d.png" "$frames_dir" "$idx")
+      $AB screenshot "$fname" 2>/dev/null || true
+      idx=$((idx + 1))
+      sleep "$VIDEO_FRAME_INTERVAL"
+    done
+  ) &
+  local frames_pid=$!
+
+  # Gallery screenshots loop (every N seconds for human review)
+  (
+    local idx=0
+    while true; do
+      local fname
+      fname=$(printf "%s/%04d.png" "$screenshot_dir" "$idx")
+      $AB screenshot "$fname" 2>/dev/null || true
       idx=$((idx + 1))
       sleep "$SCREENSHOT_INTERVAL"
     done
   ) &
   local screenshot_pid=$!
 
-  # Save state for stop command
-  echo "$ffmpeg_pid $screenshot_pid" > "$PID_FILE"
-  echo "$output_video $raw_video $screenshot_dir" > "$STATE_FILE"
+  # Save state
+  echo "$frames_pid $screenshot_pid" > "$PID_FILE"
+  echo "$output_video $frames_dir $screenshot_dir" > "$STATE_FILE"
 
   echo "[record] Started!"
-  echo "  Video:       recording (PID $ffmpeg_pid)"
-  echo "  Screenshots: every ${SCREENSHOT_INTERVAL}s → $screenshot_dir/"
-  echo "  Stop with:   $0 stop"
+  echo "  Video frames: every ${VIDEO_FRAME_INTERVAL}s (PID $frames_pid)"
+  echo "  Screenshots:  every ${SCREENSHOT_INTERVAL}s → $screenshot_dir/"
+  echo "  Stop with:    $0 stop"
 }
 
 cmd_stop() {
@@ -182,25 +103,37 @@ cmd_stop() {
     return 0
   fi
 
-  local ffmpeg_pid screenshot_pid
-  read -r ffmpeg_pid screenshot_pid < "$PID_FILE"
+  local frames_pid screenshot_pid
+  read -r frames_pid screenshot_pid < "$PID_FILE"
 
-  local output_video raw_video screenshot_dir
-  read -r output_video raw_video screenshot_dir < "$STATE_FILE"
+  local output_video frames_dir screenshot_dir
+  read -r output_video frames_dir screenshot_dir < "$STATE_FILE"
 
-  # Stop screenshot loop
+  # Stop both capture loops
+  kill "$frames_pid" 2>/dev/null || true
   kill "$screenshot_pid" 2>/dev/null || true
+  wait "$frames_pid" 2>/dev/null || true
   wait "$screenshot_pid" 2>/dev/null || true
 
-  # Stop ffmpeg gracefully
-  kill -INT "$ffmpeg_pid" 2>/dev/null || true
-  wait "$ffmpeg_pid" 2>/dev/null || true
+  # Assemble frames into video
+  local frame_count
+  frame_count=$(ls -1 "$frames_dir"/frame_*.png 2>/dev/null | wc -l | tr -d ' ')
 
-  # Move raw video to final location
-  if [ -f "$raw_video" ]; then
-    mv "$raw_video" "$output_video"
+  if [ "$frame_count" -gt 0 ]; then
+    echo "[record] Assembling $frame_count frames into video..."
+    ffmpeg -y -framerate 2 -i "$frames_dir/frame_%06d.png" \
+      -c:v libx264 -crf 23 -pix_fmt yuv420p -an \
+      "$output_video" > /tmp/ffmpeg-assemble.log 2>&1
+
+    if [ ! -s "$output_video" ]; then
+      echo "  [warn] Video assembly failed. Check /tmp/ffmpeg-assemble.log"
+      echo "  Frames preserved in: $frames_dir/"
+    fi
+  else
+    echo "  [warn] No frames captured."
   fi
 
+  rm -rf "$frames_dir" 2>/dev/null
   rm -f "$PID_FILE" "$STATE_FILE"
 
   local video_size screenshot_count
@@ -219,22 +152,24 @@ cmd_status() {
     return 0
   fi
 
-  local ffmpeg_pid screenshot_pid
-  read -r ffmpeg_pid screenshot_pid < "$PID_FILE"
+  local frames_pid screenshot_pid
+  read -r frames_pid screenshot_pid < "$PID_FILE"
 
-  local ffmpeg_ok="no" screenshot_ok="no"
-  kill -0 "$ffmpeg_pid" 2>/dev/null && ffmpeg_ok="yes"
+  local frames_ok="no" screenshot_ok="no"
+  kill -0 "$frames_pid" 2>/dev/null && frames_ok="yes"
   kill -0 "$screenshot_pid" 2>/dev/null && screenshot_ok="yes"
 
-  local output_video raw_video screenshot_dir
-  read -r output_video raw_video screenshot_dir < "$STATE_FILE"
-  local count
-  count=$(ls -1 "$screenshot_dir"/*.png 2>/dev/null | wc -l | tr -d ' ' || echo "0")
-
-  echo "[record] Active recording"
-  echo "  Video:       PID $ffmpeg_pid (running: $ffmpeg_ok)"
-  echo "  Screenshots: PID $screenshot_pid (running: $screenshot_ok), ${count} captured"
-  echo "  Output:      $output_video"
+  if [ -f "$STATE_FILE" ]; then
+    local output_video frames_dir screenshot_dir
+    read -r output_video frames_dir screenshot_dir < "$STATE_FILE"
+    local frame_count ss_count
+    frame_count=$(ls -1 "$frames_dir"/frame_*.png 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    ss_count=$(ls -1 "$screenshot_dir"/*.png 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    echo "[record] Active recording"
+    echo "  Frames:      $frame_count captured (running: $frames_ok)"
+    echo "  Screenshots: $ss_count captured (running: $screenshot_ok)"
+    echo "  Output:      $output_video"
+  fi
 }
 
 # ─── Main ───
