@@ -12,10 +12,11 @@ export const createTaskConfigSlice = (set: Setter, get: () => TaskStore, _api?: 
 
 export class TaskConfigSliceActionImpl {
   readonly #get: () => TaskStore;
+  readonly #set: Setter;
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
-    void set;
+    this.#set = set;
     this.#get = get;
   }
 
@@ -85,11 +86,22 @@ export class TaskConfigSliceActionImpl {
     id: string,
     modelConfig: { model?: string; provider?: string },
   ): Promise<void> => {
+    // Optimistic update — immediately reflect new model/provider in UI
+    this.#get().internal_dispatchTaskDetail({
+      id,
+      type: 'updateTaskDetail',
+      value: { config: { ...this.#get().taskDetailMap[id]?.config, ...modelConfig } },
+    });
+    this.#set({ taskSaveStatus: 'saving' }, false, 'updateTaskModelConfig/saving');
+
     try {
       await taskService.updateConfig(id, modelConfig);
+      this.#set({ taskSaveStatus: 'saved' }, false, 'updateTaskModelConfig/saved');
       await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update task model config:', error);
+      this.#set({ taskSaveStatus: 'idle' }, false, 'updateTaskModelConfig/error');
+      await this.#get().internal_refreshTaskDetail(id);
     }
   };
 
