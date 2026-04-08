@@ -18,6 +18,7 @@ import type {
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
+  ChatFileItem,
   ChatTopicBotContext,
   ExecAgentParams,
   ExecAgentResult,
@@ -55,6 +56,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
@@ -884,10 +886,13 @@ export class AiAgentService {
     // 12. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+    let fileList: ChatFileItem[] | undefined;
 
     if (files && files.length > 0) {
       fileIds = [];
       imageList = [];
+      fileList = [];
+      const documentService = new DocumentService(this.db, this.userId);
 
       for (const file of files) {
         await throwIfExecutionAborted('file upload');
@@ -902,16 +907,50 @@ export class AiAgentService {
               id: result.fileId,
               url: result.resolvedUrl,
             });
+            continue;
           }
+
+          // Non-image: parse file content into the documents table so the
+          // MessageContentProcessor can inject it via filesPrompts(). Mirrors
+          // what the web upload path does, ensuring bot-uploaded PDFs / text /
+          // JSON / .skill files are actually visible to the LLM (instead of
+          // being silently uploaded but never read).
+          let content: string | undefined;
+          try {
+            const document = await documentService.parseFile(result.fileId);
+            content = document.content ?? undefined;
+          } catch (parseError) {
+            log(
+              'execAgent: parseFile failed for %s (fileId=%s): %O',
+              file.name,
+              result.fileId,
+              parseError,
+            );
+          }
+
+          fileList.push({
+            content,
+            fileType: file.mimeType ?? 'application/octet-stream',
+            id: result.fileId,
+            name: file.name ?? 'file',
+            size: file.size ?? 0,
+            url: result.resolvedUrl || '',
+          });
         } catch (error) {
           log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
         }
       }
 
       if (fileIds.length > 0) {
-        log('execAgent: uploaded %d files to S3', fileIds.length);
+        log(
+          'execAgent: uploaded %d files to S3 (%d images, %d documents)',
+          fileIds.length,
+          imageList.length,
+          fileList.length,
+        );
       }
       if (imageList.length === 0) imageList = undefined;
+      if (fileList.length === 0) fileList = undefined;
     }
 
     await throwIfExecutionAborted('message creation');
@@ -947,8 +986,10 @@ export class AiAgentService {
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
 
-    // Create user message object for processing (include imageList for vision models)
-    const userMessage = { content: prompt, imageList, role: 'user' as const };
+    // Create user message object for processing.
+    // - imageList: vision models render these as image_url parts
+    // - fileList: MessageContentProcessor injects content via filesPrompts() XML
+    const userMessage = { content: prompt, fileList, imageList, role: 'user' as const };
 
     // Combine history messages with user message
     const allMessages = resume ? historyMessages : [...historyMessages, userMessage];
