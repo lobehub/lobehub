@@ -462,7 +462,7 @@ describe('convertIterableToStream', () => {
       throw new Error('Request was aborted.');
     }
 
-    const identity = (chunk: any) => ({ data: chunk, id: 'msg_1', type: 'data' });
+    const identity = (chunk: any) => ({ data: chunk, id: 'msg_1', type: 'data' as const });
     const readable = convertIterableToStream(abortingStream())
       .pipeThrough(createTokenSpeedCalculator(identity))
       .pipeThrough(createSSEProtocolTransformer((c) => c));
