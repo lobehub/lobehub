@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Electron 프레임워크 버전",
   "settingSystemTools.appEnvironment.node.desc": "내장 Node.js 버전",
   "settingSystemTools.appEnvironment.title": "앱 환경",
-  "settingSystemTools.autoSelectDesc": "가장 적합한 도구가 자동으로 선택됩니다",
   "settingSystemTools.category.browserAutomation": "브라우저 자동화",
   "settingSystemTools.category.browserAutomation.desc": "헤드리스 브라우저 자동화 및 웹 상호작용을 위한 도구",
   "settingSystemTools.category.contentSearch": "콘텐츠 검색",

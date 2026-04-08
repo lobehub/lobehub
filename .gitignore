@@ -140,5 +140,9 @@ pnpm-lock.yaml
 .turbo
 spaHtmlTemplates.ts
 
+# Embedded CLI bundle (built at pack time)
+apps/desktop/resources/bin/lobe-cli.js
+apps/desktop/resources/cli-package.json
+
 .superpowers/
 docs/superpowers

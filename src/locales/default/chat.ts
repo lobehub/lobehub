@@ -248,6 +248,8 @@ export default {
   'operation.contextCompression': 'Context too long, compressing history...',
   'operation.execAgentRuntime': 'Preparing response',
   'operation.execClientTask': 'Executing task',
+  'operation.execServerAgentRuntime':
+    'Running… You can switch tasks or close the page — the task will keep going.',
   'operation.sendMessage': 'Sending message',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',

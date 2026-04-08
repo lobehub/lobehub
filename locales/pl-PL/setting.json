@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Wersja frameworka Electron",
   "settingSystemTools.appEnvironment.node.desc": "Wersja wbudowanego Node.js",
   "settingSystemTools.appEnvironment.title": "Środowisko aplikacji",
-  "settingSystemTools.autoSelectDesc": "Najlepsze dostępne narzędzie zostanie wybrane automatycznie",
   "settingSystemTools.category.browserAutomation": "Automatyzacja przeglądarki",
   "settingSystemTools.category.browserAutomation.desc": "Narzędzia do automatyzacji przeglądarki bez interfejsu graficznego i interakcji z siecią",
   "settingSystemTools.category.contentSearch": "Wyszukiwanie treści",

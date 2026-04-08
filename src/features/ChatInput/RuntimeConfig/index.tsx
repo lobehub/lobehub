@@ -108,7 +108,6 @@ const RuntimeConfig = memo(() => {
     chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
   ]);
 
-  // Get working directory
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDirectory = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,

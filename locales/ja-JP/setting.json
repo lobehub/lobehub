@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Electron フレームワークのバージョン",
   "settingSystemTools.appEnvironment.node.desc": "同梱 Node.js のバージョン",
   "settingSystemTools.appEnvironment.title": "アプリ環境",
-  "settingSystemTools.autoSelectDesc": "最適な利用可能ツールが自動的に選択されます",
   "settingSystemTools.category.browserAutomation": "ブラウザー自動化",
   "settingSystemTools.category.browserAutomation.desc": "ヘッドレスブラウザーの自動化とウェブ操作のためのツール",
   "settingSystemTools.category.contentSearch": "コンテンツ検索",

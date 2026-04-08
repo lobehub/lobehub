@@ -1,4 +1,4 @@
-import type { ConversationContext } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
 import type {
   AgentStreamClientOptions,
@@ -169,19 +169,26 @@ export class GatewayActionImpl {
    * Execute agent task via Gateway WebSocket.
    * Call isGatewayModeEnabled() first to check availability.
    */
+  /**
+   * Execute agent task via Gateway WebSocket.
+   * The backend creates user + assistant messages and the topic (if needed).
+   * Returns the result so the caller can handle topic switching.
+   */
+  /**
+   * Execute agent task via Gateway WebSocket.
+   * The backend creates user + assistant messages and the topic (if needed),
+   * then starts the agent. This method handles topic switching and WebSocket connection.
+   */
   executeGatewayAgent = async (params: {
-    assistantMessageId: string;
     context: ConversationContext;
     message: string;
-    parentOperationId: string;
-    topicId?: string;
-    userMessageId: string;
-  }): Promise<void> => {
-    const { assistantMessageId, context, message, parentOperationId, topicId, userMessageId } =
-      params;
+  }): Promise<ExecAgentResult> => {
+    const { context, message } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+
+    const isCreateNewTopic = !context.topicId;
 
     const result = await aiAgentService.execAgentTask({
       agentId: context.agentId,
@@ -191,24 +198,33 @@ export class GatewayActionImpl {
         threadId: context.threadId,
         topicId: context.topicId,
       },
-      existingMessageIds: [userMessageId, assistantMessageId],
       prompt: message,
     });
 
+    // If server created a new topic, switch to it and clean up the _new key temp messages
+    if (isCreateNewTopic && result.topicId) {
+      await this.#get().switchTopic(result.topicId, { clearNewKey: true });
+    }
+
+    // Use the server-created topicId for the execution context
+    const execContext = { ...context, topicId: result.topicId };
+
+    if (result.topicId) {
+      this.#get().internal_updateTopicLoading(result.topicId, true);
+    }
+
     // Create a dedicated operation for gateway execution with correct context
     const { operationId: gatewayOpId } = this.#get().startOperation({
-      context,
-      parentOperationId,
+      context: execContext,
       type: 'execServerAgentRuntime',
     });
 
-    // Associate the initial assistant message with the gateway operation
-    // so the UI shows loading/generating state via the operation system
-    this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
+    // Associate the server-created assistant message with the gateway operation
+    this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
 
     const eventHandler = createGatewayEventHandler(this.#get, {
-      assistantMessageId,
-      context,
+      assistantMessageId: result.assistantMessageId,
+      context: execContext,
       operationId: gatewayOpId,
     });
 
@@ -217,11 +233,13 @@ export class GatewayActionImpl {
       onEvent: eventHandler,
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
-        if (topicId) this.#get().internal_updateTopicLoading(topicId, false);
+        if (result.topicId) this.#get().internal_updateTopicLoading(result.topicId, false);
       },
       operationId: result.operationId,
       token: result.token || '',
     });
+
+    return result;
   };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {
