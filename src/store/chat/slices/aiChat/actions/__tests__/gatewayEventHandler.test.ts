@@ -33,7 +33,6 @@ function makeEvent(type: AgentStreamEvent['type'], data?: any): AgentStreamEvent
 
 /** Flush the async processing queue by draining microtasks + setTimeout queue */
 const flush = async () => {
-  // Multiple rounds to drain chained promises and setTimeout-based delays
   for (let i = 0; i < 5; i++) {
     await new Promise((r) => setTimeout(r, 15));
   }
@@ -73,6 +72,7 @@ describe('createGatewayEventHandler', () => {
       await flush();
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ value: { content: 'hello' } }),
+        { operationId: 'op-1' },
       );
 
       // New stream_start resets
@@ -86,12 +86,13 @@ describe('createGatewayEventHandler', () => {
           id: 'msg-step2',
           value: { content: 'world' },
         }),
+        { operationId: 'op-1' },
       );
     });
   });
 
   describe('stream_chunk', () => {
-    it('should accumulate text content', async () => {
+    it('should accumulate text content and pass operationId context', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -99,11 +100,14 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' world' }));
       await flush();
 
-      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith({
-        id: 'msg-initial',
-        type: 'updateMessage',
-        value: { content: 'Hello world' },
-      });
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { content: 'Hello world' },
+        },
+        { operationId: 'op-1' },
+      );
     });
 
     it('should accumulate reasoning content', async () => {
@@ -114,11 +118,14 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_chunk', { chunkType: 'reasoning', reasoning: 'ing...' }));
       await flush();
 
-      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith({
-        id: 'msg-initial',
-        type: 'updateMessage',
-        value: { reasoning: { content: 'Thinking...' } },
-      });
+      expect(store.internal_dispatchMessage).toHaveBeenLastCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { reasoning: { content: 'Thinking...' } },
+        },
+        { operationId: 'op-1' },
+      );
     });
 
     it('should dispatch tools and toggle tool calling streaming', async () => {
@@ -129,11 +136,14 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_chunk', { chunkType: 'tools_calling', toolsCalling }));
       await flush();
 
-      expect(store.internal_dispatchMessage).toHaveBeenCalledWith({
-        id: 'msg-initial',
-        type: 'updateMessage',
-        value: { tools: toolsCalling },
-      });
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: { tools: toolsCalling },
+        },
+        { operationId: 'op-1' },
+      );
 
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith('msg-initial', [
         true,
@@ -231,20 +241,23 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('error', () => {
-    it('should dispatch error to current message', async () => {
+    it('should dispatch error to current message with operationId context', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('error', { message: 'Something went wrong' }));
       await flush();
 
-      expect(store.internal_dispatchMessage).toHaveBeenCalledWith({
-        id: 'msg-initial',
-        type: 'updateMessage',
-        value: {
-          error: { body: { message: 'Something went wrong' }, type: 'AgentRuntimeError' },
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'msg-initial',
+          type: 'updateMessage',
+          value: {
+            error: { body: { message: 'Something went wrong' }, type: 'AgentRuntimeError' },
+          },
         },
-      });
+        { operationId: 'op-1' },
+      );
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
     });
 
@@ -252,13 +265,13 @@ describe('createGatewayEventHandler', () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
-      // Switch to step 2
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
       handler(makeEvent('error', { error: 'Timeout' }));
       await flush();
 
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-step2' }),
+        { operationId: 'op-1' },
       );
     });
   });
@@ -268,7 +281,6 @@ describe('createGatewayEventHandler', () => {
       const store = createMockStore();
       const callOrder: string[] = [];
 
-      // Make refreshMessages take some time and track call order
       store.refreshMessages.mockImplementation(async () => {
         callOrder.push('refresh_start');
         await new Promise((r) => setTimeout(r, 10));
@@ -283,12 +295,10 @@ describe('createGatewayEventHandler', () => {
 
       const handler = createHandler(store);
 
-      // Fire stream_start and chunk rapidly
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-new' } }));
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Hello' }));
       await flush();
 
-      // Dispatch must happen AFTER refresh completes
       const refreshEndIdx = callOrder.indexOf('refresh_end');
       const dispatchIdx = callOrder.indexOf('dispatch');
       expect(refreshEndIdx).toBeGreaterThan(-1);
@@ -310,6 +320,7 @@ describe('createGatewayEventHandler', () => {
       await flush();
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-1', value: { content: 'Let me search.' } }),
+        { operationId: 'op-1' },
       );
 
       const tools = [{ id: 'tc-1' }];
@@ -339,6 +350,7 @@ describe('createGatewayEventHandler', () => {
       await flush();
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'msg-2', value: { content: 'Here are the results.' } }),
+        { operationId: 'op-1' },
       );
 
       handler(makeEvent('stream_end'));

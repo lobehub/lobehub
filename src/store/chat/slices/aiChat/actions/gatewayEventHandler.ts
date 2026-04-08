@@ -29,7 +29,10 @@ export const createGatewayEventHandler = (
     operationId: string;
   },
 ) => {
-  const { context } = params;
+  const { context, operationId } = params;
+
+  // Dispatch context — ensures internal_dispatchMessage resolves the correct messageMapKey
+  const dispatchContext = { operationId };
 
   // Mutable — switches to new assistant message ID on each stream_start
   let currentAssistantMessageId = params.assistantMessageId;
@@ -75,28 +78,37 @@ export const createGatewayEventHandler = (
 
           if (data.chunkType === 'text' && data.content) {
             accumulatedContent += data.content;
-            get().internal_dispatchMessage({
-              id: currentAssistantMessageId,
-              type: 'updateMessage',
-              value: { content: accumulatedContent },
-            });
+            get().internal_dispatchMessage(
+              {
+                id: currentAssistantMessageId,
+                type: 'updateMessage',
+                value: { content: accumulatedContent },
+              },
+              dispatchContext,
+            );
           }
 
           if (data.chunkType === 'reasoning' && data.reasoning) {
             accumulatedReasoning += data.reasoning;
-            get().internal_dispatchMessage({
-              id: currentAssistantMessageId,
-              type: 'updateMessage',
-              value: { reasoning: { content: accumulatedReasoning } },
-            });
+            get().internal_dispatchMessage(
+              {
+                id: currentAssistantMessageId,
+                type: 'updateMessage',
+                value: { reasoning: { content: accumulatedReasoning } },
+              },
+              dispatchContext,
+            );
           }
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
-            get().internal_dispatchMessage({
-              id: currentAssistantMessageId,
-              type: 'updateMessage',
-              value: { tools: data.toolsCalling },
-            });
+            get().internal_dispatchMessage(
+              {
+                id: currentAssistantMessageId,
+                type: 'updateMessage',
+                value: { tools: data.toolsCalling },
+              },
+              dispatchContext,
+            );
 
             // Drive tool calling animation
             get().internal_toggleToolCallingStreaming(
@@ -154,13 +166,16 @@ export const createGatewayEventHandler = (
       case 'error': {
         enqueue(() => {
           const errorMsg = event.data?.message || event.data?.error || 'Unknown error';
-          get().internal_dispatchMessage({
-            id: currentAssistantMessageId,
-            type: 'updateMessage',
-            value: {
-              error: { body: { message: errorMsg }, type: 'AgentRuntimeError' },
+          get().internal_dispatchMessage(
+            {
+              id: currentAssistantMessageId,
+              type: 'updateMessage',
+              value: {
+                error: { body: { message: errorMsg }, type: 'AgentRuntimeError' },
+              },
             },
-          });
+            dispatchContext,
+          );
           get().internal_toggleMessageLoading(false, currentAssistantMessageId);
         });
         break;
