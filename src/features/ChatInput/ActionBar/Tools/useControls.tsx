@@ -30,6 +30,7 @@ import KlavisServerItem from './KlavisServerItem';
 import KlavisSkillIcon from './KlavisSkillIcon';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
+import MarketSkillIcon from './MarketSkillIcon';
 import ToolItem from './ToolItem';
 
 const SKILL_ICON_SIZE = 20;
@@ -270,7 +271,9 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const marketAgentSkillItems = useMemo(
     () =>
       marketAgentSkills.map((skill) => ({
-        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
+        icon: (
+          <MarketSkillIcon identifier={skill.identifier} name={skill.name} size={SKILL_ICON_SIZE} />
+        ),
         key: skill.identifier,
         label: (
           <ToolItem
@@ -576,7 +579,9 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     const enabledMarketAgentSkillItems = marketAgentSkills
       .filter((skill) => checked.includes(skill.identifier))
       .map((skill) => ({
-        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
+        icon: (
+          <MarketSkillIcon identifier={skill.identifier} name={skill.name} size={SKILL_ICON_SIZE} />
+        ),
         key: skill.identifier,
         label: (
           <ToolItem

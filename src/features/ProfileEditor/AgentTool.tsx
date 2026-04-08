@@ -17,6 +17,7 @@ import KlavisSkillIcon, {
 } from '@/features/ChatInput/ActionBar/Tools/KlavisSkillIcon';
 import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
+import MarketSkillIcon from '@/features/ChatInput/ActionBar/Tools/MarketSkillIcon';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
@@ -343,7 +344,13 @@ const AgentTool = memo<AgentToolProps>(
     const marketAgentSkillItems = useMemo(
       () =>
         marketAgentSkills.map((skill) => ({
-          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
+          icon: (
+            <MarketSkillIcon
+              identifier={skill.identifier}
+              name={skill.name}
+              size={SKILL_ICON_SIZE}
+            />
+          ),
           key: skill.identifier,
           label: (
             <ToolItem
@@ -630,7 +637,13 @@ const AgentTool = memo<AgentToolProps>(
       const enabledMarketAgentSkillItems = marketAgentSkills
         .filter((skill) => isToolEnabled(skill.identifier))
         .map((skill) => ({
-          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
+          icon: (
+            <MarketSkillIcon
+              identifier={skill.identifier}
+              name={skill.name}
+              size={SKILL_ICON_SIZE}
+            />
+          ),
           key: skill.identifier,
           label: (
             <ToolItem
