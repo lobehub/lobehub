@@ -1,4 +1,6 @@
-import type { Chat } from 'chat';
+import type { Chat, Message } from 'chat';
+
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 
 // ============================================================================
 // Bot Platform Core Types
@@ -110,6 +112,19 @@ export interface PlatformClient {
   extractChatId: (platformThreadId: string) => string;
 
   /**
+   * Resolve attachments on an inbound `Message` into `AttachmentSource[]` for
+   * ingestion by the bridge. Each platform owns its own attachment quirks
+   * here: data-source priority, type-only metadata inference, quoted-message
+   * handling, and re-download paths for data lost during chat-sdk Redis
+   * serialization (functions and buffers don't survive `Message.toJSON`).
+   *
+   * Optional — when omitted, the bridge falls back to its legacy
+   * `extractFiles` implementation. Eventually all platforms will implement
+   * this and the bridge fallback will be deleted.
+   */
+  extractFiles?: (message: Message) => Promise<AttachmentSource[] | undefined>;
+
+  /**
    * Transform outbound Markdown content into a format the platform can render.
    * Called before `formatReply` and `splitMessage`.
    *
@@ -127,40 +142,15 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
+  // --- Runtime Operations ---
+
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
-
-  // --- Runtime Operations ---
 
   readonly id: string;
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;
-
-  /**
-   * Re-download an attachment's binary data using the platform-native API,
-   * given the original raw message payload.
-   *
-   * This exists because the Chat SDK's `Attachment.fetchData` closure does
-   * NOT survive serialization into the queue/Redis — functions can't be
-   * `JSON.stringify`d, so they're stripped by `Message.toJSON`. Telegram
-   * photos are the canonical victim: the adapter only sets `fetchData`
-   * (no `url`), so once the message round-trips through Redis, the
-   * attachment is unrecoverable from chat-sdk surface alone.
-   *
-   * Optional — only platforms whose attachments expose binary data via an
-   * opaque file ID (Telegram, Slack files API, etc.) need to implement this.
-   * Platforms with public CDN URLs (Discord, QQ public attachments) survive
-   * serialization unchanged and don't need this fallback.
-   */
-  refetchAttachment?: (params: {
-    /** Index within `message.attachments` (used for platforms with multiple media of the same type). */
-    index: number;
-    /** The original platform-native message payload (`message.raw`). */
-    raw: Record<string, any> | undefined;
-    /** Chat SDK attachment type discriminant: 'image' | 'video' | 'audio' | 'file'. */
-    type: string | undefined;
-  }) => Promise<Buffer | undefined>;
 
   /**
    * Register bot commands with the platform (e.g., Telegram setMyCommands).

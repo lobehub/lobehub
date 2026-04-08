@@ -1056,21 +1056,51 @@ export class AgentBridgeService {
   }
 
   /**
-   * Extract file attachment metadata from Chat SDK message for passing to execAgent.
-   * Includes attachments from both the message itself and any referenced (quoted) message.
+   * Resolve attachments on an inbound message into `AttachmentSource[]`.
+   *
+   * Prefers the platform client's own `extractFiles` (each platform owns its
+   * attachment quirks: auth, file_id paths, mime/name inference, quoted-msg
+   * handling, post-Redis refetch). Falls back to the legacy bridge
+   * `extractFiles` for platforms that haven't migrated to per-client
+   * extraction yet — this fallback will be deleted once all platforms ship
+   * their own implementations.
+   */
+  private async resolveFiles(
+    message: Message,
+    client?: PlatformClient,
+  ): Promise<
+    | Array<{
+        buffer?: Buffer;
+        mimeType?: string;
+        name?: string;
+        size?: number;
+        url?: string;
+      }>
+    | undefined
+  > {
+    const fromClient = await client?.extractFiles?.(message);
+    if (fromClient !== undefined) return fromClient;
+    return this.extractFiles(message);
+  }
+
+  /**
+   * Legacy bridge attachment extractor — used as a fallback for platforms that
+   * haven't migrated to per-client `PlatformClient.extractFiles` yet.
+   * Includes attachments from both the message itself and any referenced
+   * (quoted) message.
    *
    * Resolves attachments in this priority order:
    *   1. `buffer` — already downloaded by the adapter (WeChat / Feishu inbound)
    *   2. `fetchData()` — adapter-provided lazy download with proper auth
-   *      (Telegram, Slack, Feishu history). Required for Slack/Telegram because
-   *      their URLs are token-protected and `ingestAttachment`'s downstream
-   *      `fetch(url)` has no credentials.
+   *      (Slack, Feishu history). Required for Slack because the URL is
+   *      token-protected and `ingestAttachment`'s downstream `fetch(url)` has
+   *      no credentials.
    *   3. `url` — public CDN fallback (Discord, QQ public attachments)
+   *
+   * Note: Telegram has its own `TelegramWebhookClient.extractFiles` and never
+   * reaches this code path.
    */
-  private async extractFiles(
-    message: Message,
-    client?: PlatformClient,
-  ): Promise<
+  private async extractFiles(message: Message): Promise<
     | Array<{
         buffer?: Buffer;
         mimeType?: string;
@@ -1164,9 +1194,8 @@ export class AgentBridgeService {
           type: att.type,
         })),
       );
-      const messageRaw = (message as any).raw as Record<string, any> | undefined;
       const resolved = await Promise.all(
-        directAttachments.map(async (att, index) => {
+        directAttachments.map(async (att) => {
           const mimeType = inferMimeType(att);
           const name = inferName(att);
 
@@ -1217,40 +1246,6 @@ export class AgentBridgeService {
               size: att.size,
               url: att.url,
             };
-          }
-          // Last resort: re-download via the platform client. This is the
-          // path Telegram photos take after a debounce/queue round-trip:
-          // their `fetchData` closure was stripped by `Message.toJSON`, and
-          // they have no public URL, but `message.raw` still carries the
-          // original `file_id`. The client knows how to fetch from there.
-          if (typeof client?.refetchAttachment === 'function') {
-            try {
-              const buffer = await client.refetchAttachment({
-                index,
-                raw: messageRaw,
-                type: att.type,
-              });
-              if (buffer) {
-                log(
-                  'extractFiles: client.refetchAttachment succeeded for type=%s, %d bytes',
-                  att.type,
-                  buffer.length,
-                );
-                return {
-                  buffer,
-                  mimeType,
-                  name,
-                  size: att.size,
-                  url: '',
-                };
-              }
-              log(
-                'extractFiles: client.refetchAttachment returned no buffer for type=%s',
-                att.type,
-              );
-            } catch (error) {
-              log('extractFiles: client.refetchAttachment failed for type=%s: %O', att.type, error);
-            }
           }
           return undefined;
         }),

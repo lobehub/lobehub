@@ -284,11 +284,16 @@ describe('AgentBridgeService', () => {
     });
   });
 
-  describe('extractFiles', () => {
-    function callExtract(messageOverrides: Record<string, unknown>, client?: unknown) {
+  describe('extractFiles (legacy bridge fallback for unmigrated platforms)', () => {
+    // Telegram has its own per-client `extractFiles` (see
+    // src/server/services/bot/platforms/telegram/client.test.ts) — these
+    // tests cover the bridge fallback path that the OTHER platforms
+    // (WeChat, Feishu, Slack, Discord, QQ) still go through until they
+    // migrate to per-client extraction in follow-up PRs.
+    function callExtract(messageOverrides: Record<string, unknown>) {
       const service = new AgentBridgeService(FAKE_DB, USER_ID);
       const message = { id: MESSAGE_ID, text: 'hi', ...messageOverrides } as any;
-      return (service as any).extractFiles(message, client) as Promise<
+      return (service as any).extractFiles(message) as Promise<
         Array<{ buffer?: Buffer; mimeType?: string; name?: string; size?: number; url: string }>
       >;
     }
@@ -305,8 +310,8 @@ describe('AgentBridgeService', () => {
       ]);
     });
 
-    it('invokes fetchData for token-protected attachments (Telegram / Slack)', async () => {
-      const buffer = Buffer.from('telegram-voice');
+    it('invokes fetchData for token-protected attachments (Slack)', async () => {
+      const buffer = Buffer.from('slack-voice');
       const fetchData = vi.fn().mockResolvedValue(buffer);
       const result = await callExtract({
         attachments: [{ fetchData, mimeType: 'audio/ogg', name: 'voice.ogg', type: 'audio' }],
@@ -314,24 +319,6 @@ describe('AgentBridgeService', () => {
       expect(fetchData).toHaveBeenCalledTimes(1);
       expect(result).toEqual([
         { buffer, mimeType: 'audio/ogg', name: 'voice.ogg', size: undefined, url: '' },
-      ]);
-    });
-
-    it('infers mimeType + name for Telegram photos that omit both fields', async () => {
-      // Telegram's Bot API does not return mime_type or file_name for `photo`
-      // payloads (they are always JPEG by spec), so the chat-adapter emits
-      // attachments with only `type: "image"`. Without inference these would
-      // fall through to ingestAttachment as application/octet-stream and end
-      // up in fileList instead of imageList — vision models would never see
-      // the photo. Verify we backfill to image/jpeg + image.jpg.
-      const buffer = Buffer.from('telegram-photo-bytes');
-      const fetchData = vi.fn().mockResolvedValue(buffer);
-      const result = await callExtract({
-        attachments: [{ fetchData, size: buffer.length, type: 'image' }],
-      });
-      expect(fetchData).toHaveBeenCalledTimes(1);
-      expect(result).toEqual([
-        { buffer, mimeType: 'image/jpeg', name: 'image.jpg', size: buffer.length, url: '' },
       ]);
     });
 
@@ -377,94 +364,6 @@ describe('AgentBridgeService', () => {
       expect(result).toEqual([
         { buffer, mimeType: 'image/png', name: 'screenshot.png', size: undefined, url: '' },
       ]);
-    });
-
-    it('falls back to client.refetchAttachment when attachment has no buffer/fetchData/url', async () => {
-      // Reproduces the post-Redis state for Telegram photos: the chat-sdk's
-      // `Message.toJSON` strips `fetchData` (functions are not JSON-serializable),
-      // and Telegram photos have no public URL, so by the time the message
-      // reaches us after a debounce round-trip, all three data sources are gone
-      // — we only have `type`, `size`, and the original `raw` payload with file_id.
-      const buffer = Buffer.from('telegram-photo-bytes');
-      const refetchAttachment = vi.fn().mockResolvedValue(buffer);
-      const result = await callExtract(
-        {
-          attachments: [{ size: 16_388, type: 'image' }],
-          raw: {
-            chat: { id: 7019597964 },
-            message_id: 158,
-            photo: [
-              { file_id: 'tg-photo-small', height: 90, width: 90 },
-              { file_id: 'tg-photo-large', height: 1280, width: 1280 },
-            ],
-          },
-        },
-        { refetchAttachment },
-      );
-      expect(refetchAttachment).toHaveBeenCalledWith({
-        index: 0,
-        raw: expect.objectContaining({ photo: expect.any(Array) }),
-        type: 'image',
-      });
-      expect(result).toEqual([
-        {
-          buffer,
-          mimeType: 'image/jpeg',
-          name: 'image.jpg',
-          size: 16_388,
-          url: '',
-        },
-      ]);
-    });
-
-    it('drops the attachment if client.refetchAttachment returns undefined', async () => {
-      const refetchAttachment = vi.fn().mockResolvedValue(undefined);
-      const result = await callExtract(
-        { attachments: [{ size: 100, type: 'image' }], raw: {} },
-        { refetchAttachment },
-      );
-      expect(refetchAttachment).toHaveBeenCalledTimes(1);
-      expect(result).toBeUndefined();
-    });
-
-    it('skips the attachment without throwing when client.refetchAttachment errors', async () => {
-      const refetchAttachment = vi.fn().mockRejectedValue(new Error('telegram getFile 404'));
-      const goodBuffer = Buffer.from('good');
-      const result = await callExtract(
-        {
-          attachments: [
-            { size: 100, type: 'image' },
-            { fetchData: vi.fn().mockResolvedValue(goodBuffer), type: 'image' },
-          ],
-          raw: {},
-        },
-        { refetchAttachment },
-      );
-      // First attachment fails refetch and is dropped; second still resolves.
-      expect(result).toEqual([
-        {
-          buffer: goodBuffer,
-          mimeType: 'image/jpeg',
-          name: 'image.jpg',
-          size: undefined,
-          url: '',
-        },
-      ]);
-    });
-
-    it('does not call refetchAttachment when buffer/fetchData/url is already present', async () => {
-      const refetchAttachment = vi.fn();
-      await callExtract(
-        {
-          attachments: [
-            { buffer: Buffer.from('x'), type: 'image' },
-            { fetchData: vi.fn().mockResolvedValue(Buffer.from('y')), type: 'image' },
-            { type: 'image', url: 'https://cdn.example/z.png' },
-          ],
-        },
-        { refetchAttachment },
-      );
-      expect(refetchAttachment).not.toHaveBeenCalled();
     });
 
     it('falls back to public url when neither buffer nor fetchData is provided (Discord / QQ)', async () => {
@@ -550,6 +449,69 @@ describe('AgentBridgeService', () => {
           url: 'https://cdn.discord.example/quoted.png',
         },
       ]);
+    });
+  });
+
+  describe('resolveFiles dispatcher', () => {
+    // Verifies the bridge prefers `client.extractFiles` when implemented and
+    // skips its own legacy fallback. Per-platform attachment shape coverage
+    // lives in the platform's own client.test.ts (e.g. telegram/client.test.ts).
+    function callResolve(messageOverrides: Record<string, unknown>, client?: unknown) {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const message = { id: MESSAGE_ID, text: 'hi', ...messageOverrides } as any;
+      return (service as any).resolveFiles(message, client) as Promise<
+        Array<{ buffer?: Buffer; mimeType?: string; name?: string; size?: number; url?: string }>
+      >;
+    }
+
+    it('delegates to client.extractFiles when the client implements it', async () => {
+      const clientResult = [
+        { buffer: Buffer.from('via-client'), mimeType: 'image/jpeg', name: 'pic.jpg' },
+      ];
+      const clientExtractFiles = vi.fn().mockResolvedValue(clientResult);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      // Spy on the legacy bridge fallback to make sure it is NOT called when
+      // the client owns extraction.
+      const legacySpy = vi.spyOn(service as any, 'extractFiles');
+
+      const message = { id: MESSAGE_ID, text: 'hi', attachments: [] } as any;
+      const result = await (service as any).resolveFiles(message, {
+        extractFiles: clientExtractFiles,
+      });
+
+      expect(clientExtractFiles).toHaveBeenCalledWith(message);
+      expect(legacySpy).not.toHaveBeenCalled();
+      expect(result).toBe(clientResult);
+    });
+
+    it('falls through to the bridge legacy extractFiles when the client does not implement it', async () => {
+      // Client object without extractFiles → bridge fallback runs and returns
+      // the (here: empty) attachments via its legacy path.
+      const result = await callResolve({ attachments: [] }, { id: 'discord' });
+      expect(result).toBeUndefined();
+    });
+
+    it('falls through to the bridge legacy extractFiles when no client is passed', async () => {
+      const result = await callResolve({ attachments: [] }, undefined);
+      expect(result).toBeUndefined();
+    });
+
+    it('uses the client result even when it is an empty array (does NOT fall back)', async () => {
+      // Empty array is a valid "no files" answer from the client; it should
+      // NOT trigger the legacy fallback. Only `undefined` from the client
+      // means "I don't know — try the legacy path."
+      const clientExtractFiles = vi.fn().mockResolvedValue([]);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const legacySpy = vi.spyOn(service as any, 'extractFiles');
+
+      const message = { id: MESSAGE_ID, text: 'hi' } as any;
+      const result = await (service as any).resolveFiles(message, {
+        extractFiles: clientExtractFiles,
+      });
+
+      expect(clientExtractFiles).toHaveBeenCalledTimes(1);
+      expect(legacySpy).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
     });
   });
 });
