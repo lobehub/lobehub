@@ -98,23 +98,6 @@ const Page = memo(() => {
 
   const labsGroup: FormGroupItemType = {
     children: [
-      ...(hasGatewayUrl
-        ? [
-            {
-              children: (
-                <Switch
-                  checked={enableGatewayMode}
-                  loading={!isPreferenceInit}
-                  onChange={(checked: boolean) => updateLab({ enableGatewayMode: checked })}
-                />
-              ),
-              className: styles.labItem,
-              desc: tLabs('features.gatewayMode.desc'),
-              label: tLabs('features.gatewayMode.title'),
-              minWidth: undefined,
-            },
-          ]
-        : []),
       {
         avatar: (
           <img
@@ -135,6 +118,23 @@ const Page = memo(() => {
         label: tLabs('features.inputMarkdown.title'),
         minWidth: undefined,
       },
+      ...(hasGatewayUrl
+        ? [
+            {
+              children: (
+                <Switch
+                  checked={enableGatewayMode}
+                  loading={!isPreferenceInit}
+                  onChange={(checked: boolean) => updateLab({ enableGatewayMode: checked })}
+                />
+              ),
+              className: styles.labItem,
+              desc: tLabs('features.gatewayMode.desc'),
+              label: tLabs('features.gatewayMode.title'),
+              minWidth: undefined,
+            },
+          ]
+        : []),
     ],
     title: tLabs('title'),
   };
