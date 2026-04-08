@@ -154,14 +154,14 @@ describe('tokenCounter', () => {
       const messages = [
         {
           content: '',
-          metadata: { usage: { totalOutputTokens: 70_000 } },
+          metadata: { usage: { totalOutputTokens: 100_000 } },
           role: 'assistant',
         },
       ];
       const result = shouldCompress(messages);
 
       expect(result.needsCompression).toBe(true);
-      expect(result.currentTokenCount).toBe(70_000);
+      expect(result.currentTokenCount).toBe(100_000);
       expect(result.threshold).toBe(64_000); // 128k * 0.5
     });
 

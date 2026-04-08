@@ -2884,6 +2884,7 @@ export const createAgentExecutors = (context: {
             nextContext: {
               payload: {
                 compressedMessages: messages,
+                groupId: '',
                 skipped: true,
               } as GeneralAgentCompressionResultPayload,
               phase: 'compression_result',
@@ -2916,6 +2917,7 @@ export const createAgentExecutors = (context: {
           nextContext: {
             payload: {
               compressedMessages: messages,
+              groupId: '',
               skipped: true,
             } as GeneralAgentCompressionResultPayload,
             phase: 'compression_result',
