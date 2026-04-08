@@ -8,6 +8,7 @@ export const LobeActivatorManifest: BuiltinToolManifest = {
     {
       description:
         'Activate tools from the <available_tools> list so their full API schemas become available for use. Call this before using any tool that is not yet activated. You can activate multiple tools at once.',
+      humanIntervention: 'required',
       name: ActivatorApiName.activateTools,
       parameters: {
         properties: {
@@ -27,6 +28,7 @@ export const LobeActivatorManifest: BuiltinToolManifest = {
     {
       description:
         'Activate a skill by name to load its instructions. Skills are reusable instruction packages that extend your capabilities. Returns the skill content that you should follow to complete the task. If the skill is not found, returns a list of available skills.',
+      humanIntervention: 'required',
       name: ActivatorApiName.activateSkill,
       parameters: {
         properties: {
