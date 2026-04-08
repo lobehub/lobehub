@@ -168,6 +168,17 @@ describe('QQGatewayConnection', () => {
       const { conn } = createConnection({ abortSignal: abort.signal });
       await conn.connect(); // Should resolve immediately
     });
+
+    it('should reject when identify fails before READY', async () => {
+      const { api, connectPromise, ws } = await connectAndGetWs();
+      vi.mocked(api.getAccessToken).mockRejectedValueOnce(new Error('bad token'));
+      const rejection = expect(connectPromise).rejects.toThrow('bad token');
+
+      ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
+      await vi.advanceTimersByTimeAsync(10);
+
+      await rejection;
+    });
   });
 
   describe('heartbeat', () => {
@@ -329,6 +340,31 @@ describe('QQGatewayConnection', () => {
       // Invalid session, cannot resume
       ws.simulateMessage({ d: false, op: QQ_WS_OP_CODES.INVALID_SESSION });
       expect(ws.readyState).toBe(MockWebSocket.CLOSED);
+    });
+
+    it('should reconnect after a post-READY close', async () => {
+      const { connectPromise, ws } = await connectAndGetWs();
+
+      ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
+      await vi.advanceTimersByTimeAsync(10);
+
+      ws.simulateMessage({
+        d: {
+          session_id: 'sess_1',
+          shard: [0, 1],
+          user: { bot: true, id: 'bot_1', username: 'TestBot' },
+          version: 1,
+        },
+        op: QQ_WS_OP_CODES.DISPATCH,
+        s: 1,
+        t: 'READY',
+      });
+      await connectPromise;
+
+      ws.close(4000, 'network reset');
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(MockWebSocket.instances).toHaveLength(2);
     });
   });
 

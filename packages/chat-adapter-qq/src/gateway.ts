@@ -69,6 +69,8 @@ export class QQGatewayConnection {
   private gatewayUrl: string | null = null;
   private resumeGatewayUrl: string | null = null;
   private closed = false;
+  private openConnectionError: Error | null = null;
+  private hasConnected = false;
 
   constructor(api: QQApiClient, options: QQGatewayOptions) {
     this.api = api;
@@ -121,6 +123,7 @@ export class QQGatewayConnection {
       this.ws = ws;
 
       let resolved = false;
+      this.openConnectionError = null;
 
       const onAbort = () => {
         this.close();
@@ -165,10 +168,24 @@ export class QQGatewayConnection {
 
         if (!resolved) {
           resolved = true;
-          resolve();
+          const error = this.openConnectionError;
+          this.openConnectionError = null;
+
+          if (error) {
+            reject(error);
+          } else if (this.closed || this.abortSignal?.aborted || this.hasConnected) {
+            resolve();
+          } else {
+            reject(
+              new Error(
+                `QQ gateway socket closed before ${isResume ? 'RESUMED' : 'READY'}: ` +
+                  `code=${event.code} reason=${event.reason || 'unknown'}`,
+              ),
+            );
+          }
         }
 
-        if (!this.closed && !this.abortSignal?.aborted) {
+        if (this.hasConnected && !this.closed && !this.abortSignal?.aborted) {
           this.attemptReconnect();
         }
       });
@@ -274,12 +291,14 @@ export class QQGatewayConnection {
     if (eventType === 'READY') {
       const readyData = payload.d as QQGatewayReadyData;
       this.sessionId = readyData.session_id;
+      this.hasConnected = true;
       this.log('Ready: session_id=%s user=%s', this.sessionId, readyData.user?.username);
       onReady();
       return;
     }
 
     if (eventType === 'RESUMED') {
+      this.hasConnected = true;
       this.log('Session resumed');
       onReady();
       return;
@@ -314,7 +333,9 @@ export class QQGatewayConnection {
       })
       .catch((err) => {
         this.log('Failed to get access token for identify: %O', err);
-        this.close();
+        this.openConnectionError =
+          err instanceof Error ? err : new Error('Failed to get access token for identify');
+        this.ws?.close(4000, 'Identify failed');
       });
   }
 
@@ -336,7 +357,9 @@ export class QQGatewayConnection {
       })
       .catch((err) => {
         this.log('Failed to get access token for resume: %O', err);
-        this.close();
+        this.openConnectionError =
+          err instanceof Error ? err : new Error('Failed to get access token for resume');
+        this.ws?.close(4000, 'Resume failed');
       });
   }
 
