@@ -80,7 +80,7 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent,
     return <SkeletonList />;
   }
 
-  if (showWelcome || displayMessageIds.length === 0) {
+  if ((showWelcome || displayMessageIds.length === 0) && welcome) {
     return (
       <WideScreenContainer
         style={{

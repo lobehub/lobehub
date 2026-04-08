@@ -29,9 +29,4 @@ export const staticStyle = createStaticStyles(({ css, cssVar }) => ({
   greetingTextAnimated: css`
     animation: ${greetingTextEnter} 400ms ease-out 500ms both;
   `,
-  greetingText: css`
-    font-size: 16px;
-    line-height: 1.7;
-    color: ${cssVar.colorText};
-  `,
 }));

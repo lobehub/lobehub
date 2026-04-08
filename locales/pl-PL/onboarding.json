@@ -1,8 +1,5 @@
 {
   "agent.banner.label": "Wprowadzenie Agenta",
-  "agent.completionSubtitle": "Twój asystent jest skonfigurowany i gotowy do działania.",
-  "agent.completionTitle": "Wszystko gotowe!",
-  "agent.enterApp": "Wejdź do aplikacji",
   "agent.greeting.emojiLabel": "Emoji",
   "agent.greeting.nameLabel": "Imię",
   "agent.greeting.namePlaceholder": "np. Lumi, Atlas, Neko...",
@@ -17,7 +14,6 @@
   "agent.modeSwitch.label": "Wybierz tryb wprowadzenia",
   "agent.modeSwitch.reset": "Zresetuj proces",
   "agent.progress": "{{currentStep}}/{{totalSteps}}",
-  "agent.skipOnboarding": "Pomiń wprowadzenie",
   "agent.stage.agentIdentity": "Tożsamość Agenta",
   "agent.stage.painPoints": "Problemy",
   "agent.stage.proSettings": "Zaawansowana konfiguracja",

@@ -1,8 +1,5 @@
 {
   "agent.banner.label": "آموزش نماینده",
-  "agent.completionSubtitle": "دستیار شما تنظیم شده و آماده استفاده است.",
-  "agent.completionTitle": "همه چیز آماده است!",
-  "agent.enterApp": "ورود به برنامه",
   "agent.greeting.emojiLabel": "ایموجی",
   "agent.greeting.nameLabel": "نام",
   "agent.greeting.namePlaceholder": "مثلاً لومی، اطلس، نکو...",
@@ -17,7 +14,6 @@
   "agent.modeSwitch.label": "حالت آموزش خود را انتخاب کنید",
   "agent.modeSwitch.reset": "بازنشانی جریان",
   "agent.progress": "{{currentStep}}/{{totalSteps}}",
-  "agent.skipOnboarding": "رد کردن آموزش",
   "agent.stage.agentIdentity": "هویت نماینده",
   "agent.stage.painPoints": "نقاط ضعف",
   "agent.stage.proSettings": "تنظیمات پیشرفته",

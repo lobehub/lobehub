@@ -1,8 +1,5 @@
 {
   "agent.banner.label": "Đăng ký Đại lý",
-  "agent.completionSubtitle": "Trợ lý của bạn đã được cấu hình và sẵn sàng hoạt động.",
-  "agent.completionTitle": "Mọi thứ đã sẵn sàng!",
-  "agent.enterApp": "Vào Ứng dụng",
   "agent.greeting.emojiLabel": "Biểu tượng cảm xúc",
   "agent.greeting.nameLabel": "Tên",
   "agent.greeting.namePlaceholder": "ví dụ: Lumi, Atlas, Neko...",
@@ -17,7 +14,6 @@
   "agent.modeSwitch.label": "Chọn chế độ đăng ký của bạn",
   "agent.modeSwitch.reset": "Đặt lại Quy trình",
   "agent.progress": "{{currentStep}}/{{totalSteps}}",
-  "agent.skipOnboarding": "Bỏ qua đăng ký",
   "agent.stage.agentIdentity": "Danh tính Đại lý",
   "agent.stage.painPoints": "Điểm đau",
   "agent.stage.proSettings": "Cài đặt Nâng cao",
