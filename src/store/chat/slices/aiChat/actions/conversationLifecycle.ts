@@ -619,7 +619,7 @@ export class ConversationLifecycleActionImpl {
               if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
             },
             operationId: result.operationId,
-            token: '', // TODO: inject auth token in Phase 4
+            token: result.token,
           });
         } catch (e) {
           console.error('[Gateway] Failed to start server-side agent:', e);

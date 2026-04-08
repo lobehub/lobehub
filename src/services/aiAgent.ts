@@ -1,4 +1,8 @@
+import type { ExecAgentResult } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
+
+export type { ExecAgentResult };
 
 export interface ExecAgentTaskParams {
   agentId?: string;
@@ -87,15 +91,6 @@ export interface UpdateClientTaskThreadStatusParams {
   };
   resultContent?: string;
   threadId: string;
-}
-
-export interface ExecAgentResult {
-  agentId: string;
-  assistantMessageId: string;
-  autoStarted: boolean;
-  operationId: string;
-  topicId: string;
-  userMessageId: string;
 }
 
 class AiAgentService {
