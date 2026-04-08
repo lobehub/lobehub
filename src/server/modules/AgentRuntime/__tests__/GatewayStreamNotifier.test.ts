@@ -144,27 +144,15 @@ describe('GatewayStreamNotifier', () => {
       ]);
     });
 
-    it('calls gateway push-event and update-status endpoints', async () => {
+    it('calls gateway push-event endpoint only (no update-status)', async () => {
       await notifier.publishAgentRuntimeEnd('op-1', 2, {}, 'completed', 'All done');
 
       await new Promise((r) => setTimeout(r, 50));
 
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0]);
       expect(urls).toContain(`${gatewayUrl}/api/operations/push-event`);
-      expect(urls).toContain(`${gatewayUrl}/api/operations/update-status`);
-    });
-
-    it('maps error reason to error status', async () => {
-      await notifier.publishAgentRuntimeEnd('op-1', 0, {}, 'error', 'Something broke');
-
-      await new Promise((r) => setTimeout(r, 50));
-
-      const statusCall = mockFetch.mock.calls.find(
-        (c: any[]) => c[0] === `${gatewayUrl}/api/operations/update-status`,
-      );
-      expect(statusCall).toBeDefined();
-      const body = JSON.parse(statusCall![1].body);
-      expect(body.status).toBe('error');
+      // Gateway handles session completion directly in pushEvent on agent_runtime_end
+      expect(urls).not.toContain(`${gatewayUrl}/api/operations/update-status`);
     });
   });
 
