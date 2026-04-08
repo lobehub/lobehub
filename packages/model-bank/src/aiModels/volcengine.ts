@@ -3,7 +3,7 @@ import {
   type AIImageModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
-import { seedance15ProParams } from './lobehub/video';
+import { seedance15ProParams, seedance20Params } from './lobehub/video';
 
 // https://www.volcengine.com/docs/82379/1330310
 
@@ -1274,6 +1274,28 @@ const volcengineImageModels: AIImageModelCard[] = [
 ];
 
 const volcengineVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',
+    displayName: 'Seedance 2.0',
+    enabled: true,
+    id: 'doubao-seedance-2-0-260128',
+    organization: 'ByteDance',
+    parameters: seedance20Params,
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+  {
+    description:
+      'Seedance 2.0 Fast by ByteDance offers the same capabilities as Seedance 2.0 with faster generation speeds at a more competitive price.',
+    displayName: 'Seedance 2.0 Fast',
+    enabled: true,
+    id: 'doubao-seedance-2-0-fast-260128',
+    organization: 'ByteDance',
+    parameters: seedance20Params,
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
   {
     description:
       'Seedance 1.5 Pro by ByteDance supports text-to-video, image-to-video (first frame, first+last frame), and audio generation synchronized with visuals.',
