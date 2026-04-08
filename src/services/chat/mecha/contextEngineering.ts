@@ -416,13 +416,41 @@ export const contextEngineering = async ({
 
   if (shouldInjectAvailableAgents) {
     try {
-      // Over-fetch by 1 to detect overflow.
+      // Over-fetch by 2: +1 reserved for the current agent (filtered out below
+      // so the model doesn't try to delegate to itself) and +1 to detect overflow
+      // for the `hasMore` flag.
       const AVAILABLE_AGENTS_LIMIT = 10;
       const recentAgents = await lambdaClient.agent.queryAgents.query({
-        limit: AVAILABLE_AGENTS_LIMIT + 1,
+        limit: AVAILABLE_AGENTS_LIMIT + 2,
       });
-      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
-      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+
+      // Try to find the current agent in the recent set so we can reuse its
+      // title/description for the `<current_agent>` block. Fall back to the
+      // agent store meta if the current agent is not in the recent window.
+      let currentAgent: NonNullable<AgentManagementContext['currentAgent']> | undefined;
+      if (agentId) {
+        const fromRecent = recentAgents.find((a) => a.id === agentId);
+        if (fromRecent) {
+          currentAgent = {
+            description: fromRecent.description ?? undefined,
+            id: agentId,
+            title: fromRecent.title ?? 'Untitled',
+          };
+        } else {
+          const meta = agentSelectors.getAgentMetaById(agentId)(agentStoreState);
+          currentAgent = {
+            description: meta.description ?? undefined,
+            id: agentId,
+            title: meta.title ?? 'Untitled',
+          };
+        }
+      }
+
+      // Exclude current agent from `availableAgents` — the model is the current
+      // agent, so listing itself as a delegation target is misleading.
+      const otherAgents = agentId ? recentAgents.filter((a) => a.id !== agentId) : recentAgents;
+      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
         description: a.description ?? undefined,
         id: a.id,
         title: a.title ?? 'Untitled',
@@ -431,8 +459,14 @@ export const contextEngineering = async ({
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        currentAgent,
       };
-      log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
+      log(
+        'availableAgents fetched: %d agents (hasMore=%s), currentAgent=%s',
+        availableAgents.length,
+        hasMoreAgents,
+        currentAgent?.id ?? '(none)',
+      );
     } catch (error) {
       // Silently fail - availableAgents context is optional
       log('Failed to fetch availableAgents: %O', error);

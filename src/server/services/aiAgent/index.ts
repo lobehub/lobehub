@@ -691,13 +691,33 @@ export class AiAgentService {
     let agentManagementContext: AgentManagementContext | undefined;
 
     if (shouldInjectAvailableAgents) {
-      // Query user's most recently updated agents. Over-fetch by 1 to detect overflow.
+      // Query user's most recently updated agents.
+      // Over-fetch by 2: +1 reserved for the current agent (which we filter out
+      // below so the model doesn't try to delegate to itself) and +1 to detect
+      // overflow for the `hasMore` flag.
       const AVAILABLE_AGENTS_LIMIT = 10;
       const recentAgents = await this.agentModel.queryAgents({
-        limit: AVAILABLE_AGENTS_LIMIT + 1,
+        limit: AVAILABLE_AGENTS_LIMIT + 2,
       });
-      const hasMoreAgents = recentAgents.length > AVAILABLE_AGENTS_LIMIT;
-      const availableAgents = recentAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+
+      // Try to find the current agent inside the recent set so we can reuse its
+      // title/description for the `<current_agent>` block. Fall back to
+      // agentConfig.title when the current agent is not in the recent window
+      // (e.g. it hasn't been updated for a while). `description` is only on
+      // the DB row (not on the LobeAgentConfig type), so it's optional.
+      const currentAgentRow = recentAgents.find((a) => a.id === resolvedAgentId);
+      const currentAgent = {
+        description: currentAgentRow?.description ?? undefined,
+        id: resolvedAgentId,
+        title: currentAgentRow?.title ?? agentConfig.title ?? 'Untitled',
+      };
+
+      // Exclude the current agent from `availableAgents` — the model is the current
+      // agent, so listing itself as a delegation target is misleading and would
+      // invite self-calls.
+      const otherAgents = recentAgents.filter((a) => a.id !== resolvedAgentId);
+      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
         description: a.description ?? undefined,
         id: a.id,
         title: a.title ?? 'Untitled',
@@ -706,6 +726,7 @@ export class AiAgentService {
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        currentAgent,
       };
     }
 

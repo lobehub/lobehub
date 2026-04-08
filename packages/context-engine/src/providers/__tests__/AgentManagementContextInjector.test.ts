@@ -181,6 +181,91 @@ describe('AgentManagementContextInjector', () => {
     });
   });
 
+  describe('currentAgent identity', () => {
+    it('should render <current_agent> block with id and title', async () => {
+      const injector = new AgentManagementContextInjector({
+        enabled: true,
+        context: {
+          currentAgent: {
+            id: 'agt_self',
+            title: 'Marketing Assistant',
+            description: 'Drafts copy and ad ideas',
+          },
+        },
+      });
+
+      const ctx = createContext([
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'hi' },
+      ]);
+      const result = await injector.process(ctx);
+
+      expect(result.messages).toHaveLength(3);
+      const injected = result.messages[1].content as string;
+      expect(injected).toContain('<current_agent>');
+      expect(injected).toContain('<id>agt_self</id>');
+      expect(injected).toContain('<title>Marketing Assistant</title>');
+      expect(injected).toContain('<description>Drafts copy and ad ideas</description>');
+      // Instruction should make the model aware of self-identity and not delegate to itself
+      expect(injected).toContain('current_agent');
+      expect(injected).toContain('Never call yourself');
+    });
+
+    it('should render <current_agent> alongside <available_agents> without listing self', async () => {
+      const injector = new AgentManagementContextInjector({
+        enabled: true,
+        context: {
+          currentAgent: { id: 'agt_self', title: 'Self' },
+          // The caller is responsible for filtering self out — assert the
+          // injector renders exactly what it's given.
+          availableAgents: [
+            { id: 'agt_other_1', title: 'Code Reviewer' },
+            { id: 'agt_other_2', title: 'Translator' },
+          ],
+        },
+      });
+
+      const ctx = createContext([
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'hi' },
+      ]);
+      const result = await injector.process(ctx);
+
+      const injected = result.messages[1].content as string;
+      expect(injected).toContain('<current_agent>');
+      expect(injected).toContain('agt_self');
+      expect(injected).toContain('<available_agents>');
+      expect(injected).toContain('agt_other_1');
+      expect(injected).toContain('agt_other_2');
+      // Self id must NOT appear inside an <agent ...> tag of available_agents
+      expect(injected).not.toMatch(/<agent id="agt_self">/);
+    });
+
+    it('should preserve currentAgent when mentionedAgents is also set', async () => {
+      // Regression guard: the injector previously hand-listed fields when
+      // mentionedAgents was present and would have dropped currentAgent.
+      const injector = new AgentManagementContextInjector({
+        enabled: true,
+        context: {
+          currentAgent: { id: 'agt_self', title: 'Self' },
+          mentionedAgents: [{ id: 'agt_designer', name: 'Designer' }],
+        },
+      });
+
+      const ctx = createContext([
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'hey @Designer' },
+      ]);
+      const result = await injector.process(ctx);
+
+      // pre-user injection (current_agent) + system + user + post-user delegation
+      expect(result.messages).toHaveLength(4);
+      expect(result.messages[1].content).toContain('<current_agent>');
+      expect(result.messages[1].content).toContain('agt_self');
+      expect(result.messages[3].content).toContain('<mentioned_agents>');
+    });
+  });
+
   describe('only mentionedAgents (no providers/plugins)', () => {
     it('should NOT inject empty agent-management context but SHOULD inject delegation', async () => {
       const injector = new AgentManagementContextInjector({
