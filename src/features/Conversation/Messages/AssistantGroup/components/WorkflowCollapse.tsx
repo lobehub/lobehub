@@ -1,28 +1,19 @@
 import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { createStaticStyles } from 'antd-style';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AccordionItem, Block, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { Check, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { inspectorTextStyles } from '@/styles/text';
 import { type AssistantContentBlock } from '@/types/index';
 
 import { formatReasoningDuration, getWorkflowSummaryText, hasToolError } from '../toolDisplayNames';
 import WorkflowExpandedList from './WorkflowExpandedList';
-import WorkflowSummary from './WorkflowSummary';
 
 const styles = createStaticStyles(({ css }) => ({
   root: css`
-    @keyframes workflow-pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.35;
-      }
-    }
-
     @keyframes spin {
       from {
         transform: rotate(0deg);
@@ -63,71 +54,92 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
   );
   const durationText = totalReasoningMs > 0 ? formatReasoningDuration(totalReasoningMs) : undefined;
 
-  const [collapsed, setCollapsed] = useState(allComplete);
+  const [expanded, setExpanded] = useState(!allComplete);
   const userExpandedRef = useRef(false);
   const prevCompleteRef = useRef(allComplete);
   const prevToolCountRef = useRef(allTools.length);
 
   useEffect(() => {
-    // Only auto-collapse on transition: incomplete → complete
     if (
       allComplete &&
       !prevCompleteRef.current &&
       !userExpandedRef.current &&
       allTools.length > 0
     ) {
-      setCollapsed(true);
+      setExpanded(false);
     }
     prevCompleteRef.current = allComplete;
   }, [allComplete, allTools.length]);
 
   useEffect(() => {
     if (allTools.length > prevToolCountRef.current) {
-      setCollapsed(false);
+      setExpanded(true);
       userExpandedRef.current = false;
     }
     prevToolCountRef.current = allTools.length;
   }, [allTools.length]);
 
-  const handleToggle = () => {
-    if (collapsed) {
-      setCollapsed(false);
+  const handleExpandChange = (isExpanded: boolean) => {
+    setExpanded(isExpanded);
+    if (isExpanded) {
       userExpandedRef.current = true;
-    } else {
-      setCollapsed(true);
     }
   };
 
-  const listProps = {
-    assistantId,
-    blocks,
-    disableEditing,
-  };
+  const streaming = !allComplete;
+
+  const statusIcon = streaming ? (
+    <NeuralNetworkLoading size={16} />
+  ) : errorPresent ? (
+    <Icon color={cssVar.colorError} icon={X} />
+  ) : (
+    <Icon color={cssVar.colorSuccess} icon={Check} />
+  );
+
+  const title = (
+    <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+      <Block
+        horizontal
+        align="center"
+        flex="none"
+        height={24}
+        justify="center"
+        style={{ fontSize: 12 }}
+        variant="outlined"
+        width={24}
+      >
+        {statusIcon}
+      </Block>
+      <div className={inspectorTextStyles.root}>
+        <span>{streaming ? 'Working...' : summaryText}</span>
+        {!streaming && durationText && (
+          <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 6 }}>
+            {durationText}
+          </span>
+        )}
+      </div>
+    </Flexbox>
+  );
 
   return (
     <div className={styles.root}>
-      <WorkflowSummary
-        duration={durationText}
-        expanded={!collapsed}
-        hasError={errorPresent}
-        streaming={!allComplete}
-        summaryText={summaryText}
-        onToggle={handleToggle}
-      />
-      <AnimatePresence initial={false}>
-        {(!allComplete || !collapsed) && (
-          <motion.div
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            initial={allComplete ? { height: 0, opacity: 0 } : false}
-            key="workflow-list"
-            style={{ overflow: 'hidden' }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <WorkflowExpandedList {...listProps} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AccordionItem
+        expand={streaming ? true : expanded}
+        hideIndicator={streaming}
+        indicatorPlacement="end"
+        itemKey="workflow"
+        paddingBlock={4}
+        paddingInline={4}
+        title={title}
+        variant="borderless"
+        onExpandChange={handleExpandChange}
+      >
+        <WorkflowExpandedList
+          assistantId={assistantId}
+          blocks={blocks}
+          disableEditing={disableEditing}
+        />
+      </AccordionItem>
     </div>
   );
 });
