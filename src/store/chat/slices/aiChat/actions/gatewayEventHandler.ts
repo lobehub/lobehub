@@ -67,10 +67,6 @@ export const createGatewayEventHandler = (
 
           const newAssistantMessageId = data?.assistantMessage?.id;
 
-          // Optimistically show loading on the current message BEFORE fetching,
-          // so the UI doesn't appear frozen while waiting for DB response
-          get().internal_toggleMessageLoading(true, currentAssistantMessageId);
-
           // Switch to the new assistant message created by the server for this step
           if (newAssistantMessageId) {
             currentAssistantMessageId = newAssistantMessageId;
@@ -84,9 +80,6 @@ export const createGatewayEventHandler = (
 
           // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
           await fetchAndReplaceMessages(get, context).catch(console.error);
-
-          // Re-apply loading to the (possibly new) message after fetch replaces the map
-          get().internal_toggleMessageLoading(true, currentAssistantMessageId);
         });
         break;
       }
@@ -159,8 +152,6 @@ export const createGatewayEventHandler = (
       case 'tool_end': {
         enqueue(async () => {
           await fetchAndReplaceMessages(get, context).catch(console.error);
-          // Re-apply loading after refresh so UI stays active between tool_end and next stream_start
-          get().internal_toggleMessageLoading(true, currentAssistantMessageId);
         });
         break;
       }
@@ -179,7 +170,6 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          get().internal_toggleMessageLoading(false, currentAssistantMessageId);
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           get().completeOperation(operationId);
           await fetchAndReplaceMessages(get, context).catch(console.error);
@@ -200,7 +190,6 @@ export const createGatewayEventHandler = (
             },
             dispatchContext,
           );
-          get().internal_toggleMessageLoading(false, currentAssistantMessageId);
         });
         break;
       }

@@ -15,7 +15,6 @@ function createMockStore() {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
-    internal_toggleMessageLoading: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     replaceMessages: vi.fn(),
   };
@@ -48,7 +47,7 @@ const flush = async () => {
 
 describe('createGatewayEventHandler', () => {
   describe('stream_start', () => {
-    it('should associate new message with operation and show loading', async () => {
+    it('should associate new message with operation', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -56,7 +55,6 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-step2', 'op-1');
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-step2');
       expect(store.replaceMessages).toHaveBeenCalled();
     });
 
@@ -67,7 +65,9 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_start', {}));
       await flush();
 
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-initial');
+      // No new message to associate, but fetch still happens
+      expect(store.associateMessageWithOperation).not.toHaveBeenCalled();
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
 
     it('should reset accumulators on each stream_start', async () => {
@@ -170,15 +170,13 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('stream_end', () => {
-    it('should clear tool streaming but keep message loading active', async () => {
+    it('should clear tool streaming only', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_end'));
       await flush();
 
-      // Loading stays active until agent_runtime_end
-      expect(store.internal_toggleMessageLoading).not.toHaveBeenCalled();
       expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
         'msg-initial',
         undefined,
@@ -200,7 +198,7 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('tool_end', () => {
-    it('should refresh messages and re-apply loading', async () => {
+    it('should refresh messages to pull tool results', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -208,8 +206,6 @@ describe('createGatewayEventHandler', () => {
       await flush();
 
       expect(store.replaceMessages).toHaveBeenCalled();
-      // Re-apply loading after refresh so UI stays active until next stream_start
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-initial');
     });
   });
 
@@ -236,14 +232,13 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('agent_runtime_end', () => {
-    it('should toggle loading off, complete operation, and refresh messages', async () => {
+    it('should complete operation and refresh messages', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('agent_runtime_end'));
       await flush();
 
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       expect(store.replaceMessages).toHaveBeenCalled();
     });
@@ -267,7 +262,6 @@ describe('createGatewayEventHandler', () => {
         },
         { operationId: 'op-1' },
       );
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-initial');
     });
 
     it('should dispatch error to switched message ID', async () => {
@@ -300,8 +294,8 @@ describe('createGatewayEventHandler', () => {
       store.internal_dispatchMessage.mockImplementation(() => {
         callOrder.push('dispatch');
       });
-      store.internal_toggleMessageLoading.mockImplementation(() => {
-        callOrder.push('loading');
+      store.associateMessageWithOperation.mockImplementation(() => {
+        callOrder.push('associate');
       });
 
       const handler = createHandler(store);
@@ -325,7 +319,7 @@ describe('createGatewayEventHandler', () => {
       // Step 1: LLM call
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-1' } }));
       await flush();
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-1');
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-1', 'op-1');
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Let me search.' }));
       await flush();
@@ -355,7 +349,7 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-2' } }));
       await flush();
       expect(store.replaceMessages).toHaveBeenCalled();
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-2');
+      expect(store.associateMessageWithOperation).toHaveBeenCalledWith('msg-2', 'op-1');
 
       handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'Here are the results.' }));
       await flush();
@@ -367,7 +361,7 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('stream_end'));
       handler(makeEvent('agent_runtime_end'));
       await flush();
-      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(false, 'msg-2');
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
     });
   });
 });
