@@ -916,35 +916,47 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('message creation');
 
-    // 13. Create user message in database
-    // Include threadId if provided (for SubAgent task execution in isolated Thread)
-    const userMessageRecord = resume
-      ? undefined
-      : await this.messageModel.create({
-          agentId: resolvedAgentId,
-          content: prompt,
-          files: fileIds,
-          role: 'user',
-          threadId: appContext?.threadId ?? undefined,
-          topicId,
-        });
-    if (userMessageRecord) {
+    // 13. Create or reuse user message
+    // When existingMessageIds are provided (Gateway mode), the caller already created
+    // messages via sendMessageInServer — reuse them instead of creating duplicates.
+    const [existingUserMsgId, existingAssistantMsgId] = existingMessageIds;
+
+    let userMessageRecord: { id: string } | undefined;
+    if (resume) {
+      userMessageRecord = undefined;
+    } else if (existingUserMsgId) {
+      userMessageRecord = { id: existingUserMsgId };
+      log('execAgent: reusing existing user message %s', existingUserMsgId);
+    } else {
+      userMessageRecord = await this.messageModel.create({
+        agentId: resolvedAgentId,
+        content: prompt,
+        files: fileIds,
+        role: 'user',
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      });
       log('execAgent: created user message %s', userMessageRecord.id);
     }
 
-    // 14. Create assistant message placeholder in database
-    // Include threadId if provided (for SubAgent task execution in isolated Thread)
-    const assistantMessageRecord = await this.messageModel.create({
-      agentId: resolvedAgentId,
-      content: LOADING_FLAT,
-      model,
-      parentId: parentMessageId ?? userMessageRecord?.id,
-      provider,
-      role: 'assistant',
-      threadId: appContext?.threadId ?? undefined,
-      topicId,
-    });
-    log('execAgent: created assistant message %s', assistantMessageRecord.id);
+    // 14. Create or reuse assistant message placeholder
+    let assistantMessageRecord: { id: string };
+    if (existingAssistantMsgId) {
+      assistantMessageRecord = { id: existingAssistantMsgId };
+      log('execAgent: reusing existing assistant message %s', existingAssistantMsgId);
+    } else {
+      assistantMessageRecord = await this.messageModel.create({
+        agentId: resolvedAgentId,
+        content: LOADING_FLAT,
+        model,
+        parentId: parentMessageId ?? userMessageRecord?.id,
+        provider,
+        role: 'assistant',
+        threadId: appContext?.threadId ?? undefined,
+        topicId,
+      });
+      log('execAgent: created assistant message %s', assistantMessageRecord.id);
+    }
     assistantMessageRef.current = assistantMessageRecord.id;
 
     // Create user message object for processing (include imageList for vision models)
