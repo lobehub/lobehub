@@ -154,49 +154,22 @@ export class GatewayActionImpl {
   };
 
   /**
-   * Try to start server-side agent execution via Gateway WebSocket.
-   * Returns true if gateway mode is active and execution was started,
-   * false if gateway is not available (caller should fall back to client mode).
+   * Check if Gateway mode is available and enabled.
+   * Returns true if both server config and user lab toggle are set.
    */
-  startGatewayExecution = (params: {
-    assistantMessageId: string;
-    context: ConversationContext;
-    message: string;
-    parentOperationId: string;
-    topicId?: string;
-    userMessageId: string;
-  }): boolean => {
-    const { assistantMessageId, context, message, parentOperationId, topicId, userMessageId } =
-      params;
-
-    // Check if server-side Gateway mode is available AND user has enabled it in Labs
+  isGatewayModeEnabled = (): boolean => {
     const agentGatewayUrl =
       window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
     const enableGatewayMode = useUserStore.getState().preference.lab?.enableGatewayMode;
 
-    if (!agentGatewayUrl || !enableGatewayMode) return false;
-
-    // Fire-and-forget: start the gateway execution asynchronously
-    this.#executeViaGateway({
-      agentGatewayUrl,
-      assistantMessageId,
-      context,
-      message,
-      parentOperationId,
-      topicId,
-      userMessageId,
-    }).catch((e) => {
-      console.error('[Gateway] Failed to start server-side agent:', e);
-      if (topicId) this.#get().internal_updateTopicLoading(topicId, false);
-    });
-
-    return true;
+    return !!agentGatewayUrl && !!enableGatewayMode;
   };
 
-  // ─── Internal ───
-
-  #executeViaGateway = async (params: {
-    agentGatewayUrl: string;
+  /**
+   * Execute agent task via Gateway WebSocket.
+   * Call isGatewayModeEnabled() first to check availability.
+   */
+  executeGatewayAgent = async (params: {
     assistantMessageId: string;
     context: ConversationContext;
     message: string;
@@ -204,15 +177,11 @@ export class GatewayActionImpl {
     topicId?: string;
     userMessageId: string;
   }): Promise<void> => {
-    const {
-      agentGatewayUrl,
-      assistantMessageId,
-      context,
-      message,
-      parentOperationId,
-      topicId,
-      userMessageId,
-    } = params;
+    const { assistantMessageId, context, message, parentOperationId, topicId, userMessageId } =
+      params;
+
+    const agentGatewayUrl =
+      window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
 
     const result = await aiAgentService.execAgentTask({
       agentId: context.agentId,
