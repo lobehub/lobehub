@@ -8,11 +8,11 @@ import WorkflowReasoningLine from './WorkflowReasoningLine';
 import WorkflowToolLine from './WorkflowToolLine';
 
 const styles = createStaticStyles(({ css }) => ({
-  blockDivider: css`
-    width: 100%;
-    height: 1px;
-    margin-block: 2px;
-    background: ${cssVar.colorFillTertiary};
+  blockContent: css`
+    padding-block: 2px;
+    padding-inline: 30px 8px;
+    font-size: 13px;
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -25,10 +25,10 @@ interface WorkflowExpandedListProps {
 const WorkflowExpandedList = memo<WorkflowExpandedListProps>(
   ({ blocks, assistantId, disableEditing }) => {
     return (
-      <Flexbox gap={4} paddingBlock={'4px 8px'}>
-        {blocks.map((block, index) => (
+      <Flexbox paddingBlock={'4px 8px'}>
+        {blocks.map((block) => (
           <Flexbox key={block.id}>
-            {index > 0 && blocks.length > 1 && <div className={styles.blockDivider} />}
+            {block.content && <div className={styles.blockContent}>{block.content}</div>}
             {block.reasoning && <WorkflowReasoningLine reasoning={block.reasoning} />}
             {block.tools?.map((tool) => (
               <WorkflowToolLine
