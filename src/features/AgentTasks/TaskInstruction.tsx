@@ -1,5 +1,5 @@
 import { useEditor } from '@lobehub/editor/react';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas } from '@/features/EditorCanvas';
@@ -17,6 +17,13 @@ const TaskInstruction = memo(() => {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const editorData = useMemo(() => ({ content: instruction ?? '' }), [instruction]);
+
+  // Clean up pending debounce on unmount or task switch
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [taskId]);
 
   const handleContentChange = useCallback(() => {
     if (!editor || !taskId) return;
