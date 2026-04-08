@@ -1006,6 +1006,7 @@ Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 | `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart) |
 | `capture-app-window.sh`   | Capture screenshot of a specific app window         |
 | `record-electron-demo.sh` | Record Electron app demo with ffmpeg                |
+| `record-app-screen.sh`    | Record app screen (video + screenshots, start/stop) |
 | `test-discord-bot.sh`     | Send message to Discord bot via osascript           |
 | `test-slack-bot.sh`       | Send message to Slack bot via osascript             |
 | `test-telegram-bot.sh`    | Send message to Telegram bot via osascript          |
@@ -1068,25 +1069,16 @@ Each script: activates the app, navigates to the channel/contact, pastes the mes
 
 # Screen Recording
 
-Record automated demos by combining `ffmpeg` screen capture with `agent-browser` automation. The script `.agents/skills/local-testing/scripts/record-electron-demo.sh` handles the full lifecycle for Electron.
-
-### Usage
+Record automated demos using `record-app-screen.sh` (start/stop lifecycle, CDP screenshots + ffmpeg assembly). See [references/record-app-screen.md](references/record-app-screen.md) for full documentation.
 
 ```bash
-# Run the built-in demo (queue-edit feature)
-./.agents/skills/local-testing/scripts/record-electron-demo.sh
-
-# Run a custom automation script
-./.agents/skills/local-testing/scripts/record-electron-demo.sh ./my-demo.sh /tmp/my-demo.mp4
+./.agents/skills/local-testing/scripts/electron-dev.sh start
+./.agents/skills/local-testing/scripts/record-app-screen.sh start my-demo
+# ... run automation ...
+./.agents/skills/local-testing/scripts/record-app-screen.sh stop
 ```
 
-The script automatically:
-
-1. Starts Electron with CDP and waits for SPA to load
-2. Detects window position, screen, and Retina scale via Swift/CGWindowList
-3. Records only the Electron window region using `ffmpeg -f avfoundation` with crop
-4. Runs the demo (built-in or custom script receiving CDP port as `$1`)
-5. Stops recording and cleans up
+Outputs to `.records/` directory (gitignored): `<name>.mp4` (video) + `<name>/` (screenshots every 3s).
 
 ---
 

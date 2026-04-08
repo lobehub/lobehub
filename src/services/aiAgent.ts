@@ -1,4 +1,8 @@
+import type { ExecAgentResult } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
+
+export type { ExecAgentResult };
 
 export interface ExecAgentTaskParams {
   agentId?: string;
@@ -91,9 +95,10 @@ export interface UpdateClientTaskThreadStatusParams {
 
 class AiAgentService {
   /**
-   * Execute a single Agent task
+   * Execute a single Agent task.
+   * Returns the operationId needed to connect to the Agent Gateway.
    */
-  async execAgentTask(params: ExecAgentTaskParams) {
+  async execAgentTask(params: ExecAgentTaskParams): Promise<ExecAgentResult> {
     return await lambdaClient.aiAgent.execAgent.mutate(params);
   }
 

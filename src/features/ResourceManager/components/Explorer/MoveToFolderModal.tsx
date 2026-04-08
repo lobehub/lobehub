@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
 import FolderTree from '@/features/ResourceManager/components/FolderTree';
-import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
+import { useTreeStore } from '@/store/tree';
 
 interface MoveToFolderModalProps {
   fileId: string;
@@ -29,7 +29,8 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
     const [loadedFolders, setLoadedFolders] = useState<Set<string>>(new Set());
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
-    const [moveResource, createFolder] = useFileStore((s) => [s.moveResource, s.createFolder]);
+    const createFolder = useFileStore((s) => s.createFolder);
+    const moveItem = useTreeStore((s) => s.moveItem);
 
     // Sort items: folders only
     const sortItems = useCallback((items: FolderTreeItem[]): FolderTreeItem[] => {
@@ -218,40 +219,39 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
       message,
     ]);
 
-    const handleMove = async () => {
-      try {
-        // Use optimistic moveResource for instant UI update
-        await moveResource(fileId, selectedFolderId);
-
-        // Clear and reload all expanded folders in Tree's module-level cache
-        if (knowledgeBaseId) {
-          await clearTreeFolderCache(knowledgeBaseId);
+    const handleMove = () => {
+      if (!selectedFolderId) return;
+      const { children } = useTreeStore.getState();
+      let fromParent = '';
+      for (const [parentKey, items] of Object.entries(children)) {
+        if (items.some((i) => i.id === fileId)) {
+          fromParent = parentKey;
+          break;
         }
-
-        message.success(t('FileManager.actions.moveSuccess'));
-        onClose();
-      } catch (error) {
-        console.error('Failed to move file:', error);
-        message.error(t('FileManager.actions.moveError'));
       }
+
+      void moveItem(fileId, fromParent, selectedFolderId).catch(() => {
+        message.error(t('FileManager.actions.moveError'));
+      });
+      message.success(t('FileManager.actions.moveSuccess'));
+      onClose();
     };
 
-    const handleMoveToRoot = async () => {
-      try {
-        // Use optimistic moveResource for instant UI update
-        await moveResource(fileId, null);
-
-        // Clear and reload all expanded folders in Tree's module-level cache
-        if (knowledgeBaseId) {
-          await clearTreeFolderCache(knowledgeBaseId);
+    const handleMoveToRoot = () => {
+      const { children } = useTreeStore.getState();
+      let fromParent = '';
+      for (const [parentKey, items] of Object.entries(children)) {
+        if (items.some((i) => i.id === fileId)) {
+          fromParent = parentKey;
+          break;
         }
-
-        message.success(t('FileManager.actions.moveSuccess'));
-        onClose();
-      } catch (error) {
-        console.error('Failed to move file:', error);
-        message.error(t('FileManager.actions.moveError'));
       }
+
+      void moveItem(fileId, fromParent, '').catch(() => {
+        message.error(t('FileManager.actions.moveError'));
+      });
+      message.success(t('FileManager.actions.moveSuccess'));
+      onClose();
     };
 
     return (

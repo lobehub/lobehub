@@ -10,8 +10,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
-import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
-import { useFileStore } from '@/store/file';
+import { useTreeStore } from '@/store/tree';
 
 import { useResourceManagerStore } from './store';
 
@@ -48,6 +47,7 @@ export const useDragActive = () => use(DragActiveContext);
 interface DragState {
   data: any;
   id: string;
+  parentKey: string;
   type: 'file' | 'folder';
 }
 
@@ -74,13 +74,15 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
   const { t } = useTranslation('components');
   const { message } = App.useApp();
   const [currentDrag, setCurrentDrag] = useState<DragState | null>(null);
+  const currentDragRef = useRef<DragState | null>(null);
+  currentDragRef.current = currentDrag;
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [moveResource, resourceList] = useFileStore((s) => [s.moveResource, s.resourceList]);
   const [selectedFileIds, setSelectedFileIds] = useResourceManagerStore((s) => [
     s.selectedFileIds,
     s.setSelectedFileIds,
   ]);
-  const libraryId = useResourceManagerStore((s) => s.libraryId);
+  const selectedFileIdsRef = useRef(selectedFileIds);
+  selectedFileIdsRef.current = selectedFileIds;
 
   // Track mouse position and handle drag events
   useEffect(() => {
@@ -101,18 +103,17 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
       }
     };
 
-    const handleDrop = async (event: DragEvent) => {
+    const handleDrop = (event: DragEvent) => {
       event.preventDefault();
 
-      if (!currentDrag) return;
+      const drag = currentDragRef.current;
+      if (!drag) return;
 
-      // Find the drop target by traversing up the DOM tree
       let dropTarget = event.target as HTMLElement;
       let targetId: string | undefined;
       let isFolder = false;
       let isRootDrop = false;
 
-      // Traverse up to find element with data-drop-target-id
       while (dropTarget && dropTarget !== document.body) {
         const dataset = dropTarget.dataset;
         if (dataset.dropTargetId) {
@@ -129,44 +130,37 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         return;
       }
 
-      const targetParentId = isRootDrop ? null : (targetId ?? null);
-      const isDraggingSelection = selectedFileIds.includes(currentDrag.id);
-      const itemsToMove = isDraggingSelection ? selectedFileIds : [currentDrag.id];
+      const toParent = isRootDrop ? '' : (targetId ?? '');
+      const fromParent = drag.parentKey;
+      const currentSelectedIds = selectedFileIdsRef.current;
+      const isDraggingSelection = currentSelectedIds.includes(drag.id);
+      const itemsToMove = isDraggingSelection ? currentSelectedIds : [drag.id];
 
-      // Prevent dropping into itself
-      if (!isRootDrop && targetParentId && itemsToMove.includes(targetParentId)) {
+      if (!isRootDrop && targetId && itemsToMove.includes(targetId)) {
+        setCurrentDrag(null);
+        return;
+      }
+
+      if (fromParent === toParent) {
         setCurrentDrag(null);
         return;
       }
 
       setCurrentDrag(null);
 
-      // Show loading toast
-      const hideLoading = message.loading(t('FileManager.actions.moving'), 0);
+      const treeState = useTreeStore.getState();
+      const movePromise = isDraggingSelection
+        ? treeState.moveItems(itemsToMove, fromParent, toParent)
+        : treeState.moveItem(drag.id, fromParent, toParent);
 
-      try {
-        // Move all items using optimistic moveResource
-        const pools = itemsToMove.map((id) => moveResource(id, targetParentId));
-
-        await Promise.all(pools);
-
-        // Clear and reload all expanded folders in Tree's module-level cache
-        if (libraryId) {
-          await clearTreeFolderCache(libraryId);
-        }
-
-        // Hide loading and show success
-        hideLoading();
-        message.success(t('FileManager.actions.moveSuccess'));
-
-        if (isDraggingSelection) {
-          setSelectedFileIds([]);
-        }
-      } catch (error) {
-        console.error('Failed to move file:', error);
-        // Hide loading and show error
-        hideLoading();
+      movePromise.catch(() => {
         message.error(t('FileManager.actions.moveError'));
+      });
+
+      message.success(t('FileManager.actions.moveSuccess'));
+
+      if (isDraggingSelection) {
+        setSelectedFileIds([]);
       }
     };
 
@@ -195,16 +189,7 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('dragend', handleDragEnd);
     };
-  }, [
-    currentDrag,
-    selectedFileIds,
-    resourceList,
-    moveResource,
-    setSelectedFileIds,
-    message,
-    t,
-    libraryId,
-  ]);
+  }, [setCurrentDrag, setSelectedFileIds, message, t]);
 
   const appElement = useAppElement();
 
