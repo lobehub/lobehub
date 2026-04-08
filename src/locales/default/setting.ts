@@ -734,6 +734,11 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
+  'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
+  'settingSystemTools.appEnvironment.desc': 'Built-in runtime versions in the desktop app',
+  'settingSystemTools.appEnvironment.electron.desc': 'Electron framework version',
+  'settingSystemTools.appEnvironment.node.desc': 'Embedded Node.js version',
+  'settingSystemTools.appEnvironment.title': 'App Environment',
   'settingSystemTools.autoSelectDesc': 'The best available tool will be automatically selected',
   'settingSystemTools.category.browserAutomation': 'Browser Automation',
   'settingSystemTools.category.browserAutomation.desc':

@@ -66,7 +66,7 @@ class ElectronSystemService {
   async selectFolder(params?: {
     defaultPath?: string;
     title?: string;
-  }): Promise<string | undefined> {
+  }): Promise<{ path: string; repoType?: 'git' | 'github' } | undefined> {
     return this.ipc.system.selectFolder(params);
   }
 }

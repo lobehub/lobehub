@@ -63,9 +63,9 @@ class TaskService {
       config?: Record<string, unknown>;
       context?: Record<string, unknown>;
       description?: string;
-      // heartbeatInterval: 周期执行间隔（秒），控制每隔多久自动执行一次 task
+      // heartbeatInterval: periodic execution interval (seconds), controls how often the task auto-executes
       heartbeatInterval?: number;
-      // heartbeatTimeout: watchdog 超时阈值（秒），用于检测 running task 是否卡死
+      // heartbeatTimeout: watchdog timeout threshold (seconds), used to detect if a running task is stuck
       heartbeatTimeout?: number | null;
       instruction?: string;
       name?: string;
@@ -105,7 +105,7 @@ class TaskService {
 
   deleteTopic = async (topicId: string) => lambdaClient.task.deleteTopic.mutate({ topicId });
 
-  // 安全 merge config（不会覆盖 checkpoint/review 等其他 config 字段）
+  // Safely merges config without overwriting other config fields such as checkpoint/review
   updateConfig = async (id: string, config: Record<string, unknown>) =>
     lambdaClient.task.updateConfig.mutate({ config, id });
 

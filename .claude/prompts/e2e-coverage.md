@@ -13,16 +13,16 @@ Before starting, read the following documents:
 
 Based on the product architecture, prioritize modules by coverage status:
 
-| Module           | Sub-features                                           | Priority | Status |
-| ---------------- | ------------------------------------------------------ | -------- | ------ |
-| **Agent**        | Builder, Conversation, Task                            | P0       | 🚧     |
-| **Agent Group**  | Builder, Group Chat                                    | P0       | ⏳     |
+| Module           | Sub-features                                        | Priority | Status |
+| ---------------- | --------------------------------------------------- | -------- | ------ |
+| **Agent**        | Builder, Conversation, Task                         | P0       | 🚧     |
+| **Agent Group**  | Builder, Group Chat                                 | P0       | ⏳      |
 | **Page (Docs)**  | Sidebar CRUD ✅, Title/Emoji ✅, Rich Text ✅, Copilot | P0       | 🚧     |
-| **Knowledge**    | Create, Upload, RAG Conversation                       | P1       | ⏳     |
-| **Memory**       | View, Edit, Associate                                  | P2       | ⏳     |
-| **Home Sidebar** | Agent Mgmt, Group Mgmt                                 | P1       | ✅     |
-| **Community**    | Browse, Interactions, Detail Pages                     | P1       | ✅     |
-| **Settings**     | User Settings, Model Provider                          | P2       | ⏳     |
+| **Knowledge**    | Create, Upload, RAG Conversation                    | P1       | ⏳      |
+| **Memory**       | View, Edit, Associate                               | P2       | ⏳      |
+| **Home Sidebar** | Agent Mgmt, Group Mgmt                              | P1       | ✅      |
+| **Community**    | Browse, Interactions, Detail Pages                  | P1       | ✅      |
+| **Settings**     | User Settings, Model Provider                       | P2       | ⏳      |
 
 ## Workflow
 
@@ -304,6 +304,7 @@ HEADLESS=true BASE_URL=http://localhost:3006 \
 ### 10. Create Pull Request
 
 - Branch name: `test/e2e-{module-name}`
+
 - Commit message format:
 
   ```
@@ -311,6 +312,7 @@ HEADLESS=true BASE_URL=http://localhost:3006 \
   ```
 
 - PR title: `✅ test: add E2E tests for {module-name}`
+
 - PR body template:
 
   ````markdown

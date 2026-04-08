@@ -60,7 +60,7 @@ Quick reference for assigning issues based on labels.
 | `feature:group-chat`     | @arvinxx        | Group chat functionality                                                |
 | `feature:memory`         | @nekomeowww     | Memory feature                                                          |
 | `feature:team-workspace` | @rdmclin2       | Team workspace application                                              |
-| `feature:im-integration` | @rdmclin2       | IM and bot integration (Slack, Discord, etc.)                            |
+| `feature:im-integration` | @rdmclin2       | IM and bot integration (Slack, Discord, etc.)                           |
 | `feature:agent-builder`  | @ONLY-yours     | Agent builder                                                           |
 | `feature:schedule-task`  | @ONLY-yours     | Schedule task                                                           |
 | `feature:subscription`   | @tcmonster      | Subscription and billing                                                |

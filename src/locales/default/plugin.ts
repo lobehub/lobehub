@@ -424,8 +424,12 @@ export default {
     'Default working directory for all conversations with this Agent',
   'localSystem.workingDirectory.agentLevel': 'Agent Working Directory',
   'localSystem.workingDirectory.current': 'Current working directory',
+  'localSystem.workingDirectory.chooseDifferentFolder': 'Choose a different folder',
+  'localSystem.workingDirectory.noRecent': 'No recent directories',
   'localSystem.workingDirectory.notSet': 'Click to set working directory',
   'localSystem.workingDirectory.placeholder': 'Enter directory path, e.g. /Users/name/projects',
+  'localSystem.workingDirectory.recent': 'Recent',
+  'localSystem.workingDirectory.removeRecent': 'Remove from recent',
   'localSystem.workingDirectory.selectFolder': 'Select folder',
   'localSystem.workingDirectory.title': 'Working Directory',
   'localSystem.workingDirectory.topicDescription':

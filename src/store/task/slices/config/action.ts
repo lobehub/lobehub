@@ -80,7 +80,7 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // 通过 task.updateConfig 安全 merge model/provider 到 config，不会覆盖 checkpoint/review
+  // Safely merges model/provider into config via task.updateConfig without overwriting checkpoint/review
   updateTaskModelConfig = async (
     id: string,
     modelConfig: { model?: string; provider?: string },
@@ -93,8 +93,8 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // 配置周期执行间隔（heartbeatInterval 字段，单位：秒，null 或 0 禁用）
-  // 后端周期执行逻辑待 LOBE-6587 就绪后自动生效，前端可先完成 UI 配置
+  // Configures the periodic execution interval (heartbeatInterval field, in seconds; null or 0 disables it)
+  // Backend periodic execution logic will take effect automatically once LOBE-6587 is ready; the frontend UI config can be completed in advance
   updatePeriodicInterval = async (id: string, interval: number | null): Promise<void> => {
     try {
       await taskService.update(id, { heartbeatInterval: interval ?? 0 });
@@ -104,8 +104,8 @@ export class TaskConfigSliceActionImpl {
     }
   };
 
-  // TODO [LOBE-6587]: 定时任务（cron 模式）
-  // updateSchedule(id, { pattern, timezone }) — 后端 task.update schema 尚未暴露 schedulePattern/scheduleTimezone
+  // TODO [LOBE-6587]: Scheduled tasks (cron mode)
+  // updateSchedule(id, { pattern, timezone }) — backend task.update schema does not yet expose schedulePattern/scheduleTimezone
 }
 
 export type TaskConfigSliceAction = Pick<

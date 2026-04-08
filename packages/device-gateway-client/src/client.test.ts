@@ -506,16 +506,38 @@ describe('GatewayClient', () => {
   });
 
   describe('closeWebSocket edge cases', () => {
-    it('should handle ws in CONNECTING state', async () => {
+    it('should keep suppressing close errors until the socket closes', async () => {
       client.connect();
       await vi.advanceTimersByTimeAsync(1);
 
       const ws = (client as any).ws;
       ws.readyState = 0; // CONNECTING
-      ws.close = vi.fn();
-      ws.removeAllListeners = vi.fn();
+      ws.close = vi.fn(() => {
+        setTimeout(() => {
+          ws.emit('error', new Error('WebSocket was closed before the connection was established'));
+          ws.emit('close', 1006, Buffer.from(''));
+        }, 0);
+      });
 
-      (client as any).closeWebSocket();
+      expect(() => (client as any).closeWebSocket()).not.toThrow();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(ws.close).toHaveBeenCalled();
+      expect(() => ws.emit('error', new Error('listener should be removed after close'))).toThrow(
+        'listener should be removed after close',
+      );
+    });
+
+    it('should handle ws.close throwing synchronously', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws = (client as any).ws;
+      ws.readyState = 1; // OPEN
+      ws.close = vi.fn(() => {
+        throw new Error('close failed');
+      });
+
+      expect(() => (client as any).closeWebSocket()).not.toThrow();
       expect(ws.close).toHaveBeenCalled();
     });
 
@@ -526,7 +548,6 @@ describe('GatewayClient', () => {
       const ws = (client as any).ws;
       ws.readyState = 3; // CLOSED
       ws.close = vi.fn();
-      ws.removeAllListeners = vi.fn();
 
       (client as any).closeWebSocket();
       expect(ws.close).not.toHaveBeenCalled();
@@ -546,9 +567,7 @@ describe('GatewayClient', () => {
       await vi.advanceTimersByTimeAsync(1);
 
       const ws = (client as any).ws;
-      expect(ws.send).toHaveBeenCalledWith(
-        expect.stringContaining('"token":"refreshed-token"'),
-      );
+      expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"token":"refreshed-token"'));
     });
   });
 
@@ -574,9 +593,7 @@ describe('GatewayClient', () => {
 
       expect(client.connectionStatus).toBe('authenticating');
       const ws = (client as any).ws;
-      expect(ws.send).toHaveBeenCalledWith(
-        expect.stringContaining('"token":"new-token"'),
-      );
+      expect(ws.send).toHaveBeenCalledWith(expect.stringContaining('"token":"new-token"'));
     });
 
     it('should reset reconnect delay', async () => {

@@ -1,4 +1,5 @@
 import pc from 'picocolors';
+import urlJoin from 'url-join';
 
 import { log } from './logger';
 
@@ -14,6 +15,12 @@ export interface AgentStreamEvent {
 interface StreamOptions {
   json?: boolean;
   verbose?: boolean;
+}
+
+interface WebSocketStreamOptions extends StreamOptions {
+  gatewayUrl: string;
+  operationId: string;
+  token: string;
 }
 
 /**
@@ -150,6 +157,126 @@ export function replayAgentEvents(events: AgentStreamEvent[], options: StreamOpt
       return;
     }
   }
+}
+
+const HEARTBEAT_INTERVAL = 30_000;
+
+/**
+ * Connect to the Agent Gateway via WebSocket and render events to the terminal.
+ * Resolves when the session completes or the connection closes.
+ */
+export async function streamAgentEventsViaWebSocket(
+  options: WebSocketStreamOptions,
+): Promise<void> {
+  const { gatewayUrl, operationId, token, ...streamOpts } = options;
+  const wsUrl = urlJoin(
+    gatewayUrl.replace(/^http/, 'ws'),
+    `/ws?operationId=${encodeURIComponent(operationId)}`,
+  );
+
+  log.debug(`Connecting to gateway: ${wsUrl}`);
+
+  return new Promise<void>((resolve, reject) => {
+    const ws = new WebSocket(wsUrl);
+    const jsonEvents: AgentStreamEvent[] = [];
+    const ctx = createRenderContext();
+    let lastEventId = '';
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let jsonPrinted = false;
+
+    const cleanup = () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ token, type: 'auth' }));
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data as string);
+
+      if (msg.type === 'auth_success') {
+        log.debug('Gateway authenticated');
+        // Request all buffered events (covers events pushed before WS connected)
+        ws.send(JSON.stringify({ lastEventId: '', type: 'resume' }));
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'heartbeat' }));
+          }
+        }, HEARTBEAT_INTERVAL);
+        return;
+      }
+
+      if (msg.type === 'auth_failed') {
+        cleanup();
+        reject(new Error(`Gateway auth failed: ${msg.reason}`));
+        return;
+      }
+
+      if (msg.type === 'heartbeat_ack') return;
+
+      if (msg.type === 'agent_event') {
+        const agentEvent: AgentStreamEvent = msg.event;
+        if (msg.id) lastEventId = msg.id;
+
+        if (streamOpts.json) {
+          jsonEvents.push(agentEvent);
+        } else {
+          renderEvent(agentEvent, ctx, streamOpts);
+        }
+
+        if (agentEvent.type === 'agent_runtime_end') {
+          if (streamOpts.json && !jsonPrinted) {
+            jsonPrinted = true;
+            console.log(JSON.stringify(jsonEvents, null, 2));
+          } else if (!streamOpts.json) {
+            renderEnd(agentEvent);
+          }
+          cleanup();
+          resolve();
+          return;
+        }
+
+        if (agentEvent.type === 'error') {
+          if (streamOpts.json && !jsonPrinted) {
+            jsonPrinted = true;
+            console.log(JSON.stringify(jsonEvents, null, 2));
+          }
+          log.error(
+            `Agent error: ${agentEvent.data?.message || agentEvent.data?.error || 'Unknown error'}`,
+          );
+          cleanup();
+          process.exit(1);
+        }
+      }
+
+      if (msg.type === 'session_complete') {
+        if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
+          jsonPrinted = true;
+          console.log(JSON.stringify(jsonEvents, null, 2));
+        }
+        cleanup();
+        resolve();
+      }
+    };
+
+    ws.onerror = (err) => {
+      cleanup();
+      reject(err);
+    };
+
+    ws.onclose = () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (streamOpts.json && jsonEvents.length > 0 && !jsonPrinted) {
+        jsonPrinted = true;
+        console.log(JSON.stringify(jsonEvents, null, 2));
+      }
+      resolve();
+    };
+  });
 }
 
 // ── Render helpers ──────────────────────────────────────

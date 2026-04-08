@@ -12,6 +12,7 @@
   "config.resolution.label": "Resolución",
   "config.seed.label": "Semilla",
   "config.seed.random": "Aleatorio",
+  "config.size.label": "Tamaño",
   "generation.actions.copyError": "Copiar mensaje de error",
   "generation.actions.errorCopied": "Mensaje de error copiado al portapapeles",
   "generation.actions.errorCopyFailed": "No se pudo copiar el mensaje de error",

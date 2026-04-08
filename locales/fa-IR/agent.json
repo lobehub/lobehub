@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "اختیاری. آدرس HTTPS Tunnel برای ارسال درخواست‌های وبهوک به سرور محلی توسعه.",
   "channel.disabled": "غیرفعال",
   "channel.discord.description": "این دستیار را به سرور Discord برای چت کانال و پیام‌های مستقیم متصل کنید.",
+  "channel.displayToolCalls": "نمایش فراخوانی ابزارها",
+  "channel.displayToolCallsHint": "جزئیات فراخوانی ابزارها را در طول پاسخ‌های هوش مصنوعی نمایش دهید. در صورت غیرفعال بودن، تنها پاسخ نهایی برای تجربه‌ای تمیزتر نمایش داده می‌شود.",
   "channel.dm": "پیام‌های مستقیم",
   "channel.dmEnabled": "فعال کردن پیام‌های مستقیم",
   "channel.dmEnabledHint": "اجازه دهید ربات پیام‌های مستقیم دریافت کرده و به آنها پاسخ دهد",

@@ -5,6 +5,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import type { TaskStoreState } from './initialState';
 import { initialState } from './initialState';
 import type { TaskConfigSliceAction } from './slices/config';
@@ -24,12 +25,18 @@ export interface TaskStore
     TaskDetailSliceAction,
     TaskLifecycleSliceAction,
     TaskListSliceAction,
+    ResetableStore,
     TaskStoreState {}
 
 type TaskStoreAction = TaskConfigSliceAction &
   TaskDetailSliceAction &
   TaskLifecycleSliceAction &
-  TaskListSliceAction;
+  TaskListSliceAction &
+  ResetableStore;
+
+class TaskStoreResetAction extends ResetableStoreAction<TaskStore> {
+  protected readonly resetActionName = 'resetTaskStore';
+}
 
 const createStore: StateCreator<TaskStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<TaskStore, [['zustand/devtools', never]]>>
@@ -40,6 +47,7 @@ const createStore: StateCreator<TaskStore, [['zustand/devtools', never]]> = (
     createTaskDetailSlice(...parameters),
     createTaskLifecycleSlice(...parameters),
     createTaskConfigSlice(...parameters),
+    new TaskStoreResetAction(...parameters),
   ]),
 });
 

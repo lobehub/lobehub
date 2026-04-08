@@ -521,14 +521,13 @@ describe('Google generateObject', () => {
                 {
                   description: 'Get weather information',
                   name: 'get_weather',
-                  parameters: {
-                    description: undefined,
+                  parametersJsonSchema: {
                     properties: {
                       city: { type: 'string' },
                       unit: { type: 'string' },
                     },
                     required: ['city'],
-                    type: SchemaType.OBJECT,
+                    type: 'object',
                   },
                 },
               ],
@@ -950,7 +949,7 @@ describe('Google generateObject', () => {
             {
               functionDeclarations: [
                 expect.objectContaining({
-                  parameters: expect.objectContaining({
+                  parametersJsonSchema: expect.objectContaining({
                     properties: { dummy: { type: 'string' } },
                   }),
                 }),

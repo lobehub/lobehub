@@ -24,7 +24,7 @@ export const DEFAULT_QUERY_REWRITE_SYSTEM_AGENT_ITEM: QueryRewriteSystemAgent = 
 };
 
 export const DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
-  enabled: true,
+  enabled: false,
   model: DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
   provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
 };

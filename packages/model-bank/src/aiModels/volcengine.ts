@@ -3,7 +3,7 @@ import {
   type AIImageModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
-import { seedance15ProParams } from './lobehub/video';
+import { seedance15ProParams, seedance20Params } from './lobehub/video';
 
 // https://www.volcengine.com/docs/82379/1330310
 
@@ -1271,90 +1271,28 @@ const volcengineImageModels: AIImageModelCard[] = [
 const volcengineVideoModels: AIVideoModelCard[] = [
   {
     description:
-      'Seedance 2.0 Fast is a next-generation multimodal video creation model launched by the Doubao large model team. It inherits the core features and advantages of the Seedance 2.0 model, with significantly faster generation speed.',
-    displayName: 'Seedance 2.0 Fast',
-    id: 'doubao-seedance-2-0-fast-260128',
+      'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',
+    displayName: 'Seedance 2.0',
+    enabled: true,
+    id: 'doubao-seedance-2-0-260128',
     organization: 'ByteDance',
     parameters: {
-      aspectRatio: {
-        default: 'adaptive',
-        enum: ['adaptive', '21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
-      },
-      duration: { default: 4, max: 15, min: 4 },
-      endImageUrl: {
-        aspectRatio: { max: 2.5, min: 0.4 },
-        default: null,
-        height: { max: 6000, min: 300 },
-        maxFileSize: 30 * 1024 * 1024,
-        requiresImageUrl: true,
-        width: { max: 6000, min: 300 },
-      },
-      generateAudio: { default: true },
-      imageUrls: {
-        aspectRatio: { max: 2.5, min: 0.4 },
-        default: [],
-        height: { max: 6000, min: 300 },
-        maxCount: 9,
-        maxFileSize: 30 * 1024 * 1024,
-        width: { max: 6000, min: 300 },
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['480p', '720p'],
-      },
+      ...seedance20Params,
       watermark: { default: false },
-      webSearch: { default: false },
-      seed: { default: null },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 37, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2026-01-28',
     type: 'video',
   },
   {
     description:
-      'Seedance 2.0 is a next-generation professional-grade multimodal video creation model developed by the Doubao large model team. It supports using images, videos, audio, and other multimodal inputs as references to generate video, and also offers capabilities such as video editing and extension. The model can accurately reproduce fine details and maintain stable character features, delivering highly realistic audiovisual consistency. It is deeply suited for core scenarios including commercial advertising, film and TV production, and social media marketing.',
-    displayName: 'Seedance 2.0',
-    id: 'doubao-seedance-2-0-260128',
+      'Seedance 2.0 Fast by ByteDance offers the same capabilities as Seedance 2.0 with faster generation speeds at a more competitive price.',
+    displayName: 'Seedance 2.0 Fast',
+    enabled: true,
+    id: 'doubao-seedance-2-0-fast-260128',
     organization: 'ByteDance',
     parameters: {
-      aspectRatio: {
-        default: 'adaptive',
-        enum: ['adaptive', '21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
-      },
-      duration: { default: 4, max: 15, min: 4 },
-      endImageUrl: {
-        aspectRatio: { max: 2.5, min: 0.4 },
-        default: null,
-        height: { max: 6000, min: 300 },
-        maxFileSize: 30 * 1024 * 1024,
-        requiresImageUrl: true,
-        width: { max: 6000, min: 300 },
-      },
-      generateAudio: { default: true },
-      imageUrls: {
-        aspectRatio: { max: 2.5, min: 0.4 },
-        default: [],
-        height: { max: 6000, min: 300 },
-        maxCount: 9,
-        maxFileSize: 30 * 1024 * 1024,
-        width: { max: 6000, min: 300 },
-      },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['480p', '720p'],
-      },
+      ...seedance20Params,
       watermark: { default: false },
-      webSearch: { default: false },
-      seed: { default: null },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 46, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2026-01-28',
     type: 'video',

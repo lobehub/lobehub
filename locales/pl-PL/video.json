@@ -12,6 +12,7 @@
   "config.resolution.label": "Rozdzielczość",
   "config.seed.label": "Ziarno",
   "config.seed.random": "Losowe",
+  "config.size.label": "Rozmiar",
   "generation.actions.copyError": "Skopiuj komunikat o błędzie",
   "generation.actions.errorCopied": "Komunikat o błędzie skopiowany do schowka",
   "generation.actions.errorCopyFailed": "Nie udało się skopiować komunikatu o błędzie",

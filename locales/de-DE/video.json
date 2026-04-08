@@ -12,6 +12,7 @@
   "config.resolution.label": "Auflösung",
   "config.seed.label": "Seed",
   "config.seed.random": "Zufällig",
+  "config.size.label": "Größe",
   "generation.actions.copyError": "Fehlermeldung kopieren",
   "generation.actions.errorCopied": "Fehlermeldung in die Zwischenablage kopiert",
   "generation.actions.errorCopyFailed": "Fehlermeldung konnte nicht kopiert werden",

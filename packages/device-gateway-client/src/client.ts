@@ -294,11 +294,9 @@ export class GatewayClient extends EventEmitter {
     this.heartbeatTimer = setInterval(() => {
       this.missedHeartbeats++;
       if (this.missedHeartbeats > MAX_MISSED_HEARTBEATS) {
-        this.logger.warn(
-          `Missed ${this.missedHeartbeats} heartbeat acks, forcing reconnect`,
-        );
+        this.logger.warn(`Missed ${this.missedHeartbeats} heartbeat acks, forcing reconnect`);
         this.closeWebSocket();
-        // handleClose won't fire after removeAllListeners, so trigger reconnect manually
+        // Listeners are detached in closeWebSocket; handleClose won't run — drive reconnect here
         this.stopHeartbeat();
         if (this.autoReconnect) {
           this.setStatus('reconnecting');
@@ -364,14 +362,38 @@ export class GatewayClient extends EventEmitter {
   }
 
   private closeWebSocket() {
-    if (this.ws) {
-      this.ws.removeAllListeners();
-
-      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
-        this.ws.close(1000, 'Client disconnect');
-      }
-      this.ws = null;
+    if (!this.ws) {
+      return;
     }
+    const ws = this.ws;
+    const suppressCloseError = (error: Error) => {
+      this.logger.debug(`Ignoring WebSocket error during close: ${error.message}`);
+    };
+    const cleanupCloseErrorSuppression = () => {
+      ws.off('close', cleanupCloseErrorSuppression);
+      ws.off('error', suppressCloseError);
+    };
+
+    // Remove only listeners registered by this client.
+    // Keep a temporary error handler while closing to avoid unhandled
+    // "WebSocket was closed before the connection was established" errors.
+    ws.off('open', this.handleOpen);
+    ws.off('message', this.handleMessage);
+    ws.off('close', this.handleClose);
+    ws.off('error', this.handleError);
+    ws.on('error', suppressCloseError);
+    ws.once('close', cleanupCloseErrorSuppression);
+
+    try {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close(1000, 'Client disconnect');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to close WebSocket gracefully: ${errorMsg}`);
+    }
+
+    this.ws = null;
   }
 
   private cleanup() {

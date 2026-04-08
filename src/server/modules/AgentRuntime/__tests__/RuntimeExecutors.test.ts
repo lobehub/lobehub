@@ -1156,6 +1156,40 @@ describe('RuntimeExecutors', () => {
         const callArgs = engineSpy.mock.calls[0][0];
         expect(callArgs).not.toHaveProperty('topicReferences');
       });
+
+      it('should skip rebuilding onboarding context when messages already contain onboarding injection', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: ['lobe-web-onboarding'],
+            slug: 'web-onboarding',
+            systemRole: 'test',
+          } as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [
+              {
+                content:
+                  '<onboarding_context>\n<phase>existing</phase>\n</onboarding_context>\nHello',
+                role: 'user',
+              },
+            ],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('onboardingContext');
+      });
     });
   });
 

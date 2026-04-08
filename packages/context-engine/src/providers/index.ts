@@ -19,6 +19,9 @@ export { GTDPlanInjector } from './GTDPlanInjector';
 export { GTDTodoInjector } from './GTDTodoInjector';
 export { HistorySummaryProvider } from './HistorySummary';
 export { KnowledgeInjector } from './KnowledgeInjector';
+export { OnboardingActionHintInjector } from './OnboardingActionHintInjector';
+export { OnboardingContextInjector } from './OnboardingContextInjector';
+export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInjector';
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
 export {
@@ -84,6 +87,10 @@ export type { GTDPlan, GTDPlanInjectorConfig } from './GTDPlanInjector';
 export type { GTDTodoInjectorConfig, GTDTodoItem, GTDTodoList } from './GTDTodoInjector';
 export type { HistorySummaryConfig } from './HistorySummary';
 export type { KnowledgeInjectorConfig } from './KnowledgeInjector';
+export type {
+  OnboardingContext,
+  OnboardingContextInjectorConfig,
+} from './OnboardingContextInjector';
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';

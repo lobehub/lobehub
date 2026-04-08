@@ -3,6 +3,11 @@
   "cloud": [],
   "community": [
     {
+      "id": "2026-04-06-auto-completion",
+      "date": "2026-04-06",
+      "versionRange": ["2.1.46"]
+    },
+    {
       "id": "2026-03-30-agent-tasks",
       "date": "2026-03-30",
       "versionRange": ["2.1.45", "2.1.46"]

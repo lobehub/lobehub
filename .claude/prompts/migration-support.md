@@ -74,8 +74,11 @@ Look for the "Troubleshooting" or "FAQ" section in the migration docs and match 
 ## Response Guidelines
 
 1. **Be helpful and friendly** - Users are often frustrated when migration doesn't work
+
 2. **Be specific** - Provide exact commands or configuration examples
+
 3. **Reference documentation** - Point users to relevant docs sections
+
 4. **Ask for logs** - If the issue is unclear, ask for Docker logs:
 
    ```bash
