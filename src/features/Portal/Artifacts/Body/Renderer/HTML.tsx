@@ -14,13 +14,19 @@ interface HTMLRendererProps {
 // that LLM-generated single-file HTML demos (Tailwind CDN, p5.js, three.js,
 // vanilla JS, etc.) actually work.
 //
-// IMPORTANT: never add `allow-same-origin` here — combining it with
-// `allow-scripts` would let the iframe remove its own sandbox attribute and
-// would reintroduce the original XSS-to-RCE vulnerability.
+// IMPORTANT — do NOT add the following capabilities:
+//   - `allow-same-origin`: combined with `allow-scripts` it lets the iframe
+//     remove its own sandbox and reintroduces the original XSS-to-RCE.
+//   - `allow-popups`: in the Electron desktop app `setWindowOpenHandler`
+//     unconditionally forwards `window.open(url)` to `shell.openExternal`,
+//     which means untrusted artifact scripts could launch arbitrary
+//     protocol handlers / external URLs with zero user interaction.
+//   - `allow-top-navigation` (any flavor): would let the artifact hijack
+//     the host window.
 const HTMLRenderer = memo<HTMLRendererProps>(({ htmlContent, width = '100%', height = '100%' }) => {
   return (
     <iframe
-      sandbox="allow-scripts allow-forms allow-popups allow-modals"
+      sandbox="allow-scripts allow-forms allow-modals"
       srcDoc={htmlContent}
       style={{ border: 'none', height, width }}
       title="html-renderer"
