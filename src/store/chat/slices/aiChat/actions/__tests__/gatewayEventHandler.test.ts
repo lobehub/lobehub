@@ -47,15 +47,17 @@ const flush = async () => {
 
 describe('createGatewayEventHandler', () => {
   describe('stream_start', () => {
-    it('should switch assistantMessageId from event data', async () => {
+    it('should show loading on old message immediately, then switch to new after fetch', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' } }));
       await flush();
 
-      expect(store.replaceMessages).toHaveBeenCalled();
+      // Should have been called twice: first on old msg (optimistic), then on new msg (after fetch)
+      expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-initial');
       expect(store.internal_toggleMessageLoading).toHaveBeenCalledWith(true, 'msg-step2');
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
 
     it('should keep current ID if event data has no assistantMessage', async () => {

@@ -65,9 +65,15 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as StreamStartData | undefined;
 
+          const newAssistantMessageId = data?.assistantMessage?.id;
+
+          // Optimistically show loading on the current message BEFORE fetching,
+          // so the UI doesn't appear frozen while waiting for DB response
+          get().internal_toggleMessageLoading(true, currentAssistantMessageId);
+
           // Switch to the new assistant message created by the server for this step
-          if (data?.assistantMessage?.id) {
-            currentAssistantMessageId = data.assistantMessage.id;
+          if (newAssistantMessageId) {
+            currentAssistantMessageId = newAssistantMessageId;
           }
 
           // Reset accumulators for the new stream
@@ -77,6 +83,7 @@ export const createGatewayEventHandler = (
           // Fetch from DB so the new message exists in dbMessagesMap before chunks arrive
           await fetchAndReplaceMessages(get, context).catch(console.error);
 
+          // Re-apply loading to the (possibly new) message after fetch replaces the map
           get().internal_toggleMessageLoading(true, currentAssistantMessageId);
         });
         break;
