@@ -1,11 +1,17 @@
+import type { ConversationContext } from '@lobechat/types';
+
 import type {
   AgentStreamClientOptions,
   AgentStreamEvent,
   ConnectionStatus,
 } from '@/libs/agent-stream';
 import { AgentStreamClient } from '@/libs/agent-stream/client';
+import { aiAgentService } from '@/services/aiAgent';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+
+import { createGatewayEventHandler } from './gatewayEventHandler';
 
 type Setter = StoreSetter<ChatStore>;
 
@@ -147,7 +153,107 @@ export class GatewayActionImpl {
     return this.#get().gatewayConnections[operationId]?.status;
   };
 
+  /**
+   * Try to start server-side agent execution via Gateway WebSocket.
+   * Returns true if gateway mode is active and execution was started,
+   * false if gateway is not available (caller should fall back to client mode).
+   */
+  startGatewayExecution = (params: {
+    assistantMessageId: string;
+    context: ConversationContext;
+    message: string;
+    parentOperationId: string;
+    topicId?: string;
+    userMessageId: string;
+  }): boolean => {
+    const { assistantMessageId, context, message, parentOperationId, topicId, userMessageId } =
+      params;
+
+    // Check if server-side Gateway mode is available AND user has enabled it in Labs
+    const agentGatewayUrl =
+      window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
+    const enableGatewayMode = useUserStore.getState().preference.lab?.enableGatewayMode;
+
+    if (!agentGatewayUrl || !enableGatewayMode) return false;
+
+    // Fire-and-forget: start the gateway execution asynchronously
+    this.#executeViaGateway({
+      agentGatewayUrl,
+      assistantMessageId,
+      context,
+      message,
+      parentOperationId,
+      topicId,
+      userMessageId,
+    }).catch((e) => {
+      console.error('[Gateway] Failed to start server-side agent:', e);
+      if (topicId) this.#get().internal_updateTopicLoading(topicId, false);
+    });
+
+    return true;
+  };
+
   // ─── Internal ───
+
+  #executeViaGateway = async (params: {
+    agentGatewayUrl: string;
+    assistantMessageId: string;
+    context: ConversationContext;
+    message: string;
+    parentOperationId: string;
+    topicId?: string;
+    userMessageId: string;
+  }): Promise<void> => {
+    const {
+      agentGatewayUrl,
+      assistantMessageId,
+      context,
+      message,
+      parentOperationId,
+      topicId,
+      userMessageId,
+    } = params;
+
+    const result = await aiAgentService.execAgentTask({
+      agentId: context.agentId,
+      appContext: {
+        groupId: context.groupId,
+        scope: context.scope,
+        threadId: context.threadId,
+        topicId: context.topicId,
+      },
+      existingMessageIds: [userMessageId, assistantMessageId],
+      prompt: message,
+    });
+
+    // Create a dedicated operation for gateway execution with correct context
+    const { operationId: gatewayOpId } = this.#get().startOperation({
+      context,
+      parentOperationId,
+      type: 'execServerAgentRuntime',
+    });
+
+    // Associate the initial assistant message with the gateway operation
+    // so the UI shows loading/generating state via the operation system
+    this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
+
+    const eventHandler = createGatewayEventHandler(this.#get, {
+      assistantMessageId,
+      context,
+      operationId: gatewayOpId,
+    });
+
+    this.#get().connectToGateway({
+      gatewayUrl: agentGatewayUrl,
+      onEvent: eventHandler,
+      onSessionComplete: () => {
+        this.#get().completeOperation(gatewayOpId);
+        if (topicId) this.#get().internal_updateTopicLoading(topicId, false);
+      },
+      operationId: result.operationId,
+      token: result.token || '',
+    });
+  };
 
   private internal_cleanupGatewayConnection = (operationId: string): void => {
     this.#set(
