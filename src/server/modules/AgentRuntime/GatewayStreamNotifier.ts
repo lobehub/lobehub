@@ -96,14 +96,6 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       type: 'agent_runtime_end',
     });
 
-    const status =
-      reason === 'error' ? 'error' : reason === 'interrupted' ? 'interrupted' : 'completed';
-    this.httpPost('/api/operations/update-status', {
-      operationId,
-      status,
-      summary: reasonDetail,
-    });
-
     return result;
   }
 
