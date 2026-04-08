@@ -350,20 +350,12 @@ export class ConversationLifecycleActionImpl {
           message,
         });
 
-        // Clean up temp messages after gateway started successfully —
-        // fetchAndReplaceMessages in the event handler will pull real messages from DB
-        this.#get().internal_dispatchMessage(
-          { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
-          { operationId },
-        );
-
         return {
           assistantMessageId: result.assistantMessageId,
           userMessageId: result.userMessageId,
         };
       } catch (e) {
         console.error('[Gateway] Failed to start server-side agent:', e);
-        // Keep temp messages visible so user sees something went wrong
         this.#get().failOperation(operationId, {
           message: e instanceof Error ? e.message : 'Unknown error',
           type: 'GatewayError',
