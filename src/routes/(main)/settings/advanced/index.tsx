@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
 
@@ -42,6 +43,8 @@ const Page = memo(() => {
       s.updateLab,
     ],
   );
+
+  const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -95,19 +98,23 @@ const Page = memo(() => {
 
   const labsGroup: FormGroupItemType = {
     children: [
-      {
-        children: (
-          <Switch
-            checked={enableGatewayMode}
-            loading={!isPreferenceInit}
-            onChange={(checked) => updateLab({ enableGatewayMode: checked })}
-          />
-        ),
-        className: styles.labItem,
-        desc: tLabs('features.gatewayMode.desc'),
-        label: tLabs('features.gatewayMode.title'),
-        minWidth: undefined,
-      },
+      ...(hasGatewayUrl
+        ? [
+            {
+              children: (
+                <Switch
+                  checked={enableGatewayMode}
+                  loading={!isPreferenceInit}
+                  onChange={(checked: boolean) => updateLab({ enableGatewayMode: checked })}
+                />
+              ),
+              className: styles.labItem,
+              desc: tLabs('features.gatewayMode.desc'),
+              label: tLabs('features.gatewayMode.title'),
+              minWidth: undefined,
+            },
+          ]
+        : []),
       {
         avatar: (
           <img
