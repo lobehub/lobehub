@@ -495,7 +495,9 @@ export class AgentBridgeService {
     },
   ): Promise<{ reply: string; topicId: string }> {
     // Resolve bot platform context from platform registry
-    let botPlatformContext: { platformName: string; supportsMarkdown: boolean } | undefined;
+    let botPlatformContext:
+      | { platformName: string; supportsMarkdown: boolean; warnings?: string[] }
+      | undefined;
     if (opts.botContext?.platform) {
       const platformDef = platformRegistry.getPlatform(opts.botContext.platform);
       if (platformDef) {
@@ -530,8 +532,13 @@ export class AgentBridgeService {
       log('executeWithCallback: failed to post initial placeholder message: %O', error);
     }
 
-    const files = await this.resolveFiles(userMessage, client);
+    const { files, warnings: fileWarnings } = await this.resolveFiles(userMessage, client);
     const prompt = this.formatPrompt(userMessage, client);
+
+    // Attach file warnings to botPlatformContext for injection via context engine
+    if (fileWarnings?.length && botPlatformContext) {
+      botPlatformContext.warnings = fileWarnings;
+    }
 
     // Build webhook config for production mode
     const callbackUrl = '/api/agent/webhooks/bot-callback';
@@ -1087,17 +1094,20 @@ export class AgentBridgeService {
   private async resolveFiles(
     message: Message,
     client?: PlatformClient,
-  ): Promise<
-    | Array<{
-        buffer?: Buffer;
-        mimeType?: string;
-        name?: string;
-        size?: number;
-        url?: string;
-      }>
-    | undefined
-  > {
-    return client?.extractFiles?.(message);
+  ): Promise<{
+    files?: Array<{
+      buffer?: Buffer;
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      url?: string;
+    }>;
+    warnings?: string[];
+  }> {
+    const result = await client?.extractFiles?.(message);
+    if (!result) return {};
+    if (Array.isArray(result)) return { files: result };
+    return { files: result.files, warnings: result.warnings };
   }
 
   /**

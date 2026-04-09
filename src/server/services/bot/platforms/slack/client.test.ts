@@ -154,7 +154,7 @@ describe('SlackWebhookClient.extractFiles', () => {
       ]),
     );
 
-    expect(result?.[0]?.size).toBe(buffer.length);
+    expect((result as any)?.[0]?.size).toBe(buffer.length);
   });
 
   it('skips attachments with no url and continues with the rest', async () => {
