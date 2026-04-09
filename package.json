@@ -119,8 +119,6 @@
     "workflow:docs": "tsx ./scripts/docsWorkflow/index.ts",
     "workflow:docs-cdn": "tsx ./scripts/docsWorkflow/autoCDN.ts",
     "workflow:i18n": "tsx ./scripts/i18nWorkflow/index.ts",
-    "workflow:kb-orphan-cleanup": "tsx ./scripts/cleanupKnowledgeBaseOrphans.ts",
-    "workflow:kb-orphan-report": "tsx ./scripts/reportKnowledgeBaseOrphans.ts",
     "workflow:mdx": "tsx ./scripts/mdxWorkflow/index.ts",
     "workflow:mobile-spa": "tsx scripts/mobileSpaWorkflow/index.ts",
     "workflow:readme": "tsx ./scripts/readmeWorkflow/index.ts",

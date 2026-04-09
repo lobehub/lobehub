@@ -180,6 +180,19 @@ describe('kb command', () => {
 
       expect(mockTrpcClient.knowledgeBase.removeKnowledgeBase.mutate).toHaveBeenCalledWith({
         id: 'kb1',
+        removeFiles: undefined,
+      });
+    });
+
+    it('should pass --remove-files flag', async () => {
+      mockTrpcClient.knowledgeBase.removeKnowledgeBase.mutate.mockResolvedValue({});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'kb', 'delete', 'kb1', '--yes', '--remove-files']);
+
+      expect(mockTrpcClient.knowledgeBase.removeKnowledgeBase.mutate).toHaveBeenCalledWith({
+        id: 'kb1',
+        removeFiles: true,
       });
     });
   });
