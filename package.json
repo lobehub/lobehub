@@ -44,7 +44,7 @@
     "build:spa:copy": "tsx scripts/copySpaBuild.mts && tsx scripts/generateSpaTemplates.mts",
     "build:spa:mobile": "cross-env NODE_OPTIONS=--max-old-space-size=8192 MOBILE=true vite build",
     "build:spa:raw": "rm -rf public/_spa && vite build",
-    "build:vercel": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 \"bun run build:raw && bun run db:migrate\"",
+    "build:vercel": "cross-env-shell NODE_OPTIONS=--max-old-space-size=6500 \"bun run build:raw && bun run db:migrate\"",
     "build-migrate-db": "bun run db:migrate",
     "build-sitemap": "tsx ./scripts/buildSitemapIndex/index.ts",
     "clean:node_modules": "bash -lc 'set -e; echo \"Removing all node_modules...\"; rm -rf node_modules; pnpm -r exec rm -rf node_modules; rm -rf apps/desktop/node_modules; echo \"All node_modules removed.\"'",
