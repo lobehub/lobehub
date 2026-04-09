@@ -208,23 +208,22 @@ async function createVideoTask(
       input.media = media;
     }
   } else if (model.startsWith('pixverse/')) {
+    const media = [];
     if (imageUrls && imageUrls.length > 0) {
       imageUrls.forEach((url) =>
-        input.media.push({
+        media.push({
           type: 'image_url',
           url,
         }),
       );
     }
     if (imageUrl && !endImageUrl) {
-      input.media = [
-        {
-          type: 'image_url',
-          url: imageUrl,
-        },
-      ];
+      media.push({
+        type: 'image_url',
+        url: imageUrl,
+      });
     } else if (imageUrl && endImageUrl) {
-      input.media = [
+      media.push(
         {
           type: 'first_frame',
           url: imageUrl,
@@ -233,7 +232,10 @@ async function createVideoTask(
           type: 'last_frame',
           url: endImageUrl,
         },
-      ];
+      );
+    }
+    if (media.length > 0) {
+      input.media = media;
     }
   } else if (model.startsWith('wan2.7')) {
     const media = [];

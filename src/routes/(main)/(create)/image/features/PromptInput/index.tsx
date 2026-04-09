@@ -66,7 +66,7 @@ const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
   );
 });
 
-const PromptExtendItem = () => {
+const PromptExtendItem = memo(() => {
   const { t } = useTranslation('image');
   const { value, setValue, enumValues } = useGenerationConfigParam('promptExtend');
 
@@ -94,7 +94,7 @@ const PromptExtendItem = () => {
       <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
     </Flexbox>
   );
-};
+});
 
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
