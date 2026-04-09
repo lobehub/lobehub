@@ -23,6 +23,9 @@ const userId = 'knowledge-repo-test-user';
 const otherUserId = 'other-knowledge-user';
 const deleteDocChunkId = '33333333-3333-4333-8333-333333333333';
 const deleteManyDocChunkId = '44444444-4444-4444-8444-444444444444';
+const deleteFolderFileChunkId = '55555555-5555-4555-8555-555555555555';
+const deleteFolderDocChunkId = '66666666-6666-4666-8666-666666666666';
+const deleteNestedFolderFileChunkId = '77777777-7777-4777-8777-777777777777';
 
 let knowledgeRepo: KnowledgeRepo;
 const testEmbedding = Array.from({ length: 1024 }, () => 0.1);
@@ -430,6 +433,37 @@ describe('KnowledgeRepo', () => {
           totalLineCount: 2,
         },
         {
+          id: 'delete-folder',
+          userId,
+          title: 'Folder To Delete',
+          fileType: 'custom/folder',
+          sourceType: 'topic',
+          source: 'internal://folder/delete-folder',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'delete-folder-file',
+          userId,
+          name: 'delete-folder-file.pdf',
+          fileType: 'application/pdf',
+          size: 256,
+          parentId: 'delete-folder',
+          url: 'https://example.com/delete-folder-file.pdf',
+        },
+        {
+          id: 'delete-folder-doc-file',
+          userId,
+          name: 'delete-folder-doc-file.pdf',
+          fileType: 'application/pdf',
+          size: 512,
+          url: 'https://example.com/delete-folder-doc-file.pdf',
+        },
+      ]);
+      await serverDB.insert(documents).values([
+        {
           id: 'delete-doc-with-file',
           userId,
           title: 'To Delete File-Backed Note',
@@ -441,7 +475,40 @@ describe('KnowledgeRepo', () => {
           totalCharCount: 120,
           totalLineCount: 3,
         },
+        {
+          id: 'delete-folder-doc',
+          userId,
+          parentId: 'delete-folder',
+          title: 'Folder Child Doc',
+          fileId: 'delete-folder-doc-file',
+          fileType: 'application/pdf',
+          filename: 'delete-folder-doc-file.pdf',
+          sourceType: 'api',
+          source: 'internal://note/delete-folder-doc',
+          totalCharCount: 90,
+          totalLineCount: 2,
+        },
+        {
+          id: 'delete-folder-child',
+          userId,
+          parentId: 'delete-folder',
+          title: 'Nested Folder',
+          fileType: 'custom/folder',
+          sourceType: 'topic',
+          source: 'internal://folder/delete-folder-child',
+          totalCharCount: 0,
+          totalLineCount: 0,
+        },
       ]);
+      await serverDB.insert(files).values({
+        id: 'delete-folder-child-file',
+        userId,
+        name: 'delete-folder-child-file.pdf',
+        fileType: 'application/pdf',
+        size: 768,
+        parentId: 'delete-folder-child',
+        url: 'https://example.com/delete-folder-child-file.pdf',
+      });
 
       await serverDB.insert(chunks).values({
         id: deleteDocChunkId,
@@ -459,6 +526,60 @@ describe('KnowledgeRepo', () => {
         model: 'test-model',
         userId,
       });
+      await serverDB.insert(chunks).values([
+        {
+          id: deleteFolderFileChunkId,
+          text: 'chunk for folder file',
+          userId,
+        },
+        {
+          id: deleteFolderDocChunkId,
+          text: 'chunk for folder child mirrored file',
+          userId,
+        },
+        {
+          id: deleteNestedFolderFileChunkId,
+          text: 'chunk for nested folder file',
+          userId,
+        },
+      ]);
+      await serverDB.insert(fileChunks).values([
+        {
+          chunkId: deleteFolderFileChunkId,
+          fileId: 'delete-folder-file',
+          userId,
+        },
+        {
+          chunkId: deleteFolderDocChunkId,
+          fileId: 'delete-folder-doc-file',
+          userId,
+        },
+        {
+          chunkId: deleteNestedFolderFileChunkId,
+          fileId: 'delete-folder-child-file',
+          userId,
+        },
+      ]);
+      await serverDB.insert(embeddings).values([
+        {
+          chunkId: deleteFolderFileChunkId,
+          embeddings: testEmbedding,
+          model: 'test-model',
+          userId,
+        },
+        {
+          chunkId: deleteFolderDocChunkId,
+          embeddings: testEmbedding,
+          model: 'test-model',
+          userId,
+        },
+        {
+          chunkId: deleteNestedFolderFileChunkId,
+          embeddings: testEmbedding,
+          model: 'test-model',
+          userId,
+        },
+      ]);
     });
 
     it('should delete file by id', async () => {
@@ -499,6 +620,60 @@ describe('KnowledgeRepo', () => {
       expect(file).toBeUndefined();
       expect(chunk).toBeUndefined();
       expect(embedding).toBeUndefined();
+    });
+
+    it('should recursively delete child documents, files and vectors when deleting a folder', async () => {
+      await knowledgeRepo.deleteItem('delete-folder', 'document');
+
+      const folder = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, 'delete-folder'),
+      });
+      const childDoc = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, 'delete-folder-doc'),
+      });
+      const childFolder = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, 'delete-folder-child'),
+      });
+      const folderFile = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'delete-folder-file'),
+      });
+      const childDocFile = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'delete-folder-doc-file'),
+      });
+      const nestedFolderFile = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'delete-folder-child-file'),
+      });
+      const folderFileChunk = await serverDB.query.chunks.findFirst({
+        where: eq(chunks.id, deleteFolderFileChunkId),
+      });
+      const childDocChunk = await serverDB.query.chunks.findFirst({
+        where: eq(chunks.id, deleteFolderDocChunkId),
+      });
+      const nestedFolderFileChunk = await serverDB.query.chunks.findFirst({
+        where: eq(chunks.id, deleteNestedFolderFileChunkId),
+      });
+      const folderFileEmbedding = await serverDB.query.embeddings.findFirst({
+        where: eq(embeddings.chunkId, deleteFolderFileChunkId),
+      });
+      const childDocEmbedding = await serverDB.query.embeddings.findFirst({
+        where: eq(embeddings.chunkId, deleteFolderDocChunkId),
+      });
+      const nestedFolderFileEmbedding = await serverDB.query.embeddings.findFirst({
+        where: eq(embeddings.chunkId, deleteNestedFolderFileChunkId),
+      });
+
+      expect(folder).toBeUndefined();
+      expect(childDoc).toBeUndefined();
+      expect(childFolder).toBeUndefined();
+      expect(folderFile).toBeUndefined();
+      expect(childDocFile).toBeUndefined();
+      expect(nestedFolderFile).toBeUndefined();
+      expect(folderFileChunk).toBeUndefined();
+      expect(childDocChunk).toBeUndefined();
+      expect(nestedFolderFileChunk).toBeUndefined();
+      expect(folderFileEmbedding).toBeUndefined();
+      expect(childDocEmbedding).toBeUndefined();
+      expect(nestedFolderFileEmbedding).toBeUndefined();
     });
   });
 
