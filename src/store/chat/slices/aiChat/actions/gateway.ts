@@ -188,8 +188,10 @@ export class GatewayActionImpl {
   executeGatewayAgent = async (params: {
     context: ConversationContext;
     message: string;
+    /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+    parentMessageId?: string;
   }): Promise<ExecAgentResult> => {
-    const { context, message } = params;
+    const { context, message, parentMessageId } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
@@ -204,6 +206,7 @@ export class GatewayActionImpl {
         threadId: context.threadId,
         topicId: context.topicId,
       },
+      parentMessageId,
       prompt: message,
     });
 
