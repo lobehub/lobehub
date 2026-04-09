@@ -29,7 +29,7 @@ const WorkflowExpandedList = memo<WorkflowExpandedListProps>(
     const content = (
       <Flexbox paddingBlock={'4px 8px'}>
         {blocks.map((block) => (
-          <Flexbox key={block.id} paddingInline={'8px 0'}>
+          <Flexbox key={block.id}>
             {block.content && <div className={styles.blockContent}>{block.content}</div>}
             {block.reasoning && <WorkflowReasoningLine id={block.id} reasoning={block.reasoning} />}
             {block.tools?.map((tool) => (
