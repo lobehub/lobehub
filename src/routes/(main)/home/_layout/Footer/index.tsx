@@ -2,6 +2,7 @@
 
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { useAnalytics } from '@lobehub/analytics/react';
+import { Github } from '@lobehub/icons';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
@@ -11,7 +12,6 @@ import {
   Feather,
   FileClockIcon,
   FlaskConical,
-  Github,
   Rocket,
   Settings,
   Settings2,

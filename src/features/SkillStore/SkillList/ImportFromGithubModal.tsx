@@ -1,8 +1,9 @@
 'use client';
 
+import { Github } from '@lobehub/icons';
 import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
 import { App, Button, Modal, Typography } from 'antd';
-import { ArrowLeftRight, Github, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

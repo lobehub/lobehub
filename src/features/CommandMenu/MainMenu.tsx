@@ -1,11 +1,11 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
+import { Github } from '@lobehub/icons';
 import { DiscordIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import {
   Bot,
   FeatherIcon,
   FilePen,
-  Github,
   LibraryBig,
   MessageSquarePlusIcon,
   Monitor,
