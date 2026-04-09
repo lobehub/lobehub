@@ -52,6 +52,44 @@ const hasTools = (block: AssistantContentBlock): boolean => {
   return !!block.tools && block.tools.length > 0;
 };
 
+const hasSubstantiveContent = (block: AssistantContentBlock): boolean => {
+  const content = block.content?.trim();
+  return !!content && content !== LOADING_FLAT;
+};
+
+const hasReasoningContent = (block: AssistantContentBlock): boolean => {
+  return !!block.reasoning?.content?.trim();
+};
+
+const isTrailingReasoningCandidate = (block: AssistantContentBlock): boolean => {
+  return hasReasoningContent(block) && !hasTools(block) && !block.error;
+};
+
+const splitPostToolBlocks = (
+  postBlocks: AssistantContentBlock[],
+): Pick<PartitionedBlocks, 'answerBlocks' | 'workingBlocks'> => {
+  const answerBlocks: AssistantContentBlock[] = [];
+  const workingBlocks: AssistantContentBlock[] = [];
+
+  let index = 0;
+  while (index < postBlocks.length) {
+    const block = postBlocks[index]!;
+    if (!isTrailingReasoningCandidate(block)) break;
+
+    workingBlocks.push({ ...block, content: '' });
+
+    if (hasSubstantiveContent(block) || (block.imageList?.length ?? 0) > 0) {
+      answerBlocks.push({ ...block, reasoning: undefined });
+    }
+
+    index += 1;
+  }
+
+  answerBlocks.push(...postBlocks.slice(index));
+
+  return { answerBlocks, workingBlocks };
+};
+
 /**
  * Partition blocks into "working phase" and "answer phase".
  *
@@ -108,10 +146,14 @@ const partitionBlocks = (
   }
 
   const postBlocks = blocks.slice(lastToolIndex + 1);
-  const workingBlocks = blocks.slice(firstToolIndex, lastToolIndex + 1);
+  const postToolReasoning = splitPostToolBlocks(postBlocks);
+  const workingBlocks = [
+    ...blocks.slice(firstToolIndex, lastToolIndex + 1),
+    ...postToolReasoning.workingBlocks,
+  ];
 
   return {
-    answerBlocks: [...preBlocks, ...postBlocks],
+    answerBlocks: [...preBlocks, ...postToolReasoning.answerBlocks],
     postToolTailPromoted: false,
     workingBlocks,
   };
@@ -168,11 +210,11 @@ const Group = memo<GroupChildrenProps>(
                 assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}
+                key={id + '.' + item.id}
+                messageIndex={messageIndex}
                 isFirstBlock={
                   firstSubstantiveAnswerIndex >= 0 && index === firstSubstantiveAnswerIndex
                 }
-                key={id + '.' + item.id}
-                messageIndex={messageIndex}
               />
             );
           })}
