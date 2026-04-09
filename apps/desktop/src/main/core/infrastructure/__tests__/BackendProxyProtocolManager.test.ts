@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
+import { BrowserWindow } from 'electron';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BackendProxyProtocolManager } from '../BackendProxyProtocolManager';
 
@@ -37,10 +39,20 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+vi.mock('electron', () => ({
+  BrowserWindow: {
+    getAllWindows: vi.fn(),
+  },
+}));
+
 describe('BackendProxyProtocolManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     protocolHandlerRef.current = null;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should rewrite url to remote base and inject Oidc-Auth token', async () => {
@@ -208,5 +220,42 @@ describe('BackendProxyProtocolManager', () => {
         url: 'lobe-backend://app/trpc/hello',
       } as any),
     ).rejects.toThrow('network down');
+  });
+
+  it('should broadcast authorizationRequired when X-Auth-Required is set on HTTP 207 (batched tRPC)', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } },
+    ] as any);
+
+    const manager = new BackendProxyProtocolManager();
+    const session = { protocol: mockProtocol } as any;
+
+    const headers = new Headers({
+      [AUTH_REQUIRED_HEADER]: 'true',
+      'Content-Type': 'application/json',
+    });
+    const fetchMock = vi.fn<FetchMock>(
+      async () => new Response('[]', { headers, status: 207, statusText: 'Multi-Status' }),
+    );
+    vi.stubGlobal('fetch', fetchMock as any);
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => null,
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+      scheme: 'lobe-backend',
+    });
+
+    const handler = protocolHandlerRef.current;
+    await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'lobe-backend://app/trpc/lambda/batch?batch=1',
+    } as any);
+
+    expect(send).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(send).toHaveBeenCalledWith('authorizationRequired');
   });
 });

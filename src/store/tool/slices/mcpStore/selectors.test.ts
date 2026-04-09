@@ -5,7 +5,6 @@ import { MCPInstallStep } from '@/types/plugins';
 
 import { initialState } from '../../initialState';
 import { type ToolStoreState } from '../../initialState';
-import { PluginStoreTabs } from '../oldStore/initialState';
 import { mcpStoreSelectors } from './selectors';
 
 const createMockPluginItem = (id: string, overrides: Partial<PluginItem> = {}): PluginItem =>
@@ -56,20 +55,20 @@ const baseState: ToolStoreState = {
       settings: {},
     },
   ],
-  listType: PluginStoreTabs.MCP,
+  listType: 'mcp',
 };
 
 describe('mcpStoreSelectors', () => {
   describe('mcpPluginList', () => {
     it('should return all mcp plugins when listType is MCP', () => {
-      const state: ToolStoreState = { ...baseState, listType: PluginStoreTabs.MCP };
+      const state: ToolStoreState = { ...baseState, listType: 'mcp' };
       const result = mcpStoreSelectors.mcpPluginList(state);
 
       expect(result).toHaveLength(3);
     });
 
     it('should return only installed plugins when listType is Installed', () => {
-      const state: ToolStoreState = { ...baseState, listType: PluginStoreTabs.Installed };
+      const state: ToolStoreState = { ...baseState, listType: 'installed' };
       const result = mcpStoreSelectors.mcpPluginList(state);
 
       expect(result).toHaveLength(1);
@@ -77,7 +76,7 @@ describe('mcpStoreSelectors', () => {
     });
 
     it('should map plugin items to InstallPluginMeta format', () => {
-      const state: ToolStoreState = { ...baseState, listType: PluginStoreTabs.MCP };
+      const state: ToolStoreState = { ...baseState, listType: 'mcp' };
       const result = mcpStoreSelectors.mcpPluginList(state);
       const item = result[0];
 
@@ -99,7 +98,7 @@ describe('mcpStoreSelectors', () => {
       const state: ToolStoreState = {
         ...baseState,
         installedPlugins: [],
-        listType: PluginStoreTabs.Installed,
+        listType: 'installed',
       };
       const result = mcpStoreSelectors.mcpPluginList(state);
 
@@ -130,7 +129,7 @@ describe('mcpStoreSelectors', () => {
             settings: {},
           },
         ],
-        listType: PluginStoreTabs.Installed,
+        listType: 'installed',
       };
       const result = mcpStoreSelectors.mcpPluginList(state);
 

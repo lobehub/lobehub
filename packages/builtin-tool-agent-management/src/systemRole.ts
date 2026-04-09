@@ -26,9 +26,10 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 
 When this tool is enabled, you will receive contextual information about:
 - **Available Models**: List of AI models and providers you can use when creating/updating agents
+- **Available Agents**: The user's existing agents (most recently updated). You can call them directly via callAgent without first running searchAgent when one of them clearly matches the user's request.
 - **Available Plugins**: List of plugins (builtin tools, Klavis integrations, LobehubSkill providers) you can enable for agents
 
-This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins parameters.
+This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins/agentId parameters. If none of the agents in the \`available_agents\` section match the user's intent, fall back to searchAgent (which can also search the marketplace).
 </context_injection>
 
 <agent_creation_guide>

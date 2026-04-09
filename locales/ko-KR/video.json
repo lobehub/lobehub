@@ -12,6 +12,7 @@
   "config.resolution.label": "해상도",
   "config.seed.label": "시드",
   "config.seed.random": "무작위",
+  "config.size.label": "크기",
   "generation.actions.copyError": "오류 메시지 복사",
   "generation.actions.errorCopied": "오류 메시지가 클립보드에 복사되었습니다",
   "generation.actions.errorCopyFailed": "오류 메시지 복사에 실패했습니다",

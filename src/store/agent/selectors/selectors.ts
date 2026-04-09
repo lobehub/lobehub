@@ -5,6 +5,7 @@ import {
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
+  isDesktop,
 } from '@lobechat/const';
 import {
   type AgentMode,
@@ -18,9 +19,11 @@ import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { filterToolIds } from '@/helpers/toolFilters';
 
 import { type AgentStoreState } from '../initialState';
+import { getLocalAgentWorkingDirectory } from '../utils/localAgentWorkingDirectoryStorage';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
 
 // ==========   Meta   ============== //
@@ -258,9 +261,22 @@ const currentAgentRuntimeEnvConfig = (s: AgentStoreState): RuntimeEnvConfig | un
  * Get current agent's working directory
  */
 const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
-  currentAgentRuntimeEnvConfig(s)?.workingDirectory;
+  (() => {
+    if (!isDesktop) return;
+
+    const activeAgentId = s.activeAgentId;
+    if (!activeAgentId) return globalAgentContextManager.getContext().homePath;
+
+    return (
+      getLocalAgentWorkingDirectory(activeAgentId) ??
+      globalAgentContextManager.getContext().homePath
+    );
+  })();
 
 const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
+
+const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
+  s.agentDocumentsMap[agentId];
 
 export const agentSelectors = {
   currentAgentAvatar,
@@ -285,6 +301,7 @@ export const agentSelectors = {
   currentKnowledgeIds,
   displayableAgentPlugins,
   getAgentConfigById,
+  getAgentDocumentsById,
   getAgentMetaById,
   getAgentSlugById,
   hasEnabledKnowledge,

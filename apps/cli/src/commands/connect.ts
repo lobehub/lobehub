@@ -221,16 +221,15 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
 
-  // Update status file for daemon mode
+  // Update local connection status so other CLI commands can resolve the current device
   const updateStatus = (connectionStatus: string) => {
-    if (isDaemonChild) {
-      writeStatus({
-        connectionStatus,
-        gatewayUrl: resolvedGatewayUrl,
-        pid: process.pid,
-        startedAt: startedAt.toISOString(),
-      });
-    }
+    writeStatus({
+      connectionStatus,
+      deviceId: client.currentDeviceId,
+      gatewayUrl: resolvedGatewayUrl,
+      pid: process.pid,
+      startedAt: startedAt.toISOString(),
+    });
   };
 
   const startedAt = new Date();
@@ -333,8 +332,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     info('Shutting down...');
     cleanupAllProcesses();
     client.disconnect();
+    removeStatus();
     if (isDaemonChild) {
-      removeStatus();
       removePid();
     }
   };

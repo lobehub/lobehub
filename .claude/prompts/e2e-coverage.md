@@ -77,20 +77,24 @@ Create `e2e/src/features/{module-name}/README.md` with:
 # {Module} 模块 E2E 测试覆盖
 
 ## 模块概述
+
 **路由**: `/module`, `/module/[id]`
 
 ## 功能清单与测试覆盖
 
 ### 1. 功能分组名称
 
-| 功能点 | 描述 | 优先级 | 状态 | 测试文件 |
-| ------ | ---- | ------ | ---- | -------- |
+| 功能点 | 描述 | 优先级 | 状态 | 测试文件      |
+| ------ | ---- | ------ | ---- | ------------- |
 | 功能A  | xxx  | P0     | ✅   | `xxx.feature` |
-| 功能B  | xxx  | P1     | ⏳   |          |
+| 功能B  | xxx  | P1     | ⏳   |               |
 
 ## 测试文件结构
+
 ## 测试执行
+
 ## 已知问题
+
 ## 更新记录
 ```
 
@@ -228,7 +232,7 @@ const testId = pickle.tags.find(
     tag.name.startsWith('@COMMUNITY-') ||
     tag.name.startsWith('@AGENT-') ||
     tag.name.startsWith('@HOME-') ||
-    tag.name.startsWith('@PAGE-') ||    // Add new prefix
+    tag.name.startsWith('@PAGE-') || // Add new prefix
     tag.name.startsWith('@ROUTES-'),
 );
 ```
@@ -300,11 +304,15 @@ HEADLESS=true BASE_URL=http://localhost:3006 \
 ### 10. Create Pull Request
 
 - Branch name: `test/e2e-{module-name}`
+
 - Commit message format:
+
   ```
   ✅ test: add E2E tests for {module-name}
   ```
+
 - PR title: `✅ test: add E2E tests for {module-name}`
+
 - PR body template:
 
   ````markdown

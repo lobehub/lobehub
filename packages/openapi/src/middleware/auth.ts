@@ -49,9 +49,10 @@ setInterval(cleanupApiKeyCache, 10 * 60 * 1000);
 export const userAuthMiddleware = async (c: Context, next: Next) => {
   // Development mode debug bypass
   const isDebugApi = c.req.header('lobe-auth-dev-backend-api') === '1';
-  if (process.env.NODE_ENV === 'development' && isDebugApi) {
+  const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
+  if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
     log('Development debug mode, using mock user ID');
-    c.set('userId', process.env.MOCK_DEV_USER_ID);
+    c.set('userId', process.env.MOCK_DEV_USER_ID || 'DEV_USER');
     c.set('authType', 'debug');
     return next();
   }

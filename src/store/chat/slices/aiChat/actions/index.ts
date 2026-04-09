@@ -7,6 +7,8 @@ import { type ConversationControlAction } from './conversationControl';
 import { ConversationControlActionImpl } from './conversationControl';
 import { type ConversationLifecycleAction } from './conversationLifecycle';
 import { ConversationLifecycleActionImpl } from './conversationLifecycle';
+import { type GatewayAction } from './gateway';
+import { GatewayActionImpl } from './gateway';
 import { type ChatMemoryAction } from './memory';
 import { ChatMemoryActionImpl } from './memory';
 import { type StreamingExecutorAction } from './streamingExecutor';
@@ -17,6 +19,7 @@ import { StreamingStatesActionImpl } from './streamingStates';
 export type ChatAIChatAction = ChatMemoryAction &
   ConversationLifecycleAction &
   ConversationControlAction &
+  GatewayAction &
   StreamingExecutorAction &
   StreamingStatesAction;
 
@@ -34,6 +37,7 @@ export const chatAiChat: StateCreator<
     new ChatMemoryActionImpl(...params),
     new ConversationLifecycleActionImpl(...params),
     new ConversationControlActionImpl(...params),
+    new GatewayActionImpl(...params),
     new StreamingExecutorActionImpl(...params),
     new StreamingStatesActionImpl(...params),
   ]);

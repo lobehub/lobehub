@@ -120,7 +120,14 @@ export class FileService {
     return lambdaClient.file.removeFileAsyncTask.mutate({ id, type });
   };
 
-  updateFile = async (id: string, data: { parentId?: string | null }) => {
+  updateFile = async (
+    id: string,
+    data: {
+      metadata?: Record<string, any>;
+      name?: string;
+      parentId?: string | null;
+    },
+  ) => {
     return lambdaClient.file.updateFile.mutate({ id, ...data });
   };
 

@@ -28,6 +28,8 @@ export interface ExecAgentParams {
   appContext?: ExecAgentAppContext;
   /** Whether to auto-start execution after creating operation (default: true) */
   autoStart?: boolean;
+  /** Explicit device ID to bind to the topic and activate for this run */
+  deviceId?: string;
   /** Optional existing message IDs to include in context */
   existingMessageIds?: string[];
   /** Additional system instructions appended after the agent's own system role */
@@ -68,6 +70,8 @@ export interface ExecAgentResult {
   success: boolean;
   /** ISO timestamp */
   timestamp: string;
+  /** Short-lived JWT token for Gateway WebSocket authentication */
+  token?: string;
   /** The topic ID (created or reused) */
   topicId: string;
   /** The user message ID created for this operation */

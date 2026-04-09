@@ -67,6 +67,7 @@
     "./spark": "./src/aiModels/spark.ts",
     "./stepfun": "./src/aiModels/stepfun.ts",
     "./straico": "./src/aiModels/straico.ts",
+    "./streamlake": "./src/aiModels/streamlake.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
@@ -87,12 +88,17 @@
     "./types": "./src/types/index.ts"
   },
   "scripts": {
+    "build": "tsdown",
     "test": "vitest",
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
     "type-fest": "^5.2.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.21.4",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "zod": "^3.25.76"

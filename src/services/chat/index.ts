@@ -2,7 +2,7 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
-import { fetchSSE, getMessageError, standardizeAnimationStyle } from '@lobechat/fetch-sse';
+import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import {
@@ -12,8 +12,6 @@ import {
   type UIChatMessage,
 } from '@lobechat/types';
 import { ChatErrorType, TraceTagMap } from '@lobechat/types';
-import { type PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
-import { createHeadersWithPluginSettings } from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
@@ -32,7 +30,6 @@ import {
   builtinToolSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
-  pluginSelectors,
 } from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
@@ -42,7 +39,7 @@ import {
 } from '@/store/user/selectors';
 import { type ChatStreamPayload, type OpenAIChatMessage } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
-import { createTraceHeader, getTraceId } from '@/utils/trace';
+import { createTraceHeader } from '@/utils/trace';
 
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
@@ -99,6 +96,17 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
 }
 
 class ChatService {
+  private resolveAgentDocumentsTargetId = (
+    targetAgentId: string,
+    enabledToolIds: string[] = [],
+  ): string | undefined => {
+    if (enabledToolIds.includes(AgentBuilderIdentifier)) {
+      return getChatStoreState().activeAgentId || targetAgentId || undefined;
+    }
+
+    return targetAgentId || undefined;
+  };
+
   createAssistantMessage = async (
     {
       messages,
@@ -155,7 +163,20 @@ class ChatService {
     // Note: When Agent Builder is active, we need to get the context of the agent being edited,
     // which is stored in chatStore.activeAgentId, not the targetAgentId (which is the Agent Builder itself)
     const isAgentBuilderEnabled = enabledToolIds.includes(AgentBuilderIdentifier);
+    const documentsAgentId = this.resolveAgentDocumentsTargetId(targetAgentId, enabledToolIds);
     let agentBuilderContext;
+    let agentDocuments = documentsAgentId
+      ? agentSelectors.getAgentDocumentsById(documentsAgentId)(getAgentStoreState())
+      : undefined;
+
+    if (documentsAgentId && agentDocuments === undefined) {
+      try {
+        agentDocuments = await getAgentStoreState().ensureAgentDocuments(documentsAgentId);
+      } catch (error) {
+        // Agent documents are optional on the client; keep generation working if hydration fails.
+        console.error('[ChatService] Failed to ensure agent documents:', error);
+      }
+    }
 
     if (isAgentBuilderEnabled) {
       const activeAgentId = getChatStoreState().activeAgentId || '';
@@ -242,6 +263,7 @@ class ChatService {
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
       agentBuilderContext,
+      agentDocuments,
       agentId: targetAgentId,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,
@@ -444,40 +466,6 @@ class ChatService {
       responseAnimation: mergedResponseAnimation,
       signal,
     });
-  };
-
-  /**
-   * run the plugin api to get result
-   * @param params
-   * @param options
-   */
-  runPluginApi = async (params: PluginRequestPayload, options?: FetchOptions) => {
-    const s = getToolStoreState();
-
-    const settings = pluginSelectors.getPluginSettingsById(params.identifier)(s);
-    const manifest = pluginSelectors.getToolManifestById(params.identifier)(s);
-
-    const traceHeader = createTraceHeader(this.mapTrace(options?.trace, TraceTagMap.ToolCalling));
-
-    const headers = await createHeaderWithAuth({
-      headers: { ...createHeadersWithPluginSettings(settings), ...traceHeader },
-    });
-
-    const gatewayURL = manifest?.gateway ?? API_ENDPOINTS.gateway;
-
-    const res = await fetch(gatewayURL, {
-      body: JSON.stringify({ ...params, manifest }),
-      headers,
-      method: 'POST',
-      signal: options?.signal,
-    });
-
-    if (!res.ok) {
-      throw await getMessageError(res);
-    }
-
-    const text = await res.text();
-    return { text, traceId: getTraceId(res) };
   };
 
   fetchPresetTaskResult = async ({

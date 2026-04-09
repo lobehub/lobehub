@@ -10,7 +10,7 @@ import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { isDesktop } from '@lobechat/const';
-import { type ToolsEngine } from '@lobechat/context-engine';
+import { generateToolsFromManifest, type ToolsEngine } from '@lobechat/context-engine';
 import {
   type ConversationContext,
   type RuntimeInitialContext,
@@ -200,18 +200,35 @@ export class StreamingExecutorActionImpl {
       toolIds: mergedToolIds,
     });
 
-    const enabledToolIds = toolsDetailed.enabledToolIds;
+    // --- Merge injected manifests (generic, caller-driven) ---
+    const injectedManifests = initialContext?.initialContext?.injectedManifests;
+    const existingIdSet = new Set(toolsDetailed.enabledToolIds);
+    // Skip manifests whose identifier is already enabled (dedup)
+    const newInjected = injectedManifests?.filter((m) => !existingIdSet.has(m.identifier)) ?? [];
+
+    const enabledToolIds = [
+      ...toolsDetailed.enabledToolIds,
+      ...newInjected.map((m) => m.identifier),
+    ];
+    const enabledManifests = [...toolsDetailed.enabledManifests, ...newInjected];
+    const injectedTools = newInjected.flatMap((m) => generateToolsFromManifest(m));
+    const tools = toolsDetailed.tools
+      ? [...toolsDetailed.tools, ...injectedTools]
+      : injectedTools.length > 0
+        ? injectedTools
+        : undefined;
+
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
     const toolManifestMap = Object.fromEntries(
-      toolsDetailed.enabledManifests.map((manifest) => [manifest.identifier, manifest]),
+      enabledManifests.map((manifest) => [manifest.identifier, manifest]),
     );
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {
       ...agentConfig,
-      enabledManifests: toolsDetailed.enabledManifests,
+      enabledManifests,
       enabledToolIds,
-      tools: toolsDetailed.tools,
+      tools,
     };
 
     log(
@@ -698,7 +715,12 @@ export class StreamingExecutorActionImpl {
         setTimeout(() => {
           useChatStore
             .getState()
-            .sendMessage({ message: mergedContent, files: mergedFiles, context: execContext })
+            .sendMessage({
+              context: execContext,
+              editorData: merged.editorData,
+              files: mergedFiles,
+              message: mergedContent,
+            })
             .catch((e: unknown) => {
               console.error(
                 '[internal_execAgentRuntime] sendMessage for queued content failed:',

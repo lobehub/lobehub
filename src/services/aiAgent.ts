@@ -1,4 +1,8 @@
+import type { ExecAgentResult } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
+
+export type { ExecAgentResult };
 
 export interface ExecAgentTaskParams {
   agentId?: string;
@@ -10,6 +14,7 @@ export interface ExecAgentTaskParams {
     topicId?: string | null;
   };
   autoStart?: boolean;
+  deviceId?: string;
   existingMessageIds?: string[];
   prompt: string;
   slug?: string;
@@ -90,9 +95,10 @@ export interface UpdateClientTaskThreadStatusParams {
 
 class AiAgentService {
   /**
-   * Execute a single Agent task
+   * Execute a single Agent task.
+   * Returns the operationId needed to connect to the Agent Gateway.
    */
-  async execAgentTask(params: ExecAgentTaskParams) {
+  async execAgentTask(params: ExecAgentTaskParams): Promise<ExecAgentResult> {
     return await lambdaClient.aiAgent.execAgent.mutate(params);
   }
 
@@ -102,6 +108,13 @@ class AiAgentService {
    * - Group mode: pass groupId, Thread will be associated with the Group
    * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    */
+  /**
+   * Get a fresh JWT token for Gateway WebSocket reconnection.
+   */
+  async refreshGatewayToken(topicId: string): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
+  }
+
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }

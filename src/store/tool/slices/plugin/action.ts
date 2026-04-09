@@ -1,4 +1,5 @@
 import { type Schema, type ValidationResult } from '@cfworker/json-schema';
+import { type LobeTool } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
@@ -32,9 +33,25 @@ export class PluginActionImpl {
     // Old plugin system has been deprecated, skip auto-installation
   };
 
+  /**
+   * Refresh installed plugins from the server and update store state.
+   */
+  refreshPlugins = async (): Promise<void> => {
+    const data = await pluginService.getInstalledPlugins();
+    this.#set({ installedPlugins: data }, false, 'refreshPlugins');
+  };
+
   removeAllPlugins = async (): Promise<void> => {
     await pluginService.removeAllPlugins();
     await this.#get().refreshPlugins();
+  };
+
+  updateInstallLoadingState = (id: string, loading: boolean | undefined): void => {
+    this.#set(
+      { pluginInstallLoading: { ...this.#get().pluginInstallLoading, [id]: loading } },
+      false,
+      'updateInstallLoadingState',
+    );
   };
 
   updateInstallMcpPlugin = async (id: string, value: any): Promise<void> => {
@@ -67,6 +84,22 @@ export class PluginActionImpl {
     await pluginService.updatePluginSettings(id, nextSettings, newSignal.signal);
 
     await this.#get().refreshPlugins();
+  };
+
+  useFetchInstalledPlugins = (enable: boolean): SWRResponse => {
+    return useClientDataSWR(
+      enable ? 'useFetchInstalledPlugins' : null,
+      () => pluginService.getInstalledPlugins(),
+      {
+        onSuccess: (data: LobeTool[]) => {
+          this.#set(
+            { installedPlugins: data, loadingInstallPlugins: false },
+            false,
+            'useFetchInstalledPlugins/onSuccess',
+          );
+        },
+      },
+    );
   };
 
   useCheckPluginsIsInstalled = (enable: boolean, plugins: string[]): SWRResponse => {

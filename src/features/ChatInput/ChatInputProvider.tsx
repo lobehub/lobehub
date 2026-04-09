@@ -25,6 +25,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     mentionItems,
     allowExpand = true,
     slashPlacement,
+    getMessages,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           agentId={agentId}
           allowExpand={allowExpand}
           chatInputEditorRef={chatInputEditorRef}
+          getMessages={getMessages}
           leftActions={leftActions}
           mentionItems={mentionItems}
           mobile={mobile}

@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "내 보상",
   "referral.table.columns.rewardedAt": "보상 시간",
   "referral.table.columns.status": "상태",
-  "referral.table.columns.suspectedReason": "이상 사유",
   "referral.table.status.pending_reward": "보상 대기 중",
   "referral.table.status.registered": "가입 완료",
   "referral.table.status.revoked": "취소됨",

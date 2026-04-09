@@ -1,6 +1,7 @@
 import type {
   TaskDetailActivity,
   TaskDetailData,
+  TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskTopicHandoff,
   WorkspaceData,
@@ -28,8 +29,8 @@ export class TaskService {
     const task = await this.taskModel.resolve(taskIdOrIdentifier);
     if (!task) return null;
 
-    const [subtasks, dependencies, topics, briefs, comments, workspace] = await Promise.all([
-      this.taskModel.findSubtasks(task.id),
+    const [allDescendants, dependencies, topics, briefs, comments, workspace] = await Promise.all([
+      this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
       this.taskTopicModel.findWithHandoff(task.id).catch(() => []),
       this.briefModel.findByTaskId(task.id).catch(() => []),
@@ -37,18 +38,42 @@ export class TaskService {
       this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
     ]);
 
-    // Build subtask dependency map
-    const subtaskIds = subtasks.map((s) => s.id);
-    const subtaskDeps =
-      subtaskIds.length > 0
-        ? await this.taskModel.getDependenciesByTaskIds(subtaskIds).catch(() => [])
+    // Build dependency map for all descendants
+    const allDescendantIds = allDescendants.map((s) => s.id);
+    const allDescendantDeps =
+      allDescendantIds.length > 0
+        ? await this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => [])
         : [];
-    const idToIdentifier = new Map(subtasks.map((s) => [s.id, s.identifier]));
+    const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
     const depMap = new Map<string, string>();
-    for (const dep of subtaskDeps) {
+    for (const dep of allDescendantDeps) {
       const depId = idToIdentifier.get(dep.dependsOnId);
       if (depId) depMap.set(dep.taskId, depId);
     }
+
+    // Build nested subtask tree
+    const childrenMap = new Map<string, typeof allDescendants>();
+    for (const t of allDescendants) {
+      const parentId = t.parentTaskId!;
+      if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+      childrenMap.get(parentId)!.push(t);
+    }
+
+    const buildSubtaskTree = (parentId: string): TaskDetailSubtask[] | undefined => {
+      const children = childrenMap.get(parentId);
+      if (!children || children.length === 0) return undefined;
+      return children.map((s) => ({
+        blockedBy: depMap.get(s.id),
+        children: buildSubtaskTree(s.id),
+        identifier: s.identifier,
+        name: s.name,
+        priority: s.priority,
+        status: s.status,
+      }));
+    };
+
+    // Root level: always return array (empty [] when no subtasks) for consistent API shape
+    const subtasks = buildSubtaskTree(task.id) ?? [];
 
     // Resolve dependency task identifiers
     const depTaskIds = [...new Set(dependencies.map((d) => d.dependsOnId))];
@@ -125,6 +150,7 @@ export class TaskService {
     return {
       agentId: task.assigneeAgentId,
       checkpoint: this.taskModel.getCheckpointConfig(task),
+      config: task.config ? (task.config as Record<string, unknown>) : undefined,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
       dependencies: dependencies.map((d) => {
         const info = depIdToInfo.get(d.dependsOnId);
@@ -152,13 +178,7 @@ export class TaskService {
       review: this.taskModel.getReviewConfig(task),
       status: task.status,
       userId: task.assigneeUserId,
-      subtasks: subtasks.map((s) => ({
-        blockedBy: depMap.get(s.id),
-        identifier: s.identifier,
-        name: s.name,
-        priority: s.priority,
-        status: s.status,
-      })),
+      subtasks,
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,

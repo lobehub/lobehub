@@ -13,10 +13,11 @@ import { useTranslation } from 'react-i18next';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
 
-type UpdateChannelValue = 'canary' | 'nightly' | 'stable';
+type UpdateChannelValue = 'canary' | 'stable';
 
 const styles = createStaticStyles(({ css }) => ({
   labItem: css`
@@ -34,11 +35,16 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [isPreferenceInit, enableInputMarkdown, updateLab] = useUserStore((s) => [
-    preferenceSelectors.isPreferenceInit(s),
-    labPreferSelectors.enableInputMarkdown(s),
-    s.updateLab,
-  ]);
+  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, updateLab] = useUserStore(
+    (s) => [
+      preferenceSelectors.isPreferenceInit(s),
+      labPreferSelectors.enableInputMarkdown(s),
+      labPreferSelectors.enableGatewayMode(s),
+      s.updateLab,
+    ],
+  );
+
+  const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -74,7 +80,6 @@ const Page = memo(() => {
 
   const channelOptions = [
     { label: t('tab.advanced.updateChannel.stable'), value: 'stable' as const },
-    { label: t('tab.advanced.updateChannel.nightly'), value: 'nightly' as const },
     { label: t('tab.advanced.updateChannel.canary'), value: 'canary' as const },
   ];
 
@@ -113,6 +118,23 @@ const Page = memo(() => {
         label: tLabs('features.inputMarkdown.title'),
         minWidth: undefined,
       },
+      ...(hasGatewayUrl
+        ? [
+            {
+              children: (
+                <Switch
+                  checked={enableGatewayMode}
+                  loading={!isPreferenceInit}
+                  onChange={(checked: boolean) => updateLab({ enableGatewayMode: checked })}
+                />
+              ),
+              className: styles.labItem,
+              desc: tLabs('features.gatewayMode.desc'),
+              label: tLabs('features.gatewayMode.title'),
+              minWidth: undefined,
+            },
+          ]
+        : []),
     ],
     title: tLabs('title'),
   };

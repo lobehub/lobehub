@@ -129,8 +129,7 @@ const createTaskRuntime = ({
       changes.push(`priority → ${priorityLabel(args.priority)}`);
     }
     if (args.review) {
-      const currentConfig = (task.config as Record<string, any>) || {};
-      updateData.config = { ...currentConfig, review: { enabled: true, ...args.review } };
+      await taskModel.updateTaskConfig(task.id, { review: { enabled: true, ...args.review } });
       changes.push('review config updated');
     }
 

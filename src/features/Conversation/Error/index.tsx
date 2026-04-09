@@ -1,9 +1,8 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { type ChatMessageError, type ErrorType } from '@lobechat/types';
+import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { type IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { type AlertProps } from '@lobehub/ui';
 import { Block, Highlighter, Skeleton } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
@@ -52,7 +51,7 @@ const OllamaSetupGuide = dynamic(() => import('./OllamaSetupGuide'), {
 
 // Config for the errorMessage display
 const getErrorAlertConfig = (
-  errorType?: IPluginErrorType | ILobeAgentRuntimeErrorType | ErrorType,
+  errorType?: IToolErrorType | ILobeAgentRuntimeErrorType | ErrorType,
 ): AlertProps | undefined => {
   // OpenAIBizError / ZhipuBizError / GoogleBizError / ...
   if (typeof errorType === 'string' && (errorType.includes('Biz') || errorType.includes('Invalid')))
@@ -121,6 +120,7 @@ interface ErrorExtraProps {
 const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) => {
   const error = data.error;
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
+
   if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
     return businessChatErrorMessageExtra;
 
@@ -138,10 +138,6 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
     case AgentRuntimeErrorType.ExceededContextWindow: {
       return <ExceededContextWindowError id={data.id} />;
     }
-
-    /* ↓ cloud slot ↓ */
-
-    /* ↑ cloud slot ↑ */
 
     case AgentRuntimeErrorType.NoOpenAIAPIKey: {
       {

@@ -5,6 +5,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import type { FilesStoreState } from './initialState';
 import { initialState } from './initialState';
 import type { FileAction } from './slices/chat';
@@ -33,6 +34,7 @@ export interface FileStore
     FileChunkAction,
     FileUploadAction,
     ResourceAction,
+    ResetableStore,
     FilesStoreState {}
 
 type FileStoreAction = FileAction &
@@ -41,7 +43,12 @@ type FileStoreAction = FileAction &
   FileManageAction &
   FileChunkAction &
   FileUploadAction &
-  ResourceAction;
+  ResourceAction &
+  ResetableStore;
+
+class FileStoreResetAction extends ResetableStoreAction<FileStore> {
+  protected readonly resetActionName = 'resetFileStore';
+}
 
 const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (
   ...params: Parameters<StateCreator<FileStore, [['zustand/devtools', never]]>>
@@ -55,6 +62,7 @@ const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (
     createFileChunkSlice(...params),
     createFileUploadSlice(...params),
     new ResourceActionImpl(...params),
+    new FileStoreResetAction(...params),
   ]),
 });
 

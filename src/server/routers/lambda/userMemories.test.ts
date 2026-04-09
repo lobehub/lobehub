@@ -37,7 +37,7 @@ vi.mock('@/database/models/userMemory', async (importOriginal) => {
 });
 
 const embeddingsMock = vi.fn();
-const mockCtx = { authorizationHeader: 'Bearer mock-token', userId: 'test-user' };
+const mockCtx = { userId: 'test-user' };
 const makeServerDBMock = (query: Record<string, any> = {}) => ({
   query: {
     userSettings: {

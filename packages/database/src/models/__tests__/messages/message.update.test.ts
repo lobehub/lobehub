@@ -990,7 +990,6 @@ describe('MessageModel Update Tests', () => {
         role: 'tool',
         content: 'search result',
         parentId: 'assistant-msg-1',
-        tool_call_id: 'tool-call-1',
       });
 
       // Create plugin record
@@ -1058,7 +1057,6 @@ describe('MessageModel Update Tests', () => {
           role: 'tool',
           content: 'search result',
           parentId: 'assistant-msg-2',
-          tool_call_id: 'tool-call-search',
         },
         {
           id: 'tool-msg-calc',
@@ -1066,7 +1064,6 @@ describe('MessageModel Update Tests', () => {
           role: 'tool',
           content: 'calc result',
           parentId: 'assistant-msg-2',
-          tool_call_id: 'tool-call-calc',
         },
       ]);
 
@@ -1175,7 +1172,6 @@ describe('MessageModel Update Tests', () => {
         role: 'tool' as const,
         content: '',
         parentId: `perf-assistant-${i}`,
-        tool_call_id: `perf-tool-call-${i}`,
       }));
 
       await serverDB.insert(messages).values(toolMessagesData);
@@ -1382,7 +1378,6 @@ describe('MessageModel Update Tests', () => {
         role: 'tool',
         content: 'tool result',
         parentId: 'assistant-no-tools',
-        tool_call_id: 'orphan-tool-call',
       });
 
       // Create plugin record

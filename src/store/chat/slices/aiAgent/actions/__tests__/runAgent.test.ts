@@ -62,7 +62,6 @@ describe('runAgent actions', () => {
     act(() => {
       useChatStore.setState({
         internal_dispatchMessage: vi.fn(),
-        internal_toggleMessageLoading: vi.fn(),
         optimisticUpdateMessageContent: vi.fn(),
         refreshMessages: vi.fn(),
         updateOperationMetadata: vi.fn(),

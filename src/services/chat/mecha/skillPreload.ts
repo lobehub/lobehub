@@ -1,4 +1,3 @@
-import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   CredsIdentifier,
   type CredSummary,
@@ -6,8 +5,7 @@ import {
   type UserCredsContext,
 } from '@lobechat/builtin-tool-creds';
 import { resourcesTreePrompt } from '@lobechat/prompts';
-import type { RuntimeSelectedSkill, SendPreloadMessage, UserCredSummary } from '@lobechat/types';
-import { nanoid } from '@lobechat/utils';
+import type { RuntimeSelectedSkill, UserCredSummary } from '@lobechat/types';
 
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
@@ -27,41 +25,37 @@ interface PrepareSelectedSkillPreloadParams {
   userCreds?: UserCredSummary[];
 }
 
-const ACTION_TAG_REGEX = /<action\b([^>]*)\/>/g;
+// Match <skill name="..." label="..." /> and legacy <action type="..." category="skill" ... />
+const SKILL_TAG_REGEX = /<skill\b([^>]*)\/>/g;
+const LEGACY_ACTION_TAG_REGEX = /<action\b([^>]*)\/>/g;
 
-const getActionAttr = (attrs: string, name: string): string | undefined => {
+const getAttr = (attrs: string, name: string): string | undefined => {
   const match = new RegExp(`${name}="([^"]*)"`, 'i').exec(attrs);
   return match?.[1];
 };
 
-const cleanupWhitespace = (text: string) =>
-  text
-    .replaceAll(/[ \t]{2,}/g, ' ')
-    .replaceAll(/\n{3,}/g, '\n\n')
-    .trim();
-
 const extractSelectedSkillsFromText = (text: string): RuntimeSelectedSkill[] => {
   const parsedSkills: RuntimeSelectedSkill[] = [];
 
-  for (const match of text.matchAll(ACTION_TAG_REGEX)) {
+  // New format: <skill name="..." label="..." />
+  for (const match of text.matchAll(SKILL_TAG_REGEX)) {
     const attrs = match[1] || '';
-    if (getActionAttr(attrs, 'category') !== 'skill') continue;
-
-    const identifier = getActionAttr(attrs, 'type');
-
+    const identifier = getAttr(attrs, 'name');
     if (!identifier) continue;
+    parsedSkills.push({ identifier, name: getAttr(attrs, 'label') || identifier });
+  }
 
-    parsedSkills.push({
-      identifier,
-      name: getActionAttr(attrs, 'label') || identifier,
-    });
+  // Legacy format: <action type="..." category="skill" label="..." />
+  for (const match of text.matchAll(LEGACY_ACTION_TAG_REGEX)) {
+    const attrs = match[1] || '';
+    if (getAttr(attrs, 'category') !== 'skill') continue;
+    const identifier = getAttr(attrs, 'type');
+    if (!identifier) continue;
+    parsedSkills.push({ identifier, name: getAttr(attrs, 'label') || identifier });
   }
 
   return parsedSkills;
 };
-
-export const stripActionTagsFromText = (text: string) =>
-  cleanupWhitespace(text.replaceAll(ACTION_TAG_REGEX, ''));
 
 const resolveSelectedSkills = (
   message: string,
@@ -146,55 +140,27 @@ const loadSkillContent = async (
   };
 };
 
-const buildPersistedPreloadMessages = (skills: PreloadedSkill[]): SendPreloadMessage[] =>
-  skills.flatMap((skill, index) => {
-    const toolCallId = `selected_skill_${index}_${nanoid()}`;
-    const args = JSON.stringify({ name: skill.name });
-
-    return [
-      {
-        content: '',
-        role: 'assistant',
-        tools: [
-          {
-            apiName: ActivatorApiName.activateSkill,
-            arguments: args,
-            id: toolCallId,
-            identifier: LobeActivatorIdentifier,
-            type: 'builtin',
-          },
-        ],
-      },
-      {
-        content: skill.content,
-        plugin: {
-          apiName: ActivatorApiName.activateSkill,
-          arguments: args,
-          identifier: LobeActivatorIdentifier,
-          type: 'builtin',
-        },
-        role: 'tool',
-        tool_call_id: toolCallId,
-      },
-    ];
-  });
-
-export const prepareSelectedSkillPreload = async ({
+/**
+ * Enrich selected skills with preloaded content from skill store.
+ * Skills with available content get it attached directly, enabling
+ * SelectedSkillInjector to inline the content into the user message
+ * instead of constructing fake activateSkill tool-call preload messages.
+ */
+export const resolveSelectedSkillsWithContent = async ({
   message,
   selectedSkills,
   userCreds,
-}: PrepareSelectedSkillPreloadParams): Promise<SendPreloadMessage[]> => {
-  const resolvedSelectedSkills = resolveSelectedSkills(message, selectedSkills);
+}: PrepareSelectedSkillPreloadParams): Promise<RuntimeSelectedSkill[]> => {
+  const resolved = resolveSelectedSkills(message, selectedSkills);
 
-  if (resolvedSelectedSkills.length === 0) {
-    return [];
-  }
+  if (resolved.length === 0) return [];
 
-  const resolvedSkills = (
-    await Promise.all(
-      resolvedSelectedSkills.map((selectedSkill) => loadSkillContent(selectedSkill, userCreds)),
-    )
-  ).filter((skill): skill is PreloadedSkill => !!skill);
+  const enriched = await Promise.all(
+    resolved.map(async (skill) => {
+      const loaded = await loadSkillContent(skill, userCreds);
+      return loaded ? { ...skill, content: loaded.content } : skill;
+    }),
+  );
 
-  return buildPersistedPreloadMessages(resolvedSkills);
+  return enriched;
 };

@@ -63,6 +63,7 @@ import SiliconCloudProvider from './siliconcloud';
 import SparkProvider from './spark';
 import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
+import StreamLakeProvider from './streamlake';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
@@ -216,6 +217,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   StraicoProvider,
   XiaomiMiMoProvider,
   LongCatProvider,
+  StreamLakeProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -290,6 +292,7 @@ export { default as SiliconCloudProviderCard } from './siliconcloud';
 export { default as SparkProviderCard } from './spark';
 export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
+export { default as StreamLakeProviderCard } from './streamlake';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';

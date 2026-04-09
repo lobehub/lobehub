@@ -39,6 +39,10 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * enable server-side agent execution via Gateway WebSocket
+   */
+  enableGatewayMode: z.boolean().optional(),
+  /**
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),

@@ -5,6 +5,7 @@ import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { BriefService } from '@/server/services/brief';
 
 const briefProcedure = authedProcedure.use(serverDatabase);
 
@@ -107,8 +108,9 @@ export const briefRouter = router({
 
   list: briefProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
-      const model = new BriefModel(ctx.serverDB, ctx.userId);
-      const result = await model.list(input);
+      const service = new BriefService(ctx.serverDB, ctx.userId);
+      const result = await service.list(input);
+
       return { data: result.briefs, success: true, total: result.total };
     } catch (error) {
       console.error('[brief:list]', error);
@@ -122,9 +124,10 @@ export const briefRouter = router({
 
   listUnresolved: briefProcedure.query(async ({ ctx }) => {
     try {
-      const model = new BriefModel(ctx.serverDB, ctx.userId);
-      const items = await model.listUnresolved();
-      return { data: items, success: true };
+      const service = new BriefService(ctx.serverDB, ctx.userId);
+      const data = await service.listUnresolved();
+
+      return { data, success: true };
     } catch (error) {
       console.error('[brief:listUnresolved]', error);
       throw new TRPCError({

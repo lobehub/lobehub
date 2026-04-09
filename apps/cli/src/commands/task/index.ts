@@ -2,10 +2,12 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
+import type { KanbanColumn } from '../../utils/format';
 import {
   confirm,
   displayWidth,
   outputJson,
+  printKanban,
   printTable,
   timeAgo,
   truncate,
@@ -37,10 +39,12 @@ export function registerTaskCommand(program: Command) {
     .option('-L, --limit <n>', 'Page size', '50')
     .option('--offset <n>', 'Offset', '0')
     .option('--tree', 'Display as tree structure')
+    .option('--board', 'Display as kanban board grouped by status')
     .option('--json [fields]', 'Output JSON')
     .action(
       async (options: {
         agent?: string;
+        board?: boolean;
         json?: string | boolean;
         limit?: string;
         offset?: string;
@@ -59,8 +63,8 @@ export function registerTaskCommand(program: Command) {
         if (options.limit) input.limit = Number.parseInt(options.limit, 10);
         if (options.offset) input.offset = Number.parseInt(options.offset, 10);
 
-        // For tree mode, fetch all tasks (no pagination limit)
-        if (options.tree) {
+        // For tree/board mode, fetch all tasks (no pagination limit)
+        if (options.tree || options.board) {
           input.limit = 100;
           delete input.offset;
         }
@@ -74,6 +78,58 @@ export function registerTaskCommand(program: Command) {
 
         if (!result.data || result.data.length === 0) {
           log.info('No tasks found.');
+          return;
+        }
+
+        if (options.board) {
+          // Kanban board grouped by status
+          const statusOrder = [
+            'backlog',
+            'blocked',
+            'running',
+            'paused',
+            'completed',
+            'failed',
+            'timeout',
+            'canceled',
+          ];
+
+          const statusColors: Record<string, (s: string) => string> = {
+            backlog: pc.dim,
+            blocked: pc.red,
+            canceled: pc.dim,
+            completed: pc.green,
+            failed: pc.red,
+            paused: pc.yellow,
+            running: pc.blue,
+            timeout: pc.red,
+          };
+
+          // Group tasks by status
+          const grouped = new Map<string, any[]>();
+          for (const t of result.data) {
+            const status = t.status || 'backlog';
+            const list = grouped.get(status) || [];
+            list.push(t);
+            grouped.set(status, list);
+          }
+
+          const kanbanColumns: KanbanColumn[] = statusOrder
+            .filter((s) => grouped.has(s))
+            .map((status) => ({
+              color: statusColors[status],
+              items: grouped.get(status)!.map((t: any) => ({
+                badge: pc.dim(t.identifier),
+                meta: t.assigneeAgentId ? `agent: ${t.assigneeAgentId}` : undefined,
+                title: t.name || t.instruction,
+              })),
+              title: status.toUpperCase(),
+            }));
+
+          console.log();
+          printKanban(kanbanColumns);
+          console.log();
+          log.info(`Total: ${result.total}`);
           return;
         }
 
@@ -240,23 +296,34 @@ export function registerTaskCommand(program: Command) {
       }
       if (t.error) console.log(`${pc.red('Error:')} ${t.error}`);
 
-      // ── Subtasks ──
+      // ── Subtasks (nested tree) ──
       if (t.subtasks && t.subtasks.length > 0) {
-        // Build lookup: which subtasks are completed
-        const completedIdentifiers = new Set(
-          t.subtasks.filter((s) => s.status === 'completed').map((s) => s.identifier),
-        );
+        // Build lookup: which subtasks are completed (flatten tree)
+        const collectCompleted = (nodes: typeof t.subtasks, set: Set<string>): Set<string> => {
+          for (const s of nodes!) {
+            if (s.status === 'completed') set.add(s.identifier);
+            if (s.children) collectCompleted(s.children, set);
+          }
+          return set;
+        };
+        const completedIdentifiers = collectCompleted(t.subtasks, new Set());
+
+        const renderSubtasks = (nodes: typeof t.subtasks, indent: string) => {
+          for (const s of nodes!) {
+            const depInfo = s.blockedBy ? pc.dim(` ← blocks: ${s.blockedBy}`) : '';
+            const isBlocked = s.blockedBy && !completedIdentifiers.has(s.blockedBy);
+            const displayStatus = s.status === 'backlog' && isBlocked ? 'blocked' : s.status;
+            console.log(
+              `${indent}${pc.dim(s.identifier)} ${statusBadge(displayStatus)} ${s.name || '(unnamed)'}${depInfo}`,
+            );
+            if (s.children && s.children.length > 0) {
+              renderSubtasks(s.children, indent + '  ');
+            }
+          }
+        };
 
         console.log(`\n${pc.bold('Subtasks:')}`);
-        for (const s of t.subtasks) {
-          const depInfo = s.blockedBy ? pc.dim(` ← blocks: ${s.blockedBy}`) : '';
-          // Show 'blocked' instead of 'backlog' if task has unresolved dependencies
-          const isBlocked = s.blockedBy && !completedIdentifiers.has(s.blockedBy);
-          const displayStatus = s.status === 'backlog' && isBlocked ? 'blocked' : s.status;
-          console.log(
-            `  ${pc.dim(s.identifier)} ${statusBadge(displayStatus)} ${s.name || '(unnamed)'}${depInfo}`,
-          );
-        }
+        renderSubtasks(t.subtasks, '  ');
       }
 
       // ── Dependencies ──

@@ -151,7 +151,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsAgent('Test prompt');
+        await result.current.sendAsAgent({ message: 'Test prompt' });
       });
 
       // createSession is called internally via the store action
@@ -164,7 +164,7 @@ describe('HomeInputAction', () => {
       const longMessage = 'A'.repeat(100);
 
       await act(async () => {
-        await result.current.sendAsAgent(longMessage);
+        await result.current.sendAsAgent({ message: longMessage });
       });
 
       expect(sessionService.createSession).toHaveBeenCalled();
@@ -174,7 +174,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsAgent('Test');
+        await result.current.sendAsAgent({ message: 'Test' });
       });
 
       expect(mockNavigate).toHaveBeenCalledWith('/agent/new-agent-id/profile');
@@ -184,7 +184,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsAgent('Test message');
+        await result.current.sendAsAgent({ message: 'Test message' });
       });
 
       expect(mockSendMessage).toHaveBeenCalledWith({
@@ -201,7 +201,7 @@ describe('HomeInputAction', () => {
       });
 
       await act(async () => {
-        await result.current.sendAsAgent('Test');
+        await result.current.sendAsAgent({ message: 'Test' });
       });
 
       expect(result.current.inputActiveMode).toBeNull();
@@ -212,7 +212,7 @@ describe('HomeInputAction', () => {
 
       let agentId: string | undefined;
       await act(async () => {
-        agentId = await result.current.sendAsAgent('Test');
+        agentId = await result.current.sendAsAgent({ message: 'Test' });
       });
 
       expect(agentId).toBe('new-agent-id');
@@ -222,7 +222,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsAgent('Test');
+        await result.current.sendAsAgent({ message: 'Test' });
       });
 
       expect(result.current.homeInputLoading).toBe(false);
@@ -234,7 +234,7 @@ describe('HomeInputAction', () => {
 
       await act(async () => {
         try {
-          await result.current.sendAsAgent('Test');
+          await result.current.sendAsAgent({ message: 'Test' });
         } catch {
           // Expected error
         }
@@ -252,7 +252,7 @@ describe('HomeInputAction', () => {
 
       await expect(
         act(async () => {
-          await result.current.sendAsAgent('Test');
+          await result.current.sendAsAgent({ message: 'Test' });
         }),
       ).resolves.not.toThrow();
     });
@@ -269,7 +269,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsWrite('Document content');
+        await result.current.sendAsWrite({ message: 'Document content' });
       });
 
       expect(documentService.createDocument).toHaveBeenCalledWith({
@@ -283,7 +283,7 @@ describe('HomeInputAction', () => {
       const longMessage = 'B'.repeat(100);
 
       await act(async () => {
-        await result.current.sendAsWrite(longMessage);
+        await result.current.sendAsWrite({ message: longMessage });
       });
 
       expect(documentService.createDocument).toHaveBeenCalledWith({
@@ -296,7 +296,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsWrite('Content');
+        await result.current.sendAsWrite({ message: 'Content' });
       });
 
       expect(mockNavigate).toHaveBeenCalledWith('/page/new-doc-id');
@@ -306,7 +306,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsWrite('Content');
+        await result.current.sendAsWrite({ message: 'Content' });
       });
 
       expect(mockSendMessage).toHaveBeenCalledWith({
@@ -326,7 +326,7 @@ describe('HomeInputAction', () => {
       });
 
       await act(async () => {
-        await result.current.sendAsWrite('Content');
+        await result.current.sendAsWrite({ message: 'Content' });
       });
 
       expect(result.current.inputActiveMode).toBeNull();
@@ -337,7 +337,7 @@ describe('HomeInputAction', () => {
 
       let docId: string | undefined;
       await act(async () => {
-        docId = await result.current.sendAsWrite('Content');
+        docId = await result.current.sendAsWrite({ message: 'Content' });
       });
 
       expect(docId).toBe('new-doc-id');
@@ -347,7 +347,7 @@ describe('HomeInputAction', () => {
       const { result } = renderHook(() => useSessionStore());
 
       await act(async () => {
-        await result.current.sendAsWrite('Content');
+        await result.current.sendAsWrite({ message: 'Content' });
       });
 
       expect(result.current.homeInputLoading).toBe(false);
@@ -359,7 +359,7 @@ describe('HomeInputAction', () => {
 
       await act(async () => {
         try {
-          await result.current.sendAsWrite('Content');
+          await result.current.sendAsWrite({ message: 'Content' });
         } catch {
           // Expected error
         }

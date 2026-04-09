@@ -2,7 +2,8 @@
  * Lobe Tools Executor
  *
  * Creates and exports the ActivatorExecutor instance for registration.
- * Resolves tool manifests from the tool store (installedPlugins + builtinTools).
+ * Resolves tool manifests from the tool store (installedPlugins + builtinTools +
+ * lobehubSkillServers + klavis servers).
  *
  * State tracking (getActivatedToolIds / markActivated) is intentionally a no-op
  * because the activated state is persisted in message pluginState and accumulated
@@ -21,6 +22,7 @@ import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors/tool';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore';
 
 const skillsRuntime = new SkillsExecutionRuntime({
   builtinSkills: filterBuiltinSkills(builtinSkills),
@@ -77,6 +79,24 @@ const service: ActivatorRuntimeService = {
           name: plugin.manifest.meta?.title ?? plugin.identifier,
           systemRole: plugin.manifest.systemRole,
         });
+        continue;
+      }
+
+      // Search LobeHub Skill servers
+      const lobehubSkillServer = s.lobehubSkillServers?.find(
+        (server) => server.identifier === id && server.status === LobehubSkillStatus.CONNECTED,
+      );
+      if (lobehubSkillServer?.tools) {
+        results.push({
+          apiDescriptions: lobehubSkillServer.tools.map((t) => ({
+            description: t.description || '',
+            name: t.name,
+          })),
+          avatar: lobehubSkillServer.icon,
+          identifier: lobehubSkillServer.identifier,
+          name: lobehubSkillServer.name,
+        });
+        continue;
       }
     }
 

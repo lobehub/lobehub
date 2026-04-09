@@ -12,6 +12,6 @@ export default {
   'starter.developing': 'Coming soon',
   'starter.image': 'Image',
   'starter.imageGeneration': 'Image Generation',
-  'starter.videoGeneration': 'Video Generation',
+  'starter.videoGeneration': 'Seedance 2.0',
   'starter.write': 'Write',
 };

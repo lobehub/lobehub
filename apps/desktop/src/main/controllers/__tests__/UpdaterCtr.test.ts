@@ -8,7 +8,12 @@ import UpdaterCtr from '../UpdaterCtr';
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
+    warn: vi.fn(),
   }),
+}));
+
+vi.mock('@/modules/updater/configs', () => ({
+  UPDATE_CHANNEL: 'stable',
 }));
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
@@ -26,13 +31,23 @@ const mockCheckForUpdates = vi.fn();
 const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
 const mockInstallLater = vi.fn();
+const mockGetUpdaterState = vi.fn();
+const mockSwitchChannel = vi.fn();
+const mockStoreGet = vi.fn();
+const mockStoreSet = vi.fn();
 
 const mockApp = {
+  storeManager: {
+    get: mockStoreGet,
+    set: mockStoreSet,
+  },
   updaterManager: {
     checkForUpdates: mockCheckForUpdates,
     downloadUpdate: mockDownloadUpdate,
+    getUpdaterState: mockGetUpdaterState,
     installNow: mockInstallNow,
     installLater: mockInstallLater,
+    switchChannel: mockSwitchChannel,
   },
 } as unknown as App;
 
@@ -42,6 +57,8 @@ describe('UpdaterCtr', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ipcMainHandleMock.mockClear();
+    mockStoreGet.mockReset();
+    mockStoreSet.mockReset();
     updaterCtr = new UpdaterCtr(mockApp);
   });
 
@@ -70,6 +87,36 @@ describe('UpdaterCtr', () => {
     it('should call updaterManager.installLater', () => {
       updaterCtr.installLater();
       expect(mockInstallLater).toHaveBeenCalled();
+    });
+  });
+
+  describe('update channel', () => {
+    it('should return stored update channel', async () => {
+      mockStoreGet.mockReturnValueOnce('canary');
+
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('canary');
+    });
+
+    it('should return default update channel when store is empty', async () => {
+      mockStoreGet.mockReturnValueOnce(undefined);
+
+      await expect(updaterCtr.getUpdateChannel()).resolves.toBe('stable');
+    });
+
+    it('should keep canary input unchanged', async () => {
+      await updaterCtr.setUpdateChannel('canary');
+
+      expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'canary');
+      expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
+    });
+
+    it('should ignore invalid legacy input', async () => {
+      await updaterCtr.setUpdateChannel(
+        'nightly' as unknown as Parameters<UpdaterCtr['setUpdateChannel']>[0],
+      );
+
+      expect(mockStoreSet).not.toHaveBeenCalled();
+      expect(mockSwitchChannel).not.toHaveBeenCalled();
     });
   });
 

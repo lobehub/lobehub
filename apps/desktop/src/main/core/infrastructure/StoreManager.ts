@@ -6,6 +6,7 @@ import { makeSureDirExist } from '@/utils/file-system';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
+import { runStoreMigrations } from './migration';
 
 // Create logger
 const logger = createLogger('core:StoreManager');
@@ -27,6 +28,7 @@ export class StoreManager {
       defaults: STORE_DEFAULTS,
       name: STORE_NAME,
     });
+    runStoreMigrations(this.store);
     logger.info('StoreManager initialized with store name:', STORE_NAME);
 
     const storagePath = this.store.get('storagePath');

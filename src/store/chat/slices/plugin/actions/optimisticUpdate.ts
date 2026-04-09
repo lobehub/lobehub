@@ -210,14 +210,11 @@ export class PluginOptimisticUpdateActionImpl {
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message || !message.tools) return;
 
-    const { internal_toggleMessageLoading, replaceMessages, internal_getConversationContext } =
-      this.#get();
+    const { replaceMessages, internal_getConversationContext } = this.#get();
 
     const ctx = internal_getConversationContext(context);
 
-    internal_toggleMessageLoading(true, id);
     const result = await messageService.updateMessage(id, { tools: message.tools }, ctx);
-    internal_toggleMessageLoading(false, id);
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });

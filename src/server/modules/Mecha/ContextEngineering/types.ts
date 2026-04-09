@@ -9,7 +9,9 @@ import type {
   FileContent,
   KnowledgeBaseInfo,
   LobeToolManifest,
+  OnboardingContext,
   SkillMeta,
+  ToolDiscoveryConfig,
   TopicReferenceItem,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -86,6 +88,9 @@ export interface ServerMessagesEngineParams {
   // ========== Eval context ==========
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  // ========== Onboarding context ==========
+  /** Onboarding context for injecting phase guidance and documents */
+  onboardingContext?: OnboardingContext;
 
   // ========== Agent configuration ==========
   /** Whether to enable history message count limit */
@@ -124,6 +129,8 @@ export interface ServerMessagesEngineParams {
   // ========== Skills ==========
   /** Skills configuration for <available_skills> injection */
   skillsConfig?: { enabledSkills?: SkillMeta[] };
+  /** Tool discovery configuration for <available_tools> injection */
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
   // ========== Tools ==========
   /** Tools configuration */
   toolsConfig?: ServerToolsConfig;

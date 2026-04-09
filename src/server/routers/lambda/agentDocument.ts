@@ -85,16 +85,20 @@ export const agentDocumentRouter = router({
       z.object({
         agentId: z.string(),
         content: z.string(),
+        createdAt: z.date().optional(),
         filename: z.string(),
         metadata: metadataSchema.optional(),
+        updatedAt: z.date().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.agentDocumentService.upsertDocument({
         agentId: input.agentId,
         content: input.content,
+        createdAt: input.createdAt,
         filename: input.filename,
         metadata: input.metadata,
+        updatedAt: input.updatedAt,
       });
     }),
 

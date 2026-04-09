@@ -69,6 +69,7 @@ describe('DocumentTemplateManager', () => {
         loadPosition: undefined,
         loadRules: undefined,
         metadata: undefined,
+        policyLoad: undefined,
         policyLoadFormat: undefined,
         title: 'Agent Notes',
       });
@@ -99,6 +100,7 @@ describe('DocumentTemplateManager', () => {
         loadPosition: DocumentLoadPosition.BEFORE_SYSTEM,
         loadRules,
         metadata: { scope: 'team' },
+        policyLoad: undefined,
         policyLoadFormat: DocumentLoadFormat.FILE,
         title: 'Profile',
       });
@@ -153,6 +155,7 @@ describe('DocumentTemplateManager', () => {
           scope: 'private',
           variables: ['name'],
         },
+        policyLoad: undefined,
         policyLoadFormat: undefined,
         title: 'Prompt',
       });
@@ -182,6 +185,7 @@ describe('DocumentTemplateManager', () => {
           scope: 'team',
           variables: ['name', 'team'],
         },
+        policyLoad: undefined,
         policyLoadFormat: undefined,
         title: 'Cloned',
       });

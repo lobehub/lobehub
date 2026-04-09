@@ -1,6 +1,6 @@
 import { DEFAULT_BOT_DEBOUNCE_MS, MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
-import { userIdField } from '../const';
+import { displayToolCallsField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -48,7 +48,7 @@ export const schema: FieldSchema[] = [
       },
       {
         key: 'concurrency',
-        default: 'debounce',
+        default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
@@ -72,6 +72,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      displayToolCallsField,
       userIdField,
       // TODO: DM schema - not implemented yet
       // {

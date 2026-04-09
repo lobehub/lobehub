@@ -39,6 +39,7 @@ describe('AgentRuntimeClient', () => {
       const operationId = 'agent_1758302563222_abc';
       const events: any[] = [];
       let connectCalled = false;
+      // eslint-disable-next-line unused-imports/no-unused-vars
       let disconnectCalled = false;
 
       // Capture the callbacks passed to fetchEventSource
@@ -159,7 +160,7 @@ describe('AgentRuntimeClient', () => {
         onEvent: (event) => {
           events.push(event);
         },
-        onError: (error) => {
+        onError: () => {
           errorOccurred = true;
         },
       });

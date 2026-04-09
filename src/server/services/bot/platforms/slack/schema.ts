@@ -5,9 +5,9 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
-import { serverIdField, userIdField } from '../const';
+import { displayToolCallsField, serverIdField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
-import { MAX_SLACK_HISTORY_LIMIT } from './const';
+import { DEFAULT_SLACK_CONNECTION_MODE, MAX_SLACK_HISTORY_LIMIT } from './const';
 
 export const schema: FieldSchema[] = [
   {
@@ -35,6 +35,13 @@ export const schema: FieldSchema[] = [
         required: true,
         type: 'password',
       },
+      {
+        key: 'appToken',
+        description: 'channel.slack.appTokenHint',
+        label: 'channel.slack.appToken',
+        placeholder: 'xapp-...',
+        type: 'password',
+      },
     ],
     type: 'object',
   },
@@ -42,6 +49,15 @@ export const schema: FieldSchema[] = [
     key: 'settings',
     label: 'channel.settings',
     properties: [
+      {
+        key: 'connectionMode',
+        default: DEFAULT_SLACK_CONNECTION_MODE,
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
       {
         key: 'charLimit',
         default: 4000,
@@ -77,6 +93,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      displayToolCallsField,
       {
         key: 'historyLimit',
         default: DEFAULT_BOT_HISTORY_LIMIT,

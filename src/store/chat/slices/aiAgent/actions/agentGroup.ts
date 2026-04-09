@@ -89,10 +89,6 @@ export class ChatGroupChatActionImpl {
       { operationId: execOperationId, tempMessageId: tempAssistantId },
     );
 
-    // Start loading state for temp messages
-    this.#get().internal_toggleMessageLoading(true, tempUserId);
-    this.#get().internal_toggleMessageLoading(true, tempAssistantId);
-
     try {
       // 2. Call backend execGroupAgent - creates messages and triggers Agent
       // Pass AbortSignal to allow cancellation during the API call
@@ -153,8 +149,6 @@ export class ChatGroupChatActionImpl {
           message: result.error || 'Agent operation failed to start',
           type: 'AgentStartupError',
         });
-        // Stop loading state for assistant message
-        this.#get().internal_toggleMessageLoading(false, result.assistantMessageId);
         return;
       }
 
@@ -254,8 +248,6 @@ export class ChatGroupChatActionImpl {
         });
       }
     } finally {
-      this.#get().internal_toggleMessageLoading(false, tempUserId);
-      this.#get().internal_toggleMessageLoading(false, tempAssistantId);
       this.#set({ isCreatingMessage: false }, false, n('sendGroupMessage/end'));
     }
   };

@@ -12,6 +12,7 @@
   "config.resolution.label": "Resolutie",
   "config.seed.label": "Zaadwaarde",
   "config.seed.random": "Willekeurig",
+  "config.size.label": "Grootte",
   "generation.actions.copyError": "Foutmelding Kopiëren",
   "generation.actions.errorCopied": "Foutmelding Gekopieerd naar Klembord",
   "generation.actions.errorCopyFailed": "Kopiëren van Foutmelding Mislukt",

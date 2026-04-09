@@ -387,6 +387,102 @@ export function printCalendarHeatmap(
   console.log();
 }
 
+// ── Kanban Board ─────────────────────────────────────
+
+export interface KanbanColumn {
+  color?: (s: string) => string;
+  items: KanbanCard[];
+  title: string;
+}
+
+export interface KanbanCard {
+  badge?: string;
+  meta?: string;
+  title: string;
+}
+
+/**
+ * Render a kanban board with side-by-side columns.
+ * Adapts column width to terminal width automatically.
+ */
+export function printKanban(columns: KanbanColumn[]) {
+  // Filter out empty columns
+  const cols = columns.filter((c) => c.items.length > 0);
+  if (cols.length === 0) return;
+
+  const termWidth = process.stdout.columns || 100;
+  // Each column gets equal width, with 1-char gap between
+  const colWidth = Math.max(20, Math.floor((termWidth - (cols.length - 1)) / cols.length));
+  const innerWidth = colWidth - 4; // 2 chars border + 2 padding
+
+  const maxRows = Math.max(...cols.map((c) => c.items.length));
+
+  // ── Header ──
+  const topBorder = cols
+    .map((c) => {
+      const titleStr = ` ${c.title} (${c.items.length}) `;
+      const color = c.color || pc.white;
+      const remaining = colWidth - 2 - displayWidth(titleStr);
+      const left = Math.floor(remaining / 2);
+      const right = remaining - left;
+      return color(
+        '┌' + '─'.repeat(Math.max(0, left)) + titleStr + '─'.repeat(Math.max(0, right)) + '┐',
+      );
+    })
+    .join(' ');
+  console.log(topBorder);
+
+  // ── Rows ──
+  for (let row = 0; row < maxRows; row++) {
+    const line = cols
+      .map((c) => {
+        const color = c.color || pc.white;
+        const item = c.items[row];
+        if (!item) {
+          return color('│') + ' '.repeat(colWidth - 2) + color('│');
+        }
+
+        const badge = item.badge ? item.badge + ' ' : '';
+        const badgeWidth = displayWidth(badge);
+        const titleMaxWidth = innerWidth - badgeWidth;
+        const title = truncate(item.title, titleMaxWidth);
+        const titleWidth = displayWidth(title);
+        const pad = ' '.repeat(Math.max(0, colWidth - 2 - badgeWidth - titleWidth - 2));
+        return color('│') + ' ' + badge + title + pad + ' ' + color('│');
+      })
+      .join(' ');
+    console.log(line);
+
+    // Print meta line if any card in this row has meta
+    const hasMeta = cols.some((c) => c.items[row]?.meta);
+    if (hasMeta) {
+      const metaLine = cols
+        .map((c) => {
+          const color = c.color || pc.white;
+          const item = c.items[row];
+          if (!item?.meta) {
+            return color('│') + ' '.repeat(colWidth - 2) + color('│');
+          }
+          const meta = truncate(item.meta, innerWidth);
+          const metaWidth = displayWidth(meta);
+          const pad = ' '.repeat(Math.max(0, colWidth - 2 - metaWidth - 2));
+          return color('│') + ' ' + pc.dim(meta) + pad + ' ' + color('│');
+        })
+        .join(' ');
+      console.log(metaLine);
+    }
+  }
+
+  // ── Bottom border ──
+  const bottomBorder = cols
+    .map((c) => {
+      const color = c.color || pc.white;
+      return color('└' + '─'.repeat(colWidth - 2) + '┘');
+    })
+    .join(' ');
+  console.log(bottomBorder);
+}
+
 export function confirm(message: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((resolve) => {

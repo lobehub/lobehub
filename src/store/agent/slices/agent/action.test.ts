@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { agentDocumentService } from '@/services/agentDocument';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -19,6 +20,26 @@ vi.mock('@/services/agent', () => ({
     updateAgentConfig: vi.fn(),
     updateAgentMeta: vi.fn(),
   },
+}));
+
+vi.mock('@/services/agentDocument', () => ({
+  agentDocumentSWRKeys: {
+    documents: (agentId: string) => ['agent-documents', agentId] as const,
+  },
+  agentDocumentService: {
+    getDocuments: vi.fn(),
+  },
+  mapAgentDocumentsToContext: (documents: any[]) =>
+    documents.map((doc) => ({
+      content: doc.content,
+      filename: doc.filename,
+      id: doc.id,
+      loadPosition: undefined,
+      loadRules: doc.loadRules,
+      policyId: doc.templateId,
+      policyLoadFormat: undefined,
+      title: doc.title,
+    })),
 }));
 
 // Mock sessionStore
@@ -46,6 +67,7 @@ beforeEach(() => {
     agentMap: {},
     builtinAgentIdMap: {},
     updateAgentConfigSignal: undefined,
+    agentDocumentsMap: {},
     updateAgentMetaSignal: undefined,
   });
 });
@@ -55,6 +77,43 @@ afterEach(() => {
 });
 
 describe('AgentSlice Actions', () => {
+  describe('useFetchAgentDocuments', () => {
+    it('should sync fetched agent documents into store cache', async () => {
+      vi.mocked(agentDocumentService.getDocuments).mockResolvedValue([
+        {
+          content: 'setup steps',
+          filename: 'setup.md',
+          id: 'doc-1',
+          loadRules: [],
+          policy: null,
+          policyLoadFormat: null,
+          policyLoadPosition: null,
+          templateId: null,
+          title: 'Setup',
+        },
+      ] as any);
+
+      const { result } = renderHook(() => useAgentStore(), { wrapper: withSWR });
+
+      renderHook(() => result.current.useFetchAgentDocuments('agent-1'), { wrapper: withSWR });
+
+      await waitFor(() => {
+        expect(result.current.agentDocumentsMap['agent-1']).toEqual([
+          {
+            content: 'setup steps',
+            filename: 'setup.md',
+            id: 'doc-1',
+            loadPosition: undefined,
+            loadRules: [],
+            policyId: null,
+            policyLoadFormat: undefined,
+            title: 'Setup',
+          },
+        ]);
+      });
+    });
+  });
+
   describe('internal_dispatchAgentMap', () => {
     it('should create new agent entry if not exists', () => {
       const { result } = renderHook(() => useAgentStore());

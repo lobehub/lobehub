@@ -3,8 +3,10 @@
 import { type ReactNode } from 'react';
 import { memo, useCallback } from 'react';
 
+import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -42,12 +44,14 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent 
     dataSelectors.skipFetch(s),
     s.useFetchMessages,
   ]);
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
   useFetchMessages(context, skipFetch);
 
   // Skip fetching notebook and memories for share pages (they require authentication)
   const isSharePage = !!context.topicShareId;
 
   // Fetch notebook documents when topic is selected (skip for share pages)
+  useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
   useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
   useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 

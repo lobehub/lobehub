@@ -74,6 +74,23 @@ export class AgentModel {
   };
 
   /**
+   * Get minimal agent info (avatar, title, backgroundColor) by IDs.
+   */
+  getAgentAvatarsByIds = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+
+    return this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        title: agents.title,
+      })
+      .from(agents)
+      .where(and(eq(agents.userId, this.userId), inArray(agents.id, ids)));
+  };
+
+  /**
    * Get agent config by ID or slug (single query with OR condition)
    */
   getAgentConfig = async (idOrSlug: string) => {

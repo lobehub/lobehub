@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { localeOptions } from '@/locales/resources';
+import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { type UIChatMessage } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -51,7 +52,7 @@ export const useUserActions = ({ id, data }: UseUserActionsParams): UserActions 
     () => ({
       copy: {
         handleClick: async () => {
-          await copyToClipboard(data.content);
+          await copyToClipboard(cleanSpeakerTag(data.content));
           message.success(t('copySuccess'));
         },
         icon: Copy,

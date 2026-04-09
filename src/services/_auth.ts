@@ -1,7 +1,6 @@
 import {
   type AWSBedrockKeyVault,
   type AzureOpenAIKeyVault,
-  type ClientSecretPayload,
   type CloudflareKeyVault,
   type ComfyUIKeyVault,
   type OpenAICompatibleKeyVault,
@@ -10,11 +9,7 @@ import {
 import { clientApiKeyManager } from '@lobechat/utils/client';
 import { ModelProvider } from 'model-bank';
 
-import { LOBE_CHAT_AUTH_HEADER, SECRET_XOR_KEY } from '@/envs/auth';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
-import { obfuscatePayloadWithXOR } from '@/utils/client/xor-obfuscation';
 
 import { resolveRuntimeProvider } from './chat/helper';
 
@@ -104,15 +99,8 @@ export const getProviderAuthPayload = (
   }
 };
 
-const createAuthTokenWithPayload = (payload = {}) => {
-  const userId = userProfileSelectors.userId(useUserStore.getState());
-
-  return obfuscatePayloadWithXOR<ClientSecretPayload>({ userId, ...payload }, SECRET_XOR_KEY);
-};
-
 interface AuthParams {
   headers?: HeadersInit;
-  payload?: Record<string, any>;
   provider?: string;
 }
 
@@ -128,19 +116,6 @@ export const createPayloadWithKeyVaults = (provider: string) => {
   };
 };
 
-export const createXorKeyVaultsPayload = (provider: string) => {
-  const payload = createPayloadWithKeyVaults(provider);
-  return obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
-};
-
 export const createHeaderWithAuth = async (params?: AuthParams): Promise<HeadersInit> => {
-  let payload = params?.payload || {};
-
-  if (params?.provider) {
-    payload = { ...payload, ...createPayloadWithKeyVaults(params?.provider) };
-  }
-
-  const token = createAuthTokenWithPayload(payload);
-
-  return { ...params?.headers, [LOBE_CHAT_AUTH_HEADER]: token };
+  return { ...params?.headers };
 };

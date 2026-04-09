@@ -59,6 +59,7 @@ export const TopicUpdateRequestSchema = z.object({
     .object({
       model: z.string().optional(),
       provider: z.string().optional(),
+      boundDeviceId: z.string().optional(),
       workingDirectory: z.string().optional(),
     })
     .optional(),

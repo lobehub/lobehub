@@ -242,12 +242,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       aiModelSelectors.isModelHasExtendParams(modelId ?? '', provider ?? ''),
     );
 
-    const [expandedKeys, setExpandedKeys] = useState<string[]>(() => {
-      const keys: string[] = ['pricing'];
-      // ControlsForm uses ChatInput store + useAgentId; not available on create/image|video routes.
-      if (hasExtendParams && !pricingMode) keys.push('config');
-      return keys;
-    });
+    const [expandedKeys, setExpandedKeys] = useState<string[]>(['pricing']);
 
     const hasPricing = !!model?.pricing;
     const formatPrice = hasPricing ? getPrice(model!.pricing!) : null;

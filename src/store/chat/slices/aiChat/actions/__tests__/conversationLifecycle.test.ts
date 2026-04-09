@@ -293,7 +293,7 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
       });
 
-      it('should persist selected slash skills as preload messages before sending', async () => {
+      it('should persist selected slash skills into user message content before sending', async () => {
         const { result } = renderHook(() => useChatStore());
 
         const sendMessageInServerSpy = vi
@@ -303,7 +303,7 @@ describe('ConversationLifecycle actions', () => {
               createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
               createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
             ],
-            topics: [],
+            topics: undefined,
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
@@ -359,54 +359,27 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+        const requestPayload = sendMessageInServerSpy.mock.calls[0]?.[0];
+
+        expect(requestPayload?.newUserMessage).toEqual(
           expect.objectContaining({
-            newUserMessage: expect.objectContaining({
-              content:
-                '<action type="user_memory" category="skill" /> ' + TEST_CONTENT.USER_MESSAGE,
-              editorData: expect.objectContaining({
-                root: expect.any(Object),
-              }),
+            content: expect.stringContaining(TEST_CONTENT.USER_MESSAGE),
+            editorData: expect.objectContaining({
+              root: expect.any(Object),
             }),
-            preloadMessages: [
-              expect.objectContaining({
-                content: '',
-                role: 'assistant',
-                tools: [
-                  expect.objectContaining({
-                    apiName: 'activateSkill',
-                    arguments: JSON.stringify({ name: 'User Memory' }),
-                    identifier: 'lobe-activator',
-                  }),
-                ],
-              }),
-              expect.objectContaining({
-                content: 'Use the user memory skill content.',
-                role: 'tool',
-              }),
-              expect.objectContaining({
-                content: '',
-                role: 'assistant',
-                tools: [
-                  expect.objectContaining({
-                    apiName: 'activateSkill',
-                    arguments: JSON.stringify({ name: 'Instruction' }),
-                    identifier: 'lobe-activator',
-                  }),
-                ],
-              }),
-              expect.objectContaining({
-                content: 'Use the instruction skill content.',
-                role: 'tool',
-              }),
-            ],
           }),
-          expect.any(AbortController),
         );
-        expect(
-          sendMessageInServerSpy.mock.calls[0]?.[0].newUserMessage.editorData?.root.children[0]
-            .children,
-        ).toEqual(
+        expect(requestPayload?.newUserMessage.content).toContain('<selected_skill_context>');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="user_memory"');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="instruction"');
+        expect(requestPayload?.newUserMessage.content).toContain(
+          'Use the user memory skill content.',
+        );
+        expect(requestPayload?.newUserMessage.content).toContain(
+          'Use the instruction skill content.',
+        );
+        expect(requestPayload?.preloadMessages).toBeUndefined();
+        expect(requestPayload?.newUserMessage.editorData?.root.children[0].children).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               actionCategory: 'skill',
@@ -415,19 +388,7 @@ describe('ConversationLifecycle actions', () => {
             }),
           ]),
         );
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
-          expect.objectContaining({
-            initialContext: expect.objectContaining({
-              initialContext: {
-                selectedSkills: [
-                  { identifier: 'user_memory', name: 'User Memory' },
-                  { identifier: 'instruction', name: 'Instruction' },
-                ],
-              },
-              phase: 'init',
-            }),
-          }),
-        );
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
       });
 
       it('should work when sending from home page (activeAgentId is empty but context.agentId exists)', async () => {
@@ -475,18 +436,20 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
       });
 
-      it('should pass selected tool tags into runtime initialContext', async () => {
+      it('should persist selected tool tags into user message content before runtime execution', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topics: [],
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: undefined,
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -519,18 +482,76 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
-          expect.objectContaining({
-            initialContext: expect.objectContaining({
-              initialContext: {
-                selectedTools: [
-                  { identifier: 'lobe-notebook', name: 'Notebook' },
-                  { identifier: 'lobe-artifacts', name: 'Artifacts' },
+        const requestPayload = sendMessageInServerSpy.mock.calls[0]?.[0];
+
+        expect(requestPayload?.newUserMessage.content).toContain(TEST_CONTENT.USER_MESSAGE);
+        expect(requestPayload?.newUserMessage.content).toContain('<selected_tool_context>');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="lobe-notebook"');
+        expect(requestPayload?.newUserMessage.content).toContain('name="Notebook"');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="lobe-artifacts"');
+        expect(requestPayload?.newUserMessage.content).toContain('name="Artifacts"');
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+      });
+
+      it('should preserve editorData when enqueueing a queued message', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+        const editorData = {
+          root: {
+            children: [
+              {
+                children: [
+                  {
+                    actionCategory: 'tool',
+                    actionLabel: 'Notebook',
+                    actionType: 'lobe-notebook',
+                    type: 'action-tag',
+                  },
+                  { text: ' queued message', type: 'text' },
                 ],
+                type: 'paragraph',
               },
-              phase: 'init',
-            }),
+            ],
+            type: 'root',
+          },
+        };
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-running': {
+                childOperationIds: [],
+                context,
+                id: 'op-running',
+                metadata: {},
+                status: 'running',
+                type: 'execAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-running'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            editorData: editorData as any,
+            message: 'queued message',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'queued message',
+            editorData,
           }),
+          'op-running',
         );
       });
     });

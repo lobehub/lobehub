@@ -58,10 +58,13 @@ vi.mock('@/server/services/aiAgent', () => ({
   })),
 }));
 
+const mockHandleMention = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockHandleSubscribedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
 vi.mock('../AgentBridgeService', () => ({
   AgentBridgeService: vi.fn().mockImplementation(() => ({
-    handleMention: vi.fn().mockResolvedValue(undefined),
-    handleSubscribedMessage: vi.fn().mockResolvedValue(undefined),
+    handleMention: mockHandleMention,
+    handleSubscribedMessage: mockHandleSubscribedMessage,
   })),
 }));
 
@@ -132,6 +135,8 @@ describe('BotMessageRouter', () => {
     mockGetServerDB.mockResolvedValue(FAKE_DB);
     mockInitWithEnvKey.mockResolvedValue(FAKE_GATEKEEPER);
     mockFindEnabledByPlatform.mockResolvedValue([]);
+    mockHandleMention.mockResolvedValue(undefined);
+    mockHandleSubscribedMessage.mockResolvedValue(undefined);
   });
 
   describe('getWebhookHandler', () => {
@@ -269,6 +274,102 @@ describe('BotMessageRouter', () => {
 
       // Called once for text-based slash commands only, no DM catch-all
       expect(mockOnNewMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('onSubscribedMessage policy', () => {
+    /**
+     * Boot the router so its handler registration runs, then return the
+     * `onSubscribedMessage` handler that was registered with the Chat SDK
+     * so tests can invoke it directly with synthetic thread/message objects.
+     */
+    async function loadSubscribedHandler() {
+      mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-1' })]);
+      const router = new BotMessageRouter();
+      const webhookHandler = router.getWebhookHandler('telegram', 'app-1');
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await webhookHandler(req);
+
+      const lastCall = mockOnSubscribedMessage.mock.calls.at(-1);
+      if (!lastCall) throw new Error('onSubscribedMessage was not registered');
+      return lastCall[0] as (thread: any, message: any, ctx?: any) => Promise<void>;
+    }
+
+    function makeThread(overrides: Partial<{ id: string; isDM: boolean }> = {}) {
+      return {
+        id: 'telegram:chat-1',
+        isDM: false,
+        post: vi.fn().mockResolvedValue(undefined),
+        setState: vi.fn().mockResolvedValue(undefined),
+        ...overrides,
+      };
+    }
+
+    function makeMessage(overrides: Partial<{ isMention: boolean; text: string }> = {}) {
+      return {
+        author: { isBot: false, userName: 'alice' },
+        isMention: false,
+        text: 'hello there',
+        ...overrides,
+      };
+    }
+
+    it('should skip non-mention messages in group threads', async () => {
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: false, text: 'just chatting with bob' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    });
+
+    it('should respond to @-mentions in group threads', async () => {
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: false });
+      const message = makeMessage({ isMention: true, text: '@bot what about this' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should respond to every message in DM threads (no mention required)', async () => {
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: true });
+      const message = makeMessage({ isMention: false, text: 'hi' });
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should respond when a debounced/skipped earlier message contained the mention', async () => {
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: false });
+      const skipped = [
+        makeMessage({ isMention: true, text: '@bot first question' }),
+        makeMessage({ isMention: false, text: 'and one more thing' }),
+      ];
+      const message = makeMessage({ isMention: false, text: 'last bit' });
+
+      await handler(thread, message, { skipped, totalSinceLastHandler: 3 });
+
+      expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should ignore messages from other bots', async () => {
+      const handler = await loadSubscribedHandler();
+      const thread = makeThread({ isDM: false });
+      const message = {
+        author: { isBot: true, userName: 'other-bot' },
+        isMention: true,
+        text: '@bot hi',
+      };
+
+      await handler(thread, message);
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
     });
   });
 });

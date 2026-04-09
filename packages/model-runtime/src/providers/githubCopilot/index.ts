@@ -25,6 +25,7 @@ const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
 
 const MAX_TOTAL_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_RETRIES = 3;
+const QUOTA_EXHAUSTION_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 const debugParams = {
   chatCompletion: () => process.env.DEBUG_GITHUBCOPILOT_CHAT_COMPLETION === '1',
@@ -456,6 +457,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         if (status === 429 && rateLimitAttempts < MAX_RATE_LIMIT_RETRIES) {
           rateLimitAttempts++;
           const retryAfter = this.getRetryAfterMs(error) ?? 1000 * Math.pow(2, rateLimitAttempts);
+
+          // If retry-after exceeds the quota exhaustion threshold, surface immediately
+          if (retryAfter > QUOTA_EXHAUSTION_THRESHOLD_MS) {
+            throw this.mapError(error);
+          }
 
           await new Promise<void>((resolve) => {
             setTimeout(resolve, Math.min(retryAfter, 10_000));
