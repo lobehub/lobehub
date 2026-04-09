@@ -21,6 +21,8 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'knowledge-repo-test-user';
 const otherUserId = 'other-knowledge-user';
+const deleteDocChunkId = '33333333-3333-4333-8333-333333333333';
+const deleteManyDocChunkId = '44444444-4444-4444-8444-444444444444';
 
 let knowledgeRepo: KnowledgeRepo;
 const testEmbedding = Array.from({ length: 1024 }, () => 0.1);
@@ -407,6 +409,15 @@ describe('KnowledgeRepo', () => {
         url: 'https://example.com/delete.txt',
       });
 
+      await serverDB.insert(files).values({
+        id: 'delete-doc-file',
+        userId,
+        name: 'delete-doc-file.pdf',
+        fileType: 'application/pdf',
+        size: 2048,
+        url: 'https://example.com/delete-doc-file.pdf',
+      });
+
       await serverDB.insert(documents).values([
         {
           id: 'delete-doc',
@@ -432,26 +443,18 @@ describe('KnowledgeRepo', () => {
         },
       ]);
 
-      await serverDB.insert(files).values({
-        id: 'delete-doc-file',
-        userId,
-        name: 'delete-doc-file.pdf',
-        fileType: 'application/pdf',
-        size: 2048,
-        url: 'https://example.com/delete-doc-file.pdf',
-      });
       await serverDB.insert(chunks).values({
-        id: 'delete-doc-chunk',
+        id: deleteDocChunkId,
         text: 'chunk for mirrored file',
         userId,
       });
       await serverDB.insert(fileChunks).values({
-        chunkId: 'delete-doc-chunk',
+        chunkId: deleteDocChunkId,
         fileId: 'delete-doc-file',
         userId,
       });
       await serverDB.insert(embeddings).values({
-        chunkId: 'delete-doc-chunk',
+        chunkId: deleteDocChunkId,
         embeddings: testEmbedding,
         model: 'test-model',
         userId,
@@ -486,10 +489,10 @@ describe('KnowledgeRepo', () => {
         where: eq(files.id, 'delete-doc-file'),
       });
       const chunk = await serverDB.query.chunks.findFirst({
-        where: eq(chunks.id, 'delete-doc-chunk'),
+        where: eq(chunks.id, deleteDocChunkId),
       });
       const embedding = await serverDB.query.embeddings.findFirst({
-        where: eq(embeddings.chunkId, 'delete-doc-chunk'),
+        where: eq(embeddings.chunkId, deleteDocChunkId),
       });
 
       expect(doc).toBeUndefined();
@@ -518,6 +521,14 @@ describe('KnowledgeRepo', () => {
           size: 100,
           url: 'https://example.com/delete2.txt',
         },
+        {
+          id: 'delete-many-doc-file-1',
+          userId,
+          name: 'delete-many-doc-file-1.pdf',
+          fileType: 'application/pdf',
+          size: 512,
+          url: 'https://example.com/delete-many-doc-file-1.pdf',
+        },
       ]);
 
       await serverDB.insert(documents).values([
@@ -543,27 +554,18 @@ describe('KnowledgeRepo', () => {
           totalLineCount: 2,
         },
       ]);
-
-      await serverDB.insert(files).values({
-        id: 'delete-many-doc-file-1',
-        userId,
-        name: 'delete-many-doc-file-1.pdf',
-        fileType: 'application/pdf',
-        size: 512,
-        url: 'https://example.com/delete-many-doc-file-1.pdf',
-      });
       await serverDB.insert(chunks).values({
-        id: 'delete-many-doc-chunk-1',
+        id: deleteManyDocChunkId,
         text: 'delete many mirrored chunk',
         userId,
       });
       await serverDB.insert(fileChunks).values({
-        chunkId: 'delete-many-doc-chunk-1',
+        chunkId: deleteManyDocChunkId,
         fileId: 'delete-many-doc-file-1',
         userId,
       });
       await serverDB.insert(embeddings).values({
-        chunkId: 'delete-many-doc-chunk-1',
+        chunkId: deleteManyDocChunkId,
         embeddings: testEmbedding,
         model: 'test-model',
         userId,
@@ -594,10 +596,10 @@ describe('KnowledgeRepo', () => {
         where: eq(files.id, 'delete-many-doc-file-1'),
       });
       const chunk = await serverDB.query.chunks.findFirst({
-        where: eq(chunks.id, 'delete-many-doc-chunk-1'),
+        where: eq(chunks.id, deleteManyDocChunkId),
       });
       const embedding = await serverDB.query.embeddings.findFirst({
-        where: eq(embeddings.chunkId, 'delete-many-doc-chunk-1'),
+        where: eq(embeddings.chunkId, deleteManyDocChunkId),
       });
 
       expect(file1).toBeUndefined();

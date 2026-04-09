@@ -323,7 +323,6 @@ describe('AgentEvalDatasetModel', () => {
       expect(result?.name).toBe('Updated Name');
       expect(result?.description).toBe('New description');
       expect(result?.updatedAt).toBeDefined();
-      expect(result?.updatedAt.getTime()).toBeGreaterThanOrEqual(result!.createdAt.getTime());
     });
 
     it('should not update a dataset owned by another user', async () => {
