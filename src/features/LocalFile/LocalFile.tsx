@@ -45,7 +45,12 @@ interface LocalFileProps {
   readonly?: boolean;
 }
 
-export const LocalFile = ({ name, path, isDirectory = false, readonly = false }: LocalFileProps) => {
+export const LocalFile = ({
+  name,
+  path,
+  isDirectory = false,
+  readonly = false,
+}: LocalFileProps) => {
   const { t } = useTranslation('components');
 
   const handleOpenFile = () => {

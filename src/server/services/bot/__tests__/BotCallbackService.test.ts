@@ -174,6 +174,19 @@ describe('BotCallbackService', () => {
 
       expect(mockFindByPlatformAndAppId).toHaveBeenCalledWith(FAKE_DB, 'telegram', 'app-123');
     });
+
+    it('uses directReplyTarget as the messenger target when provided', async () => {
+      const directReplyTarget = 'dingtalk:webhook:opaque-encoded-target';
+      const body = makeBody({
+        directReplyTarget,
+        platformThreadId: 'dingtalk:group:cid-123',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockGetMessenger).toHaveBeenCalledWith(directReplyTarget);
+    });
   });
 
   // ==================== Messenger creation errors ====================

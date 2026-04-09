@@ -1,0 +1,105 @@
+---
+title: 将 LobeHub 连接到钉钉
+description: 将钉钉企业内部应用机器人连接到 LobeHub Agent，用于私聊和群内 @ 触发对话。
+tags:
+  - 钉钉
+  - 消息渠道
+  - 机器人设置
+  - 集成
+---
+
+# 将 LobeHub 连接到钉钉
+
+将钉钉渠道连接到 LobeHub Agent 后，用户可以在钉钉私聊中直接与助手对话，也可以在群聊中通过 `@机器人` 触发回复。
+
+## 前置条件
+
+- 一个可以使用 **Channels** 功能的 LobeHub 实例
+- 一个有权限创建企业内部应用的钉钉企业账号
+
+## 第一步：准备钉钉应用
+
+<Steps>
+  ### 打开钉钉开放平台
+
+  进入钉钉开放平台并打开你的企业内部应用。
+
+  ### 启用机器人 / 事件回调能力
+
+  确保该应用可以接收聊天消息，并进入事件订阅或回调配置页面。
+
+  ### 复制所需凭证
+
+  请准备以下信息：
+
+  - **AppKey** — 在 LobeHub 中填写为 `Application ID`
+  - **AppSecret** — 在 LobeHub 中填写为 `App Secret`
+  - **Verification Token** — 在 LobeHub 中填写为 `Verification Token`
+  - **AES Key** — 在 LobeHub 中填写为 `AES Key`
+</Steps>
+
+## 第二步：在 LobeHub 中配置钉钉
+
+<Steps>
+  ### 打开渠道设置
+
+  在 LobeHub 中打开目标 Agent，然后进入 **Channels** → **DingTalk**。
+
+  ### 填写凭证
+
+  将第一步准备的钉钉信息填入对应字段。
+
+  ### 选择回复模式
+
+  - **Markdown** — 使用钉钉 Markdown 模板发送回复
+  - **Text** — 发送纯文本回复
+
+  ### 保存并复制 Webhook URL
+
+  点击 **保存配置**。保存后，LobeHub 会展示该渠道的 webhook URL。复制它，下一步会在钉钉后台使用。
+</Steps>
+
+## 第三步：在钉钉后台配置回调
+
+<Steps>
+  ### 粘贴 Webhook URL
+
+  回到钉钉开放平台，打开该应用的事件订阅 / 回调配置页面。
+
+  将从 LobeHub 复制的 webhook URL 粘贴到回调地址字段。
+
+  ### 保持 Token 和 AES Key 一致
+
+  确保钉钉后台填写的 **Verification Token** 和 **AES Key** 与 LobeHub 中保存的值完全一致。
+
+  ### 保存配置
+
+  钉钉会在保存时校验回调地址。校验成功后，机器人就可以开始接收消息。
+</Steps>
+
+## 当前行为与限制
+
+- **私聊** 会直接触发机器人回复
+- **群聊** 只有在 `@机器人` 时才会触发
+- **共享群线程** — 同一个钉钉群会映射到 LobeHub 中同一个共享会话线程
+- **入站消息** — 当前 MVP 仅支持文本消息
+- **出站消息** — 支持文本和 Markdown 回复
+- **暂不支持编辑 / 表情 / 输入中状态** — 当前 webhook 模式下，LobeHub 还未接入这些钉钉能力
+
+## 配置参考
+
+| 字段                  | 是否必填 | 说明                          |
+| ------------------- | ---- | --------------------------- |
+| **Application ID**  | 是    | 钉钉 `AppKey`                 |
+| **App Secret**      | 是    | 钉钉 `AppSecret`             |
+| **Verification Token** | 是 | 用于校验钉钉回调请求来源                |
+| **AES Key**         | 是    | 用于解密钉钉加密回调内容               |
+| **回复模式**            | 否    | 可选 `Markdown` 或 `Text`      |
+| **Webhook URL**     | —    | 保存配置后由 LobeHub 自动生成        |
+
+## 故障排查
+
+- **测试连接失败** — 重新检查 LobeHub 中填写的 AppKey 和 AppSecret
+- **回调校验失败** — 确认 webhook URL、Verification Token、AES Key 在两边完全一致
+- **群里没有回复** — 当前 MVP 需要显式 `@机器人` 才会触发群聊回复
+- **Markdown 显示效果不好** — 可以切换到 **Text** 回复模式获得更稳定的纯文本展示

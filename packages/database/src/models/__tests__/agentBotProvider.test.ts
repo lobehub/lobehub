@@ -368,6 +368,25 @@ describe('AgentBotProviderModel', () => {
       expect(results[0].credentials.signingSecret).toBe('ss-123');
     });
 
+    it('should return DingTalk providers with clientSecret', async () => {
+      const model = new AgentBotProviderModel(serverDB, userId);
+      await model.create({
+        agentId,
+        applicationId: 'dingtalk-app',
+        credentials: {
+          aesKey: 'aes-key',
+          clientSecret: 'dingtalk-secret',
+          verificationToken: 'verification-token',
+        },
+        platform: 'dingtalk',
+      });
+
+      const results = await AgentBotProviderModel.findEnabledByPlatform(serverDB, 'dingtalk');
+      expect(results).toHaveLength(1);
+      expect(results[0].credentials.clientSecret).toBe('dingtalk-secret');
+      expect(results[0].credentials.verificationToken).toBe('verification-token');
+    });
+
     it('should skip providers without botToken', async () => {
       await serverDB.insert(agentBotProviders).values({
         agentId,

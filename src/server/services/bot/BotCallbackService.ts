@@ -26,6 +26,13 @@ export interface BotCallbackBody {
   applicationId: string;
   content?: string;
   cost?: number;
+  /**
+   * Optional direct-reply target provided by the platform client when the
+   * inbound message carries a one-shot reply endpoint (e.g. DingTalk session
+   * webhook). When set, the callback messenger is built from this target
+   * instead of the regular `platformThreadId`.
+   */
+  directReplyTarget?: string;
   duration?: number;
   elapsedMs?: number;
   errorMessage?: string;
@@ -71,13 +78,14 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId } = body;
+    const { type, applicationId, platformThreadId, progressMessageId, directReplyTarget } = body;
     const platform = platformThreadId.split(':')[0];
 
     const { client, messenger, charLimit, settings } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
+      directReplyTarget,
     );
 
     const entry = platformRegistry.getPlatform(platform);
@@ -109,6 +117,7 @@ export class BotCallbackService {
     platform: string,
     applicationId: string,
     platformThreadId: string,
+    directReplyTarget?: string,
   ): Promise<{
     charLimit?: number;
     client: PlatformClient;
@@ -152,7 +161,12 @@ export class BotCallbackService {
     const client = entry.clientFactory.createClient(config, {
       redisClient: getAgentRuntimeRedisClient() as any,
     });
-    const messenger = client.getMessenger(platformThreadId);
+
+    // If the inbound message carried a platform-specific direct-reply target
+    // (e.g. DingTalk session webhook), use it as the messenger target. The
+    // string is opaque to shared code — each platform's own `getMessenger`
+    // decodes it. Falls back to the regular threadId otherwise.
+    const messenger = client.getMessenger(directReplyTarget || platformThreadId);
 
     return { charLimit, client, messenger, settings };
   }

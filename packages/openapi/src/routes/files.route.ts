@@ -35,7 +35,10 @@ const app = new Hono();
 app.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to view file list'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_READ'),
+    'You do not have permission to view file list',
+  ),
   zValidator('query', FileListQuerySchema),
   async (c) => {
     const fileController = new FileController();
@@ -61,7 +64,10 @@ app.get(
 app.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPLOAD'), 'You do not have permission to upload files'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPLOAD'),
+    'You do not have permission to upload files',
+  ),
   async (c) => {
     const fileController = new FileController();
     return await fileController.uploadFile(c);
@@ -78,7 +84,10 @@ app.post(
 app.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to get file details'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_READ'),
+    'You do not have permission to get file details',
+  ),
   zValidator('param', FileIdParamSchema),
   async (c) => {
     const fileController = new FileController();
@@ -99,7 +108,10 @@ app.get(
 app.get(
   '/:id/url',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to get file access URL'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_READ'),
+    'You do not have permission to get file access URL',
+  ),
   zValidator('param', FileIdParamSchema),
   zValidator('query', FileUrlRequestSchema),
   async (c) => {
@@ -123,7 +135,10 @@ app.get(
 app.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), 'You do not have permission to update a file'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPDATE'),
+    'You do not have permission to update a file',
+  ),
   zValidator('param', FileIdParamSchema),
   zValidator('json', UpdateFileSchema),
   async (c) => {
@@ -142,7 +157,10 @@ app.patch(
 app.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_DELETE'), 'You do not have permission to delete a file'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_DELETE'),
+    'You do not have permission to delete a file',
+  ),
   zValidator('param', FileIdParamSchema),
   async (c) => {
     const fileController = new FileController();
@@ -168,7 +186,10 @@ app.delete(
 app.post(
   '/:id/parses',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), 'You do not have permission to parse file content'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPDATE'),
+    'You do not have permission to parse file content',
+  ),
   zValidator('param', FileIdParamSchema),
   zValidator('query', FileParseRequestSchema),
   async (c) => {
@@ -191,7 +212,10 @@ app.post(
 app.post(
   '/:id/chunks',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPDATE'), 'You do not have permission to create chunking tasks'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPDATE'),
+    'You do not have permission to create chunking tasks',
+  ),
   zValidator('param', FileIdParamSchema),
   zValidator('json', FileChunkRequestSchema),
   async (c) => {
@@ -215,7 +239,10 @@ app.post(
 app.get(
   '/:id/chunks',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to view file chunking status'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_READ'),
+    'You do not have permission to view file chunking status',
+  ),
   zValidator('param', FileIdParamSchema),
   async (c) => {
     const fileController = new FileController();
@@ -240,7 +267,10 @@ app.get(
 app.post(
   '/batches',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_UPLOAD'), 'You do not have permission to batch upload files'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPLOAD'),
+    'You do not have permission to batch upload files',
+  ),
   async (c) => {
     const fileController = new FileController();
     return await fileController.batchUploadFiles(c);
@@ -264,7 +294,10 @@ app.post(
 app.post(
   '/queries',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('FILE_READ'), 'You do not have permission to batch get file details'),
+  requireAnyPermission(
+    getAllScopePermissions('FILE_READ'),
+    'You do not have permission to batch get file details',
+  ),
   zValidator('json', BatchGetFilesRequestSchema),
   async (c) => {
     const fileController = new FileController();

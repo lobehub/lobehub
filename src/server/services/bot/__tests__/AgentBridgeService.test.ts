@@ -138,6 +138,46 @@ describe('AgentBridgeService', () => {
     );
   });
 
+  it('threads directReplyTarget through webhookBody and skips the placeholder post when the client provides one', async () => {
+    const DIRECT_REPLY_TARGET = 'dingtalk:webhook:opaque-encoded-target';
+
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread();
+    const message = createMessage();
+    message.raw = { sessionWebhook: 'https://oapi.dingtalk.com/robot/sendBySession?abc' };
+
+    const client = createClient();
+    client.resolveDirectReplyTarget = vi.fn().mockReturnValue(DIRECT_REPLY_TARGET);
+
+    await service.handleMention(thread, message, {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    // The client hook is consulted with the raw inbound message.
+    expect(client.resolveDirectReplyTarget).toHaveBeenCalledWith(message.raw);
+
+    // Thread.post MUST NOT be used for the placeholder when a direct-reply
+    // target is present — placeholders would be wasted on one-shot endpoints.
+    expect(thread.post).not.toHaveBeenCalled();
+
+    // The direct-reply target must flow through the webhookBody so that
+    // BotCallbackService can route replies back via the same one-shot endpoint
+    // in queue mode.
+    expect(mockExecAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hooks: expect.arrayContaining([
+          expect.objectContaining({
+            webhook: expect.objectContaining({
+              body: expect.objectContaining({ directReplyTarget: DIRECT_REPLY_TARGET }),
+            }),
+          }),
+        ]),
+      }),
+    );
+  });
+
   it('calls execAgent with hooks in queue mode for subscribed message', async () => {
     const service = new AgentBridgeService(FAKE_DB, USER_ID);
     const thread = createThread({ topicId: 'topic-1' });

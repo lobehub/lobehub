@@ -13,6 +13,10 @@ export interface DecryptedBotProvider extends Omit<AgentBotProviderItem, 'creden
   credentials: Record<string, string>;
 }
 
+function hasRuntimeCredentials(credentials: Record<string, string>): boolean {
+  return Boolean(credentials.appSecret || credentials.botToken || credentials.clientSecret);
+}
+
 export class AgentBotProviderModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -172,7 +176,7 @@ export class AgentBotProviderModel {
           ? JSON.parse((await gateKeeper.decrypt(r.credentials)).plaintext)
           : JSON.parse(r.credentials);
 
-        if (!credentials.botToken && !credentials.appSecret) continue;
+        if (!hasRuntimeCredentials(credentials)) continue;
 
         decrypted.push({ ...r, credentials });
       } catch {

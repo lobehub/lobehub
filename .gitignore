@@ -146,3 +146,4 @@ apps/desktop/resources/cli-package.json
 
 .superpowers/
 docs/superpowers
+.worktrees/
