@@ -592,6 +592,7 @@ export const aiAgentRouter = router({
         autoStart = true,
         deviceId,
         existingMessageIds = [],
+        parentMessageId,
       } = task;
 
       try {
@@ -601,7 +602,10 @@ export const aiAgentRouter = router({
           autoStart,
           deviceId,
           existingMessageIds,
+          parentMessageId,
           prompt,
+          // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
+          resume: !!parentMessageId,
           slug,
         });
 

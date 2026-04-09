@@ -307,8 +307,15 @@ describe('GatewayActionImpl', () => {
       const { action } = createExecuteTestAction();
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
         assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
         operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
         token: 'test-token',
         topicId: 'topic-1',
         userMessageId: 'usr-1',
@@ -332,8 +339,15 @@ describe('GatewayActionImpl', () => {
       const { action } = createExecuteTestAction();
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
         assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
         operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
         token: 'test-token',
         topicId: 'topic-1',
         userMessageId: 'usr-1',
@@ -356,8 +370,15 @@ describe('GatewayActionImpl', () => {
       const { action } = createExecuteTestAction();
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
         assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
         operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
         token: 'test-token',
         topicId: 'topic-1',
         userMessageId: 'usr-1',

@@ -395,7 +395,7 @@ describe('AI Agent Router Integration Tests', () => {
         })
         .returning();
 
-      const [userMsg] = await serverDB
+      const [userMsg] = (await serverDB
         .insert(messages)
         .values({
           role: 'user',
@@ -404,7 +404,7 @@ describe('AI Agent Router Integration Tests', () => {
           agentId: testAgentId,
           topicId: topic.id,
         })
-        .returning();
+        .returning()) as any[];
 
       const result = await caller.execAgent({
         agentId: testAgentId,
