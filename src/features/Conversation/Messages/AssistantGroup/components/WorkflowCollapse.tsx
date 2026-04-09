@@ -5,6 +5,7 @@ import { cssVar } from 'antd-style';
 import { Check, Loader2, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { shinyTextStyles } from '@/styles';
 import { type AssistantContentBlock } from '@/types/index';
 
@@ -40,26 +41,21 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
   const durationText = totalReasoningMs > 0 ? formatReasoningDuration(totalReasoningMs) : undefined;
 
   const [expanded, setExpanded] = useState(!allComplete);
-  const userExpandedRef = useRef(false);
+  const [userExpanded, setUserExpanded] = useState(false);
   const prevCompleteRef = useRef(allComplete);
   const prevToolCountRef = useRef(allTools.length);
 
   useEffect(() => {
-    if (
-      allComplete &&
-      !prevCompleteRef.current &&
-      !userExpandedRef.current &&
-      allTools.length > 0
-    ) {
+    if (allComplete && !prevCompleteRef.current && !userExpanded && allTools.length > 0) {
       setExpanded(false);
     }
     prevCompleteRef.current = allComplete;
-  }, [allComplete, allTools.length]);
+  }, [allComplete, allTools.length, userExpanded]);
 
   useEffect(() => {
     if (allTools.length > prevToolCountRef.current) {
       setExpanded(true);
-      userExpandedRef.current = false;
+      setUserExpanded(false);
     }
     prevToolCountRef.current = allTools.length;
   }, [allTools.length]);
@@ -67,11 +63,18 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
   const handleExpandChange = (isExpanded: boolean) => {
     setExpanded(isExpanded);
     if (isExpanded) {
-      userExpandedRef.current = true;
+      setUserExpanded(true);
     }
   };
 
   const streaming = !allComplete;
+  const constrained = streaming && !userExpanded;
+
+  const { ref: scrollRef, handleScroll: handleAutoScroll } = useAutoScroll<HTMLDivElement>({
+    deps: [allTools.length],
+    enabled: constrained,
+    threshold: 120,
+  });
 
   const statusIcon = streaming ? (
     <Icon spin color={cssVar.colorTextDescription} icon={Loader2} />
@@ -129,7 +132,10 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
         <WorkflowExpandedList
           assistantId={assistantId}
           blocks={blocks}
+          constrained={constrained}
           disableEditing={disableEditing}
+          scrollRef={scrollRef}
+          onScroll={handleAutoScroll}
         />
       </AccordionItem>
     </div>

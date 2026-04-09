@@ -1,6 +1,6 @@
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
+import { memo, type RefObject } from 'react';
 
 import { type AssistantContentBlock } from '@/types/index';
 
@@ -19,12 +19,15 @@ const styles = createStaticStyles(({ css }) => ({
 interface WorkflowExpandedListProps {
   assistantId: string;
   blocks: AssistantContentBlock[];
+  constrained?: boolean;
   disableEditing?: boolean;
+  onScroll?: () => void;
+  scrollRef?: RefObject<HTMLDivElement | null>;
 }
 
 const WorkflowExpandedList = memo<WorkflowExpandedListProps>(
-  ({ blocks, assistantId, disableEditing }) => {
-    return (
+  ({ blocks, assistantId, disableEditing, constrained, scrollRef, onScroll }) => {
+    const content = (
       <Flexbox paddingBlock={'4px 8px'}>
         {blocks.map((block) => (
           <Flexbox key={block.id}>
@@ -43,6 +46,22 @@ const WorkflowExpandedList = memo<WorkflowExpandedListProps>(
         ))}
       </Flexbox>
     );
+
+    if (constrained) {
+      return (
+        <ScrollShadow
+          offset={12}
+          ref={scrollRef as RefObject<HTMLDivElement>}
+          size={12}
+          style={{ maxHeight: 'min(40vh, 320px)' }}
+          onScroll={onScroll}
+        >
+          {content}
+        </ScrollShadow>
+      );
+    }
+
+    return content;
   },
 );
 
