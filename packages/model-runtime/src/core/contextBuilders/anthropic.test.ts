@@ -52,7 +52,57 @@ describe('anthropicHelpers', () => {
       });
     });
 
-    it('should transform a regular image URL into an Anthropic.ImageBlockParam', async () => {
+    it('should use URL-based source for image URLs by default', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: 'image/png',
+        base64: null,
+        type: 'url',
+      });
+
+      const content = {
+        type: 'image_url',
+        image_url: { url: 'https://example.com/image.png' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(parseDataUri).toHaveBeenCalledWith(content.image_url.url);
+      expect(imageUrlToBase64).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        source: {
+          type: 'url',
+          url: 'https://example.com/image.png',
+        },
+        type: 'image',
+      });
+    });
+
+    it('should use URL-based source for URLs without extension', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: null,
+        base64: null,
+        type: 'url',
+      });
+
+      const content = {
+        type: 'image_url',
+        image_url: { url: 'https://example.com/image' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(result).toEqual({
+        source: {
+          type: 'url',
+          url: 'https://example.com/image',
+        },
+        type: 'image',
+      });
+    });
+
+    it('should convert URL to base64 when LLM_VISION_IMAGE_USE_BASE64 is set', async () => {
+      process.env.LLM_VISION_IMAGE_USE_BASE64 = '1';
+
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: 'image/png',
         base64: null,
@@ -70,7 +120,6 @@ describe('anthropicHelpers', () => {
 
       const result = await buildAnthropicBlock(content);
 
-      expect(parseDataUri).toHaveBeenCalledWith(content.image_url.url);
       expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
       expect(result).toEqual({
         source: {
@@ -80,34 +129,8 @@ describe('anthropicHelpers', () => {
         },
         type: 'image',
       });
-    });
 
-    it('should use default media_type for URL images when mimeType is not provided', async () => {
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        mimeType: null,
-        base64: null,
-        type: 'url',
-      });
-      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
-        base64: 'convertedBase64String',
-        mimeType: 'image/png',
-      });
-
-      const content = {
-        type: 'image_url',
-        image_url: { url: 'https://example.com/image' },
-      } as const;
-
-      const result = await buildAnthropicBlock(content);
-
-      expect(result).toEqual({
-        source: {
-          data: 'convertedBase64String',
-          media_type: 'image/png',
-          type: 'base64',
-        },
-        type: 'image',
-      });
+      delete process.env.LLM_VISION_IMAGE_USE_BASE64;
     });
 
     it('should throw an error for invalid image URLs', async () => {
@@ -144,15 +167,11 @@ describe('anthropicHelpers', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should return undefined for unsupported SVG image (URL)', async () => {
+    it('should pass SVG URL through to Anthropic in URL mode', async () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: null,
         base64: null,
         type: 'url',
-      });
-      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
-        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
-        mimeType: 'image/svg+xml',
       });
 
       const content = {
@@ -161,7 +180,14 @@ describe('anthropicHelpers', () => {
       } as const;
 
       const result = await buildAnthropicBlock(content);
-      expect(result).toBeUndefined();
+      expect(imageUrlToBase64).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        source: {
+          type: 'url',
+          url: 'https://example.com/image.svg',
+        },
+        type: 'image',
+      });
     });
   });
 
