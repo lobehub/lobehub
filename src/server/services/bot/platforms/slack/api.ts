@@ -1,8 +1,28 @@
+import { defaultEmojiResolver } from 'chat';
 import debug from 'debug';
 
 const log = debug('bot-platform:slack:client');
 
 export const SLACK_API_BASE = 'https://slack.com/api';
+
+/**
+ * Normalize an emoji input to the shortcode that Slack's reactions API
+ * expects (e.g. `eyes`, not the unicode `👀` and not `:eyes:`).
+ *
+ * Callers may pass any of:
+ * - A unicode emoji like `👀` (e.g. BotCallbackService.removeEyesReaction)
+ * - A normalized name like `thumbs_up` (which maps to Slack's `+1`)
+ * - A Slack shortcode like `eyes` (already correct, idempotent pass-through)
+ *
+ * `defaultEmojiResolver.fromGChat` returns the EmojiValue for the unicode
+ * (or a raw EmojiValue with the input as name if no mapping), and `toSlack`
+ * then converts to the Slack format (or returns the input unchanged for
+ * unknown names — keeping custom Slack emoji like `:meow_party:` working).
+ */
+function normalizeSlackEmoji(input: string): string {
+  const stripped = input.replaceAll(':', '');
+  return defaultEmojiResolver.toSlack(defaultEmojiResolver.fromGChat(stripped));
+}
 
 /**
  * Lightweight Slack Web API client for outbound messaging operations
@@ -41,8 +61,21 @@ export class SlackApi {
   }
 
   async removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
-    log('removeReaction: channel=%s, ts=%s, name=%s', channel, timestamp, name);
-    await this.call('reactions.remove', { channel, name, timestamp });
+    const slackName = normalizeSlackEmoji(name);
+    log('removeReaction: channel=%s, ts=%s, name=%s', channel, timestamp, slackName);
+    try {
+      await this.call('reactions.remove', { channel, name: slackName, timestamp });
+    } catch (error) {
+      // `no_reaction` is benign: the reaction may have been removed already
+      // (concurrent callback, user removed it manually) or never added in
+      // the first place (e.g. an earlier reactions.add failed). Swallow it
+      // so the callback path doesn't surface a misleading error.
+      if (error instanceof Error && error.message.includes('no_reaction')) {
+        log('removeReaction: no_reaction (already gone) ts=%s, name=%s', timestamp, slackName);
+        return;
+      }
+      throw error;
+    }
   }
 
   // ==================== Message Operations ====================
@@ -82,8 +115,9 @@ export class SlackApi {
   // ==================== Reactions ====================
 
   async addReaction(channel: string, timestamp: string, name: string): Promise<void> {
-    log('addReaction: channel=%s, ts=%s, name=%s', channel, timestamp, name);
-    await this.call('reactions.add', { channel, name, timestamp });
+    const slackName = normalizeSlackEmoji(name);
+    log('addReaction: channel=%s, ts=%s, name=%s', channel, timestamp, slackName);
+    await this.call('reactions.add', { channel, name: slackName, timestamp });
   }
 
   async getReactions(
