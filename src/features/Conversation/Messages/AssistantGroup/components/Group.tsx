@@ -8,6 +8,7 @@ import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
+import { areWorkflowToolsComplete, getPostToolAnswerSplitIndex } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import WorkflowCollapse from './WorkflowCollapse';
@@ -31,6 +32,13 @@ interface GroupChildrenProps {
   messageIndex: number;
 }
 
+interface PartitionedBlocks {
+  answerBlocks: AssistantContentBlock[];
+  /** True while generating if long post-tool answer was moved outside the fold (tool phase UI may show “done”). */
+  postToolTailPromoted: boolean;
+  workingBlocks: AssistantContentBlock[];
+}
+
 const isEmptyBlock = (block: AssistantContentBlock) =>
   (!block.content || block.content === LOADING_FLAT) &&
   (!block.tools || block.tools.length === 0) &&
@@ -50,12 +58,13 @@ const hasTools = (block: AssistantContentBlock): boolean => {
  * Working phase: from first block with tools through last block with tools
  * (inclusive — interleaved content/reasoning blocks between tool blocks are included).
  *
- * Answer phase: all blocks after the last tool block.
- * Blocks before the first tool block are also treated as answer (pre-content).
+ * Answer phase: blocks before the first tool block, plus blocks after the last tool
+ * (or after detected post-tool “final answer” while still generating).
  */
 const partitionBlocks = (
   blocks: AssistantContentBlock[],
-): { answerBlocks: AssistantContentBlock[]; workingBlocks: AssistantContentBlock[] } => {
+  isGenerating: boolean,
+): PartitionedBlocks => {
   let lastToolIndex = -1;
   for (let i = blocks.length - 1; i >= 0; i--) {
     if (hasTools(blocks[i])) {
@@ -65,7 +74,7 @@ const partitionBlocks = (
   }
 
   if (lastToolIndex === -1) {
-    return { answerBlocks: blocks, workingBlocks: [] };
+    return { answerBlocks: blocks, postToolTailPromoted: false, workingBlocks: [] };
   }
 
   let firstToolIndex = 0;
@@ -77,11 +86,33 @@ const partitionBlocks = (
   }
 
   const preBlocks = blocks.slice(0, firstToolIndex);
+
+  if (isGenerating) {
+    const toolsFlat = blocks.flatMap((b) => b.tools ?? []);
+    const toolsPhaseComplete = areWorkflowToolsComplete(toolsFlat);
+    let workingEndExclusive = blocks.length;
+    let postToolTailPromoted = false;
+    if (toolsPhaseComplete) {
+      const split = getPostToolAnswerSplitIndex(blocks, lastToolIndex, toolsPhaseComplete, true);
+      if (split != null) {
+        workingEndExclusive = split;
+        postToolTailPromoted = true;
+      }
+    }
+
+    return {
+      answerBlocks: [...preBlocks, ...blocks.slice(workingEndExclusive)],
+      postToolTailPromoted,
+      workingBlocks: blocks.slice(firstToolIndex, workingEndExclusive),
+    };
+  }
+
+  const postBlocks = blocks.slice(lastToolIndex + 1);
   const workingBlocks = blocks.slice(firstToolIndex, lastToolIndex + 1);
-  const answerBlocks = blocks.slice(lastToolIndex + 1);
 
   return {
-    answerBlocks: [...preBlocks, ...answerBlocks],
+    answerBlocks: [...preBlocks, ...postBlocks],
+    postToolTailPromoted: false,
     workingBlocks,
   };
 };
@@ -94,7 +125,18 @@ const Group = memo<GroupChildrenProps>(
     ]);
     const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
 
-    const { workingBlocks, answerBlocks } = useMemo(() => partitionBlocks(blocks), [blocks]);
+    const { workingBlocks, answerBlocks, postToolTailPromoted } = useMemo(
+      () => partitionBlocks(blocks, isGenerating),
+      [blocks, isGenerating],
+    );
+
+    const workflowChromeComplete = !isGenerating || postToolTailPromoted;
+
+    /** First non-placeholder in the answer column (pre-tool + post-tool when finalized). */
+    const firstSubstantiveAnswerIndex = useMemo(
+      () => answerBlocks.findIndex((b) => !isEmptyBlock(b)),
+      [answerBlocks],
+    );
 
     if (isCollapsed) {
       return (
@@ -114,7 +156,7 @@ const Group = memo<GroupChildrenProps>(
               assistantMessageId={id}
               blocks={workingBlocks}
               disableEditing={disableEditing}
-              hasBlocksOutsideWorkflow={answerBlocks.length > 0}
+              workflowChromeComplete={workflowChromeComplete}
             />
           )}
           {answerBlocks.map((item, index) => {
@@ -126,7 +168,9 @@ const Group = memo<GroupChildrenProps>(
                 assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}
-                isFirstBlock={index === 0}
+                isFirstBlock={
+                  firstSubstantiveAnswerIndex >= 0 && index === firstSubstantiveAnswerIndex
+                }
                 key={id + '.' + item.id}
                 messageIndex={messageIndex}
               />
