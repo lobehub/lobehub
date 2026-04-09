@@ -510,7 +510,16 @@ export class AgentBridgeService {
       }
     }
 
-    const { agentId, botContext, channelContext, charLimit, client, displayToolCalls, topicId, trigger } = opts;
+    const {
+      agentId,
+      botContext,
+      channelContext,
+      charLimit,
+      client,
+      displayToolCalls,
+      topicId,
+      trigger,
+    } = opts;
 
     const queueMode = isQueueAgentRuntimeEnabled();
     const aiAgentService = new AiAgentService(this.db, this.userId);
@@ -525,7 +534,7 @@ export class AgentBridgeService {
       log('executeWithCallback: failed to post initial placeholder message: %O', error);
     }
 
-    const files = await this.extractFiles(userMessage);
+    const files = await this.resolveFiles(userMessage, client);
     const prompt = this.formatPrompt(userMessage, client);
 
     // Build webhook config for production mode
