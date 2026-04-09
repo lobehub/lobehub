@@ -8,6 +8,8 @@ const log = debug('lobe-server:message-gateway-client');
 
 export interface MessageGatewayConnectionConfig {
   connectionId: string;
+  /** Preferred connection mode (e.g., "webhook", "websocket"). Falls back to platform default if omitted. */
+  connectionMode?: string;
   credentials: Record<string, unknown>;
   platform: string;
   userId: string;

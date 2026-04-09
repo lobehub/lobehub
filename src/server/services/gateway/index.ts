@@ -81,8 +81,11 @@ export class GatewayService {
 
           try {
             const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
+            const definition = platformRegistry.getPlatform(platform);
+            const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
             await client.connect({
               connectionId: provider.id,
+              connectionMode,
               credentials: provider.credentials,
               platform,
               userId: provider.userId,
@@ -173,7 +176,7 @@ export class GatewayService {
     return 'started';
   }
 
-  async stopClient(platform: string, applicationId: string,  userId?: string): Promise<void> {
+  async stopClient(platform: string, applicationId: string, userId?: string): Promise<void> {
     if (this.useMessageGateway) {
       return this.stopClientViaGateway(platform, applicationId);
     }
@@ -238,9 +241,12 @@ export class GatewayService {
     }
 
     const webhookPath = `/api/agent/webhooks/${platform}/${applicationId}`;
+    const definition = platformRegistry.getPlatform(platform);
+    const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
 
     await client.connect({
       connectionId: provider.id,
+      connectionMode,
       credentials: provider.credentials,
       platform,
       userId,
