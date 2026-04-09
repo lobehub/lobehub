@@ -16,10 +16,6 @@ import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { PlatformClient, PlatformMessenger } from './platforms';
 import { platformRegistry } from './platforms';
 import {
-  encodeDingTalkWebhookThreadId,
-  extractDingTalkSessionWebhook,
-} from './platforms/dingtalk/helpers';
-import {
   renderError,
   renderFinalReply,
   renderStart,
@@ -222,30 +218,6 @@ export class AgentBridgeService {
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
-  }
-
-  private canEditProgressMessage(platform?: string): boolean {
-    if (!platform) return true;
-
-    const entry = platformRegistry.getPlatform(platform);
-    return entry?.supportsMessageEdit !== false;
-  }
-
-  private resolveDingTalkReplyMessenger(
-    client: PlatformClient | undefined,
-    platform: string | undefined,
-    rawMessage: unknown,
-  ): PlatformMessenger | undefined {
-    if (!client || platform !== 'dingtalk') return undefined;
-
-    const payload =
-      rawMessage && typeof rawMessage === 'object'
-        ? (rawMessage as { sessionWebhook?: string })
-        : undefined;
-    const sessionWebhook = extractDingTalkSessionWebhook(payload);
-    if (!sessionWebhook) return undefined;
-
-    return client.getMessenger(encodeDingTalkWebhookThreadId(sessionWebhook));
   }
 
   private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
@@ -555,11 +527,19 @@ export class AgentBridgeService {
 
     await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithCallback)');
 
+    // Ask the platform client whether this inbound message carries a direct-reply target
+    // (e.g. DingTalk session webhook). When present, shared services route replies through
+    // the client's messenger for that target instead of the Chat SDK thread — the placeholder
+    // post is skipped because the target is one-shot and can't be edited.
+    const directReplyTarget = client?.resolveDirectReplyTarget?.(userMessage.raw);
+
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithCallback: failed to post initial placeholder message: %O', error);
+    if (!directReplyTarget) {
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithCallback: failed to post initial placeholder message: %O', error);
+      }
     }
 
     const files = await this.resolveFiles(userMessage, client);
@@ -569,18 +549,17 @@ export class AgentBridgeService {
     const callbackUrl = '/api/agent/webhooks/bot-callback';
     const webhookBody = {
       applicationId: botContext?.applicationId,
+      directReplyTarget,
       platformThreadId: botContext?.platformThreadId,
-      sessionWebhook: extractDingTalkSessionWebhook(
-        userMessage.raw as { sessionWebhook?: string } | undefined,
-      ),
       progressMessageId: progressMessage?.id,
       userMessageId: userMessage.id,
     };
 
     log(
-      'executeWithCallback: agentId=%s, queueMode=%s, prompt=%s, files=%d',
+      'executeWithCallback: agentId=%s, queueMode=%s, directReplyTarget=%s, prompt=%s, files=%d',
       agentId,
       queueMode,
+      directReplyTarget ?? '<none>',
       prompt.slice(0, 100),
       files?.length ?? 0,
     );
@@ -611,6 +590,7 @@ export class AgentBridgeService {
       charLimit,
       channelContext,
       client,
+      directReplyTarget,
       displayToolCalls,
       files,
       progressMessage,
@@ -769,6 +749,14 @@ export class AgentBridgeService {
       charLimit?: number;
       channelContext?: DiscordChannelContext;
       client?: PlatformClient;
+      /**
+       * Optional direct-reply target resolved from the inbound message by the
+       * platform client (e.g. DingTalk session webhook). When set, replies go
+       * through `client.getMessenger(directReplyTarget)` as a one-shot sender
+       * instead of the Chat SDK thread. The progress placeholder is skipped
+       * because these targets can't be edited.
+       */
+      directReplyTarget?: string;
       displayToolCalls?: boolean;
       files?: any;
       progressMessage?: SentMessage;
@@ -786,6 +774,7 @@ export class AgentBridgeService {
       charLimit,
       channelContext,
       client,
+      directReplyTarget,
       displayToolCalls,
       files,
       prompt,
@@ -796,6 +785,11 @@ export class AgentBridgeService {
 
     let { progressMessage } = opts;
     let operationStartTime = 0;
+
+    // When the platform client provided a direct-reply target, resolve a one-shot
+    // messenger once here and reuse it for error / stopped / final-reply paths.
+    const directReplyMessenger: PlatformMessenger | undefined =
+      directReplyTarget && client ? client.getMessenger(directReplyTarget) : undefined;
 
     return new Promise<{ reply: string; topicId: string }>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -876,6 +870,8 @@ export class AgentBridgeService {
                     const errorText = renderError(errorMsg);
                     if (progressMessage) {
                       await progressMessage.edit(errorText);
+                    } else if (directReplyMessenger) {
+                      await directReplyMessenger.createMessage(errorText);
                     } else {
                       await thread.post(errorText);
                     }
@@ -892,6 +888,12 @@ export class AgentBridgeService {
                       await progressMessage.edit(renderStopped());
                     } catch {
                       // ignore edit failure
+                    }
+                  } else if (directReplyMessenger) {
+                    try {
+                      await directReplyMessenger.createMessage(renderStopped());
+                    } catch {
+                      // ignore send failure
                     }
                   }
                   resolve({ reply: '', topicId: resolvedTopicId });
@@ -921,6 +923,10 @@ export class AgentBridgeService {
                         await progressMessage.edit(chunks[0]);
                         for (let i = 1; i < chunks.length; i++) {
                           await thread.post(chunks[i]);
+                        }
+                      } else if (directReplyMessenger) {
+                        for (const chunk of chunks) {
+                          await directReplyMessenger.createMessage(chunk);
                         }
                       } else {
                         for (const chunk of chunks) {

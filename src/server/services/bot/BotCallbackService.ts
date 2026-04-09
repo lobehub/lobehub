@@ -10,7 +10,6 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { AgentBridgeService } from './AgentBridgeService';
 import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
 import { mergeWithDefaults, platformRegistry } from './platforms';
-import { encodeDingTalkWebhookThreadId } from './platforms/dingtalk/helpers';
 import {
   renderError,
   renderFinalReply,
@@ -27,6 +26,13 @@ export interface BotCallbackBody {
   applicationId: string;
   content?: string;
   cost?: number;
+  /**
+   * Optional direct-reply target provided by the platform client when the
+   * inbound message carries a one-shot reply endpoint (e.g. DingTalk session
+   * webhook). When set, the callback messenger is built from this target
+   * instead of the regular `platformThreadId`.
+   */
+  directReplyTarget?: string;
   duration?: number;
   elapsedMs?: number;
   errorMessage?: string;
@@ -43,7 +49,6 @@ export interface BotCallbackBody {
   progressMessageId?: string;
   reason?: string;
   reasoning?: string;
-  sessionWebhook?: string;
   shouldContinue?: boolean;
   stepType?: 'call_llm' | 'call_tool';
   thinking?: boolean;
@@ -73,14 +78,14 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId, sessionWebhook } = body;
+    const { type, applicationId, platformThreadId, progressMessageId, directReplyTarget } = body;
     const platform = platformThreadId.split(':')[0];
 
     const { client, messenger, charLimit, settings } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
-      sessionWebhook,
+      directReplyTarget,
     );
 
     const entry = platformRegistry.getPlatform(platform);
@@ -112,7 +117,7 @@ export class BotCallbackService {
     platform: string,
     applicationId: string,
     platformThreadId: string,
-    sessionWebhook?: string,
+    directReplyTarget?: string,
   ): Promise<{
     charLimit?: number;
     client: PlatformClient;
@@ -156,11 +161,12 @@ export class BotCallbackService {
     const client = entry.clientFactory.createClient(config, {
       redisClient: getAgentRuntimeRedisClient() as any,
     });
-    const messenger = client.getMessenger(
-      platform === 'dingtalk' && sessionWebhook
-        ? encodeDingTalkWebhookThreadId(sessionWebhook)
-        : platformThreadId,
-    );
+
+    // If the inbound message carried a platform-specific direct-reply target
+    // (e.g. DingTalk session webhook), use it as the messenger target. The
+    // string is opaque to shared code — each platform's own `getMessenger`
+    // decodes it. Falls back to the regular threadId otherwise.
+    const messenger = client.getMessenger(directReplyTarget || platformThreadId);
 
     return { charLimit, client, messenger, settings };
   }

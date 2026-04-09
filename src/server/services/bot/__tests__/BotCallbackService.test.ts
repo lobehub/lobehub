@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { BotCallbackBody } from '../BotCallbackService';
 import { BotCallbackService } from '../BotCallbackService';
-import { encodeDingTalkWebhookThreadId } from '../platforms/dingtalk/helpers';
 
 // ==================== Hoisted mocks ====================
 
@@ -176,20 +175,17 @@ describe('BotCallbackService', () => {
       expect(mockFindByPlatformAndAppId).toHaveBeenCalledWith(FAKE_DB, 'telegram', 'app-123');
     });
 
-    it('uses sessionWebhook as the DingTalk reply target when provided', async () => {
+    it('uses directReplyTarget as the messenger target when provided', async () => {
+      const directReplyTarget = 'dingtalk:webhook:opaque-encoded-target';
       const body = makeBody({
+        directReplyTarget,
         platformThreadId: 'dingtalk:group:cid-123',
-        sessionWebhook: 'https://oapi.dingtalk.com/robot/sendBySession?session=abc123',
         type: 'completion',
       });
 
       await service.handleCallback(body);
 
-      expect(mockGetMessenger).toHaveBeenCalledWith(
-        encodeDingTalkWebhookThreadId(
-          'https://oapi.dingtalk.com/robot/sendBySession?session=abc123',
-        ),
-      );
+      expect(mockGetMessenger).toHaveBeenCalledWith(directReplyTarget);
     });
   });
 

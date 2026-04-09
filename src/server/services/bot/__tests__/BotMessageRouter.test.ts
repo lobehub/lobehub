@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BotMessageRouter } from '../BotMessageRouter';
-import { DINGTALK_NOT_IMPLEMENTED_MESSAGE } from '../platforms/dingtalk/client';
 
 // ==================== Hoisted mocks ====================
 
@@ -206,53 +205,6 @@ describe('BotMessageRouter', () => {
       const resp = await handler(req);
 
       expect(resp.status).toBe(404);
-    });
-
-    it('returns 501 when the platform runtime is not implemented', async () => {
-      const provider = makeProvider({ applicationId: 'dt-app-1' });
-      mockFindEnabledByPlatform.mockResolvedValue([provider]);
-
-      const notImplementedClient = {
-        applicationId: provider.applicationId,
-        id: 'dingtalk',
-        createAdapter: () => {
-          throw new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
-        },
-        extractChatId: () => 'ignored',
-        getMessenger: () => ({
-          createMessage: () => Promise.reject(new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE)),
-          editMessage: () => Promise.reject(new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE)),
-          removeReaction: () => Promise.reject(new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE)),
-          triggerTyping: () => Promise.reject(new Error(DINGTALK_NOT_IMPLEMENTED_MESSAGE)),
-        }),
-        parseMessageId: () => '',
-        start: vi.fn(),
-        stop: vi.fn(),
-      };
-
-      const defaultPlatformImpl = mockGetPlatform.getMockImplementation();
-      mockGetPlatform.mockImplementation((platform: string) => {
-        if (platform === 'dingtalk') {
-          return {
-            clientFactory: {
-              createClient: () => notImplementedClient,
-            },
-            credentials: [],
-            id: platform,
-            name: platform,
-          };
-        }
-        return defaultPlatformImpl?.(platform);
-      });
-
-      const router = new BotMessageRouter();
-      const handler = router.getWebhookHandler('dingtalk', provider.applicationId);
-
-      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
-      const resp = await handler(req);
-
-      expect(resp.status).toBe(501);
-      expect(await resp.text()).toBe(DINGTALK_NOT_IMPLEMENTED_MESSAGE);
     });
 
     it('should return 400 when appId is missing for generic platform', async () => {

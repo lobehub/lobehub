@@ -19,9 +19,12 @@ import { ClientFactory } from '../types';
 import { formatUsageStats } from '../utils';
 import { createDingTalkAdapter } from './adapter';
 import { DingTalkApi } from './api';
-import { decodeDingTalkThreadId, decodeDingTalkWebhookThreadId } from './helpers';
-
-export const DINGTALK_NOT_IMPLEMENTED_MESSAGE = 'DingTalk webhook runtime is not implemented yet';
+import {
+  decodeDingTalkThreadId,
+  decodeDingTalkWebhookThreadId,
+  encodeDingTalkWebhookThreadId,
+  extractDingTalkSessionWebhook,
+} from './helpers';
 
 const DINGTALK_DEFAULT_MARKDOWN_TITLE = 'LobeHub';
 const DINGTALK_MAX_CHAR_LIMIT = 40_000;
@@ -187,6 +190,22 @@ class DingTalkClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return parseDingTalkThreadId(platformThreadId).id;
+  }
+
+  /**
+   * DingTalk inbound messages can carry a session-scoped webhook URL
+   * (`sessionWebhook`) that allows the bot to reply directly without
+   * going through the proactive robot API. When present, we encode it
+   * as a pseudo-threadId that `getMessenger` knows how to decode back
+   * into a session-webhook sender.
+   */
+  resolveDirectReplyTarget(rawMessage: unknown): string | undefined {
+    if (!rawMessage || typeof rawMessage !== 'object') return undefined;
+
+    const sessionWebhook = extractDingTalkSessionWebhook(rawMessage as { sessionWebhook?: string });
+    if (!sessionWebhook) return undefined;
+
+    return encodeDingTalkWebhookThreadId(sessionWebhook);
   }
 
   formatMarkdown(markdown: string): string {

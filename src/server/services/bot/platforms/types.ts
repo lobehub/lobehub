@@ -162,6 +162,21 @@ export interface PlatformClient {
   ) => Promise<void>;
 
   /**
+   * Optional: resolve a one-shot reply target from an inbound raw message.
+   *
+   * When present, shared services will route outbound replies to this target
+   * instead of the thread's regular `platformThreadId`. Used by platforms that
+   * provide session-scoped reply endpoints (e.g. DingTalk session webhooks).
+   *
+   * The returned string MUST be a valid input to `getMessenger()`. All
+   * platform-specific encoding stays inside the platform's own module.
+   *
+   * When not implemented, shared services fall back to the thread's
+   * `platformThreadId` as usual.
+   */
+  resolveDirectReplyTarget?: (rawMessage: unknown) => string | undefined;
+
+  /**
    * Resolve the correct thread ID for reaction API calls.
    *
    * Some platforms (e.g. Discord) need to route reactions to a different channel
