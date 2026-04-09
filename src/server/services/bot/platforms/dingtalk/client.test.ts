@@ -340,34 +340,6 @@ describe('DingTalkClient', () => {
     expect(decrypted.message).toBe('success');
   });
 
-  it('adapter postMessage sends group replies in local mode', async () => {
-    const sendTextMessageSpy = vi
-      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
-      .mockResolvedValue({
-        messageId: 'mid-local',
-      });
-    const client = createClient();
-    const adapter = client.createAdapter().dingtalk;
-
-    const { chat } = createChatStub();
-    await adapter.initialize(chat);
-
-    const result = await adapter.postMessage('dingtalk:group:cid-group', 'hello from adapter');
-
-    expect(sendTextMessageSpy).toHaveBeenCalledWith({
-      content: 'hello from adapter',
-      messageType: 'markdown',
-      openConversationId: 'cid-group',
-      title: 'LobeHub',
-    });
-    expect(result).toEqual(
-      expect.objectContaining({
-        id: 'mid-local',
-        threadId: 'dingtalk:group:cid-group',
-      }),
-    );
-  });
-
   it('marks runtime connected after a successful start', async () => {
     const getAccessTokenSpy = vi
       .spyOn(DingTalkApi.prototype, 'getAccessToken')

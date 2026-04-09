@@ -127,8 +127,6 @@ class DingTalkClient implements PlatformClient {
       dingtalk: createDingTalkAdapter({
         applicationId: this.applicationId,
         aesKey: this.config.credentials.aesKey,
-        clientSecret: this.config.credentials.clientSecret,
-        messageType: this.messageType,
         verificationToken: this.config.credentials.verificationToken,
       }),
     };
