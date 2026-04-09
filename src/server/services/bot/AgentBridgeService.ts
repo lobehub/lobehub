@@ -322,7 +322,11 @@ export class AgentBridgeService {
       } catch (error) {
         log('handleMention error: %O', error);
         const msg = error instanceof Error ? error.message : String(error);
-        await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+        try {
+          await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+        } catch (postError) {
+          log('handleMention: failed to post error message: %O', postError);
+        }
       }
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
@@ -455,7 +459,11 @@ export class AgentBridgeService {
         }
 
         log('handleSubscribedMessage error: %O', error);
-        await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+        try {
+          await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+        } catch (postError) {
+          log('handleSubscribedMessage: failed to post error message: %O', postError);
+        }
       }
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
