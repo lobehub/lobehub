@@ -342,6 +342,23 @@ export const generationSlice: StateCreator<
     });
 
     try {
+      // ── Gateway mode: trigger server-side regeneration ──
+      if (chatStore.isGatewayModeEnabled()) {
+        await chatStore.executeGatewayAgent({
+          context,
+          message: item.content,
+          parentMessageId: messageId,
+        });
+
+        chatStore.completeOperation(operationId);
+
+        if (hooks.onRegenerateComplete) {
+          hooks.onRegenerateComplete(messageId);
+        }
+        return;
+      }
+
+      // ── Client mode: run agent locally ──
       // Calculate next branch index by counting children of this user message
       // We need to count how many assistant messages have this user message as parent
       const { dbMessages } = get();
