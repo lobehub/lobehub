@@ -90,18 +90,6 @@ interface ThreadState {
 }
 
 interface BridgeHandlerOpts {
-  /**
-   * Internal: when true, the caller already holds the `activeThreads` flag
-   * for this thread, so the callee must skip its own activeThreads check /
-   * add / delete (the parent caller owns the lifecycle).
-   *
-   * Used by `handleSubscribedMessage` when it recursively calls
-   * `handleMention` on a stale-topic reset or FK violation. Without this,
-   * the recursive call would either (a) trip its own activeThreads check
-   * and silently skip the message (race-prone) or (b) try to delete the
-   * flag in its finally and leave the parent's finally double-deleting.
-   */
-  _activeFlagHeldByCaller?: boolean;
   agentId: string;
   botContext?: ChatTopicBotContext;
   charLimit?: number;
