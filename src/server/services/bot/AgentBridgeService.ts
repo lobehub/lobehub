@@ -82,6 +82,7 @@ async function safeSideEffect(fn: () => Promise<unknown>, label: string): Promis
 interface DiscordChannelContext {
   channel: { id: string; name?: string; topic?: string; type?: number };
   guild: { id: string };
+  thread?: { id: string; name?: string };
 }
 
 interface ThreadState {
@@ -546,6 +547,7 @@ export class AgentBridgeService {
       applicationId: botContext?.applicationId,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId: progressMessage?.id,
+      threadName: channelContext?.thread?.name,
       userMessageId: userMessage.id,
     };
 
@@ -638,7 +640,11 @@ export class AgentBridgeService {
           botContext,
           botPlatformContext,
           discordContext: channelContext
-            ? { channel: channelContext.channel, guild: channelContext.guild }
+            ? {
+                channel: channelContext.channel,
+                guild: channelContext.guild,
+                thread: channelContext.thread,
+              }
             : undefined,
           files,
           hooks: [
@@ -786,7 +792,11 @@ export class AgentBridgeService {
           botContext,
           botPlatformContext,
           discordContext: channelContext
-            ? { channel: channelContext.channel, guild: channelContext.guild }
+            ? {
+                channel: channelContext.channel,
+                guild: channelContext.guild,
+                thread: channelContext.thread,
+              }
             : undefined,
           files,
           hooks: [
@@ -1044,6 +1054,7 @@ export class AgentBridgeService {
       const decoded = thread.adapter.decodeThreadId(thread.id) as {
         channelId?: string;
         guildId?: string;
+        threadId?: string;
       };
 
       if (!decoded?.guildId || !decoded?.channelId) {
@@ -1051,25 +1062,49 @@ export class AgentBridgeService {
         return undefined;
       }
 
-      // Fetch thread info to get channel name and metadata
-      const threadInfo = await thread.adapter.fetchThread(thread.id);
-      const raw = threadInfo.metadata?.raw as { topic?: string; type?: number } | undefined;
+      // Fetch parent channel info
+      const channelInfo = await thread.adapter.fetchThread(thread.id);
+      const raw = channelInfo.metadata?.raw as { topic?: string; type?: number } | undefined;
 
       const context: DiscordChannelContext = {
         channel: {
           id: decoded.channelId,
-          name: threadInfo.channelName,
+          name: channelInfo.channelName,
           topic: raw?.topic,
           type: raw?.type,
         },
         guild: { id: decoded.guildId },
       };
 
+      // When in a Discord thread, also fetch thread info.
+      // Discord threads are channels, so we can fetch via /channels/{threadId}
+      // by constructing a synthetic composite ID with threadId as the channelId slot.
+      if (decoded.threadId) {
+        try {
+          const syntheticId = `discord:${decoded.guildId}:${decoded.threadId}`;
+          const threadInfoResult = await thread.adapter.fetchThread(syntheticId);
+          context.thread = {
+            id: decoded.threadId,
+            name: threadInfoResult.channelName,
+          };
+          log(
+            'fetchChannelContext: thread=%s (%s)',
+            decoded.threadId,
+            threadInfoResult.channelName,
+          );
+        } catch (threadError) {
+          log('fetchChannelContext: failed to fetch thread info: %O', threadError);
+          // Still include thread ID even if name fetch fails
+          context.thread = { id: decoded.threadId };
+        }
+      }
+
       log(
-        'fetchChannelContext: guild=%s, channel=%s (%s)',
+        'fetchChannelContext: guild=%s, channel=%s (%s), thread=%s',
         decoded.guildId,
         decoded.channelId,
-        threadInfo.channelName,
+        channelInfo.channelName,
+        context.thread?.name ?? 'none',
       );
 
       return context;
