@@ -29,6 +29,68 @@ import type {
 type WarnFn = (message: string, ...args: unknown[]) => void;
 
 /**
+ * Encode a Lark/Feishu thread ID with optional inline chat type.
+ *
+ *   - `lark:p2p:oc_xxx`   single chat (DM with bot)
+ *   - `lark:group:oc_xxx` group chat
+ *   - `lark:oc_xxx`       legacy / unknown type — emitted only when callers
+ *                         don't have `chatType` at hand (e.g. `parseMessage`
+ *                         on history fetches). `decodeLarkThreadId` accepts
+ *                         both formats so older persisted threadIds keep working.
+ *
+ * Encoding the chat type into the threadId itself lets the sync `isDM` the
+ * Chat SDK requires be a pure function of its argument, matching the pattern
+ * Discord uses (`discord:guildId:channelId:...`, isDM = `guildId === '@me'`)
+ * and Slack uses (channel ID prefix `D`).
+ */
+export function encodeLarkThreadId(data: LarkThreadId): string {
+  if (data.chatType === 'p2p' || data.chatType === 'group') {
+    return `${data.platform}:${data.chatType}:${data.chatId}`;
+  }
+  return `${data.platform}:${data.chatId}`;
+}
+
+/**
+ * Decode a Lark/Feishu thread ID. Accepts BOTH the new 3-segment format
+ * (`<platform>:<chatType>:<chatId>`) and the legacy 2-segment format
+ * (`<platform>:<chatId>`) so threadIds persisted in Redis from before the
+ * encoded-type rollout still resolve correctly.
+ *
+ * Exported as a standalone helper so the server-side bot platform clients
+ * (which extract `chatId` for outbound API calls) share a single source of
+ * truth with the adapter and don't have to duplicate the parsing rules.
+ */
+export function decodeLarkThreadId(
+  threadId: string,
+  defaultPlatform: 'lark' | 'feishu' = 'lark',
+): LarkThreadId {
+  const colonIdx = threadId.indexOf(':');
+  if (colonIdx === -1) {
+    return { chatId: threadId, platform: defaultPlatform };
+  }
+  const prefix = threadId.slice(0, colonIdx);
+  const rest = threadId.slice(colonIdx + 1);
+  const platform = prefix === 'lark' || prefix === 'feishu' ? prefix : defaultPlatform;
+
+  // New format: `<platform>:<chatType>:<chatId>` — only when the second
+  // segment is a recognized chat type. Otherwise treat the whole tail as
+  // the chat ID (legacy 2-segment format) so old persisted IDs still decode.
+  const nextColon = rest.indexOf(':');
+  if (nextColon !== -1) {
+    const maybeType = rest.slice(0, nextColon);
+    if (maybeType === 'p2p' || maybeType === 'group') {
+      return {
+        chatId: rest.slice(nextColon + 1),
+        chatType: maybeType,
+        platform,
+      };
+    }
+  }
+
+  return { chatId: rest, platform };
+}
+
+/**
  * Walk a raw Feishu/Lark message and produce metadata-only attachments — no
  * downloads. Used by `LarkAdapter.parseMessage` and `parseRawEvent` so the
  * inbound parse path stays cheap: media bytes are downloaded later, on
@@ -551,53 +613,12 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
   // Thread ID encoding
   // ------------------------------------------------------------------
 
-  /**
-   * ThreadId encoding:
-   *
-   *   - `lark:p2p:oc_xxx`   single chat (DM with bot)
-   *   - `lark:group:oc_xxx` group chat
-   *   - `lark:oc_xxx`       legacy / unknown type — emitted only when callers
-   *                         don't have `chatType` at hand (e.g. `parseMessage`
-   *                         on history fetches). `decodeThreadId` accepts both
-   *                         formats so older persisted threadIds keep working.
-   *
-   * Encoding the chat type into the threadId itself lets the sync `isDM`
-   * required by the Chat SDK be a pure function of its argument, matching the
-   * pattern Discord uses (`discord:guildId:channelId:...`, isDM = `guildId
-   * === '@me'`) and Slack uses (channel ID prefix `D`).
-   */
   encodeThreadId(data: LarkThreadId): string {
-    if (data.chatType === 'p2p' || data.chatType === 'group') {
-      return `${data.platform}:${data.chatType}:${data.chatId}`;
-    }
-    return `${data.platform}:${data.chatId}`;
+    return encodeLarkThreadId(data);
   }
 
   decodeThreadId(threadId: string): LarkThreadId {
-    const colonIdx = threadId.indexOf(':');
-    if (colonIdx === -1) {
-      return { chatId: threadId, platform: this.platform };
-    }
-    const prefix = threadId.slice(0, colonIdx);
-    const rest = threadId.slice(colonIdx + 1);
-    const platform = prefix === 'lark' || prefix === 'feishu' ? prefix : this.platform;
-
-    // New format: `<platform>:<chatType>:<chatId>` — only when the second
-    // segment is a recognized chat type. Otherwise treat the whole tail as
-    // the chat ID (legacy 2-segment format) so old persisted IDs still decode.
-    const nextColon = rest.indexOf(':');
-    if (nextColon !== -1) {
-      const maybeType = rest.slice(0, nextColon);
-      if (maybeType === 'p2p' || maybeType === 'group') {
-        return {
-          chatId: rest.slice(nextColon + 1),
-          chatType: maybeType,
-          platform,
-        };
-      }
-    }
-
-    return { chatId: rest, platform };
+    return decodeLarkThreadId(threadId, this.platform);
   }
 
   channelIdFromThreadId(threadId: string): string {

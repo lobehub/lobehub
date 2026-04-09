@@ -1,6 +1,8 @@
 export {
   createLarkAdapter,
+  decodeLarkThreadId,
   downloadMediaFromRawMessage,
+  encodeLarkThreadId,
   extractMediaMetadata,
   LarkAdapter,
 } from './adapter';

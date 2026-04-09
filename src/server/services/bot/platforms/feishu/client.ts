@@ -1,5 +1,6 @@
 import {
   createLarkAdapter,
+  decodeLarkThreadId,
   downloadMediaFromRawMessage,
   LarkApiClient,
   type LarkRawMessage,
@@ -38,7 +39,11 @@ export interface GatewayListenerOptions {
 }
 
 function extractChatId(platformThreadId: string): string {
-  return platformThreadId.split(':')[1];
+  // Delegate to the adapter's shared decoder so this stays in sync with the
+  // threadId format. New format is `lark:p2p:oc_xxx` / `lark:group:oc_xxx`,
+  // legacy is `lark:oc_xxx` — naive `split(':')[1]` would return `'p2p'` /
+  // `'group'` for the new format and break outbound API calls.
+  return decodeLarkThreadId(platformThreadId).chatId;
 }
 
 /** Resolve the Lark/Feishu domain from the platform id. */
