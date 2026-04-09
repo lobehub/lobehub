@@ -15,8 +15,12 @@ import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
-import type { PlatformClient } from './platforms';
+import type { PlatformClient, PlatformMessenger } from './platforms';
 import { platformRegistry } from './platforms';
+import {
+  encodeDingTalkWebhookThreadId,
+  extractDingTalkSessionWebhook,
+} from './platforms/dingtalk/helpers';
 import {
   renderError,
   renderFinalReply,
@@ -201,6 +205,30 @@ export class AgentBridgeService {
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
     this.userId = userId;
+  }
+
+  private canEditProgressMessage(platform?: string): boolean {
+    if (!platform) return true;
+
+    const entry = platformRegistry.getPlatform(platform);
+    return entry?.supportsMessageEdit !== false;
+  }
+
+  private resolveDingTalkReplyMessenger(
+    client: PlatformClient | undefined,
+    platform: string | undefined,
+    rawMessage: unknown,
+  ): PlatformMessenger | undefined {
+    if (!client || platform !== 'dingtalk') return undefined;
+
+    const payload =
+      rawMessage && typeof rawMessage === 'object'
+        ? (rawMessage as { sessionWebhook?: string })
+        : undefined;
+    const sessionWebhook = extractDingTalkSessionWebhook(payload);
+    if (!sessionWebhook) return undefined;
+
+    return client.getMessenger(encodeDingTalkWebhookThreadId(sessionWebhook));
   }
 
   private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
@@ -460,6 +488,7 @@ export class AgentBridgeService {
   ): Promise<{ reply: string; topicId: string }> {
     const { agentId, botContext, botPlatformContext, channelContext, client, topicId, trigger } =
       opts;
+    const canEditProgressMessage = this.canEditProgressMessage(botContext?.platform);
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
@@ -467,10 +496,12 @@ export class AgentBridgeService {
     await thread.startTyping();
 
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+    if (canEditProgressMessage) {
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+      }
     }
 
     const progressMessageId: string | undefined = progressMessage?.id;
@@ -487,6 +518,9 @@ export class AgentBridgeService {
       applicationId: botContext?.applicationId,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId,
+      sessionWebhook: extractDingTalkSessionWebhook(
+        userMessage.raw as { sessionWebhook?: string } | undefined,
+      ),
       userMessageId: userMessage.id,
     };
 
@@ -610,6 +644,12 @@ export class AgentBridgeService {
       topicId,
       trigger,
     } = opts;
+    const canEditProgressMessage = this.canEditProgressMessage(botContext?.platform);
+    const directReplyMessenger = this.resolveDingTalkReplyMessenger(
+      client,
+      botContext?.platform,
+      userMessage.raw,
+    );
 
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
@@ -617,10 +657,12 @@ export class AgentBridgeService {
     await thread.startTyping();
 
     let progressMessage: SentMessage | undefined;
-    try {
-      progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
-    } catch (error) {
-      log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
+    if (canEditProgressMessage) {
+      try {
+        progressMessage = await thread.post(renderStart(userMessage.text, { timezone }));
+      } catch (error) {
+        log('executeWithInMemoryCallbacks: failed to post initial placeholder message: %O', error);
+      }
     }
 
     // Track the last LLM content and tool calls for showing during tool execution
@@ -709,6 +751,8 @@ export class AgentBridgeService {
                   const errorText = renderError(errorMsg);
                   if (progressMessage) {
                     await progressMessage.edit(errorText);
+                  } else if (directReplyMessenger) {
+                    await directReplyMessenger.createMessage(errorText);
                   } else {
                     await thread.post(errorText);
                   }
@@ -725,6 +769,12 @@ export class AgentBridgeService {
                     await progressMessage.edit(renderStopped());
                   } catch {
                     // ignore edit failure
+                  }
+                } else if (directReplyMessenger) {
+                  try {
+                    await directReplyMessenger.createMessage(renderStopped());
+                  } catch {
+                    // ignore send failure
                   }
                 }
                 resolve({ reply: '', topicId: resolvedTopicId });
@@ -761,6 +811,10 @@ export class AgentBridgeService {
                       // Post overflow chunks as follow-up messages
                       for (let i = 1; i < chunks.length; i++) {
                         await thread.post(chunks[i]);
+                      }
+                    } else if (directReplyMessenger) {
+                      for (const chunk of chunks) {
+                        await directReplyMessenger.createMessage(chunk);
                       }
                     } else {
                       // No progress message (non-editable platform) — post all chunks as new messages

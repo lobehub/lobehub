@@ -1,6 +1,7 @@
+import crypto from 'node:crypto';
+
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DingTalkInboundMessagePayload } from './types';
 import {
   buildDingTalkThreadId,
   buildDingTalkWebhookSignature,
@@ -9,8 +10,34 @@ import {
   normalizeDingTalkInboundMessage,
   stripLeadingBotMention,
 } from './helpers';
+import type { DingTalkInboundMessagePayload } from './types';
 
 const BOT_NAME = 'lobehub-bot';
+
+function encryptDingTalkEventWithPaddingBlockSize(
+  plaintext: string,
+  aesKey: string,
+  receiverId: string,
+  paddingBlockSize: number,
+): string {
+  const key = Buffer.from(`${aesKey}=`, 'base64');
+  const iv = key.subarray(0, 16);
+  const random16 = Buffer.alloc(16, 1);
+  const msg = Buffer.from(plaintext, 'utf8');
+  const receiver = Buffer.from(receiverId, 'utf8');
+  const msgLen = Buffer.alloc(4);
+  msgLen.writeUInt32BE(msg.length, 0);
+
+  const payload = Buffer.concat([random16, msgLen, msg, receiver]);
+  const remainder = payload.length % paddingBlockSize;
+  const paddingLength = remainder === 0 ? paddingBlockSize : paddingBlockSize - remainder;
+  const paddedPayload = Buffer.concat([payload, Buffer.alloc(paddingLength, paddingLength)]);
+
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  cipher.setAutoPadding(false);
+
+  return Buffer.concat([cipher.update(paddedPayload), cipher.final()]).toString('base64');
+}
 
 function buildPayload(
   overrides: Partial<DingTalkInboundMessagePayload>,
@@ -196,6 +223,25 @@ describe('DingTalk helpers', () => {
       expect(body.msg_signature).toBe(expectedSig);
     });
 
+    it('decrypts encrypted callbacks that use 32-byte PKCS#7 padding', () => {
+      const encrypt = encryptDingTalkEventWithPaddingBlockSize('ping', AES_KEY, APPLICATION_ID, 32);
+
+      expect(decryptDingTalkEventWithReceiver(encrypt, AES_KEY)).toEqual({
+        message: 'ping',
+        receiverId: APPLICATION_ID,
+      });
+    });
+
+    it('round-trips payloads whose plaintext length already aligns to a 32-byte block', () => {
+      const receiverId = 'corp-123';
+      const encrypt = encryptDingTalkEvent('ping', AES_KEY, receiverId);
+
+      expect(decryptDingTalkEventWithReceiver(encrypt, AES_KEY)).toEqual({
+        message: 'ping',
+        receiverId,
+      });
+    });
+
     it('rejects invalid signatures before attempting to decrypt', async () => {
       const { createDingTalkAdapter } = await import('./adapter');
       const { chat, logger } = createChatStub();
@@ -207,11 +253,15 @@ describe('DingTalk helpers', () => {
       });
       await adapter.initialize(chat);
 
-      const encrypt = encryptDingTalkEvent(JSON.stringify({ EventType: 'check_url' }), AES_KEY, APPLICATION_ID);
-      const req = new Request(
-        'https://example.com/webhook?msg_signature=bad&timestamp=1&nonce=2',
-        { body: JSON.stringify({ encrypt }), method: 'POST' },
+      const encrypt = encryptDingTalkEvent(
+        JSON.stringify({ EventType: 'check_url' }),
+        AES_KEY,
+        APPLICATION_ID,
       );
+      const req = new Request('https://example.com/webhook?msg_signature=bad&timestamp=1&nonce=2', {
+        body: JSON.stringify({ encrypt }),
+        method: 'POST',
+      });
 
       const res = await adapter.handleWebhook(req);
       expect(res.status).toBe(401);
@@ -244,9 +294,10 @@ describe('DingTalk helpers', () => {
       expect(logger.error).toHaveBeenCalled();
     });
 
-    it('rejects encrypted callbacks when receiver/app key does not match applicationId', async () => {
+    it('uses the decrypted receiverId when answering check_url verification events', async () => {
       const { createDingTalkAdapter } = await import('./adapter');
       const { chat } = createChatStub();
+      const receiverId = 'ding-corp-id';
 
       const adapter = createDingTalkAdapter({
         aesKey: AES_KEY,
@@ -255,7 +306,12 @@ describe('DingTalk helpers', () => {
       });
       await adapter.initialize(chat);
 
-      const encrypt = encryptDingTalkEvent(JSON.stringify({ EventType: 'check_url' }), AES_KEY, 'other-app-key');
+      const encrypt = encryptDingTalkEventWithPaddingBlockSize(
+        JSON.stringify({ EventType: 'check_url' }),
+        AES_KEY,
+        receiverId,
+        32,
+      );
       const timestamp = '1';
       const nonce = '2';
       const signature = buildDingTalkWebhookSignature({ encrypt, nonce, timestamp, token: TOKEN });
@@ -266,7 +322,14 @@ describe('DingTalk helpers', () => {
       );
 
       const res = await adapter.handleWebhook(req);
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      const decrypted = decryptDingTalkEventWithReceiver(body.encrypt, AES_KEY);
+      expect(decrypted).toEqual({
+        message: 'success',
+        receiverId,
+      });
     });
   });
 });

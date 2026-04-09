@@ -10,6 +10,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 import { AgentBridgeService } from './AgentBridgeService';
 import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
 import { platformRegistry } from './platforms';
+import { encodeDingTalkWebhookThreadId } from './platforms/dingtalk/helpers';
 import {
   renderError,
   renderFinalReply,
@@ -38,6 +39,7 @@ export interface BotCallbackBody {
   progressMessageId?: string;
   reason?: string;
   reasoning?: string;
+  sessionWebhook?: string;
   shouldContinue?: boolean;
   stepType?: 'call_llm' | 'call_tool';
   thinking?: boolean;
@@ -67,13 +69,14 @@ export class BotCallbackService {
   }
 
   async handleCallback(body: BotCallbackBody): Promise<void> {
-    const { type, applicationId, platformThreadId, progressMessageId } = body;
+    const { type, applicationId, platformThreadId, progressMessageId, sessionWebhook } = body;
     const platform = platformThreadId.split(':')[0];
 
     const { client, messenger, charLimit } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
+      sessionWebhook,
     );
 
     const entry = platformRegistry.getPlatform(platform);
@@ -105,6 +108,7 @@ export class BotCallbackService {
     platform: string,
     applicationId: string,
     platformThreadId: string,
+    sessionWebhook?: string,
   ): Promise<{ charLimit?: number; messenger: PlatformMessenger; client: PlatformClient }> {
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
       this.db,
@@ -142,7 +146,11 @@ export class BotCallbackService {
     const client = entry.clientFactory.createClient(config, {
       redisClient: getAgentRuntimeRedisClient() as any,
     });
-    const messenger = client.getMessenger(platformThreadId);
+    const messenger = client.getMessenger(
+      platform === 'dingtalk' && sessionWebhook
+        ? encodeDingTalkWebhookThreadId(sessionWebhook)
+        : platformThreadId,
+    );
 
     return { charLimit, messenger, client };
   }

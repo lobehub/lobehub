@@ -99,9 +99,7 @@ export class DingTalkApi {
               title: buildMarkdownTitle(params.content, params.title),
             })
           : JSON.stringify({ content: params.content }),
-      ...(isGroup
-        ? { openConversationId }
-        : { userIds }),
+      ...(isGroup ? { openConversationId } : { userIds }),
     };
 
     const res = await fetch(url, {
@@ -115,6 +113,37 @@ export class DingTalkApi {
 
     if (!res.ok) {
       throw new Error(`DingTalk robot send failed with status ${res.status}`);
+    }
+
+    return res.json();
+  }
+
+  async sendSessionWebhookMessage(
+    sessionWebhook: string,
+    params: Pick<DingTalkSendTextMessageParams, 'content' | 'messageType' | 'title'>,
+  ): Promise<unknown> {
+    const payload =
+      params.messageType === 'text'
+        ? {
+            msgtype: 'text',
+            text: { content: params.content },
+          }
+        : {
+            markdown: {
+              text: params.content,
+              title: buildMarkdownTitle(params.content, params.title),
+            },
+            msgtype: 'markdown',
+          };
+
+    const res = await fetch(sessionWebhook, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(`DingTalk session webhook send failed with status ${res.status}`);
     }
 
     return res.json();

@@ -1,3 +1,12 @@
+import debug from 'debug';
+
+import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+
+import { stripMarkdown } from '../stripMarkdown';
 import type {
   BotPlatformRuntimeContext,
   BotProviderConfig,
@@ -8,16 +17,9 @@ import type {
 } from '../types';
 import { ClientFactory } from '../types';
 import { formatUsageStats } from '../utils';
-import { stripMarkdown } from '../stripMarkdown';
-import debug from 'debug';
-import {
-  BOT_RUNTIME_STATUSES,
-  getRuntimeStatusErrorMessage,
-  updateBotRuntimeStatus,
-} from '@/server/services/gateway/runtimeStatus';
-import { DingTalkApi } from './api';
 import { createDingTalkAdapter } from './adapter';
-import { decodeDingTalkThreadId } from './helpers';
+import { DingTalkApi } from './api';
+import { decodeDingTalkThreadId, decodeDingTalkWebhookThreadId } from './helpers';
 
 export const DINGTALK_NOT_IMPLEMENTED_MESSAGE = 'DingTalk webhook runtime is not implemented yet';
 
@@ -27,7 +29,9 @@ const DINGTALK_MIN_CHAR_LIMIT = 100;
 
 const log = debug('bot-platform:dingtalk:bot');
 
-const parseDingTalkThreadId = (platformThreadId: string): ReturnType<typeof decodeDingTalkThreadId> => {
+const parseDingTalkThreadId = (
+  platformThreadId: string,
+): ReturnType<typeof decodeDingTalkThreadId> => {
   const parts = platformThreadId.split(':');
   if (parts.length < 3 || parts[0] !== 'dingtalk') {
     throw new Error(`Invalid DingTalk threadId: ${platformThreadId}`);
@@ -123,12 +127,34 @@ class DingTalkClient implements PlatformClient {
       dingtalk: createDingTalkAdapter({
         applicationId: this.applicationId,
         aesKey: this.config.credentials.aesKey,
+        clientSecret: this.config.credentials.clientSecret,
+        messageType: this.messageType,
         verificationToken: this.config.credentials.verificationToken,
       }),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
+    const sessionWebhook = decodeDingTalkWebhookThreadId(platformThreadId);
+
+    if (sessionWebhook) {
+      const sendViaWebhook = async (content: string): Promise<void> => {
+        const formattedContent = this.formatOutboundContent(content);
+        await this.api.sendSessionWebhookMessage(sessionWebhook, {
+          content: formattedContent,
+          messageType: this.messageType,
+          title: DINGTALK_DEFAULT_MARKDOWN_TITLE,
+        });
+      };
+
+      return {
+        createMessage: sendViaWebhook,
+        editMessage: (_messageId, content) => sendViaWebhook(content),
+        removeReaction: () => Promise.resolve(),
+        triggerTyping: () => Promise.resolve(),
+      };
+    }
+
     const thread = parseDingTalkThreadId(platformThreadId);
 
     const send = async (content: string): Promise<void> => {

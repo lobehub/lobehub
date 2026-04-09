@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import {
+  BOT_RUNTIME_STATUSES,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
 
 import type { BotPlatformRuntimeContext, BotProviderConfig, PlatformClient } from '../types';
 import { DingTalkApi } from './api';
@@ -8,6 +11,7 @@ import { DingTalkClientFactory } from './client';
 import {
   buildDingTalkWebhookSignature,
   decryptDingTalkEventWithReceiver,
+  encodeDingTalkWebhookThreadId,
   encryptDingTalkEvent,
 } from './helpers';
 
@@ -100,13 +104,15 @@ const createCheckUrlRequest = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  updateRuntimeStatusMock.mockImplementation(async ({ applicationId, errorMessage, platform, status }) => ({
-    applicationId,
-    errorMessage,
-    platform,
-    status,
-    updatedAt: 0,
-  }));
+  updateRuntimeStatusMock.mockImplementation(
+    async ({ applicationId, errorMessage, platform, status }) => ({
+      applicationId,
+      errorMessage,
+      platform,
+      status,
+      updatedAt: 0,
+    }),
+  );
 });
 
 afterEach(() => {
@@ -140,7 +146,10 @@ describe('DingTalkClientFactory', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       oauthUrl,
       expect.objectContaining({
-        body: JSON.stringify({ appKey: baseApplicationId, appSecret: baseCredentials.clientSecret }),
+        body: JSON.stringify({
+          appKey: baseApplicationId,
+          appSecret: baseCredentials.clientSecret,
+        }),
         method: 'POST',
       }),
     );
@@ -331,10 +340,38 @@ describe('DingTalkClient', () => {
     expect(decrypted.message).toBe('success');
   });
 
-  it('marks runtime connected after a successful start', async () => {
-    const getAccessTokenSpy = vi.spyOn(DingTalkApi.prototype, 'getAccessToken').mockResolvedValue(
-      'token',
+  it('adapter postMessage sends group replies in local mode', async () => {
+    const sendTextMessageSpy = vi
+      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
+      .mockResolvedValue({
+        messageId: 'mid-local',
+      });
+    const client = createClient();
+    const adapter = client.createAdapter().dingtalk;
+
+    const { chat } = createChatStub();
+    await adapter.initialize(chat);
+
+    const result = await adapter.postMessage('dingtalk:group:cid-group', 'hello from adapter');
+
+    expect(sendTextMessageSpy).toHaveBeenCalledWith({
+      content: 'hello from adapter',
+      messageType: 'markdown',
+      openConversationId: 'cid-group',
+      title: 'LobeHub',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'mid-local',
+        threadId: 'dingtalk:group:cid-group',
+      }),
     );
+  });
+
+  it('marks runtime connected after a successful start', async () => {
+    const getAccessTokenSpy = vi
+      .spyOn(DingTalkApi.prototype, 'getAccessToken')
+      .mockResolvedValue('token');
     const client = createClient();
 
     await client.start();
@@ -384,9 +421,9 @@ describe('DingTalkClient', () => {
   });
 
   it('sends group replies through openConversationId', async () => {
-    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
-      {},
-    );
+    const sendTextMessageSpy = vi
+      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
+      .mockResolvedValue({});
     const client = createClient();
 
     await client.getMessenger('dingtalk:group:cid-group').createMessage('hello');
@@ -400,9 +437,9 @@ describe('DingTalkClient', () => {
   });
 
   it('sends direct replies through userIds', async () => {
-    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
-      {},
-    );
+    const sendTextMessageSpy = vi
+      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
+      .mockResolvedValue({});
     const client = createClient();
 
     await client.getMessenger('dingtalk:dm:user-1').createMessage('hello');
@@ -415,10 +452,39 @@ describe('DingTalkClient', () => {
     });
   });
 
-  it('falls back to plain text before sending when messageType is text', async () => {
-    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
-      {},
+  it('sends replies through sessionWebhook when available', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({ errcode: 0 }),
+      ok: true,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createClient();
+
+    await client
+      .getMessenger(
+        encodeDingTalkWebhookThreadId(
+          'https://oapi.dingtalk.com/robot/sendBySession?session=abc123',
+        ),
+      )
+      .createMessage('hello webhook');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://oapi.dingtalk.com/robot/sendBySession?session=abc123',
+      expect.objectContaining({
+        body: JSON.stringify({
+          markdown: { text: 'hello webhook', title: 'LobeHub' },
+          msgtype: 'markdown',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }),
     );
+  });
+
+  it('falls back to plain text before sending when messageType is text', async () => {
+    const sendTextMessageSpy = vi
+      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
+      .mockResolvedValue({});
     const client = createClient({ messageType: 'text' });
 
     expect(client.formatMarkdown('**hello** `world`')).toBe('hello world');
@@ -434,9 +500,9 @@ describe('DingTalkClient', () => {
   });
 
   it('clamps invalid low charLimit values to the schema minimum before sending', async () => {
-    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
-      {},
-    );
+    const sendTextMessageSpy = vi
+      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
+      .mockResolvedValue({});
     const client = createClient({ charLimit: 5, messageType: 'text' });
 
     await client.getMessenger('dingtalk:group:cid-group').createMessage('a'.repeat(150));
@@ -456,9 +522,9 @@ describe('DingTalkClient', () => {
   });
 
   it('edits by sending a new message as fallback', async () => {
-    const sendTextMessageSpy = vi.spyOn(DingTalkApi.prototype, 'sendTextMessage').mockResolvedValue(
-      {},
-    );
+    const sendTextMessageSpy = vi
+      .spyOn(DingTalkApi.prototype, 'sendTextMessage')
+      .mockResolvedValue({});
     const client = createClient();
 
     await client.getMessenger('dingtalk:group:cid-group').editMessage('mid-1', 'hello again');

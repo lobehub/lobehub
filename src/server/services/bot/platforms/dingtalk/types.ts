@@ -9,6 +9,7 @@ export interface DingTalkInboundTextBody {
  * shapes depending on webhook config (encrypted vs plaintext) and message type.
  */
 export interface DingTalkInboundMessagePayload {
+  [key: string]: unknown;
   conversationId?: string;
   /**
    * DingTalk commonly uses:
@@ -16,17 +17,18 @@ export interface DingTalkInboundMessagePayload {
    * - "2": group chat
    */
   conversationType?: string;
+  // Encrypted webhook envelope
+  encrypt?: string;
   isInAtList?: boolean;
   msgId?: string;
   msgtype?: string;
   senderId?: string;
   senderNick?: string;
+  sessionWebhook?: string;
+
+  sessionWebhookExpiredTime?: number;
+
   text?: DingTalkInboundTextBody;
-
-  // Encrypted webhook envelope
-  encrypt?: string;
-
-  [key: string]: unknown;
 }
 
 export interface DingTalkThreadId {

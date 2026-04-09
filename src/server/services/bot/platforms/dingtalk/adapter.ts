@@ -1,7 +1,10 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   Adapter,
   AdapterPostableMessage,
   Author,
+  BaseFormatConverter,
   ChatInstance,
   EmojiValue,
   FetchOptions,
@@ -9,11 +12,19 @@ import type {
   FormattedContent,
   Logger,
   RawMessage,
+  Root,
   ThreadInfo,
   WebhookOptions,
 } from 'chat';
-import { Message, NotImplementedError, parseMarkdown, stringifyMarkdown } from 'chat';
+import {
+  BaseFormatConverter as ChatBaseFormatConverter,
+  Message,
+  parseMarkdown,
+  stringifyMarkdown,
+} from 'chat';
 
+import { stripMarkdown } from '../stripMarkdown';
+import { DingTalkApi } from './api';
 import {
   buildDingTalkEncryptedResponse,
   decodeDingTalkThreadId,
@@ -29,17 +40,32 @@ import type {
 } from './types';
 
 export interface DingTalkAdapterConfig {
-  applicationId?: string;
   aesKey?: string;
+  applicationId?: string;
   botName?: string;
-  verificationToken?: string;
+  clientSecret?: string;
+  messageType?: 'markdown' | 'text';
   userName?: string;
+  verificationToken?: string;
+}
+
+class DingTalkFormatConverter extends ChatBaseFormatConverter {
+  fromAst(ast: Root): string {
+    return stringifyMarkdown(ast);
+  }
+
+  toAst(text: string): Root {
+    return parseMarkdown(text.trim());
+  }
 }
 
 export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboundMessagePayload> {
   readonly name = 'dingtalk';
   private readonly applicationId?: string;
   private readonly aesKey?: string;
+  private readonly api?: DingTalkApi;
+  private readonly formatConverter: BaseFormatConverter;
+  private readonly messageType: 'markdown' | 'text';
   private readonly verificationToken?: string;
   private _userName: string;
   private botName?: string;
@@ -55,7 +81,16 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
     this.botName = config.botName;
     this.applicationId = config.applicationId;
     this.aesKey = config.aesKey;
+    this.formatConverter = new DingTalkFormatConverter();
+    this.messageType = config.messageType === 'text' ? 'text' : 'markdown';
     this.verificationToken = config.verificationToken;
+
+    if (config.applicationId && config.clientSecret) {
+      this.api = new DingTalkApi({
+        appKey: config.applicationId,
+        appSecret: config.clientSecret,
+      });
+    }
   }
 
   async initialize(chat: ChatInstance): Promise<void> {
@@ -84,10 +119,15 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
     // Decrypt encrypted events if needed (DingTalk callback mode).
     if (typeof body.encrypt === 'string' && body.encrypt) {
       if (!this.aesKey || !this.verificationToken || !this.applicationId) {
-        return new Response('Encrypted event but no aesKey/verificationToken/applicationId configured', {
-          status: 401,
-        });
+        return new Response(
+          'Encrypted event but no aesKey/verificationToken/applicationId configured',
+          {
+            status: 401,
+          },
+        );
       }
+
+      let decryptedReceiverId: string | undefined;
 
       const url = new URL(request.url);
       const signature =
@@ -112,9 +152,7 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
 
       try {
         const decrypted = decryptDingTalkEventWithReceiver(body.encrypt, this.aesKey);
-        if (decrypted.receiverId !== this.applicationId) {
-          return new Response('Invalid receiverId', { status: 401 });
-        }
+        decryptedReceiverId = decrypted.receiverId || this.applicationId;
 
         body = JSON.parse(decrypted.message);
       } catch (error) {
@@ -129,7 +167,7 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
           buildDingTalkEncryptedResponse({
             aesKey: this.aesKey,
             nonce,
-            receiverId: this.applicationId,
+            receiverId: decryptedReceiverId || this.applicationId,
             timestamp,
             token: this.verificationToken,
           }),
@@ -162,18 +200,18 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
   // ------------------------------------------------------------------
 
   async postMessage(
-    _threadId: string,
-    _message: AdapterPostableMessage,
+    threadId: string,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<DingTalkInboundMessagePayload>> {
-    throw new NotImplementedError('DingTalk postMessage is not implemented yet');
+    return this.sendPostableMessage(threadId, message);
   }
 
   async editMessage(
-    _threadId: string,
+    threadId: string,
     _messageId: string,
-    _message: AdapterPostableMessage,
+    message: AdapterPostableMessage,
   ): Promise<RawMessage<DingTalkInboundMessagePayload>> {
-    throw new NotImplementedError('DingTalk editMessage is not implemented yet');
+    return this.sendPostableMessage(threadId, message);
   }
 
   async deleteMessage(_threadId: string, _messageId: string): Promise<void> {
@@ -236,8 +274,8 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
     const text = normalized?.text || '';
     const formatted = parseMarkdown(text);
 
-    const authorId = normalized?.authorId || (raw.senderId || 'unknown');
-    const authorName = normalized?.authorName || (raw.senderNick || authorId);
+    const authorId = normalized?.authorId || raw.senderId || 'unknown';
+    const authorName = normalized?.authorName || raw.senderNick || authorId;
     const author: Author = {
       fullName: authorName,
       isBot: false,
@@ -321,6 +359,44 @@ export class DingTalkAdapter implements Adapter<DingTalkThreadId, DingTalkInboun
 
   renderFormatted(content: FormattedContent): string {
     return stringifyMarkdown(content);
+  }
+
+  private formatPostableMessage(message: AdapterPostableMessage): string {
+    const rendered = this.formatConverter.renderPostable(message);
+    return this.messageType === 'text' ? stripMarkdown(rendered) : rendered;
+  }
+
+  private async sendPostableMessage(
+    threadId: string,
+    message: AdapterPostableMessage,
+  ): Promise<RawMessage<DingTalkInboundMessagePayload>> {
+    if (!this.api) {
+      throw new Error('DingTalk adapter is missing outbound credentials');
+    }
+
+    const thread = this.decodeThreadId(threadId);
+    const content = this.formatPostableMessage(message);
+    const response = await this.api.sendTextMessage({
+      content,
+      messageType: this.messageType,
+      ...(thread.type === 'group' ? { openConversationId: thread.id } : { userIds: [thread.id] }),
+      title: 'LobeHub',
+    });
+
+    const responseMessageId =
+      typeof response === 'object' && response && 'messageId' in response
+        ? response.messageId
+        : undefined;
+    const messageId = typeof responseMessageId === 'string' ? responseMessageId : randomUUID();
+
+    return {
+      id: messageId,
+      raw: {
+        msgId: messageId,
+        text: { content },
+      },
+      threadId,
+    };
   }
 }
 

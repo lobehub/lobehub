@@ -97,6 +97,27 @@ function createClient() {
   } as any;
 }
 
+function mockLocalExecAgentWithFinalReply(reply: string) {
+  mockExecAgent.mockImplementationOnce(async (input: Record<string, any>) => {
+    await input.stepCallbacks.onComplete({
+      finalState: {
+        cost: { total: 0 },
+        messages: [{ content: reply, role: 'assistant' }],
+        usage: { llm: { apiCalls: 1, tokens: { total: 10 } }, tools: { totalCalls: 0 } },
+      },
+      reason: 'completed',
+    });
+
+    return {
+      assistantMessageId: 'assistant-msg-1',
+      createdAt: new Date().toISOString(),
+      operationId: 'op-1',
+      success: true,
+      topicId: 'topic-1',
+    };
+  });
+}
+
 describe('AgentBridgeService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -150,5 +171,37 @@ describe('AgentBridgeService', () => {
     expect(replyReactionMessageId).toBe(MESSAGE_ID);
     expect(replyReactionEmoji).toBeDefined();
     expect(mockExecAgent).not.toHaveBeenCalled();
+  });
+
+  it('skips editable placeholder for non-editable platforms in local mode', async () => {
+    mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+    mockGetPlatform.mockReturnValue({ id: 'dingtalk', supportsMessageEdit: false });
+    mockLocalExecAgentWithFinalReply('hello back');
+
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread();
+    const message = createMessage();
+    const client = createClient();
+    const messenger = {
+      createMessage: vi.fn().mockResolvedValue({ id: 'm1' }),
+      editMessage: vi.fn(),
+      removeReaction: vi.fn(),
+      triggerTyping: vi.fn(),
+    };
+    client.getMessenger.mockReturnValue(messenger);
+
+    message.raw = {
+      sessionWebhook: 'https://oapi.dingtalk.com/robot/sendBySession?session=abc123',
+    };
+
+    await service.handleMention(thread, message, {
+      agentId: 'agent-1',
+      botContext: { platform: 'dingtalk', platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(thread.post).not.toHaveBeenCalled();
+    expect(client.getMessenger).toHaveBeenCalledTimes(1);
+    expect(messenger.createMessage).toHaveBeenCalledWith('hello back');
   });
 });

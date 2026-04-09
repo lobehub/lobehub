@@ -114,7 +114,7 @@ export class BotMessageRouter {
   private async handleWebhook(req: Request, platform: string, appId: string): Promise<Response> {
     log('handleWebhook: platform=%s, appId=%s', platform, appId);
 
-    let bot: RegisteredBot | null = null;
+    let bot: RegisteredBot | null;
     try {
       bot = await this.getOrCreateBot(platform, appId);
     } catch (error) {
@@ -147,16 +147,23 @@ export class BotMessageRouter {
   private async getOrCreateBot(platform: string, appId: string): Promise<RegisteredBot | null> {
     const key = buildRuntimeKey(platform, appId);
 
+    const log = debug('lobe-server:bot:message-router');
+    log(`getOrCreateBot: platform=${platform}, appId=${appId}`);
+
     // Return cached bot
     const existing = this.bots.get(key);
+    log(`existing: ${existing}`);
     if (existing) return existing;
 
     // Deduplicate concurrent loads for the same key
     const inflight = this.loadingPromises.get(key);
+    log(`inflight: ${inflight}`);
     if (inflight) return inflight;
 
     const promise = this.loadBot(platform, appId);
+    log(`promise: ${promise}`);
     this.loadingPromises.set(key, promise);
+    log(`loadingPromises: ${this.loadingPromises}`);
 
     try {
       return await promise;
