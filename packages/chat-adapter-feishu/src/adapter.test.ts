@@ -99,19 +99,55 @@ describe('LarkAdapter', () => {
   // ---------- thread ID encoding/decoding ----------
 
   describe('encodeThreadId / decodeThreadId', () => {
-    it('should encode thread ID with platform prefix', () => {
+    it('should encode legacy 2-segment format when chatType is unknown', () => {
       const encoded = adapter.encodeThreadId({ chatId: 'oc_chat1', platform: 'lark' });
       expect(encoded).toBe('lark:oc_chat1');
     });
 
-    it('should decode valid thread ID', () => {
+    it('should encode 3-segment format with chatType=p2p', () => {
+      const encoded = adapter.encodeThreadId({
+        chatId: 'oc_chat1',
+        chatType: 'p2p',
+        platform: 'lark',
+      });
+      expect(encoded).toBe('lark:p2p:oc_chat1');
+    });
+
+    it('should encode 3-segment format with chatType=group', () => {
+      const encoded = adapter.encodeThreadId({
+        chatId: 'oc_chat1',
+        chatType: 'group',
+        platform: 'feishu',
+      });
+      expect(encoded).toBe('feishu:group:oc_chat1');
+    });
+
+    it('should decode legacy 2-segment format (chatType undefined)', () => {
       const decoded = adapter.decodeThreadId('lark:oc_chat1');
       expect(decoded).toEqual({ chatId: 'oc_chat1', platform: 'lark' });
     });
 
-    it('should decode feishu prefix', () => {
+    it('should decode feishu prefix in legacy format', () => {
       const decoded = adapter.decodeThreadId('feishu:oc_chat2');
       expect(decoded).toEqual({ chatId: 'oc_chat2', platform: 'feishu' });
+    });
+
+    it('should decode 3-segment p2p format', () => {
+      const decoded = adapter.decodeThreadId('lark:p2p:oc_dm');
+      expect(decoded).toEqual({ chatId: 'oc_dm', chatType: 'p2p', platform: 'lark' });
+    });
+
+    it('should decode 3-segment group format', () => {
+      const decoded = adapter.decodeThreadId('feishu:group:oc_team');
+      expect(decoded).toEqual({ chatId: 'oc_team', chatType: 'group', platform: 'feishu' });
+    });
+
+    it('should treat unrecognized middle segment as part of legacy chatId', () => {
+      // `lark:weird:oc_x` — `weird` is not a known chat type, fall back to
+      // legacy 2-segment decoding so anything in the tail (incl. extra colons)
+      // becomes the chat ID.
+      const decoded = adapter.decodeThreadId('lark:weird:oc_x');
+      expect(decoded).toEqual({ chatId: 'weird:oc_x', platform: 'lark' });
     });
 
     it('should fallback for bare chat ID', () => {
@@ -119,8 +155,22 @@ describe('LarkAdapter', () => {
       expect(decoded).toEqual({ chatId: 'oc_chat3', platform: 'lark' });
     });
 
-    it('should round-trip encode/decode', () => {
+    it('should round-trip encode/decode for legacy format', () => {
       const original = { chatId: 'oc_abc', platform: 'lark' as const };
+      expect(adapter.decodeThreadId(adapter.encodeThreadId(original))).toEqual(original);
+    });
+
+    it('should round-trip encode/decode for p2p format', () => {
+      const original = { chatId: 'oc_abc', chatType: 'p2p' as const, platform: 'lark' as const };
+      expect(adapter.decodeThreadId(adapter.encodeThreadId(original))).toEqual(original);
+    });
+
+    it('should round-trip encode/decode for group format', () => {
+      const original = {
+        chatId: 'oc_abc',
+        chatType: 'group' as const,
+        platform: 'feishu' as const,
+      };
       expect(adapter.decodeThreadId(adapter.encodeThreadId(original))).toEqual(original);
     });
   });
@@ -357,6 +407,76 @@ describe('LarkAdapter', () => {
     });
   });
 
+  // ---------- mention detection ----------
+  //
+  // Lark renders @-mentions in raw text as `@_user_N` placeholders that the
+  // adapter strips before display, so the Chat SDK's text-based mention
+  // detection cannot match. The authoritative signal is `message.mentions[]`,
+  // and we look up the bot's own `open_id` (loaded during `initialize()` via
+  // `getBotInfo`) to set `Message.isMention`.
+
+  describe('mention detection', () => {
+    beforeEach(() => {
+      // Pretend bot info loaded successfully during initialize()
+      (adapter as any)._botUserId = 'ou_bot_test';
+    });
+
+    async function parseFromWebhook(message: LarkMessageBody) {
+      await adapter.handleWebhook(makeRequest(makeWebhookPayload(message)));
+      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
+      return factory?.();
+    }
+
+    it('should set isMention=true when bot is in mentions[]', async () => {
+      const msg = makeLarkMessage({
+        content: JSON.stringify({ text: '@_user_1 hello' }),
+        mentions: [{ id: { open_id: 'ou_bot_test' }, key: '@_user_1', name: 'TestBot' }],
+      });
+
+      const message = await parseFromWebhook(msg);
+
+      expect(message?.isMention).toBe(true);
+    });
+
+    it('should set isMention=false when only other users are mentioned', async () => {
+      const msg = makeLarkMessage({
+        content: JSON.stringify({ text: '@_user_1 hi' }),
+        mentions: [{ id: { open_id: 'ou_other_user' }, key: '@_user_1', name: 'Alice' }],
+      });
+
+      const message = await parseFromWebhook(msg);
+
+      expect(message?.isMention).toBe(false);
+    });
+
+    it('should set isMention=false when mentions[] is absent', async () => {
+      const message = await parseFromWebhook(makeLarkMessage());
+
+      expect(message?.isMention).toBe(false);
+    });
+
+    it('should set isMention=false when _botUserId is unknown', async () => {
+      (adapter as any)._botUserId = undefined;
+      const msg = makeLarkMessage({
+        mentions: [{ id: { open_id: 'ou_anyone' }, key: '@_user_1', name: 'X' }],
+      });
+
+      const message = await parseFromWebhook(msg);
+
+      expect(message?.isMention).toBe(false);
+    });
+
+    it('parseMessage (history fetch path) should also set isMention from mentions[]', () => {
+      const raw = makeLarkMessage({
+        mentions: [{ id: { open_id: 'ou_bot_test' }, key: '@_user_1', name: 'TestBot' }],
+      });
+
+      const message = adapter.parseMessage(raw);
+
+      expect(message.isMention).toBe(true);
+    });
+  });
+
   // ---------- parseMessage (sync, lazy attachments) ----------
 
   describe('parseMessage', () => {
@@ -469,8 +589,70 @@ describe('LarkAdapter', () => {
   // ---------- isDM ----------
 
   describe('isDM', () => {
-    it('should return false (cannot determine from threadId)', () => {
+    it('should return true for a p2p threadId', () => {
+      expect(adapter.isDM('lark:p2p:oc_dm')).toBe(true);
+    });
+
+    it('should return false for a group threadId', () => {
+      expect(adapter.isDM('lark:group:oc_team')).toBe(false);
+    });
+
+    it('should return false for an unknown legacy threadId with no cache hit', () => {
       expect(adapter.isDM('lark:oc_chat1')).toBe(false);
+    });
+
+    it('should make handleWebhook produce a p2p threadId for single-chat events', async () => {
+      const message = makeLarkMessage({ chat_id: 'oc_p2p', chat_type: 'p2p' });
+      await adapter.handleWebhook(makeRequest(makeWebhookPayload(message)));
+
+      const threadId = vi.mocked(mockChat.processMessage).mock.calls[0]?.[1];
+      expect(threadId).toBe('lark:p2p:oc_p2p');
+      expect(adapter.isDM(threadId as string)).toBe(true);
+    });
+
+    it('should make handleWebhook produce a group threadId for group events', async () => {
+      const message = makeLarkMessage({ chat_id: 'oc_team', chat_type: 'group' });
+      await adapter.handleWebhook(makeRequest(makeWebhookPayload(message)));
+
+      const threadId = vi.mocked(mockChat.processMessage).mock.calls[0]?.[1];
+      expect(threadId).toBe('lark:group:oc_team');
+      expect(adapter.isDM(threadId as string)).toBe(false);
+    });
+
+    // ----- legacy 2-segment threadId fallback -----
+    //
+    // Persisted threadIds from before the encoded-type rollout look like
+    // `lark:oc_xxx` and have no chat type to decode. We still want isDM to
+    // answer correctly for them while migration runs, so the adapter records
+    // P2P chat IDs from incoming webhook events into a per-process set and
+    // consults it whenever decode returns no chatType.
+
+    it('should fall back to the p2p set for a legacy threadId after a p2p webhook', async () => {
+      const message = makeLarkMessage({ chat_id: 'oc_legacy_dm', chat_type: 'p2p' });
+      await adapter.handleWebhook(makeRequest(makeWebhookPayload(message)));
+
+      // Legacy 2-segment format — must hit the fallback path
+      expect(adapter.isDM('lark:oc_legacy_dm')).toBe(true);
+    });
+
+    it('should not flip a legacy threadId to DM after only a group webhook', async () => {
+      const message = makeLarkMessage({ chat_id: 'oc_legacy_group', chat_type: 'group' });
+      await adapter.handleWebhook(makeRequest(makeWebhookPayload(message)));
+
+      expect(adapter.isDM('lark:oc_legacy_group')).toBe(false);
+    });
+
+    it('should let the encoded type win over the fallback set', () => {
+      // Manually seed the fallback set as if a prior webhook had recorded
+      // this chat as P2P, then ask isDM for an explicitly group-typed
+      // threadId for the same chat ID. The encoded type must take precedence
+      // — the set is a fallback, not an override.
+      (adapter as any).p2pChatIds.add('oc_disputed');
+
+      expect(adapter.isDM('lark:group:oc_disputed')).toBe(false);
+      expect(adapter.isDM('lark:p2p:oc_disputed')).toBe(true);
+      // Legacy form for the same chat still hits the fallback
+      expect(adapter.isDM('lark:oc_disputed')).toBe(true);
     });
   });
 });

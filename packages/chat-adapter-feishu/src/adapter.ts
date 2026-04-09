@@ -217,6 +217,20 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
     return this._botUserId;
   }
 
+  /**
+   * Legacy fallback for `isDM`. New code emits the chat type into the
+   * threadId itself (`lark:p2p:oc_xxx`) so `isDM` can be a pure function,
+   * but threadIds persisted in Redis from before this change still use the
+   * 2-segment format `lark:oc_xxx` and have no type info to decode.
+   *
+   * To avoid losing isDM correctness for those legacy IDs, we still record
+   * P2P chat IDs as we see them on incoming webhook events. `isDM` consults
+   * this set only when the threadId has no encoded type. The set rebuilds
+   * itself from live traffic after a restart, and can be retired entirely
+   * once no legacy threadIds remain in Redis.
+   */
+  private p2pChatIds = new Set<string>();
+
   constructor(config: LarkAdapterConfig & { logger?: Logger; userName?: string }) {
     this.platform = config.platform || 'lark';
     this.name = this.platform;
@@ -310,6 +324,14 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       return Response.json({ ok: true });
     }
 
+    // Record P2P chats in the legacy fallback set so `isDM` still answers
+    // correctly for any pre-migration threadId in the 2-segment format that
+    // doesn't carry an encoded chat type. New threadIds emitted below carry
+    // the type inline, so they don't need this lookup.
+    if (message.chat_type === 'p2p') {
+      this.p2pChatIds.add(message.chat_id);
+    }
+
     // Extract text content (for text messages) or media description
     const messageType = message.message_type;
     let messageText = '';
@@ -339,9 +361,16 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       return Response.json({ ok: true });
     }
 
-    // Build thread ID
+    // Build thread ID — encode chat type so the sync `isDM(threadId)` the
+    // Chat SDK calls during dispatch can derive the answer purely from the
+    // threadId, with no side cache. `chat_type` is set by Lark on every
+    // receive event: 'p2p' for single-chat with the bot, 'group' for groups.
     const threadId = this.encodeThreadId({
       chatId: message.chat_id,
+      chatType:
+        message.chat_type === 'p2p' || message.chat_type === 'group'
+          ? message.chat_type
+          : undefined,
       platform: this.platform,
     });
 
@@ -473,6 +502,7 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       },
       formatted,
       id: raw.message_id,
+      isMention: this.detectBotMention(raw),
       metadata: {
         dateSent: new Date(Number(raw.create_time)),
         edited: false,
@@ -521,7 +551,25 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
   // Thread ID encoding
   // ------------------------------------------------------------------
 
+  /**
+   * ThreadId encoding:
+   *
+   *   - `lark:p2p:oc_xxx`   single chat (DM with bot)
+   *   - `lark:group:oc_xxx` group chat
+   *   - `lark:oc_xxx`       legacy / unknown type — emitted only when callers
+   *                         don't have `chatType` at hand (e.g. `parseMessage`
+   *                         on history fetches). `decodeThreadId` accepts both
+   *                         formats so older persisted threadIds keep working.
+   *
+   * Encoding the chat type into the threadId itself lets the sync `isDM`
+   * required by the Chat SDK be a pure function of its argument, matching the
+   * pattern Discord uses (`discord:guildId:channelId:...`, isDM = `guildId
+   * === '@me'`) and Slack uses (channel ID prefix `D`).
+   */
   encodeThreadId(data: LarkThreadId): string {
+    if (data.chatType === 'p2p' || data.chatType === 'group') {
+      return `${data.platform}:${data.chatType}:${data.chatId}`;
+    }
     return `${data.platform}:${data.chatId}`;
   }
 
@@ -531,10 +579,25 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       return { chatId: threadId, platform: this.platform };
     }
     const prefix = threadId.slice(0, colonIdx);
-    const chatId = threadId.slice(colonIdx + 1);
-
+    const rest = threadId.slice(colonIdx + 1);
     const platform = prefix === 'lark' || prefix === 'feishu' ? prefix : this.platform;
-    return { chatId, platform };
+
+    // New format: `<platform>:<chatType>:<chatId>` — only when the second
+    // segment is a recognized chat type. Otherwise treat the whole tail as
+    // the chat ID (legacy 2-segment format) so old persisted IDs still decode.
+    const nextColon = rest.indexOf(':');
+    if (nextColon !== -1) {
+      const maybeType = rest.slice(0, nextColon);
+      if (maybeType === 'p2p' || maybeType === 'group') {
+        return {
+          chatId: rest.slice(nextColon + 1),
+          chatType: maybeType,
+          platform,
+        };
+      }
+    }
+
+    return { chatId: rest, platform };
   }
 
   channelIdFromThreadId(threadId: string): string {
@@ -542,8 +605,12 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
   }
 
   isDM(threadId: string): boolean {
-    // Can't determine from threadId alone; default false
-    return false;
+    const { chatId, chatType } = this.decodeThreadId(threadId);
+    // New 3-segment threadIds carry the type inline — pure-function path.
+    if (chatType !== undefined) return chatType === 'p2p';
+    // Legacy 2-segment threadId — fall back to the per-process P2P set
+    // populated from incoming webhook events. See `p2pChatIds` for context.
+    return this.p2pChatIds.has(chatId);
   }
 
   // ------------------------------------------------------------------
@@ -594,6 +661,7 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       author,
       formatted,
       id: message.message_id,
+      isMention: this.detectBotMention(message),
       metadata: {
         dateSent: new Date(Number(message.create_time)),
         edited: false,
@@ -602,6 +670,25 @@ export class LarkAdapter implements Adapter<LarkThreadId, LarkRawMessage> {
       text: cleanText,
       threadId,
     });
+  }
+
+  /**
+   * Detect whether the bot is @-mentioned in a Lark message.
+   *
+   * Lark renders @-mentions in raw text as `@_user_N` placeholders that the
+   * adapter strips before display, so the Chat SDK's text-based mention
+   * detection (which regexes `@username`) never matches. The authoritative
+   * signal is the `mentions[]` array on the event payload — each entry has
+   * the mentioned user's `open_id`. We compare against the bot's own
+   * `_botUserId` (loaded during `initialize()` via `getBotInfo`).
+   *
+   * Returns false when `_botUserId` is unknown (e.g. bot info fetch failed)
+   * to avoid false positives from comparing against `undefined`.
+   */
+  private detectBotMention(message: LarkMessageBody): boolean {
+    const botUserId = this._botUserId;
+    if (!botUserId) return false;
+    return message.mentions?.some((m) => m.id?.open_id === botUserId) === true;
   }
 
   private async resolveSenderName(openId: string): Promise<string | undefined> {
