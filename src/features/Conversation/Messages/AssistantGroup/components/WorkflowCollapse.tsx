@@ -1,30 +1,15 @@
 import { LOADING_FLAT } from '@lobechat/const';
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { AccordionItem, Block, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Check, X } from 'lucide-react';
+import { AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { Check, Loader2, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { inspectorTextStyles } from '@/styles/text';
+import { shinyTextStyles } from '@/styles';
 import { type AssistantContentBlock } from '@/types/index';
 
 import { formatReasoningDuration, getWorkflowSummaryText, hasToolError } from '../toolDisplayNames';
 import WorkflowExpandedList from './WorkflowExpandedList';
-
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-}));
 
 interface WorkflowCollapseProps {
   assistantId: string;
@@ -89,7 +74,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
   const streaming = !allComplete;
 
   const statusIcon = streaming ? (
-    <NeuralNetworkLoading size={16} />
+    <Icon spin color={cssVar.colorTextDescription} icon={Loader2} />
   ) : errorPresent ? (
     <Icon color={cssVar.colorError} icon={X} />
   ) : (
@@ -97,7 +82,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
   );
 
   const title = (
-    <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+    <Flexbox horizontal align="center" gap={6}>
       <Block
         horizontal
         align="center"
@@ -110,19 +95,26 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(({ blocks, assistantId, dis
       >
         {statusIcon}
       </Block>
-      <div className={inspectorTextStyles.root}>
-        <span>{streaming ? 'Working...' : summaryText}</span>
-        {!streaming && durationText && (
-          <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 6 }}>
-            {durationText}
-          </span>
-        )}
-      </div>
+      {streaming ? (
+        <span className={shinyTextStyles.shinyText}>Working...</span>
+      ) : (
+        <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Text
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            type="secondary"
+          >
+            {summaryText}
+          </Text>
+          {durationText && (
+            <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>{durationText}</span>
+          )}
+        </Flexbox>
+      )}
     </Flexbox>
   );
 
   return (
-    <div className={styles.root}>
+    <div>
       <AccordionItem
         expand={streaming ? true : expanded}
         hideIndicator={streaming}
