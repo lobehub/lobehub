@@ -547,7 +547,10 @@ export class AgentBridgeService {
       applicationId: botContext?.applicationId,
       platformThreadId: botContext?.platformThreadId,
       progressMessageId: progressMessage?.id,
-      threadName: channelContext?.thread?.name,
+      // Pass thread name only if it's user-set (not the bot-generated "Thread <date>" default)
+      threadName: channelContext?.thread?.name?.startsWith('Thread ')
+        ? undefined
+        : channelContext?.thread?.name,
       userMessageId: userMessage.id,
     };
 

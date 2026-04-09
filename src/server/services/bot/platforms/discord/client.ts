@@ -206,6 +206,7 @@ class DiscordGatewayClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const channelId = extractChannelId(platformThreadId);
+    const threadId = platformThreadId.split(':')[3];
     return {
       createMessage: (content) => this.discord.createMessage(channelId, content).then(() => {}),
       editMessage: (messageId, content) => this.discord.editMessage(channelId, messageId, content),
@@ -213,7 +214,6 @@ class DiscordGatewayClient implements PlatformClient {
         this.discord.removeOwnReaction(channelId, messageId, emoji),
       triggerTyping: () => this.discord.triggerTyping(channelId),
       updateThreadName: (name) => {
-        const threadId = platformThreadId.split(':')[3];
         return threadId ? this.discord.updateChannelName(threadId, name) : Promise.resolve();
       },
     };
