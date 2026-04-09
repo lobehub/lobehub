@@ -227,6 +227,9 @@ export const getLLMConfig = () => {
 
       ENABLED_LONGCAT: z.boolean(),
       LONGCAT_API_KEY: z.string().optional(),
+
+      ENABLED_STREAMLAKE: z.boolean(),
+      STREAMLAKE_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -453,6 +456,9 @@ export const getLLMConfig = () => {
 
       ENABLED_LONGCAT: !!process.env.LONGCAT_API_KEY,
       LONGCAT_API_KEY: process.env.LONGCAT_API_KEY,
+
+      ENABLED_STREAMLAKE: !!process.env.STREAMLAKE_API_KEY,
+      STREAMLAKE_API_KEY: process.env.STREAMLAKE_API_KEY,
     },
   });
 };

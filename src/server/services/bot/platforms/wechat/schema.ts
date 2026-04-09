@@ -20,7 +20,7 @@ export const schema: FieldSchema[] = [
       },
       {
         key: 'concurrency',
-        default: 'debounce',
+        default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],

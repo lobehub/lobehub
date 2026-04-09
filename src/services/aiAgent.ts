@@ -108,6 +108,13 @@ class AiAgentService {
    * - Group mode: pass groupId, Thread will be associated with the Group
    * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    */
+  /**
+   * Get a fresh JWT token for Gateway WebSocket reconnection.
+   */
+  async refreshGatewayToken(topicId: string): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
+  }
+
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }

@@ -1,5 +1,5 @@
 import type { DocumentTemplate } from '../../template';
-import { DocumentLoadFormat, DocumentLoadPosition } from '../../types';
+import { DocumentLoadFormat, DocumentLoadPosition, PolicyLoad } from '../../types';
 import content from './BOOTSTRAP.md';
 
 /**
@@ -13,6 +13,7 @@ export const BOOTSTRAP_DOCUMENT: DocumentTemplate = {
   title: 'Bootstrap',
   filename: 'BOOTSTRAP.md',
   description: 'First-run onboarding: discover identity, set up user profile, then self-destruct',
+  policyLoad: PolicyLoad.ALWAYS,
   policyLoadFormat: DocumentLoadFormat.FILE,
   loadPosition: DocumentLoadPosition.SYSTEM_APPEND,
   loadRules: {

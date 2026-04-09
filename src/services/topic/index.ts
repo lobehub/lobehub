@@ -81,10 +81,11 @@ export class TopicService {
   updateTopicMetadata = (
     id: string,
     metadata: {
+      boundDeviceId?: string;
       model?: string;
       provider?: string;
+      runningOperation?: { assistantMessageId: string; operationId: string } | null;
       workingDirectory?: string;
-      boundDeviceId?: string;
     },
   ) => {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });

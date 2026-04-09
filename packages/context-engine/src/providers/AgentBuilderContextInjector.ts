@@ -1,7 +1,7 @@
 import { escapeXml } from '@lobechat/prompts';
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
@@ -197,9 +197,14 @@ ${parts.join('\n')}
 
 /**
  * Agent Builder Context Injector
- * Responsible for injecting current agent context when Agent Builder tool is enabled
+ * Responsible for injecting current agent context when Agent Builder tool is enabled.
+ *
+ * Extends BaseFirstUserContentProvider so the injected XML is consolidated
+ * into the shared `systemInjection` message together with other before-first-user
+ * providers (UserMemory, Knowledge, AgentManagement, ...). This keeps Phase 3
+ * ordering intact and preserves prefix-cache friendliness.
  */
-export class AgentBuilderContextInjector extends BaseProvider {
+export class AgentBuilderContextInjector extends BaseFirstUserContentProvider {
   readonly name = 'AgentBuilderContextInjector';
 
   constructor(
@@ -209,56 +214,34 @@ export class AgentBuilderContextInjector extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
-    // Skip if Agent Builder is not enabled
+  protected buildContent(_context: PipelineContext): string | null {
     if (!this.config.enabled) {
       log('Agent Builder not enabled, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Skip if no agent context
     if (!this.config.agentContext) {
       log('No agent context provided, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Format agent context
     const formatFn = this.config.formatAgentContext || defaultFormatAgentContext;
     const formattedContent = formatFn(this.config.agentContext);
 
-    // Skip if no content to inject
     if (!formattedContent) {
       log('No content to inject after formatting');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Find the first user message index
-    const firstUserIndex = clonedContext.messages.findIndex((msg) => msg.role === 'user');
+    log('Agent Builder context prepared');
+    return formattedContent;
+  }
 
-    if (firstUserIndex === -1) {
-      log('No user messages found, skipping injection');
-      return this.markAsExecuted(clonedContext);
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    const result = await super.doProcess(context);
+    if (this.config.enabled && this.config.agentContext) {
+      result.metadata.agentBuilderContextInjected = true;
     }
-
-    // Insert a new user message with agent context before the first user message
-    const agentContextMessage = {
-      content: formattedContent,
-      createdAt: Date.now(),
-      id: `agent-builder-context-${Date.now()}`,
-      meta: { injectType: 'agent-builder-context', systemInjection: true },
-      role: 'user' as const,
-      updatedAt: Date.now(),
-    };
-
-    clonedContext.messages.splice(firstUserIndex, 0, agentContextMessage);
-
-    // Update metadata
-    clonedContext.metadata.agentBuilderContextInjected = true;
-
-    log('Agent Builder context injected as new user message');
-
-    return this.markAsExecuted(clonedContext);
+    return result;
   }
 }

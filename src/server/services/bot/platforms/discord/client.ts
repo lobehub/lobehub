@@ -1,8 +1,9 @@
 import type { DiscordAdapter } from '@chat-adapter/discord';
 import { createDiscordAdapter } from '@chat-adapter/discord';
-import type { Chat as ChatBot } from 'chat';
+import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -216,6 +217,77 @@ class DiscordGatewayClient implements PlatformClient {
         return threadId ? this.discord.updateChannelName(threadId, name) : Promise.resolve();
       },
     };
+  }
+
+  /**
+   * Resolve attachments on an inbound Discord message into `AttachmentSource[]`.
+   *
+   * Discord is the easiest case: attachments come with a public CDN URL
+   * (`https://cdn.discordapp.com/...`) that requires no auth, and the URL
+   * field IS preserved by `Message.toJSON`. So this method just walks the
+   * surviving attachment metadata and forwards URLs to `ingestAttachment`,
+   * which `fetch()`es them with no special handling.
+   *
+   * Discord ALSO has the `referenced_message.attachments` quirk: if a user
+   * @-mentions the bot while replying to an earlier message that had
+   * attachments, the chat-sdk only exposes the current message's
+   * attachments. We dig into `message.raw.referenced_message.attachments`
+   * to recover the quoted message's files. The Discord webhook payload
+   * uses snake_case (`content_type`, `filename`), so we normalize them.
+   */
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    type DiscordRefAttachment = {
+      content_type?: string;
+      filename?: string;
+      size?: number;
+      url?: string;
+    };
+    type DirectAttachment = {
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      type?: string;
+      url?: string;
+    };
+
+    const directAttachments = (message as any).attachments as DirectAttachment[] | undefined;
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const refAttachments = raw?.referenced_message?.attachments as
+      | DiscordRefAttachment[]
+      | undefined;
+
+    log(
+      'extractFiles: msgId=%s, direct=%d, referenced=%d',
+      (message as any).id,
+      directAttachments?.length ?? 0,
+      refAttachments?.length ?? 0,
+    );
+
+    const results: AttachmentSource[] = [];
+
+    // 1. Direct attachments on the current message
+    for (const att of directAttachments ?? []) {
+      if (!att.url) continue;
+      results.push({
+        mimeType: att.mimeType,
+        name: att.name,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    // 2. Attachments from a quoted (referenced) message
+    for (const att of refAttachments ?? []) {
+      if (!att.url) continue;
+      results.push({
+        mimeType: att.content_type,
+        name: att.filename,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    return results.length > 0 ? results : undefined;
   }
 
   extractChatId(platformThreadId: string): string {

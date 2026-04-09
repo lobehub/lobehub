@@ -679,6 +679,24 @@ export const contextEngineering = async ({
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
+      // Current agent + topic identity — referenced by the LobeHub builtin
+      // skill (packages/builtin-skills/src/lobehub/content.ts) so the model
+      // can run `lh agent run -a {{agent_id}}` etc without first having to
+      // search for itself. Read lazily from stores so we only pay the cost
+      // when the placeholder actually appears in a rendered message.
+      agent_id: () => agentId ?? '',
+      agent_title: () =>
+        agentId ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? '') : '',
+      agent_description: () =>
+        agentId
+          ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.description ?? '')
+          : '',
+      topic_id: () => topicId ?? '',
+      topic_title: () => {
+        if (!topicId) return '';
+        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        return topic?.title ?? '';
+      },
     },
 
     // Extended contexts - only pass when enabled

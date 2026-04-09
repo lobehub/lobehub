@@ -368,8 +368,6 @@ export class MessagesEngine {
 
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
-      // Placeholder variables processing
-      new PlaceholderVariablesProcessor({ variableGenerators: variableGenerators || {} }),
       // AgentCouncil message flatten
       new AgentCouncilFlattenProcessor(),
       // Group message flatten
@@ -403,6 +401,16 @@ export class MessagesEngine {
             }),
           ]
         : []),
+      // Placeholder variables processing — MUST run AFTER all flatten / role
+      // transform steps. AssistantGroup / Supervisor messages keep their real
+      // content (including any `{{...}}` placeholders inside tool results)
+      // nested under `children[].tools[].result.content`. The flatten processors
+      // hoist that nested content into top-level `role: 'tool'` messages.
+      // PlaceholderVariablesProcessor only walks `message.content`, so it MUST
+      // run after the hoist or it would silently miss every placeholder buried
+      // inside an assistantGroup. (Regression discovered while wiring lobehub
+      // skill identity placeholders — see LOBE-6882.)
+      new PlaceholderVariablesProcessor({ variableGenerators: variableGenerators || {} }),
 
       // =============================================
       // Phase 6: Content Processing

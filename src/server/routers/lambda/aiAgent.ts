@@ -1225,4 +1225,27 @@ export const aiAgentRouter = router({
         });
       }
     }),
+
+  /**
+   * Refresh Gateway JWT token for an existing operation.
+   * Used when reconnecting after page reload (original token expired).
+   */
+  refreshGatewayToken: aiAgentProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      // Verify the topic belongs to this user and has a running operation
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic?.metadata?.runningOperation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No running operation found on this topic',
+        });
+      }
+
+      const { signUserJWT } = await import('@/libs/trpc/utils/internalJwt');
+      const token = await signUserJWT(ctx.userId);
+
+      return { token };
+    }),
 });

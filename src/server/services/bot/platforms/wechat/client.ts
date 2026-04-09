@@ -1,12 +1,15 @@
 import type { WechatRawMessage } from '@lobechat/chat-adapter-wechat';
 import {
   createWechatAdapter,
+  downloadMediaFromRawMessage,
   MessageState,
   MessageType,
   WechatApiClient,
 } from '@lobechat/chat-adapter-wechat';
+import type { Message } from 'chat';
 import debug from 'debug';
 
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -321,6 +324,51 @@ class WechatGatewayClient implements PlatformClient {
         botToken: this.config.credentials.botToken,
       }),
     };
+  }
+
+  /**
+   * Resolve attachments on an inbound WeChat message into `AttachmentSource[]`.
+   *
+   * Why we re-download instead of trusting the in-message buffer:
+   * the chat-adapter-wechat pre-downloads CDN media into `att.buffer` at parse
+   * time, but `Message.toJSON` strips `buffer` from attachments when the
+   * message is enqueued into Redis (see chat@4.23.0/dist/index.js:300-344).
+   * So whenever a message round-trips through the queue (debounce always,
+   * queue when the lock is busy), the in-memory buffer is gone and we have
+   * to re-fetch from the WeChat CDN ourselves.
+   *
+   * Fortunately the original `WechatRawMessage` (with all `item_list[].media`
+   * descriptors — `encrypt_query_param` + `aes_key` + image `aeskey`) IS
+   * preserved in `message.raw` because `toJSON` keeps it intact. We hand
+   * that and our `WechatApiClient` instance to the package-exported
+   * `downloadMediaFromRawMessage` helper, which is the same code path
+   * `parseRawEvent` runs at adapter parse time — including the cascading
+   * image fallback (CDN main → thumb → direct URL).
+   */
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    const raw = (message as any).raw as WechatRawMessage | undefined;
+    if (!raw?.item_list?.length) return undefined;
+
+    log('extractFiles: msgId=%s, items=%d', (message as any).id, raw.item_list.length);
+
+    const attachments = await downloadMediaFromRawMessage(this.api, raw);
+    if (attachments.length === 0) {
+      log('extractFiles: no media items resolved for msgId=%s', (message as any).id);
+      return undefined;
+    }
+
+    log(
+      'extractFiles: resolved %d media item(s) for msgId=%s',
+      attachments.length,
+      (message as any).id,
+    );
+
+    return attachments.map((att: any) => ({
+      buffer: att.buffer,
+      mimeType: att.mimeType,
+      name: att.name,
+      size: att.size,
+    }));
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {

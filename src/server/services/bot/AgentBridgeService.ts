@@ -66,14 +66,16 @@ function extractErrorMessage(err: unknown): string {
 }
 
 /**
- * Fire-and-forget wrapper for reaction operations.
- * Reactions should never block or fail the main flow.
+ * Fire-and-forget wrapper for non-essential side effects (reactions, typing
+ * indicators, subscribe, etc.). These are UX niceties — a transient platform
+ * network error must NEVER abort the main message flow, because the abort
+ * would skip the cleanup of `activeThreads` and freeze the thread.
  */
-async function safeReaction(fn: () => Promise<void>, label: string): Promise<void> {
+async function safeSideEffect(fn: () => Promise<unknown>, label: string): Promise<void> {
   try {
     await fn();
   } catch (error) {
-    log('safeReaction [%s] failed: %O', label, error);
+    log('safeSideEffect [%s] failed: %O', label, error);
   }
 }
 
@@ -88,6 +90,18 @@ interface ThreadState {
 }
 
 interface BridgeHandlerOpts {
+  /**
+   * Internal: when true, the caller already holds the `activeThreads` flag
+   * for this thread, so the callee must skip its own activeThreads check /
+   * add / delete (the parent caller owns the lifecycle).
+   *
+   * Used by `handleSubscribedMessage` when it recursively calls
+   * `handleMention` on a stale-topic reset or FK violation. Without this,
+   * the recursive call would either (a) trip its own activeThreads check
+   * and silently skip the message (race-prone) or (b) try to delete the
+   * flag in its finally and leave the parent's finally double-deleting.
+   */
+  _activeFlagHeldByCaller?: boolean;
   agentId: string;
   botContext?: ChatTopicBotContext;
   charLimit?: number;
@@ -253,10 +267,11 @@ export class AgentBridgeService {
     const { agentId, botContext, charLimit, displayToolCalls } = opts;
 
     log(
-      'handleMention: agentId=%s, user=%s, text=%s',
+      'handleMention: agentId=%s, user=%s, text=%s, attachments=%d',
       agentId,
       this.userId,
       message.text.slice(0, 80),
+      ((message as any).attachments as unknown[] | undefined)?.length ?? 0,
     );
 
     // Skip if there's already an active execution for this thread
@@ -265,54 +280,62 @@ export class AgentBridgeService {
       return;
     }
 
-    AgentBridgeService.activeThreads.add(thread.id);
-
-    // Immediate feedback: mark as received + show typing
     const { client } = opts;
-    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeReaction(
-      () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-      'add eyes',
-    );
-
-    // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
-    const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
-    if (subscribe) {
-      await thread.subscribe();
-    }
-
-    await thread.startTyping();
-
-    // Fetch channel context for Discord context injection
-    const channelContext = await this.fetchChannelContext(thread);
-
     const queueMode = isQueueAgentRuntimeEnabled();
     let queueHandoffSucceeded = false;
 
-    try {
-      // executeWithCallback handles progress message (post + edit at each step)
-      // The final reply is edited into the progress message by onComplete
-      const { topicId } = await this.executeWithCallback(thread, message, {
-        agentId,
-        botContext,
-        channelContext,
-        charLimit,
-        client,
-        displayToolCalls,
-        trigger: RequestTrigger.Bot,
-      });
-      queueHandoffSucceeded = queueMode;
+    // Mark the thread as active and run the rest inside a try/finally so the
+    // active flag is ALWAYS released even if a side-effect call (subscribe /
+    // startTyping / addReaction) throws on a transient platform network error.
+    AgentBridgeService.activeThreads.add(thread.id);
 
-      // Persist topic mapping and channel context in thread state for follow-up messages
-      // Skip if the platform opted out of auto-subscribe (no subscribe = no follow-up)
-      if (topicId && subscribe) {
-        await thread.setState({ channelContext, topicId });
-        log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
+    try {
+      // Immediate feedback: mark as received + show typing. Both are
+      // non-essential UX niceties; a transient platform network error here
+      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+      const reactionThreadId =
+        client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
+      await safeSideEffect(
+        () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
+        'add eyes',
+      );
+
+      // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
+      const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
+      if (subscribe) {
+        await safeSideEffect(() => thread.subscribe(), 'subscribe');
       }
-    } catch (error) {
-      log('handleMention error: %O', error);
-      const msg = error instanceof Error ? error.message : String(error);
-      await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+
+      await safeSideEffect(() => thread.startTyping(), 'startTyping');
+
+      // Fetch channel context for Discord context injection
+      const channelContext = await this.fetchChannelContext(thread);
+
+      try {
+        // executeWithCallback handles progress message (post + edit at each step)
+        // The final reply is edited into the progress message by onComplete
+        const { topicId } = await this.executeWithCallback(thread, message, {
+          agentId,
+          botContext,
+          channelContext,
+          charLimit,
+          client,
+          displayToolCalls,
+          trigger: RequestTrigger.Bot,
+        });
+        queueHandoffSucceeded = queueMode;
+
+        // Persist topic mapping and channel context in thread state for follow-up messages
+        // Skip if the platform opted out of auto-subscribe (no subscribe = no follow-up)
+        if (topicId && subscribe) {
+          await thread.setState({ channelContext, topicId });
+          log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
+        }
+      } catch (error) {
+        log('handleMention error: %O', error);
+        const msg = error instanceof Error ? error.message : String(error);
+        await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+      }
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
@@ -335,7 +358,13 @@ export class AgentBridgeService {
     const threadState = await thread.state;
     const topicId = threadState?.topicId;
 
-    log('handleSubscribedMessage: agentId=%s, thread=%s, topicId=%s', agentId, thread.id, topicId);
+    log(
+      'handleSubscribedMessage: agentId=%s, thread=%s, topicId=%s, attachments=%d',
+      agentId,
+      thread.id,
+      topicId,
+      ((message as any).attachments as unknown[] | undefined)?.length ?? 0,
+    );
 
     if (!topicId) {
       log('handleSubscribedMessage: no topicId in thread state, treating as new mention');
@@ -382,55 +411,64 @@ export class AgentBridgeService {
       );
     }
 
-    AgentBridgeService.activeThreads.add(thread.id);
-
     // Read cached channel context from thread state
     const channelContext = threadState?.channelContext;
 
     const queueMode = isQueueAgentRuntimeEnabled();
     let queueHandoffSucceeded = false;
 
-    // Immediate feedback: mark as received + show typing
-    const reactionThreadId =
-      opts.client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeReaction(
-      () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-      'add eyes',
-    );
-    await thread.startTyping();
+    // Mark the thread as active and run the rest inside a try/finally so the
+    // active flag is ALWAYS released. Earlier this `add` happened outside the
+    // try block, and a network error from `thread.startTyping()` would escape
+    // before we entered the try — leaving the thread permanently locked
+    // ("already has an active execution") until process restart.
+    AgentBridgeService.activeThreads.add(thread.id);
 
     try {
-      // executeWithCallback handles progress message (post + edit at each step)
-      await this.executeWithCallback(thread, message, {
-        agentId,
-        botContext,
-        channelContext,
-        charLimit,
-        client: opts.client,
-        displayToolCalls,
-        topicId,
-        trigger: RequestTrigger.Bot,
-      });
-      queueHandoffSucceeded = queueMode;
-    } catch (error) {
-      // If the cached topicId references a deleted topic (FK violation),
-      // clear thread state and retry as a fresh mention instead of surfacing the DB error.
-      const cause = (error as any)?.cause;
-      const isFKViolation =
-        cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
-      const errMsg = error instanceof Error ? error.message : String(error);
-      if (isFKViolation) {
-        log(
-          'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
-          topicId,
-        );
-        AgentBridgeService.activeThreads.delete(thread.id);
-        await thread.setState({ ...threadState, topicId: undefined });
-        return this.handleMention(thread, message, opts);
-      }
+      // Immediate feedback: mark as received + show typing. Both are
+      // non-essential UX niceties; a transient platform network error here
+      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+      const reactionThreadId =
+        opts.client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
+      await safeSideEffect(
+        () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
+        'add eyes',
+      );
+      await safeSideEffect(() => thread.startTyping(), 'startTyping');
 
-      log('handleSubscribedMessage error: %O', error);
-      await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+      try {
+        // executeWithCallback handles progress message (post + edit at each step)
+        await this.executeWithCallback(thread, message, {
+          agentId,
+          botContext,
+          channelContext,
+          charLimit,
+          client: opts.client,
+          displayToolCalls,
+          topicId,
+          trigger: RequestTrigger.Bot,
+        });
+        queueHandoffSucceeded = queueMode;
+      } catch (error) {
+        // If the cached topicId references a deleted topic (FK violation),
+        // clear thread state and retry as a fresh mention instead of surfacing the DB error.
+        const cause = (error as any)?.cause;
+        const isFKViolation =
+          cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
+        const errMsg = error instanceof Error ? error.message : String(error);
+        if (isFKViolation) {
+          log(
+            'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
+            topicId,
+          );
+          AgentBridgeService.activeThreads.delete(thread.id);
+          await thread.setState({ ...threadState, topicId: undefined });
+          return this.handleMention(thread, message, opts);
+        }
+
+        log('handleSubscribedMessage error: %O', error);
+        await thread.post(`**Agent Execution Failed**. Details:\n\`\`\`\n${errMsg}\n\`\`\``);
+      }
     } finally {
       AgentBridgeService.activeThreads.delete(thread.id);
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
@@ -472,13 +510,22 @@ export class AgentBridgeService {
       }
     }
 
-    const { agentId, botContext, channelContext, charLimit, client, displayToolCalls, topicId, trigger } = opts;
+    const {
+      agentId,
+      botContext,
+      channelContext,
+      charLimit,
+      client,
+      displayToolCalls,
+      topicId,
+      trigger,
+    } = opts;
 
     const queueMode = isQueueAgentRuntimeEnabled();
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    await thread.startTyping();
+    await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
 
     let progressMessage: SentMessage | undefined;
     try {
@@ -487,7 +534,7 @@ export class AgentBridgeService {
       log('executeWithCallback: failed to post initial placeholder message: %O', error);
     }
 
-    const files = this.extractFiles(userMessage);
+    const files = await this.resolveFiles(userMessage, client);
     const prompt = this.formatPrompt(userMessage, client);
 
     // Build webhook config for production mode
@@ -1030,70 +1077,31 @@ export class AgentBridgeService {
   }
 
   /**
-   * Extract file attachment metadata from Chat SDK message for passing to execAgent.
-   * Includes attachments from both the message itself and any referenced (quoted) message.
+   * Resolve attachments on an inbound message into `AttachmentSource[]` by
+   * delegating to the platform client's own `extractFiles`. Each platform
+   * owns its own attachment quirks (auth, file_id paths, mime/name
+   * inference, quoted-msg handling, post-Redis refetch); the bridge stays
+   * platform-agnostic.
+   *
+   * Returns undefined when no client is provided or the client returns no
+   * attachments. (The legacy bridge fallback `extractFiles` was deleted
+   * once all 6 platforms migrated to per-client extraction — see Step 2
+   * of the per-platform extractFiles refactor.)
    */
-  private extractFiles(message: Message):
+  private async resolveFiles(
+    message: Message,
+    client?: PlatformClient,
+  ): Promise<
     | Array<{
         buffer?: Buffer;
         mimeType?: string;
         name?: string;
         size?: number;
-        url: string;
+        url?: string;
       }>
-    | undefined {
-    type AttachmentLike = {
-      buffer?: Buffer;
-      content_type?: string;
-      filename?: string;
-      mimeType?: string;
-      name?: string;
-      size?: number;
-      type?: string;
-      url?: string;
-    };
-
-    const files: Array<{
-      buffer?: Buffer;
-      mimeType?: string;
-      name?: string;
-      size?: number;
-      url: string;
-    }> = [];
-
-    // 1. Direct attachments from the message (parsed by Chat SDK)
-    const directAttachments = (message as any).attachments as AttachmentLike[] | undefined;
-    if (directAttachments?.length) {
-      for (const att of directAttachments) {
-        if (att.url || att.buffer) {
-          files.push({
-            buffer: att.buffer,
-            mimeType: att.mimeType,
-            name: att.name,
-            size: att.size,
-            url: att.url || '',
-          });
-        }
-      }
-    }
-
-    // 2. Attachments from referenced (quoted/replied-to) message (Discord raw payload)
-    const raw = (message as any).raw as Record<string, any> | undefined;
-    const refAttachments = raw?.referenced_message?.attachments as AttachmentLike[] | undefined;
-    if (refAttachments?.length) {
-      for (const att of refAttachments) {
-        if (att.url) {
-          files.push({
-            mimeType: att.content_type,
-            name: att.filename,
-            size: att.size,
-            url: att.url,
-          });
-        }
-      }
-    }
-
-    return files.length > 0 ? files : undefined;
+    | undefined
+  > {
+    return client?.extractFiles?.(message);
   }
 
   /**
@@ -1135,7 +1143,7 @@ export class AgentBridgeService {
     client?: PlatformClient,
   ): Promise<void> {
     const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeReaction(
+    await safeSideEffect(
       () => thread.adapter.removeReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
       'remove eyes',
     );

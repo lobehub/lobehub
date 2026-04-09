@@ -465,9 +465,50 @@ export const createRuntimeExecutors = (
           }
         }
 
+        // Build additional placeholder variables for the lobehub builtin skill
+        // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
+        // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
+        // model's prompt without needing a separate context injector.
+        //
+        // - agent_title / agent_description: read directly from agentConfig,
+        //   which is the result of AgentModel.getAgentConfig() and already
+        //   contains the full enriched agent record (title, description, ...).
+        //   No extra query needed.
+        // - topic_title: requires a single primary-key lookup against the
+        //   topics table. Skipped when topicId is missing or the lookup fails
+        //   (best-effort, falls back to empty string so the template still
+        //   renders cleanly).
+        const lobehubSkillAgentId = state.metadata?.agentId;
+        const lobehubSkillTopicId = state.metadata?.topicId;
+        const lobehubSkillAgentMeta = state.metadata?.agentConfig as
+          | { description?: string | null; title?: string | null }
+          | undefined;
+
+        let lobehubSkillTopicTitle = '';
+        if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
+          try {
+            const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId);
+            const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
+            lobehubSkillTopicTitle = topicRecord?.title ?? '';
+          } catch (error) {
+            log('Failed to load topic title for lobehub skill placeholders: %O', error);
+          }
+        }
+
+        const lobehubSkillVariables: Record<string, string> = {
+          agent_id: lobehubSkillAgentId ?? '',
+          agent_title: lobehubSkillAgentMeta?.title ?? '',
+          agent_description: lobehubSkillAgentMeta?.description ?? '',
+          topic_id: lobehubSkillTopicId ?? '',
+          topic_title: lobehubSkillTopicTitle,
+        };
+
         const contextEngineInput = {
           agentDocuments,
-          additionalVariables: state.metadata?.deviceSystemInfo,
+          additionalVariables: {
+            ...state.metadata?.deviceSystemInfo,
+            ...lobehubSkillVariables,
+          },
           userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
@@ -1820,6 +1861,16 @@ export const createRuntimeExecutors = (
     const { operationId, stepIndex, streamManager } = ctx;
 
     log('[%s:%d] Finishing execution: (%s)', operationId, stepIndex, reason);
+
+    // Clear runningOperation from topic metadata so reconnect doesn't trigger after completion
+    if (ctx.topicId && ctx.userId) {
+      try {
+        const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+        await topicModel.updateMetadata(ctx.topicId, { runningOperation: null });
+      } catch (e) {
+        log('[%s] Failed to clear runningOperation metadata: %O', operationId, e);
+      }
+    }
 
     // Publish execution complete event
     await streamManager.publishStreamEvent(operationId, {
