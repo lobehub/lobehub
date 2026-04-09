@@ -111,9 +111,10 @@ const Group = memo<GroupChildrenProps>(
         <Flexbox className={styles.container} gap={8}>
           {workingBlocks.length > 0 && (
             <WorkflowCollapse
-              assistantId={id}
+              assistantMessageId={id}
               blocks={workingBlocks}
               disableEditing={disableEditing}
+              hasBlocksOutsideWorkflow={answerBlocks.length > 0}
             />
           )}
           {answerBlocks.map((item, index) => {

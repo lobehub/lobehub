@@ -17,7 +17,6 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface WorkflowExpandedListProps {
-  assistantId: string;
   blocks: AssistantContentBlock[];
   constrained?: boolean;
   disableEditing?: boolean;
@@ -26,17 +25,16 @@ interface WorkflowExpandedListProps {
 }
 
 const WorkflowExpandedList = memo<WorkflowExpandedListProps>(
-  ({ blocks, assistantId, disableEditing, constrained, scrollRef, onScroll }) => {
+  ({ blocks, disableEditing, constrained, scrollRef, onScroll }) => {
     const content = (
       <Flexbox paddingBlock={'4px 8px'}>
         {blocks.map((block) => (
-          <Flexbox key={block.id}>
+          <Flexbox key={block.id} paddingInline={'8px 0'}>
             {block.content && <div className={styles.blockContent}>{block.content}</div>}
-            {block.reasoning && <WorkflowReasoningLine reasoning={block.reasoning} />}
+            {block.reasoning && <WorkflowReasoningLine id={block.id} reasoning={block.reasoning} />}
             {block.tools?.map((tool) => (
               <WorkflowToolLine
-                assistantMessageId={assistantId}
-                blockMessageId={block.id}
+                assistantMessageId={block.id}
                 disableEditing={disableEditing}
                 key={tool.id}
                 tool={tool}

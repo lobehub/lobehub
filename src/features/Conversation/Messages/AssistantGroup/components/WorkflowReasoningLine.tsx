@@ -1,29 +1,48 @@
-import { type ModelReasoning } from '@lobechat/types';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { memo } from 'react';
+import type { ModelReasoning } from '@lobechat/types';
+import { deserializeParts } from '@lobechat/utils';
+import { memo, useMemo } from 'react';
 
-import { formatReasoningDuration } from '../toolDisplayNames';
+import Thinking from '@/features/Conversation/components/Thinking';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    padding-block: 3px;
-    padding-inline: 32px 8px;
-
-    font-size: 13px;
-    font-style: italic;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+import { messageStateSelectors, useConversationStore } from '../../../store';
+import { RichContentRenderer } from '../../components/RichContentRenderer';
 
 interface WorkflowReasoningLineProps {
+  id: string;
   reasoning: ModelReasoning;
 }
 
-const WorkflowReasoningLine = memo<WorkflowReasoningLineProps>(({ reasoning }) => {
-  const duration = reasoning.duration ?? 0;
-  if (duration === 0) return null;
+const WorkflowReasoningLine = memo<WorkflowReasoningLineProps>(({ id, reasoning }) => {
+  const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
+  const transitionMode = useUserStore(userGeneralSettingsSelectors.transitionMode);
 
-  return <div className={styles.root}>Thought for {formatReasoningDuration(duration)}</div>;
+  const contentStr = reasoning.content ?? '';
+  const parts = useMemo(
+    () => reasoning.tempDisplayContent || deserializeParts(contentStr),
+    [contentStr, reasoning.tempDisplayContent],
+  );
+
+  const thinkingContent =
+    reasoning.isMultimodal && parts ? <RichContentRenderer parts={parts} /> : contentStr;
+
+  const hasReadableContent =
+    (typeof thinkingContent === 'string' && thinkingContent.trim() !== '') ||
+    !!(reasoning.isMultimodal && parts && parts.length > 0);
+
+  const hasDuration = (reasoning.duration ?? 0) > 0;
+
+  if (!isReasoning && !hasReadableContent && !hasDuration) return null;
+
+  return (
+    <Thinking
+      content={thinkingContent}
+      duration={reasoning.duration}
+      thinking={isReasoning}
+      thinkingAnimated={transitionMode === 'fadeIn' && isReasoning}
+    />
+  );
 });
 
 WorkflowReasoningLine.displayName = 'WorkflowReasoningLine';
