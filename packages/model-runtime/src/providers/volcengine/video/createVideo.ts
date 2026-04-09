@@ -81,5 +81,5 @@ export async function createVolcengineVideo(
     throw new Error('Invalid response: missing task id');
   }
 
-  return { inferenceId: data.id };
+  return { inferenceId: data.id, useWebhook: true };
 }

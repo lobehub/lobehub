@@ -7,10 +7,7 @@ import { SearXNGClient } from '@/server/services/search/impls/searxng/client';
 
 import { searchRouter } from './search';
 
-// Mock JWT verification
-vi.mock('@lobechat/utils/server', () => ({
-  getXorPayload: vi.fn().mockReturnValue({ userId: '1' }),
-}));
+// Mock removed: XOR payload is no longer used for authentication
 
 vi.mock('@lobechat/web-crawler', () => ({
   Crawler: vi.fn().mockImplementation(() => ({

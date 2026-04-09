@@ -1,5 +1,5 @@
 import { type ModelParamsSchema } from '../standard-parameters';
-import { type AIChatModelCard, type AIImageModelCard } from '../types';
+import { type AIChatModelCard, type AIImageModelCard, type AIVideoModelCard } from '../types';
 
 /**
  * gemini implicit caching not extra cost
@@ -869,6 +869,155 @@ const googleImageModels: AIImageModelCard[] = [
     },
   },
 ];
-export const allModels = [...googleChatModels, ...googleImageModels];
+
+const googleVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.1 Generate Preview',
+    enabled: true,
+    id: 'veo-3.1-generate-preview',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [4, 6, 8] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p', '4k'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-13',
+    type: 'video',
+  },
+  {
+    description:
+      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.1 Fast Generate Preview',
+    enabled: true,
+    id: 'veo-3.1-fast-generate-preview',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [4, 6, 8] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p', '4k'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-13',
+    type: 'video',
+  },
+  {
+    description:
+      'Our stable video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.0 Generate 001',
+    enabled: true,
+    id: 'veo-3.0-generate-001',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [8] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.4, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-11-11',
+    type: 'video',
+  },
+  {
+    description:
+      'Our stable video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.0 Fast Generate 001',
+    enabled: true,
+    id: 'veo-3.0-fast-generate-001',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [8] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-11-11',
+    type: 'video',
+  },
+  {
+    description:
+      'Our state-of-the-art video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 2.0 Generate 001',
+    id: 'veo-2.0-generate-001',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, max: 8, min: 5 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-04-09',
+    type: 'video',
+  },
+];
+
+export const allModels = [...googleChatModels, ...googleImageModels, ...googleVideoModels];
 
 export default allModels;

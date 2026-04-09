@@ -78,6 +78,7 @@ const MessageContent = memo<UIChatMessage>(
         {showReasoning && <Reasoning {...props.reasoning} id={id} />}
         <DisplayContent
           content={content}
+          generating={generating}
           hasImages={showImageItems}
           id={id}
           isMultimodal={metadata?.isMultimodal}

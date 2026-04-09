@@ -9,7 +9,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
-import { platformRegistry } from './platforms';
+import { mergeWithDefaults, platformRegistry } from './platforms';
 import { encodeDingTalkWebhookThreadId } from './platforms/dingtalk/helpers';
 import {
   renderError,
@@ -31,6 +31,10 @@ export interface BotCallbackBody {
   elapsedMs?: number;
   errorMessage?: string;
   executionTimeMs?: number;
+  /** Hook ID from HookDispatcher (e.g. 'bot-step-progress', 'bot-completion') */
+  hookId?: string;
+  /** Hook type from HookDispatcher (e.g. 'afterStep', 'onComplete') */
+  hookType?: string;
   lastAssistantContent?: string;
   lastLLMContent?: string;
   lastToolsCalling?: any;
@@ -72,7 +76,7 @@ export class BotCallbackService {
     const { type, applicationId, platformThreadId, progressMessageId, sessionWebhook } = body;
     const platform = platformThreadId.split(':')[0];
 
-    const { client, messenger, charLimit } = await this.createMessenger(
+    const { client, messenger, charLimit, settings } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
@@ -83,7 +87,7 @@ export class BotCallbackService {
     const canEdit = entry?.supportsMessageEdit !== false;
 
     if (type === 'step') {
-      if (canEdit && progressMessageId) {
+      if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
         await this.handleStep(body, messenger, progressMessageId, client);
       }
     } else if (type === 'completion') {
@@ -109,7 +113,12 @@ export class BotCallbackService {
     applicationId: string,
     platformThreadId: string,
     sessionWebhook?: string,
-  ): Promise<{ charLimit?: number; messenger: PlatformMessenger; client: PlatformClient }> {
+  ): Promise<{
+    charLimit?: number;
+    client: PlatformClient;
+    messenger: PlatformMessenger;
+    settings: Record<string, unknown>;
+  }> {
     const row = await AgentBotProviderModel.findByPlatformAndAppId(
       this.db,
       platform,
@@ -133,14 +142,15 @@ export class BotCallbackService {
       throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    const settings = (row as any).settings as Record<string, unknown> | undefined;
-    const charLimit = (settings?.charLimit as number) || undefined;
+    const rawSettings = (row as any).settings as Record<string, unknown> | undefined;
+    const settings = mergeWithDefaults(entry.schema, rawSettings);
+    const charLimit = (settings.charLimit as number) || undefined;
 
     const config: BotProviderConfig = {
       applicationId,
       credentials,
       platform,
-      settings: settings || {},
+      settings,
     };
 
     const client = entry.clientFactory.createClient(config, {
@@ -152,7 +162,7 @@ export class BotCallbackService {
         : platformThreadId,
     );
 
-    return { charLimit, messenger, client };
+    return { charLimit, client, messenger, settings };
   }
 
   private async handleStep(

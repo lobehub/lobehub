@@ -1,7 +1,7 @@
 // --------------- Core types & utilities ---------------
 // --------------- Registry singleton ---------------
-import { discord } from './discord/definition';
 import { dingtalk } from './dingtalk/definition';
+import { discord } from './discord/definition';
 import { feishu } from './feishu/definitions/feishu';
 import { lark } from './feishu/definitions/lark';
 import { qq } from './qq/definition';
@@ -15,6 +15,7 @@ export type {
   BotPlatformRedisClient,
   BotPlatformRuntimeContext,
   BotProviderConfig,
+  ConnectionMode,
   FieldSchema,
   PlatformClient,
   PlatformDefinition,
@@ -31,13 +32,14 @@ export {
   formatDuration,
   formatTokens,
   formatUsageStats,
+  getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
 } from './utils';
 
 // --------------- Platform definitions ---------------
-export { discord } from './discord/definition';
 export { dingtalk } from './dingtalk/definition';
+export { discord } from './discord/definition';
 export { feishu } from './feishu/definitions/feishu';
 export { lark } from './feishu/definitions/lark';
 export { qq } from './qq/definition';

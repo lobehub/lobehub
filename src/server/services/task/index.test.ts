@@ -27,7 +27,7 @@ describe('TaskService', () => {
   const mockTaskModel = {
     findById: vi.fn(),
     findByIds: vi.fn(),
-    findSubtasks: vi.fn(),
+    findAllDescendants: vi.fn(),
     getCheckpointConfig: vi.fn(),
     getComments: vi.fn(),
     getDependencies: vi.fn(),
@@ -84,7 +84,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -136,7 +136,7 @@ describe('TaskService', () => {
       const parentTask = { id: 'task_001', identifier: 'TASK-1', name: 'Parent Task' };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -175,7 +175,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -213,11 +213,19 @@ describe('TaskService', () => {
       };
 
       const subtasks = [
-        { id: 'task_002', identifier: 'TASK-2', name: 'Sub 1', priority: 'normal', status: 'todo' },
+        {
+          id: 'task_002',
+          identifier: 'TASK-2',
+          name: 'Sub 1',
+          parentTaskId: 'task_001',
+          priority: 'normal',
+          status: 'todo',
+        },
         {
           id: 'task_003',
           identifier: 'TASK-3',
           name: 'Sub 2',
+          parentTaskId: 'task_001',
           priority: 'high',
           status: 'in_progress',
         },
@@ -227,7 +235,7 @@ describe('TaskService', () => {
       const subtaskDeps = [{ dependsOnId: 'task_002', taskId: 'task_003' }];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue(subtasks);
+      mockTaskModel.findAllDescendants.mockResolvedValue(subtasks);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -244,6 +252,7 @@ describe('TaskService', () => {
       expect(result?.subtasks).toHaveLength(2);
       expect(result?.subtasks?.[0]).toEqual({
         blockedBy: undefined,
+        children: undefined,
         identifier: 'TASK-2',
         name: 'Sub 1',
         priority: 'normal',
@@ -251,11 +260,97 @@ describe('TaskService', () => {
       });
       expect(result?.subtasks?.[1]).toEqual({
         blockedBy: 'TASK-2',
+        children: undefined,
         identifier: 'TASK-3',
         name: 'Sub 2',
         priority: 'high',
         status: 'in_progress',
       });
+    });
+
+    it('should build nested subtask tree with grandchildren', async () => {
+      const task = {
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Root Task',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      // 3-level tree: TASK-1 → TASK-2 → TASK-4, TASK-1 → TASK-3
+      const allDescendants = [
+        {
+          id: 'task_002',
+          identifier: 'TASK-2',
+          name: 'Child 1',
+          parentTaskId: 'task_001',
+          priority: 'normal',
+          status: 'todo',
+        },
+        {
+          id: 'task_003',
+          identifier: 'TASK-3',
+          name: 'Child 2',
+          parentTaskId: 'task_001',
+          priority: 'high',
+          status: 'completed',
+        },
+        {
+          id: 'task_004',
+          identifier: 'TASK-4',
+          name: 'Grandchild 1',
+          parentTaskId: 'task_002',
+          priority: 'normal',
+          status: 'running',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue(allDescendants);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.getDependenciesByTaskIds.mockResolvedValue([]);
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      // Root has 2 direct children
+      expect(result?.subtasks).toHaveLength(2);
+
+      // Child 1 has 1 grandchild
+      const child1 = result?.subtasks?.[0];
+      expect(child1?.identifier).toBe('TASK-2');
+      expect(child1?.children).toHaveLength(1);
+      expect(child1?.children?.[0]).toEqual({
+        blockedBy: undefined,
+        children: undefined,
+        identifier: 'TASK-4',
+        name: 'Grandchild 1',
+        priority: 'normal',
+        status: 'running',
+      });
+
+      // Child 2 has no children
+      const child2 = result?.subtasks?.[1];
+      expect(child2?.identifier).toBe('TASK-3');
+      expect(child2?.children).toBeUndefined();
     });
 
     it('should include dependencies with identifier and name', async () => {
@@ -282,7 +377,7 @@ describe('TaskService', () => {
       const depTasks = [{ id: 'task_002', identifier: 'TASK-2', name: 'Task 2' }];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue(dependencies);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -323,7 +418,7 @@ describe('TaskService', () => {
       const dependencies = [{ dependsOnId: 'task_missing', taskId: 'task_003', type: 'blocks' }];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue(dependencies);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -393,7 +488,7 @@ describe('TaskService', () => {
       ];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
       mockBriefModel.findByTaskId.mockResolvedValue(briefs);
@@ -439,7 +534,7 @@ describe('TaskService', () => {
       ];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -476,7 +571,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -538,7 +633,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -585,7 +680,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -626,7 +721,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -663,7 +758,7 @@ describe('TaskService', () => {
       };
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       // Simulate optional calls failing
       mockTaskTopicModel.findWithHandoff.mockRejectedValue(new Error('DB error'));
@@ -718,7 +813,7 @@ describe('TaskService', () => {
       ];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue(briefs);
@@ -776,7 +871,7 @@ describe('TaskService', () => {
       ];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue(briefs);
@@ -833,7 +928,7 @@ describe('TaskService', () => {
       ];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
       mockBriefModel.findByTaskId.mockResolvedValue([]);
@@ -893,7 +988,7 @@ describe('TaskService', () => {
       ];
 
       mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
       mockBriefModel.findByTaskId.mockResolvedValue(briefs);

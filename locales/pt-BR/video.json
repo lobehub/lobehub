@@ -12,6 +12,7 @@
   "config.resolution.label": "Resolução",
   "config.seed.label": "Semente",
   "config.seed.random": "Aleatório",
+  "config.size.label": "Tamanho",
   "generation.actions.copyError": "Copiar Mensagem de Erro",
   "generation.actions.errorCopied": "Mensagem de Erro Copiada para a Área de Transferência",
   "generation.actions.errorCopyFailed": "Falha ao Copiar a Mensagem de Erro",

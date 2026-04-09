@@ -71,15 +71,18 @@ internal_createTopic: async (params) => {
 **Actions:**
 
 - Public: `createTopic`, `sendMessage`
+
 - Internal: `internal_createTopic`, `internal_updateMessageContent`
+
 - Dispatch: `internal_dispatchTopic`
-- Toggle: `internal_toggleMessageLoading`
+  **State:**
 
-**State:**
+- ID arrays: `topicEditingIds`
 
-- ID arrays: `messageLoadingIds`, `topicEditingIds`
 - Maps: `topicMaps`, `messagesMap`
+
 - Active: `activeTopicId`
+
 - Init flags: `topicsInit`
 
 ## Detailed Guides

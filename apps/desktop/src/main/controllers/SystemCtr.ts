@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import process from 'node:process';
 
 import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
@@ -169,7 +171,7 @@ export default class SystemController extends ControllerModule {
   async selectFolder(payload?: {
     defaultPath?: string;
     title?: string;
-  }): Promise<string | undefined> {
+  }): Promise<{ path: string; repoType?: 'git' | 'github' } | undefined> {
     const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
 
     const result = await dialog.showOpenDialog(mainWindow!, {
@@ -182,7 +184,10 @@ export default class SystemController extends ControllerModule {
       return undefined;
     }
 
-    return result.filePaths[0];
+    const folderPath = result.filePaths[0];
+    const repoType = await this.detectRepoType(folderPath);
+
+    return { path: folderPath, repoType };
   }
 
   @IpcMethod()
@@ -227,6 +232,17 @@ export default class SystemController extends ControllerModule {
     } catch {
       // If directory exists but cannot be read, treat as "used" to surface guidance.
       return true;
+    }
+  }
+
+  private async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
+    const gitConfigPath = path.join(dirPath, '.git', 'config');
+    try {
+      const config = await readFile(gitConfigPath, 'utf8');
+      if (config.includes('github.com')) return 'github';
+      return 'git';
+    } catch {
+      return undefined;
     }
   }
 

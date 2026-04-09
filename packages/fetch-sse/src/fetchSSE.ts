@@ -323,7 +323,7 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
 
         options.onErrorHandle?.(
           error.type
-            ? { ...error, body: { ...error.body, ...contextBody } }
+            ? error
             : {
                 body: {
                   message: error.message,

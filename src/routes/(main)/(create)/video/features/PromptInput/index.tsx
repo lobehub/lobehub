@@ -21,6 +21,7 @@ import {
   InlineVideoFrames,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
+import Select from '@/routes/(main)/(create)/image/features/ConfigPanel/components/Select';
 import VideoModelItem from '@/routes/(main)/(create)/video/features/ConfigPanel/components/ModelSelect/VideoModelItem';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
@@ -51,6 +52,23 @@ const AspectRatioItem = memo(() => {
   return <AspectRatioSelect options={options} value={value} onChange={(v) => setValue(v as any)} />;
 });
 
+const SizeItem = memo(() => {
+  const { value, setValue, enumValues } = useVideoGenerationConfigParam('size');
+
+  const options = useMemo(
+    () =>
+      enumValues?.map((size) => ({
+        label: size,
+        value: size,
+      })) ?? [],
+    [enumValues],
+  );
+
+  if (options.length === 0) return null;
+
+  return <Select options={options} value={value} onChange={setValue} />;
+});
+
 const ResolutionItem = memo(() => {
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
   const options = useMemo(
@@ -73,7 +91,31 @@ const ResolutionItem = memo(() => {
 });
 
 const DurationItem = memo(() => {
-  const { value, setValue, min, max, step } = useVideoGenerationConfigParam('duration');
+  const { value, setValue, min, max, step, enumValues } = useVideoGenerationConfigParam('duration');
+
+  const options = useMemo(
+    () =>
+      enumValues && enumValues.length > 0
+        ? enumValues.map((v) => ({
+            label: String(v),
+            value: v,
+          }))
+        : [],
+    [enumValues],
+  );
+
+  if (options.length > 0) {
+    return (
+      <Segmented
+        block
+        options={options}
+        style={{ width: '100%' }}
+        value={value ?? min}
+        variant="filled"
+        onChange={(v) => setValue(Number(v) as any)}
+      />
+    );
+  }
 
   return (
     <SliderWithInput
@@ -143,6 +185,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
   const isSupportAspectRatio = useVideoStore(isSupportedParamSelector('aspectRatio'));
   const isSupportResolution = useVideoStore(isSupportedParamSelector('resolution'));
+  const isSupportSize = useVideoStore(isSupportedParamSelector('size'));
   const isSupportDuration = useVideoStore(isSupportedParamSelector('duration'));
   const isSupportSeed = useVideoStore(isSupportedParamSelector('seed'));
   const isSupportGenerateAudio = useVideoStore(isSupportedParamSelector('generateAudio'));
@@ -151,9 +194,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const { value: duration } = useVideoGenerationConfigParam('duration');
   useFetchAiVideoConfig();
 
-  // Read prompt from query parameter
+  // Read query parameters
   const [promptParam, setPromptParam] = useQueryState('prompt');
+  const [modelParam, setModelParam] = useQueryState('model');
   const hasProcessedPrompt = useRef(false);
+  const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
     if (!isLogin) {
@@ -163,6 +208,23 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
     await createVideo();
   };
+
+  useEffect(() => {
+    if (modelParam && !hasProcessedModel.current && isInit) {
+      const targetModel = modelParam;
+
+      for (const providerGroup of enabledVideoModelList) {
+        const found = providerGroup.children.some((m) => m.id === targetModel);
+        if (found) {
+          setModelAndProviderOnSelect(targetModel, providerGroup.id);
+          break;
+        }
+      }
+
+      hasProcessedModel.current = true;
+      setModelParam(null);
+    }
+  }, [modelParam, isInit, enabledVideoModelList, setModelAndProviderOnSelect, setModelParam]);
 
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
@@ -267,6 +329,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                       <Flexbox gap={6}>
                         <Text fontSize={12}>{t('config.resolution.label')}</Text>
                         <ResolutionItem />
+                      </Flexbox>
+                    )}
+                    {isSupportSize && (
+                      <Flexbox gap={6}>
+                        <Text fontSize={12}>{t('config.size.label')}</Text>
+                        <SizeItem />
                       </Flexbox>
                     )}
                     {isSupportSeed && (

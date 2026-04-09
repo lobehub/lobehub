@@ -1,7 +1,8 @@
-import { consola } from 'consola';
-import { colors } from 'consola/utils';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+
+import { consola } from 'consola';
+import { colors } from 'consola/utils';
 
 import { entryLocaleJsonFilepath, i18nConfig, localeDir, srcDefaultLocales } from './const';
 import { tagWhite, writeJSON } from './utils';
@@ -9,7 +10,7 @@ import { tagWhite, writeJSON } from './utils';
 export const genDefaultLocale = () => {
   consola.info(`默认语言为 ${i18nConfig.entryLocale}...`);
 
-  // 确保入口语言目录存在
+  // Ensure entry locale directory exists
   const entryLocaleDir = localeDir(i18nConfig.entryLocale);
   if (!existsSync(entryLocaleDir)) {
     mkdirSync(entryLocaleDir, { recursive: true });
@@ -23,7 +24,7 @@ export const genDefaultLocale = () => {
   for (const [ns, value] of data) {
     const filepath = entryLocaleJsonFilepath(`${ns}.json`);
 
-    // 确保目录存在
+    // Ensure directory exists
     const dir = dirname(filepath);
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });

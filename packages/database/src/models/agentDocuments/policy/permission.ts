@@ -22,7 +22,7 @@ export const canDeleteDocument = (doc: Pick<AgentDocument, 'accessSelf'>): boole
 };
 
 export const canAutoLoadDocument = (doc: Pick<AgentDocument, 'policyLoad'>): boolean => {
-  return doc.policyLoad === PolicyLoad.ALWAYS;
+  return doc.policyLoad === PolicyLoad.ALWAYS || doc.policyLoad === PolicyLoad.PROGRESSIVE;
 };
 
 export const isLoadableDocument = (

@@ -36,14 +36,6 @@ vi.mock('@/server/services/search', () => ({
   },
 }));
 
-// Mock plugin gateway service
-vi.mock('@/server/services/pluginGateway', () => ({
-  PluginGatewayService: vi.fn().mockImplementation(() => ({
-    executePlugin: vi.fn(),
-    getPluginManifest: vi.fn(),
-  })),
-}));
-
 // Mock MCP service
 vi.mock('@/server/services/mcp', () => ({
   mcpService: {
@@ -64,7 +56,7 @@ vi.mock('@/server/services/toolExecution/builtin', () => ({
   })),
 }));
 
-describe('AgentRuntimeService - Completion Webhook', () => {
+describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
   let service: AgentRuntimeService;
   let stateManager: InMemoryAgentStateManager;
   let streamEventManager: InMemoryStreamEventManager;
@@ -99,19 +91,26 @@ describe('AgentRuntimeService - Completion Webhook', () => {
     });
   });
 
-  describe('createOperation persists completionWebhook', () => {
-    it('should persist completionWebhook in state metadata', async () => {
-      const operationId = 'webhook-op-1';
-      const completionWebhook = {
-        body: { runId: 'run-1', testCaseId: 'tc-1' },
-        url: 'https://example.com/webhook',
-      };
+  describe('createOperation persists hooks in metadata', () => {
+    it('should persist hooks in state metadata._hooks', async () => {
+      const operationId = 'hook-op-1';
+      const hooks = [
+        {
+          handler: vi.fn(),
+          id: 'test-completion',
+          type: 'onComplete' as const,
+          webhook: {
+            body: { runId: 'run-1', testCaseId: 'tc-1' },
+            url: 'https://example.com/webhook',
+          },
+        },
+      ];
 
       await service.createOperation({
         agentConfig: { model: 'gpt-4o', provider: 'openai' },
         appContext: { agentId: 'test-agent' },
         autoStart: false,
-        completionWebhook,
+        hooks,
         initialContext: makeContext(operationId),
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
@@ -121,11 +120,20 @@ describe('AgentRuntimeService - Completion Webhook', () => {
       });
 
       const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?.completionWebhook).toEqual(completionWebhook);
+      expect(state?.metadata?._hooks).toEqual([
+        expect.objectContaining({
+          id: 'test-completion',
+          type: 'onComplete',
+          webhook: {
+            body: { runId: 'run-1', testCaseId: 'tc-1' },
+            url: 'https://example.com/webhook',
+          },
+        }),
+      ]);
     });
 
-    it('should not have completionWebhook in metadata when not provided', async () => {
-      const operationId = 'webhook-op-2';
+    it('should not have _hooks in metadata when no hooks provided', async () => {
+      const operationId = 'hook-op-2';
 
       await service.createOperation({
         agentConfig: { model: 'gpt-4o', provider: 'openai' },
@@ -140,18 +148,18 @@ describe('AgentRuntimeService - Completion Webhook', () => {
       });
 
       const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?.completionWebhook).toBeUndefined();
+      expect(state?.metadata?._hooks).toBeUndefined();
     });
   });
 
-  describe('executeStep triggers webhook', () => {
+  describe('webhook delivery through hooks', () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
 
     beforeEach(() => {
       vi.stubGlobal('fetch', fetchSpy);
     });
 
-    const createOperationWithWebhook = async (
+    const createOperationWithHook = async (
       operationId: string,
       webhookUrl: string,
       webhookBody?: Record<string, unknown>,
@@ -160,7 +168,14 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         agentConfig: { model: 'gpt-4o', provider: 'openai' },
         appContext: { agentId: 'test-agent' },
         autoStart: false,
-        completionWebhook: { body: webhookBody, url: webhookUrl },
+        hooks: [
+          {
+            handler: vi.fn(),
+            id: 'test-completion',
+            type: 'onComplete' as const,
+            webhook: { body: webhookBody, url: webhookUrl },
+          },
+        ],
         initialContext: makeContext(operationId),
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
@@ -170,12 +185,12 @@ describe('AgentRuntimeService - Completion Webhook', () => {
       });
     };
 
-    it('should trigger webhook when operation completes normally', async () => {
-      const operationId = 'webhook-complete-1';
+    it('should persist webhook hook config for later delivery on completion', async () => {
+      const operationId = 'hook-complete-1';
       const webhookUrl = 'https://example.com/on-complete';
       const webhookBody = { runId: 'run-1', testCaseId: 'tc-1' };
 
-      await createOperationWithWebhook(operationId, webhookUrl, webhookBody);
+      await createOperationWithHook(operationId, webhookUrl, webhookBody);
 
       // Manually set state to simulate a step that produces 'done' status
       const state = await stateManager.loadAgentState(operationId);
@@ -184,21 +199,22 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         status: 'done',
       });
 
-      // executeStep will call triggerCompletionWebhook when !shouldContinue
-      // We need the step to actually produce a done state, but since we can't
-      // easily mock the full runtime.step, we test the metadata persistence above
-      // and verify the webhook method is correct through the type + metadata test.
-
-      // Verify the webhook config is persisted for later use
+      // Verify the hook config is persisted for later use
       const updatedState = await stateManager.loadAgentState(operationId);
-      expect(updatedState?.metadata?.completionWebhook).toEqual({
-        body: webhookBody,
-        url: webhookUrl,
-      });
+      expect(updatedState?.metadata?._hooks).toEqual([
+        expect.objectContaining({
+          id: 'test-completion',
+          type: 'onComplete',
+          webhook: {
+            body: webhookBody,
+            url: webhookUrl,
+          },
+        }),
+      ]);
     });
 
-    it('should NOT trigger webhook when no completionWebhook is configured', async () => {
-      const operationId = 'webhook-none-1';
+    it('should NOT have hook config when no hooks are configured', async () => {
+      const operationId = 'hook-none-1';
 
       await service.createOperation({
         agentConfig: { model: 'gpt-4o', provider: 'openai' },
@@ -213,41 +229,33 @@ describe('AgentRuntimeService - Completion Webhook', () => {
       });
 
       const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?.completionWebhook).toBeUndefined();
-
-      // fetch should not be called for webhook since there's no webhook config
-      // (It may still be called for other reasons in real execution)
+      expect(state?.metadata?._hooks).toBeUndefined();
     });
 
     it('should not throw when webhook fetch fails', async () => {
-      const operationId = 'webhook-fail-1';
+      const operationId = 'hook-fail-1';
       const webhookUrl = 'https://example.com/failing-webhook';
 
       // Make fetch throw
       fetchSpy.mockRejectedValueOnce(new Error('Network error'));
 
-      await createOperationWithWebhook(operationId, webhookUrl, { runId: 'run-1' });
+      await createOperationWithHook(operationId, webhookUrl, { runId: 'run-1' });
 
-      // Verify the webhook is stored — the triggerCompletionWebhook method
-      // catches errors internally and doesn't throw
+      // Verify the hook is stored -- the hook dispatch catches errors internally
       const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?.completionWebhook?.url).toBe(webhookUrl);
+      expect(state?.metadata?._hooks?.[0]?.webhook?.url).toBe(webhookUrl);
     });
   });
 
-  describe('triggerCompletionWebhook integration via executeSync', () => {
+  describe('hook payload structure', () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
 
     beforeEach(() => {
       vi.stubGlobal('fetch', fetchSpy);
     });
 
-    it('should include webhook body fields plus operationId/reason/status in POST payload', async () => {
-      // This test verifies the contract of what triggerCompletionWebhook sends.
-      // Since triggerCompletionWebhook is private, we verify through the metadata
-      // and the expected fetch call shape.
-
-      const operationId = 'webhook-payload-test';
+    it('should include webhook body fields in the persisted hook config', async () => {
+      const operationId = 'hook-payload-test';
       const webhookUrl = 'https://example.com/webhook';
       const webhookBody = { runId: 'run-123', testCaseId: 'tc-456', userId: 'user-789' };
 
@@ -255,7 +263,14 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         agentConfig: { model: 'gpt-4o', provider: 'openai' },
         appContext: { agentId: 'test-agent' },
         autoStart: false,
-        completionWebhook: { body: webhookBody, url: webhookUrl },
+        hooks: [
+          {
+            handler: vi.fn(),
+            id: 'test-completion',
+            type: 'onComplete' as const,
+            webhook: { body: webhookBody, url: webhookUrl },
+          },
+        ],
         initialContext: makeContext(operationId),
         initialMessages: [{ content: 'Hello', role: 'user' }],
         modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
@@ -264,12 +279,13 @@ describe('AgentRuntimeService - Completion Webhook', () => {
         userId,
       });
 
-      // Verify the persisted webhook contains the right structure
+      // Verify the persisted hook contains the right structure
       const state = await stateManager.loadAgentState(operationId);
-      const webhook = state?.metadata?.completionWebhook;
-      expect(webhook).toBeDefined();
-      expect(webhook.url).toBe(webhookUrl);
-      expect(webhook.body).toEqual(webhookBody);
+      const hooks = state?.metadata?._hooks;
+      expect(hooks).toBeDefined();
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0].webhook.url).toBe(webhookUrl);
+      expect(hooks[0].webhook.body).toEqual(webhookBody);
     });
   });
 });

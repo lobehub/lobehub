@@ -10,7 +10,7 @@ import { DocumentSourceType } from '@/types/document';
 import { type ResourceItem } from '@/types/resource';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type FileStore } from '../../store';
+import type { FileStore } from '../../store';
 import { getResourceQueryKey } from '../resource/utils';
 import { type DocumentQueryFilter } from './initialState';
 

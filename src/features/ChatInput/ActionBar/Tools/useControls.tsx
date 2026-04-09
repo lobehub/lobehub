@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -30,7 +30,10 @@ import KlavisServerItem from './KlavisServerItem';
 import KlavisSkillIcon from './KlavisSkillIcon';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
+import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
+import MarketSkillIcon from './MarketSkillIcon';
 import ToolItem from './ToolItem';
+import ToolItemDetailPopover from './ToolItemDetailPopover';
 
 const SKILL_ICON_SIZE = 20;
 
@@ -42,7 +45,20 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
     s.togglePlugin,
   ]);
-  const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
+  // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
+  // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
+  // In auto mode the activator handles those tools transparently, so they remain hidden.
+  // NOTE: must read by `agentId` (not via the activeAgentId-based selector) so that
+  // embedded / group-member chat inputs render the right agent's mode.
+  const isManualSkillMode = useAgentStore(
+    (s) => chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s) === 'manual',
+  );
+  const builtinList = useToolStore(
+    isManualSkillMode
+      ? builtinToolSelectors.metaListIncludingHidden
+      : builtinToolSelectors.metaList,
+    isEqual,
+  );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   // Klavis-related state
@@ -59,20 +75,17 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
   const [
-    useFetchPluginStore,
     useFetchUserKlavisServers,
     useFetchLobehubSkillConnections,
     useFetchUninstalledBuiltinTools,
     useFetchAgentSkills,
   ] = useToolStore((s) => [
-    s.useFetchPluginStore,
     s.useFetchUserKlavisServers,
     s.useFetchLobehubSkillConnections,
     s.useFetchUninstalledBuiltinTools,
     s.useFetchAgentSkills,
   ]);
 
-  useFetchPluginStore();
   useFetchInstalledPlugins();
   useFetchUninstalledBuiltinTools(true);
   useFetchAgentSkills(true);
@@ -162,9 +175,20 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
                 serverName={type.serverName}
               />
             ),
+            popoverContent: (
+              <ToolItemDetailPopover
+                icon={<KlavisSkillIcon icon={type.icon} label={type.label} size={36} />}
+                identifier={type.identifier}
+                sourceLabel={type.author}
+                title={type.label}
+                description={t(`tools.klavis.servers.${type.identifier}.description` as any, {
+                  defaultValue: type.description,
+                })}
+              />
+            ),
           }))
         : [],
-    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds, agentId],
+    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds, agentId, t],
   );
 
   // LobeHub Skill Provider list items - only show installed or recommended
@@ -190,6 +214,17 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
                 provider={provider.id}
               />
             ),
+            popoverContent: (
+              <ToolItemDetailPopover
+                icon={<LobehubSkillIcon icon={provider.icon} label={provider.label} size={36} />}
+                identifier={provider.id}
+                sourceLabel={provider.author}
+                title={provider.label}
+                description={t(`tools.lobehubSkill.providers.${provider.id}.description` as any, {
+                  defaultValue: provider.description,
+                })}
+              />
+            ),
           }))
         : [],
     [
@@ -198,6 +233,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       installedLobehubIds,
       recommendedLobehubIds,
       agentId,
+      t,
     ],
   );
 
@@ -226,8 +262,28 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             }}
           />
         ),
+        popoverContent: (
+          <ToolItemDetailPopover
+            identifier={item.identifier}
+            sourceLabel={t('skillStore.tabs.lobehub')}
+            description={t(`tools.builtins.${item.identifier}.description` as any, {
+              defaultValue: item.meta?.description || '',
+            })}
+            icon={
+              <Avatar
+                avatar={item.meta.avatar}
+                shape={'square'}
+                size={36}
+                style={{ flex: 'none', marginInlineEnd: 0 }}
+              />
+            }
+            title={t(`tools.builtins.${item.identifier}.title` as any, {
+              defaultValue: item.meta?.title || item.identifier,
+            })}
+          />
+        ),
       })),
-    [filteredBuiltinList, checked, togglePlugin, setUpdating],
+    [filteredBuiltinList, checked, togglePlugin, setUpdating, t],
   );
 
   // Builtin Agent Skills list items (grouped under LobeHub)
@@ -252,15 +308,41 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             }}
           />
         ),
+        popoverContent: (
+          <ToolItemDetailPopover
+            identifier={skill.identifier}
+            sourceLabel={t('skillStore.tabs.lobehub')}
+            description={t(`tools.builtins.${skill.identifier}.description` as any, {
+              defaultValue: skill.description,
+            })}
+            icon={
+              skill.avatar ? (
+                <Avatar
+                  avatar={skill.avatar}
+                  shape={'square'}
+                  size={36}
+                  style={{ flex: 'none', marginInlineEnd: 0 }}
+                />
+              ) : (
+                <Icon icon={SkillsIcon} size={36} />
+              )
+            }
+            title={t(`tools.builtins.${skill.identifier}.title` as any, {
+              defaultValue: skill.name,
+            })}
+          />
+        ),
       })),
-    [installedBuiltinSkills, checked, togglePlugin, setUpdating],
+    [installedBuiltinSkills, checked, togglePlugin, setUpdating, t],
   );
 
   // Market Agent Skills list items (grouped under Community)
   const marketAgentSkillItems = useMemo(
     () =>
       marketAgentSkills.map((skill) => ({
-        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
+        icon: (
+          <MarketSkillIcon identifier={skill.identifier} name={skill.name} size={SKILL_ICON_SIZE} />
+        ),
         key: skill.identifier,
         label: (
           <ToolItem
@@ -274,8 +356,16 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             }}
           />
         ),
+        popoverContent: (
+          <MarketAgentSkillPopoverContent
+            description={skill.description}
+            identifier={skill.identifier}
+            name={skill.name}
+            sourceLabel={t('skillStore.tabs.community')}
+          />
+        ),
       })),
-    [marketAgentSkills, checked, togglePlugin, setUpdating],
+    [marketAgentSkills, checked, togglePlugin, setUpdating, t],
   );
 
   // User Agent Skills list items (grouped under Custom)
@@ -296,14 +386,41 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             }}
           />
         ),
+        popoverContent: (
+          <ToolItemDetailPopover
+            description={skill.description}
+            icon={<Icon icon={SkillsIcon} size={36} />}
+            identifier={skill.identifier}
+            sourceLabel={t('skillStore.tabs.custom')}
+            title={skill.name}
+          />
+        ),
       })),
-    [userAgentSkills, checked, togglePlugin, setUpdating],
+    [userAgentSkills, checked, togglePlugin, setUpdating, t],
   );
 
   // Skills list items (including LobeHub Skill and Klavis)
-  // Connected items listed first
+  // Connected items listed first, deduplicated by key (LobeHub takes priority)
   const skillItems = useMemo(() => {
-    const allItems = [...lobehubSkillItems, ...klavisServerItems];
+    // Deduplicate by key - LobeHub items take priority over Klavis
+    const seenKeys = new Set<string>();
+    const allItems: typeof lobehubSkillItems = [];
+
+    // Add LobeHub items first (they take priority)
+    for (const item of lobehubSkillItems) {
+      if (!seenKeys.has(item.key as string)) {
+        seenKeys.add(item.key as string);
+        allItems.push(item);
+      }
+    }
+
+    // Add Klavis items only if not already present
+    for (const item of klavisServerItems) {
+      if (!seenKeys.has(item.key as string)) {
+        seenKeys.add(item.key as string);
+        allItems.push(item);
+      }
+    }
 
     return allItems.sort((a, b) => {
       const isConnectedA =
@@ -322,27 +439,50 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   const customPlugins = list.filter((item) => item.type === 'customPlugin');
 
   // Function to map plugins to list items
-  const mapPluginToItem = (item: (typeof list)[0]) => ({
-    icon:
-      item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+  const mapPluginToItem = (item: (typeof list)[0]) => {
+    const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
+    const isCustom = item.type === 'customPlugin';
+    return {
+      icon: isMcp ? (
         <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
       ) : (
         <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
       ),
-    key: item.identifier,
-    label: (
-      <ToolItem
-        checked={checked.includes(item.identifier)}
-        id={item.identifier}
-        label={item.title}
-        onUpdate={async () => {
-          setUpdating(true);
-          await togglePlugin(item.identifier);
-          setUpdating(false);
-        }}
-      />
-    ),
-  });
+      key: item.identifier,
+      label: (
+        <ToolItem
+          checked={checked.includes(item.identifier)}
+          id={item.identifier}
+          label={item.title}
+          onUpdate={async () => {
+            setUpdating(true);
+            await togglePlugin(item.identifier);
+            setUpdating(false);
+          }}
+        />
+      ),
+      popoverContent: (
+        <ToolItemDetailPopover
+          description={item.description}
+          identifier={item.identifier}
+          sourceLabel={isCustom ? t('skillStore.tabs.custom') : t('skillStore.tabs.community')}
+          title={item.title}
+          icon={
+            isMcp ? (
+              <Icon icon={McpIcon} size={36} />
+            ) : (
+              <Avatar
+                avatar={item.avatar}
+                shape={'square'}
+                size={36}
+                style={{ flex: 'none', marginInlineEnd: 0 }}
+              />
+            )
+          }
+        />
+      ),
+    };
+  };
 
   // Build LobeHub group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
   const lobehubGroupChildren: ItemType[] = [
@@ -432,6 +572,26 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             }}
           />
         ),
+        popoverContent: (
+          <ToolItemDetailPopover
+            identifier={item.identifier}
+            sourceLabel={t('skillStore.tabs.lobehub')}
+            description={t(`tools.builtins.${item.identifier}.description` as any, {
+              defaultValue: item.meta?.description || '',
+            })}
+            icon={
+              <Avatar
+                avatar={item.meta.avatar}
+                shape={'square'}
+                size={36}
+                style={{ flex: 'none', marginInlineEnd: 0 }}
+              />
+            }
+            title={t(`tools.builtins.${item.identifier}.title` as any, {
+              defaultValue: item.meta?.title || item.identifier,
+            })}
+          />
+        ),
       }));
 
     // Connected Klavis servers
@@ -469,6 +629,30 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             }}
           />
         ),
+        popoverContent: (
+          <ToolItemDetailPopover
+            identifier={skill.identifier}
+            sourceLabel={t('skillStore.tabs.lobehub')}
+            description={t(`tools.builtins.${skill.identifier}.description` as any, {
+              defaultValue: skill.description,
+            })}
+            icon={
+              skill.avatar ? (
+                <Avatar
+                  avatar={skill.avatar}
+                  shape={'square'}
+                  size={36}
+                  style={{ flex: 'none', marginInlineEnd: 0 }}
+                />
+              ) : (
+                <Icon icon={SkillsIcon} size={36} />
+              )
+            }
+            title={t(`tools.builtins.${skill.identifier}.title` as any, {
+              defaultValue: skill.name,
+            })}
+          />
+        ),
       }));
 
     // Build builtin tools group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
@@ -497,58 +681,104 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     // Enabled community plugins
     const enabledCommunityPlugins = communityPlugins
       .filter((item) => checked.includes(item.identifier))
-      .map((item) => ({
-        icon:
-          item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+      .map((item) => {
+        const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
+        return {
+          icon: isMcp ? (
             <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
           ) : (
             <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
           ),
-        key: item.identifier,
-        label: (
-          <ToolItem
-            checked={true}
-            id={item.identifier}
-            label={item.title}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(item.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-      }));
+          key: item.identifier,
+          label: (
+            <ToolItem
+              checked={true}
+              id={item.identifier}
+              label={item.title}
+              onUpdate={async () => {
+                setUpdating(true);
+                await togglePlugin(item.identifier);
+                setUpdating(false);
+              }}
+            />
+          ),
+          popoverContent: (
+            <ToolItemDetailPopover
+              description={item.description}
+              identifier={item.identifier}
+              sourceLabel={t('skillStore.tabs.community')}
+              title={item.title}
+              icon={
+                isMcp ? (
+                  <Icon icon={McpIcon} size={36} />
+                ) : (
+                  <Avatar
+                    avatar={item.avatar}
+                    shape={'square'}
+                    size={36}
+                    style={{ flex: 'none', marginInlineEnd: 0 }}
+                  />
+                )
+              }
+            />
+          ),
+        };
+      });
 
     // Enabled custom plugins
     const enabledCustomPlugins = customPlugins
       .filter((item) => checked.includes(item.identifier))
-      .map((item) => ({
-        icon:
-          item?.avatar === 'MCP_AVATAR' || !item?.avatar ? (
+      .map((item) => {
+        const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
+        return {
+          icon: isMcp ? (
             <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
           ) : (
             <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
           ),
-        key: item.identifier,
-        label: (
-          <ToolItem
-            checked={true}
-            id={item.identifier}
-            label={item.title}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(item.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-      }));
+          key: item.identifier,
+          label: (
+            <ToolItem
+              checked={true}
+              id={item.identifier}
+              label={item.title}
+              onUpdate={async () => {
+                setUpdating(true);
+                await togglePlugin(item.identifier);
+                setUpdating(false);
+              }}
+            />
+          ),
+          popoverContent: (
+            <ToolItemDetailPopover
+              description={item.description}
+              identifier={item.identifier}
+              sourceLabel={t('skillStore.tabs.custom')}
+              title={item.title}
+              icon={
+                isMcp ? (
+                  <Icon icon={McpIcon} size={36} />
+                ) : (
+                  <Avatar
+                    avatar={item.avatar}
+                    shape={'square'}
+                    size={36}
+                    style={{ flex: 'none', marginInlineEnd: 0 }}
+                  />
+                )
+              }
+            />
+          ),
+        };
+      });
 
     // Enabled Market Agent Skills
     const enabledMarketAgentSkillItems = marketAgentSkills
       .filter((skill) => checked.includes(skill.identifier))
       .map((skill) => ({
-        icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
+        icon: (
+          <MarketSkillIcon identifier={skill.identifier} name={skill.name} size={SKILL_ICON_SIZE} />
+        ),
         key: skill.identifier,
         label: (
           <ToolItem
@@ -560,6 +790,14 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               await togglePlugin(skill.identifier);
               setUpdating(false);
             }}
+          />
+        ),
+        popoverContent: (
+          <MarketAgentSkillPopoverContent
+            description={skill.description}
+            identifier={skill.identifier}
+            name={skill.name}
+            sourceLabel={t('skillStore.tabs.community')}
           />
         ),
       }));
@@ -591,6 +829,15 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
               await togglePlugin(skill.identifier);
               setUpdating(false);
             }}
+          />
+        ),
+        popoverContent: (
+          <ToolItemDetailPopover
+            description={skill.description}
+            icon={<Icon icon={SkillsIcon} size={36} />}
+            identifier={skill.identifier}
+            sourceLabel={t('skillStore.tabs.custom')}
+            title={skill.name}
           />
         ),
       }));

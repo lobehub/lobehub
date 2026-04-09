@@ -5,9 +5,9 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
-import { userIdField } from '../../const';
+import { displayToolCallsField, userIdField } from '../../const';
 import type { FieldSchema } from '../../types';
-import { MAX_FEISHU_HISTORY_LIMIT } from '../const';
+import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
 
 export const sharedSchema: FieldSchema[] = [
   {
@@ -50,6 +50,15 @@ export const sharedSchema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       {
+        key: 'connectionMode',
+        default: DEFAULT_FEISHU_CONNECTION_MODE,
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
+      {
         key: 'charLimit',
         default: 4000,
         description: 'channel.charLimitHint',
@@ -84,6 +93,7 @@ export const sharedSchema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      displayToolCallsField,
       {
         key: 'historyLimit',
         default: DEFAULT_BOT_HISTORY_LIMIT,

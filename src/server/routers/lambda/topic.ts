@@ -556,8 +556,18 @@ export const topicRouter = router({
       z.object({
         id: z.string(),
         metadata: z.object({
+          boundDeviceId: z.string().optional(),
           model: z.string().optional(),
           provider: z.string().optional(),
+          runningOperation: z
+            .object({
+              assistantMessageId: z.string(),
+              operationId: z.string(),
+              scope: z.string().optional(),
+              threadId: z.string().nullable().optional(),
+            })
+            .nullable()
+            .optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

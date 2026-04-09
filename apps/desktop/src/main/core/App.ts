@@ -13,6 +13,7 @@ import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
+import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import {
   astSearchDetectors,
   browserAutomationDetectors,
@@ -89,9 +90,9 @@ export class App {
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
 
-    // Append bundled binaries directory to PATH for fallback tool resolution
+    // Append bundled binaries and CLI wrapper directories to PATH for tool resolution
     const pathSep = process.platform === 'win32' ? ';' : ':';
-    process.env.PATH = `${process.env.PATH}${pathSep}${binDir}`;
+    process.env.PATH = `${process.env.PATH}${pathSep}${binDir}${pathSep}${getCliWrapperDir()}`;
 
     logger.debug('Initializing App');
     // Initialize store manager
@@ -225,6 +226,11 @@ export class App {
 
     // Initialize app
     await this.makeAppReady();
+
+    // Generate CLI wrapper for terminal usage
+    generateCliWrapper().catch((error) => {
+      logger.warn('Failed to generate CLI wrapper:', error);
+    });
 
     // Initialize i18n. Note: app.getLocale() must be called after app.whenReady() to get the correct value
     await this.i18n.init();

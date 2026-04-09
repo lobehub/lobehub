@@ -359,7 +359,6 @@
   "referral.table.columns.inviterRewardAmount": "Moja Nagroda",
   "referral.table.columns.rewardedAt": "Czas Przyznania Nagrody",
   "referral.table.columns.status": "Status",
-  "referral.table.columns.suspectedReason": "Powód Nieprawidłowości",
   "referral.table.status.pending_reward": "Oczekująca Nagroda",
   "referral.table.status.registered": "Zarejestrowany",
   "referral.table.status.revoked": "Cofnięty",

@@ -1,5 +1,5 @@
 import type { DocumentTemplate } from '../../template';
-import { DocumentLoadFormat, DocumentLoadPosition } from '../../types';
+import { DocumentLoadFormat, DocumentLoadPosition, PolicyLoad } from '../../types';
 import content from './SOUL.md';
 
 /**
@@ -12,6 +12,7 @@ export const SOUL_DOCUMENT: DocumentTemplate = {
   title: 'Soul',
   filename: 'SOUL.md',
   description: 'Core truths, boundaries, vibe, and continuity',
+  policyLoad: PolicyLoad.ALWAYS,
   policyLoadFormat: DocumentLoadFormat.FILE,
   loadPosition: DocumentLoadPosition.SYSTEM_APPEND,
   loadRules: {

@@ -1,13 +1,16 @@
-import  {
-  type GetCommandOutputResult,
-  type GlobFilesResult,
-  type GrepContentResult,
-  type KillCommandResult,
-  type LocalFileItem,
-  type LocalMoveFilesResultItem,
-  type LocalReadFileResult,
-  type RunCommandResult,
+import type {
+  LocalFileItem,
+  LocalMoveFilesResultItem,
+  LocalReadFileResult,
 } from '@lobechat/electron-client-ipc';
+
+// Re-export shared state types from @lobechat/tool-runtime
+export type {
+  EditFileState as EditLocalFileState,
+  GlobFilesState,
+  GrepContentState,
+  RunCommandState,
+} from '@lobechat/tool-runtime';
 
 export const LocalSystemIdentifier = 'lobe-local-system';
 
@@ -40,6 +43,8 @@ export interface FileResult {
   size: number;
   type: string;
 }
+
+// ==================== Local-System-Specific State Types ====================
 
 export interface LocalFileSearchState {
   /** Search engine used (e.g., 'mdfind', 'fd', 'find', 'fast-glob') */
@@ -74,40 +79,4 @@ export interface LocalRenameFileState {
   newPath: string;
   oldPath: string;
   success: boolean;
-}
-
-export interface RunCommandState {
-  message: string;
-  result: RunCommandResult;
-}
-
-export interface GetCommandOutputState {
-  message: string;
-  result: GetCommandOutputResult;
-}
-
-export interface KillCommandState {
-  message: string;
-  result: KillCommandResult;
-}
-
-export interface GrepContentState {
-  message: string;
-  /** Resolved search path after scope resolution */
-  resolvedPath?: string;
-  result: GrepContentResult;
-}
-
-export interface GlobFilesState {
-  message: string;
-  /** Resolved full glob (path + pattern) after scope resolution. May contain glob metacharacters like `*` or `**`. */
-  resolvedPath?: string;
-  result: GlobFilesResult;
-}
-
-export interface EditLocalFileState {
-  diffText?: string;
-  linesAdded?: number;
-  linesDeleted?: number;
-  replacements: number;
 }

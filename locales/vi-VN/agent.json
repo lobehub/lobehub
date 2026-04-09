@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "Tùy chọn. URL đường hầm HTTPS để chuyển tiếp yêu cầu webhook đến máy chủ phát triển cục bộ.",
   "channel.disabled": "Đã tắt",
   "channel.discord.description": "Kết nối trợ lý này với máy chủ Discord để trò chuyện kênh và tin nhắn trực tiếp.",
+  "channel.displayToolCalls": "Hiển thị Cuộc gọi Công cụ",
+  "channel.displayToolCallsHint": "Hiển thị chi tiết cuộc gọi công cụ trong quá trình AI phản hồi. Khi tắt, chỉ phản hồi cuối cùng được hiển thị để mang lại trải nghiệm gọn gàng hơn.",
   "channel.dm": "Tin nhắn trực tiếp",
   "channel.dmEnabled": "Bật tin nhắn trực tiếp",
   "channel.dmEnabledHint": "Cho phép bot nhận và trả lời tin nhắn trực tiếp",

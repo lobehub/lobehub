@@ -1,7 +1,8 @@
 import { isDesktop } from '@lobechat/const';
+import { chainInputCompletion } from '@lobechat/prompts';
 import { HotkeyEnum, KeyEnum } from '@lobechat/types';
-import { isCommandPressed } from '@lobechat/utils';
-import { INSERT_MENTION_COMMAND, ReactMathPlugin } from '@lobehub/editor';
+import { isCommandPressed, merge } from '@lobechat/utils';
+import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
@@ -11,14 +12,24 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { chatService } from '@/services/chat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, preferenceSelectors, settingsSelectors } from '@/store/user/selectors';
+import {
+  labPreferSelectors,
+  preferenceSelectors,
+  settingsSelectors,
+  systemAgentSelectors,
+} from '@/store/user/selectors';
 
 import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputStore, useStoreApi } from '../store';
-import { useSlashActionItems } from './ActionTag';
+import {
+  INSERT_ACTION_TAG_COMMAND,
+  type InsertActionTagPayload,
+  useSlashActionItems,
+} from './ActionTag';
 import { createMentionMenu } from './MentionMenu';
 import type { MentionMenuState } from './MentionMenu/types';
 import Placeholder from './Placeholder';
@@ -125,30 +136,141 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
     [slashActionItems],
   );
 
-  const richRenderProps = useMemo(
-    () =>
-      !enableRichRender
-        ? {
-            enablePasteMarkdown: false,
-            markdownOption: false,
-            plugins: CHAT_INPUT_EMBED_PLUGINS,
-          }
-        : {
-            plugins: createChatInputRichPlugins({
-              mathPlugin: Editor.withProps(ReactMathPlugin, {
-                renderComp: expand
-                  ? undefined
-                  : (props) => (
-                      <FloatMenu
-                        {...props}
-                        getPopupContainer={() => (slashMenuRef as any)?.current}
-                      />
-                    ),
-              }),
-            }),
+  // --- Auto-completion ---
+  const inputCompletionConfig = useUserStore(systemAgentSelectors.inputCompletion);
+  const isAutoCompleteEnabled = inputCompletionConfig.enabled;
+
+  const getMessagesRef = useRef(storeApi.getState().getMessages);
+  useEffect(() => {
+    return storeApi.subscribe((s) => {
+      getMessagesRef.current = s.getMessages;
+    });
+  }, [storeApi]);
+
+  const handleAutoComplete = useCallback(
+    async ({
+      abortSignal,
+      afterText,
+      input,
+    }: {
+      abortSignal: AbortSignal;
+      afterText: string;
+      editor: any;
+      input: string;
+      selectionType: string;
+    }): Promise<string | null> => {
+      // Skip autocomplete during IME composition (e.g. Chinese input method)
+      if (isComposingRef.current) return null;
+
+      if (!input.trim()) return null;
+
+      const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
+        useUserStore.getState(),
+      );
+      const context = getMessagesRef.current?.();
+      const chainParams = chainInputCompletion(input, afterText, context);
+
+      const abortController = new AbortController();
+      abortSignal.addEventListener('abort', () => abortController.abort());
+
+      let result = '';
+
+      try {
+        await chatService.fetchPresetTaskResult({
+          abortController,
+          onMessageHandle: (chunk) => {
+            if (chunk.type === 'text') {
+              result += chunk.text;
+            }
           },
-    [enableRichRender, expand, slashMenuRef],
+          params: merge(config, chainParams),
+        });
+      } catch {
+        return null;
+      }
+
+      if (abortSignal.aborted) return null;
+
+      return result.trimEnd() || null;
+    },
+    [],
   );
+
+  const autoCompletePlugin = useMemo(
+    () =>
+      isAutoCompleteEnabled
+        ? Editor.withProps(ReactAutoCompletePlugin, {
+            delay: 600,
+            onAutoComplete: handleAutoComplete,
+          })
+        : null,
+    [isAutoCompleteEnabled, handleAutoComplete],
+  );
+
+  // --- Stable mentionOption & slashOption to prevent infinite re-render on paste ---
+  const mentionMarkdownWriter = useCallback((mention: any) => {
+    if (mention.metadata?.type === 'topic') {
+      return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
+    }
+    return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
+  }, []);
+
+  const mentionOnSelect = useCallback((editor: any, option: any) => {
+    if (option.metadata?.type === 'topic') {
+      editor.dispatchCommand(INSERT_REFER_TOPIC_COMMAND, {
+        topicId: option.metadata.topicId as string,
+        topicTitle: String(option.metadata.topicTitle ?? option.label),
+      });
+    } else if (option.metadata?.type === 'skill' || option.metadata?.type === 'tool') {
+      const payload: InsertActionTagPayload = {
+        category: option.metadata.actionCategory as 'skill' | 'tool',
+        label: String(option.label),
+        type: String(option.metadata.actionType),
+      };
+      editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+    } else {
+      editor.dispatchCommand(INSERT_MENTION_COMMAND, {
+        label: String(option.label),
+        metadata: option.metadata,
+      });
+    }
+  }, []);
+
+  const mentionOption = useMemo(
+    () =>
+      enableMention
+        ? {
+            items: mentionItemsFn,
+            markdownWriter: mentionMarkdownWriter,
+            maxLength: 50,
+            onSelect: mentionOnSelect,
+            renderComp: MentionMenuComp,
+          }
+        : undefined,
+    [enableMention, mentionItemsFn, mentionMarkdownWriter, mentionOnSelect, MentionMenuComp],
+  );
+
+  const slashOption = useMemo(() => ({ items: slashItems }), [slashItems]);
+
+  const richRenderProps = useMemo(() => {
+    const basePlugins = !enableRichRender
+      ? CHAT_INPUT_EMBED_PLUGINS
+      : createChatInputRichPlugins({
+          mathPlugin: Editor.withProps(ReactMathPlugin, {
+            renderComp: expand
+              ? undefined
+              : (props) => (
+                  <FloatMenu {...props} getPopupContainer={() => (slashMenuRef as any)?.current} />
+                ),
+          }),
+        });
+
+    const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
+
+    return !enableRichRender
+      ? { enablePasteMarkdown: false, markdownOption: false, plugins }
+      : { plugins };
+  }, [enableRichRender, expand, slashMenuRef, autoCompletePlugin]);
 
   return (
     <Editor
@@ -159,46 +281,16 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       editor={editor}
       {...{ slashPlacement }}
       {...richRenderProps}
+      mentionOption={mentionOption}
       placeholder={<Placeholder />}
+      slashOption={slashOption}
       type={'text'}
       variant={'chat'}
-      mentionOption={
-        enableMention
-          ? {
-              items: mentionItemsFn,
-              markdownWriter: (mention) => {
-                if (mention.metadata?.type === 'topic') {
-                  return `<refer_topic name="${mention.metadata.topicTitle}" id="${mention.metadata.topicId}" />`;
-                }
-                return `<mention name="${mention.label}" id="${mention.metadata.id}" />`;
-              },
-              maxLength: 50,
-              onSelect: (editor, option) => {
-                if (option.metadata?.type === 'topic') {
-                  editor.dispatchCommand(INSERT_REFER_TOPIC_COMMAND, {
-                    topicId: option.metadata.topicId as string,
-                    topicTitle: String(option.metadata.topicTitle ?? option.label),
-                  });
-                } else {
-                  editor.dispatchCommand(INSERT_MENTION_COMMAND, {
-                    label: String(option.label),
-                    metadata: option.metadata,
-                  });
-                }
-              },
-              renderComp: MentionMenuComp,
-            }
-          : undefined
-      }
-      slashOption={{
-        items: slashItems,
-      }}
       style={{
         minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
       }}
       onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
       onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
-      onInit={(editor) => storeApi.setState({ editor })}
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
       }}
@@ -220,11 +312,28 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       onFocus={() => {
         enableScope(HotkeyEnum.AddUserMessage);
       }}
+      onInit={(editor) => {
+        const saved = storeApi.getState()._savedEditorState;
+        storeApi.setState({ _savedEditorState: undefined, editor });
+        if (saved) {
+          requestAnimationFrame(() => {
+            editor.setDocument('json', saved);
+          });
+        }
+      }}
       onPressEnter={({ event: e }) => {
         if (e.shiftKey || isComposingRef.current) return;
         // when user like alt + enter to add ai message
         if (e.altKey && hotkey === combineKeys([KeyEnum.Alt, KeyEnum.Enter])) return true;
         const commandKey = isCommandPressed(e);
+        // In fullscreen mode, Enter inserts newline; only Cmd/Ctrl+Enter sends
+        if (expand) {
+          if (commandKey) {
+            send();
+            return true;
+          }
+          return;
+        }
         // when user like cmd + enter to send message
         if (useCmdEnterToSend) {
           if (commandKey) {

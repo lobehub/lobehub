@@ -1,4 +1,8 @@
-import { type AIChatModelCard, type AIImageModelCard } from '../types/aiModel';
+import {
+  type AIChatModelCard,
+  type AIImageModelCard,
+  type AIVideoModelCard,
+} from '../types/aiModel';
 
 const minimaxChatModels: AIChatModelCard[] = [
   {
@@ -336,6 +340,183 @@ const minimaxImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...minimaxChatModels, ...minimaxImageModels];
+const minimaxVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Brand-new video generation model with comprehensive upgrades in body motion, physical realism, and instruction following.',
+    displayName: 'MiniMax Hailuo 2.3 Fast',
+    enabled: true,
+    id: 'MiniMax-Hailuo-2.3-Fast',
+    parameters: {
+      duration: { default: 6, enum: [6, 10] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '768P',
+        enum: ['768P', '1080P'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.35, strategy: 'fixed', unit: 'video' }],
+    },
+    releasedAt: '2025-10-28',
+    type: 'video',
+  },
+  {
+    description:
+      'Brand-new video generation model with comprehensive upgrades in body motion, physical realism, and instruction following.',
+    displayName: 'MiniMax Hailuo 2.3',
+    enabled: true,
+    id: 'MiniMax-Hailuo-2.3',
+    parameters: {
+      duration: { default: 6, enum: [6, 10] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '768P',
+        enum: ['768P', '1080P'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
+    },
+    releasedAt: '2025-10-28',
+    type: 'video',
+  },
+  {
+    description:
+      'The next-generation video generation model, MiniMax Hailuo 02, has been officially released, supporting 1080P resolution and 10-second video generation.',
+    displayName: 'MiniMax Hailuo 02',
+    enabled: true,
+    id: 'MiniMax-Hailuo-02',
+    parameters: {
+      duration: { default: 6, enum: [6, 10] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '768P',
+        enum: ['512P', '768P', '1080P'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'video' }],
+    },
+    releasedAt: '2025-06-18',
+    type: 'video',
+  },
+  {
+    description:
+      'A director-level video generation model has been officially released, offering improved adherence to camera movement instructions and cinematic shot storytelling language.',
+    displayName: 'I2V 01 Director',
+    id: 'I2V-01-Director',
+    parameters: {
+      duration: { default: 6, enum: [6] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+    },
+    releasedAt: '2025-02-11',
+    type: 'video',
+  },
+  {
+    description:
+      'A director-level video generation model has been officially released, offering improved adherence to camera movement instructions and cinematic shot storytelling language.',
+    displayName: 'T2V 01 Director',
+    id: 'T2V-01-Director',
+    parameters: {
+      duration: { default: 6, enum: [6] },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+    },
+    releasedAt: '2025-02-11',
+    type: 'video',
+  },
+  {
+    description: 'Enhanced character performance: more stable, smoother, and more vivid.',
+    displayName: 'I2V 01 Live',
+    id: 'I2V-01-live',
+    parameters: {
+      duration: { default: 6, enum: [6] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+    },
+    releasedAt: '2025-03-03',
+    type: 'video',
+  },
+  {
+    description: 'The foundational image-to-video model of the 01 series.',
+    displayName: 'I2V 01',
+    id: 'I2V-01',
+    parameters: {
+      duration: { default: 6, enum: [6] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+    },
+    releasedAt: '2025-03-03',
+    type: 'video',
+  },
+  {
+    description: 'The foundational reference-to-video model of the 01 series.',
+    displayName: 'S2V 01',
+    id: 'S2V-01',
+    parameters: {
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+    },
+    releasedAt: '2025-01-10',
+    type: 'video',
+  },
+  {
+    description: 'The foundational text-to-video model of the 01 series.',
+    displayName: 'T2V 01',
+    id: 'T2V-01',
+    parameters: {
+      duration: { default: 6, enum: [6] },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['720P'],
+      },
+    },
+    releasedAt: '2025-03-03',
+    type: 'video',
+  },
+];
+
+export const allModels = [...minimaxChatModels, ...minimaxImageModels, ...minimaxVideoModels];
 
 export default allModels;

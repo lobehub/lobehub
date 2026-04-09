@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "Opzionale. URL del tunnel HTTPS per inoltrare richieste webhook al server di sviluppo locale.",
   "channel.disabled": "Disabilitato",
   "channel.discord.description": "Connetti questo assistente al server Discord per chat di canale e messaggi diretti.",
+  "channel.displayToolCalls": "Mostra Chiamate Strumento",
+  "channel.displayToolCallsHint": "Mostra i dettagli delle chiamate agli strumenti durante le risposte dell'IA. Quando disabilitato, viene visualizzata solo la risposta finale per un'esperienza più pulita.",
   "channel.dm": "Messaggi diretti",
   "channel.dmEnabled": "Abilita messaggi diretti",
   "channel.dmEnabledHint": "Consenti al bot di ricevere e rispondere ai messaggi diretti",

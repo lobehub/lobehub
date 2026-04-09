@@ -69,6 +69,7 @@ vi.mock('@lobehub/icons', () => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
+  ShikiLobeTheme: { name: 'lobe-test', type: 'dark' as const, colors: {} },
   Icon: vi.fn(({ icon, ...props }) => (
     <div data-testid="icon" {...props}>
       {icon?.name}
@@ -123,15 +124,6 @@ vi.mock('@/features/ChatList/Error/style', () => ({
 }));
 
 describe('ComfyUIForm Integration', () => {
-  const mockProps = {
-    bedrockDescription: 'bedrock.description',
-    description: 'comfyui.description',
-    id: 'test-batch-id',
-    onClose: vi.fn(),
-    onRecreate: vi.fn(),
-    provider: ModelProvider.ComfyUI,
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
   });

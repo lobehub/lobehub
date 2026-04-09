@@ -1,4 +1,4 @@
-export { createWechatAdapter, WechatAdapter } from './adapter';
+export { createWechatAdapter, downloadMediaFromRawMessage, WechatAdapter } from './adapter';
 export type { QrCodeResponse, QrStatusResponse } from './api';
 export { DEFAULT_BASE_URL, fetchQrCode, pollQrStatus, WechatApiClient } from './api';
 export { WechatFormatConverter } from './format-converter';

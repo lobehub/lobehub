@@ -7,29 +7,34 @@ import { useTranslation } from 'react-i18next';
 
 import Search from './Search';
 import AddSkillButton from './SkillList/AddSkillButton';
-import CommunityList from './SkillList/Community';
 import CustomList from './SkillList/Custom';
 import LobeHubList from './SkillList/LobeHub';
+import MarketSkillList from './SkillList/MarketSkills';
+import MCPList from './SkillList/MCP';
 
 export enum SkillStoreTab {
-  Community = 'community',
   Custom = 'custom',
   LobeHub = 'lobehub',
+  MCP = 'mcp',
+  Skills = 'skills',
 }
 
 export const SkillStoreContent = () => {
   const { t } = useTranslation('setting');
   const [activeTab, setActiveTab] = useState<SkillStoreTab>(SkillStoreTab.LobeHub);
   const [lobehubKeywords, setLobehubKeywords] = useState('');
+  const [skillKeywords, setSkillKeywords] = useState('');
 
   const options: SegmentedOptions = [
     { label: t('skillStore.tabs.lobehub'), value: SkillStoreTab.LobeHub },
-    { label: t('skillStore.tabs.community'), value: SkillStoreTab.Community },
+    { label: 'Skills', value: SkillStoreTab.Skills },
+    { label: t('skillStore.tabs.mcp'), value: SkillStoreTab.MCP },
     { label: t('skillStore.tabs.custom'), value: SkillStoreTab.Custom },
   ];
 
   const isLobeHub = activeTab === SkillStoreTab.LobeHub;
-  const isCommunity = activeTab === SkillStoreTab.Community;
+  const isSkills = activeTab === SkillStoreTab.Skills;
+  const isMCP = activeTab === SkillStoreTab.MCP;
   const isCustom = activeTab === SkillStoreTab.Custom;
 
   return (
@@ -46,14 +51,21 @@ export const SkillStoreContent = () => {
           />
           <AddSkillButton />
         </Flexbox>
-        <Search activeTab={activeTab} onLobeHubSearch={setLobehubKeywords} />
+        <Search
+          activeTab={activeTab}
+          onLobeHubSearch={setLobehubKeywords}
+          onSkillSearch={setSkillKeywords}
+        />
       </Flexbox>
       <Flexbox height={496}>
         <Flexbox flex={1} style={{ display: isLobeHub ? 'flex' : 'none', overflow: 'auto' }}>
           <LobeHubList keywords={lobehubKeywords} />
         </Flexbox>
-        <Flexbox flex={1} style={{ display: isCommunity ? 'flex' : 'none', overflow: 'auto' }}>
-          <CommunityList />
+        <Flexbox flex={1} style={{ display: isSkills ? 'flex' : 'none', overflow: 'auto' }}>
+          <MarketSkillList keywords={skillKeywords} />
+        </Flexbox>
+        <Flexbox flex={1} style={{ display: isMCP ? 'flex' : 'none', overflow: 'auto' }}>
+          <MCPList />
         </Flexbox>
         <Flexbox flex={1} style={{ display: isCustom ? 'flex' : 'none', overflow: 'auto' }}>
           <CustomList />

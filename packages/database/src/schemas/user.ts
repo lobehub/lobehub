@@ -1,6 +1,10 @@
 import { DEFAULT_PREFERENCE } from '@lobechat/const';
-import type { CustomPluginParams, UserAgentOnboarding, UserOnboarding } from '@lobechat/types';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type {
+  CustomPluginParams,
+  ToolManifest,
+  UserAgentOnboarding,
+  UserOnboarding,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import { boolean, index, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
 
@@ -95,7 +99,7 @@ export const userInstalledPlugins = pgTable(
 
     identifier: text('identifier').notNull(),
     type: text('type', { enum: ['plugin', 'customPlugin'] }).notNull(),
-    manifest: jsonb('manifest').$type<LobeChatPluginManifest>(),
+    manifest: jsonb('manifest').$type<ToolManifest>(),
     settings: jsonb('settings'),
     customParams: jsonb('custom_params').$type<CustomPluginParams>(),
     source: varchar255('source'),

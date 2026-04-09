@@ -20,6 +20,7 @@ import type {
   FieldSchema,
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
+import { isDev } from '@/utils/env';
 
 import { platformCredentialBodyMap } from '../platform/registry';
 import type { ChannelFormValues } from './index';
@@ -143,7 +144,7 @@ const SchemaField = memo<SchemaFieldProps>(({ field, parentKey, divider }) => {
       minWidth={'max(50%, 400px)'}
       name={[parentKey, field.key]}
       rules={buildRules(field, t)}
-      tag={field.key}
+      tag={isDev ? field.key : undefined}
       valuePropName={field.type === 'boolean' ? 'checked' : undefined}
       variant="borderless"
     >
@@ -166,7 +167,7 @@ const ApplicationIdField = memo<{ field: FieldSchema }>(({ field }) => {
       minWidth={'max(50%, 400px)'}
       name="applicationId"
       rules={field.required ? [{ message: t(field.label), required: true }] : undefined}
-      tag="applicationId"
+      tag={isDev ? 'applicationId' : undefined}
       variant="borderless"
     >
       <FormInput placeholder={field.placeholder || t(field.label)} />

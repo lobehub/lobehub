@@ -45,6 +45,18 @@ export interface AvailableProviderInfo {
 }
 
 /**
+ * Available agent info for Agent Management context
+ */
+export interface AvailableAgentInfo {
+  /** Agent description */
+  description?: string;
+  /** Agent ID */
+  id: string;
+  /** Agent display name */
+  title: string;
+}
+
+/**
  * Available plugin info for Agent Management context
  */
 export interface AvailablePluginInfo {
@@ -62,6 +74,16 @@ export interface AvailablePluginInfo {
  * Agent Management context
  */
 export interface AgentManagementContext {
+  /**
+   * User's recently updated agents — surfaced so the model can callAgent without
+   * searchAgent first. The current/responding agent is NEVER included here, so
+   * the model has no exposure to its own id from this section and cannot
+   * accidentally delegate to itself. Filtering happens at the caller side
+   * (server `aiAgent` and client `contextEngineering`).
+   */
+  availableAgents?: AvailableAgentInfo[];
+  /** Whether the user has more agents than the ones listed in `availableAgents` */
+  availableAgentsHasMore?: boolean;
   /** Available plugins (all types) */
   availablePlugins?: AvailablePluginInfo[];
   /** Available providers and models */
@@ -107,6 +129,21 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
       .join('\n');
 
     parts.push(`<available_models>\n${providersXml}\n</available_models>`);
+  }
+
+  // Add available agents section (user's existing agents — never includes the current agent;
+  // the caller filters self out so the model has no exposure to its own id from this section)
+  if (context.availableAgents && context.availableAgents.length > 0) {
+    const agentsXml = context.availableAgents
+      .map((agent) => {
+        const desc = agent.description ? ` - ${escapeXml(agent.description)}` : '';
+        return `    <agent id="${escapeXml(agent.id)}">${escapeXml(agent.title)}${desc}</agent>`;
+      })
+      .join('\n');
+    const hasMoreNote = context.availableAgentsHasMore
+      ? `\n  <note>Only the ${context.availableAgents.length} most recently updated agents are listed here. The user has more agents — use the Agent Management \`searchAgent\` tool (source="user" + keyword) to find others.</note>`
+      : '';
+    parts.push(`<available_agents>${hasMoreNote}\n${agentsXml}\n</available_agents>`);
   }
 
   // Add available plugins section
@@ -158,8 +195,27 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     return '';
   }
 
+  // Build instruction dynamically based on which sections are actually present.
+  // (e.g. in "auto" mode we may inject only <available_agents> without models/plugins.)
+  const hasModelsOrPlugins =
+    (context.availableProviders && context.availableProviders.length > 0) ||
+    (context.availablePlugins && context.availablePlugins.length > 0);
+  const hasAgents = context.availableAgents && context.availableAgents.length > 0;
+
+  const instructionParts: string[] = [];
+  if (hasModelsOrPlugins) {
+    instructionParts.push(
+      'When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.',
+    );
+  }
+  if (hasAgents) {
+    instructionParts.push(
+      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+    );
+  }
+
   return `<agent_management_context>
-<instruction>When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.</instruction>
+<instruction>${instructionParts.join(' ')}</instruction>
 ${parts.join('\n')}
 </agent_management_context>`;
 };
@@ -174,7 +230,7 @@ const formatMentionedAgentsContext = (mentionedAgents: RuntimeMentionedAgent[]):
     .join('\n');
 
   return `<mentioned_agents>
-<instruction>The user has @mentioned the following agent(s) in their message. You MUST use the callAgent tool to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — call the agent and let them respond.</instruction>
+<instruction>The user has @mentioned the following agent(s) in their message. You MUST call the \`lobe-agent-management____callAgent____builtin\` tool to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — call the agent and let them respond.</instruction>
 ${agentsXml}
 </mentioned_agents>`;
 };
@@ -211,13 +267,10 @@ export class AgentManagementContextInjector extends BaseProvider {
     const hasMentionedAgents =
       this.config.context.mentionedAgents && this.config.context.mentionedAgents.length > 0;
 
-    // Format context (excluding mentionedAgents — those are injected separately after the last user message)
-    const contextWithoutMentions: AgentManagementContext = hasMentionedAgents
-      ? {
-          availablePlugins: this.config.context.availablePlugins,
-          availableProviders: this.config.context.availableProviders,
-        }
-      : this.config.context;
+    // Format context (excluding mentionedAgents — those are injected separately
+    // after the last user message). Use a destructure-rest copy so future fields
+    // (e.g. currentAgent) don't silently get dropped here.
+    const { mentionedAgents: _mentioned, ...contextWithoutMentions } = this.config.context;
 
     const formatFn = this.config.formatContext || defaultFormatContext;
     const formattedContent = formatFn(contextWithoutMentions);

@@ -12,6 +12,7 @@
   "config.resolution.label": "Độ phân giải",
   "config.seed.label": "Hạt giống",
   "config.seed.random": "Ngẫu nhiên",
+  "config.size.label": "Kích thước",
   "generation.actions.copyError": "Sao chép thông báo lỗi",
   "generation.actions.errorCopied": "Đã sao chép thông báo lỗi vào bộ nhớ tạm",
   "generation.actions.errorCopyFailed": "Không thể sao chép thông báo lỗi",

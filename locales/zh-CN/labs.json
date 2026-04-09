@@ -1,6 +1,8 @@
 {
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
+  "features.gatewayMode.desc": "通过 Gateway 在服务端执行 Agent 任务。可实现关闭浏览器后仍然执行 agent。",
+  "features.gatewayMode.title": "服务端代理执行（Gateway）",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",

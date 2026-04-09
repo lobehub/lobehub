@@ -139,9 +139,7 @@ export class UpdaterManager {
   public switchChannel = (channel: UpdateChannel) => {
     logger.info(`Switching update channel: ${this.currentChannel} -> ${channel}`);
 
-    const isDowngrade =
-      (this.currentChannel === 'canary' && channel !== 'canary') ||
-      (this.currentChannel === 'nightly' && channel === 'stable');
+    const isDowngrade = this.currentChannel === 'canary' && channel === 'stable';
 
     this.currentChannel = channel;
     autoUpdater.allowDowngrade = isDowngrade;
@@ -366,7 +364,7 @@ export class UpdaterManager {
 
   /**
    * Strip trailing channel path from URL so we can re-append the correct channel.
-   * Handles both base URL (https://cdn.example.com) and legacy URL with channel (https://cdn.example.com/stable)
+   * Handles both base URL (https://cdn.example.com) and legacy URLs with channel suffixes.
    */
   private getBaseUpdateUrl(): string | undefined {
     if (!UPDATE_SERVER_URL) return undefined;

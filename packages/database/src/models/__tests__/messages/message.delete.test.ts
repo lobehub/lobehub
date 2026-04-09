@@ -52,7 +52,7 @@ describe('MessageModel Delete Tests', () => {
         .insert(messages)
         .values([{ id: '1', userId, role: 'user', content: 'message 1' }]);
 
-      // 调用 deleteMessage 方法
+      // Call deleteMessage method
       await messageModel.deleteMessage('1');
 
       // Assert result
@@ -72,7 +72,7 @@ describe('MessageModel Delete Tests', () => {
           .values([{ id: '2', toolCallId: 'tool1', identifier: 'plugin-1', userId }]);
       });
 
-      // 调用 deleteMessage 方法
+      // Call deleteMessage method
       await messageModel.deleteMessage('1');
 
       // Assert result
@@ -93,7 +93,7 @@ describe('MessageModel Delete Tests', () => {
         .insert(messages)
         .values([{ id: '1', userId: otherUserId, role: 'user', content: 'message 1' }]);
 
-      // 调用 deleteMessage 方法
+      // Call deleteMessage method
       await messageModel.deleteMessage('1');
 
       // Assert result
@@ -186,7 +186,7 @@ describe('MessageModel Delete Tests', () => {
         { id: '2', userId, role: 'user', content: 'message 2' },
       ]);
 
-      // 调用 deleteMessage 方法
+      // Call deleteMessage method
       await messageModel.deleteMessages(['1', '2']);
 
       // Assert result
@@ -203,7 +203,7 @@ describe('MessageModel Delete Tests', () => {
         { id: '2', userId: otherUserId, role: 'user', content: 'message 1' },
       ]);
 
-      // 调用 deleteMessage 方法
+      // Call deleteMessage method
       await messageModel.deleteMessages(['1', '2']);
 
       // Assert result
@@ -309,7 +309,7 @@ describe('MessageModel Delete Tests', () => {
       await serverDB.insert(messages).values([{ id: '1', role: 'abc', userId }]);
       await serverDB.insert(messageTranslates).values([{ id: '1', userId }]);
 
-      // 调用 deleteMessageTranslate 方法
+      // Call deleteMessageTranslate method
       await messageModel.deleteMessageTranslate('1');
 
       // Assert result
@@ -328,7 +328,7 @@ describe('MessageModel Delete Tests', () => {
       await serverDB.insert(messages).values([{ id: '1', role: 'abc', userId }]);
       await serverDB.insert(messageTTS).values([{ userId, id: '1' }]);
 
-      // 调用 deleteMessageTTS 方法
+      // Call deleteMessageTTS method
       await messageModel.deleteMessageTTS('1');
 
       // Assert result
@@ -588,7 +588,7 @@ describe('MessageModel Delete Tests', () => {
         userId,
       });
 
-      // 验证查询已创建
+      // Verify query was created
       const beforeDelete = await serverDB
         .select()
         .from(messageQueries)
@@ -596,10 +596,10 @@ describe('MessageModel Delete Tests', () => {
 
       expect(beforeDelete).toHaveLength(1);
 
-      // 调用 deleteMessageQuery 方法
+      // Call deleteMessageQuery method
       await messageModel.deleteMessageQuery(queryId);
 
-      // 验证查询已删除
+      // Verify query was deleted
       const afterDelete = await serverDB
         .select()
         .from(messageQueries)
@@ -609,7 +609,7 @@ describe('MessageModel Delete Tests', () => {
     });
 
     it('should only delete message queries belonging to the user', async () => {
-      // Create test data - 其他用户的查询
+      // Create test data - queries from other users
       const queryId = uuid();
       await serverDB.insert(messages).values({
         id: 'msg5',
@@ -623,13 +623,13 @@ describe('MessageModel Delete Tests', () => {
         messageId: 'msg5',
         userQuery: 'test query',
         rewriteQuery: 'rewritten query',
-        userId: otherUserId, // 其他用户
+        userId: otherUserId, // other user
       });
 
-      // 调用 deleteMessageQuery 方法
+      // Call deleteMessageQuery method
       await messageModel.deleteMessageQuery(queryId);
 
-      // 验证查询未被删除
+      // Verify query was not deleted
       const afterDelete = await serverDB
         .select()
         .from(messageQueries)
@@ -639,7 +639,7 @@ describe('MessageModel Delete Tests', () => {
     });
 
     it('should throw error when deleting non-existent message query', async () => {
-      // 调用 deleteMessageQuery 方法删除不存在的查询
+      // Call deleteMessageQuery method to delete a non-existent query
       try {
         await messageModel.deleteMessageQuery('non-existent-id');
       } catch (e) {

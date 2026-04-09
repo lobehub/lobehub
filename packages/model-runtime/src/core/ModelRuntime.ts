@@ -126,9 +126,8 @@ export class ModelRuntime {
       });
     }
 
-    const finalOptions = await this.applyHooks(payload, options);
-
     try {
+      const finalOptions = await this.applyHooks(payload, options);
       return await this._runtime.chat(payload, finalOptions);
     } catch (error) {
       if (this._hooks?.onChatError) {
@@ -169,24 +168,24 @@ export class ModelRuntime {
   }
 
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-    await this._hooks?.beforeGenerateObject?.(payload, options);
-
-    const finalOptions = this._hooks?.onGenerateObjectFinal
-      ? {
-          ...options,
-          onUsage: async (usage: ModelUsage) => {
-            await options?.onUsage?.(usage);
-            try {
-              await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
-            } catch (e) {
-              // Hook failures (billing, tracing) must not interfere with response completion
-              console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
-            }
-          },
-        }
-      : options;
-
     try {
+      await this._hooks?.beforeGenerateObject?.(payload, options);
+
+      const finalOptions = this._hooks?.onGenerateObjectFinal
+        ? {
+            ...options,
+            onUsage: async (usage: ModelUsage) => {
+              await options?.onUsage?.(usage);
+              try {
+                await this._hooks!.onGenerateObjectFinal!({ usage }, { options, payload });
+              } catch (e) {
+                // Hook failures (billing, tracing) must not interfere with response completion
+                console.error('[ModelRuntime] onGenerateObjectFinal hook error:', e);
+              }
+            },
+          }
+        : options;
+
       return await this._runtime.generateObject!(payload, finalOptions);
     } catch (error) {
       if (this._hooks?.onGenerateObjectError) {
@@ -211,31 +210,35 @@ export class ModelRuntime {
     return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
+  async handlePollVideoStatus(inferenceId: string) {
+    return this._runtime.handlePollVideoStatus?.(inferenceId);
+  }
+
   async models() {
     return this._runtime.models?.();
   }
 
   async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
-    await this._hooks?.beforeEmbeddings?.(payload, options);
-
-    const startTime = Date.now();
-
-    const finalOptions = this._hooks?.onEmbeddingsFinal
-      ? {
-          ...options,
-          onUsage: async (usage: ModelUsage) => {
-            await options?.onUsage?.(usage);
-            try {
-              const latencyMs = Date.now() - startTime;
-              await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
-            } catch (e) {
-              console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
-            }
-          },
-        }
-      : options;
-
     try {
+      await this._hooks?.beforeEmbeddings?.(payload, options);
+
+      const startTime = Date.now();
+
+      const finalOptions = this._hooks?.onEmbeddingsFinal
+        ? {
+            ...options,
+            onUsage: async (usage: ModelUsage) => {
+              await options?.onUsage?.(usage);
+              try {
+                const latencyMs = Date.now() - startTime;
+                await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
+              } catch (e) {
+                console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+              }
+            },
+          }
+        : options;
+
       return await this._runtime.embeddings?.(payload, finalOptions);
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {

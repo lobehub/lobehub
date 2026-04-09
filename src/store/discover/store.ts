@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { createDevtools } from '../middleware/createDevtools';
 import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type AssistantAction } from './slices/assistant/action';
 import { createAssistantSlice } from './slices/assistant/action';
 import { type GroupAgentAction } from './slices/groupAgent/action';
@@ -34,7 +35,8 @@ export type DiscoverStore = MCPAction &
   PluginAction &
   SkillAction &
   SocialAction &
-  UserAction;
+  UserAction &
+  ResetableStore;
 
 type DiscoverStoreAction = MCPAction &
   AssistantAction &
@@ -44,7 +46,12 @@ type DiscoverStoreAction = MCPAction &
   PluginAction &
   SkillAction &
   SocialAction &
-  UserAction;
+  UserAction &
+  ResetableStore;
+
+class DiscoverStoreResetAction extends ResetableStoreAction<DiscoverStore> {
+  protected readonly resetActionName = 'resetDiscoverStore';
+}
 
 const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<DiscoverStore, [['zustand/devtools', never]]>>
@@ -59,6 +66,7 @@ const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = 
     createSkillSlice(...parameters),
     createSocialSlice(...parameters),
     createUserSlice(...parameters),
+    new DiscoverStoreResetAction(...parameters),
   ]);
 
 //  ===============  Implement useStore ============ //

@@ -11,7 +11,6 @@
   },
   "main": "src/index.ts",
   "scripts": {
-    "build:gen-response-formats": "tsx scripts/generate-response-formats.ts",
     "test": "vitest --run",
     "test:coverage": "vitest --coverage --silent='passed-only'",
     "type-check": "tsgo --noEmit -p tsconfig.json"
@@ -32,7 +31,7 @@
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
     "@types/xast": "^2.0.4",
-    "promptfoo": "^0.120.17",
+    "picospinner": "^3.0.0",
     "tsx": "^4.20.6"
   },
   "peerDependencies": {

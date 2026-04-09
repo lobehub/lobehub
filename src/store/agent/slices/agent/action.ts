@@ -1,27 +1,32 @@
+import { isDesktop } from '@lobechat/const';
+import { type AgentContextDocument } from '@lobechat/context-engine';
 import { isChatGroupSessionId } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
-import { type SWRResponse } from 'swr';
-import { type PartialDeep } from 'type-fest';
+import type { SWRResponse } from 'swr';
+import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { type CreateAgentParams, type CreateAgentResult } from '@/services/agent';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService } from '@/services/agent';
-import { type StoreSetter } from '@/store/types';
+import {
+  agentDocumentService,
+  agentDocumentSWRKeys,
+  mapAgentDocumentsToContext,
+  resolveAgentDocumentsContext,
+} from '@/services/agentDocument';
+import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import {
-  type LobeAgentChatConfig,
-  type LobeAgentConfig,
-  type RuntimeEnvConfig,
-} from '@/types/agent';
-import { type MetaData } from '@/types/meta';
+import type { LobeAgentChatConfig, LobeAgentConfig, RuntimeEnvConfig } from '@/types/agent';
+import type { MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
 
-import { type AgentStore } from '../../store';
-import { type AgentSliceState, type LoadingState, type SaveStatus } from './initialState';
+import type { AgentStore } from '../../store';
+import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
+import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
 
@@ -37,12 +42,26 @@ export const createAgentSlice = (set: Setter, get: () => AgentStore, _api?: unkn
 export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
+  readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
 
   constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
   }
+
+  #syncAgentDocuments = (agentId: string, documents: AgentContextDocument[]) => {
+    this.#set(
+      (state) => ({
+        agentDocumentsMap: {
+          ...state.agentDocumentsMap,
+          [agentId]: documents,
+        },
+      }),
+      false,
+      'syncAgentDocuments',
+    );
+  };
 
   appendStreamingSystemRole = (chunk: string): void => {
     const currentContent = this.#get().streamingSystemRole || '';
@@ -197,7 +216,15 @@ export class AgentSliceActionImpl {
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: config });
+    if (isDesktop && 'workingDirectory' in config) {
+      setLocalAgentWorkingDirectory(agentId, config.workingDirectory);
+    }
+
+    const restConfig = { ...config };
+    delete restConfig.workingDirectory;
+    if (Object.keys(restConfig).length > 0) {
+      await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: restConfig });
+    }
   };
 
   updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {
@@ -250,6 +277,50 @@ export class AgentSliceActionImpl {
         },
       },
     );
+  };
+
+  useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentContextDocument[]> => {
+    return useClientDataSWRWithSync<AgentContextDocument[]>(
+      agentId ? agentDocumentSWRKeys.documents(agentId) : null,
+      async () =>
+        mapAgentDocumentsToContext(await agentDocumentService.getDocuments({ agentId: agentId! })),
+      {
+        onData: (data) => {
+          if (!agentId) return;
+
+          this.#syncAgentDocuments(agentId, data);
+        },
+        revalidateOnFocus: false,
+      },
+    );
+  };
+
+  ensureAgentDocuments = async (
+    agentId?: string | null,
+  ): Promise<AgentContextDocument[] | undefined> => {
+    if (!agentId) return undefined;
+
+    const cachedDocuments = this.#get().agentDocumentsMap[agentId];
+    if (cachedDocuments !== undefined) return cachedDocuments;
+
+    const pendingRequest = this.#pendingAgentDocuments.get(agentId);
+    if (pendingRequest) return pendingRequest;
+
+    const request = resolveAgentDocumentsContext({ agentId })
+      .then((documents) => {
+        if (documents) {
+          this.#syncAgentDocuments(agentId, documents);
+        }
+
+        return documents;
+      })
+      .finally(() => {
+        this.#pendingAgentDocuments.delete(agentId);
+      });
+
+    this.#pendingAgentDocuments.set(agentId, request);
+
+    return request;
   };
 
   internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {

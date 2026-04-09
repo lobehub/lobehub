@@ -85,6 +85,11 @@ export const getServerGlobalConfig = async () => {
     ),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
 
+    // Expose Agent Gateway URL to client when queue-based agent runtime is enabled
+    ...(appEnv.enableQueueAgentRuntime && appEnv.AGENT_GATEWAY_URL
+      ? { agentGatewayUrl: appEnv.AGENT_GATEWAY_URL }
+      : undefined),
+
     image: cleanObject({
       defaultImageNum: imageEnv.AI_IMAGE_DEFAULT_IMAGE_NUM,
     }),

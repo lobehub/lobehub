@@ -220,34 +220,26 @@ export class ResourceService {
     if (!existing) throw new Error('Resource not found');
 
     if (existing.sourceType === 'file') {
-      // Update file (currently only supports parentId)
-      if (updates.parentId !== undefined) {
-        await fileService.updateFile(id, { parentId: updates.parentId });
-      }
-
-      // Fetch updated file
-      const updated = await fileService.getKnowledgeItem(id);
-      if (!updated) throw new Error('Failed to fetch updated file');
-
-      return mapToResourceItem(updated);
+      await fileService.updateFile(id, {
+        metadata: updates.metadata,
+        name: updates.name ?? updates.title,
+        parentId: updates.parentId !== undefined ? updates.parentId : undefined,
+      });
     } else {
-      // Update document
       await documentService.updateDocument({
         content: updates.content,
         editorData: updates.editorData ? JSON.stringify(updates.editorData) : undefined,
         id,
         metadata: updates.metadata,
-        // Keep null as null (for moving to root), don't convert to undefined
         parentId: updates.parentId !== undefined ? updates.parentId : undefined,
         title: updates.title || updates.name,
       });
-
-      // Fetch updated document
-      const updated = await fileService.getKnowledgeItem(id);
-      if (!updated) throw new Error('Failed to fetch updated document');
-
-      return mapToResourceItem(updated);
     }
+
+    const updated = await fileService.getKnowledgeItem(id);
+    if (!updated) throw new Error('Failed to fetch updated resource');
+
+    return mapToResourceItem(updated);
   }
 
   /**

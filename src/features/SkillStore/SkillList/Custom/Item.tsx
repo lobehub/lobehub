@@ -51,7 +51,7 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
 
   const [customPlugin, uninstallPlugin, updateCustomPlugin, pluginManifest] = useToolStore((s) => [
     pluginSelectors.getCustomPluginById(identifier)(s),
-    s.uninstallPlugin,
+    s.uninstallCustomPlugin,
     s.updateCustomPlugin,
     pluginSelectors.getToolManifestById(identifier)(s),
   ]);

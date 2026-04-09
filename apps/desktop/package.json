@@ -11,6 +11,7 @@
   "author": "LobeHub",
   "main": "./dist/main/index.js",
   "scripts": {
+    "build:cli": "cd ../cli && bun run build",
     "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 electron-vite build",
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",
@@ -68,7 +69,7 @@
     "cookie": "^1.1.1",
     "cross-env": "^10.1.0",
     "diff": "^8.0.4",
-    "electron": "41.0.2",
+    "electron": "41.1.0",
     "electron-builder": "^26.8.1",
     "electron-devtools-installer": "4.0.0",
     "electron-is": "^3.0.0",

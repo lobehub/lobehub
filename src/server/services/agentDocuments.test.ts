@@ -44,16 +44,7 @@ describe('AgentDocumentsService', () => {
 
       expect(mockModel.findByFilename).toHaveBeenNthCalledWith(1, 'agent-1', 'note.md');
       expect(mockModel.findByFilename).toHaveBeenNthCalledWith(2, 'agent-1', 'note-2.md');
-      expect(mockModel.create).toHaveBeenCalledWith(
-        'agent-1',
-        'note-2.md',
-        'content',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-      );
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note-2.md', 'content', undefined);
       expect(result).toEqual({ id: 'new-doc', filename: 'note-2.md' });
     });
 

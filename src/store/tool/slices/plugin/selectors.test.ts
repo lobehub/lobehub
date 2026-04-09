@@ -1,7 +1,5 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
-
-import { type DiscoverPluginItem } from '@/types/discover';
 
 import { type ToolStoreState } from '../../initialState';
 import { initialState } from '../../initialState';
@@ -21,7 +19,8 @@ const mockState = {
         identifier: 'plugin-1',
         api: [{ name: 'api-1' }],
         type: 'default',
-      } as LobeChatPluginManifest,
+        meta: { avatar: 'avatar-url-1', title: 'Plugin 1' },
+      } as ToolManifest,
       settings: { setting1: 'value1' },
     },
     {
@@ -29,6 +28,7 @@ const mockState = {
       manifest: {
         identifier: 'plugin-2',
         api: [{ name: 'api-2' }],
+        meta: { avatar: 'avatar-url-2', title: 'Plugin 2' },
       },
       type: 'plugin',
     },
@@ -39,23 +39,6 @@ const mockState = {
         api: [{ name: 'api-3' }],
       },
       type: 'customPlugin',
-    },
-  ],
-  oldPluginItems: [
-    {
-      identifier: 'plugin-1',
-      author: 'Author 1',
-      createdAt: '2021-01-01',
-      avatar: 'avatar-url-1',
-      title: 'Plugin 1',
-      homepage: 'http://homepage-1.com',
-    } as DiscoverPluginItem,
-    {
-      identifier: 'plugin-2',
-      author: 'Author 2',
-      createdAt: '2022-02-02',
-      meta: { avatar: 'avatar-url-2', title: 'Plugin 2' },
-      homepage: 'http://homepage-2.com',
     },
   ],
 } as ToolStoreState;
@@ -71,10 +54,9 @@ describe('pluginSelectors', () => {
   describe('getPluginMetaById', () => {
     it('should return the plugin metadata by id', () => {
       const result = pluginSelectors.getPluginMetaById('plugin-1')(mockState);
-      const item = mockState.oldPluginItems[0];
       expect(result).toEqual({
-        title: item.title,
-        avatar: item.avatar,
+        avatar: 'avatar-url-1',
+        title: 'Plugin 1',
       });
     });
   });
@@ -168,7 +150,7 @@ describe('pluginSelectors', () => {
   });
 
   describe('storeAndInstallPluginsIdList', () => {
-    it('should return a list of unique plugin identifiers from both installed and store lists', () => {
+    it('should return a list of unique plugin identifiers from installed plugins', () => {
       const result = pluginSelectors.storeAndInstallPluginsIdList(mockState);
       expect(result).toEqual(['plugin-1', 'plugin-2', 'plugin-3']);
     });
@@ -185,13 +167,9 @@ describe('pluginSelectors', () => {
   describe('installedPluginMetaList', () => {
     it('should return a list of meta information for installed plugins', () => {
       const result = pluginSelectors.installedPluginMetaList(mockState);
-      const expectedMetaList = mockState.installedPlugins.map((p) => ({
-        identifier: p.identifier,
-        meta: pluginSelectors.getPluginMetaById(p.identifier)(mockState),
-        type: p.type,
-        ...pluginSelectors.getPluginMetaById(p.identifier)(mockState),
-      }));
-      expect(result).toEqual(expectedMetaList);
+      expect(result).toHaveLength(mockState.installedPlugins.length);
+      expect(result[0].identifier).toBe('plugin-1');
+      expect(result[0].type).toBe('plugin');
     });
   });
 

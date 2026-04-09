@@ -6,6 +6,7 @@ import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
+import { CronManifest } from '@lobechat/builtin-tool-cron';
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GTDManifest } from '@lobechat/builtin-tool-gtd';
@@ -64,6 +65,30 @@ export const manualModeExcludeToolIds = [
   SkillStoreManifest.identifier,
 ];
 
+/**
+ * Tool IDs whose enabled state is decided by runtime / system conditions
+ * (e.g. cloud runtime, agent has documents attached, knowledge base configured,
+ * desktop gateway available), NOT by the user's plugin selection.
+ *
+ * The chat-input Tools popover deliberately hides these — even in manual
+ * skill-activate mode — so users don't see a toggle that they can't actually
+ * affect (the rules in `AgentToolsEngine.createEnableChecker` would force them
+ * back on regardless of UI state).
+ *
+ * If you change this list, keep it in sync with the `rules` map in
+ * `src/server/modules/Mecha/AgentToolsEngine/index.ts` and the matching frontend
+ * `src/helpers/toolEngineering/index.ts`.
+ */
+export const runtimeManagedToolIds = [
+  CloudSandboxManifest.identifier,
+  KnowledgeBaseManifest.identifier,
+  LocalSystemManifest.identifier,
+  MemoryManifest.identifier,
+  RemoteDeviceManifest.identifier,
+  AgentDocumentsManifest.identifier,
+  WebBrowsingManifest.identifier,
+];
+
 export const builtinTools: LobeBuiltinTool[] = [
   {
     discoverable: false,
@@ -113,6 +138,11 @@ export const builtinTools: LobeBuiltinTool[] = [
   {
     identifier: CredsManifest.identifier,
     manifest: CredsManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: CronManifest.identifier,
+    manifest: CronManifest,
     type: 'builtin',
   },
   {

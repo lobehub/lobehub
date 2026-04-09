@@ -31,6 +31,7 @@ export interface AttachmentSource {
 export interface IngestResult {
   fileId: string;
   isImage: boolean;
+  isVideo: boolean;
   key: string;
   resolvedUrl: string;
 }
@@ -93,6 +94,15 @@ export async function ingestAttachment(
   fileService: FileService,
   userId: string,
 ): Promise<IngestResult> {
+  log(
+    'ingestAttachment: input name=%s, mimeType=%s, hasBuffer=%s, hasUrl=%s, size=%s',
+    source.name,
+    source.mimeType,
+    !!source.buffer,
+    !!source.url,
+    source.size,
+  );
+
   let buffer: Buffer;
   let mimeType = source.mimeType || 'application/octet-stream';
 
@@ -117,7 +127,11 @@ export async function ingestAttachment(
 
   // 2. MIME correction from filename
   if (mimeType === 'application/octet-stream' && source.name) {
-    mimeType = mime.getType(source.name) || mimeType;
+    const inferred = mime.getType(source.name);
+    if (inferred) {
+      log('ingestAttachment: inferred mimeType from filename: %s -> %s', source.name, inferred);
+      mimeType = inferred;
+    }
   }
 
   // 3. Compress images
@@ -128,14 +142,34 @@ export async function ingestAttachment(
     mimeType = compressed.mimeType;
   }
 
+  // Videos are not compressed, but we still need a resolved URL so the
+  // MessageContentProcessor can pass the video to vision/video-capable models.
+  const isVideo = !isImage && mimeType.startsWith('video/');
+
+  log(
+    'ingestAttachment: classified name=%s, finalMimeType=%s, isImage=%s, isVideo=%s, bufferSize=%d',
+    source.name,
+    mimeType,
+    isImage,
+    isVideo,
+    buffer.length,
+  );
+
   // 4. Upload + create record
   const ext = source.name?.split('.').pop() || 'bin';
   const { nanoid } = await import('@lobechat/utils');
   const pathname = `files/${userId}/${nanoid()}/${source.name || `file.${ext}`}`;
   const { fileId, key } = await fileService.uploadFromBuffer(buffer, mimeType, pathname);
 
-  // 5. Resolve full URL for images (presigned or public)
-  const resolvedUrl = isImage ? await fileService.getFullFileUrl(key) : '';
+  // 5. Resolve full URL for images and videos (presigned or public)
+  const resolvedUrl = isImage || isVideo ? await fileService.getFullFileUrl(key) : '';
 
-  return { fileId, isImage, key, resolvedUrl };
+  log(
+    'ingestAttachment: uploaded fileId=%s, key=%s, resolvedUrl=%s',
+    fileId,
+    key,
+    resolvedUrl ? 'set' : '(empty)',
+  );
+
+  return { fileId, isImage, isVideo, key, resolvedUrl };
 }

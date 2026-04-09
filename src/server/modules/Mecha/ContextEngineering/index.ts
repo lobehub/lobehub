@@ -61,6 +61,7 @@ export const serverMessagesEngine = async ({
   knowledge,
   agentDocuments,
   skillsConfig,
+  toolDiscoveryConfig,
   toolsConfig,
   capabilities,
   userMemory,
@@ -69,6 +70,7 @@ export const serverMessagesEngine = async ({
   discordContext,
   evalContext,
   agentManagementContext,
+  onboardingContext,
   pageContentContext,
   topicReferences,
   additionalVariables,
@@ -119,6 +121,7 @@ export const serverMessagesEngine = async ({
     timezone: userTimezone,
 
     // Tools configuration
+    toolDiscoveryConfig,
     toolsConfig: {
       manifests: toolsConfig?.manifests,
       tools: toolsConfig?.tools,
@@ -152,6 +155,7 @@ export const serverMessagesEngine = async ({
     ...(botPlatformContext && { botPlatformContext }),
     ...(discordContext && { discordContext }),
     ...(evalContext && { evalContext }),
+    ...(onboardingContext && { onboardingContext }),
     ...(agentManagementContext && { agentManagementContext }),
     ...(pageContentContext && { pageContentContext }),
   });

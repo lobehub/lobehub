@@ -63,7 +63,7 @@ export const agentBotProviderRouter = router({
       // Stop running client and invalidate cached bot
       if (existing) {
         const service = new GatewayService();
-        await service.stopClient(existing.platform, existing.applicationId);
+        await service.stopClient(existing.platform, existing.applicationId, ctx.userId);
         await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
       }
 
@@ -201,7 +201,7 @@ export const agentBotProviderRouter = router({
 
         if (shouldStopRuntime) {
           const service = new GatewayService();
-          await service.stopClient(existing.platform, existing.applicationId);
+          await service.stopClient(existing.platform, existing.applicationId, ctx.userId);
         }
 
         await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);

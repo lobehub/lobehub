@@ -91,6 +91,8 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /** Explicit device ID to bind to the topic and activate for this run */
+    deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
     /** The user input/prompt */
@@ -518,7 +520,15 @@ export const aiAgentRouter = router({
     }),
 
   execAgent: aiAgentProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
-    const { agentId, slug, prompt, appContext, autoStart = true, existingMessageIds = [] } = input;
+    const {
+      agentId,
+      slug,
+      prompt,
+      appContext,
+      autoStart = true,
+      deviceId,
+      existingMessageIds = [],
+    } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
 
@@ -527,6 +537,7 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        deviceId,
         existingMessageIds,
         prompt,
         slug,
@@ -567,13 +578,22 @@ export const aiAgentRouter = router({
       task: (typeof tasks)[number],
       taskIndex: number,
     ): Promise<TaskResult> => {
-      const { agentId, slug, prompt, appContext, autoStart = true, existingMessageIds = [] } = task;
+      const {
+        agentId,
+        slug,
+        prompt,
+        appContext,
+        autoStart = true,
+        deviceId,
+        existingMessageIds = [],
+      } = task;
 
       try {
         const result = await ctx.aiAgentService.execAgent({
           agentId,
           appContext,
           autoStart,
+          deviceId,
           existingMessageIds,
           prompt,
           slug,
@@ -1204,5 +1224,28 @@ export const aiAgentRouter = router({
           message: `Failed to update client task thread status: ${error.message}`,
         });
       }
+    }),
+
+  /**
+   * Refresh Gateway JWT token for an existing operation.
+   * Used when reconnecting after page reload (original token expired).
+   */
+  refreshGatewayToken: aiAgentProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      // Verify the topic belongs to this user and has a running operation
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic?.metadata?.runningOperation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No running operation found on this topic',
+        });
+      }
+
+      const { signUserJWT } = await import('@/libs/trpc/utils/internalJwt');
+      const token = await signUserJWT(ctx.userId);
+
+      return { token };
     }),
 });

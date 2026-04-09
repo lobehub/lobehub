@@ -1,27 +1,26 @@
+import { LocalSystemRenders } from '@lobechat/builtin-tool-local-system/client';
+import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
+
 import { CloudSandboxApiName } from '../../types';
-import EditLocalFile from './EditLocalFile';
 import ExecuteCode from './ExecuteCode';
 import ExportFile from './ExportFile';
-import ListFiles from './ListFiles';
-import MoveLocalFiles from './MoveLocalFiles';
-import ReadLocalFile from './ReadLocalFile';
-import RunCommand from './RunCommand';
-import SearchFiles from './SearchFiles';
-import WriteFile from './WriteFile';
 
 /**
  * Cloud Sandbox Render Components Registry
+ *
+ * Reuses local-system renders for shared file/shell operations.
+ * Only cloud-specific tools (executeCode, exportFile) have their own renders.
  */
 export const CloudSandboxRenders = {
-  [CloudSandboxApiName.editLocalFile]: EditLocalFile,
+  [CloudSandboxApiName.editLocalFile]: LocalSystemRenders.editLocalFile,
   [CloudSandboxApiName.executeCode]: ExecuteCode,
   [CloudSandboxApiName.exportFile]: ExportFile,
-  [CloudSandboxApiName.listLocalFiles]: ListFiles,
-  [CloudSandboxApiName.moveLocalFiles]: MoveLocalFiles,
-  [CloudSandboxApiName.readLocalFile]: ReadLocalFile,
-  [CloudSandboxApiName.runCommand]: RunCommand,
-  [CloudSandboxApiName.searchLocalFiles]: SearchFiles,
-  [CloudSandboxApiName.writeLocalFile]: WriteFile,
+  [CloudSandboxApiName.listLocalFiles]: LocalSystemRenders.listLocalFiles,
+  [CloudSandboxApiName.moveLocalFiles]: LocalSystemRenders.moveLocalFiles,
+  [CloudSandboxApiName.readLocalFile]: LocalSystemRenders.readLocalFile,
+  [CloudSandboxApiName.runCommand]: RunCommandRender,
+  [CloudSandboxApiName.searchLocalFiles]: LocalSystemRenders.searchLocalFiles,
+  [CloudSandboxApiName.writeLocalFile]: LocalSystemRenders.writeLocalFile,
 };
 
 // Export API names for use in other modules

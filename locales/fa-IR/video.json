@@ -12,6 +12,7 @@
   "config.resolution.label": "وضوح تصویر",
   "config.seed.label": "بذر (Seed)",
   "config.seed.random": "تصادفی",
+  "config.size.label": "اندازه",
   "generation.actions.copyError": "کپی پیام خطا",
   "generation.actions.errorCopied": "پیام خطا در کلیپ‌بورد کپی شد",
   "generation.actions.errorCopyFailed": "کپی پیام خطا ناموفق بود",

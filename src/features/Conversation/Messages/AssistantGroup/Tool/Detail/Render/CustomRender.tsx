@@ -1,8 +1,8 @@
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { type ChatPluginPayload } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-
-import PluginRender from '@/features/PluginsUI/Render';
-import { type ChatPluginPayload } from '@/types/index';
 
 interface CustomRenderProps {
   content: string;
@@ -19,19 +19,21 @@ interface CustomRenderProps {
 }
 
 const CustomRender = memo<CustomRenderProps>(
-  ({ toolCallId, messageId, content, pluginState, plugin }) => {
+  ({ content, messageId, plugin, pluginState, toolCallId }) => {
+    const Render = getBuiltinRender(plugin?.identifier, plugin?.apiName);
+
+    if (!Render) return null;
+
     return (
       <Flexbox gap={12} id={toolCallId} width={'100%'}>
-        <PluginRender
-          arguments={plugin?.arguments}
+        <Render
+          apiName={plugin?.apiName}
+          args={safeParseJSON(plugin?.arguments)}
           content={content}
           identifier={plugin?.identifier}
-          loading={false}
-          messageId={messageId}
-          payload={plugin}
+          messageId={messageId!}
           pluginState={pluginState}
           toolCallId={toolCallId}
-          type={plugin?.type}
         />
       </Flexbox>
     );

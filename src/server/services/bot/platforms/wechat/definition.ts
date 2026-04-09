@@ -5,7 +5,7 @@ import { schema } from './schema';
 export const wechat: PlatformDefinition = {
   id: 'wechat',
   name: 'WeChat',
-  connectionMode: 'persistent',
+  connectionMode: 'polling',
   description: 'Connect a WeChat bot via iLink API',
   documentation: {
     setupGuideUrl: 'https://lobehub.com/docs/usage/channels/wechat',

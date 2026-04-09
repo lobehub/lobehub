@@ -58,7 +58,7 @@ describe('MessageModel Statistics Tests', () => {
         { id: '3', userId: otherUserId, role: 'user', content: 'message 3' },
       ]);
 
-      // 调用 count 方法
+      // Call count method
       const result = await messageModel.count();
 
       // Assert result
@@ -67,7 +67,7 @@ describe('MessageModel Statistics Tests', () => {
 
     describe('count with date filters', () => {
       beforeEach(async () => {
-        // Create test data，包含不同日期的消息
+        // Create test data with messages on different dates
         await serverDB.insert(messages).values([
           {
             id: 'date1',
@@ -102,12 +102,12 @@ describe('MessageModel Statistics Tests', () => {
 
       it('should count messages with startDate filter', async () => {
         const result = await messageModel.count({ startDate: '2023-02-01' });
-        expect(result).toBe(3); // 2月15日, 3月15日, 4月15日的消息
+        expect(result).toBe(3); // messages from Feb 15, Mar 15, Apr 15
       });
 
       it('should count messages with endDate filter', async () => {
         const result = await messageModel.count({ endDate: '2023-03-01' });
-        expect(result).toBe(2); // 1月15日, 2月15日的消息
+        expect(result).toBe(2); // messages from Jan 15, Feb 15
       });
 
       it('should count messages with both startDate and endDate filters', async () => {
@@ -115,32 +115,32 @@ describe('MessageModel Statistics Tests', () => {
           startDate: '2023-02-01',
           endDate: '2023-03-31',
         });
-        expect(result).toBe(2); // 2月15日, 3月15日的消息
+        expect(result).toBe(2); // messages from Feb 15, Mar 15
       });
 
       it('should count messages with range filter', async () => {
         const result = await messageModel.count({
           range: ['2023-02-01', '2023-04-01'],
         });
-        expect(result).toBe(2); // 2月15日, 3月15日的消息
+        expect(result).toBe(2); // messages from Feb 15, Mar 15
       });
 
       it('should handle edge cases in date filters', async () => {
-        // 边界日期
+        // Boundary dates
         const result1 = await messageModel.count({
           startDate: '2023-01-15',
           endDate: '2023-04-15',
         });
-        expect(result1).toBe(4); // 包含所有消息
+        expect(result1).toBe(4); // includes all messages
 
-        // 没有消息的日期范围
+        // Date range with no messages
         const result2 = await messageModel.count({
           startDate: '2023-05-01',
           endDate: '2023-06-01',
         });
         expect(result2).toBe(0);
 
-        // 精确到一天
+        // Exact to one day
         const result3 = await messageModel.count({
           startDate: '2023-01-15',
           endDate: '2023-01-15',
@@ -175,7 +175,7 @@ describe('MessageModel Statistics Tests', () => {
         { id: '3', userId: otherUserId, role: 'user', content: 'other user message' },
       ]);
 
-      // 调用 countWords 方法
+      // Call countWords method
       const result = await messageModel.countWords();
 
       // Assert result - 'hello world' + 'test message' = 23 characters
@@ -201,12 +201,12 @@ describe('MessageModel Statistics Tests', () => {
         },
       ]);
 
-      // 调用 countWords 方法，设置日期范围
+      // Call countWords method with date range
       const result = await messageModel.countWords({
         range: ['2023-05-01', '2023-07-01'],
       });
 
-      // Assert result - 只计算 'new message' = 11 characters
+      // Assert result - only counts 'new message' = 11 characters
       expect(result).toEqual(11);
     });
 
@@ -217,7 +217,7 @@ describe('MessageModel Statistics Tests', () => {
         { id: '2', userId, role: 'user', content: null },
       ]);
 
-      // 调用 countWords 方法
+      // Call countWords method
       const result = await messageModel.countWords();
 
       // Assert result
@@ -275,7 +275,7 @@ describe('MessageModel Statistics Tests', () => {
 
   describe('getHeatmaps', () => {
     it('should return heatmap data for the last year', async () => {
-      // 使用固定日期进行测试
+      // Use fixed date for testing
       vi.useFakeTimers();
       const fixedDate = new Date('2023-04-07T13:00:00Z');
       vi.setSystemTime(fixedDate);
@@ -310,24 +310,24 @@ describe('MessageModel Statistics Tests', () => {
         },
       ]);
 
-      // 调用 getHeatmaps 方法
+      // Call getHeatmaps method
       const result = await messageModel.getHeatmaps();
 
       // Assert result
       expect(result.length).toBeGreaterThanOrEqual(366);
       expect(result.length).toBeLessThan(368);
 
-      // 检查两天前的数据
+      // Check data from two days ago
       const twoDaysAgo = result.find((item) => item.date === twoDaysAgoDate);
       expect(twoDaysAgo?.count).toBe(2);
       expect(twoDaysAgo?.level).toBe(1);
 
-      // 检查一天前的数据
+      // Check data from one day ago
       const oneDayAgo = result.find((item) => item.date === oneDayAgoDate);
       expect(oneDayAgo?.count).toBe(1);
       expect(oneDayAgo?.level).toBe(1);
 
-      // 检查今天的数据
+      // Check today's data
       const todayData = result.find((item) => item.date === todayDate);
       expect(todayData?.count).toBe(0);
       expect(todayData?.level).toBe(0);
@@ -336,7 +336,7 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should calculate correct levels based on message count', async () => {
-      // 使用固定日期进行测试
+      // Use fixed date for testing
       vi.useFakeTimers();
       const fixedDate = new Date('2023-05-15T12:00:00Z');
       vi.setSystemTime(fixedDate);
@@ -348,7 +348,7 @@ describe('MessageModel Statistics Tests', () => {
       const oneDayAgoDate = today.subtract(1, 'day').format('YYYY-MM-DD');
       const todayDate = today.format('YYYY-MM-DD');
 
-      // Create test data - 不同数量的消息以测试不同的等级
+      // Create test data - different numbers of messages to test different levels
       await serverDB.insert(messages).values([
         // 1 message - level 1
         {
@@ -400,10 +400,10 @@ describe('MessageModel Statistics Tests', () => {
           })),
       ]);
 
-      // 调用 getHeatmaps 方法
+      // Call getHeatmaps method
       const result = await messageModel.getHeatmaps();
 
-      // 检查不同天数的等级
+      // Check levels for different days
       const fourDaysAgo = result.find((item) => item.date === fourDaysAgoDate);
       expect(fourDaysAgo?.count).toBe(1);
       expect(fourDaysAgo?.level).toBe(1);
@@ -428,7 +428,7 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should return time count correctly when 19:00 time', async () => {
-      // 使用固定日期进行测试，使用本地时间避免时区问题
+      // Use fixed date for testing, use local time to avoid timezone issues
       vi.useFakeTimers();
       // Use local time at noon to avoid timezone edge cases
       const fixedDate = new Date('2025-04-02T12:00:00');
@@ -464,24 +464,24 @@ describe('MessageModel Statistics Tests', () => {
         },
       ]);
 
-      // 调用 getHeatmaps 方法
+      // Call getHeatmaps method
       const result = await messageModel.getHeatmaps();
 
       // Assert result
       expect(result.length).toBeGreaterThanOrEqual(366);
       expect(result.length).toBeLessThan(368);
 
-      // 检查两天前的数据
+      // Check data from two days ago
       const twoDaysAgo = result.find((item) => item.date === twoDaysAgoDate);
       expect(twoDaysAgo?.count).toBe(2);
       expect(twoDaysAgo?.level).toBe(1);
 
-      // 检查一天前的数据
+      // Check data from one day ago
       const oneDayAgo = result.find((item) => item.date === oneDayAgoDate);
       expect(oneDayAgo?.count).toBe(1);
       expect(oneDayAgo?.level).toBe(1);
 
-      // 检查今天的数据
+      // Check today's data
       const todayData = result.find((item) => item.date === todayDate);
       expect(todayData?.count).toBe(0);
       expect(todayData?.level).toBe(0);
@@ -490,16 +490,16 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should handle empty data', async () => {
-      // 不创建任何消息数据
+      // Do not create any message data
 
-      // 调用 getHeatmaps 方法
+      // Call getHeatmaps method
       const result = await messageModel.getHeatmaps();
 
       // Assert result
       expect(result.length).toBeGreaterThanOrEqual(366);
       expect(result.length).toBeLessThan(368);
 
-      // 检查所有数据的 count 和 level 是否为 0
+      // Check that count and level are 0 for all data
       result.forEach((item) => {
         expect(item.count).toBe(0);
         expect(item.level).toBe(0);
@@ -514,27 +514,27 @@ describe('MessageModel Statistics Tests', () => {
         { id: '1', userId, role: 'assistant', content: 'message 1', model: 'gpt-3.5' },
         { id: '2', userId, role: 'assistant', content: 'message 2', model: 'gpt-3.5' },
         { id: '3', userId, role: 'assistant', content: 'message 3', model: 'gpt-4' },
-        { id: '4', userId: otherUserId, role: 'assistant', content: 'message 4', model: 'gpt-3.5' }, // 其他用户的消息
+        { id: '4', userId: otherUserId, role: 'assistant', content: 'message 4', model: 'gpt-3.5' }, // other user's message
       ]);
 
-      // 调用 rankModels 方法
+      // Call rankModels method
       const result = await messageModel.rankModels();
 
       // Assert result
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ id: 'gpt-3.5', count: 2 }); // 当前用户使用 gpt-3.5 两次
-      expect(result[1]).toEqual({ id: 'gpt-4', count: 1 }); // 当前用户使用 gpt-4 一次
+      expect(result[0]).toEqual({ id: 'gpt-3.5', count: 2 }); // current user used gpt-3.5 twice
+      expect(result[1]).toEqual({ id: 'gpt-4', count: 1 }); // current user used gpt-4 once
     });
 
     it('should only count messages with model field', async () => {
-      // Create test data，包括没有 model 字段的消息
+      // Create test data including messages without model field
       await serverDB.insert(messages).values([
         { id: '1', userId, role: 'assistant', content: 'message 1', model: 'gpt-3.5' },
         { id: '2', userId, role: 'assistant', content: 'message 2', model: null },
-        { id: '3', userId, role: 'user', content: 'message 3' }, // 用户消息通常没有 model
+        { id: '3', userId, role: 'user', content: 'message 3' }, // user messages typically have no model
       ]);
 
-      // 调用 rankModels 方法
+      // Call rankModels method
       const result = await messageModel.rankModels();
 
       // Assert result
@@ -543,13 +543,13 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should return empty array when no models are used', async () => {
-      // Create test data，所有消息都没有 model
+      // Create test data where all messages have no model
       await serverDB.insert(messages).values([
         { id: '1', userId, role: 'user', content: 'message 1' },
         { id: '2', userId, role: 'assistant', content: 'message 2' },
       ]);
 
-      // 调用 rankModels 方法
+      // Call rankModels method
       const result = await messageModel.rankModels();
 
       // Assert result
@@ -557,7 +557,7 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should order models by count in descending order', async () => {
-      // Create test data，使用不同次数的模型
+      // Create test data with models used different number of times
       await serverDB.insert(messages).values([
         { id: '1', userId, role: 'assistant', content: 'message 1', model: 'gpt-4' },
         { id: '2', userId, role: 'assistant', content: 'message 2', model: 'gpt-3.5' },
@@ -566,12 +566,12 @@ describe('MessageModel Statistics Tests', () => {
         { id: '5', userId, role: 'assistant', content: 'message 5', model: 'gpt-3.5' },
       ]);
 
-      // 调用 rankModels 方法
+      // Call rankModels method
       const result = await messageModel.rankModels();
 
       // Assert result
       expect(result).toHaveLength(3);
-      expect(result[0]).toEqual({ id: 'gpt-3.5', count: 3 }); // 最多使用
+      expect(result[0]).toEqual({ id: 'gpt-3.5', count: 3 }); // most used
       expect(result[1]).toEqual({ id: 'claude', count: 1 });
       expect(result[2]).toEqual({ id: 'gpt-4', count: 1 });
     });
@@ -586,7 +586,7 @@ describe('MessageModel Statistics Tests', () => {
         { id: '3', userId, role: 'user', content: 'message 3' },
       ]);
 
-      // 测试不同的 N 值
+      // Test different N values
       const result1 = await messageModel.hasMoreThanN(2); // 3 > 2
       const result2 = await messageModel.hasMoreThanN(3); // 3 ≯ 3
       const result3 = await messageModel.hasMoreThanN(4); // 3 ≯ 4
@@ -597,16 +597,16 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should only count messages belonging to the user', async () => {
-      // Create test data，包括其他用户的消息
+      // Create test data including messages from other users
       await serverDB.insert(messages).values([
         { id: '1', userId, role: 'user', content: 'message 1' },
         { id: '2', userId, role: 'user', content: 'message 2' },
-        { id: '3', userId: otherUserId, role: 'user', content: 'message 3' }, // 其他用户的消息
+        { id: '3', userId: otherUserId, role: 'user', content: 'message 3' }, // other user's message
       ]);
 
       const result = await messageModel.hasMoreThanN(2);
 
-      expect(result).toBe(false); // 当前用户只有 2 条消息，不大于 2
+      expect(result).toBe(false); // current user only has 2 messages, not greater than 2
     });
 
     it('should return false when no messages exist', async () => {
@@ -615,12 +615,12 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should handle edge cases', async () => {
-      // 创建一条消息
+      // Create a single message
       await serverDB
         .insert(messages)
         .values([{ id: '1', userId, role: 'user', content: 'message 1' }]);
 
-      // 测试边界情况
+      // Test edge cases
       const result1 = await messageModel.hasMoreThanN(0); // 1 > 0
       const result2 = await messageModel.hasMoreThanN(1); // 1 ≯ 1
       const result3 = await messageModel.hasMoreThanN(-1); // 1 > -1

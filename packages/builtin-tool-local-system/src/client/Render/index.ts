@@ -1,9 +1,10 @@
+import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
+
 import { LocalSystemApiName } from '../..';
 import EditLocalFile from './EditLocalFile';
 import ListFiles from './ListFiles';
 import MoveLocalFiles from './MoveLocalFiles';
 import ReadLocalFile from './ReadLocalFile';
-import RunCommand from './RunCommand';
 import SearchFiles from './SearchFiles';
 import WriteFile from './WriteFile';
 
@@ -15,7 +16,7 @@ export const LocalSystemRenders = {
   [LocalSystemApiName.listLocalFiles]: ListFiles,
   [LocalSystemApiName.moveLocalFiles]: MoveLocalFiles,
   [LocalSystemApiName.readLocalFile]: ReadLocalFile,
-  [LocalSystemApiName.runCommand]: RunCommand,
+  [LocalSystemApiName.runCommand]: RunCommandRender,
   [LocalSystemApiName.searchLocalFiles]: SearchFiles,
   [LocalSystemApiName.writeLocalFile]: WriteFile,
 };

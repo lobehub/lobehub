@@ -173,6 +173,80 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).toContain('File mode content');
       expect(result.messages[0].content).toContain('</agent_document>');
     });
+
+    it('should inject progressive documents as index instead of full content', async () => {
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            content: 'Full content that should NOT appear',
+            description: 'Core safety rules',
+            filename: 'guardrails.md',
+            id: 'doc-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'Guardrails',
+          },
+          {
+            content: 'Another full content that should NOT appear',
+            filename: 'notes.txt',
+            id: 'doc-2',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'Notes',
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      expect(injected).toContain('<agent_documents_index>');
+      expect(injected).toContain('[doc-1]');
+      expect(injected).toContain('guardrails.md');
+      expect(injected).toContain('"Guardrails"');
+      expect(injected).toContain('Core safety rules');
+      expect(injected).toContain('[doc-2]');
+      expect(injected).toContain('notes.txt');
+      expect(injected).not.toContain('Full content that should NOT appear');
+      expect(injected).not.toContain('Another full content that should NOT appear');
+      expect(injected).toContain('</agent_documents_index>');
+    });
+
+    it('should mix full-content and progressive documents', async () => {
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          {
+            content: 'Always-loaded full content',
+            filename: 'full.md',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'always',
+          },
+          {
+            content: 'Progressive content hidden',
+            description: 'A summary doc',
+            filename: 'summary.md',
+            id: 'doc-p',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            title: 'Summary',
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      const injected = result.messages[0].content;
+      expect(injected).toContain('Always-loaded full content');
+      expect(injected).toContain('<agent_documents_index>');
+      expect(injected).toContain('summary.md');
+      expect(injected).not.toContain('Progressive content hidden');
+    });
   });
 
   describe('AgentDocumentBeforeSystemInjector (before-system)', () => {

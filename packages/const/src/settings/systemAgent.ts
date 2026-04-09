@@ -23,10 +23,17 @@ export const DEFAULT_QUERY_REWRITE_SYSTEM_AGENT_ITEM: QueryRewriteSystemAgent = 
   provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
 };
 
+export const DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  enabled: false,
+  model: DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
+  provider: DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
+};
+
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserSystemAgentConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   historyCompress: DEFAULT_SYSTEM_AGENT_ITEM,
+  inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
   queryRewrite: DEFAULT_QUERY_REWRITE_SYSTEM_AGENT_ITEM,
   thread: DEFAULT_SYSTEM_AGENT_ITEM,
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,

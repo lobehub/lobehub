@@ -74,6 +74,19 @@ describe('runCommand', () => {
       expect(result.success).toBe(true);
       expect(result.stdout).toContain('/tmp');
     });
+
+    it('should merge env into child process environment', async () => {
+      const result = await runCommand(
+        {
+          command: 'node -e "console.log(process.env.LOB_TEST_ENV_MERGE)"',
+          env: { LOB_TEST_ENV_MERGE: 'from-runner' },
+        },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('from-runner');
+    });
   });
 
   describe('background mode', () => {

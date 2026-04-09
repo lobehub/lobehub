@@ -2,12 +2,15 @@ import { type PluginItem } from '@lobehub/market-sdk';
 
 import { type MCPInstallProgressMap } from '@/types/plugins';
 
+export type PluginStoreListType = 'installed' | 'mcp';
+
 export interface MCPStoreState {
   activeMCPIdentifier?: string;
   categories: string[];
   currentPage: number;
   isLoadingMore?: boolean;
   isMcpListInit?: boolean;
+  listType: PluginStoreListType;
   mcpInstallAbortControllers: Record<string, AbortController>;
   mcpInstallProgress: MCPInstallProgressMap;
   mcpPluginItems: PluginItem[];
@@ -25,6 +28,7 @@ export interface MCPStoreState {
 export const initialMCPStoreState: MCPStoreState = {
   categories: [],
   currentPage: 1,
+  listType: 'mcp',
   mcpInstallAbortControllers: {},
   mcpInstallProgress: {},
   mcpPluginItems: [],
