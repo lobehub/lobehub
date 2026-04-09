@@ -17,6 +17,7 @@ export enum ModelProvider {
   CometAPI = 'cometapi',
   ComfyUI = 'comfyui',
   DeepSeek = 'deepseek',
+  EUrouter = 'eurouter',
   Fal = 'fal',
   FireworksAI = 'fireworksai',
   GiteeAI = 'giteeai',
