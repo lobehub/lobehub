@@ -35,10 +35,10 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 
-    padding-block: 4px;
+    padding-block: 3px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadius};
 
@@ -65,18 +65,9 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: center;
 
     width: 16px;
-    height: 24px;
+    height: 16px;
   `,
 }));
-
-const getToolColor = (apiName: string, hasError: boolean): string => {
-  if (hasError) return cssVar.colorError;
-  if (apiName.includes('search') || apiName.includes('crawl')) return '#c084fc';
-  if (apiName.includes('exec') || apiName.includes('run') || apiName.includes('activate'))
-    return cssVar.colorWarning;
-  if (apiName.includes('write') || apiName.includes('create')) return cssVar.colorSuccess;
-  return cssVar.colorInfo;
-};
 
 interface WorkflowToolLineProps {
   assistantMessageId: string;
@@ -98,8 +89,6 @@ const WorkflowToolLine = memo<WorkflowToolLineProps>(
     const isAborted = tool.intervention?.status === 'aborted';
     const hasResult =
       tool.result != null && tool.result.content !== LOADING_FLAT && tool.result.content != null;
-    const actionColor = getToolColor(tool.apiName, hasError);
-
     const isLoading = !hasResult && !hasError && !isAborted;
 
     const handleClick = () => {
@@ -124,7 +113,7 @@ const WorkflowToolLine = memo<WorkflowToolLineProps>(
       <>
         <div className={styles.root} onClick={handleClick}>
           <span className={styles.statusIcon}>{statusIcon}</span>
-          <span style={{ color: actionColor, flexShrink: 0 }}>{displayName}</span>
+          <span style={{ color: cssVar.colorTextSecondary, flexShrink: 0 }}>{displayName}</span>
           {detail && (
             <>
               <span className={styles.separator}>·</span>

@@ -9,8 +9,8 @@ import WorkflowToolLine from './WorkflowToolLine';
 
 const styles = createStaticStyles(({ css }) => ({
   blockContent: css`
-    padding-block: 2px;
-    padding-inline: 30px 8px;
+    padding-block: 3px;
+    padding-inline: 32px 8px;
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
   `,
