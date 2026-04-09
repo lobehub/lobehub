@@ -1,7 +1,8 @@
 import { createSlackAdapter } from '@chat-adapter/slack';
-import type { Chat as ChatBot } from 'chat';
+import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -58,6 +59,73 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
   };
 }
 
+/**
+ * Resolve attachments on an inbound Slack message into `AttachmentSource[]`.
+ * Shared by both webhook and socket-mode clients.
+ *
+ * Slack is the easy case among the platforms that need re-fetching: the
+ * adapter sets `att.url = file.url_private`, and `url` IS preserved by
+ * `Message.toJSON`. So we don't need to dig into `message.raw` — we can
+ * read the URL straight off each attachment after the round-trip.
+ *
+ * What we DO need is auth: `url_private` returns an HTML login page when
+ * fetched without `Authorization: Bearer <bot_token>`. The adapter normally
+ * encloses the bot token in a per-attachment `fetchData` closure, but the
+ * closure dies on `Message.toJSON`. We use the bot token from `this.config`
+ * via `SlackApi.downloadFile` instead.
+ */
+async function slackExtractFiles(
+  api: SlackApi,
+  message: Message,
+): Promise<AttachmentSource[] | undefined> {
+  const attachments = (message as any).attachments as
+    | Array<{
+        height?: number;
+        mimeType?: string;
+        name?: string;
+        size?: number;
+        type?: string;
+        url?: string;
+        width?: number;
+      }>
+    | undefined;
+  if (!attachments?.length) return undefined;
+
+  log('extractFiles: msgId=%s, attachments=%d', (message as any).id, attachments.length);
+
+  const results: AttachmentSource[] = [];
+
+  for (const att of attachments) {
+    if (!att.url) {
+      log(
+        'extractFiles: skipping attachment with no url_private (type=%s, name=%s)',
+        att.type,
+        att.name,
+      );
+      continue;
+    }
+    try {
+      const buffer = await api.downloadFile(att.url);
+      results.push({
+        buffer,
+        mimeType: att.mimeType,
+        name: att.name,
+        size: att.size ?? buffer.length,
+      });
+      log(
+        'extractFiles: downloaded %s (%d bytes) for type=%s',
+        att.name ?? 'attachment',
+        buffer.length,
+        att.type,
+      );
+    } catch (error) {
+      log('extractFiles: downloadFile failed for %s: %O', att.name ?? 'attachment', error);
+    }
+  }
+
+  return results.length > 0 ? results : undefined;
+}
+
 // ---------- Webhook Client (existing behavior) ----------
 
 class SlackWebhookClient implements PlatformClient {
@@ -65,10 +133,19 @@ class SlackWebhookClient implements PlatformClient {
   readonly applicationId: string;
 
   private config: BotProviderConfig;
+  /** Lazy-cached SlackApi — keeps no state but avoids repeated allocs. */
+  private _api?: SlackApi;
 
   constructor(config: BotProviderConfig, _context: BotPlatformRuntimeContext) {
     this.config = config;
     this.applicationId = config.applicationId;
+  }
+
+  private get api(): SlackApi {
+    if (!this._api) {
+      this._api = new SlackApi(this.config.credentials.botToken);
+    }
+    return this._api;
   }
 
   async start(): Promise<void> {
@@ -119,6 +196,10 @@ class SlackWebhookClient implements PlatformClient {
     return createMessenger(this.config, platformThreadId);
   }
 
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    return slackExtractFiles(this.api, message);
+  }
+
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
   }
@@ -154,11 +235,20 @@ class SlackSocketModeClient implements PlatformClient {
   private gateway: SlackSocketModeConnection | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  /** Lazy-cached SlackApi — keeps no state but avoids repeated allocs. */
+  private _api?: SlackApi;
 
   constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
     this.config = config;
     this.context = context;
     this.applicationId = config.applicationId;
+  }
+
+  private get api(): SlackApi {
+    if (!this._api) {
+      this._api = new SlackApi(this.config.credentials.botToken);
+    }
+    return this._api;
   }
 
   async start(options?: GatewayListenerOptions): Promise<void> {
@@ -297,6 +387,10 @@ class SlackSocketModeClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     return createMessenger(this.config, platformThreadId);
+  }
+
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    return slackExtractFiles(this.api, message);
   }
 
   extractChatId(platformThreadId: string): string {

@@ -151,6 +151,44 @@ export class SlackApi {
     return { messages: data.messages ?? [] };
   }
 
+  // ==================== File Download ====================
+
+  /**
+   * Download a Slack file by its `url_private` URL using the bot token.
+   *
+   * Slack's file URLs (`https://files.slack.com/files-pri/...`) require Bearer
+   * auth — fetching them without the bot token returns an HTML login page
+   * (which we explicitly detect and report). The chat-adapter-slack normally
+   * encloses the bot token in a `fetchData` closure on each Attachment, but
+   * the closure is stripped by `Message.toJSON` when messages round-trip
+   * through the chat-sdk debounce/queue. This method is the post-Redis
+   * recovery path used by `SlackWebhookClient.extractFiles` and
+   * `SlackSocketModeClient.extractFiles`.
+   */
+  async downloadFile(url: string): Promise<Buffer> {
+    log('downloadFile: url=%s', url);
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to download Slack file: ${response.status} ${response.statusText}`);
+    }
+
+    // Slack returns an HTML login page (not a 4xx) when auth fails or the
+    // bot lacks `files:read`. Detect that explicitly so the error is
+    // actionable instead of getting a corrupted "buffer" of HTML bytes.
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('text/html')) {
+      throw new Error(
+        `Failed to download file from Slack: received HTML login page instead of file data. ` +
+          `Ensure your Slack app has the "files:read" OAuth scope. URL: ${url}`,
+      );
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
   // ------------------------------------------------------------------
 
   private truncateText(text: string): string {

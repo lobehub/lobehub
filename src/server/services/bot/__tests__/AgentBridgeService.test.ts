@@ -284,178 +284,12 @@ describe('AgentBridgeService', () => {
     });
   });
 
-  describe('extractFiles (legacy bridge fallback for unmigrated platforms)', () => {
-    // Telegram has its own per-client `extractFiles` (see
-    // src/server/services/bot/platforms/telegram/client.test.ts) — these
-    // tests cover the bridge fallback path that the OTHER platforms
-    // (WeChat, Feishu, Slack, Discord, QQ) still go through until they
-    // migrate to per-client extraction in follow-up PRs.
-    function callExtract(messageOverrides: Record<string, unknown>) {
-      const service = new AgentBridgeService(FAKE_DB, USER_ID);
-      const message = { id: MESSAGE_ID, text: 'hi', ...messageOverrides } as any;
-      return (service as any).extractFiles(message) as Promise<
-        Array<{ buffer?: Buffer; mimeType?: string; name?: string; size?: number; url: string }>
-      >;
-    }
-
-    it('uses the pre-downloaded buffer when present (WeChat / Feishu inbound)', async () => {
-      const buffer = Buffer.from('wechat-image');
-      const result = await callExtract({
-        attachments: [
-          { buffer, mimeType: 'image/jpeg', name: 'pic.jpg', size: buffer.length, type: 'image' },
-        ],
-      });
-      expect(result).toEqual([
-        { buffer, mimeType: 'image/jpeg', name: 'pic.jpg', size: buffer.length, url: '' },
-      ]);
-    });
-
-    it('invokes fetchData for token-protected attachments (Slack)', async () => {
-      const buffer = Buffer.from('slack-voice');
-      const fetchData = vi.fn().mockResolvedValue(buffer);
-      const result = await callExtract({
-        attachments: [{ fetchData, mimeType: 'audio/ogg', name: 'voice.ogg', type: 'audio' }],
-      });
-      expect(fetchData).toHaveBeenCalledTimes(1);
-      expect(result).toEqual([
-        { buffer, mimeType: 'audio/ogg', name: 'voice.ogg', size: undefined, url: '' },
-      ]);
-    });
-
-    it('infers mimeType + name for type-only video and audio attachments', async () => {
-      const videoBuffer = Buffer.from('vid');
-      const audioBuffer = Buffer.from('aud');
-      const result = await callExtract({
-        attachments: [
-          { fetchData: vi.fn().mockResolvedValue(videoBuffer), type: 'video' },
-          { fetchData: vi.fn().mockResolvedValue(audioBuffer), type: 'audio' },
-        ],
-      });
-      expect(result).toEqual([
-        {
-          buffer: videoBuffer,
-          mimeType: 'video/mp4',
-          name: 'video.mp4',
-          size: undefined,
-          url: '',
-        },
-        {
-          buffer: audioBuffer,
-          mimeType: 'audio/ogg',
-          name: 'audio.ogg',
-          size: undefined,
-          url: '',
-        },
-      ]);
-    });
-
-    it('does not overwrite an explicit mimeType / name when type is also set', async () => {
-      const buffer = Buffer.from('explicit');
-      const result = await callExtract({
-        attachments: [
-          {
-            fetchData: vi.fn().mockResolvedValue(buffer),
-            mimeType: 'image/png',
-            name: 'screenshot.png',
-            type: 'image',
-          },
-        ],
-      });
-      expect(result).toEqual([
-        { buffer, mimeType: 'image/png', name: 'screenshot.png', size: undefined, url: '' },
-      ]);
-    });
-
-    it('falls back to public url when neither buffer nor fetchData is provided (Discord / QQ)', async () => {
-      const result = await callExtract({
-        attachments: [
-          {
-            mimeType: 'image/png',
-            name: 'discord.png',
-            size: 4321,
-            type: 'image',
-            url: 'https://cdn.discord.example/discord.png',
-          },
-        ],
-      });
-      expect(result).toEqual([
-        {
-          mimeType: 'image/png',
-          name: 'discord.png',
-          size: 4321,
-          url: 'https://cdn.discord.example/discord.png',
-        },
-      ]);
-    });
-
-    it('prefers fetchData over url so Slack-style auth-required URLs are not blindly fetched', async () => {
-      const buffer = Buffer.from('slack-file');
-      const fetchData = vi.fn().mockResolvedValue(buffer);
-      const result = await callExtract({
-        attachments: [
-          {
-            fetchData,
-            mimeType: 'application/pdf',
-            name: 'doc.pdf',
-            size: 9999,
-            type: 'file',
-            url: 'https://files.slack.com/private/doc.pdf',
-          },
-        ],
-      });
-      expect(fetchData).toHaveBeenCalledTimes(1);
-      expect(result?.[0]).toMatchObject({ buffer, mimeType: 'application/pdf', url: '' });
-    });
-
-    it('skips a single failing attachment without dropping the others', async () => {
-      const goodBuffer = Buffer.from('ok');
-      const result = await callExtract({
-        attachments: [
-          { fetchData: vi.fn().mockRejectedValue(new Error('boom')), name: 'bad.bin' },
-          { fetchData: vi.fn().mockResolvedValue(goodBuffer), name: 'good.bin' },
-        ],
-      });
-      expect(result).toEqual([
-        { buffer: goodBuffer, mimeType: undefined, name: 'good.bin', size: undefined, url: '' },
-      ]);
-    });
-
-    it('returns undefined when no attachments are present', async () => {
-      const result = await callExtract({ attachments: [] });
-      expect(result).toBeUndefined();
-    });
-
-    it('still picks up referenced (quoted) message attachments via raw payload', async () => {
-      const result = await callExtract({
-        attachments: [],
-        raw: {
-          referenced_message: {
-            attachments: [
-              {
-                content_type: 'image/png',
-                filename: 'quoted.png',
-                size: 100,
-                url: 'https://cdn.discord.example/quoted.png',
-              },
-            ],
-          },
-        },
-      });
-      expect(result).toEqual([
-        {
-          mimeType: 'image/png',
-          name: 'quoted.png',
-          size: 100,
-          url: 'https://cdn.discord.example/quoted.png',
-        },
-      ]);
-    });
-  });
-
   describe('resolveFiles dispatcher', () => {
-    // Verifies the bridge prefers `client.extractFiles` when implemented and
-    // skips its own legacy fallback. Per-platform attachment shape coverage
-    // lives in the platform's own client.test.ts (e.g. telegram/client.test.ts).
+    // The bridge no longer has its own attachment extraction logic — every
+    // platform owns its own `client.extractFiles`. resolveFiles is just a
+    // thin delegate. Per-platform attachment shape coverage lives in the
+    // platform's own client.test.ts (e.g. telegram/client.test.ts,
+    // wechat/client.test.ts, slack/client.test.ts, etc.).
     function callResolve(messageOverrides: Record<string, unknown>, client?: unknown) {
       const service = new AgentBridgeService(FAKE_DB, USER_ID);
       const message = { id: MESSAGE_ID, text: 'hi', ...messageOverrides } as any;
@@ -469,40 +303,32 @@ describe('AgentBridgeService', () => {
         { buffer: Buffer.from('via-client'), mimeType: 'image/jpeg', name: 'pic.jpg' },
       ];
       const clientExtractFiles = vi.fn().mockResolvedValue(clientResult);
-      const service = new AgentBridgeService(FAKE_DB, USER_ID);
-      // Spy on the legacy bridge fallback to make sure it is NOT called when
-      // the client owns extraction.
-      const legacySpy = vi.spyOn(service as any, 'extractFiles');
 
       const message = { id: MESSAGE_ID, text: 'hi', attachments: [] } as any;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
       const result = await (service as any).resolveFiles(message, {
         extractFiles: clientExtractFiles,
       });
 
       expect(clientExtractFiles).toHaveBeenCalledWith(message);
-      expect(legacySpy).not.toHaveBeenCalled();
       expect(result).toBe(clientResult);
     });
 
-    it('falls through to the bridge legacy extractFiles when the client does not implement it', async () => {
-      // Client object without extractFiles → bridge fallback runs and returns
-      // the (here: empty) attachments via its legacy path.
+    it('returns undefined when client is missing extractFiles method', async () => {
+      // Defensive: a client that doesn't implement the optional method should
+      // produce no files, not throw.
       const result = await callResolve({ attachments: [] }, { id: 'discord' });
       expect(result).toBeUndefined();
     });
 
-    it('falls through to the bridge legacy extractFiles when no client is passed', async () => {
+    it('returns undefined when no client is passed', async () => {
       const result = await callResolve({ attachments: [] }, undefined);
       expect(result).toBeUndefined();
     });
 
-    it('uses the client result even when it is an empty array (does NOT fall back)', async () => {
-      // Empty array is a valid "no files" answer from the client; it should
-      // NOT trigger the legacy fallback. Only `undefined` from the client
-      // means "I don't know — try the legacy path."
+    it('returns the client result as-is even when it is an empty array', async () => {
       const clientExtractFiles = vi.fn().mockResolvedValue([]);
       const service = new AgentBridgeService(FAKE_DB, USER_ID);
-      const legacySpy = vi.spyOn(service as any, 'extractFiles');
 
       const message = { id: MESSAGE_ID, text: 'hi' } as any;
       const result = await (service as any).resolveFiles(message, {
@@ -510,7 +336,6 @@ describe('AgentBridgeService', () => {
       });
 
       expect(clientExtractFiles).toHaveBeenCalledTimes(1);
-      expect(legacySpy).not.toHaveBeenCalled();
       expect(result).toEqual([]);
     });
   });

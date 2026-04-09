@@ -1,8 +1,9 @@
 import type { QQAdapter } from '@lobechat/chat-adapter-qq';
 import { createQQAdapter, QQApiClient } from '@lobechat/chat-adapter-qq';
-import type { Chat as ChatBot } from 'chat';
+import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -66,6 +67,47 @@ async function sendQQMessage(
       await api.sendGroupMessage(targetId, content);
     }
   }
+}
+
+/**
+ * Resolve attachments on an inbound QQ message into `AttachmentSource[]`.
+ *
+ * QQ is the simplest case: attachments come with public CDN URLs (`https://multimedia.nt.qq.com.cn/...`)
+ * that require no auth and survive `Message.toJSON` unchanged. We just walk
+ * the surviving attachment metadata and forward URLs to `ingestAttachment`,
+ * which `fetch()`es them with no special handling.
+ *
+ * No `referenced_message` quirk like Discord, no auth like Slack, no
+ * file_id download like Telegram/WeChat/Feishu — just URLs.
+ */
+function qqExtractFiles(message: Message): AttachmentSource[] | undefined {
+  const attachments = (message as any).attachments as
+    | Array<{
+        height?: number;
+        mimeType?: string;
+        name?: string;
+        size?: number;
+        type?: string;
+        url?: string;
+        width?: number;
+      }>
+    | undefined;
+  if (!attachments?.length) return undefined;
+
+  log('extractFiles: msgId=%s, attachments=%d', (message as any).id, attachments.length);
+
+  const results: AttachmentSource[] = [];
+  for (const att of attachments) {
+    if (!att.url) continue;
+    results.push({
+      mimeType: att.mimeType,
+      name: att.name,
+      size: att.size,
+      url: att.url,
+    });
+  }
+
+  return results.length > 0 ? results : undefined;
 }
 
 class QQGatewayClient implements PlatformClient {
@@ -233,6 +275,10 @@ class QQGatewayClient implements PlatformClient {
     };
   }
 
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    return qqExtractFiles(message);
+  }
+
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
   }
@@ -325,6 +371,10 @@ class QQWebhookClient implements PlatformClient {
       removeReaction: () => Promise.resolve(),
       triggerTyping: () => Promise.resolve(),
     };
+  }
+
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    return qqExtractFiles(message);
   }
 
   extractChatId(platformThreadId: string): string {

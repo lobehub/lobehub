@@ -1,7 +1,13 @@
-import { createLarkAdapter, LarkApiClient } from '@lobechat/chat-adapter-feishu';
-import type { Chat as ChatBot } from 'chat';
+import {
+  createLarkAdapter,
+  downloadMediaFromRawMessage,
+  LarkApiClient,
+  type LarkRawMessage,
+} from '@lobechat/chat-adapter-feishu';
+import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -57,6 +63,53 @@ function createMessenger(
   };
 }
 
+/**
+ * Resolve attachments on an inbound Feishu/Lark message into
+ * `AttachmentSource[]`. Shared by both webhook and websocket clients.
+ *
+ * Why we re-download instead of trusting the in-message buffer or fetchData:
+ * the chat-adapter-feishu used to set `fetchData` (sync `parseMessage` path)
+ * or `buffer` (async `parseRawEvent` path) on attachments, but
+ * `Message.toJSON` strips both whenever the message is enqueued (debounce
+ * always; queue when busy). So whenever a message round-trips through the
+ * queue, the in-memory data is gone and we have to re-fetch via the Lark
+ * resource API ourselves. After the adapter refactor, attachments are now
+ * metadata-only at parse time and `extractFiles` is the sole download path.
+ *
+ * The original `LarkRawMessage` (with `message_id` + `content` JSON
+ * carrying `image_key` / `file_key` / etc.) IS preserved in `message.raw`
+ * because `toJSON` keeps it intact. We hand that and a `LarkApiClient` to
+ * the package-exported `downloadMediaFromRawMessage` helper.
+ */
+async function feishuExtractFiles(
+  api: LarkApiClient,
+  message: Message,
+): Promise<AttachmentSource[] | undefined> {
+  const raw = (message as any).raw as LarkRawMessage | undefined;
+  if (!raw) return undefined;
+
+  log('extractFiles: msgId=%s, message_type=%s', (message as any).id, raw.message_type);
+
+  const attachments = await downloadMediaFromRawMessage(api, raw);
+  if (attachments.length === 0) {
+    log('extractFiles: no media items resolved for msgId=%s', (message as any).id);
+    return undefined;
+  }
+
+  log(
+    'extractFiles: resolved %d media item(s) for msgId=%s',
+    attachments.length,
+    (message as any).id,
+  );
+
+  return attachments.map((att: any) => ({
+    buffer: att.buffer,
+    mimeType: att.mimeType,
+    name: att.name,
+    size: att.size,
+  }));
+}
+
 // ---------- Webhook Client (existing behavior) ----------
 
 class FeishuWebhookClient implements PlatformClient {
@@ -65,12 +118,25 @@ class FeishuWebhookClient implements PlatformClient {
 
   private config: BotProviderConfig;
   private domain: 'lark' | 'feishu';
+  /** Lazy-cached LarkApiClient — keeps the tenant token cache hot across calls. */
+  private _api?: LarkApiClient;
 
   constructor(config: BotProviderConfig, _context: BotPlatformRuntimeContext) {
     this.config = config;
     this.id = config.platform;
     this.applicationId = config.applicationId;
     this.domain = resolveDomain(config.platform);
+  }
+
+  private get api(): LarkApiClient {
+    if (!this._api) {
+      this._api = new LarkApiClient(
+        this.config.applicationId,
+        this.config.credentials.appSecret,
+        this.domain,
+      );
+    }
+    return this._api;
   }
 
   async start(): Promise<void> {
@@ -132,6 +198,10 @@ class FeishuWebhookClient implements PlatformClient {
     return createMessenger(this.config, this.domain, platformThreadId);
   }
 
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    return feishuExtractFiles(this.api, message);
+  }
+
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
   }
@@ -163,6 +233,8 @@ class FeishuWSClientImpl implements PlatformClient {
   private bot: ChatBot<any> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  /** Lazy-cached LarkApiClient — keeps the tenant token cache hot across calls. */
+  private _api?: LarkApiClient;
 
   constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
     this.config = config;
@@ -170,6 +242,17 @@ class FeishuWSClientImpl implements PlatformClient {
     this.id = config.platform;
     this.applicationId = config.applicationId;
     this.domain = resolveDomain(config.platform);
+  }
+
+  private get api(): LarkApiClient {
+    if (!this._api) {
+      this._api = new LarkApiClient(
+        this.config.applicationId,
+        this.config.credentials.appSecret,
+        this.domain,
+      );
+    }
+    return this._api;
   }
 
   async start(options?: GatewayListenerOptions): Promise<void> {
@@ -309,6 +392,10 @@ class FeishuWSClientImpl implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     return createMessenger(this.config, this.domain, platformThreadId);
+  }
+
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    return feishuExtractFiles(this.api, message);
   }
 
   extractChatId(platformThreadId: string): string {

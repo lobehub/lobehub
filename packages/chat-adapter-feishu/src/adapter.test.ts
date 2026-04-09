@@ -1,6 +1,13 @@
+import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createLarkAdapter, LarkAdapter } from './adapter';
+import {
+  createLarkAdapter,
+  downloadMediaFromRawMessage,
+  extractMediaMetadata,
+  LarkAdapter,
+} from './adapter';
+import { LarkApiClient } from './api';
 import type { LarkMessageBody } from './types';
 
 // ---- helpers ----
@@ -232,12 +239,19 @@ describe('LarkAdapter', () => {
     });
   });
 
-  // ---------- parseRawEvent media download ----------
+  // ---------- parseRawEvent metadata-only attachments (webhook path) ----------
+  //
+  // The inbound parse path is metadata-only — it does NOT call the Lark
+  // resource API. Eager downloading was removed because the chat-sdk's
+  // `Message.toJSON` strips both `att.buffer` AND `att.fetchData` whenever
+  // the message is enqueued, making any pre-downloaded buffer or lazy
+  // closure pure waste. Server-side `Feishu*Client.extractFiles` is now the
+  // sole download path; it walks `message.raw` on demand via the standalone
+  // `downloadMediaFromRawMessage` helper (separately tested below).
 
-  describe('parseRawEvent media download', () => {
-    it('should download image and create attachment', async () => {
-      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-      vi.spyOn((adapter as any).api, 'downloadResource').mockResolvedValueOnce(imageBytes);
+  describe('parseRawEvent metadata-only attachments', () => {
+    it('should produce metadata-only image attachment without calling the API', async () => {
+      const downloadSpy = vi.spyOn((adapter as any).api, 'downloadResource');
 
       const msg = makeLarkMessage({
         content: JSON.stringify({ image_key: 'img_test' }),
@@ -248,14 +262,16 @@ describe('LarkAdapter', () => {
       const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
       const message = await factory?.();
 
+      expect(downloadSpy).not.toHaveBeenCalled();
       expect(message?.attachments).toEqual([
-        { buffer: imageBytes, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' },
+        { mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' },
       ]);
+      // raw is preserved so server-side extractFiles can re-fetch from image_key.
+      expect(message?.raw).toBeDefined();
     });
 
-    it('should download file and create attachment', async () => {
-      const fileBytes = Buffer.from([0x25, 0x50, 0x44, 0x46]);
-      vi.spyOn((adapter as any).api, 'downloadResource').mockResolvedValueOnce(fileBytes);
+    it('should produce metadata-only file attachment with name from content', async () => {
+      const downloadSpy = vi.spyOn((adapter as any).api, 'downloadResource');
 
       const msg = makeLarkMessage({
         content: JSON.stringify({ file_key: 'file_test', file_name: 'report.pdf' }),
@@ -266,9 +282,9 @@ describe('LarkAdapter', () => {
       const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
       const message = await factory?.();
 
+      expect(downloadSpy).not.toHaveBeenCalled();
       expect(message?.attachments).toEqual([
         {
-          buffer: fileBytes,
           mimeType: 'application/octet-stream',
           name: 'report.pdf',
           type: 'file',
@@ -276,9 +292,8 @@ describe('LarkAdapter', () => {
       ]);
     });
 
-    it('should download audio and create attachment', async () => {
-      const audioBytes = Buffer.from([0x4f, 0x67, 0x67, 0x53]);
-      vi.spyOn((adapter as any).api, 'downloadResource').mockResolvedValueOnce(audioBytes);
+    it('should produce metadata-only audio attachment', async () => {
+      const downloadSpy = vi.spyOn((adapter as any).api, 'downloadResource');
 
       const msg = makeLarkMessage({
         content: JSON.stringify({ file_key: 'audio_key' }),
@@ -289,14 +304,14 @@ describe('LarkAdapter', () => {
       const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
       const message = await factory?.();
 
+      expect(downloadSpy).not.toHaveBeenCalled();
       expect(message?.attachments).toEqual([
-        { buffer: audioBytes, mimeType: 'audio/ogg', name: 'audio.ogg', type: 'audio' },
+        { mimeType: 'audio/ogg', name: 'audio.ogg', type: 'audio' },
       ]);
     });
 
-    it('should download video (media) and create attachment', async () => {
-      const videoBytes = Buffer.from([0x00, 0x00, 0x00, 0x1c]);
-      vi.spyOn((adapter as any).api, 'downloadResource').mockResolvedValueOnce(videoBytes);
+    it('should produce metadata-only video attachment', async () => {
+      const downloadSpy = vi.spyOn((adapter as any).api, 'downloadResource');
 
       const msg = makeLarkMessage({
         content: JSON.stringify({ file_key: 'video_key', image_key: 'thumb_key' }),
@@ -307,14 +322,14 @@ describe('LarkAdapter', () => {
       const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
       const message = await factory?.();
 
+      expect(downloadSpy).not.toHaveBeenCalled();
       expect(message?.attachments).toEqual([
-        { buffer: videoBytes, mimeType: 'video/mp4', name: 'video.mp4', type: 'video' },
+        { mimeType: 'video/mp4', name: 'video.mp4', type: 'video' },
       ]);
     });
 
-    it('should download sticker and create attachment', async () => {
-      const stickerBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-      vi.spyOn((adapter as any).api, 'downloadResource').mockResolvedValueOnce(stickerBytes);
+    it('should produce metadata-only sticker attachment as image type', async () => {
+      const downloadSpy = vi.spyOn((adapter as any).api, 'downloadResource');
 
       const msg = makeLarkMessage({
         content: JSON.stringify({ file_key: 'sticker_key' }),
@@ -325,26 +340,10 @@ describe('LarkAdapter', () => {
       const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
       const message = await factory?.();
 
+      expect(downloadSpy).not.toHaveBeenCalled();
       expect(message?.attachments).toEqual([
-        { buffer: stickerBytes, mimeType: 'image/png', name: 'sticker.png', type: 'image' },
+        { mimeType: 'image/png', name: 'sticker.png', type: 'image' },
       ]);
-    });
-
-    it('should return empty attachments when download fails', async () => {
-      vi.spyOn((adapter as any).api, 'downloadResource').mockRejectedValueOnce(
-        new Error('Download failed: 500'),
-      );
-
-      const msg = makeLarkMessage({
-        content: JSON.stringify({ image_key: 'img_broken' }),
-        message_type: 'image',
-      });
-      await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
-
-      const factory = vi.mocked(mockChat.processMessage).mock.calls[0]?.[2];
-      const message = await factory?.();
-
-      expect(message?.attachments).toEqual([]);
     });
 
     it('should return no attachments for text messages', async () => {
@@ -378,7 +377,7 @@ describe('LarkAdapter', () => {
       expect(message.text).toBe('hello');
     });
 
-    it('should create lazy attachment for image message', () => {
+    it('should create metadata-only attachment for image message', () => {
       const raw = makeLarkMessage({
         content: JSON.stringify({ image_key: 'img_lazy' }),
         message_type: 'image',
@@ -388,10 +387,13 @@ describe('LarkAdapter', () => {
       expect(message.attachments).toHaveLength(1);
       expect(message.attachments[0].type).toBe('image');
       expect(message.attachments[0].mimeType).toBe('image/jpeg');
-      expect(message.attachments[0].fetchData).toBeTypeOf('function');
+      // No fetchData closure or buffer — actual download is server-side via
+      // FeishuWebhookClient.extractFiles → downloadMediaFromRawMessage(api, raw).
+      expect((message.attachments[0] as any).fetchData).toBeUndefined();
+      expect((message.attachments[0] as any).buffer).toBeUndefined();
     });
 
-    it('should create lazy attachment for file message', () => {
+    it('should create metadata-only attachment for file message', () => {
       const raw = makeLarkMessage({
         content: JSON.stringify({ file_key: 'file_lazy', file_name: 'doc.xlsx' }),
         message_type: 'file',
@@ -401,9 +403,10 @@ describe('LarkAdapter', () => {
       expect(message.attachments).toHaveLength(1);
       expect(message.attachments[0].type).toBe('file');
       expect(message.attachments[0].name).toBe('doc.xlsx');
+      expect((message.attachments[0] as any).fetchData).toBeUndefined();
     });
 
-    it('should create lazy attachment for audio message', () => {
+    it('should create metadata-only attachment for audio message', () => {
       const raw = makeLarkMessage({
         content: JSON.stringify({ file_key: 'audio_lazy' }),
         message_type: 'audio',
@@ -412,9 +415,10 @@ describe('LarkAdapter', () => {
 
       expect(message.attachments).toHaveLength(1);
       expect(message.attachments[0].type).toBe('audio');
+      expect((message.attachments[0] as any).fetchData).toBeUndefined();
     });
 
-    it('should create lazy attachment for video message', () => {
+    it('should create metadata-only attachment for video message', () => {
       const raw = makeLarkMessage({
         content: JSON.stringify({ file_key: 'video_lazy', image_key: 'thumb' }),
         message_type: 'media',
@@ -423,6 +427,7 @@ describe('LarkAdapter', () => {
 
       expect(message.attachments).toHaveLength(1);
       expect(message.attachments[0].type).toBe('video');
+      expect((message.attachments[0] as any).fetchData).toBeUndefined();
     });
 
     it('should return empty attachments for malformed content', () => {
@@ -482,5 +487,258 @@ describe('createLarkAdapter', () => {
   it('should use feishu platform when specified', () => {
     const adapter = createLarkAdapter({ appId: 'a', appSecret: 's', platform: 'feishu' });
     expect(adapter.name).toBe('feishu');
+  });
+});
+
+// ---------- extractMediaMetadata (the metadata-only parse-time helper) ----------
+
+describe('extractMediaMetadata', () => {
+  it('returns empty array for text messages', () => {
+    expect(extractMediaMetadata(makeLarkMessage())).toEqual([]);
+  });
+
+  it('returns empty array for post messages', () => {
+    expect(
+      extractMediaMetadata(makeLarkMessage({ message_type: 'post', content: JSON.stringify({}) })),
+    ).toEqual([]);
+  });
+
+  it('returns empty array for malformed content JSON', () => {
+    expect(
+      extractMediaMetadata(makeLarkMessage({ content: 'not json', message_type: 'image' })),
+    ).toEqual([]);
+  });
+
+  it('returns metadata-only image attachment', () => {
+    const attachments = extractMediaMetadata(
+      makeLarkMessage({
+        content: JSON.stringify({ image_key: 'img_1' }),
+        message_type: 'image',
+      }),
+    );
+    expect(attachments).toEqual([{ mimeType: 'image/jpeg', name: 'image.jpg', type: 'image' }]);
+  });
+
+  it('returns metadata-only file attachment with name from content', () => {
+    const attachments = extractMediaMetadata(
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'f_1', file_name: 'plan.pdf' }),
+        message_type: 'file',
+      }),
+    );
+    expect(attachments).toEqual([
+      { mimeType: 'application/octet-stream', name: 'plan.pdf', type: 'file' },
+    ]);
+  });
+
+  it('falls back to "file" name when file_name missing', () => {
+    const attachments = extractMediaMetadata(
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'f_1' }),
+        message_type: 'file',
+      }),
+    );
+    expect(attachments[0].name).toBe('file');
+  });
+
+  it('returns metadata-only audio attachment', () => {
+    const attachments = extractMediaMetadata(
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'a_1' }),
+        message_type: 'audio',
+      }),
+    );
+    expect(attachments).toEqual([{ mimeType: 'audio/ogg', name: 'audio.ogg', type: 'audio' }]);
+  });
+
+  it('returns metadata-only video attachment for media type', () => {
+    const attachments = extractMediaMetadata(
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'v_1', image_key: 't_1' }),
+        message_type: 'media',
+      }),
+    );
+    expect(attachments).toEqual([{ mimeType: 'video/mp4', name: 'video.mp4', type: 'video' }]);
+  });
+
+  it('returns metadata-only sticker attachment as image type', () => {
+    const attachments = extractMediaMetadata(
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 's_1' }),
+        message_type: 'sticker',
+      }),
+    );
+    expect(attachments).toEqual([{ mimeType: 'image/png', name: 'sticker.png', type: 'image' }]);
+  });
+
+  it('returns empty array when image_key is missing', () => {
+    expect(
+      extractMediaMetadata(makeLarkMessage({ content: JSON.stringify({}), message_type: 'image' })),
+    ).toEqual([]);
+  });
+});
+
+// ---------- downloadMediaFromRawMessage (the on-demand download path) ----------
+//
+// This is the helper called by server-side `Feishu*Client.extractFiles` to
+// materialize media after a chat-sdk Redis round-trip has stripped any
+// in-memory buffer/fetchData. It walks `raw.content` (JSON) and downloads
+// each media item via `LarkApiClient.downloadResource(messageId, key, type)`.
+
+describe('downloadMediaFromRawMessage', () => {
+  let api: LarkApiClient;
+  let downloadSpy: MockInstance<LarkApiClient['downloadResource']>;
+
+  beforeEach(() => {
+    api = new LarkApiClient('app', 'secret', 'feishu');
+    downloadSpy = vi.spyOn(api, 'downloadResource') as MockInstance<
+      LarkApiClient['downloadResource']
+    >;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('downloads an image via image_key + downloadResource(messageId, key, "image")', async () => {
+    const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    downloadSpy.mockResolvedValueOnce(imageBytes);
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ image_key: 'img_1' }),
+        message_type: 'image',
+      }),
+    );
+
+    expect(downloadSpy).toHaveBeenCalledTimes(1);
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 'img_1', 'image');
+    expect(result).toEqual([
+      {
+        buffer: imageBytes,
+        mimeType: 'image/jpeg',
+        name: 'image.jpg',
+        type: 'image',
+      },
+    ]);
+  });
+
+  it('downloads a file via file_key with name from content', async () => {
+    const pdfBytes = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+    downloadSpy.mockResolvedValueOnce(pdfBytes);
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'f_1', file_name: 'doc.pdf' }),
+        message_type: 'file',
+      }),
+    );
+
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 'f_1', 'file');
+    expect(result).toEqual([
+      {
+        buffer: pdfBytes,
+        mimeType: 'application/octet-stream',
+        name: 'doc.pdf',
+        type: 'file',
+      },
+    ]);
+  });
+
+  it('downloads audio via file_key as audio/ogg', async () => {
+    const audioBytes = Buffer.from([0x4f, 0x67, 0x67, 0x53]);
+    downloadSpy.mockResolvedValueOnce(audioBytes);
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'a_1' }),
+        message_type: 'audio',
+      }),
+    );
+
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 'a_1', 'file');
+    expect(result).toEqual([
+      { buffer: audioBytes, mimeType: 'audio/ogg', name: 'audio.ogg', type: 'audio' },
+    ]);
+  });
+
+  it('downloads video via file_key as video/mp4', async () => {
+    const videoBytes = Buffer.from([0x00, 0x00, 0x00, 0x18]);
+    downloadSpy.mockResolvedValueOnce(videoBytes);
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 'v_1', image_key: 't_1' }),
+        message_type: 'media',
+      }),
+    );
+
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 'v_1', 'file');
+    expect(result?.[0]?.type).toBe('video');
+  });
+
+  it('downloads sticker via file_key with type "image" (not "file")', async () => {
+    const stickerBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    downloadSpy.mockResolvedValueOnce(stickerBytes);
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ file_key: 's_1' }),
+        message_type: 'sticker',
+      }),
+    );
+
+    expect(downloadSpy).toHaveBeenCalledWith('om_test_msg_001', 's_1', 'image');
+    expect(result?.[0]?.mimeType).toBe('image/png');
+  });
+
+  it('returns empty array when downloadResource throws (per-item swallow)', async () => {
+    downloadSpy.mockRejectedValueOnce(new Error('Download failed: 500'));
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ image_key: 'img_broken' }),
+        message_type: 'image',
+      }),
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array for text messages', async () => {
+    const result = await downloadMediaFromRawMessage(api, makeLarkMessage());
+    expect(downloadSpy).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when content is malformed JSON', async () => {
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({ content: 'not json', message_type: 'image' }),
+    );
+    expect(downloadSpy).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
+  });
+
+  it('forwards warnings to the optional logger on download failure', async () => {
+    downloadSpy.mockRejectedValueOnce(new Error('boom'));
+    const warn = vi.fn();
+
+    await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({ image_key: 'img_1' }),
+        message_type: 'image',
+      }),
+      { warn },
+    );
+
+    expect(warn).toHaveBeenCalled();
   });
 });

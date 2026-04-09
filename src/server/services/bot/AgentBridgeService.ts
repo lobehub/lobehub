@@ -90,6 +90,18 @@ interface ThreadState {
 }
 
 interface BridgeHandlerOpts {
+  /**
+   * Internal: when true, the caller already holds the `activeThreads` flag
+   * for this thread, so the callee must skip its own activeThreads check /
+   * add / delete (the parent caller owns the lifecycle).
+   *
+   * Used by `handleSubscribedMessage` when it recursively calls
+   * `handleMention` on a stale-topic reset or FK violation. Without this,
+   * the recursive call would either (a) trip its own activeThreads check
+   * and silently skip the message (race-prone) or (b) try to delete the
+   * flag in its finally and leave the parent's finally double-deleting.
+   */
+  _activeFlagHeldByCaller?: boolean;
   agentId: string;
   botContext?: ChatTopicBotContext;
   charLimit?: number;
@@ -1056,14 +1068,16 @@ export class AgentBridgeService {
   }
 
   /**
-   * Resolve attachments on an inbound message into `AttachmentSource[]`.
+   * Resolve attachments on an inbound message into `AttachmentSource[]` by
+   * delegating to the platform client's own `extractFiles`. Each platform
+   * owns its own attachment quirks (auth, file_id paths, mime/name
+   * inference, quoted-msg handling, post-Redis refetch); the bridge stays
+   * platform-agnostic.
    *
-   * Prefers the platform client's own `extractFiles` (each platform owns its
-   * attachment quirks: auth, file_id paths, mime/name inference, quoted-msg
-   * handling, post-Redis refetch). Falls back to the legacy bridge
-   * `extractFiles` for platforms that haven't migrated to per-client
-   * extraction yet — this fallback will be deleted once all platforms ship
-   * their own implementations.
+   * Returns undefined when no client is provided or the client returns no
+   * attachments. (The legacy bridge fallback `extractFiles` was deleted
+   * once all 6 platforms migrated to per-client extraction — see Step 2
+   * of the per-platform extractFiles refactor.)
    */
   private async resolveFiles(
     message: Message,
@@ -1078,214 +1092,7 @@ export class AgentBridgeService {
       }>
     | undefined
   > {
-    const fromClient = await client?.extractFiles?.(message);
-    if (fromClient !== undefined) return fromClient;
-    return this.extractFiles(message);
-  }
-
-  /**
-   * Legacy bridge attachment extractor — used as a fallback for platforms that
-   * haven't migrated to per-client `PlatformClient.extractFiles` yet.
-   * Includes attachments from both the message itself and any referenced
-   * (quoted) message.
-   *
-   * Resolves attachments in this priority order:
-   *   1. `buffer` — already downloaded by the adapter (WeChat / Feishu inbound)
-   *   2. `fetchData()` — adapter-provided lazy download with proper auth
-   *      (Slack, Feishu history). Required for Slack because the URL is
-   *      token-protected and `ingestAttachment`'s downstream `fetch(url)` has
-   *      no credentials.
-   *   3. `url` — public CDN fallback (Discord, QQ public attachments)
-   *
-   * Note: Telegram has its own `TelegramWebhookClient.extractFiles` and never
-   * reaches this code path.
-   */
-  private async extractFiles(message: Message): Promise<
-    | Array<{
-        buffer?: Buffer;
-        mimeType?: string;
-        name?: string;
-        size?: number;
-        url: string;
-      }>
-    | undefined
-  > {
-    type AttachmentLike = {
-      buffer?: Buffer;
-      content_type?: string;
-      fetchData?: () => Promise<Buffer>;
-      filename?: string;
-      mimeType?: string;
-      name?: string;
-      size?: number;
-      type?: string;
-      url?: string;
-    };
-
-    // Some chat-adapters (notably Telegram for `photo` payloads) emit
-    // attachments with a `type` discriminant but no `mimeType`/`name` —
-    // Telegram's Bot API doesn't return either for photos because they
-    // are always JPEG. Without a usable mimeType, ingestAttachment falls
-    // back to `application/octet-stream`, the file is misclassified as a
-    // document instead of an image, and vision models never see it.
-    //
-    // Honor `att.type` and provide sensible defaults so downstream
-    // detection (`isImage` / `isVideo`) works.
-    const inferMimeType = (att: AttachmentLike): string | undefined => {
-      if (att.mimeType) return att.mimeType;
-      switch (att.type) {
-        case 'image': {
-          return 'image/jpeg';
-        }
-        case 'video': {
-          return 'video/mp4';
-        }
-        case 'audio': {
-          return 'audio/ogg';
-        }
-        default: {
-          return undefined;
-        }
-      }
-    };
-    const inferName = (att: AttachmentLike): string | undefined => {
-      if (att.name) return att.name;
-      switch (att.type) {
-        case 'image': {
-          return 'image.jpg';
-        }
-        case 'video': {
-          return 'video.mp4';
-        }
-        case 'audio': {
-          return 'audio.ogg';
-        }
-        default: {
-          return undefined;
-        }
-      }
-    };
-
-    const files: Array<{
-      buffer?: Buffer;
-      mimeType?: string;
-      name?: string;
-      size?: number;
-      url: string;
-    }> = [];
-
-    // 1. Direct attachments from the message (parsed by Chat SDK)
-    const directAttachments = (message as any).attachments as AttachmentLike[] | undefined;
-    log(
-      'extractFiles: msgId=%s, directAttachments=%d',
-      (message as any).id,
-      directAttachments?.length ?? 0,
-    );
-    if (directAttachments?.length) {
-      log(
-        'extractFiles: directAttachments shapes: %o',
-        directAttachments.map((att) => ({
-          hasBuffer: !!att.buffer,
-          hasFetchData: typeof att.fetchData === 'function',
-          hasUrl: !!att.url,
-          mimeType: att.mimeType,
-          name: att.name,
-          size: att.size,
-          type: att.type,
-        })),
-      );
-      const resolved = await Promise.all(
-        directAttachments.map(async (att) => {
-          const mimeType = inferMimeType(att);
-          const name = inferName(att);
-
-          if (mimeType !== att.mimeType || name !== att.name) {
-            log(
-              'extractFiles: inferred from type=%s -> mimeType=%s (was %s), name=%s (was %s)',
-              att.type,
-              mimeType,
-              att.mimeType,
-              name,
-              att.name,
-            );
-          }
-
-          if (att.buffer) {
-            return {
-              buffer: att.buffer,
-              mimeType,
-              name,
-              size: att.size,
-              url: '',
-            };
-          }
-          if (typeof att.fetchData === 'function') {
-            try {
-              const buffer = await att.fetchData();
-              log(
-                'extractFiles: fetchData succeeded for %s, %d bytes',
-                name ?? 'attachment',
-                buffer.length,
-              );
-              return {
-                buffer,
-                mimeType,
-                name,
-                size: att.size,
-                url: '',
-              };
-            } catch (error) {
-              log('extractFiles: fetchData failed for %s: %O', name ?? 'attachment', error);
-              return undefined;
-            }
-          }
-          if (att.url) {
-            return {
-              mimeType,
-              name,
-              size: att.size,
-              url: att.url,
-            };
-          }
-          return undefined;
-        }),
-      );
-      for (const file of resolved) {
-        if (file) files.push(file);
-      }
-    }
-
-    // 2. Attachments from referenced (quoted/replied-to) message (Discord raw payload)
-    const raw = (message as any).raw as Record<string, any> | undefined;
-    const refAttachments = raw?.referenced_message?.attachments as AttachmentLike[] | undefined;
-    if (refAttachments?.length) {
-      log('extractFiles: refAttachments=%d (from quoted message)', refAttachments.length);
-      for (const att of refAttachments) {
-        if (att.url) {
-          files.push({
-            mimeType: att.content_type,
-            name: att.filename,
-            size: att.size,
-            url: att.url,
-          });
-        }
-      }
-    }
-
-    log(
-      'extractFiles: resolved %d file(s) for msgId=%s: %o',
-      files.length,
-      (message as any).id,
-      files.map((f) => ({
-        hasBuffer: !!f.buffer,
-        mimeType: f.mimeType,
-        name: f.name,
-        size: f.size,
-        urlSet: !!f.url,
-      })),
-    );
-
-    return files.length > 0 ? files : undefined;
+    return client?.extractFiles?.(message);
   }
 
   /**
