@@ -134,7 +134,7 @@
   "input.addUser": "Add a user message",
   "input.disclaimer": "Agents can make mistakes. Use your judgment for critical info.",
   "input.errorMsg": "Send failed: {{errorMsg}}. Retry, or send again later.",
-  "input.more": "more",
+  "input.more": "More",
   "input.send": "Send",
   "input.sendWithCmdEnter": "Press <key/> to send",
   "input.sendWithEnter": "Press <key/> to send",
