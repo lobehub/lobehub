@@ -1,7 +1,7 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, ChevronRight, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -95,21 +95,6 @@ const useCommittedProseHeadline = (proseSource: string, streaming: boolean) => {
 
   return committed;
 };
-
-const AccordionArrow = memo<{ open: boolean }>(({ open }) => (
-  <Icon
-    color={cssVar.colorTextDescription}
-    icon={ChevronRight}
-    size={16}
-    style={{
-      flex: 'none',
-      transform: open ? 'rotate(90deg)' : undefined,
-      transition: 'transform 200ms ease-out',
-    }}
-  />
-));
-
-AccordionArrow.displayName = 'AccordionArrow';
 
 const WorkflowCollapse = memo<WorkflowCollapseProps>(
   ({ assistantMessageId, blocks, disableEditing, workflowChromeComplete = false }) => {
@@ -222,11 +207,6 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     ) : (
       <Icon color={cssVar.colorSuccess} icon={Check} />
     );
-    const collapseIndicator = (
-      <span style={{ display: 'flex', flexShrink: 0, alignItems: 'center' }}>
-        <AccordionArrow open={isExpanded} />
-      </span>
-    );
 
     const title = (
       <Flexbox horizontal align="center" gap={6}>
@@ -247,70 +227,63 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             horizontal
             align="center"
             flex={1}
-            gap={6}
             style={{ minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX, minWidth: 0 }}
           >
-            <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
-              <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                <AnimatePresence initial={false} mode="wait">
-                  <motion.div
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    initial={{ opacity: 0, y: 8 }}
-                    key={streamingHeadline || 'working-fallback'}
-                    transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+              <AnimatePresence initial={false} mode="wait">
+                <motion.div
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  key={streamingHeadline || 'working-fallback'}
+                  transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
+                  }}
+                >
+                  <span
+                    className={shinyTextStyles.shinyText}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <span
-                      className={shinyTextStyles.shinyText}
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {streamingHeadline || 'Working...'}
-                    </span>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-              {collapseIndicator}
-            </Flexbox>
-            {showWorkingElapsed && (
-              <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
-                ({workingElapsedSeconds}s)
-              </span>
-            )}
+                    {streamingHeadline || 'Working...'}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
+            </div>
           </Flexbox>
         ) : (
-          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
-              <Text
-                style={{
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                type="secondary"
-              >
-                {summaryText}
-              </Text>
-              {collapseIndicator}
-            </Flexbox>
-            {durationText && (
-              <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
-                {durationText}
-              </span>
-            )}
+          <Flexbox horizontal align="center" style={{ minWidth: 0, overflow: 'hidden' }}>
+            <Text
+              style={{
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              type="secondary"
+            >
+              {summaryText}
+            </Text>
           </Flexbox>
         )}
       </Flexbox>
     );
+
+    const action = streaming
+      ? showWorkingElapsed && (
+          <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
+            ({workingElapsedSeconds}s)
+          </span>
+        )
+      : durationText && (
+          <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>{durationText}</span>
+        );
 
     return (
       <Accordion
@@ -319,7 +292,8 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
         onExpandedChange={handleExpandedChange}
       >
         <AccordionItem
-          hideIndicator
+          action={action}
+          alwaysShowAction
           itemKey="workflow"
           paddingBlock={4}
           paddingInline={4}
