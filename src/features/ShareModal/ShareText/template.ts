@@ -74,10 +74,20 @@ export const generateMarkdown = ({
       .filter((m) => m.content !== LOADING_FLAT)
       .filter((m) => (!includeUser ? m.role !== 'user' : true))
       .filter((m) => (!includeTool ? m.role !== 'tool' : true))
-      .map((message) => ({
-        ...message,
-        content: normalizeThinkTags(processWithArtifact(message.content)),
-      })),
+      .map((message) => {
+        // For assistantGroup messages, content is stored in children blocks
+        if (message.role === 'assistantGroup' && message.children?.length) {
+          const combinedContent = message.children
+            .map((child) => normalizeThinkTags(processWithArtifact(child.content)))
+            .filter(Boolean)
+            .join('\n\n');
+          return { ...message, content: combinedContent, role: 'assistant' as const };
+        }
+        return {
+          ...message,
+          content: normalizeThinkTags(processWithArtifact(message.content)),
+        };
+      }),
     systemRole: withSystemRole ? systemRole : undefined,
     title,
     withRole,

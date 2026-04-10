@@ -193,4 +193,54 @@ describe('generateMarkdown', () => {
 
     expect(result).toContain('Intro\n\n<think>\n\nReasoning\n\n</think>\n\nOutro');
   });
+
+  it('should include assistantGroup children content in export', () => {
+    const messagesWithAssistantGroup = [
+      {
+        id: '1',
+        content: 'What is the weather?',
+        role: 'user',
+        createdAt: Date.now(),
+      },
+      {
+        id: '2',
+        content: '',
+        role: 'assistantGroup',
+        createdAt: Date.now(),
+        children: [
+          { id: 'block-1', content: 'Let me check the weather for you.' },
+          { id: 'block-2', content: 'The weather is sunny today.' },
+        ],
+      },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({
+      ...defaultParams,
+      messages: messagesWithAssistantGroup,
+    });
+
+    expect(result).toContain('Let me check the weather for you.');
+    expect(result).toContain('The weather is sunny today.');
+  });
+
+  it('should render assistantGroup as Assistant role when withRole is true', () => {
+    const messagesWithAssistantGroup = [
+      {
+        id: '1',
+        content: '',
+        role: 'assistantGroup',
+        createdAt: Date.now(),
+        children: [{ id: 'block-1', content: 'Agent response content.' }],
+      },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({
+      ...defaultParams,
+      withRole: true,
+      messages: messagesWithAssistantGroup,
+    });
+
+    expect(result).toContain('##### Assistant:');
+    expect(result).toContain('Agent response content.');
+  });
 });
