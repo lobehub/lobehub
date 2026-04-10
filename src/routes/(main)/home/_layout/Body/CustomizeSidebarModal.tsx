@@ -4,7 +4,7 @@ import { type ModalInstance } from '@lobehub/ui';
 import { ActionIcon, Block, createModal, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { t } from 'i18next';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, PinIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,7 +43,9 @@ const SectionRow = memo<{
         {icon && <Icon icon={icon} size={18} />}
         <Text>{label}</Text>
       </Flexbox>
-      {!alwaysVisible && (
+      {alwaysVisible ? (
+        <ActionIcon icon={PinIcon} size={'small'} style={{ cursor: 'default', opacity: 0.45 }} />
+      ) : (
         <ActionIcon icon={isHidden ? EyeOff : Eye} size={'small'} onClick={onToggle} />
       )}
     </Flexbox>
