@@ -1,8 +1,6 @@
 import { Avatar, Icon } from '@lobehub/ui';
-import { McpIcon } from '@lobehub/ui/icons';
+import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { memo } from 'react';
-
-import SkillAvatar from '@/components/SkillAvatar';
 
 interface MentionItemIconProps {
   avatar?: string;
@@ -21,7 +19,7 @@ const MentionItemIcon = memo<MentionItemIconProps>(({ avatar, category, label, s
   }
 
   if (category === 'skill' && !normalizedAvatar) {
-    return <SkillAvatar size={size} />;
+    return <Icon icon={SkillsIcon} size={Math.round(size * 0.8)} />;
   }
 
   return (
