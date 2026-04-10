@@ -188,10 +188,12 @@ export class GatewayActionImpl {
   executeGatewayAgent = async (params: {
     context: ConversationContext;
     message: string;
+    /** Called when the gateway session completes (agent finished running) */
+    onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
   }): Promise<ExecAgentResult> => {
-    const { context, message, parentMessageId } = params;
+    const { context, message, onComplete, parentMessageId } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
@@ -262,6 +264,7 @@ export class GatewayActionImpl {
             .updateTopicMetadata(result.topicId, { runningOperation: null })
             .catch(() => {});
         }
+        onComplete?.();
       },
       operationId: result.operationId,
       token: result.token || '',

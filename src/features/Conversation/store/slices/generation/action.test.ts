@@ -873,20 +873,30 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('msg-1');
       });
 
-      // Should call executeGatewayAgent with parentMessageId and original content
-      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith({
-        context,
-        message: 'Hello world',
-        parentMessageId: 'msg-1',
+      // Should switch message branch before gateway call
+      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('msg-1', 0, {
+        operationId: 'test-op-id',
       });
+
+      // Should call executeGatewayAgent with parentMessageId, original content, and onComplete
+      expect(mockExecuteGatewayAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          message: 'Hello world',
+          parentMessageId: 'msg-1',
+          onComplete: expect.any(Function),
+        }),
+      );
 
       // Should NOT call client-mode internal_execAgentRuntime
       expect(mockInternalExecAgentRuntime).not.toHaveBeenCalled();
 
-      // Should NOT call switchMessageBranch (server handles branching)
-      expect(mockSwitchMessageBranch).not.toHaveBeenCalled();
+      // regenerate operation stays running until onComplete is called
+      expect(mockCompleteOperation).not.toHaveBeenCalled();
 
-      // Should complete the operation
+      // Simulate gateway session complete
+      const onComplete = mockExecuteGatewayAgent.mock.calls[0][0].onComplete;
+      onComplete();
       expect(mockCompleteOperation).toHaveBeenCalledWith('test-op-id');
     });
 
@@ -902,6 +912,7 @@ describe('Generation Actions', () => {
         failOperation: mockFailOperation,
         isGatewayModeEnabled: vi.fn(() => true),
         executeGatewayAgent: mockExecuteGatewayAgent,
+        switchMessageBranch: mockSwitchMessageBranch,
       } as any);
 
       const onRegenerateComplete = vi.fn();
@@ -923,6 +934,12 @@ describe('Generation Actions', () => {
         await store.getState().regenerateUserMessage('msg-1');
       });
 
+      // Hook is called via onComplete callback, not directly
+      expect(onRegenerateComplete).not.toHaveBeenCalled();
+
+      // Simulate gateway session complete
+      const onComplete = mockExecuteGatewayAgent.mock.calls[0][0].onComplete;
+      onComplete();
       expect(onRegenerateComplete).toHaveBeenCalledWith('msg-1');
     });
 
