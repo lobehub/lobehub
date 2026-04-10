@@ -184,8 +184,13 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           get().completeOperation(operationId);
 
-          // Write inline error immediately so the UI always shows something,
-          // even if the DB hasn't persisted the error yet.
+          // Fetch from DB first — the server may have persisted a richer error
+          // detail into the message already.
+          await fetchAndReplaceMessages(get, context).catch(console.error);
+
+          // Then overlay the inline error. This ensures the UI always shows the
+          // error even if the server hasn't persisted it into the message yet
+          // (the DB fetch would have returned a message with no error field).
           get().internal_dispatchMessage(
             {
               id: currentAssistantMessageId,
@@ -196,10 +201,6 @@ export const createGatewayEventHandler = (
             },
             dispatchContext,
           );
-
-          // Then fetch from DB — if the server persisted a richer error detail
-          // into the message, this replaces the inline error with the full version.
-          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }
