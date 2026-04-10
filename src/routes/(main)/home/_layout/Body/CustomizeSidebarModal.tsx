@@ -1,12 +1,12 @@
 'use client';
 
-import { type ModalInstance } from '@lobehub/ui';
-import { ActionIcon, Block, createModal, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Modal } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
-import { t } from 'i18next';
 import { Eye, EyeOff, PinIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { create } from 'zustand';
 
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
@@ -30,13 +30,26 @@ const BOTTOM_ITEMS: { key: string; labelKey: string; routeId?: string }[] = [
   { key: 'resource', labelKey: 'tab.resource', routeId: 'resource' },
 ];
 
+const useCustomizeSidebarModalStore = create<{
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}>((set) => ({
+  open: false,
+  setOpen: (open) => set({ open }),
+}));
+
+export const openCustomizeSidebarModal = () =>
+  useCustomizeSidebarModalStore.getState().setOpen(true);
+
 const SectionRow = memo<{
   alwaysVisible?: boolean;
   icon?: any;
   isHidden: boolean;
   label: string;
+  pinnedTooltip?: string;
+  toggleTooltip?: string;
   onToggle: () => void;
-}>(({ label, icon, isHidden, alwaysVisible, onToggle }) => (
+}>(({ label, icon, isHidden, alwaysVisible, pinnedTooltip, toggleTooltip, onToggle }) => (
   <Block style={{ opacity: isHidden ? 0.5 : 1 }} variant={isHidden ? 'filled' : 'borderless'}>
     <Flexbox horizontal align={'center'} height={40} justify={'space-between'} paddingInline={8}>
       <Flexbox horizontal align={'center'} gap={8}>
@@ -44,9 +57,13 @@ const SectionRow = memo<{
         <Text>{label}</Text>
       </Flexbox>
       {alwaysVisible ? (
-        <ActionIcon icon={PinIcon} size={'small'} style={{ cursor: 'default', opacity: 0.45 }} />
+        <Tooltip title={pinnedTooltip}>
+          <ActionIcon icon={PinIcon} size={'small'} style={{ cursor: 'default', opacity: 0.45 }} />
+        </Tooltip>
       ) : (
-        <ActionIcon icon={isHidden ? EyeOff : Eye} size={'small'} onClick={onToggle} />
+        <Tooltip title={toggleTooltip}>
+          <ActionIcon icon={isHidden ? EyeOff : Eye} size={'small'} onClick={onToggle} />
+        </Tooltip>
       )}
     </Flexbox>
   </Block>
@@ -73,12 +90,14 @@ const CustomizeSidebarContent = memo(() => {
     <Flexbox gap={2}>
       {TOP_NAV_ITEMS.map((item) => {
         const route = item.routeId ? getRouteById(item.routeId) : undefined;
+        const isHidden = hiddenSections.includes(item.key);
         return (
           <SectionRow
             icon={route?.icon}
-            isHidden={hiddenSections.includes(item.key)}
+            isHidden={isHidden}
             key={item.key}
             label={t(item.labelKey as any)}
+            toggleTooltip={t(isHidden ? ('navPanel.hidden' as any) : ('navPanel.visible' as any))}
             onToggle={() => toggleSection(item.key)}
           />
         );
@@ -87,13 +106,16 @@ const CustomizeSidebarContent = memo(() => {
       {sidebarSectionOrder.map((key) => {
         const item = SECTION_ITEMS.find((i) => i.key === key);
         if (!item) return null;
+        const isHidden = !item.alwaysVisible && hiddenSections.includes(key);
 
         return (
           <SectionRow
             alwaysVisible={item.alwaysVisible}
-            isHidden={!item.alwaysVisible && hiddenSections.includes(key)}
+            isHidden={isHidden}
             key={key}
             label={t(item.labelKey as any)}
+            pinnedTooltip={t('navPanel.pinned' as any)}
+            toggleTooltip={t(isHidden ? ('navPanel.hidden' as any) : ('navPanel.visible' as any))}
             onToggle={() => toggleSection(key)}
           />
         );
@@ -102,12 +124,14 @@ const CustomizeSidebarContent = memo(() => {
       {BOTTOM_ITEMS.map((item) => {
         const route = item.routeId ? getRouteById(item.routeId) : undefined;
         const icon = route?.icon;
+        const isHidden = hiddenSections.includes(item.key);
         return (
           <SectionRow
             icon={icon}
-            isHidden={hiddenSections.includes(item.key)}
+            isHidden={isHidden}
             key={item.key}
             label={t(item.labelKey as any)}
+            toggleTooltip={t(isHidden ? ('navPanel.hidden' as any) : ('navPanel.visible' as any))}
             onToggle={() => toggleSection(item.key)}
           />
         );
@@ -116,14 +140,22 @@ const CustomizeSidebarContent = memo(() => {
   );
 });
 
-CustomizeSidebarContent.displayName = 'CustomizeSidebarContent';
+export const CustomizeSidebarModal = memo(() => {
+  const { t } = useTranslation('common');
+  const open = useCustomizeSidebarModalStore((s) => s.open);
+  const setOpen = useCustomizeSidebarModalStore((s) => s.setOpen);
 
-export const openCustomizeSidebarModal = (): ModalInstance =>
-  createModal({
-    centered: true,
-    children: <CustomizeSidebarContent />,
-    destroyOnHidden: true,
-    footer: null,
-    title: t('navPanel.customizeSidebar', { ns: 'common' }),
-    width: 360,
-  });
+  return (
+    <Modal
+      centered
+      destroyOnHidden
+      footer={null}
+      open={open}
+      title={t('navPanel.customizeSidebar')}
+      width={360}
+      onCancel={() => setOpen(false)}
+    >
+      <CustomizeSidebarContent />
+    </Modal>
+  );
+});

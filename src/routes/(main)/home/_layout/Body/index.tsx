@@ -9,6 +9,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import Agent from './Agent';
 import BottomMenu from './BottomMenu';
+import { CustomizeSidebarModal } from './CustomizeSidebarModal';
 
 export enum GroupKey {
   Agent = 'agent',
@@ -40,6 +41,7 @@ const Body = memo(() => {
         {sections}
       </Accordion>
       <BottomMenu />
+      <CustomizeSidebarModal />
     </Flexbox>
   );
 });
