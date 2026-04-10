@@ -15,6 +15,7 @@ import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/Cus
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isModifierClick } from '@/utils/navigation';
+import { prefetchRoute } from '@/utils/router';
 
 /** Keys that cannot be hidden and should not show section actions */
 const PERMANENT_KEYS = new Set(['home', 'search']);
@@ -95,6 +96,7 @@ const Nav = memo(() => {
             <Link
               key={item.key}
               to={item.url}
+              onMouseEnter={() => prefetchRoute(item.url!)}
               onClick={(e) => {
                 if (isModifierClick(e)) return;
                 e.preventDefault();

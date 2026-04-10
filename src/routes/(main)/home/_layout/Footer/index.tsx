@@ -30,6 +30,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
+import { prefetchRoute } from '@/utils/router';
 
 const PRODUCT_HUNT_NOTIFICATION = {
   actionHref: 'https://www.producthunt.com/products/lobehub?launch=lobehub',
@@ -241,7 +242,7 @@ const Footer = memo(() => {
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
           {isDevMode && (
-            <Link to="/settings">
+            <Link to="/settings" onMouseEnter={() => prefetchRoute('/settings')}>
               <ActionIcon
                 aria-label={t('userPanel.setting')}
                 icon={SettingsIcon}

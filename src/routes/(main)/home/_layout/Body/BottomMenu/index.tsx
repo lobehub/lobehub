@@ -12,6 +12,7 @@ import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/Cus
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { isModifierClick } from '@/utils/navigation';
+import { prefetchRoute } from '@/utils/router';
 
 const BottomMenu = memo(() => {
   const { t } = useTranslation('common');
@@ -66,6 +67,7 @@ const BottomMenu = memo(() => {
         <Link
           key={item.key}
           to={item.url!}
+          onMouseEnter={() => prefetchRoute(item.url!)}
           onClick={(e) => {
             if (isModifierClick(e)) return;
             e.preventDefault();

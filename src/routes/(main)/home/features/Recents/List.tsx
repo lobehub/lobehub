@@ -15,7 +15,7 @@ import AllRecentsDrawer from './AllRecentsDrawer';
 import RecentListItem from './Item';
 
 const RecentsList = memo(() => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation('chat');
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
@@ -43,7 +43,9 @@ const RecentsList = memo(() => {
           <RecentListItem {...item} />
         </Link>
       ))}
-      {hasMore && <NavItem icon={MoreHorizontalIcon} title={t('more')} onClick={openDrawer} />}
+      {hasMore && (
+        <NavItem icon={MoreHorizontalIcon} title={t('input.more')} onClick={openDrawer} />
+      )}
       <AllRecentsDrawer open={drawerOpen} onClose={closeDrawer} />
     </Flexbox>
   );

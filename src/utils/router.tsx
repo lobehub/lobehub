@@ -193,3 +193,27 @@ export function createAppRouter(routes: RouteObject[], options?: CreateAppRouter
 export function redirectElement(to: string): ReactElement {
   return <Navigate replace to={to} />;
 }
+
+/**
+ * Prefetch route layout chunks on hover to reduce navigation delay.
+ * Each import is only triggered once — subsequent calls are no-ops.
+ */
+const prefetchedRoutes = new Set<string>();
+
+const routePrefetchMap: Record<string, () => Promise<unknown>> = {
+  '/community': () => import('@/routes/(main)/community/_layout'),
+  '/page': () => import('@/routes/(main)/page/_layout'),
+  '/resource': () => import('@/routes/(main)/resource/_layout'),
+  '/settings': () => import('@/routes/(main)/settings/_layout'),
+};
+
+export function prefetchRoute(path: string): void {
+  // Match the first path segment, e.g. "/settings/provider" -> "/settings"
+  const key = '/' + path.replace(/^\//, '').split('/')[0];
+  if (prefetchedRoutes.has(key)) return;
+  const loader = routePrefetchMap[key];
+  if (loader) {
+    prefetchedRoutes.add(key);
+    loader();
+  }
+}
