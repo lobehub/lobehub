@@ -63,6 +63,10 @@ export const desktopRoutes: RouteObject[] = [
                     path: ':taskId',
                   },
                 ],
+                element: dynamicLayout(
+                  () => import('@/routes/(main)/agent/tasks/_layout'),
+                  'Desktop > Chat > Tasks > Layout',
+                ),
                 path: 'tasks',
               },
             ],
