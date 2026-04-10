@@ -36,7 +36,7 @@ const NewAgentButton = memo(() => {
           />
         </DropdownMenu>
       }
-      onClick={() => openCreateModal('agent')}
+      onClick={() => openCreateModal?.('agent')}
     />
   );
 });

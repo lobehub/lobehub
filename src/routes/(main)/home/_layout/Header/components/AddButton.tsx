@@ -26,7 +26,7 @@ const AddButton = memo(() => {
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      openCreateModal('agent');
+      openCreateModal?.('agent');
     },
     [openCreateModal],
   );
