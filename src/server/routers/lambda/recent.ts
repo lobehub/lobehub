@@ -38,9 +38,13 @@ export const recentRouter = router({
 
         switch (item.type) {
           case 'topic': {
-            routePath = item.routeGroupId
-              ? `/group/${item.routeGroupId}?topic=${item.id}`
-              : `/agent/${item.routeId}?topic=${item.id}`;
+            if (item.routeGroupId) {
+              routePath = `/group/${item.routeGroupId}?topic=${item.id}`;
+            } else if (item.routeId) {
+              routePath = `/agent/${item.routeId}?topic=${item.id}`;
+            } else {
+              routePath = '/';
+            }
             break;
           }
           case 'document': {
@@ -48,7 +52,7 @@ export const recentRouter = router({
             break;
           }
           case 'task': {
-            routePath = `/agent/${item.routeId}`;
+            routePath = item.routeId ? `/agent/${item.routeId}` : '/';
             break;
           }
         }

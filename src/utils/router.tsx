@@ -203,6 +203,7 @@ const prefetchedRoutes = new Set<string>();
 const routePrefetchMap: Record<string, () => Promise<unknown>> = {
   '/agent': () => import('@/routes/(main)/agent/_layout'),
   '/community': () => import('@/routes/(main)/community/_layout'),
+  '/group': () => import('@/routes/(main)/group/_layout'),
   '/page': () => import('@/routes/(main)/page/_layout'),
   '/resource': () => import('@/routes/(main)/resource/_layout'),
   '/settings': () => import('@/routes/(main)/settings/_layout'),

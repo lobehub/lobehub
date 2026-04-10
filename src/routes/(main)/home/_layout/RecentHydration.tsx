@@ -2,8 +2,8 @@ import { memo } from 'react';
 
 import { useInitRecentPage } from '@/hooks/useInitRecentPage';
 import { useInitRecentResource } from '@/hooks/useInitRecentResource';
-import { useInitRecentTopic } from '@/hooks/useInitRecentTopic';
 import { useInitRecents } from '@/hooks/useInitRecents';
+import { useInitRecentTopic } from '@/hooks/useInitRecentTopic';
 
 const RecentHydration = memo(() => {
   useInitRecentTopic();
