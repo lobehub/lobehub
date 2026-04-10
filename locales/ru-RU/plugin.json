@@ -2,6 +2,7 @@
   "arguments.moreParams": "Всего параметров: {{count}}",
   "arguments.title": "Аргументы",
   "builtins.lobe-activator.apiName.activateTools": "Активировать инструменты",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} не найдено",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Получить доступные модели",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Получить доступные навыки",
   "builtins.lobe-agent-builder.apiName.getConfig": "Получить конфигурацию",

@@ -77,6 +77,8 @@
   "channel.publicKeyPlaceholder": "用于交互验证",
   "channel.qq.appIdHint": "您在 QQ 开放平台获取的机器人 App ID",
   "channel.qq.description": "将助手连接到 QQ，支持群聊和私聊。",
+  "channel.qq.webhookMigrationDesc": "WebSocket 模式无需回调 URL，即可提供实时事件传递和自动重连。要进行迁移，请在 QQ 开放平台创建一个新的机器人且不要配置回调 URL，然后在高级设置中将连接模式切换为 WebSocket。",
+  "channel.qq.webhookMigrationTitle": "建议迁移至 WebSocket 模式",
   "channel.removeChannel": "移除频道",
   "channel.removeFailed": "移除频道失败",
   "channel.removed": "频道已移除",

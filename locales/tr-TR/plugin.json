@@ -2,6 +2,7 @@
   "arguments.moreParams": "Toplam {{count}} parametre",
   "arguments.title": "Argümanlar",
   "builtins.lobe-activator.apiName.activateTools": "Araçları Etkinleştir",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} bulunamadı",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Mevcut modelleri al",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Mevcut Yetenekleri al",
   "builtins.lobe-agent-builder.apiName.getConfig": "Yapılandırmayı al",
