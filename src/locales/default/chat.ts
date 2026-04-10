@@ -239,7 +239,7 @@ export default {
   'createModal.createBlank': 'Create Blank',
   'createModal.groupPlaceholder': 'Describe what this group should do...',
   'createModal.groupTitle': 'What should your group do?',
-  'createModal.placeholder': 'Let AI create an agent...',
+  'createModal.placeholder': 'Describe what your agent should do...',
   'createModal.title': 'What should your agent do?',
   'newAgent': 'Create Agent',
   'newGroupChat': 'Create Group',

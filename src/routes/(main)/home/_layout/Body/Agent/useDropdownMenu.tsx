@@ -46,16 +46,9 @@ export const useAgentActionsDropdownMenu = ({
   );
 
   // Create menu items
-  const {
-    createAgentMenuItem,
-    createGroupChatMenuItem,
-    createSessionGroupMenuItem,
-    configMenuItem,
-  } = useCreateMenuItems();
+  const { createSessionGroupMenuItem, configMenuItem } = useCreateMenuItems();
 
   return useMemo(() => {
-    const createAgentItem = createAgentMenuItem();
-    const createGroupChatItem = createGroupChatMenuItem();
     const createSessionGroupItem = createSessionGroupMenuItem();
     const configItem = configMenuItem(openConfigGroupModal);
 
@@ -70,9 +63,6 @@ export const useAgentActionsDropdownMenu = ({
     }));
 
     return [
-      createAgentItem,
-      createGroupChatItem,
-      { type: 'divider' as const },
       createSessionGroupItem,
       configItem,
       { type: 'divider' as const },
@@ -108,8 +98,6 @@ export const useAgentActionsDropdownMenu = ({
   }, [
     agentPageSize,
     updateSystemStatus,
-    createAgentMenuItem,
-    createGroupChatMenuItem,
     createSessionGroupMenuItem,
     configMenuItem,
     openConfigGroupModal,
