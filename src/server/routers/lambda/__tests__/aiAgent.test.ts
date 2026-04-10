@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, agentsToSessions, sessions, threads, topics } from '@lobechat/database/schemas';
+import {
+  agents,
+  agentsToSessions,
+  messages,
+  sessions,
+  threads,
+  topics,
+} from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import type * as ModelBankModule from 'model-bank';
@@ -372,6 +379,58 @@ describe('AI Agent Router Integration Tests', () => {
           }),
         }),
       );
+    });
+
+    it('should skip user message creation when parentMessageId is provided (regeneration)', async () => {
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      // Create a topic and a user message to regenerate from
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({
+          title: 'Regen Topic',
+          agentId: testAgentId,
+          sessionId: testSessionId,
+          userId,
+        })
+        .returning();
+
+      const [userMsg] = (await serverDB
+        .insert(messages)
+        .values({
+          role: 'user',
+          content: 'Original question',
+          userId,
+          agentId: testAgentId,
+          topicId: topic.id,
+        })
+        .returning()) as any[];
+
+      const result = await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'Original question',
+        parentMessageId: userMsg.id,
+        appContext: { topicId: topic.id },
+      });
+
+      expect(result.success).toBe(true);
+
+      // Verify only the assistant message was created (no new user message)
+      const allMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, topic.id));
+
+      const userMessages = allMessages.filter((m) => m.role === 'user');
+      const assistantMessages = allMessages.filter((m) => m.role === 'assistant');
+
+      // Should still have only 1 user message (the original, no new one created)
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].id).toBe(userMsg.id);
+
+      // Should have 1 assistant message with parentId pointing to the user message
+      expect(assistantMessages).toHaveLength(1);
+      expect(assistantMessages[0].parentId).toBe(userMsg.id);
     });
   });
 });

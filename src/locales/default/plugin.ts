@@ -199,6 +199,7 @@ export default {
   'builtins.lobe-page-agent.apiName.wrapNodes': 'Wrap nodes',
   'builtins.lobe-page-agent.title': 'Page',
   'builtins.lobe-activator.apiName.activateTools': 'Activate Tools',
+  'builtins.lobe-activator.inspector.activateTools.notFoundCount': '{{count}} not found',
   'builtins.lobe-skill-store.apiName.importFromMarket': 'Import from Market',
   'builtins.lobe-skill-store.apiName.importSkill': 'Import Skill',
   'builtins.lobe-skill-store.apiName.searchSkill': 'Search Skills',

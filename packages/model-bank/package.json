@@ -67,6 +67,7 @@
     "./spark": "./src/aiModels/spark.ts",
     "./stepfun": "./src/aiModels/stepfun.ts",
     "./straico": "./src/aiModels/straico.ts",
+    "./streamlake": "./src/aiModels/streamlake.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",

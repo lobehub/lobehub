@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Electron framework sürümü",
   "settingSystemTools.appEnvironment.node.desc": "Gömülü Node.js sürümü",
   "settingSystemTools.appEnvironment.title": "Uygulama ortamı",
-  "settingSystemTools.autoSelectDesc": "En iyi mevcut araç otomatik olarak seçilecektir",
   "settingSystemTools.category.browserAutomation": "Tarayıcı Otomasyonu",
   "settingSystemTools.category.browserAutomation.desc": "Başsız tarayıcı otomasyonu ve web etkileşimi için araçlar",
   "settingSystemTools.category.contentSearch": "İçerik Arama",

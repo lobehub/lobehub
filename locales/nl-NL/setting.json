@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Electron-frameworkversie",
   "settingSystemTools.appEnvironment.node.desc": "Ingesloten Node.js-versie",
   "settingSystemTools.appEnvironment.title": "App-omgeving",
-  "settingSystemTools.autoSelectDesc": "Het best beschikbare hulpmiddel wordt automatisch geselecteerd",
   "settingSystemTools.category.browserAutomation": "Browserautomatisering",
   "settingSystemTools.category.browserAutomation.desc": "Tools voor headless browserautomatisering en webinteractie",
   "settingSystemTools.category.contentSearch": "Zoeken in Inhoud",

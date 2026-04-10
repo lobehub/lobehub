@@ -8,6 +8,7 @@ import AgentOnboardingConversation from './Conversation';
 
 // Prevent unhandled rejections from @splinetool/runtime fetching remote assets in CI
 vi.mock('@lobehub/ui/brand', () => ({
+  LobeHub: () => null,
   LogoThree: () => null,
 }));
 
@@ -33,8 +34,17 @@ vi.mock('@/features/Conversation', () => ({
 
     return <div data-testid="chat-input" />;
   },
-  ChatList: ({ itemContent }: { itemContent?: (index: number, id: string) => ReactNode }) => (
+  ChatList: ({
+    itemContent,
+    showWelcome,
+    welcome,
+  }: {
+    itemContent?: (index: number, id: string) => ReactNode;
+    showWelcome?: boolean;
+    welcome?: ReactNode;
+  }) => (
     <div data-testid="chat-list">
+      {showWelcome ? <div data-testid="chat-welcome">{welcome}</div> : null}
       {mockState.displayMessages.map((message, index) => (
         <div key={message.id}>{itemContent?.(index, message.id)}</div>
       ))}
@@ -63,6 +73,10 @@ vi.mock('@/features/Conversation/hooks/useAgentMeta', () => ({
   }),
 }));
 
+vi.mock('./Welcome', () => ({
+  default: ({ content }: { content: string }) => <div data-testid="welcome-content">{content}</div>,
+}));
+
 describe('AgentOnboardingConversation', () => {
   beforeEach(() => {
     chatInputSpy.mockClear();
@@ -83,6 +97,7 @@ describe('AgentOnboardingConversation', () => {
 
     render(<AgentOnboardingConversation />);
 
+    expect(screen.getByTestId('chat-welcome')).toBeInTheDocument();
     expect(screen.getByText('Welcome')).toBeInTheDocument();
     expect(screen.queryByText('finish')).not.toBeInTheDocument();
   });

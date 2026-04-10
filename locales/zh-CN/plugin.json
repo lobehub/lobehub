@@ -2,6 +2,7 @@
   "arguments.moreParams": "等 {{count}} 个参数",
   "arguments.title": "参数列表",
   "builtins.lobe-activator.apiName.activateTools": "激活工具",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} 个未找到",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "获取可用模型",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "获取可用技能",
   "builtins.lobe-agent-builder.apiName.getConfig": "获取配置",

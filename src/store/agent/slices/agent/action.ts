@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 import { isChatGroupSessionId } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
@@ -24,6 +25,7 @@ import type { MetaData } from '@/types/meta';
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
@@ -214,7 +216,15 @@ export class AgentSliceActionImpl {
   ): Promise<void> => {
     if (!agentId) return;
 
-    await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: config });
+    if (isDesktop && 'workingDirectory' in config) {
+      setLocalAgentWorkingDirectory(agentId, config.workingDirectory);
+    }
+
+    const restConfig = { ...config };
+    delete restConfig.workingDirectory;
+    if (Object.keys(restConfig).length > 0) {
+      await this.#get().updateAgentChatConfigById(agentId, { runtimeEnv: restConfig });
+    }
   };
 
   updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {

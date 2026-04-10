@@ -4,6 +4,7 @@ export interface RunCommandParams {
   command: string;
   cwd?: string;
   description?: string;
+  env?: Record<string, string>;
   run_in_background?: boolean;
   timeout?: number;
 }

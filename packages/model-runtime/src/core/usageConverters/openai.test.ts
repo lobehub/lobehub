@@ -100,6 +100,38 @@ describe('convertUsage', () => {
     });
   });
 
+  it('should preserve zero cache miss tokens for fully cached completion usage', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const usageWithFullyCachedPrompt = {
+      completion_tokens: 598,
+      prompt_tokens: 4198,
+      prompt_tokens_details: {
+        cached_tokens: 4198,
+      },
+      total_tokens: 4796,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const result = convertOpenAIUsage(usageWithFullyCachedPrompt, { pricing });
+
+    expect(result).toMatchObject({
+      inputCacheMissTokens: 0,
+      inputCachedTokens: 4198,
+      inputTextTokens: 4198,
+      outputTextTokens: 598,
+      totalInputTokens: 4198,
+      totalOutputTokens: 598,
+      totalTokens: 4796,
+    });
+    expect(result.cost).toBeGreaterThan(0);
+  });
+
   it('should handle audio tokens in input correctly', () => {
     // Arrange
     const usageWithAudioInput = {
@@ -248,6 +280,23 @@ describe('convertUsage', () => {
     expect(result).not.toHaveProperty('outputAudioTokens');
   });
 
+  it('should omit NaN usage fields from completion usage output', () => {
+    const embeddingLikeUsage = {
+      prompt_tokens: 100,
+      total_tokens: 100,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const result = convertOpenAIUsage(embeddingLikeUsage);
+
+    expect(result).toEqual({
+      inputTextTokens: 100,
+      totalInputTokens: 100,
+      totalTokens: 100,
+    });
+    expect(result).not.toHaveProperty('outputTextTokens');
+    expect(result).not.toHaveProperty('totalOutputTokens');
+  });
+
   it('should handle XAI provider correctly where completion_tokens does not include reasoning_tokens', () => {
     // Arrange
     const xaiUsage: OpenAI.Completions.CompletionUsage = {
@@ -350,6 +399,38 @@ describe('convertUsage', () => {
       outputTextTokens: 170, // 200 - 30
       totalTokens: 300,
     });
+  });
+
+  it('should preserve zero cache miss tokens for fully cached response usage', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const responseUsage = {
+      input_tokens: 4198,
+      input_tokens_details: {
+        cached_tokens: 4198,
+      },
+      output_tokens: 598,
+      total_tokens: 4796,
+    } as OpenAI.Responses.ResponseUsage;
+
+    const result = convertOpenAIResponseUsage(responseUsage, { pricing });
+
+    expect(result).toMatchObject({
+      inputCacheMissTokens: 0,
+      inputCachedTokens: 4198,
+      inputTextTokens: 4198,
+      outputTextTokens: 598,
+      totalInputTokens: 4198,
+      totalOutputTokens: 598,
+      totalTokens: 4796,
+    });
+    expect(result.cost).toBeGreaterThan(0);
   });
 
   it('should enrich completion usage with pricing cost when pricing is provided', () => {

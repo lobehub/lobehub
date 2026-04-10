@@ -6,6 +6,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
 import ToolsList, { toolsListStyles } from './ToolsList';
 
@@ -81,14 +82,14 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore }) => {
         />
         <SkillActivateMode />
       </Flexbox>
-      <div
+      <ScrollSignalProvider
         style={{
           height: 480,
           overflowY: 'auto',
         }}
       >
         <ToolsList items={filteredItems} />
-      </div>
+      </ScrollSignalProvider>
       <div className={styles.footer}>
         <div
           className={toolsListStyles.item}

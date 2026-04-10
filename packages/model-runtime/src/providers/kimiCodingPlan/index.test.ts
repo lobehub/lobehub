@@ -77,6 +77,425 @@ describe('LobeKimiCodingPlanAI', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
+    describe('max_tokens handling', () => {
+      const getLastRequestPayload = () => {
+        const calls = (instance['client'].messages.create as Mock).mock.calls;
+        return calls.at(-1)?.[0];
+      };
+
+      it('should use hardcoded maxOutput for k2p5 (deploymentName)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'k2p5',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.max_tokens).toBe(32_768);
+      });
+
+      it('should use hardcoded maxOutput for kimi-k2.5 (model id)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.max_tokens).toBe(32_768);
+      });
+
+      it('should use hardcoded maxOutput for kimi-k2-thinking', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.max_tokens).toBe(65_536);
+      });
+
+      it('should use default 8192 for unknown models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'unknown-model',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.max_tokens).toBe(8192);
+      });
+
+      it('should respect user-provided max_tokens', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          max_tokens: 4096,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.max_tokens).toBe(4096);
+      });
+    });
+
+    describe('thinking parameter handling', () => {
+      const getLastRequestPayload = () => {
+        const calls = (instance['client'].messages.create as Mock).mock.calls;
+        return calls.at(-1)?.[0];
+      };
+
+      it('should enable thinking by default for kimi-k2.5', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
+      it('should disable thinking when type is disabled for kimi-k2.5', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+        expect(payload.temperature).toBe(0.6);
+      });
+
+      it('should always enable thinking for kimi-k2-thinking', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
+      it('should ignore thinking disabled for native thinking models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2-thinking',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
+      });
+
+      it('should respect custom thinking budget', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          max_tokens: 4096,
+          thinking: { budget_tokens: 2048, type: 'enabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ budget_tokens: 2048, type: 'enabled' });
+      });
+
+      it('should cap thinking budget to max_tokens - 1', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          thinking: { budget_tokens: 100_000, type: 'enabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        // max_tokens defaults to 32_768 for kimi-k2.5, so budget capped to 32_767
+        expect(payload.thinking!.budget_tokens).toBe(32_767);
+      });
+
+      it('should not add thinking params for unknown models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'unknown-model',
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toBeUndefined();
+      });
+    });
+
+    describe('message normalization for thinking', () => {
+      const getLastRequestPayload = () => {
+        const calls = (instance['client'].messages.create as Mock).mock.calls;
+        return calls.at(-1)?.[0];
+      };
+
+      it('should force thinking block on assistant messages for kimi-k2-thinking', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
+      });
+
+      it('should force thinking block on assistant messages for kimi-k2.5 with thinking enabled', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: 'Response' },
+        ]);
+      });
+
+      it('should not force thinking block when thinking is disabled', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+          ],
+          model: 'kimi-k2.5',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        // Content is converted to array by Anthropic factory, but no thinking block
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([expect.objectContaining({ type: 'text', text: 'Response' })]),
+        );
+        expect(assistantMessage?.content).not.toContainEqual(
+          expect.objectContaining({ type: 'thinking' }),
+        );
+      });
+
+      it('should convert reasoning to thinking block for assistant messages', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Response',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning process' },
+            } as any,
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'thinking', thinking: 'My reasoning process' }),
+            expect.objectContaining({ type: 'text', text: 'Response' }),
+          ]),
+        );
+      });
+
+      it('should handle empty content with reasoning', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning process' },
+            } as any,
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'thinking', thinking: 'My reasoning process' }),
+            expect.objectContaining({ type: 'text', text: ' ' }),
+          ]),
+        );
+      });
+
+      it('should add placeholder thinking when reasoning has signature', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Response',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning', signature: 'some-signature' },
+            } as any,
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        // reasoning with signature is invalid, so placeholder thinking is added
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'thinking', thinking: ' ' }),
+            expect.objectContaining({ type: 'text', text: 'Response' }),
+          ]),
+        );
+      });
+
+      it('should handle assistant message with tool_calls and reasoning', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              reasoning: { content: 'Thinking about tools' },
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'get_weather', arguments: '{"city":"Beijing"}' },
+                },
+              ],
+            } as any,
+            {
+              content: '{"temp": 20}',
+              role: 'tool',
+              tool_call_id: 'call_1',
+            } as any,
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'thinking', thinking: 'Thinking about tools' }),
+            expect.objectContaining({ type: 'tool_use', name: 'get_weather' }),
+          ]),
+        );
+      });
+
+      it('should add placeholder thinking for tool_calls without reasoning', async () => {
+        // This is the bug scenario: tool_calls without reasoning_content
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'get_weather', arguments: '{"city":"Beijing"}' },
+                },
+              ],
+            } as any,
+            {
+              content: '{"temp": 20}',
+              role: 'tool',
+              tool_call_id: 'call_1',
+            } as any,
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        // Should have placeholder thinking block to avoid API error
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'thinking', thinking: ' ' }),
+            expect.objectContaining({ type: 'tool_use', name: 'get_weather' }),
+          ]),
+        );
+      });
+
+      it('should handle empty assistant message with placeholder', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: '', role: 'assistant' },
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2-thinking',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: ' ' },
+          { type: 'text', text: ' ' },
+        ]);
+      });
+
+      it('should not modify non-thinking model messages', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Response', role: 'assistant' },
+          ],
+          model: 'unknown-model',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        // Content is converted to array by Anthropic factory, but no thinking block
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([expect.objectContaining({ type: 'text', text: 'Response' })]),
+        );
+        expect(assistantMessage?.content).not.toContainEqual(
+          expect.objectContaining({ type: 'thinking' }),
+        );
+      });
+    });
+
     it('should handle text messages correctly', async () => {
       // Arrange
       const mockStream = new ReadableStream({

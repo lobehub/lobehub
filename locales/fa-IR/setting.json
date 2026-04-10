@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "نسخهٔ چارچوب Electron",
   "settingSystemTools.appEnvironment.node.desc": "نسخهٔ Node.js تعبیه‌شده",
   "settingSystemTools.appEnvironment.title": "محیط برنامه",
-  "settingSystemTools.autoSelectDesc": "بهترین ابزار موجود به‌صورت خودکار انتخاب خواهد شد",
   "settingSystemTools.category.browserAutomation": "اتوماسیون مرورگر",
   "settingSystemTools.category.browserAutomation.desc": "ابزارهایی برای اتوماسیون مرورگر بدون رابط کاربری و تعامل وب",
   "settingSystemTools.category.contentSearch": "جستجوی محتوا",

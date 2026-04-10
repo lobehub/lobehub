@@ -44,6 +44,33 @@ export interface StreamChunkData {
   toolsCalling?: any[];
 }
 
+// ─── Typed Event Data ───
+
+export interface StreamStartData {
+  assistantMessage: { id: string };
+  model?: string;
+  provider?: string;
+}
+
+export interface ToolStartData {
+  parentMessageId: string;
+  toolCalling: Record<string, unknown>;
+}
+
+export interface ToolEndData {
+  executionTime?: number;
+  isSuccess: boolean;
+  payload?: Record<string, unknown>;
+  result?: unknown;
+}
+
+export interface StepCompleteData {
+  finalState?: unknown;
+  phase: string;
+  reason?: string;
+  reasonDetail?: string;
+}
+
 // ─── WebSocket Protocol Messages ───
 
 // Client → Server
@@ -129,6 +156,13 @@ export interface AgentStreamClientOptions {
   gatewayUrl: string;
   /** Operation ID to subscribe to */
   operationId: string;
+  /**
+   * Enable resume buffering on first connect (default: false).
+   * When true, events are buffered and deduplicated after the resume replay
+   * completes, preventing out-of-order display during page-reload reconnect.
+   * Only set this for reconnection scenarios, not for new operations.
+   */
+  resumeOnConnect?: boolean;
   /** Auth token */
   token: string;
 }

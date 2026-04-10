@@ -556,11 +556,13 @@ export const fileRouter = router({
     .input(
       z.object({
         id: z.string(),
+        metadata: z.record(z.string(), z.any()).optional(),
+        name: z.string().optional(),
         parentId: z.string().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, parentId } = input;
+      const { id, metadata, name, parentId } = input;
 
       // Resolve parentId if it's a slug (otherwise use as-is)
       let resolvedParentId: string | null | undefined = parentId;
@@ -571,7 +573,23 @@ export const fileRouter = router({
         }
       }
 
-      await ctx.fileModel.update(id, { parentId: resolvedParentId });
+      const updates: Parameters<typeof ctx.fileModel.update>[1] = {};
+
+      if (metadata !== undefined) {
+        updates.metadata = metadata;
+      }
+
+      if (name !== undefined) {
+        updates.name = name;
+      }
+
+      if (parentId !== undefined) {
+        updates.parentId = resolvedParentId;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await ctx.fileModel.update(id, updates);
+      }
 
       return { success: true };
     }),

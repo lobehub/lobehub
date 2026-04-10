@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +15,34 @@ vi.mock('@/features/User/UserPanel/ThemeButton', () => ({
 
 vi.mock('@/hooks/useIsDark', () => ({
   useIsDark: () => false,
+}));
+
+vi.mock('react-i18next', () => ({
+  Trans: ({
+    components,
+    values,
+  }: {
+    components: Record<string, ReactNode>;
+    values?: { mode?: string; skip?: string };
+  }) => {
+    const modeText = values?.mode ?? '';
+    const skipText = values?.skip ?? '';
+
+    return (
+      <>
+        {'Not feeling it today? You can switch to '}
+        {components.modeLink}
+        {' or '}
+        {components.skipLink}
+        {'.'}
+        <span style={{ display: 'none' }}>{modeText}</span>
+        <span style={{ display: 'none' }}>{skipText}</span>
+      </>
+    );
+  },
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
 }));
 
 describe('OnBoardingContainer', () => {
@@ -42,6 +71,6 @@ describe('OnBoardingContainer', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('button', { name: 'agent.skipOnboarding' })).toBeInTheDocument();
+    expect(screen.getByText('agent.layout.skip')).toBeInTheDocument();
   });
 });

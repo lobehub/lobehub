@@ -65,7 +65,7 @@ const ClassicOnboardingPage = memo(() => {
 
   return (
     <OnboardingContainer>
-      <Flexbox gap={24} style={{ maxWidth: 480, width: '100%' }}>
+      <Flexbox gap={24} style={{ maxWidth: 600, width: '100%' }}>
         <ModeSwitch />
         {renderStep()}
       </Flexbox>

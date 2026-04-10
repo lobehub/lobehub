@@ -72,7 +72,7 @@ export const createStreamEventManager = (): IStreamEventManager => {
   }
 
   // Wrap with Gateway notifier when configured
-  if (appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
+  if (appEnv.AGENT_GATEWAY_URL && appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
     log('Wrapping with GatewayStreamNotifier (%s)', appEnv.AGENT_GATEWAY_URL);
     return new GatewayStreamNotifier(
       manager,

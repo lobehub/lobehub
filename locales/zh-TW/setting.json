@@ -657,7 +657,6 @@
   "settingSystemTools.appEnvironment.electron.desc": "Electron 框架版本",
   "settingSystemTools.appEnvironment.node.desc": "內嵌 Node.js 版本",
   "settingSystemTools.appEnvironment.title": "應用環境",
-  "settingSystemTools.autoSelectDesc": "將自動選擇最佳可用工具",
   "settingSystemTools.category.browserAutomation": "瀏覽器自動化",
   "settingSystemTools.category.browserAutomation.desc": "用於無頭瀏覽器自動化和網頁交互的工具",
   "settingSystemTools.category.contentSearch": "內容搜尋",

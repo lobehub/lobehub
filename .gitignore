@@ -25,6 +25,9 @@ Desktop.ini
 *.code-workspace
 .vscode/sessions.json
 prd
+# Recordings
+.records/
+
 # Temporary files
 .temp/
 temp/
@@ -137,5 +140,10 @@ pnpm-lock.yaml
 .turbo
 spaHtmlTemplates.ts
 
+# Embedded CLI bundle (built at pack time)
+apps/desktop/resources/bin/lobe-cli.js
+apps/desktop/resources/cli-package.json
+
+# Superpowers plugin brainstorm/spec outputs (local only; do not commit)
 .superpowers/
-docs/superpowers
+docs/superpowers/

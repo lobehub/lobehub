@@ -90,7 +90,6 @@ export default defineConfig({
       outDir: 'dist/preload',
       sourcemap: isDev ? 'inline' : false,
     },
-
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src/main'),

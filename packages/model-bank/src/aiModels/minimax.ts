@@ -9,55 +9,6 @@ const minimaxChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 204_800,
-    description:
-      'Beginning the journey of recursive self-improvement. Optimized for top real-world engineering, professional office delivery, and character-rich interaction.',
-    displayName: 'MiniMax M2.7',
-    enabled: true,
-    id: 'MiniMax-M2.7',
-    maxOutput: 131_072,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.42, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-03-18',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-    },
-    contextWindowTokens: 204_800,
-    description:
-      'Same performance as M2.7, with significantly faster inference for low-latency coding and refactoring.',
-    displayName: 'MiniMax M2.7 highspeed',
-    id: 'MiniMax-M2.7-highspeed',
-    maxOutput: 131_072,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.42, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-03-18',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
     },
     contextWindowTokens: 204_800,
     description:

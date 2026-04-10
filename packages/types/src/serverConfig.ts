@@ -47,6 +47,12 @@ export interface ServerModelProviderConfig {
 export type ServerLanguageModel = Partial<Record<GlobalLLMProviderKey, ServerModelProviderConfig>>;
 
 export interface GlobalServerConfig {
+  /**
+   * Agent Gateway URL for WebSocket-based agent execution.
+   * When set, the SPA can offload agent execution to the server and receive
+   * events via the Gateway instead of running the agent loop client-side.
+   */
+  agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   disableEmailPassword?: boolean;

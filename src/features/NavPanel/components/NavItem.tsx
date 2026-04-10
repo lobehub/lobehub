@@ -107,7 +107,7 @@ const NavItem = memo<NavItemProps>(
           if (href && !isModifierClick(e)) {
             e.preventDefault();
           }
-          if (disabled || loading) return;
+          if (disabled) return;
           onClick?.(e);
         }}
         {...linkProps}

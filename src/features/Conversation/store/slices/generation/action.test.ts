@@ -31,7 +31,8 @@ vi.mock('@/store/chat', () => ({
         ],
       },
       operations: {},
-      messageLoadingIds: [],
+      operationsByMessage: {},
+
       cancelOperations: mockCancelOperations,
       cancelOperation: mockCancelOperation,
       cancelSendMessageInServer: mockCancelSendMessageInServer,
@@ -163,6 +164,7 @@ describe('Generation Actions', () => {
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
         operations: {},
+        operationsByMessage: {},
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
@@ -221,6 +223,7 @@ describe('Generation Actions', () => {
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
         operations: {},
+        operationsByMessage: {},
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
@@ -256,6 +259,7 @@ describe('Generation Actions', () => {
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
         operations: {},
+        operationsByMessage: {},
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
@@ -293,6 +297,7 @@ describe('Generation Actions', () => {
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
         operations: {},
+        operationsByMessage: {},
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
@@ -338,6 +343,7 @@ describe('Generation Actions', () => {
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
         operations: {},
+        operationsByMessage: {},
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
@@ -381,6 +387,7 @@ describe('Generation Actions', () => {
       vi.mocked(await import('@/store/chat').then((m) => m.useChatStore.getState)).mockReturnValue({
         messagesMap: {},
         operations: {},
+        operationsByMessage: {},
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
@@ -419,7 +426,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
@@ -482,7 +490,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: vi.fn().mockImplementation(() => {
@@ -550,7 +559,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         deleteMessage: mockDeleteMessage,
@@ -590,7 +600,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
@@ -641,7 +652,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
@@ -697,7 +709,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
@@ -744,7 +757,8 @@ describe('Generation Actions', () => {
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
         operations: {},
-        messageLoadingIds: [],
+        operationsByMessage: {},
+
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
@@ -811,11 +825,19 @@ describe('Generation Actions', () => {
     });
 
     it('should not regenerate if message is already loading', async () => {
-      // Mock messageLoadingIds to include the target message
+      // Mock operation system to indicate message is processing
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
-        messageLoadingIds: ['msg-1'],
+        operations: {
+          'op-1': {
+            id: 'op-1',
+            type: 'sendMessage',
+            status: 'running',
+            context: { messageIds: ['msg-1'] },
+          },
+        },
+        operationsByMessage: { 'msg-1': ['op-1'] },
         startOperation: mockStartOperation,
       } as any);
 

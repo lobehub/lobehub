@@ -8,6 +8,7 @@ import {
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
 } from '@/store/chat/slices/aiChat/actions/commandBus';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type Store as ConversationStore } from '../../action';
@@ -314,8 +315,8 @@ export const generationSlice: StateCreator<
     const { context, displayMessages, hooks } = get();
     const chatStore = useChatStore.getState();
 
-    // Check if already regenerating
-    const isRegenerating = chatStore.messageLoadingIds.includes(messageId);
+    // Check if already regenerating via operation system
+    const isRegenerating = operationSelectors.isMessageProcessing(messageId)(chatStore);
     if (isRegenerating) return;
 
     // Find the message in current conversation messages
