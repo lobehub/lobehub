@@ -45,6 +45,7 @@ const PROVIDER_SEARCH_DEFAULTS: Record<
   // perplexity: defaults to internal
   perplexity: { searchImpl: 'internal' },
   qwen: { searchImpl: 'params' },
+  search1api: { searchImpl: 'internal' },
   spark: { searchImpl: 'params' }, // Some models (like max-32k) will prioritize built-in if marked as internal
   stepfun: { searchImpl: 'params' },
   vertexai: { searchImpl: 'params', searchProvider: 'google' },

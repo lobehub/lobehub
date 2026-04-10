@@ -46,7 +46,7 @@ export const LobeQwenAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
-        ...(model.includes('-thinking')
+        ...(['-thinking', 'deepseek-r1'].some((keyword) => model.toLowerCase().includes(keyword))
           ? {
               enable_thinking: true,
               thinking_budget:
