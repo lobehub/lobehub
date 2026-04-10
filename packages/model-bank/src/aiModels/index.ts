@@ -62,6 +62,7 @@ import { default as siliconcloud } from './siliconcloud';
 import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
+import { default as streamlake } from './streamlake';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
@@ -161,6 +162,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   spark,
   stepfun,
   straico,
+  streamlake,
   taichu,
   tencentcloud,
   togetherai,
@@ -241,6 +243,7 @@ export { default as siliconcloud } from './siliconcloud';
 export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
+export { default as streamlake } from './streamlake';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';

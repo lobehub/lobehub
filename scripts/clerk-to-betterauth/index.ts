@@ -162,7 +162,7 @@ async function migrateFromClerk() {
         }
       }
 
-      // Clerk API 不返回 credential external_account；若用户开启密码并且 CSV 提供散列，则补齐本地密码账号
+      // Clerk API does not return credential external_account; if the user has password enabled and the CSV provides a hash, supplement the local password account
       const passwordEnabled = Boolean(clerkUser?.password_enabled);
       if (passwordEnabled && user.password_digest) {
         const passwordUpdatedAt = clerkUser?.password_last_updated_at;

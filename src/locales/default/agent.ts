@@ -46,6 +46,9 @@ export default {
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
   'channel.feishu.description': 'Connect this assistant to Feishu for private and group chats.',
+  'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
+  'channel.feishu.webhookMigrationDesc':
+    'WebSocket mode provides real-time event delivery without needing a public callback URL. To migrate, switch the Connection Mode to WebSocket in Advanced Settings. No additional configuration is needed on the Feishu/Lark Open Platform.',
   'channel.lark.description': 'Connect this assistant to Lark for private and group chats.',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
@@ -54,6 +57,9 @@ export default {
   'channel.publicKeyPlaceholder': 'Required for interaction verification',
   'channel.qq.appIdHint': 'Your QQ Bot App ID from QQ Open Platform',
   'channel.qq.description': 'Connect this assistant to QQ for group chats and direct messages.',
+  'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
+  'channel.qq.webhookMigrationDesc':
+    'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket in Advanced Settings.',
   'channel.wechat.description':
     'Connect this assistant to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
@@ -82,8 +88,14 @@ export default {
   'channel.saved': 'Configuration saved successfully',
   'channel.secretToken': 'Webhook Secret Token',
   'channel.slack.appIdHint': 'Your Slack App ID from the Slack API dashboard (starts with A).',
+  'channel.slack.appToken': 'App-Level Token',
+  'channel.slack.appTokenHint':
+    'Required for Socket Mode (WebSocket). Generate an app-level token (xapp-...) under Basic Information in your Slack app settings.',
   'channel.slack.description':
     'Connect this assistant to Slack for channel conversations and direct messages.',
+  'channel.slack.webhookMigrationTitle': 'Consider migrating to Socket Mode (WebSocket)',
+  'channel.slack.webhookMigrationDesc':
+    'Socket Mode provides real-time event delivery via WebSocket without exposing a public HTTP endpoint. To migrate, enable Socket Mode in your Slack app settings, generate an App-Level Token, then switch the Connection Mode to WebSocket in Advanced Settings.',
   'channel.secretTokenHint': 'Optional. Used to verify webhook requests from Telegram.',
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
   'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
@@ -98,6 +110,11 @@ export default {
 
   'channel.appSecretHint':
     'The App Secret of your bot application. It will be encrypted and stored securely.',
+  'channel.connectionMode': 'Connection Mode',
+  'channel.connectionModeHint':
+    'WebSocket is recommended for new bots. Use Webhook if your bot already has a callback URL configured on QQ Open Platform.',
+  'channel.connectionModeWebSocket': 'WebSocket',
+  'channel.connectionModeWebhook': 'Webhook',
   'channel.charLimit': 'Character Limit',
   'channel.charLimitHint': 'Maximum number of characters per message',
   'channel.concurrency': 'Concurrency Mode',

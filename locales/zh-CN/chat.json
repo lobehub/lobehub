@@ -229,6 +229,7 @@
   "operation.contextCompression": "上下文过长，正在压缩历史记录……",
   "operation.execAgentRuntime": "准备响应中",
   "operation.execClientTask": "执行任务中",
+  "operation.execServerAgentRuntime": "准备响应中（切换任务或关闭页面都会继续执行）",
   "operation.sendMessage": "消息发送中",
   "owner": "群主",
   "pageCopilot.title": "文稿助理",

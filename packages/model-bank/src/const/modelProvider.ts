@@ -60,6 +60,7 @@ export enum ModelProvider {
   Spark = 'spark',
   Stepfun = 'stepfun',
   Straico = 'straico',
+  StreamLake = 'streamlake',
   Taichu = 'taichu',
   TencentCloud = 'tencentcloud',
   TogetherAI = 'togetherai',

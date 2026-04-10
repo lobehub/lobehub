@@ -1,4 +1,4 @@
-import type { ConversationContext } from '@lobechat/types';
+import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
 import type {
   AgentStreamClientOptions,
@@ -7,6 +7,8 @@ import type {
 } from '@/libs/agent-stream';
 import { AgentStreamClient } from '@/libs/agent-stream/client';
 import { aiAgentService } from '@/services/aiAgent';
+import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
@@ -40,6 +42,10 @@ export interface ConnectGatewayParams {
    */
   operationId: string;
   /**
+   * Enable resume buffering for reconnect scenarios (default: false)
+   */
+  resumeOnConnect?: boolean;
+  /**
    * Auth token for the Gateway
    */
   token: string;
@@ -66,12 +72,12 @@ export class GatewayActionImpl {
    * Creates an AgentStreamClient, manages its lifecycle, and wires up event callbacks.
    */
   connectToGateway = (params: ConnectGatewayParams): void => {
-    const { operationId, gatewayUrl, token, onEvent, onSessionComplete } = params;
+    const { operationId, gatewayUrl, token, onEvent, onSessionComplete, resumeOnConnect } = params;
 
     // Disconnect existing connection for this operation if any
     this.disconnectFromGateway(operationId);
 
-    const client = this.createClient({ gatewayUrl, operationId, token });
+    const client = this.createClient({ gatewayUrl, operationId, resumeOnConnect, token });
 
     // Track connection in store
     this.#set(
@@ -169,19 +175,28 @@ export class GatewayActionImpl {
    * Execute agent task via Gateway WebSocket.
    * Call isGatewayModeEnabled() first to check availability.
    */
+  /**
+   * Execute agent task via Gateway WebSocket.
+   * The backend creates user + assistant messages and the topic (if needed).
+   * Returns the result so the caller can handle topic switching.
+   */
+  /**
+   * Execute agent task via Gateway WebSocket.
+   * The backend creates user + assistant messages and the topic (if needed),
+   * then starts the agent. This method handles topic switching and WebSocket connection.
+   */
   executeGatewayAgent = async (params: {
-    assistantMessageId: string;
     context: ConversationContext;
     message: string;
-    parentOperationId: string;
-    topicId?: string;
-    userMessageId: string;
-  }): Promise<void> => {
-    const { assistantMessageId, context, message, parentOperationId, topicId, userMessageId } =
-      params;
+    /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+    parentMessageId?: string;
+  }): Promise<ExecAgentResult> => {
+    const { context, message, parentMessageId } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+
+    const isCreateNewTopic = !context.topicId;
 
     const result = await aiAgentService.execAgentTask({
       agentId: context.agentId,
@@ -191,19 +206,106 @@ export class GatewayActionImpl {
         threadId: context.threadId,
         topicId: context.topicId,
       },
-      existingMessageIds: [userMessageId, assistantMessageId],
+      parentMessageId,
       prompt: message,
     });
 
+    // If server created a new topic, fetch messages first then switch topic
+    // (same pattern as client mode: replaceMessages before switchTopic to avoid skeleton flash)
+    if (isCreateNewTopic && result.topicId) {
+      try {
+        const newContext = { ...context, topicId: result.topicId };
+        const messages = await messageService.getMessages(newContext);
+        this.#get().replaceMessages(messages, { context: newContext });
+      } catch {
+        /* non-critical */
+      }
+
+      await this.#get().switchTopic(result.topicId, {
+        clearNewKey: true,
+        skipRefreshMessage: true,
+      });
+    }
+
+    // Use the server-created topicId for the execution context
+    const execContext = { ...context, topicId: result.topicId };
+
+    if (result.topicId) {
+      this.#get().internal_updateTopicLoading(result.topicId, true);
+    }
+
     // Create a dedicated operation for gateway execution with correct context
     const { operationId: gatewayOpId } = this.#get().startOperation({
-      context,
-      parentOperationId,
+      context: execContext,
       type: 'execServerAgentRuntime',
     });
 
-    // Associate the initial assistant message with the gateway operation
-    // so the UI shows loading/generating state via the operation system
+    // Associate the server-created assistant message with the gateway operation
+    this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
+
+    const eventHandler = createGatewayEventHandler(this.#get, {
+      assistantMessageId: result.assistantMessageId,
+      context: execContext,
+      operationId: gatewayOpId,
+    });
+
+    this.#get().connectToGateway({
+      gatewayUrl: agentGatewayUrl,
+      onEvent: eventHandler,
+      onSessionComplete: () => {
+        this.#get().completeOperation(gatewayOpId);
+        if (result.topicId) {
+          this.#get().internal_updateTopicLoading(result.topicId, false);
+          // Clear running operation from topic metadata (best-effort from frontend;
+          // if browser was closed, reconnect logic will handle stale entries)
+          topicService
+            .updateTopicMetadata(result.topicId, { runningOperation: null })
+            .catch(() => {});
+        }
+      },
+      operationId: result.operationId,
+      token: result.token || '',
+    });
+
+    return result;
+  };
+
+  /**
+   * Reconnect to an existing Gateway operation after page reload.
+   * Reads runningOperation from topic metadata, refreshes the JWT token,
+   * and establishes a new WebSocket connection with event replay.
+   */
+  reconnectToGatewayOperation = async (params: {
+    assistantMessageId: string;
+    operationId: string;
+    scope?: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<void> => {
+    const { assistantMessageId, operationId, topicId, scope, threadId } = params;
+
+    if (!this.isGatewayModeEnabled()) return;
+
+    const agentGatewayUrl =
+      window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+
+    // Get a fresh JWT token (original expired after 5 min)
+    const { token } = await aiAgentService.refreshGatewayToken(topicId);
+
+    const agentId = this.#get().activeAgentId;
+    const context = {
+      agentId,
+      scope: (scope ?? 'main') as ConversationContext['scope'],
+      threadId: threadId ?? null,
+      topicId,
+    };
+
+    // Create a local operation for UI loading state
+    const { operationId: gatewayOpId } = this.#get().startOperation({
+      context,
+      type: 'execServerAgentRuntime',
+    });
+
     this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
 
     const eventHandler = createGatewayEventHandler(this.#get, {
@@ -217,10 +319,12 @@ export class GatewayActionImpl {
       onEvent: eventHandler,
       onSessionComplete: () => {
         this.#get().completeOperation(gatewayOpId);
-        if (topicId) this.#get().internal_updateTopicLoading(topicId, false);
+        this.#get().internal_updateTopicLoading(topicId, false);
+        topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
-      operationId: result.operationId,
-      token: result.token || '',
+      operationId,
+      resumeOnConnect: true,
+      token,
     });
   };
 

@@ -332,6 +332,63 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 198_000,
+    description:
+      'GLM-5.1 is a next-generation flagship model designed for agent engineering, using a Mixture of Experts (MoE) architecture with 754B parameters. It significantly enhances programming capabilities, achieving leading results on SWE-Bench Pro, and substantially outperforms its predecessor on benchmarks like NL2Repo and Terminal-Bench 2.0. Designed for long-duration agent tasks, it handles ambiguous questions with better judgment, decomposes complex tasks, executes experiments, analyzes results, and continuously optimizes through hundreds of iterations and thousands of tool calls.',
+    displayName: 'GLM-5.1 (Pro)',
+    id: 'Pro/zai-org/GLM-5.1',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.3,
+              '[0.032, infinity]': 2,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 6,
+              '[0.032, infinity]': 8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 24,
+              '[0.032, infinity]': 28,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-08',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken32k'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 131_072,

@@ -18,6 +18,7 @@ import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
 import { useAgentContext } from './useAgentContext';
+import { useGatewayReconnect } from './useGatewayReconnect';
 
 const log = debug('lobe-render:agent:ConversationArea');
 
@@ -45,6 +46,9 @@ const Conversation = memo(() => {
 
   // Get actionsBar config with branching support from ChatStore
   const actionsBarConfig = useActionsBarConfig();
+
+  // Auto-reconnect to running Gateway operation on topic load
+  useGatewayReconnect(context.topicId);
 
   return (
     <ConversationProvider

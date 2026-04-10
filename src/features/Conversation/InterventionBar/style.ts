@@ -1,30 +1,20 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useStyles = createStyles(({ css, token }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
     padding-block: 8px;
     padding-inline: 16px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   container: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    max-height: 50vh;
     margin-block-end: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 10px;
-
-    background: ${token.colorBgContainer};
   `,
   content: css`
     overflow-y: auto;
     flex: 1;
 
     min-height: 0;
-    padding-block: 12px;
-    padding-inline: 16px;
+    padding-block: 8px 12px;
   `,
   tab: css`
     cursor: pointer;
@@ -34,25 +24,25 @@ export const useStyles = createStyles(({ css, token }) => ({
     border-block-end: 2px solid transparent;
 
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     white-space: nowrap;
 
     transition: all 0.2s;
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   tabActive: css`
-    border-block-end-color: ${token.colorPrimary};
-    color: ${token.colorPrimary};
-    background: ${token.colorPrimaryBg};
+    border-block-end-color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorPrimary};
+    background: ${cssVar.colorPrimaryBg};
   `,
   tabBar: css`
     overflow-x: auto;
     display: flex;
     align-items: center;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   tabCounter: css`
     margin-inline-start: auto;
@@ -60,7 +50,7 @@ export const useStyles = createStyles(({ css, token }) => ({
     padding-inline: 14px;
 
     font-size: 11px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     white-space: nowrap;
   `,
 }));

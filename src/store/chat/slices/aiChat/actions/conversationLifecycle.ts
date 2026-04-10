@@ -340,6 +340,31 @@ export class ConversationLifecycleActionImpl {
       inputSendErrorMsg: undefined,
     });
 
+    // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
+    if (this.#get().isGatewayModeEnabled()) {
+      this.#get().completeOperation(operationId);
+
+      try {
+        const result = await this.#get().executeGatewayAgent({
+          context: operationContext,
+          message,
+        });
+
+        return {
+          assistantMessageId: result.assistantMessageId,
+          userMessageId: result.userMessageId,
+        };
+      } catch (e) {
+        console.error('[Gateway] Failed to start server-side agent:', e);
+        this.#get().failOperation(operationId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'GatewayError',
+        });
+        return;
+      }
+    }
+
+    // ── Client mode: send via server API then run agent locally ──
     let data: SendMessageServerResponse | undefined;
     try {
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
@@ -582,32 +607,7 @@ export class ConversationLifecycleActionImpl {
       }
     }
 
-    // ── AI execution ──
-
-    // Gateway mode: server-side execution via WebSocket (opt-in via Labs toggle)
-    if (this.#get().isGatewayModeEnabled()) {
-      try {
-        await this.#get().executeGatewayAgent({
-          assistantMessageId: data.assistantMessageId,
-          context: execContext,
-          message,
-          parentOperationId: operationId,
-          topicId: data.topicId,
-          userMessageId: data.userMessageId,
-        });
-      } catch (e) {
-        console.error('[Gateway] Failed to start server-side agent:', e);
-        if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, false);
-      }
-
-      return {
-        assistantMessageId: data.assistantMessageId,
-        createdThreadId: data.createdThreadId,
-        userMessageId: data.userMessageId,
-      };
-    }
-
-    // Client mode: run agent loop locally
+    // ── AI execution (client mode) ──
     {
       const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
         messageMapKey(execContext),

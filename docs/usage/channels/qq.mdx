@@ -20,6 +20,15 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 - A LobeHub account with an active subscription
 - A QQ account
 
+## Connection Modes
+
+LobeHub supports two connection modes for QQ bots:
+
+- **WebSocket (Recommended)** — Persistent connection. Events are delivered in real time via WebSocket. No callback URL configuration required. This is the default mode for new bots.
+- **Webhook** — Stateless HTTP callbacks. Use this mode if your bot already has a callback URL configured on the QQ Open Platform and cannot switch.
+
+> **Note:** On the QQ Open Platform, once a bot is configured with a Webhook callback URL, it cannot be switched to WebSocket mode. New bots that have not configured a callback URL should use WebSocket mode.
+
 ## Step 1: Create a QQ Bot
 
 <Steps>
@@ -42,9 +51,11 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
 
   ![](/blog/assets276a4e8748e9bd300b30dcd9d0e24980.webp)
 
-  ### Configure Webhook URL
+  ### Configure Event Delivery (Webhook Only)
 
-  In the QQ Open Platform, navigate to **Development Settings** → **Callback Configuration**. You will need to paste the LobeHub Callback URL here after completing Step 2.
+  If you are using **Webhook mode**, navigate to **Development Settings** → **Callback Configuration** in the QQ Open Platform. You will need to paste the LobeHub Callback URL here after completing Step 2.
+
+  If you are using **WebSocket mode** (default), skip this step — no callback URL is needed.
 </Steps>
 
 ## Step 2: Configure QQ in LobeHub
@@ -61,16 +72,26 @@ By connecting a QQ channel to your LobeHub agent, users can interact with the AI
   - **Application ID** — The App ID from the QQ Open Platform
   - **App Secret** — The App Secret from the QQ Open Platform
 
-  ### Save and Copy the Callback URL
+  ### Select Connection Mode
 
-  Click **Save Configuration**. After saving, a **Callback URL** will be displayed. Copy this URL.
+  In **Advanced Settings**, choose the **Connection Mode**:
 
-  Your credentials will be encrypted and stored securely.
+  - **WebSocket** (default) — Recommended for new bots
+  - **Webhook** — For bots with an existing callback URL on QQ Open Platform
+
+  ### Save Configuration
+
+  Click **Save Configuration**. Your credentials will be encrypted and stored securely.
+
+  - In **WebSocket mode**, the bot will automatically connect to the QQ gateway. No further configuration is needed.
+  - In **Webhook mode**, a **Callback URL** will be displayed after saving. Copy this URL for Step 3.
 
   ![](/blog/assetsf9317924035e48fcb1d1ae586568ea5f.webp)
 </Steps>
 
-## Step 3: Configure Callback in QQ Open Platform
+## Step 3: Configure Callback in QQ Open Platform (Webhook Only)
+
+> Skip this step if you are using WebSocket mode.
 
 <Steps>
   ### Paste the Callback URL
@@ -121,11 +142,11 @@ To use the bot in QQ groups:
 
 ## Configuration Reference
 
-| Field              | Required | Description                                              |
-| ------------------ | -------- | -------------------------------------------------------- |
-| **Application ID** | Yes      | Your bot's App ID from QQ Open Platform                  |
-| **App Secret**     | Yes      | Your bot's App Secret from QQ Open Platform              |
-| **Callback URL**   | —        | Auto-generated after saving; paste into QQ Open Platform |
+| Field               | Required | Description                                                                             |
+| ------------------- | -------- | --------------------------------------------------------------------------------------- |
+| **Application ID**  | Yes      | Your bot's App ID from QQ Open Platform                                                 |
+| **App Secret**      | Yes      | Your bot's App Secret from QQ Open Platform                                             |
+| **Connection Mode** | No       | `websocket` (default) or `webhook`. Choose based on your QQ Open Platform configuration |
 
 ## Limitations
 
@@ -136,7 +157,8 @@ To use the bot in QQ groups:
 
 ## Troubleshooting
 
-- **Callback URL verification failed:** Ensure you saved the configuration in LobeHub first and the URL was copied correctly. LobeHub handles Ed25519 verification automatically.
+- **Bot not connecting (WebSocket mode):** Verify the App ID and App Secret are correct. Ensure the bot has not been configured with a callback URL on QQ Open Platform — once a callback URL is set, WebSocket mode is unavailable.
+- **Callback URL verification failed (Webhook mode):** Ensure you saved the configuration in LobeHub first and the URL was copied correctly. LobeHub handles Ed25519 verification automatically.
 - **Bot not responding:** Verify the App ID and App Secret are correct, the bot is published (or you are a sandbox test user), and the required message events are subscribed.
 - **Group chat issues:** Make sure the bot has been added to the group. @mention the bot to trigger a response.
 - **Test Connection failed:** Double-check the App ID and App Secret in LobeHub's channel settings.
