@@ -1,7 +1,7 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, X } from 'lucide-react';
+import { Check, ChevronRight, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -97,26 +97,16 @@ const useCommittedProseHeadline = (proseSource: string, streaming: boolean) => {
 };
 
 const AccordionArrow = memo<{ open: boolean }>(({ open }) => (
-  <svg
-    aria-hidden="true"
-    height={18}
+  <Icon
+    color={cssVar.colorTextDescription}
+    icon={ChevronRight}
+    size={16}
     style={{
-      color: cssVar.colorTextDescription,
       flex: 'none',
-      lineHeight: 1,
       transform: open ? 'rotate(90deg)' : undefined,
       transition: 'transform 200ms ease-out',
     }}
-    viewBox="0 0 16 16"
-    width={18}
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M7.002 10.624a.5.5 0 01-.752-.432V5.808a.5.5 0 01.752-.432l3.758 2.192a.5.5 0 010 .864l-3.758 2.192z"
-      fill="currentColor"
-      fillRule="evenodd"
-    />
-  </svg>
+  />
 ));
 
 AccordionArrow.displayName = 'AccordionArrow';
