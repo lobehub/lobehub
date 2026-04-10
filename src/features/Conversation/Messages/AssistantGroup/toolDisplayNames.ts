@@ -299,28 +299,16 @@ const isThinkingOnlyBlock = (block: AssistantContentBlock | undefined): boolean 
   return !!getBlockReasoningContent(block) && !getBlockContent(block) && !block.error;
 };
 
-const getLastMeaningfulWorkflowBlock = (
-  blocks: AssistantContentBlock[],
-): AssistantContentBlock | undefined => {
+export const extractTrailingReasoningHeadline = (blocks: AssistantContentBlock[]): string => {
   for (let i = blocks.length - 1; i >= 0; i--) {
     const block = blocks[i];
-    if (!block) continue;
-    if (hasTools(block) || getBlockReasoningContent(block) || getBlockContent(block)) return block;
+    if (!isThinkingOnlyBlock(block)) continue;
+
+    const title = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
+    if (title) return title;
   }
-  return undefined;
-};
 
-export const extractTrailingReasoningHeadline = (blocks: AssistantContentBlock[]): string => {
-  const block = getLastMeaningfulWorkflowBlock(blocks);
-  if (!isThinkingOnlyBlock(block)) return '';
-  return extractMarkdownHeadingTitle(getBlockReasoningContent(block));
-};
-
-const extractTrailingProseHeadlineSource = (blocks: AssistantContentBlock[]): string => {
-  const block = getLastMeaningfulWorkflowBlock(blocks);
-  const content = getBlockContent(block);
-  if (!content || isThinkingOnlyBlock(block) || hasTools(block)) return '';
-  return content.length >= WORKFLOW_PROSE_SOURCE_MIN_CHARS ? content : '';
+  return '';
 };
 
 export type WorkflowStreamingHeadlineState =
@@ -333,27 +321,43 @@ export type WorkflowStreamingHeadlineState =
 export const getWorkflowStreamingHeadlineState = (
   blocks: AssistantContentBlock[],
 ): WorkflowStreamingHeadlineState => {
-  const block = getLastMeaningfulWorkflowBlock(blocks);
-  if (!block) return { kind: 'idle' };
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i];
+    if (!block) continue;
 
-  if (hasTools(block)) {
-    const lastTool = block.tools?.at(-1);
-    return {
-      explicitStep: lastTool ? getExplicitStepHeadlineLine(lastTool) : '',
-      fallbackTool: lastTool ? getToolFallbackHeadlineLine(lastTool) : '',
-      kind: 'tool',
-    };
+    if (hasTools(block)) {
+      const lastTool = block.tools?.at(-1);
+      const explicitStep = lastTool ? getExplicitStepHeadlineLine(lastTool) : '';
+      const fallbackTool = lastTool ? getToolFallbackHeadlineLine(lastTool) : '';
+
+      if (explicitStep || fallbackTool) {
+        return {
+          explicitStep,
+          fallbackTool,
+          kind: 'tool',
+        };
+      }
+
+      continue;
+    }
+
+    if (isThinkingOnlyBlock(block)) {
+      const reasoningTitle = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
+      if (reasoningTitle) {
+        return {
+          kind: 'thinking',
+          reasoningTitle,
+        };
+      }
+
+      continue;
+    }
+
+    const proseSource = getBlockContent(block);
+    if (proseSource.length >= WORKFLOW_PROSE_SOURCE_MIN_CHARS) {
+      return { kind: 'prose', proseSource };
+    }
   }
-
-  if (isThinkingOnlyBlock(block)) {
-    return {
-      kind: 'thinking',
-      reasoningTitle: extractMarkdownHeadingTitle(getBlockReasoningContent(block)),
-    };
-  }
-
-  const proseSource = extractTrailingProseHeadlineSource(blocks);
-  if (proseSource) return { kind: 'prose', proseSource };
 
   return { kind: 'idle' };
 };

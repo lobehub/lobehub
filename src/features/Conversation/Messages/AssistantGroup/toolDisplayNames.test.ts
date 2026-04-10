@@ -151,4 +151,53 @@ describe('reasoning headline extraction', () => {
       proseSource: 'Now I will compare the release notes and summarize the migration changes.',
     });
   });
+
+  it('falls back to the previous usable block when trailing thinking has no heading', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        tools: [
+          {
+            apiName: 'search',
+            arguments: '{"query":"Node.js 24"}',
+            result: {
+              state: { workflowHeadline: { stepMessage: 'Searching release notes' } },
+            },
+          } as any,
+        ],
+      }),
+      blk({
+        id: '1',
+        reasoning: {
+          content: 'Thinking through the comparison strategy without a markdown heading.',
+        } as any,
+      }),
+    ]);
+
+    expect(state).toEqual({
+      explicitStep: 'Searched the web: Searching release notes',
+      fallbackTool: 'Searched the web: Node.js 24',
+      kind: 'tool',
+    });
+  });
+
+  it('falls back to the previous usable block when trailing prose is too short', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        reasoning: {
+          content: '### Search release notes',
+        } as any,
+      }),
+      blk({
+        id: '1',
+        content: 'ok',
+      }),
+    ]);
+
+    expect(state).toEqual({
+      kind: 'thinking',
+      reasoningTitle: 'Search release notes',
+    });
+  });
 });
