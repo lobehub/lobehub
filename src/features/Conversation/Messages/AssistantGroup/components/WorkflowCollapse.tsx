@@ -42,7 +42,7 @@ const collectTools = (blocks: AssistantContentBlock[]): ChatToolPayloadWithResul
   return blocks.flatMap((b) => b.tools ?? []);
 };
 
-const useDebouncedHeadline = (raw: string, allComplete: boolean) => {
+const useDebouncedHeadline = (raw: string, allComplete: boolean, immediate = false) => {
   const [out, setOut] = useState(raw);
   const prevCompleteRef = useRef(allComplete);
 
@@ -51,6 +51,10 @@ const useDebouncedHeadline = (raw: string, allComplete: boolean) => {
     prevCompleteRef.current = allComplete;
     const streaming = !allComplete;
 
+    if (immediate) {
+      setOut(raw);
+      return;
+    }
     if (!streaming) {
       setOut(raw);
       return;
@@ -61,7 +65,7 @@ const useDebouncedHeadline = (raw: string, allComplete: boolean) => {
     }
     const id = window.setTimeout(() => setOut(raw), WORKFLOW_HEADLINE_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
-  }, [allComplete, raw]);
+  }, [allComplete, immediate, raw]);
 
   return !allComplete ? out : raw;
 };
@@ -91,6 +95,31 @@ const useCommittedProseHeadline = (proseSource: string, streaming: boolean) => {
 
   return committed;
 };
+
+const AccordionArrow = memo<{ open: boolean }>(({ open }) => (
+  <svg
+    aria-hidden="true"
+    height={18}
+    style={{
+      color: cssVar.colorTextDescription,
+      flex: 'none',
+      lineHeight: 1,
+      transform: open ? 'rotate(90deg)' : undefined,
+      transition: 'transform 200ms ease-out',
+    }}
+    viewBox="0 0 16 16"
+    width={18}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M7.002 10.624a.5.5 0 01-.752-.432V5.808a.5.5 0 01.752-.432l3.758 2.192a.5.5 0 010 .864l-3.758 2.192z"
+      fill="currentColor"
+      fillRule="evenodd"
+    />
+  </svg>
+));
+
+AccordionArrow.displayName = 'AccordionArrow';
 
 const WorkflowCollapse = memo<WorkflowCollapseProps>(
   ({ assistantMessageId, blocks, disableEditing, workflowChromeComplete = false }) => {
@@ -131,19 +160,26 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     const streaming = !allComplete;
     const isExpanded = expanded;
 
-    const { explicitStep, fallbackTool, proseSource } = useMemo(
+    const { explicitStep, fallbackTool, proseSource, reasoningTitle } = useMemo(
       () => getWorkflowStreamingHeadlineParts(blocks, allTools),
       [blocks, allTools],
     );
     const committedProse = useCommittedProseHeadline(proseSource, streaming);
 
+    const showExpandedWorkingLabel = streaming && isExpanded;
     const streamingHeadlineRaw = useMemo(() => {
+      if (showExpandedWorkingLabel) return 'Working...';
+      if (reasoningTitle) return reasoningTitle;
       if (explicitStep) return explicitStep;
-      if (committedProse) return committedProse;
       if (fallbackTool) return fallbackTool;
+      if (committedProse) return committedProse;
       return '';
-    }, [committedProse, explicitStep, fallbackTool]);
-    const streamingHeadline = useDebouncedHeadline(streamingHeadlineRaw, allComplete);
+    }, [committedProse, explicitStep, fallbackTool, reasoningTitle, showExpandedWorkingLabel]);
+    const streamingHeadline = useDebouncedHeadline(
+      streamingHeadlineRaw,
+      allComplete,
+      showExpandedWorkingLabel,
+    );
 
     const [workingElapsedSeconds, setWorkingElapsedSeconds] = useState(0);
 
@@ -187,6 +223,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     ) : (
       <Icon color={cssVar.colorSuccess} icon={Check} />
     );
+    const collapseIndicator = (
+      <span style={{ display: 'flex', flexShrink: 0, alignItems: 'center' }}>
+        <AccordionArrow open={isExpanded} />
+      </span>
+    );
 
     const title = (
       <Flexbox horizontal align="center" gap={6}>
@@ -210,33 +251,36 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             gap={6}
             style={{ minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX, minWidth: 0 }}
           >
-            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-              <AnimatePresence initial={false} mode="wait">
-                <motion.div
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  initial={{ opacity: 0, y: 8 }}
-                  key={streamingHeadline || 'working-fallback'}
-                  transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
-                  }}
-                >
-                  <span
-                    className={shinyTextStyles.shinyText}
+            <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    initial={{ opacity: 0, y: 8 }}
+                    key={streamingHeadline || 'working-fallback'}
+                    transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
                     style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      alignItems: 'center',
+                      minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
                     }}
                   >
-                    {streamingHeadline || 'Working...'}
-                  </span>
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                    <span
+                      className={shinyTextStyles.shinyText}
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {streamingHeadline || 'Working...'}
+                    </span>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+              {collapseIndicator}
+            </Flexbox>
             {showWorkingElapsed && (
               <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
                 ({workingElapsedSeconds}s)
@@ -245,12 +289,20 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           </Flexbox>
         ) : (
           <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Text
-              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              type="secondary"
-            >
-              {summaryText}
-            </Text>
+            <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
+              <Text
+                style={{
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                type="secondary"
+              >
+                {summaryText}
+              </Text>
+              {collapseIndicator}
+            </Flexbox>
             {durationText && (
               <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
                 {durationText}
@@ -264,11 +316,16 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     return (
       <Accordion
         expandedKeys={isExpanded ? ['workflow'] : []}
-        indicatorPlacement="end"
         variant="borderless"
         onExpandedChange={handleExpandedChange}
       >
-        <AccordionItem itemKey="workflow" paddingBlock={4} paddingInline={4} title={title}>
+        <AccordionItem
+          hideIndicator
+          itemKey="workflow"
+          paddingBlock={4}
+          paddingInline={4}
+          title={title}
+        >
           <WorkflowExpandedList
             assistantId={assistantMessageId}
             blocks={blocks}

@@ -235,6 +235,27 @@ const stripLightMarkdownForHeadline = (md: string): string => {
   return s;
 };
 
+const extractMarkdownHeadingTitle = (md: string): string => {
+  const withoutCode = md.replaceAll(/```[\s\S]*?```/g, ' ');
+  const lines = withoutCode.split('\n');
+  let lastTitle = '';
+
+  for (const line of lines) {
+    const match = line.match(
+      new RegExp(`^\\s{0,3}#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s+(.+?)\\s*$`),
+    );
+    if (!match) continue;
+
+    const raw = match[1]?.replace(/\s+#+\s*$/, '') ?? '';
+    const title = stripLightMarkdownForHeadline(raw).replaceAll(/\s+/g, ' ').trim();
+    if (!title) continue;
+
+    lastTitle = truncateDisplayAtWord(title, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
+  }
+
+  return lastTitle;
+};
+
 /**
  * Deterministic one-line snippet from streamed assistant prose (A path).
  * Prefers a full sentence when punctuation exists; otherwise trims to max width.
@@ -267,9 +288,16 @@ export const extractLatestProseHeadlineSource = (blocks: AssistantContentBlock[]
   return '';
 };
 
+export const extractTrailingReasoningHeadline = (blocks: AssistantContentBlock[]): string => {
+  const reasoning = blocks.at(-1)?.reasoning?.content?.trim();
+  if (!reasoning || reasoning === LOADING_FLAT) return '';
+  return extractMarkdownHeadingTitle(reasoning);
+};
+
 export interface WorkflowStreamingHeadlineParts {
   explicitStep: string;
   fallbackTool: string;
+  reasoningTitle: string;
   proseSource: string;
 }
 
@@ -282,6 +310,7 @@ export const getWorkflowStreamingHeadlineParts = (
   return {
     explicitStep: last ? getExplicitStepHeadlineLine(last) : '',
     fallbackTool: last ? getToolFallbackHeadlineLine(last) : '',
+    reasoningTitle: extractTrailingReasoningHeadline(blocks),
     proseSource: extractLatestProseHeadlineSource(blocks),
   };
 };
