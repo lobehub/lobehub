@@ -1,4 +1,5 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
 import { type AssistantContentBlock } from '@/types/index';
@@ -95,7 +96,11 @@ const toTitleCase = (apiName: string): string => {
 };
 
 export const getToolDisplayName = (apiName: string): string => {
-  return TOOL_API_DISPLAY_NAMES[apiName] || toTitleCase(apiName);
+  const defaultValue = toTitleCase(apiName);
+  const key = TOOL_API_DISPLAY_NAMES[apiName];
+  if (!key) return defaultValue;
+
+  return t(key, { defaultValue, ns: 'chat' });
 };
 
 export const getToolSummaryText = (tools: ChatToolPayloadWithResult[]): string => {
@@ -371,7 +376,8 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
   for (const [apiName, { count, errorCount }] of groups) {
     let part = getToolDisplayName(apiName);
     if (count > 1) part += ` (${count})`;
-    if (errorCount > 0) part += ' (failed)';
+    if (errorCount > 0)
+      part += ` ${t('workflow.failedSuffix', { defaultValue: '(failed)', ns: 'chat' })}`;
     toolParts.push(part);
   }
 
@@ -379,7 +385,11 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
 
   const totalReasoningMs = blocks.reduce((sum, b) => sum + (b.reasoning?.duration ?? 0), 0);
   if (totalReasoningMs > 0) {
-    result += ` · Thought for ${formatReasoningDuration(totalReasoningMs)}`;
+    result += ` · ${t('workflow.thoughtForDuration', {
+      defaultValue: 'Thought for {{duration}}',
+      duration: formatReasoningDuration(totalReasoningMs),
+      ns: 'chat',
+    })}`;
   }
 
   return result;

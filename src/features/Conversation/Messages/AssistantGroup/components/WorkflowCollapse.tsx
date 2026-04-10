@@ -4,6 +4,7 @@ import { cssVar } from 'antd-style';
 import { Check, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
@@ -98,6 +99,7 @@ const useCommittedProseHeadline = (proseSource: string, streaming: boolean) => {
 
 const WorkflowCollapse = memo<WorkflowCollapseProps>(
   ({ assistantMessageId, blocks, disableEditing, workflowChromeComplete = false }) => {
+    const { t } = useTranslation('chat');
     const allTools = useMemo(() => collectTools(blocks), [blocks]);
     const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
     const isGenerating = useConversationStore(
@@ -142,8 +144,9 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     );
 
     const showExpandedWorkingLabel = streaming && isExpanded;
+    const workingLabel = t('workflow.working', { defaultValue: 'Working...' });
     const streamingHeadlineRaw = useMemo(() => {
-      if (showExpandedWorkingLabel) return 'Working...';
+      if (showExpandedWorkingLabel) return workingLabel;
       switch (headlineState.kind) {
         case 'thinking': {
           return headlineState.reasoningTitle;
@@ -158,7 +161,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           return '';
         }
       }
-    }, [committedProse, headlineState, showExpandedWorkingLabel]);
+    }, [committedProse, headlineState, showExpandedWorkingLabel, workingLabel]);
     const streamingHeadline = useDebouncedHeadline(
       streamingHeadlineRaw,
       allComplete,
@@ -252,7 +255,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {streamingHeadline || 'Working...'}
+                    {streamingHeadline || workingLabel}
                   </span>
                 </motion.div>
               </AnimatePresence>
