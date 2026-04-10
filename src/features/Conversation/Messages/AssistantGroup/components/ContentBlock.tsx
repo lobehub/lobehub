@@ -40,6 +40,8 @@ const ContentBlock = memo<ContentBlockProps>(
     const hasTools = tools && tools.length > 0;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+    const hasContent = !!content && content !== LOADING_FLAT;
+    const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
     const handleRegenerate = useCallback(async () => {
       await deleteMessage(id);
@@ -80,14 +82,16 @@ const ContentBlock = memo<ContentBlockProps>(
           </SafeBoundary>
         )}
 
-        <SafeBoundary variant="alert">
-          <MessageContent
-            content={content}
-            hasTools={hasTools}
-            id={id}
-            isFirstBlock={isFirstBlock}
-          />
-        </SafeBoundary>
+        {showMessageContent && (
+          <SafeBoundary variant="alert">
+            <MessageContent
+              content={content}
+              hasTools={hasTools}
+              id={id}
+              isFirstBlock={isFirstBlock}
+            />
+          </SafeBoundary>
+        )}
 
         {showImageItems && (
           <SafeBoundary>

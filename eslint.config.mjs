@@ -40,6 +40,7 @@ export default eslint(
       // AI coding tools directories
       '.claude',
       '.serena',
+      '.i18nrc.js',
     ],
     next: true,
     react: 'next',

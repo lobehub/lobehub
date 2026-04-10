@@ -20,9 +20,9 @@ export const seedance20Params: VideoModelParamsSchema = {
     width: { max: 6000, min: 300 },
   },
   generateAudio: { default: true },
-  imageUrl: {
+  imageUrls: {
     aspectRatio: { max: 2.5, min: 0.4 },
-    default: null,
+    default: [],
     height: { max: 6000, min: 300 },
     maxFileSize: 30 * 1024 * 1024,
     width: { max: 6000, min: 300 },

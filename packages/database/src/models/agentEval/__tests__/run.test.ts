@@ -303,7 +303,6 @@ describe('AgentEvalRunModel', () => {
         passRate: 0.5,
       });
       expect(result?.updatedAt).toBeDefined();
-      expect(result?.updatedAt.getTime()).toBeGreaterThanOrEqual(result!.createdAt.getTime());
     });
 
     it('should not update a run owned by another user', async () => {

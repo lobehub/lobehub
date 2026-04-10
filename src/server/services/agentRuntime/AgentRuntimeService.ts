@@ -980,10 +980,14 @@ export class AgentRuntimeService {
                 completionReason: reason,
                 error: stepResult.newState.error
                   ? {
-                      message: String(
-                        stepResult.newState.error.message ?? stepResult.newState.error,
+                      message:
+                        this.extractErrorMessage(stepResult.newState.error) ??
+                        JSON.stringify(stepResult.newState.error),
+                      type: String(
+                        stepResult.newState.error.type ??
+                          stepResult.newState.error.errorType ??
+                          'unknown',
                       ),
-                      type: String(stepResult.newState.error.type ?? 'unknown'),
                     }
                   : undefined,
                 model: partial.model,

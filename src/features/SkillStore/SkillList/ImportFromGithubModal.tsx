@@ -1,8 +1,9 @@
 'use client';
 
 import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
+import { GithubIcon } from '@lobehub/ui/icons';
 import { App, Button, Modal, Typography } from 'antd';
-import { ArrowLeftRight, Github, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,7 +50,7 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
     <Modal destroyOnClose footer={null} open={open} title={null} width={480} onCancel={handleClose}>
       <Flexbox align="center" gap={16} padding={'16px 0'}>
         <Flexbox horizontal align="center" gap={8}>
-          <Icon icon={Github} size={28} />
+          <Icon icon={GithubIcon} size={28} />
           <Icon
             icon={ArrowLeftRight}
             size={16}
