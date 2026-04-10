@@ -10,7 +10,7 @@ import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
-import { useAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
+import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import { type CreateAgentParams } from '@/services/agent';
 import { type GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
@@ -192,7 +192,8 @@ export const useCreateMenuItems = () => {
     [mutateGroup],
   );
 
-  const { openCreateModal } = useAgentModal();
+  const agentModal = useOptionalAgentModal();
+  const openCreateModal = agentModal?.openCreateModal;
 
   /**
    * Create agent menu item
@@ -206,8 +207,10 @@ export const useCreateMenuItems = () => {
         info.domEvent?.stopPropagation();
         if (options?.groupId) {
           await createAgent(options);
-        } else {
+        } else if (openCreateModal) {
           openCreateModal('agent');
+        } else {
+          await createAgent(options);
         }
       },
     }),
@@ -227,8 +230,10 @@ export const useCreateMenuItems = () => {
         info.domEvent?.stopPropagation();
         if (options?.groupId) {
           await createEmptyGroup(options);
-        } else {
+        } else if (openCreateModal) {
           openCreateModal('group');
+        } else {
+          await createEmptyGroup(options);
         }
       },
     }),

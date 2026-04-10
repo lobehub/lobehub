@@ -50,6 +50,10 @@ export const useAgentModal = () => {
   return context;
 };
 
+export const useOptionalAgentModal = () => {
+  return use(AgentModalContext);
+};
+
 interface CreateModalRendererProps {
   onClose: () => void;
   open: boolean;

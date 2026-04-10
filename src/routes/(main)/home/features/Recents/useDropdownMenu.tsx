@@ -6,6 +6,8 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type RecentItem } from '@/server/routers/lambda/recent';
+import { documentService } from '@/services/document';
+import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
@@ -30,6 +32,14 @@ export const useRecentItemDropdownMenu = (
 
       // Persist to server
       switch (item.type) {
+        case 'document': {
+          await documentService.updateDocument({ id: item.id, title: newTitle });
+          break;
+        }
+        case 'task': {
+          await taskService.update(item.id, { name: newTitle });
+          break;
+        }
         case 'topic': {
           await topicService.updateTopic(item.id, { title: newTitle });
           break;
@@ -59,6 +69,11 @@ export const useRecentItemDropdownMenu = (
             break;
           }
           case 'document': {
+            await documentService.deleteDocument(item.id);
+            break;
+          }
+          case 'task': {
+            await taskService.delete(item.id);
             break;
           }
         }
@@ -70,7 +85,7 @@ export const useRecentItemDropdownMenu = (
   }, [item, modal, t, removeTopic, removeRecent, refreshRecents]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
-    const canRename = item.type !== 'task';
+    const canRename = true;
 
     return [
       ...(canRename
