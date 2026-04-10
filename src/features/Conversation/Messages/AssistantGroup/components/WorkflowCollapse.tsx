@@ -23,7 +23,7 @@ import {
 import {
   areWorkflowToolsComplete,
   formatReasoningDuration,
-  getWorkflowStreamingHeadlineParts,
+  getWorkflowStreamingHeadlineState,
   getWorkflowSummaryText,
   hasToolError,
   shapeProseForWorkflowHeadline,
@@ -160,21 +160,30 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     const streaming = !allComplete;
     const isExpanded = expanded;
 
-    const { explicitStep, fallbackTool, proseSource, reasoningTitle } = useMemo(
-      () => getWorkflowStreamingHeadlineParts(blocks, allTools),
-      [blocks, allTools],
+    const headlineState = useMemo(() => getWorkflowStreamingHeadlineState(blocks), [blocks]);
+    const committedProse = useCommittedProseHeadline(
+      headlineState.kind === 'prose' ? headlineState.proseSource : '',
+      streaming,
     );
-    const committedProse = useCommittedProseHeadline(proseSource, streaming);
 
     const showExpandedWorkingLabel = streaming && isExpanded;
     const streamingHeadlineRaw = useMemo(() => {
       if (showExpandedWorkingLabel) return 'Working...';
-      if (reasoningTitle) return reasoningTitle;
-      if (explicitStep) return explicitStep;
-      if (fallbackTool) return fallbackTool;
-      if (committedProse) return committedProse;
-      return '';
-    }, [committedProse, explicitStep, fallbackTool, reasoningTitle, showExpandedWorkingLabel]);
+      switch (headlineState.kind) {
+        case 'thinking': {
+          return headlineState.reasoningTitle;
+        }
+        case 'tool': {
+          return headlineState.explicitStep || headlineState.fallbackTool;
+        }
+        case 'prose': {
+          return committedProse;
+        }
+        default: {
+          return '';
+        }
+      }
+    }, [committedProse, headlineState, showExpandedWorkingLabel]);
     const streamingHeadline = useDebouncedHeadline(
       streamingHeadlineRaw,
       allComplete,

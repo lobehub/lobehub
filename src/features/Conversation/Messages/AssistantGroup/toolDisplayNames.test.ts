@@ -5,7 +5,7 @@ import { type AssistantContentBlock } from '@/types/index';
 import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from './constants';
 import {
   extractTrailingReasoningHeadline,
-  getWorkflowStreamingHeadlineParts,
+  getWorkflowStreamingHeadlineState,
   getPostToolAnswerSplitIndex,
   scorePostToolBlockAsFinalAnswer,
   shapeProseForWorkflowHeadline,
@@ -86,21 +86,69 @@ describe('reasoning headline extraction', () => {
   });
 
   it('uses trailing reasoning heading as workflow headline fallback', () => {
-    const parts = getWorkflowStreamingHeadlineParts(
-      [
-        blk({
-          id: '0',
-          content: '',
-          reasoning: {
-            content: '### Search release notes\n\nReview the latest changelog before editing.',
-          } as any,
-        }),
-      ],
-      [],
-    );
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        content: '',
+        reasoning: {
+          content: '### Search release notes\n\nReview the latest changelog before editing.',
+        } as any,
+      }),
+    ]);
 
-    expect(parts.explicitStep).toBe('');
-    expect(parts.fallbackTool).toBe('');
-    expect(parts.reasoningTitle).toBe('Search release notes');
+    expect(state).toEqual({
+      kind: 'thinking',
+      reasoningTitle: 'Search release notes',
+    });
+  });
+
+  it('prefers tool state when the trailing block has tools', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        reasoning: {
+          content: '### Search release notes',
+        } as any,
+      }),
+      blk({
+        id: '1',
+        tools: [
+          {
+            apiName: 'search',
+            arguments: '{"query":"Node.js 24"}',
+            result: {
+              state: { workflowHeadline: { stepMessage: 'Searching release notes' } },
+            },
+          } as any,
+        ],
+      }),
+    ]);
+
+    expect(state).toEqual({
+      explicitStep: 'Searched the web: Searching release notes',
+      fallbackTool: 'Searched the web: Node.js 24',
+      kind: 'tool',
+    });
+  });
+
+  it('uses prose state when the trailing block is prose', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        tools: [{ apiName: 'search', id: 't1' } as any],
+      }),
+      blk({
+        id: '1',
+        content: 'Now I will compare the release notes and summarize the migration changes.',
+        reasoning: {
+          content: '### Planning',
+        } as any,
+      }),
+    ]);
+
+    expect(state).toEqual({
+      kind: 'prose',
+      proseSource: 'Now I will compare the release notes and summarize the migration changes.',
+    });
   });
 });
