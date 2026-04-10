@@ -106,20 +106,39 @@ export class GatewayActionImpl {
       );
     });
 
-    // Forward agent events to caller
-    if (onEvent) {
-      client.on('agent_event', onEvent);
-    }
+    // Track whether a terminal agent event was received (agent_runtime_end or error),
+    // so we can fire onSessionComplete from the subsequent disconnect.
+    // session_complete is handled separately as an explicit server signal.
+    let receivedTerminalEvent = false;
+    let sessionCompleted = false;
+    const fireSessionComplete = () => {
+      if (sessionCompleted) return;
+      sessionCompleted = true;
+      onSessionComplete?.();
+    };
+
+    // Forward agent events to caller, and track terminal events
+    client.on('agent_event', (event) => {
+      if (event.type === 'agent_runtime_end' || event.type === 'error') {
+        receivedTerminalEvent = true;
+      }
+      onEvent?.(event);
+    });
 
     // Handle session completion
     client.on('session_complete', () => {
       this.internal_cleanupGatewayConnection(operationId);
-      onSessionComplete?.();
+      fireSessionComplete();
     });
 
-    // Handle disconnection (terminal events auto-disconnect the client)
+    // Handle disconnection — only fire session complete if a terminal agent event
+    // was received (agent_runtime_end / error). Auth failures, explicit disconnect(),
+    // and other non-terminal disconnects should NOT trigger onSessionComplete.
     client.on('disconnected', () => {
       this.internal_cleanupGatewayConnection(operationId);
+      if (receivedTerminalEvent) {
+        fireSessionComplete();
+      }
     });
 
     // Handle auth failures

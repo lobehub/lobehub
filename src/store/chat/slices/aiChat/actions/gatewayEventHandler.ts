@@ -178,8 +178,14 @@ export const createGatewayEventHandler = (
       }
 
       case 'error': {
-        enqueue(() => {
+        enqueue(async () => {
           const errorMsg = event.data?.message || event.data?.error || 'Unknown error';
+
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          get().completeOperation(operationId);
+
+          // Write inline error immediately so the UI always shows something,
+          // even if the DB hasn't persisted the error yet.
           get().internal_dispatchMessage(
             {
               id: currentAssistantMessageId,
@@ -190,6 +196,10 @@ export const createGatewayEventHandler = (
             },
             dispatchContext,
           );
+
+          // Then fetch from DB — if the server persisted a richer error detail
+          // into the message, this replaces the inline error with the full version.
+          await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;
       }
