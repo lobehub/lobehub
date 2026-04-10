@@ -44,7 +44,7 @@ agent-browser fill @e1 "user@example.com"
 agent-browser fill @e2 "password123"
 agent-browser click @e3
 agent-browser wait --load networkidle
-agent-browser snapshot -i  # Check result
+agent-browser snapshot -i # Check result
 ```
 
 ## Command Chaining
@@ -162,8 +162,8 @@ agent-browser auth login myapp
 
 # Option 2: Session name (auto-save/restore cookies + localStorage)
 agent-browser --session-name myapp open https://app.example.com/login
-agent-browser close  # State auto-saved
-agent-browser --session-name myapp open https://app.example.com/dashboard  # Auto-restored
+agent-browser close                                                       # State auto-saved
+agent-browser --session-name myapp open https://app.example.com/dashboard # Auto-restored
 
 # Option 3: Persistent profile
 agent-browser --profile ~/.myapp open https://app.example.com/login
@@ -190,7 +190,7 @@ agent-browser find testid "submit-btn" click
 agent-browser eval 'document.title'
 
 # Complex JS: use --stdin with heredoc (RECOMMENDED)
-agent-browser eval --stdin <<'EVALEOF'
+agent-browser eval --stdin << 'EVALEOF'
 JSON.stringify(
   Array.from(document.querySelectorAll("img"))
     .filter(i => !i.alt)
@@ -213,7 +213,7 @@ agent-browser screenshot --annotate
 # Output includes the image path and a legend:
 #   [1] @e1 button "Submit"
 #   [2] @e2 link "Home"
-agent-browser click @e2  # Click using ref from annotated screenshot
+agent-browser click @e2 # Click using ref from annotated screenshot
 ```
 
 ## Parallel Sessions
@@ -227,8 +227,8 @@ agent-browser session list
 ## Connect to Existing Chrome
 
 ```bash
-agent-browser --auto-connect snapshot            # Auto-discover running Chrome
-agent-browser --cdp 9222 snapshot                # Explicit CDP port
+agent-browser --auto-connect snapshot # Auto-discover running Chrome
+agent-browser --cdp 9222 snapshot     # Explicit CDP port
 ```
 
 ## iOS Simulator (Mobile Safari)
@@ -247,7 +247,7 @@ agent-browser -p ios close
 
 ```bash
 agent-browser dashboard install
-agent-browser dashboard start      # Background server on port 4848
+agent-browser dashboard start # Background server on port 4848
 agent-browser dashboard stop
 ```
 
@@ -258,37 +258,43 @@ Use `-p <provider>` to run against cloud browsers: `agentcore`, `browserbase`, `
 ## Browser Engine Selection
 
 ```bash
-agent-browser --engine lightpanda open example.com   # 10x faster, 10x less memory
+agent-browser --engine lightpanda open example.com # 10x faster, 10x less memory
 ```
 
 ## Electron (LobeHub Desktop)
 
-### Setup
+### Setup / Teardown
+
+Use the `electron-dev.sh` script to manage the Electron dev environment. It handles process lifecycle, waits for SPA readiness, and reliably kills all child processes (main + helpers + vite).
 
 ```bash
-# 1. Kill existing instances
-pkill -f "Electron" 2> /dev/null
-pkill -f "electron-vite" 2> /dev/null
-pkill -f "agent-browser" 2> /dev/null
-sleep 3
+SCRIPT=".agents/skills/local-testing/scripts/electron-dev.sh"
 
-# 2. Start Electron with CDP (MUST cd to apps/desktop first)
-cd apps/desktop && ELECTRON_ENABLE_LOGGING=1 npx electron-vite dev -- --remote-debugging-port=9222 > /tmp/electron-dev.log 2>&1 &
+# Start Electron dev with CDP (idempotent — skips if already running)
+$SCRIPT start
 
-# 3. Wait for startup
-for i in $(seq 1 12); do
-  sleep 5
-  if strings /tmp/electron-dev.log 2> /dev/null | grep -q "starting electron"; then
-    echo "ready"
-    break
-  fi
-done
+# Check if Electron is running and CDP is reachable
+$SCRIPT status
 
-# 4. Wait for renderer, then connect
-sleep 15 && agent-browser --cdp 9222 wait 3000
+# Kill all Electron-related processes (main + helper + vite)
+$SCRIPT stop
+
+# Force fresh restart
+$SCRIPT restart
 ```
 
-**Critical:** `npx electron-vite dev` MUST run from `apps/desktop/` directory, not project root.
+After `start` succeeds, connect with: `agent-browser --cdp 9222 snapshot -i`
+
+**Always run `$SCRIPT stop` when done testing** — `pkill -f "Electron"` alone won't catch all helper processes.
+
+#### Environment Variables
+
+| Variable          | Default                 | Description                              |
+| ----------------- | ----------------------- | ---------------------------------------- |
+| `CDP_PORT`        | `9222`                  | Chrome DevTools Protocol port            |
+| `ELECTRON_LOG`    | `/tmp/electron-dev.log` | Electron process log                     |
+| `ELECTRON_WAIT_S` | `60`                    | Max seconds to wait for Electron process |
+| `RENDERER_WAIT_S` | `60`                    | Max seconds to wait for SPA to load      |
 
 ### LobeHub-Specific Patterns
 
@@ -373,621 +379,30 @@ agent-browser --auto-connect snapshot -i
 
 # Part 2: osascript (Native macOS App Bot Testing)
 
-Use AppleScript via `osascript` to control native macOS desktop apps for bot testing. This works with any app that supports macOS Accessibility, without needing CDP or Chromium.
+Use AppleScript via `osascript` to control native macOS desktop apps for bot testing. Works with any app that supports macOS Accessibility, no CDP or Chromium needed.
 
-## Core osascript Patterns
+The pattern is the same for every platform:
 
-### Activate an App
+1. **Activate** the app (`tell application "X" to activate`)
+2. **Navigate** to a channel/chat (Quick Switcher `Cmd+K` or Search `Cmd+F`)
+3. **Send** a message (clipboard paste `Cmd+V` + Enter)
+4. **Wait** for the bot response
+5. **Screenshot** for verification (`screencapture` + `Read` tool)
 
-```bash
-osascript -e 'tell application "Discord" to activate'
-```
+## Per-Platform References
 
-### Type Text
+Pick the file for your target platform — each contains activation, navigation, send-message, and verification snippets specific to that app:
 
-```bash
-# Type character by character (reliable, but slow for long text)
-osascript -e 'tell application "System Events" to keystroke "Hello world"'
+| Platform      | Reference                                        | Quick switcher |
+| ------------- | ------------------------------------------------ | -------------- |
+| Discord       | [reference/discord.md](./reference/discord.md)   | `Cmd+K`        |
+| Slack         | [reference/slack.md](./reference/slack.md)       | `Cmd+K`        |
+| Telegram      | [reference/telegram.md](./reference/telegram.md) | `Cmd+F`        |
+| WeChat / 微信 | [reference/wechat.md](./reference/wechat.md)     | `Cmd+F`        |
+| Lark / 飞书   | [reference/lark.md](./reference/lark.md)         | `Cmd+K`        |
+| QQ            | [reference/qq.md](./reference/qq.md)             | `Cmd+F`        |
 
-# Press Enter
-osascript -e 'tell application "System Events" to key code 36'
-
-# Press Tab
-osascript -e 'tell application "System Events" to key code 48'
-
-# Press Escape
-osascript -e 'tell application "System Events" to key code 53'
-```
-
-### Paste from Clipboard (fast, for long text)
-
-```bash
-# Set clipboard and paste — much faster than keystroke for long messages
-osascript -e 'set the clipboard to "Your long message here"'
-osascript -e 'tell application "System Events" to keystroke "v" using command down'
-```
-
-Or in one shot:
-
-```bash
-osascript -e '
-set the clipboard to "Your long message here"
-tell application "System Events" to keystroke "v" using command down
-'
-```
-
-### Keyboard Shortcuts
-
-```bash
-# Cmd+K (quick switcher in Discord/Slack)
-osascript -e 'tell application "System Events" to keystroke "k" using command down'
-
-# Cmd+F (search)
-osascript -e 'tell application "System Events" to keystroke "f" using command down'
-
-# Cmd+N (new message/chat)
-osascript -e 'tell application "System Events" to keystroke "n" using command down'
-
-# Cmd+Shift+K (example: multi-modifier)
-osascript -e 'tell application "System Events" to keystroke "k" using {command down, shift down}'
-```
-
-### Click at Position
-
-```bash
-# Click at absolute screen coordinates
-osascript -e '
-tell application "System Events"
-    click at {500, 300}
-end tell
-'
-```
-
-### Get Window Info
-
-```bash
-# Get window position and size
-osascript -e '
-tell application "System Events"
-    tell process "Discord"
-        get {position, size} of window 1
-    end tell
-end tell
-'
-```
-
-### Screenshot
-
-```bash
-# Full screen
-screencapture /tmp/screenshot.png
-
-# Interactive region select
-screencapture -i /tmp/screenshot.png
-
-# Specific window (by window ID from CGWindowList)
-screencapture -l < WINDOW_ID > /tmp/screenshot.png
-```
-
-To get window ID for a specific app:
-
-```bash
-osascript -e '
-tell application "System Events"
-    tell process "Discord"
-        get id of window 1
-    end tell
-end tell
-'
-```
-
-### Read Accessibility Elements
-
-```bash
-# Get all UI elements of the frontmost window (can be slow/large)
-osascript -e '
-tell application "System Events"
-    tell process "Discord"
-        entire contents of window 1
-    end tell
-end tell
-'
-
-# Get a specific element's value
-osascript -e '
-tell application "System Events"
-    tell process "Discord"
-        get value of text field 1 of window 1
-    end tell
-end tell
-'
-```
-
-> **Warning:** `entire contents` can be extremely slow on complex UIs. Prefer screenshots + `Read` tool for visual verification.
-
-### Read Screen Text via Clipboard
-
-For reading the latest message or response from an app:
-
-```bash
-# Select all text in the focused area and copy
-osascript -e '
-tell application "System Events"
-    keystroke "a" using command down
-    keystroke "c" using command down
-end tell
-'
-sleep 0.5
-# Read clipboard
-pbpaste
-```
-
----
-
-## Client: Discord
-
-**App name:** `Discord` | **Process name:** `Discord`
-
-### Activate & Navigate
-
-```bash
-# Activate Discord
-osascript -e 'tell application "Discord" to activate'
-sleep 1
-
-# Open Quick Switcher (Cmd+K) to navigate to a channel
-osascript -e 'tell application "System Events" to keystroke "k" using command down'
-sleep 0.5
-osascript -e 'tell application "System Events" to keystroke "bot-testing"'
-sleep 1
-osascript -e 'tell application "System Events" to key code 36' # Enter
-sleep 2
-```
-
-### Send Message to Bot
-
-```bash
-# The message input is focused after navigating to a channel
-# Type a message
-osascript -e 'tell application "System Events" to keystroke "/hello"'
-sleep 0.5
-osascript -e 'tell application "System Events" to key code 36' # Enter
-```
-
-### Send Long Message (via clipboard)
-
-```bash
-osascript -e '
-tell application "Discord" to activate
-delay 0.5
-set the clipboard to "Write a 3000 word essay about space exploration"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36  -- Enter
-end tell
-'
-```
-
-### Verify Bot Response
-
-```bash
-# Wait for bot to respond, then screenshot
-sleep 10
-screencapture /tmp/discord-bot-response.png
-# Read with the Read tool for visual verification
-```
-
-### Full Bot Test Example
-
-```bash
-#!/usr/bin/env bash
-# test-discord-bot.sh — Send message and verify bot response
-
-# 1. Activate Discord and navigate to channel
-osascript -e '
-tell application "Discord" to activate
-delay 1
--- Quick Switcher
-tell application "System Events" to keystroke "k" using command down
-delay 0.5
-tell application "System Events" to keystroke "bot-testing"
-delay 1
-tell application "System Events" to key code 36
-delay 2
-'
-
-# 2. Send test message
-osascript -e '
-set the clipboard to "!ping"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36
-end tell
-'
-
-# 3. Wait for response and capture
-sleep 5
-screencapture /tmp/discord-test-result.png
-echo "Screenshot saved to /tmp/discord-test-result.png"
-```
-
----
-
-## Client: Slack
-
-**App name:** `Slack` | **Process name:** `Slack`
-
-### Activate & Navigate
-
-```bash
-# Activate Slack
-osascript -e 'tell application "Slack" to activate'
-sleep 1
-
-# Quick Switcher (Cmd+K)
-osascript -e 'tell application "System Events" to keystroke "k" using command down'
-sleep 0.5
-osascript -e 'tell application "System Events" to keystroke "bot-testing"'
-sleep 1
-osascript -e 'tell application "System Events" to key code 36' # Enter
-sleep 2
-```
-
-### Send Message to Bot
-
-```bash
-# Direct message input (focused after channel nav)
-osascript -e 'tell application "System Events" to keystroke "@mybot hello"'
-sleep 0.3
-osascript -e 'tell application "System Events" to key code 36'
-```
-
-### Send Long Message
-
-```bash
-osascript -e '
-tell application "Slack" to activate
-delay 0.5
-set the clipboard to "A long test message for the bot..."
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36
-end tell
-'
-```
-
-### Slash Command Test
-
-```bash
-osascript -e '
-tell application "Slack" to activate
-delay 0.5
-tell application "System Events"
-    keystroke "/ask What is the meaning of life?"
-    delay 0.5
-    key code 36
-end tell
-'
-```
-
-### Verify Response
-
-```bash
-sleep 10
-screencapture /tmp/slack-bot-response.png
-```
-
----
-
-## Client: Telegram
-
-**App name:** `Telegram` | **Process name:** `Telegram`
-
-### Activate & Navigate
-
-```bash
-# Activate Telegram
-osascript -e 'tell application "Telegram" to activate'
-sleep 1
-
-# Search for a bot (Cmd+F or click search)
-osascript -e '
-tell application "System Events"
-    keystroke "f" using command down
-    delay 0.5
-    keystroke "MyTestBot"
-    delay 1
-    key code 36  -- Enter to select
-end tell
-'
-sleep 2
-```
-
-### Send Message to Bot
-
-```bash
-# After navigating to bot chat, input is focused
-osascript -e '
-tell application "System Events"
-    keystroke "/start"
-    delay 0.3
-    key code 36
-end tell
-'
-```
-
-### Send Long Message
-
-```bash
-osascript -e '
-tell application "Telegram" to activate
-delay 0.5
-set the clipboard to "Tell me about quantum computing in detail"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36
-end tell
-'
-```
-
-### Verify Response
-
-```bash
-sleep 10
-screencapture /tmp/telegram-bot-response.png
-```
-
-### Telegram Bot API (programmatic alternative)
-
-For sending messages directly to the bot's chat without UI:
-
-```bash
-# Send message as the bot (for testing webhooks/responses)
-curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-  -d "chat_id=$CHAT_ID&text=test message"
-
-# Get recent updates
-curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates?limit=5" | jq .
-```
-
----
-
-## Client: WeChat / 微信
-
-**App name:** `微信` or `WeChat` | **Process name:** `WeChat`
-
-### Activate & Navigate
-
-```bash
-# Activate WeChat
-osascript -e 'tell application "微信" to activate'
-sleep 1
-
-# Search for a contact/bot (Cmd+F)
-osascript -e '
-tell application "System Events"
-    keystroke "f" using command down
-    delay 0.5
-    keystroke "TestBot"
-    delay 1
-    key code 36  -- Enter to select
-end tell
-'
-sleep 2
-```
-
-### Send Message
-
-```bash
-# After navigating to a chat, the input is focused
-osascript -e '
-tell application "System Events"
-    keystroke "Hello bot!"
-    delay 0.3
-    key code 36
-end tell
-'
-```
-
-### Send Long Message (clipboard)
-
-```bash
-osascript -e '
-tell application "微信" to activate
-delay 0.5
-set the clipboard to "Please help me with this task..."
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36
-end tell
-'
-```
-
-### Verify Response
-
-```bash
-sleep 10
-screencapture /tmp/wechat-bot-response.png
-```
-
-### WeChat-Specific Notes
-
-- WeChat macOS app name can be `微信` or `WeChat` depending on system language. Try both:
-  ```bash
-  osascript -e 'tell application "微信" to activate' 2> /dev/null \
-    || osascript -e 'tell application "WeChat" to activate'
-  ```
-- WeChat uses **Enter** to send (not Cmd+Enter by default, but configurable)
-- For multi-line messages without sending, use **Shift+Enter**:
-  ```bash
-  osascript -e 'tell application "System Events" to key code 36 using shift down'
-  ```
-
----
-
-## Client: Lark / 飞书
-
-**App name:** `Lark` or `飞书` | **Process name:** `Lark` or `飞书`
-
-### Activate & Navigate
-
-```bash
-# Activate Lark (auto-detects Lark or 飞书)
-osascript -e 'tell application "Lark" to activate' 2> /dev/null \
-  || osascript -e 'tell application "飞书" to activate'
-sleep 1
-
-# Quick Switcher / Search (Cmd+K)
-osascript -e 'tell application "System Events" to keystroke "k" using command down'
-sleep 0.5
-osascript -e '
-set the clipboard to "bot-testing"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 1.5
-    key code 36  -- Enter
-end tell
-'
-sleep 2
-```
-
-### Send Message to Bot
-
-```bash
-osascript -e '
-set the clipboard to "@MyBot help me with this task"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36  -- Enter
-end tell
-'
-```
-
-### Verify Response
-
-```bash
-sleep 10
-screencapture /tmp/lark-bot-response.png
-```
-
-### Lark-Specific Notes
-
-- App name varies: `Lark` (international) vs `飞书` (China mainland) — the script auto-detects
-- Uses `Cmd+K` for quick search (same as Discord/Slack)
-- Enter sends message by default
-
----
-
-## Client: QQ
-
-**App name:** `QQ` | **Process name:** `QQ`
-
-### Activate & Navigate
-
-```bash
-osascript -e 'tell application "QQ" to activate'
-sleep 1
-
-# Search for contact/group (Cmd+F)
-osascript -e '
-tell application "System Events"
-    keystroke "f" using command down
-    delay 0.8
-end tell
-'
-osascript -e '
-set the clipboard to "bot-testing"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 1.5
-    key code 36  -- Enter
-end tell
-'
-sleep 2
-```
-
-### Send Message to Bot
-
-```bash
-osascript -e '
-set the clipboard to "Hello bot!"
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36  -- Enter
-end tell
-'
-```
-
-### Verify Response
-
-```bash
-sleep 10
-screencapture /tmp/qq-bot-response.png
-```
-
-### QQ-Specific Notes
-
-- Enter sends message by default; Shift+Enter for newlines
-- Uses `Cmd+F` for search
-- Always use clipboard paste for CJK characters
-
----
-
-## Common Bot Testing Workflow (osascript)
-
-Regardless of platform, the pattern is:
-
-```bash
-APP_NAME="Discord" # or "Slack", "Telegram", "微信"
-CHANNEL="bot-testing"
-MESSAGE="Hello bot!"
-WAIT_SECONDS=10
-
-# 1. Activate
-osascript -e "tell application \"$APP_NAME\" to activate"
-sleep 1
-
-# 2. Navigate to channel/chat (via Quick Switcher or Search)
-osascript -e 'tell application "System Events" to keystroke "k" using command down'
-sleep 0.5
-osascript -e "tell application \"System Events\" to keystroke \"$CHANNEL\""
-sleep 1
-osascript -e 'tell application "System Events" to key code 36'
-sleep 2
-
-# 3. Send message
-osascript -e "set the clipboard to \"$MESSAGE\""
-osascript -e '
-tell application "System Events"
-    keystroke "v" using command down
-    delay 0.3
-    key code 36
-end tell
-'
-
-# 4. Wait for bot response
-sleep "$WAIT_SECONDS"
-
-# 5. Screenshot for verification
-screencapture /tmp/"${APP_NAME,,}"-bot-test.png
-echo "Result saved to /tmp/${APP_NAME,,}-bot-test.png"
-```
-
-### Tips
-
-- **Use clipboard paste** (`Cmd+V`) for messages containing special characters or long text — `keystroke` can mangle non-ASCII
-- **Add `delay`** between actions — apps need time to process UI events
-- **Screenshot for verification** — use `screencapture` + `Read` tool for visual checks
-- **Use a dedicated test channel/chat** — avoid polluting real conversations
-- **Check app name** — some apps have different names in different locales (e.g., `微信` vs `WeChat`)
-- **Accessibility permissions required** — System Events automation requires granting Accessibility access in System Preferences > Privacy & Security > Accessibility
+For **shared osascript patterns** (activate, type, paste, screenshot, read accessibility, common workflow template, gotchas), see [reference/osascript-common.md](./reference/osascript-common.md). Read this first if you're new to osascript automation.
 
 ---
 
@@ -995,16 +410,18 @@ echo "Result saved to /tmp/${APP_NAME,,}-bot-test.png"
 
 Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 
-| Script                    | Usage                                         |
-| ------------------------- | --------------------------------------------- |
-| `capture-app-window.sh`   | Capture screenshot of a specific app window   |
-| `record-electron-demo.sh` | Record Electron app demo with ffmpeg          |
-| `test-discord-bot.sh`     | Send message to Discord bot via osascript     |
-| `test-slack-bot.sh`       | Send message to Slack bot via osascript       |
-| `test-telegram-bot.sh`    | Send message to Telegram bot via osascript    |
-| `test-wechat-bot.sh`      | Send message to WeChat bot via osascript      |
-| `test-lark-bot.sh`        | Send message to Lark / 飞书 bot via osascript |
-| `test-qq-bot.sh`          | Send message to QQ bot via osascript          |
+| Script                    | Usage                                               |
+| ------------------------- | --------------------------------------------------- |
+| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart) |
+| `capture-app-window.sh`   | Capture screenshot of a specific app window         |
+| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                |
+| `record-app-screen.sh`    | Record app screen (video + screenshots, start/stop) |
+| `test-discord-bot.sh`     | Send message to Discord bot via osascript           |
+| `test-slack-bot.sh`       | Send message to Slack bot via osascript             |
+| `test-telegram-bot.sh`    | Send message to Telegram bot via osascript          |
+| `test-wechat-bot.sh`      | Send message to WeChat bot via osascript            |
+| `test-lark-bot.sh`        | Send message to Lark / 飞书 bot via osascript       |
+| `test-qq-bot.sh`          | Send message to QQ bot via osascript                |
 
 ### Window Screenshot Utility
 
@@ -1061,25 +478,16 @@ Each script: activates the app, navigates to the channel/contact, pastes the mes
 
 # Screen Recording
 
-Record automated demos by combining `ffmpeg` screen capture with `agent-browser` automation. The script `.agents/skills/local-testing/scripts/record-electron-demo.sh` handles the full lifecycle for Electron.
-
-### Usage
+Record automated demos using `record-app-screen.sh` (start/stop lifecycle, CDP screenshots + ffmpeg assembly). See [references/record-app-screen.md](references/record-app-screen.md) for full documentation.
 
 ```bash
-# Run the built-in demo (queue-edit feature)
-./.agents/skills/local-testing/scripts/record-electron-demo.sh
-
-# Run a custom automation script
-./.agents/skills/local-testing/scripts/record-electron-demo.sh ./my-demo.sh /tmp/my-demo.mp4
+./.agents/skills/local-testing/scripts/electron-dev.sh start
+./.agents/skills/local-testing/scripts/record-app-screen.sh start my-demo
+# ... run automation ...
+./.agents/skills/local-testing/scripts/record-app-screen.sh stop
 ```
 
-The script automatically:
-
-1. Starts Electron with CDP and waits for SPA to load
-2. Detects window position, screen, and Retina scale via Swift/CGWindowList
-3. Records only the Electron window region using `ffmpeg -f avfoundation` with crop
-4. Runs the demo (built-in or custom script receiving CDP port as `$1`)
-5. Stops recording and cleans up
+Outputs to `.records/` directory (gitignored): `<name>.mp4` (video) + `<name>/` (screenshots every 3s).
 
 ---
 
@@ -1098,20 +506,11 @@ The script automatically:
 
 ### Electron-specific
 
-- **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently
+- **Always use `electron-dev.sh stop` to clean up** — `pkill -f "Electron"` only kills the main process; helper processes (GPU, renderer, network) survive. The script finds and kills all of them via PID matching against the project's electron binary path.
+- **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently. The `electron-dev.sh` script handles this automatically.
 - **Don't resize the Electron window after load** — resizing triggers full SPA reload
 - **Store is at `window.__LOBE_STORES`** not `window.__ZUSTAND_STORES__`
 
 ### osascript
 
-- **Accessibility permission required** — first run will prompt for access; grant it in System Preferences > Privacy & Security > Accessibility for Terminal / iTerm / Claude Code
-- **`keystroke` is slow for long text** — always use clipboard paste (`Cmd+V`) for messages over \~20 characters
-- **`keystroke` can mangle non-ASCII** — use clipboard paste for Chinese, emoji, or special characters
-- **`key code 36` is Enter** — this is the hardware key code, works regardless of keyboard layout
-- **`entire contents` is extremely slow** — avoid for complex UIs; use screenshots instead
-- **App name varies by locale** — `微信` vs `WeChat`, `企业微信` vs `WeCom`; handle both
-- **WeChat Enter sends immediately** — use `Shift+Enter` for newlines within a message
-- **Rate limiting** — don't send messages too fast; platforms may throttle or flag automated input
-- **Lark / 飞书 app name varies** — `Lark` (international) vs `飞书` (China mainland); scripts auto-detect
-- **QQ uses `Cmd+F` for search** — not `Cmd+K` like Discord/Slack/Lark
-- **Bot response times vary** — AI-powered bots may take 10-60s; use generous sleep values
+See [reference/osascript-common.md](./reference/osascript-common.md#gotchas) for the full osascript gotchas list (accessibility permissions, `keystroke` non-ASCII issues, locale-specific app names, rate limiting, etc.).

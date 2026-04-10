@@ -287,6 +287,53 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should preserve reasoning in newState when assistant returns tool calls', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onThinking?.('Need to inspect the search results first.');
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        await options?.callback?.onCompletion?.({
+          usage: {
+            totalInputTokens: 1,
+            totalOutputTokens: 2,
+            totalTokens: 3,
+          },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      const result = await executors.call_llm!(instruction, state);
+
+      expect(result.newState.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          reasoning: { content: 'Need to inspect the search results first.' },
+          role: 'assistant',
+          tool_calls: [expect.objectContaining({ id: 'call_1' })],
+        }),
+      );
+    });
+
     it('should execute compress_context and return compression_result', async () => {
       const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
         await options?.callback?.onText?.('summary');
@@ -1155,6 +1202,40 @@ describe('RuntimeExecutors', () => {
         // resolveTopicReferences ran but found no <refer_topic> tags → topicReferences is undefined
         const callArgs = engineSpy.mock.calls[0][0];
         expect(callArgs).not.toHaveProperty('topicReferences');
+      });
+
+      it('should skip rebuilding onboarding context when messages already contain onboarding injection', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: ['lobe-web-onboarding'],
+            slug: 'web-onboarding',
+            systemRole: 'test',
+          } as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [
+              {
+                content:
+                  '<onboarding_context>\n<phase>existing</phase>\n</onboarding_context>\nHello',
+                role: 'user',
+              },
+            ],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('onboardingContext');
       });
     });
   });

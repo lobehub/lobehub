@@ -184,6 +184,8 @@ export interface RunCommandParams {
   command: string;
   cwd?: string;
   description?: string;
+  /** Merged into the child process environment (after `process.env`). */
+  env?: Record<string, string>;
   run_in_background?: boolean;
   timeout?: number;
 }

@@ -1256,6 +1256,10 @@ const zhipuImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      resolution: {
+        default: 'hd',
+        enum: ['hd'],
+      },
       size: {
         default: '1280x1280',
         enum: [
@@ -1268,6 +1272,7 @@ const zhipuImageModels: AIImageModelCard[] = [
           '960x1728',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1286,10 +1291,15 @@ const zhipuImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      resolution: {
+        default: 'standard',
+        enum: ['hd', 'standard'],
+      },
       size: {
         default: '1024x1024',
         enum: ['1024x1024', '768x1344', '864x1152', '1344x768', '1152x864', '1440x720', '720x1440'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1308,10 +1318,15 @@ const zhipuImageModels: AIImageModelCard[] = [
       prompt: {
         default: '',
       },
+      resolution: {
+        default: 'standard',
+        enum: ['hd', 'standard'],
+      },
       size: {
         default: '1024x1024',
         enum: ['1024x1024', '768x1344', '864x1152', '1344x768', '1152x864', '1440x720', '720x1440'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1334,12 +1349,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         enum: ['16:9', '9:16', '1:1'],
       },
       duration: { default: 4, enum: [4] },
-      endImageUrl: {
-        default: null,
-      },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 3,
       },
       prompt: { default: '' },
       size: {
@@ -1507,6 +1520,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      resolution: {
+        default: 'speed',
+        enum: ['speed', 'quality'],
+      },
       size: {
         default: '1920x1080',
         enum: [
@@ -1519,6 +1536,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
           '3840x2160',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1538,6 +1556,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      resolution: {
+        default: 'speed',
+        enum: ['speed', 'quality'],
+      },
       size: {
         default: '1920x1080',
         enum: [
@@ -1551,6 +1573,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
           '3840x2160',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -1570,6 +1593,10 @@ const zhipuVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       prompt: { default: '' },
+      resolution: {
+        default: 'speed',
+        enum: ['speed', 'quality'],
+      },
       size: {
         default: '1920x1080',
         enum: [
@@ -1583,6 +1610,7 @@ const zhipuVideoModels: AIVideoModelCard[] = [
           '3840x2160',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',

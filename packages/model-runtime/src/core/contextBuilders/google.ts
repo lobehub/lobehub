@@ -4,7 +4,6 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { Type as SchemaType } from '@google/genai';
 import { imageUrlToBase64 } from '@lobechat/utils';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
@@ -249,137 +248,25 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 };
 
 /**
- * JSON Schema keywords that cause Google GenAI / Vertex AI SDK validation errors.
- * Other unsupported keywords are silently ignored by the API, so only strip these.
- */
-const UNSUPPORTED_SCHEMA_KEYS = new Set(['examples', 'default', 'additionalProperties', '$ref']);
-
-/**
- * Resolve all `$ref` pointers in a JSON Schema tree by inlining definitions.
- * Only handles internal `#/definitions/…` references (the kind produced by our manifests).
- * Recursive references are guarded by a depth limit to avoid infinite loops.
- */
-const resolveRefs = (
-  node: Record<string, any>,
-  definitions: Record<string, any>,
-  depth = 0,
-): Record<string, any> => {
-  if (!node || typeof node !== 'object' || depth > 10) return node;
-
-  if (Array.isArray(node)) {
-    return node.map((item) => resolveRefs(item, definitions, depth));
-  }
-
-  // Unwrap single-element allOf (common pattern: allOf: [{ $ref: '...' }])
-  if (Array.isArray(node.allOf) && node.allOf.length === 1) {
-    const { allOf, ...rest } = node;
-    return resolveRefs({ ...rest, ...allOf[0] }, definitions, depth);
-  }
-
-  // If this node IS a $ref, replace it with the referenced definition
-  // Preserve sibling fields (e.g. description) that sit next to $ref
-  if (typeof node.$ref === 'string') {
-    const { $ref: ref, ...siblings } = node;
-    const match = ref.match(/^#\/definitions\/(.+)$/);
-    if (match && definitions[match[1]]) {
-      return resolveRefs({ ...definitions[match[1]], ...siblings }, definitions, depth + 1);
-    }
-    // Unknown $ref — return without it so Google doesn't choke
-    return siblings;
-  }
-
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(node)) {
-    // Drop definitions key after resolving — Google doesn't understand it
-    if (key === 'definitions') continue;
-
-    if (value && typeof value === 'object') {
-      result[key] = resolveRefs(value, definitions, depth);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
-};
-
-/**
- * Sanitize JSON Schema for Google GenAI compatibility
- * Google's API doesn't support certain JSON Schema keywords like 'const'
- * This function recursively processes the schema and converts unsupported keywords
- */
-const sanitizeSchemaForGoogle = (
-  schema: Record<string, any>,
-  rootDefinitions?: Record<string, any>,
-): Record<string, any> => {
-  if (!schema || typeof schema !== 'object') return schema;
-
-  // Handle arrays
-  if (Array.isArray(schema)) {
-    return schema.map((item) => sanitizeSchemaForGoogle(item, rootDefinitions));
-  }
-
-  const result: Record<string, any> = {};
-
-  for (const [key, value] of Object.entries(schema)) {
-    // Strip unsupported JSON Schema keywords (e.g. examples, default, $schema)
-    if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
-
-    // Drop definitions — already resolved by resolveRefs
-    if (key === 'definitions') continue;
-
-    // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
-    if (key === 'const') {
-      result['enum'] = [value];
-      continue;
-    }
-
-    // Filter null values from enum arrays (Google doesn't support null in enum)
-    if (key === 'enum' && Array.isArray(value)) {
-      const filteredEnum = value.filter((item) => item !== null);
-      // Only set enum if there are remaining values after filtering
-      if (filteredEnum.length > 0) {
-        result[key] = filteredEnum;
-      }
-      continue;
-    }
-
-    // Recursively process nested objects
-    if (value && typeof value === 'object') {
-      result[key] = sanitizeSchemaForGoogle(value, rootDefinitions);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-};
-
-/**
- * Convert ChatCompletionTool to Google FunctionDeclaration
+ * Convert ChatCompletionTool to Google FunctionDeclaration.
+ * Uses `parametersJsonSchema` to pass standard JSON Schema directly,
+ * avoiding Google's restrictive Schema subset (no $ref, nullable, const, etc.).
  */
 export const buildGoogleTool = (tool: ChatCompletionTool): FunctionDeclaration => {
   const functionDeclaration = tool.function;
   const parameters = functionDeclaration.parameters;
-  // refs: https://github.com/lobehub/lobe-chat/pull/5002
-  const rawProperties =
-    parameters?.properties && Object.keys(parameters.properties).length > 0
-      ? parameters.properties
-      : { dummy: { type: 'string' } }; // dummy property to avoid empty object
 
-  // Resolve $ref references first, then sanitize for Google compatibility
-  const definitions = (parameters as any)?.definitions ?? {};
-  const resolved = resolveRefs(rawProperties, definitions);
-  const properties = sanitizeSchemaForGoogle(resolved, definitions);
+  // refs: https://github.com/lobehub/lobe-chat/pull/5002
+  const hasProperties = parameters?.properties && Object.keys(parameters.properties).length > 0;
+
+  const jsonSchema = hasProperties
+    ? parameters
+    : { type: 'object', properties: { dummy: { type: 'string' } } };
 
   return {
     description: functionDeclaration.description,
     name: functionDeclaration.name,
-    parameters: {
-      description: parameters?.description,
-      properties,
-      required: parameters?.required,
-      type: SchemaType.OBJECT,
-    },
+    parametersJsonSchema: jsonSchema,
   };
 };
 

@@ -1,4 +1,9 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import type {
+  Agent,
+  AgentRuntimeContext,
+  AgentState,
+  GeneralAgentConfig,
+} from '@lobechat/agent-runtime';
 import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
@@ -81,6 +86,13 @@ function formatErrorForState(error: unknown): ChatMessageError {
 
 export interface AgentRuntimeServiceOptions {
   /**
+   * Custom agent factory. When provided, this function is called instead of
+   * the default `new GeneralChatAgent(config)` to create the Agent instance.
+   * This allows injecting alternative Agent implementations (e.g. GraphAgent)
+   * without the service needing to know about them.
+   */
+  agentFactory?: (config: GeneralAgentConfig) => Agent;
+  /**
    * Coordinator configuration options
    * Allows injection of custom stateManager and streamEventManager
    */
@@ -121,6 +133,7 @@ export interface AgentRuntimeServiceOptions {
  * ```
  */
 export class AgentRuntimeService {
+  private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private coordinator: AgentRuntimeCoordinator;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
@@ -148,6 +161,7 @@ export class AgentRuntimeService {
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
     this.snapshotStore = options?.snapshotStore ?? this.createDefaultSnapshotStore();
+    this.agentFactory = options?.agentFactory;
     this.serverDB = db;
     this.userId = userId;
     this.messageModel = new MessageModel(db, this.userId);
@@ -750,6 +764,7 @@ export class AgentRuntimeService {
         const elapsedMs = stepResult.newState?.createdAt
           ? Date.now() - new Date(stepResult.newState.createdAt).getTime()
           : undefined;
+        const stepLabel = metadata?._stepLabel;
         await hookDispatcher.dispatch(
           operationId,
           'afterStep',
@@ -759,6 +774,7 @@ export class AgentRuntimeService {
             elapsedMs,
             executionTimeMs: stepPresentationData.executionTimeMs,
             finalState: stepResult.newState,
+            ...(stepLabel && { stepLabel }),
             lastLLMContent: tracking.lastLLMContent,
             lastToolsCalling: tracking.lastToolsCalling,
             operationId,
@@ -964,10 +980,14 @@ export class AgentRuntimeService {
                 completionReason: reason,
                 error: stepResult.newState.error
                   ? {
-                      message: String(
-                        stepResult.newState.error.message ?? stepResult.newState.error,
+                      message:
+                        this.extractErrorMessage(stepResult.newState.error) ??
+                        JSON.stringify(stepResult.newState.error),
+                      type: String(
+                        stepResult.newState.error.type ??
+                          stepResult.newState.error.errorType ??
+                          'unknown',
                       ),
-                      type: String(stepResult.newState.error.type ?? 'unknown'),
                     }
                   : undefined,
                 model: partial.model,
@@ -1406,8 +1426,8 @@ export class AgentRuntimeService {
     operationId: string;
     stepIndex: number;
   }) {
-    // Create Durable Agent instance
-    const agent = new GeneralChatAgent({
+    // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
+    const generalConfig = {
       agentConfig: metadata?.agentConfig,
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
@@ -1416,7 +1436,11 @@ export class AgentRuntimeService {
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
       operationId,
       userId: metadata?.userId,
-    });
+    };
+
+    const agent = this.agentFactory
+      ? this.agentFactory(generalConfig)
+      : new GeneralChatAgent(generalConfig);
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {

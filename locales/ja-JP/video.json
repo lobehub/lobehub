@@ -12,6 +12,7 @@
   "config.resolution.label": "解像度",
   "config.seed.label": "シード値",
   "config.seed.random": "ランダム",
+  "config.size.label": "サイズ",
   "generation.actions.copyError": "エラーメッセージをコピー",
   "generation.actions.errorCopied": "エラーメッセージをクリップボードにコピーしました",
   "generation.actions.errorCopyFailed": "エラーメッセージのコピーに失敗しました",

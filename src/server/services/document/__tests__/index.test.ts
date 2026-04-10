@@ -70,6 +70,12 @@ describe('DocumentService', () => {
     vi.clearAllMocks();
   });
 
+  describe('constructor', () => {
+    it('should not initialize FileService before file parsing is needed', () => {
+      expect(FileService).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createDocument', () => {
     it('should create a document without knowledgeBase', async () => {
       const mockDoc = { id: 'doc-1', title: 'Test Doc' };

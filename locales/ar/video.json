@@ -12,6 +12,7 @@
   "config.resolution.label": "الدقة",
   "config.seed.label": "البذرة",
   "config.seed.random": "عشوائي",
+  "config.size.label": "الحجم",
   "generation.actions.copyError": "نسخ رسالة الخطأ",
   "generation.actions.errorCopied": "تم نسخ رسالة الخطأ إلى الحافظة",
   "generation.actions.errorCopyFailed": "فشل في نسخ رسالة الخطأ",

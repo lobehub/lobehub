@@ -14,6 +14,7 @@ export type {
   BotPlatformRedisClient,
   BotPlatformRuntimeContext,
   BotProviderConfig,
+  ConnectionMode,
   FieldSchema,
   PlatformClient,
   PlatformDefinition,
@@ -30,6 +31,7 @@ export {
   formatDuration,
   formatTokens,
   formatUsageStats,
+  getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
 } from './utils';

@@ -12,6 +12,7 @@
   "config.resolution.label": "Çözünürlük",
   "config.seed.label": "Tohum",
   "config.seed.random": "Rastgele",
+  "config.size.label": "Boyut",
   "generation.actions.copyError": "Hata Mesajını Kopyala",
   "generation.actions.errorCopied": "Hata Mesajı Panoya Kopyalandı",
   "generation.actions.errorCopyFailed": "Hata Mesajı Kopyalanamadı",

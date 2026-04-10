@@ -635,9 +635,9 @@ describe('VARIABLE_GENERATORS', () => {
       expect(VARIABLE_GENERATORS.userDataPath()).toBe('');
     });
 
-    it('should return default message for working directory when not specified', () => {
+    it('should return empty string for working directory when not on desktop', () => {
       const result = VARIABLE_GENERATORS.workingDirectory();
-      expect(result).toBe('(not specified, use user Desktop directory as default)');
+      expect(result).toBe('');
     });
   });
 

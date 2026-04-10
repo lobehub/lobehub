@@ -229,6 +229,7 @@
   "operation.contextCompression": "Context too long, compressing history...",
   "operation.execAgentRuntime": "Preparing response",
   "operation.execClientTask": "Executing task",
+  "operation.execServerAgentRuntime": "Preparing response (switching tasks or closing the page won't stop)",
   "operation.sendMessage": "Sending message",
   "owner": "Group owner",
   "pageCopilot.title": "Page Agent",

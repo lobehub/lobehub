@@ -47,6 +47,7 @@ vi.mock('@/database/models/agent', () => ({
       provider: 'openai',
       systemRole: 'You are a helpful assistant',
     }),
+    queryAgents: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -365,7 +366,11 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('device-001');
-      expect(topicMock.updateMetadata).not.toHaveBeenCalled();
+      // updateMetadata is called for runningOperation persistence, but not for device binding
+      expect(topicMock.updateMetadata).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ boundDeviceId: expect.anything() }),
+      );
     });
 
     it('should not reuse topic boundDeviceId when no explicit deviceId is provided', async () => {
@@ -491,7 +496,11 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         deviceId: 'device-002',
       });
 
-      expect(topicMock.updateMetadata).not.toHaveBeenCalled();
+      // updateMetadata is called for runningOperation persistence, but not for device binding
+      expect(topicMock.updateMetadata).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ boundDeviceId: expect.anything() }),
+      );
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('device-002');
     });

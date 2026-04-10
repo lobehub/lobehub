@@ -271,6 +271,30 @@ export class TaskModel {
       .orderBy(tasks.sortOrder, tasks.seq);
   }
 
+  /**
+   * Fetch all descendants of a root task using Drizzle select() (returns camelCase fields).
+   * Uses breadth-first traversal with O(depth) queries.
+   */
+  async findAllDescendants(rootTaskId: string): Promise<TaskItem[]> {
+    const all: TaskItem[] = [];
+    let parentIds = [rootTaskId];
+
+    while (parentIds.length > 0) {
+      const children = await this.db
+        .select()
+        .from(tasks)
+        .where(and(inArray(tasks.parentTaskId, parentIds), eq(tasks.createdByUserId, this.userId)))
+        .orderBy(tasks.sortOrder, tasks.seq);
+
+      if (children.length === 0) break;
+
+      all.push(...children);
+      parentIds = children.map((c) => c.id);
+    }
+
+    return all;
+  }
+
   // Recursive query to get full task tree
   async getTaskTree(rootTaskId: string): Promise<TaskItem[]> {
     const result = await this.db.execute(sql`

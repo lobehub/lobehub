@@ -17,6 +17,7 @@ import {
   buildStepSkillDelta,
   buildStepToolDelta,
   type LobeToolManifest,
+  type OnboardingContext,
   type OperationToolSet,
   type ResolvedToolSet,
   resolveTopicReferences,
@@ -39,6 +40,7 @@ import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/type
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { MessageService } from '@/server/services/message';
+import { OnboardingService } from '@/server/services/onboarding';
 import {
   type ToolExecutionResultResponse,
   type ToolExecutionService,
@@ -329,8 +331,14 @@ export const createRuntimeExecutors = (
     }
 
     // Publish stream start event
+    const stepLabel = (instruction as any).stepLabel;
     await streamManager.publishStreamEvent(operationId, {
-      data: { assistantMessage: assistantMessageItem, model, provider },
+      data: {
+        assistantMessage: assistantMessageItem,
+        model,
+        provider,
+        ...(stepLabel && { stepLabel }),
+      },
       stepIndex,
       type: 'stream_start',
     });
@@ -401,9 +409,106 @@ export const createRuntimeExecutors = (
           }
         }
 
+        // Detect onboarding agent and build context injection
+        let onboardingContext: OnboardingContext | undefined;
+        const isOnboardingAgent =
+          agentConfig?.slug === 'web-onboarding' ||
+          resolved.enabledToolIds.includes('lobe-web-onboarding');
+        const alreadyHasOnboardingContext = (
+          llmPayload.messages as Array<{ content: string | unknown }>
+        ).some((message) => {
+          if (typeof message.content !== 'string') return false;
+
+          return (
+            message.content.includes('<onboarding_context>') ||
+            message.content.includes('<current_soul_document>') ||
+            message.content.includes('<current_user_persona>')
+          );
+        });
+
+        if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
+          try {
+            const { formatWebOnboardingStateMessage } =
+              await import('@lobechat/builtin-tool-web-onboarding/utils');
+            const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+            const onboardingState = await onboardingService.getState();
+            const phaseGuidance = formatWebOnboardingStateMessage(onboardingState);
+
+            // Fetch SOUL.md from inbox agent's documents
+            let soulContent: string | null = null;
+            try {
+              const inboxAgentId = await onboardingService.getInboxAgentId();
+              if (inboxAgentId) {
+                const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+                const soulDoc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
+                soulContent = soulDoc?.content ?? null;
+              }
+            } catch (error) {
+              log('Failed to fetch SOUL.md for onboarding context: %O', error);
+            }
+
+            // Fetch user persona
+            let personaContent: string | null = null;
+            try {
+              const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+              const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+              const persona = await personaModel.getLatestPersonaDocument();
+              personaContent = persona?.persona ?? null;
+            } catch (error) {
+              log('Failed to fetch user persona for onboarding context: %O', error);
+            }
+
+            onboardingContext = { personaContent, phaseGuidance, soulContent };
+            log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
+          } catch (error) {
+            log('Failed to build onboarding context: %O', error);
+          }
+        }
+
+        // Build additional placeholder variables for the lobehub builtin skill
+        // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
+        // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
+        // model's prompt without needing a separate context injector.
+        //
+        // - agent_title / agent_description: read directly from agentConfig,
+        //   which is the result of AgentModel.getAgentConfig() and already
+        //   contains the full enriched agent record (title, description, ...).
+        //   No extra query needed.
+        // - topic_title: requires a single primary-key lookup against the
+        //   topics table. Skipped when topicId is missing or the lookup fails
+        //   (best-effort, falls back to empty string so the template still
+        //   renders cleanly).
+        const lobehubSkillAgentId = state.metadata?.agentId;
+        const lobehubSkillTopicId = state.metadata?.topicId;
+        const lobehubSkillAgentMeta = state.metadata?.agentConfig as
+          | { description?: string | null; title?: string | null }
+          | undefined;
+
+        let lobehubSkillTopicTitle = '';
+        if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
+          try {
+            const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId);
+            const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
+            lobehubSkillTopicTitle = topicRecord?.title ?? '';
+          } catch (error) {
+            log('Failed to load topic title for lobehub skill placeholders: %O', error);
+          }
+        }
+
+        const lobehubSkillVariables: Record<string, string> = {
+          agent_id: lobehubSkillAgentId ?? '',
+          agent_title: lobehubSkillAgentMeta?.title ?? '',
+          agent_description: lobehubSkillAgentMeta?.description ?? '',
+          topic_id: lobehubSkillTopicId ?? '',
+          topic_title: lobehubSkillTopicTitle,
+        };
+
         const contextEngineInput = {
           agentDocuments,
-          additionalVariables: state.metadata?.deviceSystemInfo,
+          additionalVariables: {
+            ...state.metadata?.deviceSystemInfo,
+            ...lobehubSkillVariables,
+          },
           userTimezone: ctx.userTimezone,
           capabilities: {
             isCanUseFC: (m: string, p: string) => {
@@ -464,6 +569,7 @@ export const createRuntimeExecutors = (
 
           // Topic reference summaries
           ...(topicReferences && { topicReferences }),
+          ...(onboardingContext && { onboardingContext }),
         };
 
         processedMessages = await serverMessagesEngine(contextEngineInput);
@@ -751,6 +857,7 @@ export const createRuntimeExecutors = (
             data: {
               finalContent: content,
               grounding,
+              ...(stepLabel && { stepLabel }),
               imageList: imageList.length > 0 ? imageList : undefined,
               reasoning: thinkingContent || undefined,
               toolsCalling,
@@ -808,6 +915,7 @@ export const createRuntimeExecutors = (
 
           newState.messages.push({
             content,
+            reasoning: finalReasoning,
             role: 'assistant',
             tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
           });
@@ -824,6 +932,12 @@ export const createRuntimeExecutors = (
 
             newState.usage = usage;
             if (cost) newState.cost = cost;
+          }
+
+          // Propagate stepLabel from instruction to state metadata for hook consumers
+          if (stepLabel) {
+            if (!newState.metadata) newState.metadata = {};
+            newState.metadata._stepLabel = stepLabel;
           }
 
           return {
@@ -1748,6 +1862,16 @@ export const createRuntimeExecutors = (
     const { operationId, stepIndex, streamManager } = ctx;
 
     log('[%s:%d] Finishing execution: (%s)', operationId, stepIndex, reason);
+
+    // Clear runningOperation from topic metadata so reconnect doesn't trigger after completion
+    if (ctx.topicId && ctx.userId) {
+      try {
+        const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+        await topicModel.updateMetadata(ctx.topicId, { runningOperation: null });
+      } catch (e) {
+        log('[%s] Failed to clear runningOperation metadata: %O', operationId, e);
+      }
+    }
 
     // Publish execution complete event
     await streamManager.publishStreamEvent(operationId, {

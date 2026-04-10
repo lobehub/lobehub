@@ -112,7 +112,6 @@ describe('agentGroup actions', () => {
     act(() => {
       useChatStore.setState({
         optimisticCreateTmpMessage: vi.fn(),
-        internal_toggleMessageLoading: vi.fn(),
         internal_dispatchMessage: vi.fn(),
         internal_handleAgentStreamEvent: vi.fn(),
         internal_cleanupAgentOperation: vi.fn(),
@@ -667,12 +666,6 @@ describe('agentGroup actions', () => {
             message: TEST_CONTENT.GROUP_MESSAGE,
           });
         });
-
-        // Should toggle loading off in finally block
-        expect(result.current.internal_toggleMessageLoading).toHaveBeenLastCalledWith(
-          false,
-          expect.any(String),
-        );
       });
 
       it('should handle abort error without calling failOperation', async () => {

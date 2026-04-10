@@ -1,7 +1,11 @@
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import type { StreamChunkData, StreamEvent } from './StreamEventManager';
+import {
+  getDefaultReasonDetail,
+  type StreamChunkData,
+  type StreamEvent,
+} from './StreamEventManager';
 import type { IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
@@ -88,20 +92,15 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       reasonDetail,
     );
 
+    const effectiveReasonDetail = reasonDetail || getDefaultReasonDetail(finalState, reason);
+    const errorType = finalState?.error?.type || finalState?.error?.errorType;
+
     this.pushEvent(operationId, {
-      data: { finalState, reason, reasonDetail },
+      data: { errorType, finalState, reason, reasonDetail: effectiveReasonDetail },
       operationId,
       stepIndex,
       timestamp: Date.now(),
       type: 'agent_runtime_end',
-    });
-
-    const status =
-      reason === 'error' ? 'error' : reason === 'interrupted' ? 'interrupted' : 'completed';
-    this.httpPost('/api/operations/update-status', {
-      operationId,
-      status,
-      summary: reasonDetail,
     });
 
     return result;

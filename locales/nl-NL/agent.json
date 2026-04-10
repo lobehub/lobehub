@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "Optioneel. HTTPS-tunnel-URL voor het doorsturen van webhookverzoeken naar lokale ontwikkelserver.",
   "channel.disabled": "Uitgeschakeld",
   "channel.discord.description": "Verbind deze assistent met een Discord-server voor kanaalchat en directe berichten.",
+  "channel.displayToolCalls": "Hulpmiddeloproepen weergeven",
+  "channel.displayToolCallsHint": "Toon details van hulpmiddeloproepen tijdens AI-antwoorden. Wanneer uitgeschakeld, wordt alleen het uiteindelijke antwoord weergegeven voor een overzichtelijkere ervaring.",
   "channel.dm": "Directe berichten",
   "channel.dmEnabled": "Directe berichten inschakelen",
   "channel.dmEnabledHint": "Sta de bot toe om directe berichten te ontvangen en erop te reageren",

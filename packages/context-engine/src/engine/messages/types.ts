@@ -20,6 +20,7 @@ import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilder
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
+import type { OnboardingContext } from '../../providers/OnboardingContextInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
@@ -276,6 +277,8 @@ export interface MessagesEngineParams {
   discordContext?: DiscordContext;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
+  /** Onboarding context for injecting phase guidance and documents */
+  onboardingContext?: OnboardingContext;
   /** Agent Management context */
   agentManagementContext?: AgentManagementContext;
   /** Agent group configuration for multi-agent scenarios */

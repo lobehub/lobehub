@@ -72,6 +72,7 @@ Module granularity examples:
 ### 5. Create Pull Request
 
 - Create a new branch: `automatic/translate-comments-[module-name]-[date]`
+
 - Commit changes with message format:
 
   ```
@@ -79,7 +80,9 @@ Module granularity examples:
   ```
 
 - Push the branch
+
 - Create a PR with:
+
   - Title: `🌐 chore: translate non-English comments to English in [module-name]`
   - Body following this template:
 

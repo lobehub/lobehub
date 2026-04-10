@@ -70,6 +70,8 @@ export interface ExecAgentResult {
   success: boolean;
   /** ISO timestamp */
   timestamp: string;
+  /** Short-lived JWT token for Gateway WebSocket authentication */
+  token?: string;
   /** The topic ID (created or reused) */
   topicId: string;
   /** The user message ID created for this operation */

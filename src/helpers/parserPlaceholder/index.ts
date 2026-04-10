@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { uuid } from '@lobechat/utils';
 import { template } from 'es-toolkit/compat';
 
@@ -153,16 +154,16 @@ export const VARIABLE_GENERATORS = {
   videosPath: () => globalAgentContextManager.getContext().videosPath ?? '',
   userDataPath: () => globalAgentContextManager.getContext().userDataPath ?? '',
   /**
-   * Working directory: Topic-level setting takes priority over Agent-level setting
+   * Working directory: topic-level override takes priority over agent-level value
    */
   workingDirectory: () => {
-    // First check topic-level working directory
+    if (!isDesktop) return '';
+
     const topicWorkingDir = topicSelectors.currentTopicWorkingDirectory(useChatStore.getState());
     if (topicWorkingDir) return topicWorkingDir;
 
-    // Fallback to agent-level working directory
     const agentWorkingDir = agentSelectors.currentAgentWorkingDirectory(useAgentStore.getState());
-    return agentWorkingDir ?? '(not specified, use user Desktop directory as default)';
+    return agentWorkingDir ?? '(not specified, use user Home directory as default)';
   },
 } as Record<string, () => string>;
 

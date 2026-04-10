@@ -7,7 +7,7 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Read a lightweight onboarding summary. This is advisory context for what is still useful to ask, not a strict step-machine payload.',
+        'Read a lightweight onboarding summary. Note: phase and missing-fields are automatically injected into your system context each turn, so this tool is only needed as a fallback when you are uncertain about the current state.',
       name: WebOnboardingApiName.getOnboardingState,
       parameters: {
         properties: {},
@@ -57,7 +57,7 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read a document by type. Use "soul" to read SOUL.md (agent identity + base template), or "persona" to read the user persona document (user identity, work style, context, pain points).',
+        'Read a document by type. Note: document contents are automatically injected into your system context (in <current_soul_document> and <current_user_persona> tags), so this tool is only needed as a fallback. Use "soul" for SOUL.md or "persona" for the user persona document.',
       name: WebOnboardingApiName.readDocument,
       parameters: {
         properties: {

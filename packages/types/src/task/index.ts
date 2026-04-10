@@ -42,6 +42,7 @@ export interface TaskTopicHandoff {
 
 export interface TaskDetailSubtask {
   blockedBy?: string;
+  children?: TaskDetailSubtask[];
   identifier: string;
   name?: string | null;
   priority?: number | null;

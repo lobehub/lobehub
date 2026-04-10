@@ -10,11 +10,17 @@ import {
 } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { LobeToolManifest, ToolSource } from '@lobechat/context-engine';
+import type {
+  AgentManagementContext,
+  LobeToolManifest,
+  ToolSource,
+} from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
+  ChatFileItem,
   ChatTopicBotContext,
+  ChatVideoItem,
   ExecAgentParams,
   ExecAgentResult,
   ExecGroupAgentParams,
@@ -37,6 +43,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
+import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
   createServerAgentToolsEngine,
   type EvalContext,
@@ -50,6 +57,7 @@ import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
@@ -676,9 +684,45 @@ export class AiAgentService {
       }
     }
 
-    // 9.5. Build Agent Management context if agent-management tool is enabled
+    // 9.5. Build Agent Management context
+    // - availableAgents is injected whenever the user is in auto mode (so the supervisor
+    //   can decide to activate agent-management on its own) OR when the tool is explicitly enabled.
+    // - availableProviders / availablePlugins are only built when the tool is explicitly
+    //   enabled, since they're solely needed for createAgent / updateAgent.
     const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
-    let agentManagementContext;
+    const isInAutoSkillMode = agentConfig.chatConfig?.skillActivateMode !== 'manual';
+    const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
+    let agentManagementContext: AgentManagementContext | undefined;
+
+    if (shouldInjectAvailableAgents) {
+      // Query user's most recently updated agents.
+      // Over-fetch by 2: +1 reserved for the current agent (filtered out below
+      // so the model has no exposure to its own id and cannot self-delegate)
+      // and +1 to detect overflow for the `hasMore` flag.
+      const AVAILABLE_AGENTS_LIMIT = 10;
+      const recentAgents = await this.agentModel.queryAgents({
+        limit: AVAILABLE_AGENTS_LIMIT + 2,
+      });
+
+      // Exclude the current agent from `availableAgents` — the model is the current
+      // agent. Its persona/identity is already established by `systemRole`, so we
+      // don't re-inject it here, and removing self from the list ensures the model
+      // never sees its own id in the agent-management context (so it can't
+      // accidentally call itself via `callAgent`).
+      const otherAgents = recentAgents.filter((a) => a.id !== resolvedAgentId);
+      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+        description: a.description ?? undefined,
+        id: a.id,
+        title: a.title ?? 'Untitled',
+      }));
+
+      agentManagementContext = {
+        availableAgents,
+        availableAgentsHasMore: hasMoreAgents,
+      };
+    }
+
     if (isAgentManagementEnabled) {
       // Query user's enabled models from database
       const aiModelModel = new AiModelModel(this.db, this.userId);
@@ -755,16 +799,26 @@ export class AiAgentService {
         })),
       ];
 
+      // Merge models / plugins into the (already-initialized) agentManagementContext.
+      // availableAgents was populated above by `shouldInjectAvailableAgents`, which is
+      // always true when isAgentManagementEnabled.
       agentManagementContext = {
+        ...agentManagementContext!,
         availablePlugins,
         // Limit to first 5 providers to avoid context bloat
         availableProviders: Array.from(providerMap.values()).slice(0, 5),
       };
 
       log(
-        'execAgent: built agentManagementContext with %d providers and %d plugins',
-        agentManagementContext.availableProviders.length,
-        agentManagementContext.availablePlugins.length,
+        'execAgent: built agentManagementContext with %d providers, %d plugins, %d agents',
+        agentManagementContext.availableProviders!.length,
+        agentManagementContext.availablePlugins!.length,
+        agentManagementContext.availableAgents?.length ?? 0,
+      );
+    } else if (agentManagementContext) {
+      log(
+        'execAgent: injected availableAgents only (auto mode, agent-management tool not enabled): %d agents',
+        agentManagementContext.availableAgents?.length ?? 0,
       );
     }
 
@@ -833,10 +887,15 @@ export class AiAgentService {
     // 12. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
+    let videoList: ChatVideoItem[] | undefined;
+    let fileList: ChatFileItem[] | undefined;
 
     if (files && files.length > 0) {
       fileIds = [];
       imageList = [];
+      videoList = [];
+      fileList = [];
+      const documentService = new DocumentService(this.db, this.userId);
 
       for (const file of files) {
         await throwIfExecutionAborted('file upload');
@@ -851,16 +910,61 @@ export class AiAgentService {
               id: result.fileId,
               url: result.resolvedUrl,
             });
+            continue;
           }
+
+          if (result.isVideo) {
+            videoList.push({
+              alt: file.name || 'video',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video: parse file content into the documents table so
+          // the MessageContentProcessor can inject it via filesPrompts(). Mirrors
+          // what the web upload path does, ensuring bot-uploaded PDFs / text /
+          // JSON / .skill files are actually visible to the LLM (instead of
+          // being silently uploaded but never read).
+          let content: string | undefined;
+          try {
+            const document = await documentService.parseFile(result.fileId);
+            content = document.content ?? undefined;
+          } catch (parseError) {
+            log(
+              'execAgent: parseFile failed for %s (fileId=%s): %O',
+              file.name,
+              result.fileId,
+              parseError,
+            );
+          }
+
+          fileList.push({
+            content,
+            fileType: file.mimeType ?? 'application/octet-stream',
+            id: result.fileId,
+            name: file.name ?? 'file',
+            size: file.size ?? 0,
+            url: result.resolvedUrl || '',
+          });
         } catch (error) {
           log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
         }
       }
 
       if (fileIds.length > 0) {
-        log('execAgent: uploaded %d files to S3', fileIds.length);
+        log(
+          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d documents)',
+          fileIds.length,
+          imageList.length,
+          videoList.length,
+          fileList.length,
+        );
       }
       if (imageList.length === 0) imageList = undefined;
+      if (videoList.length === 0) videoList = undefined;
+      if (fileList.length === 0) fileList = undefined;
     }
 
     await throwIfExecutionAborted('message creation');
@@ -896,8 +1000,17 @@ export class AiAgentService {
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
 
-    // Create user message object for processing (include imageList for vision models)
-    const userMessage = { content: prompt, imageList, role: 'user' as const };
+    // Create user message object for processing.
+    // - imageList: vision models render these as image_url parts
+    // - videoList: video-capable models render these as video parts
+    // - fileList: MessageContentProcessor injects content via filesPrompts() XML
+    const userMessage = {
+      content: prompt,
+      fileList,
+      imageList,
+      role: 'user' as const,
+      videoList,
+    };
 
     // Combine history messages with user message
     const allMessages = resume ? historyMessages : [...historyMessages, userMessage];
@@ -1025,6 +1138,24 @@ export class AiAgentService {
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
 
+      // Persist running operation to topic metadata for reconnect after page reload
+      await this.topicModel.updateMetadata(topicId, {
+        runningOperation: {
+          assistantMessageId: assistantMessageRecord.id,
+          operationId,
+          scope: appContext?.scope ?? undefined,
+          threadId: appContext?.threadId ?? undefined,
+        },
+      });
+
+      // Generate a short-lived JWT for Gateway WebSocket authentication
+      let gatewayToken: string | undefined;
+      try {
+        gatewayToken = await signUserJWT(this.userId);
+      } catch {
+        log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
+      }
+
       return {
         agentId: resolvedAgentId,
         assistantMessageId: assistantMessageRecord.id,
@@ -1036,6 +1167,7 @@ export class AiAgentService {
         status: 'created',
         success: true,
         timestamp: new Date().toISOString(),
+        token: gatewayToken,
         topicId,
         userMessageId: userMessageRecord?.id ?? parentMessageId ?? '',
       };

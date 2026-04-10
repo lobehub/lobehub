@@ -84,6 +84,10 @@ const Footer = memo<FooterProps>(
     const platformId = platformDef.id;
     const applicationId = AntdForm.useWatch('applicationId', form);
 
+    const settingsConnectionMode = AntdForm.useWatch(['settings', 'connectionMode'], form);
+
+    const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
+
     const webhookUrl = applicationId
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
       : `${origin}/api/agent/webhooks/${platformId}`;
@@ -163,7 +167,37 @@ const Footer = memo<FooterProps>(
           />
         )}
 
-        {hasConfig && platformDef.showWebhookUrl && (
+        {hasConfig && showWebhookUrl && platformId === 'qq' && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.qq.webhookMigrationDesc')}
+            message={t('channel.qq.webhookMigrationTitle')}
+            type="warning"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && platformId === 'slack' && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.slack.webhookMigrationDesc')}
+            message={t('channel.slack.webhookMigrationTitle')}
+            type="warning"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && (platformId === 'feishu' || platformId === 'lark') && (
+          <Alert
+            closable
+            showIcon
+            description={t('channel.feishu.webhookMigrationDesc')}
+            message={t('channel.feishu.webhookMigrationTitle')}
+            type="warning"
+          />
+        )}
+
+        {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>
               <span style={{ fontWeight: 600 }}>{t('channel.endpointUrl')}</span>

@@ -12,6 +12,7 @@
   "config.resolution.label": "Резолюция",
   "config.seed.label": "Сийд",
   "config.seed.random": "Случаен",
+  "config.size.label": "Размер",
   "generation.actions.copyError": "Копирай съобщението за грешка",
   "generation.actions.errorCopied": "Съобщението за грешка е копирано в клипборда",
   "generation.actions.errorCopyFailed": "Неуспешно копиране на съобщението за грешка",

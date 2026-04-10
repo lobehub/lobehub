@@ -12,6 +12,7 @@
   "config.resolution.label": "Risoluzione",
   "config.seed.label": "Seed",
   "config.seed.random": "Casuale",
+  "config.size.label": "Dimensione",
   "generation.actions.copyError": "Copia Messaggio di Errore",
   "generation.actions.errorCopied": "Messaggio di Errore Copiato negli Appunti",
   "generation.actions.errorCopyFailed": "Copia del Messaggio di Errore Fallita",

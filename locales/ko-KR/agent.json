@@ -38,6 +38,8 @@
   "channel.devWebhookProxyUrlHint": "선택 사항. 로컬 개발 서버로 웹훅 요청을 전달하기 위한 HTTPS 터널 URL입니다.",
   "channel.disabled": "비활성화됨",
   "channel.discord.description": "이 어시스턴트를 Discord 서버에 연결하여 채널 채팅 및 직접 메시지를 사용할 수 있습니다.",
+  "channel.displayToolCalls": "도구 호출 표시",
+  "channel.displayToolCallsHint": "AI 응답 중 도구 호출 세부 정보를 표시합니다. 비활성화하면 최종 응답만 표시되어 더 깔끔한 경험을 제공합니다.",
   "channel.dm": "직접 메시지",
   "channel.dmEnabled": "DM 활성화",
   "channel.dmEnabledHint": "봇이 직접 메시지를 받고 응답할 수 있도록 허용",

@@ -4,6 +4,7 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
+import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type {
   AgentBuilderContext,
@@ -15,6 +16,7 @@ import type {
   GTDConfig,
   LobeToolManifest,
   MemoryContext,
+  OnboardingContext,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
@@ -33,7 +35,7 @@ import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
 import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
@@ -400,8 +402,52 @@ export const contextEngineering = async ({
     }
   }
 
-  // Build Agent Management context if Agent Management tool is enabled
+  // Build Agent Management context.
+  // - availableAgents is injected whenever the user is in auto skill mode (so the
+  //   supervisor can decide to activate agent-management on its own) OR when the tool
+  //   is explicitly enabled.
+  // - availableProviders / availablePlugins are only built when the tool is explicitly
+  //   enabled, since they're solely needed for createAgent / updateAgent.
   let agentManagementContext: AgentManagementContext | undefined;
+
+  const isInAutoSkillMode =
+    agentChatConfigSelectors.skillActivateMode(agentStoreState) !== 'manual';
+  const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
+
+  if (shouldInjectAvailableAgents) {
+    try {
+      // Over-fetch by 2: +1 reserved for the current agent (filtered out below
+      // so the model has no exposure to its own id and cannot self-delegate)
+      // and +1 to detect overflow for the `hasMore` flag.
+      const AVAILABLE_AGENTS_LIMIT = 10;
+      const recentAgents = await lambdaClient.agent.queryAgents.query({
+        limit: AVAILABLE_AGENTS_LIMIT + 2,
+      });
+
+      // Exclude current agent from `availableAgents`. The model is the current
+      // agent — its identity/persona is already established by `systemRole`, so
+      // we don't re-inject it here, and removing self from the list ensures the
+      // model never sees its own id in the agent-management context (so it
+      // cannot accidentally call itself via `callAgent`).
+      const otherAgents = agentId ? recentAgents.filter((a) => a.id !== agentId) : recentAgents;
+      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
+      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
+        description: a.description ?? undefined,
+        id: a.id,
+        title: a.title ?? 'Untitled',
+      }));
+
+      agentManagementContext = {
+        availableAgents,
+        availableAgentsHasMore: hasMoreAgents,
+      };
+      log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
+    } catch (error) {
+      // Silently fail - availableAgents context is optional
+      log('Failed to fetch availableAgents: %O', error);
+    }
+  }
+
   if (isAgentManagementEnabled) {
     // Get enabled providers and models from aiInfra store
     const aiProviderState = getAiInfraStoreState();
@@ -484,14 +530,16 @@ export const contextEngineering = async ({
     }
 
     agentManagementContext = {
+      ...agentManagementContext,
       availablePlugins,
       availableProviders,
     };
 
     log(
-      'agentManagementContext built: %d providers, %d plugins',
+      'agentManagementContext built: %d providers, %d plugins, %d agents',
       agentManagementContext.availableProviders?.length ?? 0,
       agentManagementContext.availablePlugins?.length ?? 0,
+      agentManagementContext.availableAgents?.length ?? 0,
     );
   }
 
@@ -525,6 +573,45 @@ export const contextEngineering = async ({
       }));
     },
   );
+
+  // Build onboarding context if this is the web-onboarding agent
+  let onboardingContext: OnboardingContext | undefined;
+  const isOnboardingAgent = tools?.includes(WebOnboardingIdentifier);
+  if (isOnboardingAgent) {
+    try {
+      const { userService } = await import('@/services/user');
+      const { formatWebOnboardingStateMessage } =
+        await import('@lobechat/builtin-tool-web-onboarding/utils');
+      const state = await userService.getOnboardingState();
+      const phaseGuidance = formatWebOnboardingStateMessage(state);
+
+      // Fetch SOUL.md and persona documents via raw DB access to avoid placeholder text
+      let soulContent: string | null = null;
+      let personaContent: string | null = null;
+      try {
+        const soulDoc = await userService.readOnboardingDocument('soul');
+        // Only inject real content, not empty-state placeholder messages
+        if (soulDoc?.id && soulDoc.content) {
+          soulContent = soulDoc.content;
+        }
+      } catch {
+        // Ignore — document may not exist yet
+      }
+      try {
+        const personaDoc = await userService.readOnboardingDocument('persona');
+        if (personaDoc?.id && personaDoc.content) {
+          personaContent = personaDoc.content;
+        }
+      } catch {
+        // Ignore — document may not exist yet
+      }
+
+      onboardingContext = { personaContent, phaseGuidance, soulContent };
+      log('Built onboarding context, phase: %s', state.phase);
+    } catch (error) {
+      log('Failed to build onboarding context: %O', error);
+    }
+  }
 
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
@@ -592,15 +679,34 @@ export const contextEngineering = async ({
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
+      // Current agent + topic identity — referenced by the LobeHub builtin
+      // skill (packages/builtin-skills/src/lobehub/content.ts) so the model
+      // can run `lh agent run -a {{agent_id}}` etc without first having to
+      // search for itself. Read lazily from stores so we only pay the cost
+      // when the placeholder actually appears in a rendered message.
+      agent_id: () => agentId ?? '',
+      agent_title: () =>
+        agentId ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? '') : '',
+      agent_description: () =>
+        agentId
+          ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.description ?? '')
+          : '',
+      topic_id: () => topicId ?? '',
+      topic_title: () => {
+        if (!topicId) return '';
+        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+        return topic?.title ?? '';
+      },
     },
 
     // Extended contexts - only pass when enabled
     ...(isAgentBuilderEnabled && { agentBuilderContext }),
     ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
-    ...((isAgentManagementEnabled || hasMentionedAgents) && { agentManagementContext }),
+    ...(agentManagementContext && { agentManagementContext }),
     ...(agentGroup && { agentGroup }),
     ...(gtdConfig && { gtd: gtdConfig }),
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
+    ...(onboardingContext && { onboardingContext }),
   });
 
   log('Input messages count: %d', messages.length);

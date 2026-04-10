@@ -2,17 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { DocumentService } from '@/server/services/document';
 
 import { NotebookRuntimeService } from '../index';
 
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/topicDocument');
+vi.mock('@/server/services/document');
 
 describe('NotebookRuntimeService', () => {
   let service: NotebookRuntimeService;
   const mockDb = {} as any;
   const mockUserId = 'test-user';
   let mockDocumentModel: any;
+  let mockDocumentService: any;
   let mockTopicDocumentModel: any;
 
   beforeEach(() => {
@@ -25,6 +28,10 @@ describe('NotebookRuntimeService', () => {
       update: vi.fn(),
     };
 
+    mockDocumentService = {
+      deleteDocument: vi.fn(),
+    };
+
     mockTopicDocumentModel = {
       associate: vi.fn(),
       deleteByDocumentId: vi.fn(),
@@ -32,6 +39,7 @@ describe('NotebookRuntimeService', () => {
     };
 
     vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
+    vi.mocked(DocumentService).mockImplementation(() => mockDocumentService);
     vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel);
 
     service = new NotebookRuntimeService({ serverDB: mockDb, userId: mockUserId });
@@ -169,12 +177,12 @@ describe('NotebookRuntimeService', () => {
   describe('deleteDocument', () => {
     it('should delete associations first then the document', async () => {
       mockTopicDocumentModel.deleteByDocumentId.mockResolvedValue(undefined);
-      mockDocumentModel.delete.mockResolvedValue(undefined);
+      mockDocumentService.deleteDocument.mockResolvedValue(undefined);
 
       await service.deleteDocument('doc-1');
 
       expect(mockTopicDocumentModel.deleteByDocumentId).toHaveBeenCalledWith('doc-1');
-      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1');
     });
   });
 

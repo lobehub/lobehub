@@ -73,8 +73,6 @@ export class AgentActionImpl {
     });
 
     // Stop loading state
-    this.#get().internal_toggleMessageLoading(false, assistantId);
-
     // Clean up operation (this will cancel the operation)
     this.#get().internal_cleanupAgentOperation(assistantId);
   };
@@ -131,7 +129,7 @@ export class AgentActionImpl {
 
         // Stop loading state
         log(`Stopping loading for completed agent runtime: ${assistantId}`);
-        this.#get().internal_toggleMessageLoading(false, assistantId);
+
         break;
       }
 
@@ -235,7 +233,6 @@ export class AgentActionImpl {
 
         // Stop loading state
         log(`Stopping loading for ${assistantId}`);
-        this.#get().internal_toggleMessageLoading(false, assistantId);
 
         // Show desktop notification
         if (isDesktop) {
@@ -290,7 +287,6 @@ export class AgentActionImpl {
 
           // Stop loading state, waiting for human intervention
           log(`Stopping loading for human approval: ${assistantId}`);
-          this.#get().internal_toggleMessageLoading(false, assistantId);
         } else if (phase === 'tool_execution' && toolCall) {
           log(`Tool execution started for ${assistantId}: ${toolCall.function?.name}`);
         }
@@ -312,7 +308,6 @@ export class AgentActionImpl {
           });
 
           log(`Stopping loading for completed agent: ${assistantId}`);
-          this.#get().internal_toggleMessageLoading(false, assistantId);
         }
         break;
       }
@@ -361,9 +356,6 @@ export class AgentActionImpl {
         data,
         operationId: messageOpId,
       });
-
-      // Resume loading state
-      this.#get().internal_toggleMessageLoading(true, assistantId);
 
       // Clear human intervention state
       this.#get().updateOperationMetadata(messageOpId, {

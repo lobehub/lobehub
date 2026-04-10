@@ -20,129 +20,183 @@ By connecting a Slack channel to your LobeHub agent, users can interact with the
 - A LobeHub account with an active subscription
 - A Slack workspace where you have permission to install apps
 
-## Step 1: Create a Slack App
+## Connection Modes
+
+LobeHub supports two connection modes for Slack:
+
+- **Socket Mode / WebSocket (Recommended)** — Real-time event delivery via WebSocket. No public URL required. Ideal for development and private deployments.
+- **Webhook** — Stateless HTTP callbacks via the Events API. Requires a publicly accessible URL. Use this if your Slack app already has Event Subscriptions configured.
+
+## Socket Mode Setup (Recommended)
+
+### Step 1: Create a Slack App from Manifest
 
 <Steps>
-  ### Go to the Slack API Dashboard
+  ### Open the Slack API Dashboard
 
-  Visit [Slack API Apps](https://api.slack.com/apps) and click **Create New App**. Choose **From scratch**, give your app a name (e.g., "LobeHub Assistant"), select the workspace to install it in, and click **Create App**.
+  Visit [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App** → **From an app manifest**.
 
-  ### Copy the App ID and Signing Secret
+  ### Select Your Workspace
 
-  On the **Basic Information** page, copy and save:
+  Choose the Slack workspace where you want to install the app.
 
-  - **App ID** — displayed at the top of the page
-  - **Signing Secret** — under the **App Credentials** section
+  ### Paste the Manifest
+
+  Select **YAML** format and paste the following manifest template:
+
+  ```yaml
+  display_information:
+    name: LobeHub Assistant
+    description: AI assistant powered by LobeHub
+  features:
+    app_home:
+      home_tab_enabled: false
+      messages_tab_enabled: true
+      messages_tab_read_only_enabled: false
+    bot_user:
+      display_name: LobeHub Assistant
+      always_online: true
+  oauth_config:
+    scopes:
+      bot:
+        - app_mentions:read
+        - channels:history
+        - channels:read
+        - chat:write
+        - groups:history
+        - groups:read
+        - im:history
+        - im:read
+        - mpim:history
+        - mpim:read
+        - reactions:read
+        - reactions:write
+        - users:read
+        - assistant:write
+  settings:
+    event_subscriptions:
+      bot_events:
+        - app_mention
+        - message.channels
+        - message.groups
+        - message.im
+        - message.mpim
+        - member_joined_channel
+        - assistant_thread_started
+        - assistant_thread_context_changed
+    org_deploy_enabled: false
+    socket_mode_enabled: true
+    token_rotation_enabled: false
+  ```
+
+  > **Note:** `socket_mode_enabled: true` means no Request URL is needed. Events are delivered via WebSocket.
+
+  ### Create the App
+
+  Review the summary and click **Create**.
 
   ![](/blog/assets3865756ef6158a855aee64dd01bd3d6b.webp)
+</Steps>
 
-  ### Add Bot Token Scopes
+### Step 2: Collect Credentials
 
-  In the left sidebar, go to **OAuth & Permissions**. Scroll down to **Scopes** → **Bot Token Scopes** and add the following:
+<Steps>
+  ### Copy the App ID and Signing Secret
 
-  - `app_mentions:read` — Detect when the bot is mentioned
-  - `channels:history` — Read messages in public channels
-  - `channels:read` — Read channel info
-  - `chat:write` — Send messages
-  - `groups:history` — Read messages in private channels
-  - `groups:read` — Read private channel info
-  - `im:history` — Read direct messages
-  - `im:read` — Read DM channel info
-  - `mpim:history` — Read group DM messages
-  - `mpim:read` — Read group DM channel info
-  - `reactions:read` — Read reactions
-  - `reactions:write` — Add reactions
-  - `users:read` — Look up user info
+  On the **Basic Information** page, copy:
 
-  **Optional scopes** (for Slack Assistants API support):
+  - **App ID** — displayed at the top
+  - **Signing Secret** — under **App Credentials**
 
-  - `assistant:write` — Enable the Slack Assistants API features
+  ### Generate an App-Level Token
+
+  Scroll down to **App-Level Tokens** and click **Generate Token and Scopes**. Name it (e.g., "socket-mode"), add the `connections:write` scope, and click **Generate**.
+
+  Copy the token (starts with `xapp-`).
+
+  > **Important:** This token is only shown once. Store it securely.
 
   ### Install the App to Your Workspace
 
-  Still on the **OAuth & Permissions** page, click **Install to Workspace** and authorize the app. After installation, copy the **Bot User OAuth Token** (starts with `xoxb-`).
-
-  > **Important:** Treat your bot token like a password. Never share it publicly or commit it to version control.
+  Go to **OAuth & Permissions** in the sidebar, click **Install to Workspace**, and authorize. Copy the **Bot User OAuth Token** (starts with `xoxb-`).
 
   ![](/blog/assetsfd4606a4b5d801a8764bf333cde77d57.webp)
 </Steps>
 
-## Step 2: Configure Slack in LobeHub
+### Step 3: Configure Slack in LobeHub
 
 <Steps>
   ### Open Channel Settings
 
-  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **Slack** from the platform list.
+  In LobeHub, navigate to your agent's settings → **Channels** tab → click **Slack**.
 
-  ### Fill in the Credentials
+  ### Enter Credentials
 
-  Enter the following fields:
+  Fill in:
 
-  - **Application ID** — The App ID from your Slack app's Basic Information page
-  - **Bot Token** — The Bot User OAuth Token (xoxb-...) from OAuth & Permissions
-  - **Signing Secret** — The Signing Secret from your Slack app's Basic Information page
+  - **Application ID** — The App ID
+  - **Bot Token** — The Bot User OAuth Token (`xoxb-...`)
+  - **Signing Secret** — The Signing Secret
+  - **App-Level Token** — The app-level token (`xapp-...`)
 
-  Your token will be encrypted and stored securely.
+  ### Select Connection Mode
+
+  In **Advanced Settings**, set **Connection Mode** to **WebSocket**.
 
   ### Save Configuration
 
-  Click **Save Configuration**. LobeHub will save your credentials and display a **Webhook URL**.
-
-  ### Copy the Webhook URL
-
-  Copy the displayed Webhook URL — you will need it in the next step to configure Slack's Event Subscriptions.
+  Click **Save Configuration**. The bot will automatically connect via Socket Mode. No webhook URL configuration is needed.
 
   ![](/blog/assetsc3042da681a9df811e70473636a8f461.webp)
 </Steps>
 
-## Step 3: Configure Event Subscriptions
+### Step 4: Test the Connection
+
+Click **Test Connection** in LobeHub, then go to Slack, invite the bot to a channel, and mention it with `@LobeHub Assistant` to confirm it responds.
+
+---
+
+## Webhook Setup (Alternative)
+
+Use this method if your Slack app already has Event Subscriptions configured with a public HTTP endpoint, or if you cannot use Socket Mode.
 
 <Steps>
-  ### Enable Events
+  ### Create a Slack App
 
-  Back in the [Slack API Dashboard](https://api.slack.com/apps), go to **Event Subscriptions** and toggle **Enable Events** to **On**.
+  Visit [api.slack.com/apps](https://api.slack.com/apps), click **Create New App** → **From scratch**. Name your app and select the workspace.
 
-  ### Set the Request URL
+  ### Add Bot Token Scopes
 
-  Paste the **Webhook URL** you copied from LobeHub into the **Request URL** field. Slack will send a verification challenge — LobeHub will respond automatically.
+  Go to **OAuth & Permissions** → **Bot Token Scopes** and add: `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `reactions:read`, `reactions:write`, `users:read`.
 
-  ### Subscribe to Bot Events
+  ### Install to Workspace
 
-  Under **Subscribe to bot events**, add:
+  Click **Install to Workspace** and copy the **Bot User OAuth Token** (`xoxb-...`).
 
-  - `app_mention` — Triggered when someone mentions the bot
-  - `message.channels` — Messages in public channels
-  - `message.groups` — Messages in private channels
-  - `message.im` — Direct messages to the bot
-  - `message.mpim` — Messages in group DMs
-  - `member_joined_channel` — When a user joins a channel
+  ### Configure in LobeHub
 
-  **Optional events** (for Slack Assistants API support):
+  Enter **Application ID**, **Bot Token**, and **Signing Secret** in LobeHub's Slack channel settings. Set **Connection Mode** to **Webhook** in Advanced Settings. Save and copy the displayed **Webhook URL**.
 
-  - `assistant_thread_started` — When a user opens a new assistant thread
-  - `assistant_thread_context_changed` — When a user navigates to a different channel with the assistant panel open
+  ### Configure Event Subscriptions
 
-  ### Save Changes
-
-  Click **Save Changes** at the bottom of the page.
+  In the Slack API Dashboard → **Event Subscriptions**, enable events, paste the Webhook URL as the **Request URL**, and subscribe to bot events: `app_mention`, `message.channels`, `message.groups`, `message.im`, `message.mpim`, `member_joined_channel`.
 
   ![](/blog/assets8f3657f3785fc04c42b0f53c17daa72e.webp)
 </Steps>
 
-## Step 4: Test the Connection
-
-Back in LobeHub's channel settings for Slack, click **Test Connection** to verify the integration. Then go to your Slack workspace, invite the bot to a channel, and mention it with `@YourBotName` to confirm it responds.
-
 ## Configuration Reference
 
-| Field              | Required | Description                                |
-| ------------------ | -------- | ------------------------------------------ |
-| **Application ID** | Yes      | Your Slack app's ID                        |
-| **Bot Token**      | Yes      | Bot User OAuth Token (xoxb-...)            |
-| **Signing Secret** | Yes      | Used to verify webhook requests from Slack |
+| Field               | Required         | Description                                           |
+| ------------------- | ---------------- | ----------------------------------------------------- |
+| **Application ID**  | Yes              | Your Slack app's ID                                   |
+| **Bot Token**       | Yes              | Bot User OAuth Token (`xoxb-...`)                     |
+| **Signing Secret**  | Yes              | Used to verify requests from Slack                    |
+| **App-Level Token** | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection |
+| **Connection Mode** | No               | `websocket` or `webhook` (default: `webhook`)         |
 
 ## Troubleshooting
 
-- **Bot not responding:** Confirm the bot has been invited to the channel and the Event Subscriptions are correctly configured with the right webhook URL.
-- **Test Connection failed:** Double-check the Application ID and Bot Token are correct. Ensure the app is installed to the workspace.
-- **Webhook verification failed:** Make sure the Signing Secret matches the one in your Slack app's Basic Information page.
+- **Bot not responding:** Confirm the bot has been invited to the channel. For Socket Mode, ensure the App-Level Token is correct and Socket Mode is enabled in Slack app settings.
+- **Test Connection failed:** Double-check the Application ID and Bot Token. Ensure the app is installed to the workspace.
+- **Webhook verification failed (Webhook mode):** Make sure the Signing Secret matches and the Webhook URL is correct.
+- **Socket Mode not connecting:** Verify the App-Level Token has the `connections:write` scope. Check that Socket Mode is enabled in your Slack app settings under **Socket Mode**.

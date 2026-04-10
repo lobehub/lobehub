@@ -22,6 +22,14 @@ export interface LarkAdapterConfig {
 export interface LarkThreadId {
   /** Lark chat ID (group or P2P) */
   chatId: string;
+  /**
+   * Lark chat type, encoded into the threadId so the sync `isDM(threadId)`
+   * the Chat SDK requires can derive the answer without a side cache.
+   * `undefined` means unknown — produced by paths that don't have the chat
+   * type at hand (e.g. `parseMessage` for historical fetches), and decoded
+   * back from the legacy 2-segment threadId format for backward compat.
+   */
+  chatType?: 'p2p' | 'group';
   /** Platform variant */
   platform: 'lark' | 'feishu';
 }

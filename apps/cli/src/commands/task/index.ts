@@ -296,23 +296,34 @@ export function registerTaskCommand(program: Command) {
       }
       if (t.error) console.log(`${pc.red('Error:')} ${t.error}`);
 
-      // ── Subtasks ──
+      // ── Subtasks (nested tree) ──
       if (t.subtasks && t.subtasks.length > 0) {
-        // Build lookup: which subtasks are completed
-        const completedIdentifiers = new Set(
-          t.subtasks.filter((s) => s.status === 'completed').map((s) => s.identifier),
-        );
+        // Build lookup: which subtasks are completed (flatten tree)
+        const collectCompleted = (nodes: typeof t.subtasks, set: Set<string>): Set<string> => {
+          for (const s of nodes!) {
+            if (s.status === 'completed') set.add(s.identifier);
+            if (s.children) collectCompleted(s.children, set);
+          }
+          return set;
+        };
+        const completedIdentifiers = collectCompleted(t.subtasks, new Set());
+
+        const renderSubtasks = (nodes: typeof t.subtasks, indent: string) => {
+          for (const s of nodes!) {
+            const depInfo = s.blockedBy ? pc.dim(` ← blocks: ${s.blockedBy}`) : '';
+            const isBlocked = s.blockedBy && !completedIdentifiers.has(s.blockedBy);
+            const displayStatus = s.status === 'backlog' && isBlocked ? 'blocked' : s.status;
+            console.log(
+              `${indent}${pc.dim(s.identifier)} ${statusBadge(displayStatus)} ${s.name || '(unnamed)'}${depInfo}`,
+            );
+            if (s.children && s.children.length > 0) {
+              renderSubtasks(s.children, indent + '  ');
+            }
+          }
+        };
 
         console.log(`\n${pc.bold('Subtasks:')}`);
-        for (const s of t.subtasks) {
-          const depInfo = s.blockedBy ? pc.dim(` ← blocks: ${s.blockedBy}`) : '';
-          // Show 'blocked' instead of 'backlog' if task has unresolved dependencies
-          const isBlocked = s.blockedBy && !completedIdentifiers.has(s.blockedBy);
-          const displayStatus = s.status === 'backlog' && isBlocked ? 'blocked' : s.status;
-          console.log(
-            `  ${pc.dim(s.identifier)} ${statusBadge(displayStatus)} ${s.name || '(unnamed)'}${depInfo}`,
-          );
-        }
+        renderSubtasks(t.subtasks, '  ');
       }
 
       // ── Dependencies ──

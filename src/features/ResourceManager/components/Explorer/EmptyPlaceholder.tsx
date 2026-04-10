@@ -5,6 +5,7 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
 
@@ -66,6 +67,7 @@ const EmptyPlaceholder = () => {
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
+  const currentFolderId = useCurrentFolderId();
 
   const { open } = useCreateNewModal();
 
@@ -101,7 +103,7 @@ const EmptyPlaceholder = () => {
           multiple={true}
           showUploadList={false}
           beforeUpload={async (file) => {
-            await pushDockFileList([file], libraryId);
+            await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
             return false;
           }}
@@ -122,7 +124,7 @@ const EmptyPlaceholder = () => {
           multiple={true}
           showUploadList={false}
           beforeUpload={async (file) => {
-            await pushDockFileList([file], libraryId);
+            await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
             return false;
           }}

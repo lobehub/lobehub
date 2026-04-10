@@ -95,6 +95,8 @@ const ExecAgentSchema = z
     deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
+    /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+    parentMessageId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /** The agent slug to run (either agentId or slug is required) */
@@ -528,6 +530,7 @@ export const aiAgentRouter = router({
       autoStart = true,
       deviceId,
       existingMessageIds = [],
+      parentMessageId,
     } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
@@ -539,7 +542,10 @@ export const aiAgentRouter = router({
         autoStart,
         deviceId,
         existingMessageIds,
+        parentMessageId,
         prompt,
+        // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
+        resume: !!parentMessageId,
         slug,
       });
     } catch (error: any) {
@@ -586,6 +592,7 @@ export const aiAgentRouter = router({
         autoStart = true,
         deviceId,
         existingMessageIds = [],
+        parentMessageId,
       } = task;
 
       try {
@@ -595,7 +602,10 @@ export const aiAgentRouter = router({
           autoStart,
           deviceId,
           existingMessageIds,
+          parentMessageId,
           prompt,
+          // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
+          resume: !!parentMessageId,
           slug,
         });
 
@@ -1224,5 +1234,28 @@ export const aiAgentRouter = router({
           message: `Failed to update client task thread status: ${error.message}`,
         });
       }
+    }),
+
+  /**
+   * Refresh Gateway JWT token for an existing operation.
+   * Used when reconnecting after page reload (original token expired).
+   */
+  refreshGatewayToken: aiAgentProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      // Verify the topic belongs to this user and has a running operation
+      const topic = await ctx.topicModel.findById(input.topicId);
+
+      if (!topic?.metadata?.runningOperation) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No running operation found on this topic',
+        });
+      }
+
+      const { signUserJWT } = await import('@/libs/trpc/utils/internalJwt');
+      const token = await signUserJWT(ctx.userId);
+
+      return { token };
     }),
 });

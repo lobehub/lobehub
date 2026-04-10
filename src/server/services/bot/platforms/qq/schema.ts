@@ -2,6 +2,7 @@ import { MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
 import { displayToolCallsField, userIdField } from '../const';
 import type { FieldSchema } from '../types';
+import { DEFAULT_QQ_CONNECTION_MODE } from './const';
 
 export const schema: FieldSchema[] = [
   {
@@ -30,6 +31,15 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       {
+        key: 'connectionMode',
+        default: DEFAULT_QQ_CONNECTION_MODE,
+        description: 'channel.connectionModeHint',
+        enum: ['websocket', 'webhook'],
+        enumLabels: ['channel.connectionModeWebSocket', 'channel.connectionModeWebhook'],
+        label: 'channel.connectionMode',
+        type: 'string',
+      },
+      {
         key: 'charLimit',
         default: 2000,
         description: 'channel.charLimitHint',
@@ -40,7 +50,7 @@ export const schema: FieldSchema[] = [
       },
       {
         key: 'concurrency',
-        default: 'debounce',
+        default: 'queue',
         description: 'channel.concurrencyHint',
         enum: ['queue', 'debounce'],
         enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],

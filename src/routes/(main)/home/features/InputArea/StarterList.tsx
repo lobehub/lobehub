@@ -81,6 +81,7 @@ const StarterList = memo(() => {
         titleKey: 'starter.imageGeneration',
       },
       {
+        hot: true,
         icon: VideoIcon,
         key: 'video',
         titleKey: 'starter.videoGeneration',
@@ -98,7 +99,7 @@ const StarterList = memo(() => {
   const handleClick = useCallback(
     (key: StarterMode) => {
       if (key === 'video') {
-        navigate?.('/video');
+        navigate?.('/video?model=doubao-seedance-2-0-260128');
         return;
       }
 
