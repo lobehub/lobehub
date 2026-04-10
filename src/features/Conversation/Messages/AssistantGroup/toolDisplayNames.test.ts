@@ -4,8 +4,8 @@ import { type AssistantContentBlock } from '@/types/index';
 
 import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from './constants';
 import {
-  getWorkflowStreamingHeadlineState,
   getPostToolAnswerSplitIndex,
+  getWorkflowStreamingHeadlineState,
   scorePostToolBlockAsFinalAnswer,
   shapeProseForWorkflowHeadline,
 } from './toolDisplayNames';
