@@ -36,7 +36,7 @@ export class SystemRoleInjector extends BaseSystemRoleProvider {
 
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
     const systemRole = this.config.systemRole;
-    if (!systemRole || systemRole.trim() === '') {
+    if (!systemRole || typeof systemRole !== 'string' || systemRole.trim() === '') {
       log('No system role configured, skipping injection');
       return null;
     }

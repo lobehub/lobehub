@@ -219,6 +219,67 @@ describe('SystemRoleInjector', () => {
     expect(result.metadata.systemRoleInjected).toBeUndefined();
   });
 
+  it('should skip injection when systemRole is a non-string truthy value (object)', async () => {
+    const provider = new SystemRoleInjector({
+      systemRole: { nested: 'object' } as any,
+    });
+
+    const context = {
+      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
+      messages: [
+        { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
+      ],
+      metadata: { model: 'gpt-4', maxTokens: 4096 },
+      isAborted: false,
+    };
+
+    const result = await provider.process(context);
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].role).toBe('user');
+    expect(result.metadata.systemRoleInjected).toBeUndefined();
+  });
+
+  it('should skip injection when systemRole is an array', async () => {
+    const provider = new SystemRoleInjector({
+      systemRole: ['system', 'role'] as any,
+    });
+
+    const context = {
+      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
+      messages: [
+        { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
+      ],
+      metadata: { model: 'gpt-4', maxTokens: 4096 },
+      isAborted: false,
+    };
+
+    const result = await provider.process(context);
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].role).toBe('user');
+  });
+
+  it('should skip injection when systemRole is a number', async () => {
+    const provider = new SystemRoleInjector({
+      systemRole: 42 as any,
+    });
+
+    const context = {
+      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
+      messages: [
+        { id: '1', role: 'user', content: 'Hello', createdAt: Date.now(), updatedAt: Date.now() },
+      ],
+      metadata: { model: 'gpt-4', maxTokens: 4096 },
+      isAborted: false,
+    };
+
+    const result = await provider.process(context);
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].role).toBe('user');
+  });
+
   it('should handle empty message array', async () => {
     const provider = new SystemRoleInjector({
       systemRole: 'You are a helpful assistant.',
