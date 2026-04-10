@@ -6,7 +6,6 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type RecentItem } from '@/server/routers/lambda/recent';
-import { fileService } from '@/services/file';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
@@ -35,11 +34,6 @@ export const useRecentItemDropdownMenu = (
           await topicService.updateTopic(item.id, { title: newTitle });
           break;
         }
-        case 'document':
-        case 'file': {
-          await fileService.updateFile(item.id, { name: newTitle });
-          break;
-        }
       }
     },
     [item, updateRecentTitle],
@@ -48,7 +42,6 @@ export const useRecentItemDropdownMenu = (
   const handleDelete = useCallback(() => {
     const confirmMessages: Record<string, string> = {
       document: t('FileManager.actions.confirmDelete', { ns: 'components' }),
-      file: t('FileManager.actions.confirmDelete', { ns: 'components' }),
       topic: t('actions.confirmRemoveTopic', { ns: 'topic' }),
     };
 
@@ -65,9 +58,7 @@ export const useRecentItemDropdownMenu = (
             await removeTopic(item.id);
             break;
           }
-          case 'document':
-          case 'file': {
-            await fileService.removeFile(item.id);
+          case 'document': {
             break;
           }
         }

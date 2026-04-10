@@ -232,9 +232,9 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
-  agentPageSize: 10,
+  agentPageSize: 5,
   chatInputHeight: 64,
-  recentPageSize: 10,
+  recentPageSize: 5,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
   expandInputActionbar: true,

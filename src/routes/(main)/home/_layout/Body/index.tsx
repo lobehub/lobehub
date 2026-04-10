@@ -28,7 +28,7 @@ const Body = memo(() => {
   const sections = useMemo(
     () =>
       sidebarSectionOrder
-        .filter((key) => !hiddenSections.includes(key))
+        .filter((key) => key === GroupKey.Agent || !hiddenSections.includes(key))
         .map((key) => sectionComponents[key]?.(key))
         .filter(Boolean),
     [sidebarSectionOrder, hiddenSections],

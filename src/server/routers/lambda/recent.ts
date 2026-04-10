@@ -12,7 +12,7 @@ export interface RecentItem {
   metadata?: ChatTopicMetadata;
   routePath: string;
   title: string;
-  type: 'topic' | 'document' | 'file' | 'task';
+  type: 'topic' | 'document' | 'task';
   updatedAt: Date;
 }
 
@@ -45,10 +45,6 @@ export const recentRouter = router({
           }
           case 'document': {
             routePath = `/page/${item.id}`;
-            break;
-          }
-          case 'file': {
-            routePath = `/resource?file=${item.id}`;
             break;
           }
           case 'task': {

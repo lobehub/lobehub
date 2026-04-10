@@ -13,9 +13,10 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 // Accordion sections (Recents, Agents)
-const SECTION_ITEMS: { icon?: any; key: string; labelKey: string }[] = [
+// `alwaysVisible` sections cannot be hidden by the user
+const SECTION_ITEMS: { alwaysVisible?: boolean; icon?: any; key: string; labelKey: string }[] = [
   { key: 'recents', labelKey: 'recents' },
-  { key: 'agent', labelKey: 'navPanel.agent' },
+  { alwaysVisible: true, key: 'agent', labelKey: 'navPanel.agent' },
 ];
 
 // Bottom menu items (Community, Resources, Settings)
@@ -26,18 +27,21 @@ const BOTTOM_ITEMS: { key: string; labelKey: string; routeId?: string }[] = [
 ];
 
 const SectionRow = memo<{
+  alwaysVisible?: boolean;
   icon?: any;
   isHidden: boolean;
   label: string;
   onToggle: () => void;
-}>(({ label, icon, isHidden, onToggle }) => (
+}>(({ label, icon, isHidden, alwaysVisible, onToggle }) => (
   <Block style={{ opacity: isHidden ? 0.5 : 1 }} variant={isHidden ? 'filled' : 'borderless'}>
     <Flexbox horizontal align={'center'} height={40} justify={'space-between'} paddingInline={8}>
       <Flexbox horizontal align={'center'} gap={8}>
         {icon && <Icon icon={icon} size={18} />}
         <Text>{label}</Text>
       </Flexbox>
-      <ActionIcon icon={isHidden ? EyeOff : Eye} size={'small'} onClick={onToggle} />
+      {!alwaysVisible && (
+        <ActionIcon icon={isHidden ? EyeOff : Eye} size={'small'} onClick={onToggle} />
+      )}
     </Flexbox>
   </Block>
 ));
@@ -67,7 +71,8 @@ const CustomizeSidebarContent = memo(() => {
 
         return (
           <SectionRow
-            isHidden={hiddenSections.includes(key)}
+            alwaysVisible={item.alwaysVisible}
+            isHidden={!item.alwaysVisible && hiddenSections.includes(key)}
             key={key}
             label={t(item.labelKey as any)}
             onToggle={() => toggleSection(key)}

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 
-import { agents, documents, files, knowledgeBaseFiles, tasks, topics } from '../schemas';
+import { agents, documents, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface RecentDbItem {
@@ -9,7 +9,7 @@ export interface RecentDbItem {
   routeGroupId: string | null;
   routeId: string | null;
   title: string;
-  type: 'topic' | 'document' | 'file' | 'task';
+  type: 'topic' | 'document' | 'task';
   updatedAt: Date;
 }
 
@@ -57,24 +57,6 @@ export class RecentModel {
           AND ${documents.sourceType} != 'file'
           AND ${documents.knowledgeBaseId} IS NULL
           AND ${documents.fileType} != 'custom/folder'
-
-        UNION ALL
-
-        SELECT
-          ${files.id} as id,
-          COALESCE(${files.name}, 'Untitled File') as title,
-          'file' as type,
-          NULL as route_id,
-          NULL as route_group_id,
-          ${files.updatedAt} as updated_at,
-          NULL as metadata
-        FROM ${files}
-        WHERE ${files.userId} = ${this.userId}
-          AND ${files.fileType} != 'custom/document'
-          AND NOT EXISTS (
-            SELECT 1 FROM ${knowledgeBaseFiles}
-            WHERE ${knowledgeBaseFiles.fileId} = ${files.id}
-          )
 
         UNION ALL
 

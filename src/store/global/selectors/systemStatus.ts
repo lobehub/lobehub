@@ -12,9 +12,9 @@ const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expand
 
 const topicPageSize = (s: GlobalState): number => s.status.topicPageSize || 20;
 
-const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 10;
+const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
 
-const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 10;
+const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
 
 const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 

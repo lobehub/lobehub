@@ -1,13 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  EyeOffIcon,
-  Hash,
-  LucideCheck,
-  SlidersHorizontalIcon,
-} from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, Hash, LucideCheck, SlidersHorizontalIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,10 +44,6 @@ export const useAgentActionsDropdownMenu = ({
     },
     [sidebarSectionOrder, updateSystemStatus],
   );
-
-  const hideSection = useCallback(() => {
-    updateSystemStatus({ hiddenSidebarSections: [...hiddenSections, 'agent'] });
-  }, [hiddenSections, updateSystemStatus]);
 
   // Create menu items
   const {
@@ -108,13 +97,6 @@ export const useAgentActionsDropdownMenu = ({
         label: t('navPanel.moveDown'),
         onClick: () => moveSection('down'),
       },
-      {
-        disabled: false,
-        icon: <Icon icon={EyeOffIcon} />,
-        key: 'hideSection',
-        label: t('navPanel.hideSection'),
-        onClick: hideSection,
-      },
       { type: 'divider' as const },
       {
         icon: <Icon icon={SlidersHorizontalIcon} />,
@@ -134,7 +116,6 @@ export const useAgentActionsDropdownMenu = ({
     isFirst,
     isLast,
     moveSection,
-    hideSection,
     visibleOrder.length,
     t,
   ]);
