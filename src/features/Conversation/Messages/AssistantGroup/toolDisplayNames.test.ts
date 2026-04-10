@@ -4,7 +4,6 @@ import { type AssistantContentBlock } from '@/types/index';
 
 import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from './constants';
 import {
-  extractTrailingReasoningHeadline,
   getWorkflowStreamingHeadlineState,
   getPostToolAnswerSplitIndex,
   scorePostToolBlockAsFinalAnswer,
@@ -58,47 +57,21 @@ describe('post-tool final answer split', () => {
 });
 
 describe('reasoning headline extraction', () => {
-  it('extracts the markdown heading from trailing reasoning content', () => {
-    const blocks = [
-      blk({
-        id: '0',
-        reasoning: {
-          content: '## Planning the file updates\n\n- inspect components\n- patch layout',
-        } as any,
-      }),
-    ];
-
-    expect(extractTrailingReasoningHeadline(blocks)).toBe('Planning the file updates');
-  });
-
-  it('extracts the last markdown heading from trailing reasoning content', () => {
-    const blocks = [
-      blk({
-        id: '0',
-        reasoning: {
-          content:
-            '# Initial framing\n\nSome details.\n\n## Search release notes\n\nMore details.\n\n### Finalize patch plan',
-        } as any,
-      }),
-    ];
-
-    expect(extractTrailingReasoningHeadline(blocks)).toBe('Finalize patch plan');
-  });
-
-  it('uses trailing reasoning heading as workflow headline fallback', () => {
+  it('uses the last markdown heading for a trailing thinking-only block', () => {
     const state = getWorkflowStreamingHeadlineState([
       blk({
         id: '0',
         content: '',
         reasoning: {
-          content: '### Search release notes\n\nReview the latest changelog before editing.',
+          content:
+            '# Initial framing\n\nSome details.\n\n## Search release notes\n\nMore details.\n\n### Finalize patch plan',
         } as any,
       }),
     ]);
 
     expect(state).toEqual({
       kind: 'thinking',
-      reasoningTitle: 'Search release notes',
+      reasoningTitle: 'Finalize patch plan',
     });
   });
 

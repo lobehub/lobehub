@@ -277,38 +277,22 @@ export const shapeProseForWorkflowHeadline = (source: string): string => {
   return truncateDisplayAtWord(s, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
 };
 
-/** Raw assistant `content` from the latest block that qualifies (scan from end). */
-const getBlockContent = (block: AssistantContentBlock | undefined): string => {
-  const content = block?.content?.trim() ?? '';
+const getBlockContent = (block: AssistantContentBlock): string => {
+  const content = block.content?.trim() ?? '';
   if (!content || content === LOADING_FLAT) return '';
   return content;
 };
 
-const getBlockReasoningContent = (block: AssistantContentBlock | undefined): string => {
-  const reasoning = block?.reasoning?.content?.trim() ?? '';
+const getBlockReasoningContent = (block: AssistantContentBlock): string => {
+  const reasoning = block.reasoning?.content?.trim() ?? '';
   if (!reasoning || reasoning === LOADING_FLAT) return '';
   return reasoning;
 };
 
-const hasTools = (block: AssistantContentBlock | undefined): boolean => !!block?.tools?.length;
-
-const isThinkingOnlyBlock = (block: AssistantContentBlock | undefined): boolean => {
-  if (!block) return false;
-  if (hasTools(block)) return false;
+const isThinkingOnlyBlock = (block: AssistantContentBlock): boolean => {
+  if (block.tools?.length) return false;
   if ((block.imageList?.length ?? 0) > 0) return false;
   return !!getBlockReasoningContent(block) && !getBlockContent(block) && !block.error;
-};
-
-export const extractTrailingReasoningHeadline = (blocks: AssistantContentBlock[]): string => {
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    const block = blocks[i];
-    if (!isThinkingOnlyBlock(block)) continue;
-
-    const title = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
-    if (title) return title;
-  }
-
-  return '';
 };
 
 export type WorkflowStreamingHeadlineState =
@@ -317,7 +301,39 @@ export type WorkflowStreamingHeadlineState =
   | { kind: 'thinking'; reasoningTitle: string }
   | { explicitStep: string; fallbackTool: string; kind: 'tool' };
 
-/** Determine headline state from the last meaningful workflow block instead of a flat global priority list. */
+const getHeadlineStateFromBlock = (
+  block: AssistantContentBlock,
+): WorkflowStreamingHeadlineState | null => {
+  if (block.tools?.length) {
+    const lastTool = block.tools.at(-1);
+    const explicitStep = lastTool ? getExplicitStepHeadlineLine(lastTool) : '';
+    const fallbackTool = lastTool ? getToolFallbackHeadlineLine(lastTool) : '';
+    if (!explicitStep && !fallbackTool) return null;
+
+    return {
+      explicitStep,
+      fallbackTool,
+      kind: 'tool',
+    };
+  }
+
+  if (isThinkingOnlyBlock(block)) {
+    const reasoningTitle = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
+    if (!reasoningTitle) return null;
+
+    return {
+      kind: 'thinking',
+      reasoningTitle,
+    };
+  }
+
+  const proseSource = getBlockContent(block);
+  if (proseSource.length < WORKFLOW_PROSE_SOURCE_MIN_CHARS) return null;
+
+  return { kind: 'prose', proseSource };
+};
+
+/** Walk backward and return the first block that can produce a meaningful headline state. */
 export const getWorkflowStreamingHeadlineState = (
   blocks: AssistantContentBlock[],
 ): WorkflowStreamingHeadlineState => {
@@ -325,38 +341,8 @@ export const getWorkflowStreamingHeadlineState = (
     const block = blocks[i];
     if (!block) continue;
 
-    if (hasTools(block)) {
-      const lastTool = block.tools?.at(-1);
-      const explicitStep = lastTool ? getExplicitStepHeadlineLine(lastTool) : '';
-      const fallbackTool = lastTool ? getToolFallbackHeadlineLine(lastTool) : '';
-
-      if (explicitStep || fallbackTool) {
-        return {
-          explicitStep,
-          fallbackTool,
-          kind: 'tool',
-        };
-      }
-
-      continue;
-    }
-
-    if (isThinkingOnlyBlock(block)) {
-      const reasoningTitle = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
-      if (reasoningTitle) {
-        return {
-          kind: 'thinking',
-          reasoningTitle,
-        };
-      }
-
-      continue;
-    }
-
-    const proseSource = getBlockContent(block);
-    if (proseSource.length >= WORKFLOW_PROSE_SOURCE_MIN_CHARS) {
-      return { kind: 'prose', proseSource };
-    }
+    const state = getHeadlineStateFromBlock(block);
+    if (state) return state;
   }
 
   return { kind: 'idle' };
