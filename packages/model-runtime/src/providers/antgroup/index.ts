@@ -1,0 +1,23 @@
+import { ModelProvider } from 'model-bank';
+
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+
+export const LobeAntGroupAI = createOpenAICompatibleRuntime({
+  baseURL: 'https://api.tbox.cn/api/llm/v1',
+  chatCompletion: {
+    handlePayload: (payload) => {
+      const { enabledSearch, ...rest } = payload;
+
+      return {
+        ...rest,
+        ...(enabledSearch && {
+          enable_search: true,
+        }),
+      } as any;
+    },
+  },
+  debug: {
+    chatCompletion: () => process.env.DEBUG_ANTGROUP_CHAT_COMPLETION === '1',
+  },
+  provider: ModelProvider.AntGroup,
+});
