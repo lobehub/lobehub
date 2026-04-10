@@ -2,7 +2,7 @@ import type { ModelProviderCard } from '@/types/llm';
 
 const AntGroup: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'Ling-mini-2.0',
+  checkModel: 'Ling-2.5-1T',
   description:
     'Ant Ling is the core foundation model series of Ant Group’s Artificial General Intelligence (AGI) initiative, dedicated to building and opening up cutting-edge foundational model capabilities. We believe that the development of intelligence must move toward openness, sharing, and scalability—starting from small, practical steps to drive the steady evolution and real-world deployment of AGI.',
   id: 'antgroup',

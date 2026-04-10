@@ -3,7 +3,6 @@ import { type AIChatModelCard } from '../types/aiModel';
 const antgroupChatModels: AIChatModelCard[] = [
   {
     abilities: {
-      functionCall: true,
       reasoning: true,
       search: true,
     },
@@ -28,7 +27,6 @@ const antgroupChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
       reasoning: true,
       search: true,
     },
@@ -48,46 +46,6 @@ const antgroupChatModels: AIChatModelCard[] = [
     settings: {
       searchImpl: 'params',
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'It is a high-performance reasoning model deeply optimized based on the Ling-flash-2.0 MoE architecture. With 100B total parameters, it activates only 6.1B parameters per inference, enabling sparse and highly efficient execution for each reasoning task. Through the proprietary IcePop algorithm, the model addresses the instability challenges in MoE reinforcement learning training, allowing its complex reasoning capabilities to continuously improve over long training horizons. The model achieves breakthroughs across multiple high-difficulty benchmarks, including mathematical competitions, code generation, and logical reasoning, outperforming dense models below the 40B parameter scale. It also demonstrates a relatively rare strength among reasoning models: strong creative writing capabilities.',
-    displayName: 'Ring-flash-2.0',
-    id: 'Ring-flash-2.0',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-10-23',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'It is a high-performance reasoning model deeply optimized based on the Ling-mini-2.0 MoE architecture. The model demonstrates strong performance in logical reasoning, coding, and mathematical tasks. In addition, it is characterized by both speed and efficiency: it supports up to a 128K context window with generation speeds exceeding 300 tokens per second, and with a total of 16B parameters—activating only 1.4B per inference—it achieves overall reasoning capability comparable to dense models under the 10B scale. This makes it an optimal choice for reasoning tasks in resource-constrained environments.',
-    displayName: 'Ring-mini-2.0',
-    id: 'Ring-mini-2.0',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-10-23',
     type: 'chat',
   },
   {
@@ -139,44 +97,6 @@ const antgroupChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'It is a general-purpose model based on the Ling 2.0 MoE architecture. Leveraging a sparse MoE design—with a total parameter scale of 100B, activating 6.1B parameters per token (4.8B excluding embeddings)—the model delivers exceptional cost-performance and strong overall capabilities across most language model use cases. Despite its relatively lightweight configuration, the model demonstrates performance comparable to or even surpassing 40B-scale dense models and larger MoE models on multiple authoritative benchmarks.',
-    displayName: 'Ling-flash-2.0',
-    id: 'Ling-flash-2.0',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-26',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'A small-scale, high-performance large language model based on a Mixture-of-Experts (MoE) architecture. It has a total of 16B parameters, while activating only 1.4B parameters per token (789M excluding embeddings), enabling extremely high generation speed. Thanks to its efficient MoE design and large-scale high-quality training data, the model delivers top-tier performance on downstream tasks. Despite activating only 1.4B parameters, it achieves results comparable to dense LLMs under 10B parameters as well as larger-scale MoE models.',
-    displayName: 'Ling-mini-2.0',
-    id: 'Ling-mini-2.0',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-29',
-    type: 'chat',
-  },
-  {
-    abilities: {
       reasoning: true,
     },
     contextWindowTokens: 131_072,
@@ -192,7 +112,7 @@ const antgroupChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-02-10',
+    releasedAt: '2026-03-03',
     type: 'chat',
   },
 ];

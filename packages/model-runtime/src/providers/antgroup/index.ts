@@ -12,6 +12,7 @@ export const LobeAntGroupAI = createOpenAICompatibleRuntime({
         ...rest,
         ...(enabledSearch && {
           enable_search: true,
+          // search_options: { forced_search: true },
         }),
       } as any;
     },
