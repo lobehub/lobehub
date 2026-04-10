@@ -3,17 +3,19 @@ import { type FileListItem } from '@/types/files';
 import { type RecentTopic } from '@/types/topic';
 
 export interface RecentState {
+  allRecentsDrawerOpen: boolean;
   isRecentPagesInit: boolean;
   isRecentResourcesInit: boolean;
-  isRecentTopicsInit: boolean;
   isRecentsInit: boolean;
+  isRecentTopicsInit: boolean;
   recentPages: any[];
   recentResources: FileListItem[];
-  recentTopics: RecentTopic[];
   recents: RecentItem[];
+  recentTopics: RecentTopic[];
 }
 
 export const initialRecentState: RecentState = {
+  allRecentsDrawerOpen: false,
   isRecentPagesInit: false,
   isRecentResourcesInit: false,
   isRecentTopicsInit: false,

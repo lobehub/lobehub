@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -19,13 +19,14 @@ const RecentsList = memo(() => {
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, openDrawer, closeDrawer] = useHomeStore((s) => [
+    s.allRecentsDrawerOpen,
+    s.openAllRecentsDrawer,
+    s.closeAllRecentsDrawer,
+  ]);
 
   const displayItems = useMemo(() => recents.slice(0, recentPageSize), [recents, recentPageSize]);
   const hasMore = recents.length > recentPageSize;
-
-  const openDrawer = useCallback(() => setDrawerOpen(true), []);
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   if (!isInit) {
     return <SkeletonList rows={3} />;
