@@ -227,6 +227,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             horizontal
             align="center"
             flex={1}
+            gap={6}
             style={{ minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX, minWidth: 0 }}
           >
             <div style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -256,34 +257,34 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
                 </motion.div>
               </AnimatePresence>
             </div>
+            {showWorkingElapsed && (
+              <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
+                ({workingElapsedSeconds}s)
+              </span>
+            )}
           </Flexbox>
         ) : (
-          <Flexbox horizontal align="center" style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
             <Text
+              type="secondary"
               style={{
                 minWidth: 0,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
-              type="secondary"
             >
               {summaryText}
             </Text>
+            {durationText && (
+              <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
+                {durationText}
+              </span>
+            )}
           </Flexbox>
         )}
       </Flexbox>
     );
-
-    const action = streaming
-      ? showWorkingElapsed && (
-          <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
-            ({workingElapsedSeconds}s)
-          </span>
-        )
-      : durationText && (
-          <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>{durationText}</span>
-        );
 
     return (
       <Accordion
@@ -291,14 +292,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
         variant="borderless"
         onExpandedChange={handleExpandedChange}
       >
-        <AccordionItem
-          action={action}
-          alwaysShowAction
-          itemKey="workflow"
-          paddingBlock={4}
-          paddingInline={4}
-          title={title}
-        >
+        <AccordionItem itemKey="workflow" paddingBlock={4} paddingInline={4} title={title}>
           <WorkflowExpandedList
             assistantId={assistantMessageId}
             blocks={blocks}
