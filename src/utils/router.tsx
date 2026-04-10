@@ -201,6 +201,7 @@ export function redirectElement(to: string): ReactElement {
 const prefetchedRoutes = new Set<string>();
 
 const routePrefetchMap: Record<string, () => Promise<unknown>> = {
+  '/agent': () => import('@/routes/(main)/agent/_layout'),
   '/community': () => import('@/routes/(main)/community/_layout'),
   '/page': () => import('@/routes/(main)/page/_layout'),
   '/resource': () => import('@/routes/(main)/resource/_layout'),

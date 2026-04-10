@@ -14,6 +14,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
+import { prefetchRoute } from '@/utils/router';
 
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
@@ -48,7 +49,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   // Memoize event handlers
   const handleMouseEnter = useCallback(() => {
     prefetchAgent(id);
-  }, [id, prefetchAgent]);
+    prefetchRoute(agentUrl);
+  }, [id, prefetchAgent, agentUrl]);
 
   const handleDoubleClick = useCallback(() => {
     openAgentInNewWindow(id);
@@ -108,12 +110,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   });
 
   return (
-    <Link
-      aria-label={displayTitle}
-      ref={setAnchor}
-      to={agentUrl}
-      onMouseEnter={handleMouseEnter}
-    >
+    <Link aria-label={displayTitle} ref={setAnchor} to={agentUrl} onMouseEnter={handleMouseEnter}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         className={className}
