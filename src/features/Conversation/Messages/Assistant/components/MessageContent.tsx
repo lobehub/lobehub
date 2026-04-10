@@ -9,6 +9,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { ReactionDisplay } from '../../../components/Reaction';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessage';
+import { Tools } from '../../AssistantGroup/Tools';
 import DisplayContent from '../../components/DisplayContent';
 import FileChunks from '../../components/FileChunks';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
@@ -27,7 +28,9 @@ const MessageContent = memo<UIChatMessage>(
     const removeReaction = useConversationStore((s) => s.removeReaction);
     const userId = useUserStore(userProfileSelectors.userId)!;
 
-    const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && !!tools;
+    const messageTools = tools ?? [];
+    const hasTools = messageTools.length > 0;
+    const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && hasTools;
 
     const showSearch = !!search && (!!search.citations?.length || !!search.imageResults?.length);
     const showImageItems = !!imageList && imageList.length > 0;
@@ -87,6 +90,7 @@ const MessageContent = memo<UIChatMessage>(
           tempDisplayContent={metadata?.tempDisplayContent}
         />
         {showImageItems && <ImageFileListViewer items={imageList} />}
+        {hasTools && <Tools messageId={id} tools={messageTools} />}
         {reactions.length > 0 && (
           <ReactionDisplay
             isActive={isActive}
