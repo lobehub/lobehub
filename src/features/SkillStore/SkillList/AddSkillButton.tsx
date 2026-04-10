@@ -1,5 +1,5 @@
-import { Github } from '@lobehub/icons';
 import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { GithubIcon } from '@lobehub/ui/icons';
 import { ChevronDown, FileArchive, Grid2x2Plus, Link, PenLine } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -63,7 +63,7 @@ const AddSkillButton = () => {
             onClick: () => setUrlModal(true),
           },
           {
-            icon: <Icon icon={Github} />,
+            icon: <Icon icon={GithubIcon} />,
             key: 'importGithub',
             label: (
               <MenuLabel desc={t('tab.importFromGithub.desc')} title={t('tab.importFromGithub')} />

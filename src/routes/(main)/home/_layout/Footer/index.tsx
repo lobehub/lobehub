@@ -2,10 +2,9 @@
 
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { useAnalytics } from '@lobehub/analytics/react';
-import { Github } from '@lobehub/icons';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { DiscordIcon } from '@lobehub/ui/icons';
+import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import {
   Book,
   CircleHelp,
@@ -173,7 +172,7 @@ const Footer = memo(() => {
       ...(footer.layout === 'compact' && !footer.hideGitHub
         ? [
             {
-              icon: <Icon icon={Github} />,
+              icon: <Icon icon={GithubIcon} />,
               key: 'github',
               label: (
                 <a href={GITHUB} rel="noopener noreferrer" target="_blank">
@@ -226,7 +225,7 @@ const Footer = memo(() => {
             </DropdownMenu>
             {!footer.hideGitHub && (
               <a aria-label={'GitHub'} href={GITHUB} rel="noopener noreferrer" target={'_blank'}>
-                <ActionIcon icon={Github} size={16} title={'GitHub'} />
+                <ActionIcon icon={GithubIcon} size={16} title={'GitHub'} />
               </a>
             )}
             <Link to="/eval">
