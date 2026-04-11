@@ -1,6 +1,11 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
-import type { AsyncTaskType, UserMemoryExtractionMetadata } from '@lobechat/types';
-import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import type { UserMemoryExtractionMetadata } from '@lobechat/types';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  AsyncTaskType,
+} from '@lobechat/types';
 import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AsyncTaskSelectItem, NewAsyncTaskItem } from '../schemas';
@@ -110,6 +115,17 @@ export class AsyncTaskModel {
     return chunkTasks;
   };
 
+  isUserMemoryExtractionCancellationRequested = async (taskId: string) => {
+    // NOTICE: Shared cancellation gate for cooperative cascading cancellation.
+    // Workflow stages call this before fan-out/heavy steps to stop the remaining task tree.
+    const task = await this.findById(taskId);
+    if (!task || task.userId !== this.userId) return false;
+    if (task.type !== AsyncTaskType.UserMemoryExtractionWithChatTopic) return false;
+
+    const metadata = task.metadata as UserMemoryExtractionMetadata | undefined;
+    return Boolean(metadata?.control?.cancelRequestedAt);
+  };
+
   /**
    * make the task status to be `error` if the task is not finished in 20 seconds
    */
@@ -151,6 +167,18 @@ export class AsyncTaskModel {
 export const initUserMemoryExtractionMetadata = (
   metadata?: UserMemoryExtractionMetadata,
 ): UserMemoryExtractionMetadata => ({
+  control: metadata?.control
+    ? {
+        cancelReason: metadata.control.cancelReason,
+        cancelRequestedAt: metadata.control.cancelRequestedAt,
+        cancelledBy: metadata.control.cancelledBy,
+        upstash: metadata.control.upstash
+          ? {
+              workflowRunIds: metadata.control.upstash.workflowRunIds || [],
+            }
+          : undefined,
+      }
+    : undefined,
   progress: {
     completedTopics: metadata?.progress?.completedTopics ?? 0,
     totalTopics: metadata?.progress?.totalTopics ?? null,

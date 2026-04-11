@@ -61,6 +61,24 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
       const executor = await MemoryExtractionExecutor.create();
 
       try {
+        if (payload.asyncTaskId) {
+          // NOTICE: Cooperative cascading cancellation for the workflow tree.
+          // Check before CEPA extraction so cancelled tasks stop at the earliest safe boundary.
+          const cancelled = await context.run(
+            `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:before`,
+            () =>
+              getServerDB().then((db) =>
+                new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
+                  payload.asyncTaskId!,
+                ),
+              ),
+          );
+          if (cancelled) {
+            span.setStatus({ code: SpanStatusCode.OK });
+            return { message: 'Memory extraction task cancellation requested, skip topic.' };
+          }
+        }
+
         {
           let layers = CEPA_LAYERS;
           if (payload.layers.length) {
@@ -85,6 +103,26 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
           );
         }
         {
+          if (payload.asyncTaskId) {
+            // NOTICE: Cooperative cascading cancellation for the workflow tree.
+            // Re-check before identity extraction to avoid running sequential identity step after cancel.
+            const cancelled = await context.run(
+              `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:identity`,
+              () =>
+                getServerDB().then((db) =>
+                  new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
+                    payload.asyncTaskId!,
+                  ),
+                ),
+            );
+            if (cancelled) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              return {
+                message: 'Memory extraction task cancellation requested, skip identity extraction.',
+              };
+            }
+          }
+
           let layers = IDENTITY_LAYERS;
           if (payload.layers.length) {
             layers = payload.layers.filter((layer) => IDENTITY_LAYERS.includes(layer));
