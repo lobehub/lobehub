@@ -7,17 +7,18 @@ import type {
   TaskTopicHandoff,
   WorkspaceData,
 } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
 
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { agents, users } from '@/database/schemas';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 
 export class TaskService {
+  private agentModel: AgentModel;
   private briefModel: BriefModel;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
@@ -25,6 +26,7 @@ export class TaskService {
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
+    this.agentModel = new AgentModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
     this.taskTopicModel = new TaskTopicModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
@@ -225,18 +227,8 @@ export class TaskService {
     const map = new Map<string, TaskDetailActivityAuthor>();
 
     const [agentRows, userRows] = await Promise.all([
-      agentIds.size > 0
-        ? this.db
-            .select({ avatar: agents.avatar, id: agents.id, title: agents.title })
-            .from(agents)
-            .where(inArray(agents.id, [...agentIds]))
-        : [],
-      userIds.size > 0
-        ? this.db
-            .select({ avatar: users.avatar, fullName: users.fullName, id: users.id })
-            .from(users)
-            .where(inArray(users.id, [...userIds]))
-        : [],
+      this.agentModel.getAgentAvatarsByIds([...agentIds]),
+      UserModel.findByIds(this.db, [...userIds]),
     ]);
 
     for (const a of agentRows) {

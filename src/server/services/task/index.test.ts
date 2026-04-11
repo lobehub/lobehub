@@ -1,12 +1,18 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(),
+}));
 
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(),
@@ -20,15 +26,17 @@ vi.mock('@/database/models/brief', () => ({
   BriefModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
+}));
+
 describe('TaskService', () => {
-  const mockSelectChain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue([]),
-  };
-  const db = {
-    select: vi.fn().mockReturnValue(mockSelectChain),
-  } as unknown as LobeChatDatabase;
+  const db = {} as LobeChatDatabase;
   const userId = 'user-1';
+
+  const mockAgentModel = {
+    getAgentAvatarsByIds: vi.fn().mockResolvedValue([]),
+  };
 
   const mockTaskModel = {
     findById: vi.fn(),
@@ -53,6 +61,7 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (AgentModel as any).mockImplementation(() => mockAgentModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
     (BriefModel as any).mockImplementation(() => mockBriefModel);
@@ -564,20 +573,13 @@ describe('TaskService', () => {
       mockTaskModel.getCheckpointConfig.mockReturnValue({});
       mockTaskModel.getReviewConfig.mockReturnValue(undefined);
 
-      // Mock db.select to return agent and user data
-      let callCount = 0;
-      mockSelectChain.where.mockImplementation(() => {
-        callCount++;
-        // First call: agents query
-        if (callCount === 1)
-          return Promise.resolve([
-            { avatar: 'https://example.com/agent.png', id: 'agt_assignee', title: 'My Agent' },
-          ]);
-        // Second call: users query
-        return Promise.resolve([
-          { avatar: 'https://example.com/bob.png', fullName: 'Bob', id: 'user_bob' },
-        ]);
-      });
+      // Mock model methods to return agent and user data
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: 'https://example.com/agent.png', id: 'agt_assignee', title: 'My Agent' },
+      ]);
+      vi.mocked(UserModel.findByIds).mockResolvedValue([
+        { avatar: 'https://example.com/bob.png', fullName: 'Bob', id: 'user_bob' } as any,
+      ]);
 
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
