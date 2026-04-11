@@ -208,7 +208,7 @@ function readAgentProfile(workspacePath: string): AgentProfile {
     // Try to extract **Emoji:** value (single emoji)
     const emojiMatch = content.match(/\*{0,2}Emoji:?\*{0,2}\s*(.+)/i);
     const rawAvatar = emojiMatch ? emojiMatch[1].trim() : undefined;
-    // Filter out placeholder text like （待定）, _(待定)_, (TBD), N/A, etc.
+    // Filter out placeholder text like （待定）(Chinese TBD), _(待定)_, (TBD), N/A, etc.
     const isPlaceholder =
       rawAvatar && /^[_*（(].*[)）_*]$|^(?:tbd|todo|n\/?a|none|待定|未定)$/i.test(rawAvatar);
     const avatar = rawAvatar && !isPlaceholder ? rawAvatar : undefined;

@@ -305,7 +305,7 @@ export class ConversationLifecycleActionImpl {
         files: fileIdList,
         role: 'user',
         agentId: operationContext.agentId,
-        // if there is topicId，then add topicId to message
+        // if there is topicId, then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
         imageList: tempImages.length > 0 ? tempImages : undefined,
@@ -320,7 +320,7 @@ export class ConversationLifecycleActionImpl {
         content: LOADING_FLAT,
         role: 'assistant',
         agentId: operationContext.agentId,
-        // if there is topicId，then add topicId to message
+        // if there is topicId, then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
         // Pass isSupervisor metadata for group orchestration (consistent with server)
@@ -407,7 +407,7 @@ export class ConversationLifecycleActionImpl {
             parentId,
           },
           preloadMessages: undefined,
-          // if there is topicId，then add topicId to message
+          // if there is topicId, then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,
           // Support creating new thread along with message

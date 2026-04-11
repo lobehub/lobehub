@@ -73,7 +73,7 @@ export interface SendMessageServerParams {
   preloadMessages?: SendPreloadMessage[];
   sessionId?: string;
   threadId?: string;
-  // if there is activeTopicId，then add topicId to message
+  // if there is activeTopicId, then add topicId to message
   topicId?: string;
 }
 
