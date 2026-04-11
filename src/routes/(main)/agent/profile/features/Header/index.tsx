@@ -5,6 +5,7 @@ import isEqual from 'fast-deep-equal';
 import { BotMessageSquareIcon, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { message } from '@/components/AntdStaticMethods';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
@@ -27,6 +28,7 @@ import AutoSaveHint from './AutoSaveHint';
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'marketAuth', 'chat']);
   const { modal } = App.useApp();
+  const navigate = useNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
@@ -123,10 +125,11 @@ const Header = memo(() => {
       onOk: async () => {
         await removeAgent(activeAgentId);
         message.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
+        navigate('/');
       },
       title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
     });
-  }, [activeAgentId, modal, removeAgent, t]);
+  }, [activeAgentId, modal, navigate, removeAgent, t]);
 
   const menuItems = useMemo(
     () => [
