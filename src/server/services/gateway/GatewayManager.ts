@@ -21,6 +21,7 @@ export interface GatewayManagerConfig {
 export class GatewayManager {
   private clients = new Map<string, PlatformClient>();
   private running = false;
+  private _startPromise: Promise<void> | null = null;
   private config: GatewayManagerConfig;
 
   private definitionByPlatform: Map<string, PlatformDefinition>;
@@ -44,14 +45,28 @@ export class GatewayManager {
       return;
     }
 
-    log('Starting GatewayManager');
+    // If start() is already in progress (concurrent calls), wait for it
+    if (this._startPromise) {
+      log('GatewayManager start already in progress, waiting');
+      return this._startPromise;
+    }
 
-    await this.sync().catch((err) => {
-      console.error('[GatewayManager] Initial sync failed:', err);
-    });
+    this._startPromise = (async () => {
+      log('Starting GatewayManager');
 
-    this.running = true;
-    log('GatewayManager started with %d clients', this.clients.size);
+      await this.sync().catch((err) => {
+        console.error('[GatewayManager] Initial sync failed:', err);
+      });
+
+      this.running = true;
+      log('GatewayManager started with %d clients', this.clients.size);
+    })();
+
+    try {
+      await this._startPromise;
+    } finally {
+      this._startPromise = null;
+    }
   }
 
   async stop(): Promise<void> {
