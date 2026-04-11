@@ -56,9 +56,10 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
 
   const avatar = useAgentMeta(agentId);
 
-  // Get editing, generating, and interrupted state from ConversationStore
+  // Get editing, generating, creating, and interrupted state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
   const interrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
 
   const errorContent = useErrorContent(error);
@@ -96,7 +97,7 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
       editing={editing}
       id={id}
-      loading={generating}
+      loading={generating || isCreating}
       message={message}
       placement={'left'}
       time={createdAt}
