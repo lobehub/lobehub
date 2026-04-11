@@ -1,4 +1,8 @@
 export const handleAnthropicError = (error: any): { errorResult: any; message?: string } => {
+  if (!error) {
+    return { errorResult: { message: 'Unknown error' }, message: 'Unknown error' };
+  }
+
   let errorResult: any;
 
   if (error.error) {
