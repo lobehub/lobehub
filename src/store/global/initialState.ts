@@ -99,6 +99,11 @@ export interface SystemStatus {
   chatInputHeight?: number;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
+  /**
+   * IDs of banners/ads the user has dismissed. New banners use a new ID
+   * so dismissing the current one does not hide future ones.
+   */
+  dismissedBannerIds?: string[];
   expandInputActionbar?: boolean;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
@@ -237,6 +242,7 @@ export const INITIAL_STATUS = {
   recentPageSize: 5,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
+  dismissedBannerIds: [],
   expandInputActionbar: true,
   expandSessionGroupKeys: [SessionDefaultGroup.Pinned, SessionDefaultGroup.Default],
   fileManagerViewMode: 'list' as const,

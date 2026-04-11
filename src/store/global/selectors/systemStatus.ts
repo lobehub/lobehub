@@ -76,6 +76,13 @@ const isNotificationRead =
     const slugs = s.status.readNotificationSlugs || [];
     return slugs.includes(slug);
   };
+
+const isBannerDismissed =
+  (bannerId: string) =>
+  (s: GlobalState): boolean => {
+    const ids = s.status.dismissedBannerIds || [];
+    return ids.includes(bannerId);
+  };
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
@@ -95,6 +102,7 @@ export const systemStatusSelectors = {
   imageTopicViewMode,
   imageTopicPanelWidth,
   inZenMode,
+  isBannerDismissed,
   isNotificationRead,
   isShowCredit,
   isStatusInit,
