@@ -21,7 +21,13 @@ vi.mock('@/database/models/brief', () => ({
 }));
 
 describe('TaskService', () => {
-  const db = {} as LobeChatDatabase;
+  const mockSelectChain = {
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue([]),
+  };
+  const db = {
+    select: vi.fn().mockReturnValue(mockSelectChain),
+  } as unknown as LobeChatDatabase;
   const userId = 'user-1';
 
   const mockTaskModel = {
@@ -506,6 +512,93 @@ describe('TaskService', () => {
       expect(result?.activities?.[0].type).toBe('brief');
       expect(result?.activities?.[1].type).toBe('comment');
       expect(result?.activities?.[2].type).toBe('topic');
+    });
+
+    it('should resolve author info for activities', async () => {
+      const task = {
+        assigneeAgentId: 'agt_assignee',
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Task 1',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'running',
+        totalTopics: 0,
+      };
+
+      const topics = [
+        {
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          handoff: { title: 'Run 1' },
+          seq: 1,
+          status: 'completed',
+          topicId: 'topic-1',
+        },
+      ];
+
+      const comments = [
+        {
+          authorAgentId: null,
+          authorUserId: 'user_bob',
+          content: 'User comment',
+          createdAt: new Date('2024-01-02T00:00:00Z'),
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue(comments);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+
+      // Mock db.select to return agent and user data
+      let callCount = 0;
+      mockSelectChain.where.mockImplementation(() => {
+        callCount++;
+        // First call: agents query
+        if (callCount === 1)
+          return Promise.resolve([
+            { avatar: 'https://example.com/agent.png', id: 'agt_assignee', title: 'My Agent' },
+          ]);
+        // Second call: users query
+        return Promise.resolve([
+          { avatar: 'https://example.com/bob.png', fullName: 'Bob', id: 'user_bob' },
+        ]);
+      });
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      // Topic should have agent author
+      const topicActivity = result?.activities?.find((a) => a.type === 'topic');
+      expect(topicActivity?.author).toEqual({
+        avatar: 'https://example.com/agent.png',
+        id: 'agt_assignee',
+        name: 'My Agent',
+        type: 'agent',
+      });
+
+      // Comment should have user author
+      const commentActivity = result?.activities?.find((a) => a.type === 'comment');
+      expect(commentActivity?.author).toEqual({
+        avatar: 'https://example.com/bob.png',
+        id: 'user_bob',
+        name: 'Bob',
+        type: 'user',
+      });
     });
 
     it('should include topic count when topics exist', async () => {

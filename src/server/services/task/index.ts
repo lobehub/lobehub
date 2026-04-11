@@ -1,25 +1,30 @@
 import type {
   TaskDetailActivity,
+  TaskDetailActivityAuthor,
   TaskDetailData,
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
   TaskTopicHandoff,
   WorkspaceData,
 } from '@lobechat/types';
+import { inArray } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 
 export class TaskService {
   private briefModel: BriefModel;
+  private db: LobeChatDatabase;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
 
   constructor(db: LobeChatDatabase, userId: string) {
+    this.db = db;
     this.taskModel = new TaskModel(db, userId);
     this.taskTopicModel = new TaskTopicModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
@@ -112,8 +117,27 @@ export class TaskService {
     const toISO = (d: Date | string | null | undefined) =>
       d ? new Date(d).toISOString() : undefined;
 
+    // Collect unique agent/user IDs for author resolution
+    const agentIds = new Set<string>();
+    const userIds = new Set<string>();
+
+    // Topics are created by the task's assignee agent
+    if (task.assigneeAgentId && topics.length > 0) agentIds.add(task.assigneeAgentId);
+    // Briefs may have an agentId
+    for (const b of briefs) {
+      if (b.agentId) agentIds.add(b.agentId);
+    }
+    // Comments have authorAgentId or authorUserId
+    for (const c of comments) {
+      if (c.authorAgentId) agentIds.add(c.authorAgentId);
+      if (c.authorUserId) userIds.add(c.authorUserId);
+    }
+
+    const authorMap = await this.resolveAuthors(agentIds, userIds);
+
     const activities: TaskDetailActivity[] = [
       ...topics.map((t) => ({
+        author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
         id: t.topicId ?? undefined,
         seq: t.seq,
         status: t.status,
@@ -122,6 +146,7 @@ export class TaskService {
         type: 'topic' as const,
       })),
       ...briefs.map((b) => ({
+        author: b.agentId ? authorMap.get(b.agentId) : undefined,
         briefType: b.type,
         id: b.id,
         priority: b.priority,
@@ -137,6 +162,11 @@ export class TaskService {
       })),
       ...comments.map((c) => ({
         agentId: c.authorAgentId,
+        author: c.authorAgentId
+          ? authorMap.get(c.authorAgentId)
+          : c.authorUserId
+            ? authorMap.get(c.authorUserId)
+            : undefined,
         content: c.content,
         time: toISO(c.createdAt),
         type: 'comment' as const,
@@ -183,5 +213,39 @@ export class TaskService {
       topicCount: topics.length > 0 ? topics.length : undefined,
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
     };
+  }
+
+  /**
+   * Batch-resolve agent and user IDs to author info (name + avatar).
+   */
+  private async resolveAuthors(
+    agentIds: Set<string>,
+    userIds: Set<string>,
+  ): Promise<Map<string, TaskDetailActivityAuthor>> {
+    const map = new Map<string, TaskDetailActivityAuthor>();
+
+    const [agentRows, userRows] = await Promise.all([
+      agentIds.size > 0
+        ? this.db
+            .select({ avatar: agents.avatar, id: agents.id, title: agents.title })
+            .from(agents)
+            .where(inArray(agents.id, [...agentIds]))
+        : [],
+      userIds.size > 0
+        ? this.db
+            .select({ avatar: users.avatar, fullName: users.fullName, id: users.id })
+            .from(users)
+            .where(inArray(users.id, [...userIds]))
+        : [],
+    ]);
+
+    for (const a of agentRows) {
+      map.set(a.id, { avatar: a.avatar, id: a.id, name: a.title, type: 'agent' });
+    }
+    for (const u of userRows) {
+      map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName, type: 'user' });
+    }
+
+    return map;
   }
 }
