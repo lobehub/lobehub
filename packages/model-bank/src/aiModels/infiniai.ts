@@ -201,26 +201,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      'DeepSeek-OCR is a vision-language model from DeepSeek AI focused on OCR and "contextual optical compression." It explores compressing contextual information from images, efficiently processes documents, and converts them into structured text formats such as Markdown. It accurately recognizes text in images, making it ideal for document digitization, text extraction, and structured processing.',
-    displayName: 'DeepSeek OCR',
-    id: 'deepseek-ocr',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-10-20',
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
       reasoning: true,
     },
@@ -229,26 +209,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
       'MiniMax-M2.1 is the latest version of the MiniMax series, optimized for multilingual programming and real-world complex tasks. As an AI-native model, MiniMax-M2.1 achieves significant improvements in model performance, agent framework support, and multi-scenario adaptation, aiming to help enterprises and individuals find AI-native work and lifestyle more quickly.',
     displayName: 'MiniMax M2.1',
     id: 'minimax-m2.1',
-    maxOutput: 200_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'MiniMax-M2 is a Mixture of Experts (MoE) language model optimized for coding and agent workflows, with approximately 230B total parameters and approximately 10B active parameters. While maintaining strong general intelligence, it is deeply enhanced for developer scenarios such as multi-file editing, code-run-fix loops, and test validation fixes, demonstrating stable and efficient performance in real environments like terminals, IDEs, and CI.',
-    displayName: 'MiniMax M2',
-    id: 'minimax-m2',
     maxOutput: 200_000,
     pricing: {
       currency: 'CNY',
@@ -575,59 +535,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description: 'Kimi K2 Instruct is a Moonshot AI LLM with ultra-long context handling.',
-    displayName: 'Kimi K2 Instruct',
-    id: 'kimi-k2-instruct',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 32_000,
-    description:
-      'ERNIE 4.5 300B A47B is Baidu ERNIE’s ultra-large MoE model with excellent reasoning.',
-    displayName: 'ERNIE 4.5 300B A47B',
-    id: 'ernie-4.5-300b-a47b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2.9, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.9, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 120_000,
-    description:
-      'ERNIE 4.5 21B A3B is Baidu ERNIE’s MoE model with strong reasoning and multilingual abilities.',
-    displayName: 'ERNIE 4.5 21B A3B',
-    id: 'ernie-4.5-21b-a3b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 131_072,
@@ -790,24 +697,6 @@ const infiniaiChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 32_000,
-    description: 'QwQ 32B is a Qwen reasoning-focused model built for reasoning tasks.',
-    displayName: 'QwQ 32B',
-    id: 'qwq-32b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2.9, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

@@ -2338,43 +2338,11 @@ const qwenChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, 0.256]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'audioInput', rate: 4.96, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.8,
-              '[0.128, infinity]': 2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'imageInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 9.6,
-              '[0.128, 0.256]': 24,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 53, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 213, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -2402,43 +2370,11 @@ const qwenChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'CNY',
       units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.2,
-              '[0.128, 0.256]': 0.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'audioInput', rate: 1.24, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 0.2,
-              '[0.128, infinity]': 0.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'imageInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.128]': 4,
-              '[0.128, 0.256]': 16,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 18, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 13.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 72, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-03-30',
@@ -2471,6 +2407,7 @@ const qwenChatModels: AIChatModelCard[] = [
         { name: 'audioInput', rate: 15.8, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'imageInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioOutput', rate: 62.6, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-12-04',
