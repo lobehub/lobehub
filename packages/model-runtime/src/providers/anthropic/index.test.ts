@@ -420,6 +420,7 @@ describe('LobeAnthropicAI', () => {
             endpoint: 'https://api.anthropic.com',
             error: apiError.error.error,
             errorType: bizErrorType,
+            message: "Anthropic's API is temporarily overloaded",
             provider,
           });
         }

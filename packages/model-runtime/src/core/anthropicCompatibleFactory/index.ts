@@ -291,7 +291,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     }
   }
 
-  const { errorResult } = handleAnthropicError(error);
+  const { errorResult, message } = handleAnthropicError(error);
 
   const errorMsg = errorResult.message || errorResult.error?.message;
   if (isExceededContextWindowError(errorMsg)) {
@@ -299,6 +299,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
       endpoint: desensitizedEndpoint,
       error: errorResult,
       errorType: AgentRuntimeErrorType.ExceededContextWindow,
+      message,
     };
   }
 
@@ -307,6 +308,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
       endpoint: desensitizedEndpoint,
       error: errorResult,
       errorType: AgentRuntimeErrorType.QuotaLimitReached,
+      message,
     };
   }
 
@@ -314,6 +316,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     endpoint: desensitizedEndpoint,
     error: errorResult,
     errorType: AgentRuntimeErrorType.ProviderBizError,
+    message,
   };
 };
 
@@ -676,17 +679,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         }
       }
 
-      const errorResult = (() => {
-        if (error?.error) {
-          const innerError = error.error;
-          if ('error' in innerError) {
-            return innerError.error;
-          }
-          return innerError;
-        }
-
-        return { headers: error?.headers, stack: error?.stack, status: error?.status };
-      })();
+      const { errorResult, message } = handleAnthropicError(error);
 
       const errorMsg = errorResult.message || errorResult.error?.message;
       if (isExceededContextWindowError(errorMsg)) {
@@ -694,6 +687,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          message,
           provider: this.id,
         });
       }
@@ -703,6 +697,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           endpoint: desensitizedEndpoint,
           error: errorResult,
           errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          message,
           provider: this.id,
         });
       }
@@ -711,6 +706,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         endpoint: desensitizedEndpoint,
         error: errorResult,
         errorType: ErrorType.bizError,
+        message,
         provider: this.id,
       });
     }
