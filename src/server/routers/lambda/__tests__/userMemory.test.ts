@@ -78,6 +78,7 @@ const createCaller = (ctxOverrides: Partial<any> = {}) => {
 describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTriggerProcessUsers.mockResolvedValue({ workflowRunId: 'workflow-run-1' });
   });
 
   it('dedupes when an active task exists', async () => {
@@ -135,6 +136,15 @@ describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
       }),
       { extraHeaders: { 'x-test': 'ok' } },
     );
+    expect(mockUpdate).toHaveBeenCalledWith('new-task', {
+      metadata: expect.objectContaining({
+        control: {
+          upstash: {
+            workflowRunIds: ['workflow-run-1'],
+          },
+        },
+      }),
+    });
     expect(result).toMatchObject({
       deduped: false,
       id: 'new-task',
