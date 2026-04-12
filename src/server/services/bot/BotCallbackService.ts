@@ -210,7 +210,7 @@ export class BotCallbackService {
     try {
       await messenger.editMessage(progressMessageId, progressText);
       if (!isLlmFinalResponse) {
-        await messenger.triggerTyping();
+        await messenger.triggerTyping?.();
       }
     } catch (error) {
       log('handleStep: failed to edit progress message: %O', error);

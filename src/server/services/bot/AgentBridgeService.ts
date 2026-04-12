@@ -515,12 +515,19 @@ export class AgentBridgeService {
     const aiAgentService = new AiAgentService(this.db, this.userId);
     const timezone = await this.loadTimezone();
 
-    // When the message-gateway is configured, skip the ack/progress message and
-    // rely on the gateway's alarm-based typing indicator throughout AI generation.
+    // When the message-gateway is configured AND the platform supports typing
+    // indicators, skip the ack/progress message and rely on the gateway's
+    // alarm-based typing indicator throughout AI generation.
     // Posting an ack message cancels platform-level typing (e.g. Discord), and the
     // gateway typing makes ack redundant as user feedback.
+    // For platforms without typing support (no triggerTyping on messenger), the
+    // gateway typing is invisible, so we still send an ack message as user feedback.
     const gwClient = getMessageGatewayClient();
-    const useGatewayTyping = gwClient.isConfigured;
+    const platformSupportsTyping =
+      client && botContext?.platformThreadId
+        ? !!client.getMessenger(botContext.platformThreadId).triggerTyping
+        : true;
+    const useGatewayTyping = gwClient.isConfigured && platformSupportsTyping;
 
     let progressMessage: SentMessage | undefined;
     if (useGatewayTyping) {

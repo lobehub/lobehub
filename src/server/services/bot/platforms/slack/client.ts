@@ -55,7 +55,6 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
         : slack.postMessage(channelId, content).then(() => {}),
     editMessage: (messageId, content) => slack.updateMessage(channelId, messageId, content),
     removeReaction: (messageId, emoji) => slack.removeReaction(channelId, messageId, emoji),
-    triggerTyping: () => Promise.resolve(),
   };
 }
 

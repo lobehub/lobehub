@@ -70,7 +70,7 @@ export interface PlatformMessenger {
   createMessage: (content: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
-  triggerTyping: () => Promise<void>;
+  triggerTyping?: () => Promise<void>;
   updateThreadName?: (name: string) => Promise<void>;
 }
 
