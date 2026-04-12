@@ -7,6 +7,8 @@ const log = debug('lobe-server:message-gateway-client');
 // ─── Types ───
 
 export interface MessageGatewayConnectionConfig {
+  /** Platform application ID (e.g., Feishu appId, QQ appId) */
+  applicationId?: string;
   connectionId: string;
   /** Preferred connection mode (e.g., "webhook", "websocket"). Falls back to platform default if omitted. */
   connectionMode?: string;

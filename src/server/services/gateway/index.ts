@@ -84,6 +84,7 @@ export class GatewayService {
             const definition = platformRegistry.getPlatform(platform);
             const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
             await client.connect({
+              applicationId: provider.applicationId,
               connectionId: provider.id,
               connectionMode,
               credentials: provider.credentials,
@@ -245,6 +246,7 @@ export class GatewayService {
     const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
 
     await client.connect({
+      applicationId: provider.applicationId,
       connectionId: provider.id,
       connectionMode,
       credentials: provider.credentials,
