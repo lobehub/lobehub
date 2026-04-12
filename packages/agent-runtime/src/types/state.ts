@@ -2,6 +2,7 @@ import type {
   ActivatedStepSkill,
   ActivatedStepTool,
   OperationToolSet,
+  ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
@@ -122,6 +123,9 @@ export interface AgentState {
   stepCount: number;
 
   systemRole?: string;
+  /** Tool executor map for routing tool execution between server and client */
+  toolExecutorMap?: Record<string, ToolExecutor>;
+
   toolManifestMap: Record<string, any>;
 
   tools?: any[];

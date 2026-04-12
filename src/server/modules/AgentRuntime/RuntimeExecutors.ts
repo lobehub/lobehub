@@ -250,6 +250,7 @@ export const createRuntimeExecutors = (
     const activeDeviceId = state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
+      executorMap: state.toolExecutorMap ?? {},
       manifestMap: state.toolManifestMap ?? {},
       sourceMap: state.toolSourceMap ?? {},
       tools: state.tools ?? [],
@@ -769,9 +770,10 @@ export const createRuntimeExecutors = (
               },
               onToolsCalling: async ({ toolsCalling: raw }) => {
                 const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
-                // Add source field from resolved sourceMap for routing tool execution
+                // Attach source (origin) and executor (dispatch target) for routing
                 const payload = resolvedCalls.map((p) => ({
                   ...p,
+                  executor: resolved.executorMap?.[p.identifier],
                   source: resolved.sourceMap[p.identifier],
                 }));
                 // log(`[${operationLogId}][toolsCalling]`, payload);

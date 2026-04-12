@@ -312,6 +312,7 @@ export class AgentRuntimeService {
         status: 'idle',
         stepCount: initialStepCount,
         // Backward-compat: resolved tool fields read by RuntimeExecutors
+        toolExecutorMap: operationToolSet.executorMap,
         toolManifestMap: operationToolSet.manifestMap,
         toolSourceMap: operationToolSet.sourceMap,
         tools: operationToolSet.tools,

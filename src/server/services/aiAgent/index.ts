@@ -13,6 +13,7 @@ import { LOADING_FLAT } from '@lobechat/const';
 import type {
   AgentManagementContext,
   LobeToolManifest,
+  ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
 import { SkillEngine } from '@lobechat/context-engine';
@@ -455,6 +456,7 @@ export class AiAgentService {
     };
     const toolManifestMap: Record<string, any> = {};
     const toolSourceMap: Record<string, ToolSource> = {};
+    const toolExecutorMap: Record<string, ToolExecutor> = {};
     let onlineDevices: DeviceAttachment[] = [];
     let activeDeviceId: string | undefined;
     let hasAgentDocuments = false;
@@ -1141,6 +1143,7 @@ export class AiAgentService {
         stream,
         toolSet: {
           enabledToolIds: toolsResult.enabledToolIds,
+          executorMap: toolExecutorMap,
           manifestMap: toolManifestMap,
           sourceMap: toolSourceMap,
           tools,
