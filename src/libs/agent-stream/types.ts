@@ -9,6 +9,7 @@ export type AgentStreamEventType =
   | 'stream_retry'
   | 'tool_start'
   | 'tool_end'
+  | 'tool_execute'
   | 'step_start'
   | 'step_complete'
   | 'error';
@@ -71,6 +72,22 @@ export interface StepCompleteData {
   reasonDetail?: string;
 }
 
+/**
+ * Server → Client: request the client to execute a tool locally and return the result.
+ */
+export interface ToolExecuteData {
+  /** Tool function name (e.g. "readFile"). */
+  apiName: string;
+  /** JSON-encoded argument string as returned by the LLM. */
+  arguments: string;
+  /** Per-invocation deadline. Server caps against its own function budget. */
+  executionTimeoutMs: number;
+  /** Tool plugin identifier (e.g. "local-system"). */
+  identifier: string;
+  /** Unique tool call id; used as the correlation key for the returned result. */
+  toolCallId: string;
+}
+
 // ─── WebSocket Protocol Messages ───
 
 // Client → Server
@@ -92,7 +109,26 @@ export interface InterruptMessage {
   type: 'interrupt';
 }
 
-export type ClientMessage = AuthMessage | HeartbeatMessage | InterruptMessage | ResumeMessage;
+/**
+ * Client → Server: tool execution result, correlated by toolCallId.
+ */
+export interface ToolResultMessage {
+  content: string | null;
+  error?: {
+    message: string;
+    type?: string;
+  };
+  success: boolean;
+  toolCallId: string;
+  type: 'tool_result';
+}
+
+export type ClientMessage =
+  | AuthMessage
+  | HeartbeatMessage
+  | InterruptMessage
+  | ResumeMessage
+  | ToolResultMessage;
 
 // Server → Client
 export interface AuthSuccessMessage {
