@@ -1,5 +1,7 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 
+import type { ToolExecuteData } from '@/libs/agent-stream/types';
+
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
 
@@ -144,6 +146,14 @@ export interface IStreamEventManager {
     operationId: string,
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
   ) => Promise<string>;
+
+  /**
+   * Optional: dispatch a tool execution request to the client via Agent Gateway.
+   * Rejects if the gateway is unavailable — callers decide their fallback path.
+   * Only present on implementations that speak to a live gateway (not on the
+   * in-memory / Redis-only managers).
+   */
+  sendToolExecute?: (operationId: string, data: ToolExecuteData) => Promise<void>;
 
   /**
    * Subscribe to stream events (for SSE endpoint)

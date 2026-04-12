@@ -372,4 +372,57 @@ describe('GatewayStreamNotifier', () => {
       expect(url).not.toContain('//api');
     });
   });
+
+  describe('sendToolExecute', () => {
+    const toolExecuteData = {
+      apiName: 'readFile',
+      arguments: '{"path":"/tmp/x"}',
+      executionTimeoutMs: 30_000,
+      identifier: 'local-system',
+      toolCallId: 'call-1',
+    };
+
+    beforeEach(() => {
+      // Earlier tests in this file install hanging mockImplementations that
+      // clearAllMocks doesn't reset — restore the default behavior here.
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
+    });
+
+    it('POSTs to /api/operations/tool-execute with the expected payload', async () => {
+      await notifier.sendToolExecute('op-1', toolExecuteData);
+
+      const calls = mockFetch.mock.calls.filter((c: any[]) =>
+        String(c[0]).includes('/api/operations/tool-execute'),
+      );
+      expect(calls).toHaveLength(1);
+
+      const [url, init] = calls[0];
+      expect(url).toBe(`${gatewayUrl}/api/operations/tool-execute`);
+      expect(init.method).toBe('POST');
+      expect(init.headers.Authorization).toBe(`Bearer ${serviceToken}`);
+      expect(JSON.parse(init.body)).toEqual({
+        data: toolExecuteData,
+        operationId: 'op-1',
+      });
+    });
+
+    it('rejects when the gateway returns a non-ok status', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: () => Promise.resolve('bad gateway'),
+      });
+
+      await expect(notifier.sendToolExecute('op-1', toolExecuteData)).rejects.toThrow(/502/);
+    });
+
+    it('rejects when fetch throws (network / timeout)', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('network down'));
+
+      await expect(notifier.sendToolExecute('op-1', toolExecuteData)).rejects.toThrow(
+        'network down',
+      );
+    });
+  });
 });
