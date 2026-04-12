@@ -4,12 +4,13 @@ export async function register() {
     await import('./libs/debug-file-logger');
   }
 
-  // Auto-start GatewayManager for non-Vercel environments so that
-  // persistent bots (e.g. Discord gateway, WeChat long-polling) reconnect after server restart.
+  // Auto-start GatewayManager / sync message-gateway connections on server start.
+  // - Non-Vercel (Docker, local): always run — persistent bots need reconnection after restart.
+  // - Vercel: only run when an external message gateway is configured, to sync connection state.
   if (
     process.env.NEXT_RUNTIME === 'nodejs' &&
-    !process.env.VERCEL_ENV &&
-    process.env.DATABASE_URL
+    process.env.DATABASE_URL &&
+    (!process.env.VERCEL_ENV || process.env.MESSAGE_GATEWAY_URL)
   ) {
     const { GatewayService } = await import('./server/services/gateway');
     const service = new GatewayService();
