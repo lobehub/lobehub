@@ -14,6 +14,7 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import { SessionDefaultGroup } from '@/types/session';
 
 import { useCreateMenuItems } from '../../../hooks';
+import NewAgentButton from '../../NewAgentButton';
 import GroupItem from './AgentGroupItem';
 import AgentItem from './AgentItem';
 
@@ -60,13 +61,16 @@ const List = memo<SessionListProps>(
             <AgentItem className={itemClassName} item={item} key={item.id} style={itemStyle} />
           ),
         )}
-        {hasMore && (
-          <NavItem
-            icon={MoreHorizontal}
-            title={t('input.more')}
-            onClick={onMoreClick || openAllAgentsDrawer}
-          />
-        )}
+        {isDefaultList &&
+          (hasMore ? (
+            <NavItem
+              icon={MoreHorizontal}
+              title={t('input.more')}
+              onClick={onMoreClick || openAllAgentsDrawer}
+            />
+          ) : (
+            <NewAgentButton />
+          ))}
       </Flexbox>
     );
   },

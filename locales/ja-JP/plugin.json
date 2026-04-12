@@ -2,6 +2,7 @@
   "arguments.moreParams": "合計で{{count}}個のパラメーターがあります",
   "arguments.title": "パラメーター一覧",
   "builtins.lobe-activator.apiName.activateTools": "ツールをアクティブ化",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} 件が見つかりません",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "利用可能なモデルを取得",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "利用可能なツールを取得",
   "builtins.lobe-agent-builder.apiName.getConfig": "設定を取得",

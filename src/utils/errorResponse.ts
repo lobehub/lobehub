@@ -42,6 +42,10 @@ const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
       return 404;
     }
 
+    case AgentRuntimeErrorType.AccountDeactivated: {
+      return 403;
+    }
+
     case AgentRuntimeErrorType.InsufficientQuota:
     case AgentRuntimeErrorType.QuotaLimitReached: {
       return 429;

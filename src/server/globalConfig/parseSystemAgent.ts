@@ -3,7 +3,7 @@ import { type UserSystemAgentConfig } from '@/types/user/settings';
 
 const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
 
-const defaultTrueLey = new Set(['queryRewrite', 'autoSuggestion']);
+const defaultTrueLey = new Set(['queryRewrite', 'promptRewrite', 'autoSuggestion']);
 
 export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgentConfig> => {
   if (!envString) return {};

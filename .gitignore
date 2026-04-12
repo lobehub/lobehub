@@ -144,5 +144,6 @@ spaHtmlTemplates.ts
 apps/desktop/resources/bin/lobe-cli.js
 apps/desktop/resources/cli-package.json
 
+# Superpowers plugin brainstorm/spec outputs (local only; do not commit)
 .superpowers/
-docs/superpowers
+docs/superpowers/

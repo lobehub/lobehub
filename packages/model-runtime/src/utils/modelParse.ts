@@ -1,7 +1,8 @@
-import { type ChatModelCard } from '@lobechat/types';
-import { type AIBaseModelCard, type AiModelSettings, type ExtendParamsType } from 'model-bank';
+import type { ChatModelCard } from '@lobechat/types';
+import type { AIBaseModelCard, AiModelSettings, AiModelType, ExtendParamsType } from 'model-bank';
+import { AiModelTypeSchema } from 'model-bank';
 
-import { type ModelProviderKey } from '../types';
+import type { ModelProviderKey } from '../types';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -189,6 +190,20 @@ export const IMAGE_MODEL_KEYWORDS = [
 
 // Embedding model keyword configuration
 export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
+
+const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
+
+const normalizeModelType = (value: unknown): AiModelType | undefined => {
+  if (typeof value !== 'string') return undefined;
+
+  const normalized = value.toLowerCase() as AiModelType;
+
+  if (AI_MODEL_TYPE_SET.has(normalized)) {
+    return normalized;
+  }
+
+  return undefined;
+};
 
 /**
  * Detect whether a keyword list matches a model ID (supports multiple matching patterns)
@@ -482,8 +497,9 @@ const processModelCard = (
   } = config;
 
   const isExcludedModel = isKeywordListMatch(model.id.toLowerCase(), excludeKeywords);
+  const normalizedModelType = normalizeModelType(model.type);
   const modelType =
-    model.type ||
+    normalizedModelType ||
     knownModel?.type ||
     (isKeywordListMatch(
       model.id.toLowerCase(),

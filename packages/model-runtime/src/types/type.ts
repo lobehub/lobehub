@@ -14,6 +14,7 @@ export interface ChatCompletionErrorPayload {
   endpoint?: string;
   error: object;
   errorType: ILobeAgentRuntimeErrorType;
+  message?: string;
   provider: string;
 }
 

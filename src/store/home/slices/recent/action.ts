@@ -1,8 +1,10 @@
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
-import { useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { type RecentItem } from '@/server/routers/lambda/recent';
 import { fileService } from '@/services/file';
+import { recentService } from '@/services/recent';
 import { topicService } from '@/services/topic';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
@@ -15,6 +17,7 @@ const n = setNamespace('recent');
 const FETCH_RECENT_TOPICS_KEY = 'fetchRecentTopics';
 const FETCH_RECENT_RESOURCES_KEY = 'fetchRecentResources';
 const FETCH_RECENT_PAGES_KEY = 'fetchRecentPages';
+const FETCH_RECENTS_KEY = 'fetchRecents';
 
 type Setter = StoreSetter<HomeStore>;
 export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -29,6 +32,45 @@ export class RecentActionImpl {
     this.#set = set;
     this.#get = get;
   }
+
+  closeAllRecentsDrawer = (): void => {
+    this.#set({ allRecentsDrawerOpen: false }, false, n('closeAllRecentsDrawer'));
+  };
+
+  openAllRecentsDrawer = (): void => {
+    this.#set({ allRecentsDrawerOpen: true }, false, n('openAllRecentsDrawer'));
+  };
+
+  updateRecentTitle = (id: string, title: string): void => {
+    const recents = this.#get().recents.map((item) => (item.id === id ? { ...item, title } : item));
+    this.#set({ recents }, false, n('updateRecentTitle'));
+  };
+
+  removeRecent = (id: string): void => {
+    const recents = this.#get().recents.filter((item) => item.id !== id);
+    this.#set({ recents }, false, n('removeRecent'));
+  };
+
+  refreshRecents = async (): Promise<void> => {
+    await mutate((key: unknown) => Array.isArray(key) && key[0] === FETCH_RECENTS_KEY);
+  };
+
+  useFetchRecents = (
+    isLogin: boolean | undefined,
+    limit: number = 10,
+  ): SWRResponse<RecentItem[]> => {
+    return useClientDataSWRWithSync<RecentItem[]>(
+      isLogin === true ? [FETCH_RECENTS_KEY, isLogin, limit] : null,
+      async () => recentService.getAll(limit + 1),
+      {
+        onData: (data) => {
+          if (this.#get().isRecentsInit && isEqual(this.#get().recents, data)) return;
+
+          this.#set({ isRecentsInit: true, recents: data }, false, n('useFetchRecents/onData'));
+        },
+      },
+    );
+  };
 
   useFetchRecentPages = (isLogin: boolean | undefined): SWRResponse<any[]> => {
     return useClientDataSWRWithSync<any[]>(

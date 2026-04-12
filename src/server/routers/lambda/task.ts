@@ -1233,6 +1233,31 @@ export const taskRouter = router({
         const model = ctx.taskModel;
         const resolved = await resolveOrThrow(model, id);
 
+        // Cascade: when leaving `running`, cancel all running topics
+        if (resolved.status === 'running' && status !== 'running') {
+          const topics = await ctx.taskTopicModel.findByTaskId(resolved.id);
+          const aiAgentService = new AiAgentService(ctx.serverDB, ctx.userId);
+
+          for (const t of topics) {
+            if (t.status !== 'running' || !t.topicId) continue;
+
+            // Interrupt the remote operation first; if it fails, skip cancellation
+            // to avoid desynchronizing DB state from a still-running operation.
+            if (t.operationId) {
+              try {
+                await aiAgentService.interruptTask({ operationId: t.operationId });
+              } catch (err) {
+                console.error('[task:updateStatus] failed to interrupt topic %s:', t.topicId, err);
+                continue;
+              }
+            }
+
+            // Conditionally cancel only if the topic is still running,
+            // avoiding overwrite of a concurrent completed/timeout transition.
+            await ctx.taskTopicModel.cancelIfRunning(resolved.id, t.topicId);
+          }
+        }
+
         const extra: Record<string, unknown> = {};
         if (status === 'running') extra.startedAt = new Date();
         if (status === 'completed' || status === 'failed' || status === 'canceled')

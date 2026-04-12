@@ -17,15 +17,20 @@ export class DocumentService {
   userId: string;
   private fileModel: FileModel;
   private documentModel: DocumentModel;
-  private fileService: FileService;
+  private fileServiceInstance?: FileService;
   private db: LobeChatDatabase;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
     this.fileModel = new FileModel(db, userId);
-    this.fileService = new FileService(db, userId);
     this.documentModel = new DocumentModel(db, userId);
+  }
+
+  private get fileService() {
+    this.fileServiceInstance ??= new FileService(this.db, this.userId);
+
+    return this.fileServiceInstance;
   }
 
   /**

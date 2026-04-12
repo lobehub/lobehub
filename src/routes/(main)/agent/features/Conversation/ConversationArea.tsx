@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import debug from 'debug';
 import { memo, Suspense, useMemo } from 'react';
 
+import AgentHome from '@/features/AgentHome';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider, TodoProgress } from '@/features/Conversation';
 import ZenModeToast from '@/features/ZenModeToast';
@@ -11,7 +12,6 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import WelcomeChatItem from './AgentWelcome';
 import ChatHydration from './ChatHydration';
 import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
@@ -71,7 +71,7 @@ const Conversation = memo(() => {
           position: 'relative',
         }}
       >
-        <ChatList welcome={<WelcomeChatItem />} />
+        <ChatList welcome={<AgentHome />} />
       </Flexbox>
       <TodoProgress />
       <MainChatInput />

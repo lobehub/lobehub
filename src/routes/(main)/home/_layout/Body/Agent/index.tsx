@@ -1,7 +1,7 @@
 'use client';
 
 import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { memo, Suspense, useCallback } from 'react';
+import React, { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -25,7 +25,12 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   const { openConfigGroupModal } = useAgentModal();
 
   // Create menu items
-  const { isLoading } = useCreateMenuItems();
+  const { createAgentMenuItem, createGroupChatMenuItem, isLoading } = useCreateMenuItems();
+
+  const addMenuItems = useMemo(
+    () => [createAgentMenuItem(), createGroupChatMenuItem()],
+    [createAgentMenuItem, createGroupChatMenuItem],
+  );
 
   const handleOpenConfigGroupModal = useCallback(() => {
     openConfigGroupModal();
@@ -37,10 +42,12 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
 
   return (
     <AccordionItem
-      action={<Actions dropdownMenu={dropdownMenu} isLoading={isLoading} />}
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
+      action={
+        <Actions addMenuItems={addMenuItems} dropdownMenu={dropdownMenu} isLoading={isLoading} />
+      }
       headerWrapper={(header) => (
         <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
       )}

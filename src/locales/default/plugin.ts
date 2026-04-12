@@ -199,6 +199,7 @@ export default {
   'builtins.lobe-page-agent.apiName.wrapNodes': 'Wrap nodes',
   'builtins.lobe-page-agent.title': 'Page',
   'builtins.lobe-activator.apiName.activateTools': 'Activate Tools',
+  'builtins.lobe-activator.inspector.activateTools.notFoundCount': '{{count}} not found',
   'builtins.lobe-skill-store.apiName.importFromMarket': 'Import from Market',
   'builtins.lobe-skill-store.apiName.importSkill': 'Import Skill',
   'builtins.lobe-skill-store.apiName.searchSkill': 'Search Skills',
@@ -575,6 +576,7 @@ export default {
   'skillDetail.tools': 'Tools',
   'skillDetail.trustWarning':
     "Only use connectors from developers you trust. LobeHub does not control which tools developers make available and cannot verify that they will work as intended or that they won't change.",
+  'skillInstallBanner.dismiss': 'Dismiss',
   'skillInstallBanner.title': 'Add skills to Lobe AI',
   'store.actions.cancel': 'Cancel',
   'store.actions.configure': 'Configure',

@@ -1,7 +1,7 @@
 ---
 name: pr
 description: "Create a PR for the current branch. Use when the user asks to create a pull request, submit PR, or says 'pr'."
-user_invocable: true
+user-invocable: true
 ---
 
 # Create Pull Request

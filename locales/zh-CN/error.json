@@ -60,6 +60,7 @@
   "response.520": "服务遇到意外问题，暂时无法完成请求，请稍后再试",
   "response.522": "连接超时（可能网络不稳定或服务暂不可达），请稍后再试",
   "response.524": "等待上游响应超时，请稍后再试",
+  "response.AccountDeactivated": "你的账户已被停用或暂停。这可能是由于政策、安全或账户审查原因。请联系服务商支持获取帮助。",
   "response.AgentRuntimeError": "助理运行时出错。请根据以下信息排查或重试",
   "response.ComfyUIBizError": "ComfyUI 服务返回错误。请根据以下信息排查或重试",
   "response.ComfyUIEmptyResult": "ComfyUI 未生成结果。请检查模型/工作流配置后重试",

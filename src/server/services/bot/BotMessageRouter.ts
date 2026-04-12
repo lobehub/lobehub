@@ -21,6 +21,7 @@ import {
   type PlatformDefinition,
   platformRegistry,
 } from './platforms';
+import { renderError } from './replyTemplate';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -461,13 +462,23 @@ export class BotMessageRouter {
         (context?.skipped?.length ?? 0) + 1,
         ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
       );
-      await bridge.handleMention(thread, merged, {
-        agentId,
-        botContext: { applicationId, platform, platformThreadId: thread.id },
-        charLimit,
-        client,
-        displayToolCalls,
-      });
+      try {
+        await bridge.handleMention(thread, merged, {
+          agentId,
+          botContext: { applicationId, platform, platformThreadId: thread.id },
+          charLimit,
+          client,
+          displayToolCalls,
+        });
+      } catch (error) {
+        log('onNewMention: unhandled error from handleMention: %O', error);
+        try {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          await thread.post(renderError(errMsg));
+        } catch {
+          // best-effort notification
+        }
+      }
     });
 
     bot.onSubscribedMessage(async (thread, message, context?: MessageContext) => {
@@ -528,13 +539,23 @@ export class BotMessageRouter {
         ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
       );
 
-      await bridge.handleSubscribedMessage(thread, merged, {
-        agentId,
-        botContext: { applicationId, platform, platformThreadId: thread.id },
-        charLimit,
-        client,
-        displayToolCalls,
-      });
+      try {
+        await bridge.handleSubscribedMessage(thread, merged, {
+          agentId,
+          botContext: { applicationId, platform, platformThreadId: thread.id },
+          charLimit,
+          client,
+          displayToolCalls,
+        });
+      } catch (error) {
+        log('onSubscribedMessage: unhandled error from handleSubscribedMessage: %O', error);
+        try {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          await thread.post(renderError(errMsg));
+        } catch {
+          // best-effort notification
+        }
+      }
     });
 
     // Register slash command handlers (native + text-based)
@@ -581,13 +602,23 @@ export class BotMessageRouter {
           ((merged as any).attachments as unknown[] | undefined)?.length ?? 0,
         );
 
-        await bridge.handleMention(thread, merged, {
-          agentId,
-          botContext: { applicationId, platform, platformThreadId: thread.id },
-          charLimit,
-          client,
-          displayToolCalls,
-        });
+        try {
+          await bridge.handleMention(thread, merged, {
+            agentId,
+            botContext: { applicationId, platform, platformThreadId: thread.id },
+            charLimit,
+            client,
+            displayToolCalls,
+          });
+        } catch (error) {
+          log('onNewMessage: unhandled error from handleMention: %O', error);
+          try {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            await thread.post(`**Error**: ${errMsg}`);
+          } catch {
+            // best-effort notification
+          }
+        }
       });
     }
   }

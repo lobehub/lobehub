@@ -90,7 +90,18 @@ export async function createZhipuVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, endImageUrl, aspectRatio, duration, generateAudio, size } = params;
+  const {
+    prompt,
+    imageUrl,
+    imageUrls,
+    endImageUrl,
+    aspectRatio,
+    duration,
+    generateAudio,
+    resolution,
+    size,
+    watermark,
+  } = params;
 
   log('Creating video with Zhipu API - model: %s, params: %O', model, params);
 
@@ -104,15 +115,18 @@ export async function createZhipuVideo(
 
   // Zhipu requires image_url as an array: [first_frame, last_frame?]
   // https://docs.bigmodel.cn/cn/guide/paid-recommendation/cogvideox
-  const imageUrls: string[] = [];
+  const content: string[] = [];
   if (imageUrl) {
-    imageUrls.push(imageUrl);
+    content.push(imageUrl);
+  }
+  if (imageUrls && imageUrls.length > 0) {
+    imageUrls.forEach((url) => content.push(url));
   }
   if (endImageUrl) {
-    imageUrls.push(endImageUrl);
+    content.push(endImageUrl);
   }
-  if (imageUrls.length > 0) {
-    body.image_url = imageUrls;
+  if (content.length > 0) {
+    body.image_url = content;
   }
 
   // Add other optional parameters
@@ -120,6 +134,8 @@ export async function createZhipuVideo(
   if (duration) body.duration = duration;
   if (generateAudio !== undefined) body.with_audio = generateAudio;
   if (size) body.size = size;
+  if (resolution) body.quality = resolution;
+  if (watermark !== undefined) body.watermark_enabled = watermark;
 
   log('Zhipu video API request body: %O', body);
 

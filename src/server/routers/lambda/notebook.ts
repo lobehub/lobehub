@@ -5,6 +5,7 @@ import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { NotebookRuntimeService } from '@/server/services/notebook';
 
 const notebookProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -12,6 +13,7 @@ const notebookProcedure = authedProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
+      notebookService: new NotebookRuntimeService({ serverDB: ctx.serverDB, userId: ctx.userId }),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId),
     },
   });
@@ -60,10 +62,7 @@ export const notebookRouter = router({
   deleteDocument: notebookProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Remove associations first
-      await ctx.topicDocumentModel.deleteByDocumentId(input.id);
-      // Delete the document
-      await ctx.documentModel.delete(input.id);
+      await ctx.notebookService.deleteDocument(input.id);
 
       return { success: true };
     }),

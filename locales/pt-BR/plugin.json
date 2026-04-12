@@ -2,6 +2,7 @@
   "arguments.moreParams": "{{count}} parâmetros no total",
   "arguments.title": "Argumentos",
   "builtins.lobe-activator.apiName.activateTools": "Ativar Ferramentas",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} não encontrado",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Obter modelos disponíveis",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Obter Habilidades disponíveis",
   "builtins.lobe-agent-builder.apiName.getConfig": "Obter configuração",

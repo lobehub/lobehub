@@ -66,17 +66,17 @@ export const useNavLayout = (): NavLayout => {
     () =>
       [
         {
+          hidden: !showMarket,
+          icon: getRouteById('community')!.icon,
+          key: SidebarTabKey.Community,
+          title: t('tab.community'),
+          url: '/community',
+        },
+        {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
-        },
-        {
-          hidden: !showMarket,
-          icon: getRouteById('community')!.icon,
-          key: SidebarTabKey.Community,
-          title: t('tab.marketplace'),
-          url: '/community',
         },
       ] as NavItem[],
     [t, showMarket],

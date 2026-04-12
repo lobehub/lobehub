@@ -27,6 +27,10 @@ export default {
   'billing.subscriptionId': 'Subscription ID',
   'billing.unpaid': 'Unpaid',
   'billing.view': 'View',
+  'crossPlatform.desc':
+    'This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.',
+  'crossPlatform.manageOnMobile': 'Manage on mobile device',
+  'crossPlatform.title': 'Cross-Platform Subscription',
   'cancelPlan.alert':
     'You will still enjoy the benefits until the current plan expires ({{date}}). You can resubscribe at any time before expiration.',
   'cancelPlan.desc':

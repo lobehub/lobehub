@@ -2,6 +2,7 @@
   "arguments.moreParams": "總共有 {{count}} 個參數",
   "arguments.title": "參數清單",
   "builtins.lobe-activator.apiName.activateTools": "啟用工具",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} 未找到",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "取得可用模型",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "取得可用工具",
   "builtins.lobe-agent-builder.apiName.getConfig": "取得設定",

@@ -56,6 +56,7 @@ const Action = memo<ActionProps>(
           placement: 'bottom',
         }}
         onClick={(e) => {
+          if (disabled || loading) return;
           if (onClick) return onClick(e);
           setShow(true);
         }}
@@ -69,7 +70,7 @@ const Action = memo<ActionProps>(
       />
     );
 
-    if (disabled) return iconNode;
+    if (disabled || loading) return iconNode;
 
     if (dropdown)
       return (

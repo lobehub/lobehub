@@ -4,17 +4,16 @@ import { SOCIAL_URL } from '@lobechat/business-const';
 import { useAnalytics } from '@lobehub/analytics/react';
 import { type MenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { DiscordIcon } from '@lobehub/ui/icons';
+import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import {
   Book,
   CircleHelp,
   Feather,
   FileClockIcon,
   FlaskConical,
-  Github,
   Rocket,
-  Settings,
   Settings2,
+  SettingsIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +29,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
+import { prefetchRoute } from '@/utils/router';
 
 const PRODUCT_HUNT_NOTIFICATION = {
   actionHref: 'https://www.producthunt.com/products/lobehub?launch=lobehub',
@@ -173,7 +173,7 @@ const Footer = memo(() => {
       ...(footer.layout === 'compact' && !footer.hideGitHub
         ? [
             {
-              icon: <Icon icon={Github} />,
+              icon: <Icon icon={GithubIcon} />,
               key: 'github',
               label: (
                 <a href={GITHUB} rel="noopener noreferrer" target="_blank">
@@ -226,7 +226,7 @@ const Footer = memo(() => {
             </DropdownMenu>
             {!footer.hideGitHub && (
               <a aria-label={'GitHub'} href={GITHUB} rel="noopener noreferrer" target={'_blank'}>
-                <ActionIcon icon={Github} size={16} title={'GitHub'} />
+                <ActionIcon icon={GithubIcon} size={16} title={'GitHub'} />
               </a>
             )}
             <Link to="/eval">
@@ -240,9 +240,14 @@ const Footer = memo(() => {
           <DropdownMenu items={helpMenuItems} placement="topLeft">
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
-          {isDevMode && !isSettingsPage && (
-            <Link to="/settings">
-              <ActionIcon aria-label={t('userPanel.setting')} icon={Settings} size={16} />
+          {isDevMode && (
+            <Link to="/settings" onMouseEnter={() => prefetchRoute('/settings')}>
+              <ActionIcon
+                aria-label={t('userPanel.setting')}
+                icon={SettingsIcon}
+                size={16}
+                title={t('userPanel.setting')}
+              />
             </Link>
           )}
         </Flexbox>

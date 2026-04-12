@@ -99,6 +99,11 @@ export interface SystemStatus {
   chatInputHeight?: number;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
+  /**
+   * IDs of banners/ads the user has dismissed. New banners use a new ID
+   * so dismissing the current one does not hide future ones.
+   */
+  dismissedBannerIds?: string[];
   expandInputActionbar?: boolean;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
@@ -110,6 +115,10 @@ export interface SystemStatus {
    * Group Agent Builder panel width
    */
   groupAgentBuilderPanelWidth?: number;
+  /**
+   * Hidden sidebar sections
+   */
+  hiddenSidebarSections?: string[];
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   hideTopicSharePrivacyWarning?: boolean;
@@ -154,6 +163,10 @@ export interface SystemStatus {
   portalWidth: number;
   readNotificationSlugs?: string[];
   /**
+   * number of recent items to display
+   */
+  recentPageSize?: number;
+  /**
    * Resource Manager column widths
    */
   resourceManagerColumnWidths?: {
@@ -171,6 +184,10 @@ export interface SystemStatus {
   showSystemRole?: boolean;
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
+  /**
+   * Order of sidebar sections (e.g. ['recents', 'agent'])
+   */
+  sidebarSectionOrder?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
   /**
    * Whether to display tokens in short format
@@ -220,10 +237,12 @@ export interface GlobalState {
 
 export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
-  agentPageSize: 10,
+  agentPageSize: 5,
   chatInputHeight: 64,
+  recentPageSize: 5,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
+  dismissedBannerIds: [],
   expandInputActionbar: true,
   expandSessionGroupKeys: [SessionDefaultGroup.Pinned, SessionDefaultGroup.Default],
   fileManagerViewMode: 'list' as const,

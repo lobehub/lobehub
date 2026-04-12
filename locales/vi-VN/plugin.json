@@ -2,6 +2,7 @@
   "arguments.moreParams": "Tổng cộng có {{count}} tham số",
   "arguments.title": "Tham số",
   "builtins.lobe-activator.apiName.activateTools": "Kích hoạt Công cụ",
+  "builtins.lobe-activator.inspector.activateTools.notFoundCount": "{{count}} không tìm thấy",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Lấy mô hình khả dụng",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Lấy Kỹ năng khả dụng",
   "builtins.lobe-agent-builder.apiName.getConfig": "Lấy cấu hình",

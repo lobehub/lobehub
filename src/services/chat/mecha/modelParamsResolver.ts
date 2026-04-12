@@ -1,4 +1,5 @@
-import { type LobeAgentChatConfig } from '@lobechat/types';
+import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { ExtendParamsType } from 'model-bank';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
@@ -29,6 +30,22 @@ export interface ModelExtendParams {
   urlContext?: boolean;
   verbosity?: string;
 }
+
+const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
+  thinkingLevel: 'high',
+  thinkingLevel2: 'high',
+  thinkingLevel3: 'high',
+  thinkingLevel4: 'minimal',
+  thinkingLevel5: 'minimal',
+} as const satisfies Partial<Record<ExtendParamsType, string>>;
+
+const THINKING_LEVEL_PARAM_TO_CONFIG_KEY = {
+  thinkingLevel: 'thinkingLevel',
+  thinkingLevel2: 'thinkingLevel2',
+  thinkingLevel3: 'thinkingLevel3',
+  thinkingLevel4: 'thinkingLevel4',
+  thinkingLevel5: 'thinkingLevel5',
+} as const satisfies Partial<Record<ExtendParamsType, keyof LobeAgentChatConfig>>;
 
 /**
  * Resolves extended parameters for model runtime based on model capabilities and chat config
@@ -168,24 +185,24 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.thinkingBudget = chatConfig.thinkingBudget;
   }
 
-  if (modelExtendParams.includes('thinkingLevel') && chatConfig.thinkingLevel) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel;
+  const supportedThinkingLevelParams = modelExtendParams.filter(
+    (extendParam): extendParam is keyof typeof THINKING_LEVEL_PARAM_TO_CONFIG_KEY =>
+      extendParam in THINKING_LEVEL_PARAM_TO_CONFIG_KEY,
+  );
+
+  for (const supportedThinkingLevelParam of supportedThinkingLevelParams) {
+    const configKey = THINKING_LEVEL_PARAM_TO_CONFIG_KEY[supportedThinkingLevelParam];
+    const value = chatConfig[configKey];
+
+    if (typeof value === 'string') {
+      extendParams.thinkingLevel = value;
+      break;
+    }
   }
 
-  if (modelExtendParams.includes('thinkingLevel2') && chatConfig.thinkingLevel2) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel2;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel3') && chatConfig.thinkingLevel3) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel3;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel4') && chatConfig.thinkingLevel4) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel4;
-  }
-
-  if (modelExtendParams.includes('thinkingLevel5') && chatConfig.thinkingLevel5) {
-    extendParams.thinkingLevel = chatConfig.thinkingLevel5;
+  if (!extendParams.thinkingLevel && supportedThinkingLevelParams.length > 0) {
+    extendParams.thinkingLevel =
+      DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[supportedThinkingLevelParams[0]];
   }
 
   // URL context

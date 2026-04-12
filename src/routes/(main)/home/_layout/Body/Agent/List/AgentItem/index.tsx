@@ -9,10 +9,12 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
+import { prefetchRoute } from '@/utils/router';
 
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
@@ -32,6 +34,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
+  const prefetchAgent = usePrefetchAgent();
   const isUpdating = useHomeStore((s) => s.agentUpdatingId === id);
 
   // Separate loading state from chat store - only show loading for this specific agent
@@ -44,6 +47,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   const agentUrl = SESSION_CHAT_URL(id, false);
 
   // Memoize event handlers
+  const handleMouseEnter = useCallback(() => {
+    prefetchAgent(id);
+    prefetchRoute(agentUrl);
+  }, [id, prefetchAgent, agentUrl]);
+
   const handleDoubleClick = useCallback(() => {
     openAgentInNewWindow(id);
   }, [id, openAgentInNewWindow]);
@@ -102,7 +110,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
   });
 
   return (
-    <Link aria-label={displayTitle} ref={setAnchor} to={agentUrl}>
+    <Link aria-label={displayTitle} ref={setAnchor} to={agentUrl} onMouseEnter={handleMouseEnter}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
         className={className}

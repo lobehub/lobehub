@@ -59,8 +59,16 @@ export interface TaskDetailWorkspaceNode {
   title?: string;
 }
 
+export interface TaskDetailActivityAuthor {
+  avatar?: string | null;
+  id: string;
+  name?: string | null;
+  type: 'agent' | 'user';
+}
+
 export interface TaskDetailActivity {
   agentId?: string | null;
+  author?: TaskDetailActivityAuthor;
   briefType?: string;
   content?: string;
   id?: string;

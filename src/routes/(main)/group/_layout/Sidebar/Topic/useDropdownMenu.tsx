@@ -100,6 +100,7 @@ export const useTopicActionsDropdownMenu = (
       },
       {
         children: pageSizeItems,
+        extra: topicPageSize,
         icon: <Icon icon={Hash} />,
         key: 'displayItems',
         label: t('displayItems'),

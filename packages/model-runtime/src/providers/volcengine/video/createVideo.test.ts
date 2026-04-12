@@ -162,6 +162,29 @@ describe('createVolcengineVideo', () => {
       expect(body.generate_audio).toBe(true);
     });
 
+    it('should disable web search tool by default when webSearch is undefined', async () => {
+      payload.model = 'doubao-seedance-2-0-fast-260128';
+      await createVolcengineVideo(payload, options);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.tools).toBeUndefined();
+    });
+
+    it('should enable web search tool when webSearch is true', async () => {
+      payload.model = 'doubao-seedance-2-0-fast-260128';
+      payload.params.webSearch = true;
+      await createVolcengineVideo(payload, options);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.tools).toEqual([{ type: 'web_search' }]);
+    });
+
+    it('should disable web search tool when webSearch is false', async () => {
+      payload.model = 'doubao-seedance-2-0-fast-260128';
+      payload.params.webSearch = false;
+      await createVolcengineVideo(payload, options);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.tools).toBeUndefined();
+    });
+
     it('should map seed to body.seed', async () => {
       payload.params.seed = 42;
       await createVolcengineVideo(payload, options);
@@ -195,6 +218,13 @@ describe('createVolcengineVideo', () => {
       await createVolcengineVideo(payload, options);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.callback_url).toBe('https://example.com/webhook');
+    });
+
+    it('should allow overriding watermark when watermark is provided', async () => {
+      payload.params.watermark = true;
+      await createVolcengineVideo(payload, options);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.watermark).toBe(true);
     });
   });
 

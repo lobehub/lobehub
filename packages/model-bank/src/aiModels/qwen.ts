@@ -2909,6 +2909,7 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2934,6 +2935,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2959,6 +2962,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 4096, min: 256, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2972,7 +2977,6 @@ const qwenImageModels: AIImageModelCard[] = [
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Max',
     id: 'qwen-image-edit-max',
-    enabled: true,
     organization: 'Qwen',
     parameters: {
       height: { default: 1536, max: 2048, min: 512, step: 1 },
@@ -2984,6 +2988,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -2996,7 +3002,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Plus',
-    enabled: true,
     id: 'qwen-image-edit-plus',
     organization: 'Qwen',
     parameters: {
@@ -3009,6 +3014,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3021,7 +3028,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
-    enabled: true,
     id: 'qwen-image-edit',
     organization: 'Qwen',
     parameters: {
@@ -3032,6 +3038,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '',
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3044,7 +3052,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen Image Generation Model (Max series) delivers enhanced realism and visual naturalness compared with the Plus series, effectively reducing AI-generated artifacts, and demonstrating outstanding performance in human appearance, texture details, and text rendering.',
     displayName: 'Qwen Image Max',
-    enabled: true,
     id: 'qwen-image-max',
     organization: 'Qwen',
     parameters: {
@@ -3056,6 +3063,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1664x928',
         enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3068,7 +3077,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'It supports a wide range of artistic styles and is particularly proficient at rendering complex text within images, enabling integrated image–text layout design.',
     displayName: 'Qwen Image Plus',
-    enabled: true,
     id: 'qwen-image-plus',
     organization: 'Qwen',
     parameters: {
@@ -3080,6 +3088,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1664x928',
         enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3092,7 +3102,6 @@ const qwenImageModels: AIImageModelCard[] = [
     description:
       'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
     displayName: 'Qwen Image',
-    enabled: true,
     id: 'qwen-image',
     organization: 'Qwen',
     parameters: {
@@ -3104,6 +3113,8 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1328x1328',
         enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3128,6 +3139,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 2048, max: 11_585, min: 271, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3152,6 +3165,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 2048, max: 5792, min: 271, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3176,6 +3191,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2880, min: 640, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3198,6 +3215,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2880, min: 640, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3221,6 +3240,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2560, min: 384, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3242,6 +3263,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1280, max: 2880, min: 640, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3263,6 +3286,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3284,6 +3309,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3305,6 +3332,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3326,6 +3355,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3347,6 +3378,8 @@ const qwenImageModels: AIImageModelCard[] = [
       },
       seed: { default: null },
       width: { default: 1024, max: 1440, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3397,6 +3430,7 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1k',
         enum: ['1k', '2k'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3427,168 +3461,13 @@ const qwenImageModels: AIImageModelCard[] = [
         default: '1k',
         enum: ['1k', '2k', '4k'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
       units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2026-03-26',
-    type: 'image',
-  },
-  {
-    description:
-      'FLUX.1 [schnell] is the most advanced open-source few-step model, surpassing similar competitors and even strong non-distilled models like Midjourney v6.0 and DALL-E 3 (HD). It is finely tuned to preserve pretraining diversity, significantly improving visual quality, instruction following, size/aspect variation, font handling, and output diversity.',
-    displayName: 'FLUX.1 [schnell]',
-    id: 'flux-schnell',
-    organization: 'Qwen',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['512x1024', '768x512', '768x1024', '1024x576', '576x1024', '1024x1024'],
-      },
-      steps: { default: 4, max: 12, min: 1 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-08-07',
-    type: 'image',
-  },
-  {
-    description:
-      'FLUX.1 [dev] is an open-weights distilled model for non-commercial use. It keeps near-pro image quality and instruction following while running more efficiently, using resources better than same-size standard models.',
-    displayName: 'FLUX.1 [dev]',
-    id: 'flux-dev',
-    organization: 'Qwen',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['512x1024', '768x512', '768x1024', '1024x576', '576x1024', '1024x1024'],
-      },
-      steps: { default: 50, max: 50, min: 1 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-08-07',
-    type: 'image',
-  },
-  {
-    description:
-      'FLUX.1 [merged] combines the deep features explored in "DEV" with the high-speed advantages of "Schnell", extending performance limits and broadening applications.',
-    displayName: 'FLUX.1 [merged]',
-    id: 'flux-merged',
-    organization: 'Qwen',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['512x1024', '768x512', '768x1024', '1024x576', '576x1024', '1024x1024'],
-      },
-      steps: { default: 30, max: 30, min: 1 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-08-22',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-3.5-large is an 800M-parameter MMDiT text-to-image model with excellent quality and prompt alignment, supporting 1-megapixel images and efficient runs on consumer hardware.',
-    displayName: 'StableDiffusion 3.5 Large',
-    id: 'stable-diffusion-3.5-large',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 1024, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 40, max: 500, min: 1 },
-      width: { default: 1024, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-10-25',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-3.5-large-turbo applies adversarial diffusion distillation (ADD) to stable-diffusion-3.5-large for faster speed.',
-    displayName: 'StableDiffusion 3.5 Large Turbo',
-    id: 'stable-diffusion-3.5-large-turbo',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 1024, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 40, max: 500, min: 1 },
-      width: { default: 1024, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-10-25',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-xl brings major improvements over v1.5 and matches top open text-to-image results. Improvements include a 3x larger UNet backbone, a refinement module for better image quality, and more efficient training techniques.',
-    displayName: 'StableDiffusion xl',
-    id: 'stable-diffusion-xl',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 1024, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 50, max: 500, min: 1 },
-      width: { default: 1024, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-04-09',
-    type: 'image',
-  },
-  {
-    description:
-      'stable-diffusion-v1.5 is initialized from the v1.2 checkpoint and fine-tuned for 595k steps on "laion-aesthetics v2 5+" at 512x512 resolution, reducing text conditioning by 10% to improve classifier-free guidance sampling.',
-    displayName: 'StableDiffusion v1.5',
-    id: 'stable-diffusion-v1.5',
-    organization: 'Qwen',
-    parameters: {
-      height: { default: 512, max: 1024, min: 512, step: 128 },
-      prompt: {
-        default: '',
-      },
-      steps: { default: 50, max: 500, min: 1 },
-      width: { default: 512, max: 1024, min: 512, step: 128 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2024-04-09',
     type: 'image',
   },
 ];
@@ -3614,6 +3493,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3634,8 +3515,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
       },
       duration: { default: 5, max: 10, min: 2 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 5,
       },
       prompt: { default: '' },
       resolution: {
@@ -3643,6 +3525,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3669,6 +3553,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3695,6 +3581,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3719,6 +3607,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3736,8 +3626,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     parameters: {
       duration: { default: 5, max: 10, min: 2 },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 5,
       },
       prompt: { default: '' },
       size: {
@@ -3756,6 +3647,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         ],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3771,8 +3664,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     id: 'wan2.6-r2v',
     parameters: {
       duration: { default: 5, max: 10, min: 2 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 5,
       },
       prompt: { default: '' },
       size: {
@@ -3791,6 +3685,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         ],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3824,6 +3720,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         ],
       },
       seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3847,6 +3745,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '1080P',
         enum: ['480P', '720P', '1080P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3881,6 +3781,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1248x1632',
         ],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3906,6 +3808,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '720P',
         enum: ['480P', '720P', '1080P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3931,6 +3835,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '720P',
         enum: ['720P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3954,6 +3860,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '720P',
         enum: ['480P', '720P', '1080P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -3977,6 +3885,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '1080P',
         enum: ['480P', '1080P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4006,6 +3916,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1248x1632',
         ],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4028,6 +3940,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '720P',
         enum: ['480P', '720P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4051,6 +3965,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '720P',
         enum: ['720P'],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4079,6 +3995,8 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '832x1088',
         ],
       },
+      promptExtend: { default: false },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4095,10 +4013,12 @@ const qwenVideoModels: AIVideoModelCard[] = [
     parameters: {
       duration: { default: 5, enum: [5] },
       prompt: { default: '' },
+      promptExtend: { default: false },
       size: {
         default: '1280x720',
         enum: ['1280x720', '720x1280', '960x960', '1088x832', '832x1088'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4131,6 +4051,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: '1080p',
         enum: ['720p', '1080p'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4154,14 +4075,16 @@ const qwenVideoModels: AIVideoModelCard[] = [
         default: null,
       },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
         default: '1080p',
         enum: ['720p', '1080p'],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4204,6 +4127,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1238x1674',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4245,6 +4169,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1238x1674',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4285,6 +4210,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1238x1674',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4310,6 +4236,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4334,6 +4261,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4357,6 +4285,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4380,6 +4309,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4408,6 +4338,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4435,6 +4366,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4461,6 +4393,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4487,6 +4420,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4501,8 +4435,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     id: 'vidu/viduq2-pro_reference2video',
     parameters: {
       duration: { default: 5, max: 10, min: 1 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
@@ -4530,6 +4465,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1080x1920',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4544,8 +4480,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     id: 'vidu/viduq2_reference2video',
     parameters: {
       duration: { default: 5, max: 10, min: 1 },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       resolution: {
@@ -4573,6 +4510,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1080x1920',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4628,6 +4566,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1920x832',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4670,6 +4609,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1080x1920',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4695,6 +4635,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['360P', '540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4719,6 +4660,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['360P', '540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4747,6 +4689,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['360P', '540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4774,6 +4717,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
         enum: ['360P', '540P', '720P', '1080P'],
       },
       seed: { default: null },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',
@@ -4789,8 +4733,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     parameters: {
       duration: { default: 5, enum: [5, 8, 10] },
       generateAudio: { default: true },
-      imageUrl: {
-        default: null,
+      imageUrls: {
+        default: [],
+        maxCount: 7,
       },
       prompt: { default: '' },
       seed: { default: null },
@@ -4819,6 +4764,7 @@ const qwenVideoModels: AIVideoModelCard[] = [
           '1080x1920',
         ],
       },
+      watermark: { default: false },
     },
     pricing: {
       currency: 'CNY',

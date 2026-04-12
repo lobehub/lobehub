@@ -2,6 +2,7 @@ import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_AVATAR,
+  DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
   INBOX_SESSION_ID,
@@ -136,6 +137,18 @@ describe('agentSelectors', () => {
 
       expect(meta.avatar).toBe(DEFAULT_AVATAR);
     });
+
+    it('should return inbox avatar fallback for inbox agent with no custom avatar', () => {
+      const state = createState({
+        activeAgentId: 'inbox-agent',
+        agentMap: { 'inbox-agent': {} },
+        builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent' },
+      });
+
+      const meta = agentSelectors.currentAgentMeta(state);
+
+      expect(meta.avatar).toBe(DEFAULT_INBOX_AVATAR);
+    });
   });
 
   describe('getAgentMetaById', () => {
@@ -160,6 +173,17 @@ describe('agentSelectors', () => {
       const meta = agentSelectors.getAgentMetaById('non-existent')(state);
 
       expect(meta).toEqual({});
+    });
+
+    it('should return inbox avatar fallback for inbox agent with no custom avatar', () => {
+      const state = createState({
+        agentMap: { 'inbox-agent': {} },
+        builtinAgentIdMap: { [INBOX_SESSION_ID]: 'inbox-agent' },
+      });
+
+      const meta = agentSelectors.getAgentMetaById('inbox-agent')(state);
+
+      expect(meta.avatar).toBe(DEFAULT_INBOX_AVATAR);
     });
   });
 

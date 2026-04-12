@@ -1,7 +1,8 @@
+import { cx } from 'antd-style';
 import { memo } from 'react';
 
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
-import { useStyles } from './style';
+import { styles } from './style';
 
 interface InterventionTabBarProps {
   activeIndex: number;
@@ -11,8 +12,6 @@ interface InterventionTabBarProps {
 
 const InterventionTabBar = memo<InterventionTabBarProps>(
   ({ interventions, activeIndex, onTabChange }) => {
-    const { cx, styles } = useStyles();
-
     return (
       <div className={styles.tabBar}>
         {interventions.map((item, index) => (

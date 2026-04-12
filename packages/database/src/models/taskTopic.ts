@@ -44,6 +44,26 @@ export class TaskTopicModel {
       );
   }
 
+  /**
+   * Atomically cancel a topic only if it is still in `running` status.
+   * Returns true if a row was actually updated.
+   */
+  async cancelIfRunning(taskId: string, topicId: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status: 'canceled' })
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.status, 'running'),
+          eq(taskTopics.userId, this.userId),
+        ),
+      )
+      .returning();
+    return result.length > 0;
+  }
+
   async updateOperationId(taskId: string, topicId: string, operationId?: string): Promise<void> {
     await this.db
       .update(taskTopics)
