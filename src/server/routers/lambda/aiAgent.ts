@@ -95,6 +95,8 @@ const ExecAgentSchema = z
     deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
     existingMessageIds: z.array(z.string()).optional().default([]),
+    /** File IDs of already-uploaded attachments to attach to the new user message */
+    fileIds: z.array(z.string()).optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
     /** The user input/prompt */
@@ -530,6 +532,7 @@ export const aiAgentRouter = router({
       autoStart = true,
       deviceId,
       existingMessageIds = [],
+      fileIds,
       parentMessageId,
     } = input;
 
@@ -542,6 +545,7 @@ export const aiAgentRouter = router({
         autoStart,
         deviceId,
         existingMessageIds,
+        fileIds,
         parentMessageId,
         prompt,
         // When parentMessageId is provided, this is a regeneration/continue — skip user message creation

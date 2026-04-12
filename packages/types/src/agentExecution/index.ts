@@ -32,6 +32,14 @@ export interface ExecAgentParams {
   deviceId?: string;
   /** Optional existing message IDs to include in context */
   existingMessageIds?: string[];
+  /**
+   * File IDs of already-uploaded attachments to attach to the new user message.
+   * Resolved server-side via FileModel.findByIds into imageList / videoList / fileList.
+   * Use this when files were uploaded separately via the file upload flow
+   * (e.g. SPA Gateway mode). For platform-adapter ingestion from raw URL/buffer,
+   * use the internal `files` param instead.
+   */
+  fileIds?: string[];
   /** Additional system instructions appended after the agent's own system role */
   instructions?: string;
   /** Override the agent's default model */

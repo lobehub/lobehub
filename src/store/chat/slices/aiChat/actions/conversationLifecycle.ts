@@ -347,6 +347,7 @@ export class ConversationLifecycleActionImpl {
       try {
         const result = await this.#get().executeGatewayAgent({
           context: operationContext,
+          fileIds: fileIdList,
           message,
         });
 

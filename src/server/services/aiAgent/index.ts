@@ -36,6 +36,7 @@ import debug from 'debug';
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
@@ -225,6 +226,7 @@ export class AiAgentService {
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
+      fileIds: attachedFileIds,
       files,
       functionTools,
       hooks,
@@ -973,6 +975,101 @@ export class AiAgentService {
       if (imageList.length === 0) imageList = undefined;
       if (videoList.length === 0) videoList = undefined;
       if (fileList.length === 0) fileList = undefined;
+    }
+
+    // 13b. Attach already-uploaded files referenced by fileIds (e.g. SPA Gateway mode).
+    // These files are already in the `files` table; resolve URLs + classify, and
+    // merge into the imageList/videoList/fileList passed to the LLM and stored
+    // as message relations via messagesFiles.
+    if (attachedFileIds && attachedFileIds.length > 0) {
+      await throwIfExecutionAborted('file resolution');
+
+      const fileModel = new FileModel(this.db, this.userId);
+      const fileRecords = await fileModel.findByIds(attachedFileIds);
+
+      if (fileRecords.length > 0) {
+        fileIds = fileIds ?? [];
+        imageList = imageList ?? [];
+        videoList = videoList ?? [];
+        fileList = fileList ?? [];
+
+        const documentService = new DocumentService(this.db, this.userId);
+
+        // Preserve caller's ordering of fileIds so rendering matches upload order.
+        const recordById = new Map(fileRecords.map((f) => [f.id, f]));
+
+        for (const id of attachedFileIds) {
+          const file = recordById.get(id);
+          if (!file) {
+            warnings.push(`Attachment "${id}" was not found and skipped.`);
+            continue;
+          }
+
+          fileIds.push(file.id);
+          const resolvedUrl = (await fileService.getFullFileUrl(file.url)) || file.url;
+          const fileType = file.fileType || '';
+
+          if (fileType.startsWith('image')) {
+            imageList.push({
+              alt: file.name || 'image',
+              id: file.id,
+              url: resolvedUrl,
+            });
+            continue;
+          }
+
+          if (fileType.startsWith('video')) {
+            videoList.push({
+              alt: file.name || 'video',
+              id: file.id,
+              url: resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video: ensure the document content is parsed so
+          // MessageContentProcessor can inject it via filesPrompts(). parseFile
+          // is idempotent — returns cached content when the document already exists.
+          let content: string | undefined;
+          try {
+            const document = await documentService.parseFile(file.id);
+            content = document.content ?? undefined;
+          } catch (parseError) {
+            log(
+              'execAgent: parseFile failed for attached file %s (id=%s): %O',
+              file.name,
+              file.id,
+              parseError,
+            );
+            warnings.push(
+              `File "${file.name || 'unknown'}" was attached but its contents could not be extracted.`,
+            );
+          }
+
+          fileList.push({
+            content,
+            fileType: fileType || 'application/octet-stream',
+            id: file.id,
+            name: file.name || 'file',
+            size: file.size ?? 0,
+            url: resolvedUrl,
+          });
+        }
+
+        log(
+          'execAgent: resolved %d attached file(s) (%d images, %d videos, %d documents)',
+          fileRecords.length,
+          imageList.length,
+          videoList.length,
+          fileList.length,
+        );
+
+        if (imageList.length === 0) imageList = undefined;
+        if (videoList.length === 0) videoList = undefined;
+        if (fileList.length === 0) fileList = undefined;
+      } else {
+        log('execAgent: no file records found for attachedFileIds=%O', attachedFileIds);
+      }
     }
 
     await throwIfExecutionAborted('message creation');

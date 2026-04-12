@@ -16,6 +16,8 @@ export interface ExecAgentTaskParams {
   autoStart?: boolean;
   deviceId?: string;
   existingMessageIds?: string[];
+  /** File IDs of already-uploaded attachments to attach to the new user message */
+  fileIds?: string[];
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
