@@ -70,19 +70,37 @@ export class GatewayService {
 
         for (const provider of providers) {
           try {
-            const status = await client.getStatus(provider.id);
-            if (status.state.status === 'connected') {
-              log('Gateway sync: %s already connected, skipping', provider.id);
-              continue;
-            }
-          } catch {
-            // Status check failed — try to connect
-          }
-
-          try {
-            const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
             const definition = platformRegistry.getPlatform(platform);
             const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+
+            // Webhook-mode platforms don't need persistent gateway connections.
+            // Run the platform client locally via GatewayManager instead
+            // (e.g. Telegram setWebhook, QQ credential verification).
+            if (connectionMode === 'webhook') {
+              const manager = createGatewayManager({
+                definitions: platformRegistry.listPlatforms(),
+              });
+              await manager.startClient(platform, provider.applicationId, provider.userId);
+              log(
+                'Gateway sync: started webhook-mode %s:%s locally',
+                platform,
+                provider.applicationId,
+              );
+              continue;
+            }
+
+            // For persistent connections, check gateway status before reconnecting
+            try {
+              const status = await client.getStatus(provider.id);
+              if (status.state.status === 'connected') {
+                log('Gateway sync: %s already connected, skipping', provider.id);
+                continue;
+              }
+            } catch {
+              // Status check failed — try to connect
+            }
+
+            const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
             await client.connect({
               applicationId: provider.applicationId,
               connectionId: provider.id,
@@ -244,16 +262,13 @@ export class GatewayService {
     const definition = platformRegistry.getPlatform(platform);
     const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
 
-    // Webhook-mode bots don't need persistent connections — QQ Open Platform
-    // pushes events directly via HTTP. Starting a WebSocket here would conflict
-    // with webhook verification on platforms like QQ that don't allow both modes.
+    // Webhook-mode platforms don't need persistent gateway connections.
+    // Run the platform client locally via GatewayManager so each platform can
+    // perform its own initialization (e.g. Telegram calls setWebhook).
     if (connectionMode === 'webhook') {
-      await updateBotRuntimeStatus({
-        applicationId,
-        platform,
-        status: BOT_RUNTIME_STATUSES.connected,
-      });
-      log('Skipping message-gateway for webhook-mode %s:%s', platform, applicationId);
+      const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
+      await manager.startClient(platform, applicationId, userId);
+      log('Started webhook-mode client locally %s:%s', platform, applicationId);
       return 'started';
     }
 
@@ -280,6 +295,12 @@ export class GatewayService {
   }
 
   private async stopClientViaGateway(platform: string, applicationId: string): Promise<void> {
+    // Stop locally-managed webhook client if it exists (e.g. Telegram deleteWebhook)
+    const manager = getGatewayManager();
+    if (manager) {
+      await manager.stopClient(platform, applicationId);
+    }
+
     const client = getMessageGatewayClient();
 
     const { getServerDB } = await import('@/database/core/db-adaptor');
