@@ -123,9 +123,10 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  // When an external message gateway is configured, it manages all persistent
-  // connections. Skip in-process bot startup to avoid duplicate connections.
-  if (process.env.MESSAGE_GATEWAY_URL) {
+  // When an external message gateway is fully configured (both URL and service
+  // token), it manages all persistent connections. Skip in-process bot startup
+  // to avoid duplicate connections.
+  if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
     return Response.json({ skipped: true, reason: 'using external message gateway' });
   }
 
