@@ -266,6 +266,29 @@ describe('AgentSlice Actions', () => {
         expect.any(AbortSignal),
       );
     });
+
+    it('should preserve explicit null when clearing avatar', async () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      vi.mocked(agentService.updateAgentMeta).mockResolvedValue({
+        agent: { avatar: null } as any,
+        success: true,
+      });
+
+      act(() => {
+        useAgentStore.setState({ activeAgentId: 'agent-1' });
+      });
+
+      await act(async () => {
+        await result.current.updateAgentMeta({ avatar: null });
+      });
+
+      expect(agentService.updateAgentMeta).toHaveBeenCalledWith(
+        'agent-1',
+        { avatar: null },
+        expect.any(AbortSignal),
+      );
+    });
   });
 
   describe('updateAgentChatConfig', () => {

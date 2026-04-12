@@ -3,6 +3,7 @@ import {
   DEFAULT_AGENT_CONFIG,
   DEFAULT_AVATAR,
   DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
   isDesktop,
@@ -33,7 +34,14 @@ const currentAgentData = (s: AgentStoreState) =>
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
 
-const currentAgentAvatar = (s: AgentStoreState) => currentAgentData(s)?.avatar || DEFAULT_AVATAR;
+const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
+  const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
+
+  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
+};
+
+const currentAgentAvatar = (s: AgentStoreState) =>
+  currentAgentData(s)?.avatar || getDefaultAvatarByAgentId(s, s.activeAgentId);
 
 const currentAgentDescription = (s: AgentStoreState) => currentAgentData(s)?.description;
 
@@ -49,7 +57,7 @@ const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || []
 const currentAgentMeta = (s: AgentStoreState): MetaData => {
   const data = currentAgentData(s);
   return {
-    avatar: data?.avatar || DEFAULT_AVATAR,
+    avatar: data?.avatar || getDefaultAvatarByAgentId(s, s.activeAgentId),
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
@@ -69,7 +77,7 @@ const getAgentMetaById =
     if (!data) return {};
 
     return {
-      avatar: data.avatar || DEFAULT_AVATAR,
+      avatar: data.avatar || getDefaultAvatarByAgentId(s, agentId),
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,

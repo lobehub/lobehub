@@ -1,4 +1,4 @@
-import { type AgentItem, type LobeAgentConfig, type MetaData } from '@lobechat/types';
+import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -13,6 +13,13 @@ type MarketAgentModel =
       parameters?: Partial<LobeAgentConfig['params']>;
       provider?: LobeAgentConfig['provider'];
     };
+
+type AgentMetaUpdate = Partial<
+  Pick<
+    AgentItem,
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+  >
+>;
 
 /**
  * Normalize market agent config to standard agent config.
@@ -182,7 +189,7 @@ class AgentService {
   /**
    * Update agent meta and return the updated agent data
    */
-  updateAgentMeta = async (agentId: string, meta: Partial<MetaData>, signal?: AbortSignal) => {
+  updateAgentMeta = async (agentId: string, meta: AgentMetaUpdate, signal?: AbortSignal) => {
     return lambdaClient.agent.updateAgentConfig.mutate({ agentId, value: meta }, { signal });
   };
 
