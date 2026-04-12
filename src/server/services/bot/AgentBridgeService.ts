@@ -234,13 +234,21 @@ export class AgentBridgeService {
 
     AgentBridgeService.clearActiveThread(thread.id);
 
+    const errorContent = stopped ? renderStopped(errorMessage) : renderError(errorMessage);
+
     if (progressMessage) {
       try {
-        await progressMessage.edit(
-          stopped ? renderStopped(errorMessage) : renderError(errorMessage),
-        );
+        await progressMessage.edit(errorContent);
       } catch (editError) {
         log('finishStartupFailure: failed to edit progress message: %O', editError);
+      }
+    } else {
+      // No placeholder message (e.g. gateway typing mode) — post a new message
+      // so the user still sees the error instead of a silently frozen typing indicator.
+      try {
+        await thread.post(errorContent);
+      } catch (postError) {
+        log('finishStartupFailure: failed to post error message: %O', postError);
       }
     }
 
