@@ -241,9 +241,23 @@ export class GatewayService {
       throw new Error(`No enabled provider found for ${platform}:${applicationId}`);
     }
 
-    const webhookPath = `/api/agent/webhooks/${platform}/${applicationId}`;
     const definition = platformRegistry.getPlatform(platform);
     const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+
+    // Webhook-mode bots don't need persistent connections — QQ Open Platform
+    // pushes events directly via HTTP. Starting a WebSocket here would conflict
+    // with webhook verification on platforms like QQ that don't allow both modes.
+    if (connectionMode === 'webhook') {
+      await updateBotRuntimeStatus({
+        applicationId,
+        platform,
+        status: BOT_RUNTIME_STATUSES.connected,
+      });
+      log('Skipping message-gateway for webhook-mode %s:%s', platform, applicationId);
+      return 'started';
+    }
+
+    const webhookPath = `/api/agent/webhooks/${platform}/${applicationId}`;
 
     await client.connect({
       applicationId: provider.applicationId,
