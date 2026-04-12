@@ -583,6 +583,38 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
     });
 
+    it('deduplicates repeated fileIds before inserting the messages_files link', async () => {
+      // messages_files has a composite PK on (file_id, message_id). Duplicate
+      // fileIds would cause a constraint violation and abort the whole send.
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-img-1',
+          fileType: 'image/png',
+          name: 'photo.png',
+          size: 1,
+          url: 'photo.png',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-img-1', 'file-img-1', 'file-img-1'],
+        prompt: 'Triple duplicate',
+      });
+
+      // FileModel.findByIds sees deduped input (cheaper query)
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+
+      // Only one link row will be inserted
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toEqual(['file-img-1']);
+
+      // And imageList only contains the image once (no duplicate rendering)
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      const lastMessage = createOpArgs.initialMessages.at(-1);
+      expect(lastMessage.imageList).toHaveLength(1);
+    });
+
     it('no-ops cleanly when fileIds is an empty array', async () => {
       await service.execAgent({
         agentId: 'agent-1',

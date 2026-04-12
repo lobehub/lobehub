@@ -984,8 +984,13 @@ export class AiAgentService {
     if (attachedFileIds && attachedFileIds.length > 0) {
       await throwIfExecutionAborted('file resolution');
 
+      // Dedupe while preserving caller order. messages_files has a composite PK
+      // on (file_id, message_id), so duplicate fileIds would violate the
+      // constraint on messageModel.create and abort the whole send.
+      const dedupedFileIds = Array.from(new Set(attachedFileIds));
+
       const fileModel = new FileModel(this.db, this.userId);
-      const fileRecords = await fileModel.findByIds(attachedFileIds);
+      const fileRecords = await fileModel.findByIds(dedupedFileIds);
 
       if (fileRecords.length > 0) {
         fileIds = fileIds ?? [];
@@ -998,7 +1003,7 @@ export class AiAgentService {
         // Preserve caller's ordering of fileIds so rendering matches upload order.
         const recordById = new Map(fileRecords.map((f) => [f.id, f]));
 
-        for (const id of attachedFileIds) {
+        for (const id of dedupedFileIds) {
           const file = recordById.get(id);
           if (!file) {
             warnings.push(`Attachment "${id}" was not found and skipped.`);
@@ -1068,7 +1073,7 @@ export class AiAgentService {
         if (videoList.length === 0) videoList = undefined;
         if (fileList.length === 0) fileList = undefined;
       } else {
-        log('execAgent: no file records found for attachedFileIds=%O', attachedFileIds);
+        log('execAgent: no file records found for attachedFileIds=%O', dedupedFileIds);
       }
     }
 
