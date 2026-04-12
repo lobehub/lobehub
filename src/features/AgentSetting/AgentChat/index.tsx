@@ -4,7 +4,7 @@ import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, SliderWithInput } from '@lobehub/ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
@@ -16,6 +16,13 @@ const AgentChat = memo(() => {
   const [form] = Form.useForm();
   const updateConfig = useStore((s) => s.setChatConfig);
   const config = useStore(selectors.currentChatConfig, isEqual);
+
+  const handleFinish = useCallback(
+    (values: any) => {
+      updateConfig(values);
+    },
+    [updateConfig],
+  );
 
   const chat: FormGroupItemType = {
     children: [
@@ -82,7 +89,7 @@ const AgentChat = memo(() => {
       items={[chat]}
       itemsType={'group'}
       variant={'borderless'}
-      onFinish={updateConfig}
+      onFinish={handleFinish}
       {...FORM_STYLE}
     />
   );

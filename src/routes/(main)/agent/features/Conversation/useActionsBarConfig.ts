@@ -10,6 +10,8 @@ import {
   type MessageActionFactory,
   type MessageActionItem,
 } from '@/features/Conversation/types';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -51,16 +53,27 @@ export const useBranchingActionFactory = (): MessageActionFactory => {
 export const useActionsBarConfig = (): ActionsBarConfig => {
   const branchingFactory = useBranchingActionFactory();
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const hasACPProvider = useAgentStore(
+    (s) => !!agentSelectors.currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider,
+  );
 
   return useMemo(
     () => ({
       assistant: {
-        extraBarActions: isDevMode ? [branchingFactory] : [],
+        extraBarActions: isDevMode && !hasACPProvider ? [branchingFactory] : [],
       },
+      // For ACP agents, only show copy + delete in the assistant group action bar
+      ...(hasACPProvider
+        ? {
+            assistantGroup: {
+              extraBarActions: [],
+            },
+          }
+        : {}),
       user: {
         extraBarActions: isDevMode ? [branchingFactory] : [],
       },
     }),
-    [branchingFactory, isDevMode],
+    [branchingFactory, hasACPProvider, isDevMode],
   );
 };

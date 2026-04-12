@@ -1,5 +1,6 @@
 import type { CreateServicesResult, IpcServiceConstructor, MergeIpcService } from '@/utils/ipc';
 
+import AcpCtr from './AcpCtr';
 import AuthCtr from './AuthCtr';
 import BrowserWindowsCtr from './BrowserWindowsCtr';
 import CliCtr from './CliCtr';
@@ -22,6 +23,7 @@ import UpdaterCtr from './UpdaterCtr';
 import UploadFileCtr from './UploadFileCtr';
 
 export const controllerIpcConstructors = [
+  AcpCtr,
   AuthCtr,
   BrowserWindowsCtr,
   CliCtr,

@@ -1,8 +1,9 @@
+import { isDesktop } from '@lobechat/const';
 import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
-import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus } from 'lucide-react';
+import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus, TerminalSquareIcon } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -192,6 +193,30 @@ export const useCreateMenuItems = () => {
     [mutateGroup],
   );
 
+  /**
+   * Create a Claude Code agent with ACP provider pre-configured
+   */
+  const createClaudeCodeAgent = useCallback(
+    async (options?: CreateAgentOptions) => {
+      await mutateAgent({
+        config: {
+          agencyConfig: {
+            heterogeneousProvider: {
+              command: 'claude',
+              type: 'claudecode' as const,
+            },
+          },
+          systemRole:
+            'You are Claude Code, an AI coding agent. Help users with code-related tasks.',
+          title: 'Claude Code',
+        },
+        groupId: options?.groupId,
+      });
+      options?.onSuccess?.();
+    },
+    [mutateAgent],
+  );
+
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
 
@@ -215,6 +240,25 @@ export const useCreateMenuItems = () => {
       },
     }),
     [t, createAgent, openCreateModal],
+  );
+
+  /**
+   * Create Claude Code agent menu item (Desktop only)
+   */
+  const createClaudeCodeMenuItem = useCallback(
+    (options?: CreateAgentOptions): ItemType | null => {
+      if (!isDesktop) return null;
+      return {
+        icon: <Icon icon={TerminalSquareIcon} />,
+        key: 'newClaudeCodeAgent',
+        label: t('newClaudeCodeAgent'),
+        onClick: async (info) => {
+          info.domEvent?.stopPropagation();
+          await createClaudeCodeAgent(options);
+        },
+      };
+    },
+    [t, createClaudeCodeAgent],
   );
 
   /**
@@ -308,6 +352,8 @@ export const useCreateMenuItems = () => {
     configMenuItem,
     createAgent,
     createAgentMenuItem,
+    createClaudeCodeAgent,
+    createClaudeCodeMenuItem,
     createEmptyGroup,
     createGroupChatMenuItem,
     createGroupFromTemplate,

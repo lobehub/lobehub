@@ -1,7 +1,12 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/const';
 import { type AgentBuilderContext } from '@lobechat/context-engine';
-import { type AgentMode, type LobeAgentTTSConfig, type RuntimeEnvConfig } from '@lobechat/types';
+import {
+  type AgentMode,
+  type LobeAgentAgencyConfig,
+  type LobeAgentTTSConfig,
+  type RuntimeEnvConfig,
+} from '@lobechat/types';
 
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 
@@ -124,12 +129,21 @@ const getAgentBuilderContextById =
   };
 
 /**
+ * Get agencyConfig by agentId
+ */
+const getAgencyConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LobeAgentAgencyConfig | undefined =>
+    agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
+
+/**
  * Get full agent data by agentId
  * Returns the complete agent object including metadata fields like updatedAt
  */
 const getAgentById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId];
 
 export const agentByIdSelectors = {
+  getAgencyConfigById,
   getAgentBuilderContextById,
   getAgentById,
   getAgentConfigById: agentSelectors.getAgentConfigById,

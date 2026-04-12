@@ -23,7 +23,7 @@ import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPre
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
 import { type ChatStore } from '@/store/chat/store';
 import {
@@ -339,6 +339,128 @@ export class ConversationLifecycleActionImpl {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
     });
+
+    // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
+    // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    if (heterogeneousProvider?.type === 'claudecode') {
+      // Persist messages to DB first (same as client mode)
+      let acpData: SendMessageServerResponse | undefined;
+      try {
+        const { model, provider } =
+          agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+        acpData = await aiChatService.sendMessageInServer(
+          {
+            agentId: operationContext.agentId,
+            groupId: operationContext.groupId ?? undefined,
+            newAssistantMessage: { model, provider: provider! },
+            newTopic: !operationContext.topicId
+              ? {
+                  title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                  topicMessageIds: messages.map((m) => m.id),
+                }
+              : undefined,
+            newUserMessage: {
+              content: message,
+              editorData,
+              files: fileIdList,
+              pageSelections,
+              parentId,
+            },
+            threadId: operationContext.threadId ?? undefined,
+            topicId: operationContext.topicId ?? undefined,
+          },
+          abortController,
+        );
+      } catch (e) {
+        console.error('[ACP] Failed to persist messages:', e);
+        this.#get().failOperation(operationId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'ACPError',
+        });
+        return;
+      }
+
+      if (!acpData) return;
+
+      // Update context with server-created topicId
+      const acpContext = {
+        ...operationContext,
+        topicId: acpData.topicId ?? operationContext.topicId,
+      };
+
+      // Replace optimistic messages with persisted ones
+      this.#get().replaceMessages(acpData.messages, {
+        action: 'sendMessage/serverResponse',
+        context: acpContext,
+      });
+
+      // Handle new topic creation
+      if (acpData.isCreateNewTopic && acpData.topicId) {
+        if (acpData.topics) {
+          const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
+          this.#get().internal_updateTopics(operationContext.agentId, {
+            groupId: operationContext.groupId,
+            items: acpData.topics.items,
+            pageSize,
+            total: acpData.topics.total,
+          });
+        }
+        await this.#get().switchTopic(acpData.topicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+      }
+
+      // Clean up temp messages
+      this.#get().internal_dispatchMessage(
+        { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
+        { operationId },
+      );
+
+      // Complete sendMessage operation, start ACP execution as child operation
+      this.#get().completeOperation(operationId);
+
+      if (acpData.topicId) this.#get().internal_updateTopicLoading(acpData.topicId, true);
+
+      // Start ACP execution
+      const { operationId: acpOpId } = this.#get().startOperation({
+        context: acpContext,
+        label: 'ACP Agent Execution',
+        parentOperationId: operationId,
+        type: 'execAgentRuntime',
+      });
+
+      this.#get().associateMessageWithOperation(acpData.assistantMessageId, acpOpId);
+
+      try {
+        const { executeACPAgent } = await import('./acpExecutor');
+        const workingDirectory =
+          agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+        await executeACPAgent(() => this.#get(), {
+          assistantMessageId: acpData.assistantMessageId,
+          context: acpContext,
+          heterogeneousProvider,
+          message,
+          operationId: acpOpId,
+          workingDirectory,
+        });
+      } catch (e) {
+        console.error('[ACP] Agent execution failed:', e);
+        this.#get().failOperation(acpOpId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'ACPError',
+        });
+      }
+
+      if (acpData.topicId) this.#get().internal_updateTopicLoading(acpData.topicId, false);
+
+      return {
+        assistantMessageId: acpData.assistantMessageId,
+        userMessageId: acpData.userMessageId,
+      };
+    }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (this.#get().isGatewayModeEnabled()) {

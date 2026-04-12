@@ -549,6 +549,16 @@ export default {
   'settingAppearance.primaryColor.desc': 'Custom theme color',
   'settingAppearance.primaryColor.title': 'Theme Color',
   'settingAppearance.title': 'Application Appearance',
+  'settingChat.agentProvider.command.desc': 'Command to launch the agent (e.g. claude, codex)',
+  'settingChat.agentProvider.command.placeholder': 'claude',
+  'settingChat.agentProvider.command.title': 'Agent Command',
+  'settingChat.agentProvider.desc': 'Delegate execution to an external agent via ACP protocol',
+  'settingChat.agentProvider.title': 'Agent Provider (ACP)',
+  'settingChat.agentProvider.toggle.title': 'Enable External Agent',
+  'settingChat.agentProvider.workingDirectory.desc':
+    'Working directory for the agent (leave empty to use default)',
+  'settingChat.agentProvider.workingDirectory.placeholder': '/path/to/project',
+  'settingChat.agentProvider.workingDirectory.title': 'Working Directory',
   'settingChat.autoCreateTopicThreshold.desc':
     'Automatically create a topic when the current message count exceeds this value',
   'settingChat.autoCreateTopicThreshold.title': 'Message Threshold',
