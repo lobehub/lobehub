@@ -349,10 +349,32 @@ export const generationSlice: StateCreator<
       // New branch index = current children count (since index is 0-based)
       const nextBranchIndex = childrenCount;
 
-      // Switch to a new branch (pass operationId for correct context in optimistic update)
+      // Switch to the new branch so the UI shows the incoming response immediately
       await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
         operationId,
       });
+
+      // ── Gateway mode: trigger server-side regeneration ──
+      if (chatStore.isGatewayModeEnabled()) {
+        // Keep the regenerate operation running until the gateway session completes,
+        // so isMessageRegenerating stays true and duplicate clicks are blocked.
+        await chatStore.executeGatewayAgent({
+          context,
+          message: item.content,
+          onComplete: () => {
+            chatStore.completeOperation(operationId);
+            if (hooks.onRegenerateComplete) {
+              hooks.onRegenerateComplete(messageId);
+            }
+          },
+          parentMessageId: messageId,
+        });
+
+        return;
+      }
+
+      // ── Client mode: run agent locally ──
+      // (switchMessageBranch already called above)
 
       // Execute agent runtime with full context from ConversationStore
       await chatStore.internal_execAgentRuntime({

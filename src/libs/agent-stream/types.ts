@@ -156,6 +156,13 @@ export interface AgentStreamClientOptions {
   gatewayUrl: string;
   /** Operation ID to subscribe to */
   operationId: string;
+  /**
+   * Enable resume buffering on first connect (default: false).
+   * When true, events are buffered and deduplicated after the resume replay
+   * completes, preventing out-of-order display during page-reload reconnect.
+   * Only set this for reconnection scenarios, not for new operations.
+   */
+  resumeOnConnect?: boolean;
   /** Auth token */
   token: string;
 }

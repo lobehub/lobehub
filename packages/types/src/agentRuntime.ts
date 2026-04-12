@@ -15,6 +15,7 @@ export const AgentRuntimeErrorType = {
   AgentRuntimeError: 'AgentRuntimeError', // Agent Runtime module runtime error
   LocationNotSupportError: 'LocationNotSupportError',
 
+  AccountDeactivated: 'AccountDeactivated',
   QuotaLimitReached: 'QuotaLimitReached',
   InsufficientQuota: 'InsufficientQuota',
 

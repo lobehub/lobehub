@@ -8,6 +8,8 @@ import { Client } from '@upstash/qstash';
 import { WorkflowAbort } from '@upstash/workflow';
 import { serve } from '@upstash/workflow/nextjs';
 
+import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { getServerDB } from '@/database/server';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
@@ -75,6 +77,27 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
           }
 
           const userId = payload.userIds[0];
+          if (payload.asyncTaskId && userId) {
+            // NOTICE: Cooperative cascading cancellation for the workflow tree.
+            // If cancelled, stop before fan-out into per-topic child workflows.
+            const cancelled = await context.run(
+              `memory:user-memory:extract:users:${userId}:cancel-check`,
+              () =>
+                getServerDB().then((db) =>
+                  new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
+                    payload.asyncTaskId!,
+                  ),
+                ),
+            );
+            if (cancelled) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              return {
+                message: 'Memory extraction task cancellation requested, skip topic batch.',
+                processedTopics: 0,
+                processedUsers: 0,
+              };
+            }
+          }
           // Delegate per-topic extraction to dedicated workflow for better isolation
           await Promise.all(
             payload.topicIds.map(async (topicId, index) => {

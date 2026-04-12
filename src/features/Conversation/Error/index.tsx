@@ -61,6 +61,7 @@ const getErrorAlertConfig = (
 
   switch (errorType) {
     case ChatErrorType.SystemTimeNotMatchError:
+    case AgentRuntimeErrorType.AccountDeactivated:
     case AgentRuntimeErrorType.PermissionDenied:
     case AgentRuntimeErrorType.InsufficientQuota:
     case AgentRuntimeErrorType.ModelNotFound:

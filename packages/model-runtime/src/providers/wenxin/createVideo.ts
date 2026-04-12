@@ -91,7 +91,8 @@ export async function createWenxinVideo(
   options: CreateVideoOptions,
 ): Promise<CreateVideoResponse> {
   const { model, params } = payload;
-  const { prompt, imageUrl, aspectRatio, duration, generateAudio } = params;
+  const { prompt, imageUrl, aspectRatio, duration, generateAudio, promptExtend, watermark } =
+    params;
 
   log('Creating video with Wenxin API - model: %s, params: %O', model, params);
 
@@ -125,6 +126,8 @@ export async function createWenxinVideo(
   if (aspectRatio) body.aspect_ratio = aspectRatio;
   if (duration) body.duration = duration;
   if (generateAudio !== undefined) body.generate_audio = generateAudio;
+  if (promptExtend) body.prompt_extend = promptExtend;
+  if (watermark) body.watermark = watermark;
 
   log('Wenxin video API request body: %O', body);
 

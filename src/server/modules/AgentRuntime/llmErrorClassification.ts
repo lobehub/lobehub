@@ -21,6 +21,7 @@ const RETRY_ERROR_TYPES = new Set([
   'StreamChunkError',
 ]);
 const STOP_ERROR_TYPES = new Set([
+  'AccountDeactivated',
   'ExceededContextWindow',
   'InsufficientQuota',
   'InvalidBedrockCredentials',

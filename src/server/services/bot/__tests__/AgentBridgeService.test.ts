@@ -311,19 +311,19 @@ describe('AgentBridgeService', () => {
       });
 
       expect(clientExtractFiles).toHaveBeenCalledWith(message);
-      expect(result).toBe(clientResult);
+      expect(result).toEqual({ files: clientResult });
     });
 
-    it('returns undefined when client is missing extractFiles method', async () => {
+    it('returns empty object when client is missing extractFiles method', async () => {
       // Defensive: a client that doesn't implement the optional method should
       // produce no files, not throw.
       const result = await callResolve({ attachments: [] }, { id: 'discord' });
-      expect(result).toBeUndefined();
+      expect(result).toEqual({});
     });
 
-    it('returns undefined when no client is passed', async () => {
+    it('returns empty object when no client is passed', async () => {
       const result = await callResolve({ attachments: [] }, undefined);
-      expect(result).toBeUndefined();
+      expect(result).toEqual({});
     });
 
     it('returns the client result as-is even when it is an empty array', async () => {
@@ -336,7 +336,7 @@ describe('AgentBridgeService', () => {
       });
 
       expect(clientExtractFiles).toHaveBeenCalledTimes(1);
-      expect(result).toEqual([]);
+      expect(result).toEqual({ files: [] });
     });
   });
 });

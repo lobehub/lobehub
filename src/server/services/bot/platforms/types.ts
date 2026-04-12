@@ -6,6 +6,16 @@ import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachmen
 // Bot Platform Core Types
 // ============================================================================
 
+/**
+ * Extended return type for `extractFiles` that carries optional warnings
+ * (e.g. "file too large") alongside extracted files. Warnings are appended
+ * to the agent prompt so the AI can inform the user naturally.
+ */
+export interface ExtractFilesResult {
+  files?: AttachmentSource[];
+  warnings?: string[];
+}
+
 // --------------- Connection Mode ---------------
 
 /**
@@ -122,7 +132,7 @@ export interface PlatformClient {
    * `extractFiles` implementation. Eventually all platforms will implement
    * this and the bridge fallback will be deleted.
    */
-  extractFiles?: (message: Message) => Promise<AttachmentSource[] | undefined>;
+  extractFiles?: (message: Message) => Promise<AttachmentSource[] | ExtractFilesResult | undefined>;
 
   /**
    * Transform outbound Markdown content into a format the platform can render.

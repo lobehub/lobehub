@@ -1,19 +1,9 @@
 'use client';
 
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import {
-  Accordion,
-  AccordionItem,
-  Block,
-  Flexbox,
-  Icon,
-  Markdown,
-  ScrollShadow,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ScrollText, Workflow } from 'lucide-react';
-import { type RefObject } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,14 +13,13 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import ContentBlock from '../../AssistantGroup/components/ContentBlock';
+import ContentBlocksScroll from '../../AssistantGroup/components/ContentBlocksScroll';
+import { resolveAssistantGroupFromMessages } from '../../AssistantGroup/utils/resolveAssistantGroupFromMessages';
 import Usage from '../../components/Extras/Usage';
 import AnimatedNumber from '../../components/Extras/Usage/UsageDetail/AnimatedNumber';
 import { accumulateUsage, formatDuration, formatElapsedTime } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
-  contentScroll: css`
-    max-height: min(50vh, 300px);
-  `,
   instructionContent: css`
     overflow: auto;
     max-height: 300px;
@@ -137,18 +126,17 @@ interface TaskMessagesProps {
  */
 const ProcessingView = memo<{
   accumulatedUsage: { cost?: number; totalTokens?: number };
-  assistantId: string;
-  blocks: AssistantContentBlock[];
+  messages: UIChatMessage[];
   model?: string;
   provider?: string;
   startTime?: number;
   totalToolCalls: number;
-}>(({ blocks, assistantId, startTime, model, provider, totalToolCalls, accumulatedUsage }) => {
+}>(({ messages, startTime, model, provider, totalToolCalls, accumulatedUsage }) => {
   const { t } = useTranslation('chat');
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const [elapsedTime, setElapsedTime] = useState(0);
   const { ref, handleScroll } = useAutoScroll<HTMLDivElement>({
-    deps: [blocks],
+    deps: [messages],
     enabled: true,
   });
 
@@ -204,19 +192,13 @@ const ProcessingView = memo<{
           )}
         </Flexbox>
       </Flexbox>
-      <ScrollShadow
-        className={styles.contentScroll}
-        offset={12}
-        ref={ref as RefObject<HTMLDivElement>}
-        size={8}
+      <ContentBlocksScroll
+        disableEditing
+        messages={messages}
+        scrollRef={ref}
+        variant="task"
         onScroll={handleScroll}
-      >
-        <Flexbox gap={8}>
-          {blocks.map((block) => (
-            <ContentBlock {...block} disableEditing assistantId={assistantId} key={block.id} />
-          ))}
-        </Flexbox>
-      </ScrollShadow>
+      />
 
       {/* Usage display */}
       {isDevMode && model && provider && (
@@ -327,45 +309,10 @@ CompletedView.displayName = 'CompletedView';
 const TaskMessages = memo<TaskMessagesProps>(
   ({ messages, isProcessing = false, startTime, duration, model, provider, totalCost }) => {
     // Extract blocks and instruction from messages
-    const { blocks, assistantId, instruction } = useMemo(() => {
-      if (!messages || messages.length === 0)
-        return { assistantId: '', blocks: [], instruction: undefined };
-
-      const assistantGroupMessage = messages.find((item) => item.role === 'assistantGroup');
-      const userMessage = messages.find((item) => item.role === 'user');
-
-      // If assistantGroup exists, use its children as blocks
-      if (assistantGroupMessage) {
-        return {
-          assistantId: assistantGroupMessage.id ?? '',
-          blocks: assistantGroupMessage.children ?? [],
-          instruction: userMessage?.content,
-        };
-      }
-
-      // Fallback: support plain assistant message (without tools)
-      // This handles cases where SubAgent returns a simple text response
-      const assistantMessage = messages.find((item) => item.role === 'assistant');
-      if (assistantMessage) {
-        // Convert plain assistant message to block format
-        const block: AssistantContentBlock = {
-          content: assistantMessage.content || '',
-          id: assistantMessage.id,
-        };
-
-        // Copy optional fields if they exist
-        if (assistantMessage.error) block.error = assistantMessage.error;
-        if (assistantMessage.reasoning) block.reasoning = assistantMessage.reasoning;
-
-        return {
-          assistantId: assistantMessage.id ?? '',
-          blocks: [block],
-          instruction: userMessage?.content,
-        };
-      }
-
-      return { assistantId: '', blocks: [], instruction: undefined };
-    }, [messages]);
+    const { blocks, assistantId, instruction } = useMemo(
+      () => resolveAssistantGroupFromMessages(messages),
+      [messages],
+    );
 
     // Calculate total tool calls
     const totalToolCalls = useMemo(
@@ -387,8 +334,7 @@ const TaskMessages = memo<TaskMessagesProps>(
         {isProcessing ? (
           <ProcessingView
             accumulatedUsage={accumulatedUsage}
-            assistantId={assistantId}
-            blocks={blocks}
+            messages={messages}
             model={model}
             provider={provider}
             startTime={startTime}

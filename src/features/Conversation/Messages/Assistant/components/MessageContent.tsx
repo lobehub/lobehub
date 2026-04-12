@@ -21,13 +21,15 @@ const MessageContent = memo<UIChatMessage>(
     const markdownProps = useMarkdown(id);
     // Use ConversationStore instead of ChatStore
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+    const isCreating = useConversationStore(messageStateSelectors.isMessageCreating(id));
     const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
     const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
     const addReaction = useConversationStore((s) => s.addReaction);
     const removeReaction = useConversationStore((s) => s.removeReaction);
     const userId = useUserStore(userProfileSelectors.userId)!;
 
-    const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && !!tools;
+    const isLoading = generating || isCreating;
+    const isToolCallGenerating = isLoading && (content === LOADING_FLAT || !content) && !!tools;
 
     const showSearch = !!search && (!!search.citations?.length || !!search.imageResults?.length);
     const showImageItems = !!imageList && imageList.length > 0;
@@ -78,7 +80,7 @@ const MessageContent = memo<UIChatMessage>(
         {showReasoning && <Reasoning {...props.reasoning} id={id} />}
         <DisplayContent
           content={content}
-          generating={generating}
+          generating={isLoading}
           hasImages={showImageItems}
           id={id}
           isMultimodal={metadata?.isMultimodal}

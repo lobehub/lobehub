@@ -141,8 +141,8 @@ describe('QQGatewayClient.extractFiles', () => {
     );
 
     expect(result).toHaveLength(2);
-    expect(result?.[0]?.name).toBe('a.jpg');
-    expect(result?.[1]?.name).toBe('b.pdf');
+    expect((result as any)?.[0]?.name).toBe('a.jpg');
+    expect((result as any)?.[1]?.name).toBe('b.pdf');
   });
 
   it('returns undefined when all attachments lack urls', async () => {

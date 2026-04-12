@@ -1,6 +1,7 @@
 import {
   type AIVideoModelCard,
   extractVideoDefaultValues,
+  type RuntimeVideoGenParams,
   type RuntimeVideoGenParamsKeys,
   type RuntimeVideoGenParamsValue,
   type VideoModelParamsSchema,
@@ -12,6 +13,10 @@ import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import {
+  normalizeImageInputOnSchemaSwitch,
+  preserveSupportedParams,
+} from '../../../utils/preserveSupportedParams';
 import type { VideoStore } from '../../store';
 
 export function getVideoModelAndDefaults(model: string, provider: string) {
@@ -39,17 +44,33 @@ export function getVideoModelAndDefaults(model: string, provider: string) {
   return { activeModel, defaultValues, parametersSchema };
 }
 
+function preserveVideoInputParams(
+  previousParameters: RuntimeVideoGenParams,
+  nextDefaultValues: RuntimeVideoGenParams,
+  nextSchema: VideoModelParamsSchema,
+) {
+  const result = preserveSupportedParams(previousParameters, nextDefaultValues, nextSchema, [
+    'prompt',
+    'imageUrl',
+    'imageUrls',
+    'endImageUrl',
+  ]);
+
+  return normalizeImageInputOnSchemaSwitch(previousParameters, nextSchema, result);
+}
+
 type Setter = StoreSetter<VideoStore>;
 
 export const createGenerationConfigSlice = (set: Setter, get: () => VideoStore, _api?: unknown) =>
   new GenerationConfigActionImpl(set, get, _api);
 
 export class GenerationConfigActionImpl {
+  readonly #get: () => VideoStore;
   readonly #set: Setter;
 
-  constructor(set: Setter, _get: () => VideoStore, _api?: unknown) {
-    void _get;
+  constructor(set: Setter, get: () => VideoStore, _api?: unknown) {
     void _api;
+    this.#get = get;
     this.#set = set;
   }
 
@@ -85,12 +106,18 @@ export class GenerationConfigActionImpl {
   };
 
   setModelAndProviderOnSelect = (model: string, provider: string): void => {
+    const previousParameters = this.#get().parameters;
     const { defaultValues, parametersSchema } = getVideoModelAndDefaults(model, provider);
+    const parameters = preserveVideoInputParams(
+      previousParameters,
+      defaultValues,
+      parametersSchema,
+    );
 
     this.#set(
       {
         model,
-        parameters: defaultValues,
+        parameters,
         parametersSchema,
         provider,
       },

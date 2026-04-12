@@ -11,9 +11,6 @@ import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selec
 
 import CommunityAgents from './CommunityAgents';
 import InputArea from './InputArea';
-import RecentPage from './RecentPage';
-import RecentResource from './RecentResource';
-import RecentTopic from './RecentTopic';
 import WelcomeText from './WelcomeText';
 
 const Home = memo(() => {
@@ -34,14 +31,7 @@ const Home = memo(() => {
       <InputArea />
       {/* Use CSS visibility to hide instead of unmounting to prevent data re-fetching */}
       <Flexbox gap={40} style={{ display: hideOtherModules ? 'none' : undefined }}>
-        {isDevMode && isLogin && (
-          <>
-            <RecentTopic />
-            <RecentPage />
-          </>
-        )}
         {isDevMode && <CommunityAgents />}
-        {isDevMode && isLogin && <RecentResource />}
       </Flexbox>
     </Flexbox>
   );

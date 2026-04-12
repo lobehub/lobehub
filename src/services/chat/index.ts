@@ -351,6 +351,7 @@ class ChatService {
       ModelProvider.Volcengine,
       ModelProvider.AzureAI,
       ModelProvider.Qwen,
+      ModelProvider.KimiCodingPlan,
     ] as string[];
 
     if (providersWithDeploymentName.includes(provider)) {

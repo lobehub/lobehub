@@ -163,8 +163,8 @@ describe('DiscordGatewayClient', () => {
       );
 
       expect(result).toHaveLength(2);
-      expect(result?.[0]?.name).toBe('direct.png');
-      expect(result?.[1]?.name).toBe('quoted.jpg');
+      expect((result as any)?.[0]?.name).toBe('direct.png');
+      expect((result as any)?.[1]?.name).toBe('quoted.jpg');
     });
 
     it('returns undefined when neither direct nor referenced attachments have urls', async () => {

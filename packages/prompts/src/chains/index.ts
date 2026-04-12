@@ -4,6 +4,7 @@ export * from './compressContext';
 export * from './inputCompletion';
 export * from './langDetect';
 export * from './pickEmoji';
+export * from './rewriteGenerationPrompt';
 export * from './rewriteQuery';
 export * from './summaryAgentName';
 export * from './summaryDescription';

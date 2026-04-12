@@ -86,6 +86,7 @@ describe('LobeOpenAI', () => {
               status: 400,
             },
             errorType: 'ProviderBizError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -124,6 +125,7 @@ describe('LobeOpenAI', () => {
               cause: { message: 'api is undefined' },
             },
             errorType: 'ProviderBizError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -158,6 +160,7 @@ describe('LobeOpenAI', () => {
               cause: { message: 'api is undefined' },
             },
             errorType: 'ProviderBizError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }
@@ -185,6 +188,7 @@ describe('LobeOpenAI', () => {
               name: genericError.name,
             },
             errorType: 'AgentRuntimeError',
+            message: expect.any(String),
             provider: 'openai',
           });
         }

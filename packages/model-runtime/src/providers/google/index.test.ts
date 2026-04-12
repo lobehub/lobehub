@@ -12,6 +12,10 @@ const provider = 'google';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
 
+async function* createEmptyAsyncGenerator<T>(): AsyncGenerator<T> {
+  yield* [] as unknown as T[];
+}
+
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -21,7 +25,7 @@ beforeEach(() => {
   instance = new LobeGoogleAI({ apiKey: 'test' });
 
   // Use vi.spyOn to mock the chat.completions.create method
-  const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+  const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
   vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 });
 
@@ -354,16 +358,16 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
+        let chunks: any[] = [];
 
         // Read first value then cancel to trigger error chunk
-        chunks.push((await reader.read()).value); // eslint-disable-line unicorn/no-immediate-mutation
+        chunks = chunks.concat((await reader.read()).value);
         abortController.abort();
 
         // Read all remaining chunks
         let result;
         while (!(result = await reader.read()).done) {
-          chunks.push(result.value);
+          chunks = chunks.concat(result.value);
         }
 
         // Batch-assert the entire chunks array
@@ -381,9 +385,7 @@ describe('LobeGoogleAI', () => {
       });
 
       it('should handle stream cancellation without data', async () => {
-        const mockStream = (async function* () {
-          // Empty stream
-        })();
+        const mockStream = createEmptyAsyncGenerator<{ text: string }>();
 
         const abortController = new AbortController();
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
@@ -408,13 +410,13 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
+        let chunks: any[] = [];
 
         // Read first value then collect remaining chunks (error included)
-        chunks.push((await reader.read()).value); // eslint-disable-line unicorn/no-immediate-mutation
+        chunks = chunks.concat((await reader.read()).value);
         let result;
         while (!(result = await reader.read()).done) {
-          chunks.push(result.value);
+          chunks = chunks.concat(result.value);
         }
 
         // Assert both data and error chunk together
@@ -434,6 +436,7 @@ describe('LobeGoogleAI', () => {
       it('should handle AbortError without data', async () => {
         // eslint-disable-next-line require-yield
         const mockStream = (async function* () {
+          yield* [] as any;
           throw new Error('aborted');
         })();
 
@@ -441,17 +444,15 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
 
         // Read error chunk
         const chunk1 = await reader.read();
-        chunks.push(chunk1.value);
 
         // Stream should be closed
         const chunk2 = await reader.read();
         expect(chunk2.done).toBe(true);
 
-        expect(chunks[0][LOBE_ERROR_KEY]).toEqual({
+        expect(chunk1.value[LOBE_ERROR_KEY]).toEqual({
           body: {
             message: 'aborted',
             name: 'AbortError',
@@ -474,13 +475,13 @@ describe('LobeGoogleAI', () => {
         const enhancedStream = instance['createEnhancedStream'](mockStream, abortController.signal);
 
         const reader = enhancedStream.getReader();
-        const chunks: any[] = [];
+        let chunks: any[] = [];
 
         // Read first value then collect remaining chunks (parsing error)
-        chunks.push((await reader.read()).value); // eslint-disable-line unicorn/no-immediate-mutation
+        chunks = chunks.concat((await reader.read()).value);
         let result;
         while (!(result = await reader.read()).done) {
-          chunks.push(result.value);
+          chunks = chunks.concat(result.value);
         }
 
         expect(chunks).toEqual([
@@ -501,7 +502,7 @@ describe('LobeGoogleAI', () => {
 
 describe('thinkingConfig includeThoughts logic', () => {
   it('should enable thinking when thinkingBudget is set', async () => {
-    const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+    const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 
     await instance.chat({
@@ -517,7 +518,7 @@ describe('thinkingConfig includeThoughts logic', () => {
   });
 
   it('should enable thinking when thinkingLevel is set', async () => {
-    const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+    const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 
     await instance.chat({
@@ -533,7 +534,7 @@ describe('thinkingConfig includeThoughts logic', () => {
   });
 
   it('should let API decide thinking for gemini-3-pro-image models without explicit params', async () => {
-    const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+    const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 
     await instance.chat({
@@ -548,8 +549,23 @@ describe('thinkingConfig includeThoughts logic', () => {
     expect(config.thinkingConfig?.includeThoughts).toBeUndefined();
   });
 
+  it('should omit thinkingConfig when all fields are undefined', async () => {
+    const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.1-pro-preview',
+      temperature: 0,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config;
+    expect(config.thinkingConfig).toBeUndefined();
+  });
+
   it('should enable thinking for thinking-enabled models', async () => {
-    const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+    const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 
     await instance.chat({
@@ -564,7 +580,7 @@ describe('thinkingConfig includeThoughts logic', () => {
   });
 
   it('should disable thinking when resolvedThinkingBudget is 0', async () => {
-    const mockStreamData = (async function* (): AsyncGenerator<GenerateContentResponse> {})();
+    const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(mockStreamData);
 
     await instance.chat({

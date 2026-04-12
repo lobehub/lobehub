@@ -1,6 +1,8 @@
 export interface BotPlatformInfo {
   platformName: string;
   supportsMarkdown: boolean;
+  /** Non-fatal warnings from message processing (e.g. file too large, parse failure) */
+  warnings?: string[];
 }
 
 /**
@@ -12,6 +14,7 @@ export interface BotPlatformInfo {
 export const formatBotPlatformContext = ({
   platformName,
   supportsMarkdown,
+  warnings,
 }: BotPlatformInfo): string => {
   const lines = [
     `<bot_platform_context platform="${platformName}">`,
@@ -46,6 +49,25 @@ export const formatBotPlatformContext = ({
       '',
       'Use plain text only. Use line breaks, indentation, dashes, and numbering to structure your response for readability.',
       '</formatting>',
+    );
+  }
+
+  if (warnings && warnings.length > 0) {
+    // Sanitize warning text to prevent prompt injection via user-controlled content
+    // (e.g. filenames containing XML tags or special characters)
+    const sanitize = (text: string) =>
+      text.replaceAll(
+        /[<>&"']/g,
+        (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[ch]!,
+      );
+
+    lines.push(
+      '',
+      '<processing_warnings>',
+      "The following issues occurred while processing the user's message.",
+      'Briefly inform the user about these issues in your response:',
+      ...warnings.map((w) => `- ${sanitize(w)}`),
+      '</processing_warnings>',
     );
   }
 

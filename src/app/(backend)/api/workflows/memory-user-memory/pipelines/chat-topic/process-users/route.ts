@@ -2,6 +2,8 @@ import { Client } from '@upstash/qstash';
 import { serve } from '@upstash/workflow/nextjs';
 import { chunk } from 'es-toolkit/compat';
 
+import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { getServerDB } from '@/database/server';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
@@ -21,6 +23,20 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
     const params = normalizeMemoryExtractionPayload(context.requestPayload || {});
     if (params.sources.length === 0) {
       return { message: 'No sources provided, skip memory extraction.' };
+    }
+    if (params.asyncTaskId && params.userIds[0]) {
+      // NOTICE: Cooperative cascading cancellation for the workflow tree.
+      // If root task has cancelRequestedAt, this stage stops scheduling child workflows.
+      const cancelled = await context.run('memory:user-memory:extract:cancel-check:root', () =>
+        getServerDB().then((db) =>
+          new AsyncTaskModel(db, params.userIds[0]!).isUserMemoryExtractionCancellationRequested(
+            params.asyncTaskId!,
+          ),
+        ),
+      );
+      if (cancelled) {
+        return { message: 'Memory extraction task cancellation requested, skip processing users.' };
+      }
     }
 
     const executor = await MemoryExtractionExecutor.create();

@@ -62,6 +62,7 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   extentHeaderContent?: ReactNode;
   inputContainerProps?: ChatInputProps;
   leftContent?: ReactNode;
+  placeholder?: ReactNode;
   sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
   showRuntimeConfig?: boolean;
@@ -78,6 +79,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     leftContent,
+    placeholder,
     sendAreaPrefix,
   }) => {
     const { t } = useTranslation('chat');
@@ -160,7 +162,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor />
+          <InputEditor placeholder={placeholder} />
         </ChatInput>
         {showRuntimeConfig && <RuntimeConfig />}
         {showFootnote && !expand && (

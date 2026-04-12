@@ -16,6 +16,8 @@ export interface ExecAgentTaskParams {
   autoStart?: boolean;
   deviceId?: string;
   existingMessageIds?: string[];
+  /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+  parentMessageId?: string;
   prompt: string;
   slug?: string;
 }

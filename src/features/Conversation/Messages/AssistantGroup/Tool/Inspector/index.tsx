@@ -1,3 +1,5 @@
+import type { ActivateToolsState } from '@lobechat/builtin-tool-activator';
+import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
 import type { ToolIntervention } from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
@@ -38,6 +40,25 @@ const Inspectors = memo<InspectorProps>(
       !hasResult && !isPending && !isAborted && !isRejected && !isArgumentsStreaming;
     const isTitleLoading = isArgumentsStreaming || isToolExecuting;
 
+    const activateToolsState = result?.state as ActivateToolsState | undefined;
+    let statusSuccessVariant: 'warning' | undefined;
+    if (
+      identifier === LobeActivatorIdentifier &&
+      apiName === ActivatorApiName.activateTools &&
+      !isTitleLoading &&
+      !result?.error
+    ) {
+      const notFound = activateToolsState?.notFound;
+      const activated = activateToolsState?.activatedTools;
+      if (
+        Array.isArray(notFound) &&
+        notFound.length > 0 &&
+        (!activated || activated.length === 0)
+      ) {
+        statusSuccessVariant = 'warning';
+      }
+    }
+
     // Check for custom inspector renderer
     const CustomInspector = getBuiltinInspector(identifier, apiName);
 
@@ -46,7 +67,11 @@ const Inspectors = memo<InspectorProps>(
       const partialJson = safeParsePartialJSON(argsStr);
       return (
         <Flexbox allowShrink horizontal align={'center'} gap={6}>
-          <StatusIndicator intervention={intervention} result={result} />
+          <StatusIndicator
+            intervention={intervention}
+            result={result}
+            successVariant={statusSuccessVariant}
+          />
           <SafeBoundary minHeight={22} resetKeys={[argsStr, result]}>
             <CustomInspector
               apiName={apiName}
@@ -69,7 +94,11 @@ const Inspectors = memo<InspectorProps>(
 
     return (
       <Flexbox horizontal align={'center'} gap={6}>
-        <StatusIndicator intervention={intervention} result={result} />
+        <StatusIndicator
+          intervention={intervention}
+          result={result}
+          successVariant={statusSuccessVariant}
+        />
         <ToolTitle
           apiName={apiName}
           args={args || undefined}

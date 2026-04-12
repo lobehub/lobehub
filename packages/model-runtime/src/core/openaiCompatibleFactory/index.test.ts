@@ -634,6 +634,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               status: 400,
             },
             errorType: bizErrorType,
+            message: expect.any(String),
             provider,
           });
         }
@@ -672,6 +673,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               cause: { message: 'api is undefined' },
             },
             errorType: bizErrorType,
+            message: expect.any(String),
             provider,
           });
         }
@@ -706,6 +708,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               cause: { message: 'api is undefined' },
             },
             errorType: bizErrorType,
+            message: expect.any(String),
             provider,
           });
         }
@@ -784,6 +787,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               status: 400,
             },
             errorType: AgentRuntimeErrorType.InsufficientQuota,
+            message: expect.any(String),
             provider,
           });
         }
@@ -822,6 +826,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               status: 400,
             },
             errorType: AgentRuntimeErrorType.ExceededContextWindow,
+            message: expect.any(String),
             provider,
           });
         }
@@ -858,6 +863,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               status: 429,
             },
             errorType: AgentRuntimeErrorType.QuotaLimitReached,
+            message: expect.any(String),
             provider,
           });
         }
@@ -885,6 +891,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               name: genericError.name,
             },
             errorType: 'AgentRuntimeError',
+            message: expect.any(String),
             provider,
           });
         }
@@ -1899,6 +1906,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           status: 400,
         },
         errorType: AgentRuntimeErrorType.ExceededContextWindow,
+        message: expect.any(String),
         provider,
       });
     });

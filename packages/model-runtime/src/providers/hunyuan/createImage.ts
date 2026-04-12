@@ -71,7 +71,8 @@ export async function createHunyuanImage(
           ? { images: [params.imageUrl] }
           : {}),
       extra_body: {
-        logo_add: 0, // Add Watermark: 0 disabled, 1 enabled
+        revise: params.promptExtend === true ? 1 : 0, // Prompt optimization switch, default is 0 (no optimization)
+        logo_add: params.watermark === true ? 1 : 0, // Watermark switch, default is 0 (no watermark)
         ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
       },
     };
@@ -92,7 +93,9 @@ export async function createHunyuanImage(
       let errorData;
       try {
         errorData = await submitResponse.json();
-      } catch {}
+      } catch (error) {
+        void error;
+      }
 
       const errorMessage =
         typeof errorData?.error?.message === 'string'
@@ -202,7 +205,9 @@ export async function createHunyuanImage(
           let errorData;
           try {
             errorData = await queryResponse.json();
-          } catch {}
+          } catch (error) {
+            void error;
+          }
 
           const errorMessage =
             typeof errorData?.message === 'string'

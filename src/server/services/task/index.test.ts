@@ -1,12 +1,18 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(),
+}));
 
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(),
@@ -20,9 +26,17 @@ vi.mock('@/database/models/brief', () => ({
   BriefModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
+}));
+
 describe('TaskService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
+
+  const mockAgentModel = {
+    getAgentAvatarsByIds: vi.fn().mockResolvedValue([]),
+  };
 
   const mockTaskModel = {
     findById: vi.fn(),
@@ -47,6 +61,7 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (AgentModel as any).mockImplementation(() => mockAgentModel);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
     (BriefModel as any).mockImplementation(() => mockBriefModel);
@@ -506,6 +521,86 @@ describe('TaskService', () => {
       expect(result?.activities?.[0].type).toBe('brief');
       expect(result?.activities?.[1].type).toBe('comment');
       expect(result?.activities?.[2].type).toBe('topic');
+    });
+
+    it('should resolve author info for activities', async () => {
+      const task = {
+        assigneeAgentId: 'agt_assignee',
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Task 1',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'running',
+        totalTopics: 0,
+      };
+
+      const topics = [
+        {
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          handoff: { title: 'Run 1' },
+          seq: 1,
+          status: 'completed',
+          topicId: 'topic-1',
+        },
+      ];
+
+      const comments = [
+        {
+          authorAgentId: null,
+          authorUserId: 'user_bob',
+          content: 'User comment',
+          createdAt: new Date('2024-01-02T00:00:00Z'),
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
+      mockBriefModel.findByTaskId.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue(comments);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+
+      // Mock model methods to return agent and user data
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: 'https://example.com/agent.png', id: 'agt_assignee', title: 'My Agent' },
+      ]);
+      vi.mocked(UserModel.findByIds).mockResolvedValue([
+        { avatar: 'https://example.com/bob.png', fullName: 'Bob', id: 'user_bob' } as any,
+      ]);
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      // Topic should have agent author
+      const topicActivity = result?.activities?.find((a) => a.type === 'topic');
+      expect(topicActivity?.author).toEqual({
+        avatar: 'https://example.com/agent.png',
+        id: 'agt_assignee',
+        name: 'My Agent',
+        type: 'agent',
+      });
+
+      // Comment should have user author
+      const commentActivity = result?.activities?.find((a) => a.type === 'comment');
+      expect(commentActivity?.author).toEqual({
+        avatar: 'https://example.com/bob.png',
+        id: 'user_bob',
+        name: 'Bob',
+        type: 'user',
+      });
     });
 
     it('should include topic count when topics exist', async () => {

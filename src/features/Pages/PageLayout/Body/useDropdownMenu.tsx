@@ -34,6 +34,7 @@ export const useDropdownMenu = (): MenuProps['items'] => {
     return [
       {
         children: pageSizeItems,
+        extra: pagePageSize,
         icon: <Icon icon={Hash} />,
         key: 'displayItems',
         label: t('common:navPanel.displayItems'),

@@ -46,6 +46,8 @@ export interface BotCallbackBody {
   shouldContinue?: boolean;
   stepType?: 'call_llm' | 'call_tool';
   thinking?: boolean;
+  /** Thread name from the platform (e.g. Discord thread title) */
+  threadName?: string;
   toolCalls?: number;
   toolsCalling?: any;
   toolsResult?: any;
@@ -331,7 +333,7 @@ export class BotCallbackService {
   }
 
   private summarizeTopicTitle(body: BotCallbackBody, messenger: PlatformMessenger): void {
-    const { reason, topicId, userId, userPrompt, lastAssistantContent } = body;
+    const { reason, topicId, userId, userPrompt, lastAssistantContent, threadName } = body;
     if (
       reason === 'error' ||
       reason === 'interrupted' ||
@@ -340,6 +342,21 @@ export class BotCallbackService {
       !userPrompt ||
       !lastAssistantContent
     ) {
+      return;
+    }
+
+    // Thread already has a user-set name — use it as topic title, skip LLM generation
+    if (threadName) {
+      const topicModel = new TopicModel(this.db, userId);
+      topicModel
+        .findById(topicId)
+        .then(async (topic) => {
+          if (topic?.title) return;
+          await topicModel.update(topicId, { title: threadName });
+        })
+        .catch((error) => {
+          log('summarizeTopicTitle: failed to set thread name as topic title: %O', error);
+        });
       return;
     }
 

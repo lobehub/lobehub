@@ -27,6 +27,10 @@ export interface ChatListProps {
    */
   itemContent?: (index: number, id: string) => ReactNode;
   /**
+   * Force showing welcome component even when messages exist
+   */
+  showWelcome?: boolean;
+  /**
    * Welcome component to display when there are no messages
    */
   welcome?: ReactNode;
@@ -36,7 +40,7 @@ export interface ChatListProps {
  *
  * Uses ConversationStore for message data and fetching.
  */
-const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent }) => {
+const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent, showWelcome }) => {
   // Fetch messages (SWR key is null when skipFetch is true)
   const context = useConversationStore((s) => s.context);
   const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
@@ -76,7 +80,7 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent 
     return <SkeletonList />;
   }
 
-  if (displayMessageIds.length === 0) {
+  if ((showWelcome || displayMessageIds.length === 0) && welcome) {
     return (
       <WideScreenContainer
         style={{

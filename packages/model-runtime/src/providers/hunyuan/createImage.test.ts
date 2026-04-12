@@ -67,6 +67,7 @@ describe('createHunyuanImage', () => {
         size: '1024:1024',
         extra_body: {
           logo_add: 0,
+          revise: 0,
         },
       });
 

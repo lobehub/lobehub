@@ -39,6 +39,10 @@ export enum AsyncTaskErrorType {
    */
   SubscriptionPlanLimit = 'SubscriptionPlanLimit',
   /**
+   * this happens when a task is intentionally cancelled
+   */
+  TaskCancelled = 'TaskCancelled',
+  /**
    * this happens when the task is not trigger successfully
    */
   TaskTriggerError = 'TaskTriggerError',
@@ -76,6 +80,29 @@ export interface UserMemoryExtractionProgress {
 }
 
 export interface UserMemoryExtractionMetadata {
+  control?: {
+    /**
+     * Human-readable reason for cancellation when available.
+     */
+    cancelReason?: string;
+    /**
+     * ISO timestamp indicating when cancellation was requested.
+     */
+    cancelRequestedAt?: string;
+    /**
+     * Who initiated cancellation.
+     */
+    cancelledBy?: 'system' | 'user' | 'webhook';
+    /**
+     * Provider-specific cancellation metadata.
+     */
+    upstash?: {
+      /**
+       * Known workflow run ids associated with this task.
+       */
+      workflowRunIds?: string[];
+    };
+  };
   progress: UserMemoryExtractionProgress;
   range?: {
     from?: string;

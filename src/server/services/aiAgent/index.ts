@@ -884,7 +884,11 @@ export class AiAgentService {
 
     await throwIfExecutionAborted('message history loading');
 
-    // 12. Upload external files to S3 and collect file IDs
+    // 12. Collect Phase 2 warnings (ingestion/parsing errors) alongside Phase 1 warnings
+    // Phase 1 warnings (e.g. file too large) are already in botPlatformContext.warnings
+    const warnings: string[] = [];
+
+    // 13. Upload external files to S3 and collect file IDs
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
     let videoList: ChatVideoItem[] | undefined;
@@ -938,6 +942,9 @@ export class AiAgentService {
               result.fileId,
               parseError,
             );
+            warnings.push(
+              `File "${file.name || 'unknown'}" was uploaded but its contents could not be extracted.`,
+            );
           }
 
           fileList.push({
@@ -950,6 +957,7 @@ export class AiAgentService {
           });
         } catch (error) {
           log('execAgent: failed to ingest file %s: %O', file.name || file.url, error);
+          warnings.push(`File "${file.name || 'unknown'}" could not be uploaded and was skipped.`);
         }
       }
 
@@ -999,6 +1007,13 @@ export class AiAgentService {
     });
     log('execAgent: created assistant message %s', assistantMessageRecord.id);
     assistantMessageRef.current = assistantMessageRecord.id;
+
+    // Append Phase 2 warnings (ingestion/parsing errors) to botPlatformContext
+    // so the context engine can inject them alongside Phase 1 warnings
+    if (warnings.length > 0 && botPlatformContext) {
+      const existing = (botPlatformContext as any).warnings as string[] | undefined;
+      (botPlatformContext as any).warnings = [...(existing ?? []), ...warnings];
+    }
 
     // Create user message object for processing.
     // - imageList: vision models render these as image_url parts

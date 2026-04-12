@@ -245,13 +245,20 @@ describe('createGatewayEventHandler', () => {
   });
 
   describe('error', () => {
-    it('should dispatch error to current message with operationId context', async () => {
+    it('should dispatch inline error, complete operation, and refresh messages', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('error', { message: 'Something went wrong' }));
       await flush();
 
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-initial',
+        undefined,
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+
+      // Should dispatch inline error immediately
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
         {
           id: 'msg-initial',
@@ -262,9 +269,12 @@ describe('createGatewayEventHandler', () => {
         },
         { operationId: 'op-1' },
       );
+
+      // Should also fetch from DB
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
 
-    it('should dispatch error to switched message ID', async () => {
+    it('should dispatch inline error with switched message ID', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
@@ -272,10 +282,25 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('error', { error: 'Timeout' }));
       await flush();
 
+      expect(store.internal_toggleToolCallingStreaming).toHaveBeenCalledWith(
+        'msg-step2',
+        undefined,
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+
+      // Should dispatch inline error with the switched message ID
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'msg-step2' }),
+        expect.objectContaining({
+          id: 'msg-step2',
+          value: expect.objectContaining({
+            error: expect.objectContaining({
+              body: { message: 'Timeout' },
+            }),
+          }),
+        }),
         { operationId: 'op-1' },
       );
+      expect(store.replaceMessages).toHaveBeenCalled();
     });
   });
 
