@@ -87,7 +87,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
-    optimisticUpdateAgentMeta(agentId, { avatar: undefined });
+    optimisticUpdateAgentMeta(agentId, { avatar: null });
   }, [optimisticUpdateAgentMeta, agentId]);
 
   // Handle background color change (immediate save) - save to agent store (supervisor agent)

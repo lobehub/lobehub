@@ -20,8 +20,12 @@ import {
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import type { LobeAgentChatConfig, LobeAgentConfig, RuntimeEnvConfig } from '@/types/agent';
-import type { MetaData } from '@/types/meta';
+import type {
+  AgentItem,
+  LobeAgentChatConfig,
+  LobeAgentConfig,
+  RuntimeEnvConfig,
+} from '@/types/agent';
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
@@ -29,6 +33,12 @@ import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDire
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
+type AgentMetaUpdate = Partial<
+  Pick<
+    AgentItem,
+    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'tags' | 'title'
+  >
+>;
 
 /**
  * Agent Slice Actions
@@ -227,7 +237,7 @@ export class AgentSliceActionImpl {
     }
   };
 
-  updateAgentMeta = async (meta: Partial<MetaData>): Promise<void> => {
+  updateAgentMeta = async (meta: AgentMetaUpdate): Promise<void> => {
     const { activeAgentId } = this.#get();
 
     if (!activeAgentId) return;
@@ -369,7 +379,7 @@ export class AgentSliceActionImpl {
 
   optimisticUpdateAgentMeta = async (
     id: string,
-    meta: Partial<MetaData>,
+    meta: AgentMetaUpdate,
     signal?: AbortSignal,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();

@@ -287,6 +287,55 @@ describe('MessageContentProcessor', () => {
       // Should not include file context
       expect(result.messages[0].content).toBe('Hello');
     });
+
+    // Regression: when an already-multimodal user message (content is an array
+    // of parts) is re-processed with file context enabled, the old code did
+    // `textContent = message.content || ''` — turning the array back into
+    // `[object Object],[object Object]` via string coercion when concatenated
+    // with filesContext. Processor should instead extract text parts from the
+    // array (or leave the content untouched) rather than emit garbage.
+    it('should not stringify array content when concatenating file context', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: true },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          // Already-multimodal content (e.g. a historical user turn that was
+          // previously normalized to parts). Shape matches UserMessageContentPart[].
+          content: [{ text: 'Hello', type: 'text' }] as any,
+          fileList: [
+            {
+              id: 'file1',
+              name: 'test.txt',
+              fileType: 'text/plain',
+              size: 100,
+              url: 'http://example.com/test.txt',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(Array.isArray(content)).toBe(true);
+      const textPart = content.find((p) => p.type === 'text');
+      expect(textPart).toBeDefined();
+      // Must not contain the `[object Object]` string coercion artifact.
+      expect(textPart.text).not.toContain('[object Object]');
+      // Must preserve the original text payload.
+      expect(textPart.text).toContain('Hello');
+    });
   });
 
   describe('Reasoning/thinking content', () => {

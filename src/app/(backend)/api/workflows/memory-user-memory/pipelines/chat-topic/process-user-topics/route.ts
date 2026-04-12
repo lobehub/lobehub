@@ -2,7 +2,9 @@ import { MemorySourceType } from '@lobechat/types';
 import { Client } from '@upstash/qstash';
 import { serve } from '@upstash/workflow/nextjs';
 
+import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { type ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
+import { getServerDB } from '@/database/server';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
@@ -50,6 +52,23 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
     };
 
     for (const userId of params.userIds) {
+      if (params.asyncTaskId) {
+        // NOTICE: Cooperative cascading cancellation for the workflow tree.
+        // A cancelled root task should stop at user-topic pagination and avoid enqueuing topic batches.
+        const cancelled = await context.run(
+          `memory:user-memory:extract:users:${userId}:cancel-check`,
+          () =>
+            getServerDB().then((db) =>
+              new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
+                params.asyncTaskId!,
+              ),
+            ),
+        );
+        if (cancelled) {
+          continue;
+        }
+      }
+
       const topicCursor =
         params.topicCursor && params.topicCursor.userId === userId
           ? {
@@ -132,7 +151,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
               throw new Error('Invalid cursor date when scheduling next topic page');
             }
 
-            scheduleNextPage(userId, createdAt, cursor.id);
+            return scheduleNextPage(userId, createdAt, cursor.id);
           },
         );
       }
