@@ -74,6 +74,14 @@ vi.mock('../AgentBridgeService', () => ({
   },
 }));
 
+vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
+  getMessageGatewayClient: vi.fn().mockReturnValue({
+    isConfigured: false,
+    startTyping: vi.fn().mockResolvedValue(undefined),
+    stopTyping: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 vi.mock('@/server/services/systemAgent', () => ({
   SystemAgentService: vi.fn().mockImplementation(() => ({
     generateTopicTitle: mockGenerateTopicTitle,
