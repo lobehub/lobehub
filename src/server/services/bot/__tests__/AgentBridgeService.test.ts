@@ -31,6 +31,10 @@ vi.mock('@/server/services/aiAgent', () => ({
   })),
 }));
 
+vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
+  getMessageGatewayClient: vi.fn().mockReturnValue({ isConfigured: false }),
+}));
+
 vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: mockIsQueueAgentRuntimeEnabled,
 }));
@@ -90,7 +94,7 @@ function createClient() {
   return {
     createAdapter: vi.fn(),
     extractChatId: vi.fn(),
-    getMessenger: vi.fn(),
+    getMessenger: vi.fn().mockReturnValue({ triggerTyping: vi.fn() }),
     id: 'discord',
     parseMessageId: vi.fn(),
     shouldSubscribe: vi.fn().mockReturnValue(true),
