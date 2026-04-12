@@ -56,28 +56,15 @@ export const buildAnthropicBlock = async (
       }
 
       if (type === 'url') {
-        const shouldUseBase64 = process.env.LLM_VISION_IMAGE_USE_BASE64 === '1';
+        const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
 
-        if (shouldUseBase64) {
-          const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+        if (!isImageTypeSupported(mimeType)) return undefined;
 
-          if (!isImageTypeSupported(mimeType)) return undefined;
-
-          return {
-            source: {
-              data: base64 as string,
-              media_type: mimeType as Anthropic.Base64ImageSource['media_type'],
-              type: 'base64',
-            },
-            type: 'image',
-          };
-        }
-
-        // Default: use URL-based source (more efficient, 20 MB limit vs 5 MB for base64)
         return {
           source: {
-            type: 'url' as const,
-            url: content.image_url.url,
+            data: base64 as string,
+            media_type: mimeType as Anthropic.Base64ImageSource['media_type'],
+            type: 'base64',
           },
           type: 'image',
         };

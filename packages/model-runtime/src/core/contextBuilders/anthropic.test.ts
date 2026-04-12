@@ -52,57 +52,7 @@ describe('anthropicHelpers', () => {
       });
     });
 
-    it('should use URL-based source for image URLs by default', async () => {
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        mimeType: 'image/png',
-        base64: null,
-        type: 'url',
-      });
-
-      const content = {
-        type: 'image_url',
-        image_url: { url: 'https://example.com/image.png' },
-      } as const;
-
-      const result = await buildAnthropicBlock(content);
-
-      expect(parseDataUri).toHaveBeenCalledWith(content.image_url.url);
-      expect(imageUrlToBase64).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        source: {
-          type: 'url',
-          url: 'https://example.com/image.png',
-        },
-        type: 'image',
-      });
-    });
-
-    it('should use URL-based source for URLs without extension', async () => {
-      vi.mocked(parseDataUri).mockReturnValueOnce({
-        mimeType: null,
-        base64: null,
-        type: 'url',
-      });
-
-      const content = {
-        type: 'image_url',
-        image_url: { url: 'https://example.com/image' },
-      } as const;
-
-      const result = await buildAnthropicBlock(content);
-
-      expect(result).toEqual({
-        source: {
-          type: 'url',
-          url: 'https://example.com/image',
-        },
-        type: 'image',
-      });
-    });
-
-    it('should convert URL to base64 when LLM_VISION_IMAGE_USE_BASE64 is set', async () => {
-      process.env.LLM_VISION_IMAGE_USE_BASE64 = '1';
-
+    it('should convert URL to base64 for image URLs', async () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: 'image/png',
         base64: null,
@@ -120,6 +70,7 @@ describe('anthropicHelpers', () => {
 
       const result = await buildAnthropicBlock(content);
 
+      expect(parseDataUri).toHaveBeenCalledWith(content.image_url.url);
       expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
       expect(result).toEqual({
         source: {
@@ -129,8 +80,35 @@ describe('anthropicHelpers', () => {
         },
         type: 'image',
       });
+    });
 
-      delete process.env.LLM_VISION_IMAGE_USE_BASE64;
+    it('should convert URL to base64 for URLs without extension', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: null,
+        base64: null,
+        type: 'url',
+      });
+      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
+        base64: 'convertedBase64String',
+        mimeType: 'image/png',
+      });
+
+      const content = {
+        type: 'image_url',
+        image_url: { url: 'https://example.com/image' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
+      expect(result).toEqual({
+        source: {
+          data: 'convertedBase64String',
+          media_type: 'image/png',
+          type: 'base64',
+        },
+        type: 'image',
+      });
     });
 
     it('should throw an error for invalid image URLs', async () => {
@@ -167,11 +145,15 @@ describe('anthropicHelpers', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should pass SVG URL through to Anthropic in URL mode', async () => {
+    it('should return undefined for unsupported SVG URL after base64 conversion', async () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: null,
         base64: null,
         type: 'url',
+      });
+      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
+        base64: 'svgBase64String',
+        mimeType: 'image/svg+xml',
       });
 
       const content = {
@@ -180,14 +162,8 @@ describe('anthropicHelpers', () => {
       } as const;
 
       const result = await buildAnthropicBlock(content);
-      expect(imageUrlToBase64).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        source: {
-          type: 'url',
-          url: 'https://example.com/image.svg',
-        },
-        type: 'image',
-      });
+      expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
+      expect(result).toBeUndefined();
     });
   });
 
