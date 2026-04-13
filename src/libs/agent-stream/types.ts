@@ -114,11 +114,11 @@ export interface InterruptMessage {
  */
 export interface ToolResultMessage {
   content: string | null;
-  state?: any;
   error?: {
     message: string;
     type?: string;
   };
+  state?: any;
   success: boolean;
   toolCallId: string;
   type: 'tool_result';
