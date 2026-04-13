@@ -238,10 +238,6 @@ export const classifyLLMError = (error: unknown): ClassifiedLLMError => {
       message: signal.message,
     };
   } catch (classificationError) {
-    console.warn('[classifyLLMError] classification failed, falling back to stop:', {
-      classificationError,
-      originalError: error,
-    });
     return {
       kind: 'stop',
       message: bestEffortMessage(error),
