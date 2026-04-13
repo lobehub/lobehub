@@ -588,6 +588,9 @@ export class AiAgentService {
         LocalSystemManifest.identifier,
         RemoteDeviceManifest.identifier,
         ...(isBotConversation ? [MessageToolIdentifier] : []),
+        // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+        ...lobehubSkillManifests.map((m) => m.identifier),
+        ...klavisManifests.map((m) => m.identifier),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
