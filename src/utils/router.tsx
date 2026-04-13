@@ -17,6 +17,7 @@ import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { useGlobalStore } from '@/store/global';
+import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
@@ -128,10 +129,9 @@ export const NavigatorRegistrar = memo(() => {
   const navigate = useNavigate();
 
   useLayoutEffect(() => {
-    const { navigationRef } = useGlobalStore.getState();
-    navigationRef.current = navigate;
+    useGlobalStore.setState({ navigationRef: { current: navigate } });
     return () => {
-      navigationRef.current = null;
+      useGlobalStore.setState({ navigationRef: createNavigationRef() });
     };
   }, [navigate]);
 

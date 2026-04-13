@@ -207,6 +207,9 @@ export interface GlobalNavigationRef {
   current: NavigateFunction | null;
 }
 
+/** Fresh ref object — use for store init and resets so `initialState` is not aliased by nested mutation. */
+export const createNavigationRef = (): GlobalNavigationRef => ({ current: null });
+
 export interface GlobalState {
   hasNewVersion?: boolean;
   initClientDBError?: Error;
@@ -297,7 +300,7 @@ export const initialState: GlobalState = {
   initClientDBStage: DatabaseLoadingState.Idle,
   isMobile: false,
   isStatusInit: false,
-  navigationRef: { current: null },
+  navigationRef: createNavigationRef(),
   sidebarKey: SidebarTabKey.Chat,
   status: INITIAL_STATUS,
   statusStorage: new AsyncLocalStorage('LOBE_SYSTEM_STATUS'),

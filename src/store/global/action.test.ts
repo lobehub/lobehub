@@ -269,7 +269,7 @@ describe('createPreferenceSlice', () => {
       const navigate = vi.fn();
 
       act(() => {
-        useGlobalStore.getState().navigationRef.current = navigate;
+        useGlobalStore.setState({ navigationRef: { current: navigate } });
         result.current.switchBackToChat(sessionId);
       });
 
