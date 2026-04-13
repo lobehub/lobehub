@@ -3,7 +3,7 @@ name: Deploy to Vercel (Prebuilt)
 on:
   push:
     branches:
-      - main
+      - canary
   workflow_dispatch:
 
 env:
