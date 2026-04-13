@@ -4,13 +4,13 @@ export async function register() {
     await import('./libs/debug-file-logger');
   }
 
-  // Auto-start GatewayManager / sync message-gateway connections on server start.
-  // - Non-Vercel (Docker, local): always run — persistent bots need reconnection after restart.
-  // - Vercel: only run when an external message gateway is configured, to sync connection state.
+  // Auto-start GatewayManager on server start for non-Vercel environments (Docker, local).
+  // Persistent bots need reconnection after restart.
+  // On Vercel, the cron job at /api/agent/gateway handles this reliably instead.
   if (
     process.env.NEXT_RUNTIME === 'nodejs' &&
     process.env.DATABASE_URL &&
-    (!process.env.VERCEL_ENV || process.env.MESSAGE_GATEWAY_URL)
+    !process.env.VERCEL_ENV
   ) {
     const { GatewayService } = await import('./server/services/gateway');
     const service = new GatewayService();

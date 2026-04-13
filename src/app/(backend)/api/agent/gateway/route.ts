@@ -123,11 +123,13 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  // When an external message gateway is fully configured (both URL and service
-  // token), it manages all persistent connections. Skip in-process bot startup
-  // to avoid duplicate connections.
+  // When an external message gateway is configured, use ensureRunning to sync
+  // connections via the gateway instead of starting bots in-process.
   if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
-    return Response.json({ skipped: true, reason: 'using external message gateway' });
+    const { GatewayService } = await import('@/server/services/gateway');
+    const service = new GatewayService();
+    await service.ensureRunning();
+    return Response.json({ ensureRunning: true, reason: 'synced via external message gateway' });
   }
 
   const platforms = platformRegistry.listPlatforms();
