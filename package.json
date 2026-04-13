@@ -330,6 +330,7 @@
     "file-type": "^21.3.0",
     "fuse.js": "^7.0.0",
     "gray-matter": "^4.0.3",
+    "hono": "^4.11.1",
     "html-to-text": "^9.0.5",
     "i18next": "^25.8.0",
     "i18next-browser-languagedetector": "^8.2.0",

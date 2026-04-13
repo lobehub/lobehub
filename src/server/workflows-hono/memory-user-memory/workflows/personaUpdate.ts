@@ -1,4 +1,4 @@
-import { serve } from '@upstash/workflow/nextjs';
+import { type WorkflowContext } from '@upstash/workflow';
 import { z } from 'zod';
 
 import { getServerDB } from '@/database/server';
@@ -11,7 +11,7 @@ const workflowPayloadSchema = z.object({
   userIds: z.array(z.string()).optional(),
 });
 
-export const { POST } = serve(async (context) => {
+export const personaUpdateHandler = async (context: WorkflowContext) => {
   const payload = await context.run('memory:pipelines:persona:update-writing:parse-payload', () =>
     workflowPayloadSchema.parse(context.requestPayload || {}),
   );
@@ -27,8 +27,8 @@ export const { POST } = serve(async (context) => {
   await Promise.all(
     userIds.map(async (userId) =>
       context.run(`memory:pipelines:persona:update-writing:users:${userId}`, async () => {
-        const context = await buildUserPersonaJobInput(db, userId);
-        const result = await service.composeWriting({ ...context, userId });
+        const jobInput = await buildUserPersonaJobInput(db, userId);
+        const result = await service.composeWriting({ ...jobInput, userId });
         return {
           diffId: result.diff?.id,
           documentId: result.document.id,
@@ -43,4 +43,4 @@ export const { POST } = serve(async (context) => {
     message: 'User persona processed via workflow.',
     processedUsers: userIds.length,
   };
-});
+};

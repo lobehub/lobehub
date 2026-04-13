@@ -5,21 +5,19 @@ import {
 } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { errorMessageFrom } from '@lobechat/utils';
-import { Client } from '@upstash/qstash';
 import { type WorkflowContext } from '@upstash/workflow';
 import { WorkflowAbort, WorkflowNonRetryableError } from '@upstash/workflow';
-import { createWorkflow } from '@upstash/workflow/nextjs';
+import { createWorkflow } from '@upstash/workflow/hono';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { getServerDB } from '@/database/server';
-import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { type MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
   MemoryExtractionExecutor,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
-const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+import { createWorkflowQstashClient } from '../qstashClient';
 
 const CEPA_LAYERS: LayersEnum[] = [
   LayersEnum.Context,
@@ -204,12 +202,7 @@ export const processTopicWorkflow = createWorkflow<MemoryExtractionPayloadInput,
         return 'async-task-update-failed';
       }
     },
-    qstashClient: new Client({
-      headers: {
-        ...upstashWorkflowExtraHeaders,
-      },
-      token: process.env.QSTASH_TOKEN!,
-    }),
+    qstashClient: createWorkflowQstashClient(),
   },
 );
 
