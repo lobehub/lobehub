@@ -94,6 +94,7 @@ export const createServerAgentToolsEngine = (
   const {
     additionalManifests,
     agentConfig,
+    clientRuntime,
     deviceContext,
     globalMemoryEnabled = false,
     hasAgentDocuments = false,
@@ -102,6 +103,10 @@ export const createServerAgentToolsEngine = (
     model,
     provider,
   } = params;
+  // Phase 6.4: the caller itself can execute `executor: 'client'` tools
+  // (local-system / stdio MCP) over its Agent Gateway WS. This is orthogonal
+  // to the legacy device-proxy flow described by `deviceContext`.
+  const hasClientExecutor = clientRuntime === 'desktop';
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
@@ -138,11 +143,13 @@ export const createServerAgentToolsEngine = (
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
+        // Enable local-system when the caller itself is a desktop Electron
+        // client (Phase 6.4 tool_execute path), OR when a legacy remote
+        // device is registered, online, and auto-activated.
         [LocalSystemManifest.identifier]:
           runtimeMode === 'local' &&
           !!deviceContext?.gatewayConfigured &&
-          !!deviceContext?.deviceOnline &&
-          !!deviceContext?.autoActivated,
+          (hasClientExecutor || (!!deviceContext?.deviceOnline && !!deviceContext?.autoActivated)),
         [MemoryManifest.identifier]: globalMemoryEnabled,
         // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
         ...(isBotConversation && { [MessageManifest.identifier]: true }),

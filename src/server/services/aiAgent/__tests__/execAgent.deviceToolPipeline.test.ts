@@ -224,6 +224,44 @@ describe('AiAgentService.execAgent - device tool pipeline (LOBE-5636)', () => {
     });
   });
 
+  describe('clientRuntime forwarded to createServerAgentToolsEngine', () => {
+    it('forwards clientRuntime="desktop" so the engine enables local-system for Electron callers', async () => {
+      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        clientRuntime: 'desktop',
+        prompt: 'Hello',
+      });
+
+      expect(mockCreateServerAgentToolsEngine).toHaveBeenCalledTimes(1);
+      const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      expect(params.clientRuntime).toBe('desktop');
+    });
+
+    it('forwards clientRuntime="web" verbatim', async () => {
+      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        clientRuntime: 'web',
+        prompt: 'Hello',
+      });
+
+      const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      expect(params.clientRuntime).toBe('web');
+    });
+
+    it('omits clientRuntime when the caller does not specify one', async () => {
+      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+      const params = mockCreateServerAgentToolsEngine.mock.calls[0][1];
+      expect(params.clientRuntime).toBeUndefined();
+    });
+  });
+
   describe('RemoteDevice systemRole override', () => {
     it('should override RemoteDevice systemRole with dynamic prompt when enabled by ToolsEngine', async () => {
       const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');

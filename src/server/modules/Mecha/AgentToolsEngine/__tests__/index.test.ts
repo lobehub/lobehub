@@ -520,4 +520,66 @@ describe('createServerAgentToolsEngine', () => {
       expect(result.enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
   });
+
+  describe('clientRuntime === "desktop" (Phase 6.4)', () => {
+    it('enables LocalSystem when the caller itself is a desktop client, with no registered remote device', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        clientRuntime: 'desktop',
+        // Gateway is configured on the server (so `runtimeMode` becomes
+        // `local`), but no remote device has been registered or activated.
+        deviceContext: { gatewayConfigured: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
+    });
+
+    it('still requires gateway to be configured on the server', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        clientRuntime: 'desktop',
+        // No server-side gateway → no way to push tool_execute even if the
+        // client would be able to handle it.
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+
+    it('does not enable LocalSystem for web callers even when gateway is configured', () => {
+      const context = createMockContext();
+      const engine = createServerAgentToolsEngine(context, {
+        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        clientRuntime: 'web',
+        deviceContext: { gatewayConfigured: true },
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = engine.generateToolsDetailed({
+        toolIds: [LocalSystemManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain(LocalSystemManifest.identifier);
+    });
+  });
 });
