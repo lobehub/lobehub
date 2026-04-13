@@ -8,6 +8,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
+import { useStableNavigate } from '@/hooks/useStableNavigate';
 import { type StarterMode } from '@/store/home';
 import { useHomeStore } from '@/store/home';
 
@@ -52,10 +53,10 @@ const StarterList = memo(() => {
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.groupAgentBuilder);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
-  const [inputActiveMode, setInputActiveMode, navigate] = useHomeStore((s) => [
+  const navigate = useStableNavigate();
+  const [inputActiveMode, setInputActiveMode] = useHomeStore((s) => [
     s.inputActiveMode,
     s.setInputActiveMode,
-    s.navigate,
   ]);
 
   const items: StarterItem[] = useMemo(
@@ -99,12 +100,12 @@ const StarterList = memo(() => {
   const handleClick = useCallback(
     (key: StarterMode) => {
       if (key === 'video') {
-        navigate?.('/video?model=doubao-seedance-2-0-260128');
+        navigate('/video?model=doubao-seedance-2-0-260128');
         return;
       }
 
       if (key === 'image') {
-        navigate?.('/image');
+        navigate('/image');
         return;
       }
 
@@ -115,7 +116,7 @@ const StarterList = memo(() => {
         setInputActiveMode(key);
       }
     },
-    [inputActiveMode, setInputActiveMode, navigate],
+    [inputActiveMode, navigate, setInputActiveMode],
   );
 
   return (

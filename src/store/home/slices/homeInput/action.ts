@@ -1,5 +1,3 @@
-import { type NavigateFunction } from 'react-router-dom';
-
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
 import { getAgentStoreState } from '@/store/agent';
@@ -8,6 +6,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
+import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type StarterMode } from './initialState';
@@ -62,10 +61,7 @@ export class HomeInputActionImpl {
       });
 
       // 3. Navigate to Agent profile page
-      const { navigate } = this.#get();
-      if (navigate) {
-        navigate(`/agent/${result.agentId}/profile`);
-      }
+      getStableNavigate()?.(`/agent/${result.agentId}/profile`);
 
       // 4. Refresh agent list
       this.#get().refreshAgentList();
@@ -126,10 +122,7 @@ export class HomeInputActionImpl {
       this.#get().refreshAgentList();
 
       // 5. Navigate to Group profile page
-      const { navigate } = this.#get();
-      if (navigate) {
-        navigate(`/group/${group.id}/profile`);
-      }
+      getStableNavigate()?.(`/group/${group.id}/profile`);
 
       // 6. Update groupAgentBuilder's model config and send initial message
       const groupAgentBuilderId = builtinAgentSelectors.groupAgentBuilderId(agentState);
@@ -187,10 +180,7 @@ export class HomeInputActionImpl {
       });
 
       // 3. Navigate to Page
-      const { navigate } = this.#get();
-      if (navigate) {
-        navigate(`/page/${newDoc.id}`);
-      }
+      getStableNavigate()?.(`/page/${newDoc.id}`);
 
       // 4. Update pageAgent's model config and send initial message
       const pageAgentId = builtinAgentSelectors.pageAgentId(agentState);
@@ -220,10 +210,6 @@ export class HomeInputActionImpl {
 
   setInputActiveMode = (mode: StarterMode): void => {
     this.#set({ inputActiveMode: mode }, false, n('setInputActiveMode', mode));
-  };
-
-  setNavigate = (navigate: NavigateFunction): void => {
-    this.#set({ navigate }, false, n('setNavigate'));
   };
 }
 

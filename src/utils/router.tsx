@@ -2,7 +2,7 @@
 
 import { ThemeProvider } from '@lobehub/ui';
 import { type ComponentType, type ReactElement } from 'react';
-import { lazy, memo, Suspense, useCallback, useEffect } from 'react';
+import { lazy, memo, Suspense, useCallback, useLayoutEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import {
   createBrowserRouter,
@@ -121,27 +121,17 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
 };
 
 /**
- * Component to register navigate function in global store
- * This allows navigation to be triggered from anywhere in the app, including stores
- *
- * @example
- * import { NavigatorRegistrar } from '@/utils/dynamicPage';
- *
- * // In router root layout:
- * const RootLayout = () => (
- *   <>
- *     <NavigatorRegistrar />
- *     <YourMainLayout />
- *   </>
- * );
+ * Syncs React Router's `navigate` into `navigationRef` (see `getStableNavigate` / `useStableNavigate`).
+ * Mounted once on {@link RouterRoot} so imperative navigation works app-wide (desktop + mobile).
  */
 export const NavigatorRegistrar = memo(() => {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    useGlobalStore.setState({ navigate });
+  useLayoutEffect(() => {
+    const { navigationRef } = useGlobalStore.getState();
+    navigationRef.current = navigate;
     return () => {
-      useGlobalStore.setState({ navigate: undefined });
+      navigationRef.current = null;
     };
   }, [navigate]);
 
@@ -155,6 +145,7 @@ export interface CreateAppRouterOptions {
 const RouterRoot = memo(() => (
   <SPAGlobalProvider>
     <BusinessGlobalProvider>
+      <NavigatorRegistrar />
       <Outlet />
     </BusinessGlobalProvider>
   </SPAGlobalProvider>
