@@ -180,8 +180,11 @@ export const createServerAgentToolsEngine = (
         // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
         ...(isBotConversation && { [MessageManifest.identifier]: true }),
         // Remote-device proxy: shown only when the server has a proxy but
-        // no specific device is auto-activated yet (user must pick).
-        [RemoteDeviceManifest.identifier]: hasDeviceProxy && !deviceContext?.autoActivated,
+        // no specific device is auto-activated yet (user must pick). When
+        // the caller itself can execute `executor: 'client'` tools, the
+        // proxy is redundant — local-system goes directly to the caller.
+        [RemoteDeviceManifest.identifier]:
+          hasDeviceProxy && !deviceContext?.autoActivated && !hasClientExecutor,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },

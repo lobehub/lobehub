@@ -625,10 +625,21 @@ export class AiAgentService {
       // require local IPC / subprocess capabilities:
       //   - local-system builtin: Electron IPC for file + command execution
       //   - stdio MCP plugins: subprocess lives on the user's machine
-      // Only applies when gateway is NOT configured (standalone Electron). When
-      // deviceContext is present, tools are routed via the RemoteDevice proxy,
-      // so marking them as `client` would misdispatch through dispatchClientTool.
-      if (!gatewayConfigured) {
+      //
+      // Two triggers, in priority order:
+      //  (a) `clientRuntime === 'desktop'` — the caller itself is an Electron
+      //      client on the Agent Gateway WS and is ready to receive
+      //      `tool_execute`. This is the Phase 6.4 path and is authoritative
+      //      regardless of whether DEVICE_GATEWAY (the legacy device-proxy) is
+      //      also configured.
+      //  (b) `!gatewayConfigured` — no DEVICE_GATEWAY configured on the server,
+      //      so legacy Remote Device proxy isn't an option and any client
+      //      tooling falls through to the Gateway WS (standalone Electron).
+      //
+      // When DEVICE_GATEWAY is configured AND the caller is a web client, we
+      // leave executor unset so tools route via RemoteDevice proxy.
+      const shouldDispatchToClient = clientRuntime === 'desktop' || !gatewayConfigured;
+      if (shouldDispatchToClient) {
         if (manifestMap.has(LocalSystemManifest.identifier)) {
           toolExecutorMap[LocalSystemManifest.identifier] = 'client';
         }

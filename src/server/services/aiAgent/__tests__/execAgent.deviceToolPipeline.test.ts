@@ -389,6 +389,91 @@ describe('AiAgentService.execAgent - device tool pipeline (LOBE-5636)', () => {
     });
   });
 
+  describe('clientRuntime="desktop" bypasses the DEVICE_GATEWAY gate (Phase 6.4)', () => {
+    it('marks local-system as client when caller is desktop, even with DEVICE_GATEWAY configured', async () => {
+      // On cloud canary, DEVICE_GATEWAY is configured AND a remote Linux VM
+      // may be registered. Before this fix, `!gatewayConfigured` was false, so
+      // local-system was never stamped `executor='client'` — and dispatch fell
+      // through to the Remote Device proxy (which then tried to read the file
+      // on the wrong host). When clientRuntime='desktop', the caller itself is
+      // the execution target and wins.
+      const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
+      vi.spyOn(deviceProxy, 'isConfigured', 'get').mockReturnValue(true);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' },
+      ]);
+
+      mockGetEnabledPluginManifests.mockReturnValue(
+        new Map([[LocalSystemManifest.identifier, LocalSystemManifest]]),
+      );
+      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        clientRuntime: 'desktop',
+        prompt: 'Hello',
+      });
+
+      const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
+      expect(executorMap[LocalSystemManifest.identifier]).toBe('client');
+    });
+
+    it('marks stdio MCP as client when caller is desktop, even with DEVICE_GATEWAY configured', async () => {
+      const stdioPlugin = {
+        customParams: { mcp: { type: 'stdio' } },
+        identifier: 'my-stdio-mcp',
+      } as any;
+      const stdioManifest = {
+        api: [{ description: 't', name: 'a', parameters: {} }],
+        identifier: 'my-stdio-mcp',
+        meta: { title: 'Stdio' },
+      };
+
+      const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
+      vi.spyOn(deviceProxy, 'isConfigured', 'get').mockReturnValue(true);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' },
+      ]);
+
+      mockPluginQuery.mockResolvedValue([stdioPlugin]);
+      mockGetEnabledPluginManifests.mockReturnValue(new Map([['my-stdio-mcp', stdioManifest]]));
+      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig({ plugins: ['my-stdio-mcp'] }));
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        clientRuntime: 'desktop',
+        prompt: 'Hello',
+      });
+
+      const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
+      expect(executorMap['my-stdio-mcp']).toBe('client');
+    });
+
+    it('keeps legacy routing for web callers with DEVICE_GATEWAY configured', async () => {
+      // Web client + DEVICE_GATEWAY configured → tools still route through
+      // Remote Device proxy; executor stays unset (legacy behaviour).
+      const { deviceProxy } = await import('@/server/services/toolExecution/deviceProxy');
+      vi.spyOn(deviceProxy, 'isConfigured', 'get').mockReturnValue(true);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'dev-1', deviceName: 'Remote VM', platform: 'linux' },
+      ]);
+
+      mockGetEnabledPluginManifests.mockReturnValue(
+        new Map([[LocalSystemManifest.identifier, LocalSystemManifest]]),
+      );
+      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        clientRuntime: 'web',
+        prompt: 'Hello',
+      });
+
+      const executorMap = mockCreateOperation.mock.calls[0][0].toolSet.executorMap;
+      expect(executorMap[LocalSystemManifest.identifier]).toBeUndefined();
+    });
+  });
+
   describe('toolManifestMap fully derived from ToolsEngine', () => {
     it('should derive manifestMap entirely from getEnabledPluginManifests', async () => {
       const mockManifest = {
