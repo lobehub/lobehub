@@ -7,50 +7,72 @@ import { ToolResultWaiter } from '../ToolResultWaiter';
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
- * Minimal in-memory Redis stub that supports the subset used by ToolResultWaiter
- * (`blpop` on the blocking client, `pipeline().lpush().expire().exec()` on the
- * producer). `blpop` resolves immediately if a value is queued; otherwise it
- * waits using real `setTimeout` and is woken by `lpush`.
+ * Minimal in-memory Redis stub that supports the subset used by ToolResultWaiter:
+ * - multi-key `blpop(key1, key2, ..., timeoutSeconds)` on the blocking client,
+ * - `pipeline().lpush().expire().exec()` on the producer.
+ *
+ * `blpop` resolves immediately if any of the passed keys has a value;
+ * otherwise it registers a single multi-key waiter and sleeps with real
+ * `setTimeout`. `lpush` wakes the first waiter that is interested in the key.
  */
 function createMockRedisPair() {
   const lists = new Map<string, string[]>();
-  const waiters = new Map<string, Array<(value: string) => void>>();
+  const waiters: Array<{
+    keys: string[];
+    wake: (key: string, value: string) => void;
+  }> = [];
+
+  const tryDeliverFromLists = () => {
+    for (let i = 0; i < waiters.length; i++) {
+      const w = waiters[i];
+      for (const key of w.keys) {
+        const list = lists.get(key);
+        if (list && list.length > 0) {
+          const value = list.pop()!;
+          waiters.splice(i, 1);
+          w.wake(key, value);
+          return true;
+        }
+      }
+    }
+    return false;
+  };
 
   const lpush = (key: string, ...values: string[]): number => {
     const list = lists.get(key) ?? [];
     list.unshift(...values);
     lists.set(key, list);
-    const pending = waiters.get(key) ?? [];
-    while (pending.length > 0 && list.length > 0) {
-      const wake = pending.shift()!;
-      const popped = list.pop()!;
-      wake(popped);
-    }
-    waiters.set(key, pending);
+    tryDeliverFromLists();
     return list.length;
   };
 
   const blockingClient = {
-    blpop: vi.fn(async (key: string, timeoutSeconds: number) => {
-      const list = lists.get(key);
-      if (list && list.length > 0) {
-        const value = list.pop()!;
-        return [key, value] as [string, string];
+    blpop: vi.fn(async (...args: (string | number)[]) => {
+      const timeoutSeconds = args.at(-1) as number;
+      const keys = args.slice(0, -1) as string[];
+
+      for (const key of keys) {
+        const list = lists.get(key);
+        if (list && list.length > 0) {
+          const value = list.pop()!;
+          return [key, value] as [string, string];
+        }
       }
+
       return new Promise<[string, string] | null>((resolve) => {
-        const pending = waiters.get(key) ?? [];
-        const wake = (value: string) => {
-          clearTimeout(timer);
-          resolve([key, value]);
+        const w = {
+          keys,
+          wake: (key: string, value: string) => {
+            clearTimeout(timer);
+            resolve([key, value]);
+          },
         };
         const timer = setTimeout(() => {
-          const queue = waiters.get(key) ?? [];
-          const idx = queue.indexOf(wake);
-          if (idx >= 0) queue.splice(idx, 1);
+          const idx = waiters.indexOf(w);
+          if (idx >= 0) waiters.splice(idx, 1);
           resolve(null);
         }, timeoutSeconds * 1000);
-        pending.push(wake);
-        waiters.set(key, pending);
+        waiters.push(w);
       });
     }),
   } as unknown as Redis;
@@ -111,7 +133,6 @@ describe('ToolResultWaiter', () => {
     const { blockingClient, producingClient } = createMockRedisPair();
     const waiter = new ToolResultWaiter(blockingClient, producingClient);
 
-    // BLPOP timeout is clamped to min 1 second, so pass 50ms → waits ~1s.
     const result = await waiter.waitForResult('call-timeout', 50);
     expect(result).toBeNull();
   });
@@ -127,6 +148,36 @@ describe('ToolResultWaiter', () => {
     expect(results[0]?.content).toBe('A');
     expect(results[1]).toBeNull();
     expect(results[2]?.content).toBe('C');
+  });
+
+  it('waitForResults uses multi-key BLPOP (total latency ≈ one timeout, not N × timeout)', async () => {
+    const { blockingClient, producingClient } = createMockRedisPair();
+    const waiter = new ToolResultWaiter(blockingClient, producingClient);
+
+    // None of the keys ever receive a value. In the old serial impl this
+    // would take ~3s (1s clamp × 3 keys). The multi-key loop should finish
+    // in roughly one clamped-timeout window.
+    const start = Date.now();
+    const results = await waiter.waitForResults(['x', 'y', 'z'], 50);
+    const elapsed = Date.now() - start;
+
+    expect(results).toEqual([null, null, null]);
+    expect(elapsed).toBeLessThan(1500);
+  });
+
+  it('waitForResults wakes as results arrive and re-enters BLPOP with remaining keys', async () => {
+    const { blockingClient, lpush, producingClient } = createMockRedisPair();
+    const waiter = new ToolResultWaiter(blockingClient, producingClient);
+
+    const pending = waiter.waitForResults(['a', 'b'], 5000);
+    await tick();
+    lpush('tool_result:a', JSON.stringify({ content: 'A', success: true, toolCallId: 'a' }));
+    await tick();
+    lpush('tool_result:b', JSON.stringify({ content: 'B', success: true, toolCallId: 'b' }));
+
+    const results = await pending;
+    expect(results[0]?.content).toBe('A');
+    expect(results[1]?.content).toBe('B');
   });
 
   it('cancel() wakes a blocked BLPOP and returns null', async () => {
