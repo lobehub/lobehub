@@ -616,6 +616,20 @@ export class AiAgentService {
         toolSourceMap[manifest.identifier] = 'klavis';
       }
 
+      // Mark tools that must run on the client (desktop Electron) because they
+      // require local IPC / subprocess capabilities:
+      //   - local-system builtin: Electron IPC for file + command execution
+      //   - stdio MCP plugins: subprocess lives on the user's machine
+      // Dispatcher in RuntimeExecutors reads this to route via Agent Gateway WS.
+      if (manifestMap.has(LocalSystemManifest.identifier)) {
+        toolExecutorMap[LocalSystemManifest.identifier] = 'client';
+      }
+      for (const plugin of installedPlugins) {
+        if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
+          toolExecutorMap[plugin.identifier] = 'client';
+        }
+      }
+
       log(
         'execAgent: generated %d tools, %d lobehub skills, %d klavis tools',
         tools?.length ?? 0,
