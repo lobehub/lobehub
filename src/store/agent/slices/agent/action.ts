@@ -8,7 +8,7 @@ import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService } from '@/services/agent';
 import {
@@ -270,19 +270,21 @@ export class AgentSliceActionImpl {
     isLogin: boolean | undefined,
     agentId: string,
   ): SWRResponse<LobeAgentConfig> => {
-    return useClientDataSWR<LobeAgentConfig>(
-      // Only fetch when login status is explicitly true (not null/undefined)
+    const swrKey =
       isLogin === true && agentId && !isChatGroupSessionId(agentId)
         ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
-        : null,
-      async ([, id]: readonly [string, string]) => {
-        const data = await agentService.getAgentConfigById(id);
+        : null;
+
+    return useClientDataSWRWithSync<LobeAgentConfig>(
+      swrKey,
+      async () => {
+        const data = await agentService.getAgentConfigById(agentId);
         return data as LobeAgentConfig;
       },
       {
-        onSuccess: (data) => {
+        onData: (data) => {
+          if (!data) return;
           this.#get().internal_dispatchAgentMap(agentId, data);
-
           this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
         },
       },
