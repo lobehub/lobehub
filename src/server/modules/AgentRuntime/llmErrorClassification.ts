@@ -64,8 +64,8 @@ const STOP_KEYWORDS = [
 const hasAnyKeyword = (text: string, keywords: string[]) =>
   keywords.some((keyword) => text.includes(keyword));
 
-const normalizeCode = (value?: string) => {
-  if (!value) return;
+const normalizeCode = (value?: unknown): string | undefined => {
+  if (typeof value !== 'string' || !value) return;
 
   return value
     .trim()
@@ -73,7 +73,11 @@ const normalizeCode = (value?: string) => {
     .replaceAll(/[\s-]+/g, '_');
 };
 
-const normalizeErrorType = (value?: string) => value?.trim();
+const normalizeErrorType = (value?: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
 
 const tryExtractStatus = (message: string) => {
   const matches = message.match(/\b([45]\d{2})\b/);
@@ -198,14 +202,51 @@ const classifyKind = ({ code, errorType, message, status }: LLMErrorSignal): LLM
   return 'retry';
 };
 
-export const classifyLLMError = (error: unknown): ClassifiedLLMError => {
-  const signal = normalizeSignal(error);
+/**
+ * Extract a human-readable message for the fallback path without relying on
+ * normalizeSignal (which might be the thing that just threw).
+ */
+const bestEffortMessage = (error: unknown): string => {
+  try {
+    if (error instanceof Error && typeof error.message === 'string' && error.message.length > 0) {
+      return error.message;
+    }
+    if (typeof error === 'string' && error.length > 0) return error;
+    if (error && typeof error === 'object') {
+      const e = error as { message?: unknown; error?: { message?: unknown } };
+      if (typeof e.message === 'string' && e.message.length > 0) return e.message;
+      const nested = e.error?.message;
+      if (typeof nested === 'string' && nested.length > 0) return nested;
+    }
+  } catch {
+    // Property access itself can throw (e.g. hostile Proxy). Fall through to default.
+  }
+  return 'unknown error';
+};
 
-  return {
-    code: signal.code || signal.errorType,
-    kind: classifyKind(signal),
-    message: signal.message,
-  };
+export const classifyLLMError = (error: unknown): ClassifiedLLMError => {
+  // Defensive: a classifier that throws would mask the original provider error
+  // behind the classifier's own TypeError (e.g. `e.trim is not a function`),
+  // making prod debugging impossible. If anything below throws, fall back to a
+  // conservative "stop" decision that preserves the original error message.
+  try {
+    const signal = normalizeSignal(error);
+
+    return {
+      code: signal.code || signal.errorType,
+      kind: classifyKind(signal),
+      message: signal.message,
+    };
+  } catch (classificationError) {
+    console.warn('[classifyLLMError] classification failed, falling back to stop:', {
+      classificationError,
+      originalError: error,
+    });
+    return {
+      kind: 'stop',
+      message: bestEffortMessage(error),
+    };
+  }
 };
 
 export type { ClassifiedLLMError, LLMErrorKind };
