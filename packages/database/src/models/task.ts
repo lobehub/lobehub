@@ -1,5 +1,6 @@
 import type {
   CheckpointConfig,
+  NewTask,
   TaskItem,
   WorkspaceData,
   WorkspaceDocNode,
@@ -9,7 +10,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 
 import { merge } from '@/utils/merge';
 
-import type { NewTask, NewTaskComment, TaskCommentItem } from '../schemas/task';
+import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 

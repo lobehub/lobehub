@@ -101,8 +101,6 @@ export const tasks = pgTable(
   ],
 );
 
-export type NewTask = typeof tasks.$inferInsert;
-
 // ── Task Dependencies ────────────────────────────────────
 
 export const taskDependencies = pgTable(

@@ -84,6 +84,39 @@ export type TaskListItem = TaskItem & {
   participants: TaskParticipant[];
 };
 
+export interface NewTask {
+  accessedAt?: Date;
+  assigneeAgentId?: string | null;
+  assigneeUserId?: string | null;
+  completedAt?: Date | null;
+  config?: unknown;
+  context?: unknown;
+  createdAt?: Date;
+  createdByAgentId?: string | null;
+  createdByUserId: string;
+  currentTopicId?: string | null;
+  description?: string | null;
+  error?: string | null;
+  heartbeatInterval?: number | null;
+  heartbeatTimeout?: number | null;
+  id?: string;
+  identifier: string;
+  instruction: string;
+  lastHeartbeatAt?: Date | null;
+  maxTopics?: number | null;
+  name?: string | null;
+  parentTaskId?: string | null;
+  priority?: number | null;
+  schedulePattern?: string | null;
+  scheduleTimezone?: string | null;
+  seq: number;
+  sortOrder?: number | null;
+  startedAt?: Date | null;
+  status?: string;
+  totalTopics?: number | null;
+  updatedAt?: Date;
+}
+
 // ── Task Detail (shared across CLI, viewTask tool, task.detail router) ──
 
 export interface TaskDetailSubtask {
