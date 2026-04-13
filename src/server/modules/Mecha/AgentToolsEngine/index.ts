@@ -165,15 +165,17 @@ export const createServerAgentToolsEngine = (
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
-        // Local-system requires, in this order:
-        //  (a) user opted into local runtime on this platform (runtimeMode);
-        //  (b) server has a Gateway path to push tool_execute (hasDeviceProxy);
-        //  (c) a concrete execution target — either the caller itself
-        //      (Phase 6.4), or a legacy activated remote device.
+        // Local-system: user must have opted into local runtime on this
+        // platform (`runtimeMode === 'local'`), AND one execution channel
+        // must exist:
+        //  - `hasClientExecutor` — Phase 6.4 dispatch over the Agent Gateway
+        //    WS that this request is already riding on; no extra server-side
+        //    prerequisite needed;
+        //  - legacy device-proxy with an online & auto-activated device.
         [LocalSystemManifest.identifier]:
           runtimeMode === 'local' &&
-          hasDeviceProxy &&
-          (hasClientExecutor || (!!deviceContext?.deviceOnline && !!deviceContext?.autoActivated)),
+          (hasClientExecutor ||
+            (hasDeviceProxy && !!deviceContext?.deviceOnline && !!deviceContext?.autoActivated)),
         [MemoryManifest.identifier]: globalMemoryEnabled,
         // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
         ...(isBotConversation && { [MessageManifest.identifier]: true }),

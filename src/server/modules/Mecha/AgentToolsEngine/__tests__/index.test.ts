@@ -522,14 +522,14 @@ describe('createServerAgentToolsEngine', () => {
   });
 
   describe('clientRuntime === "desktop" (Phase 6.4)', () => {
-    it('enables LocalSystem when the caller itself is a desktop client, with no registered remote device', () => {
+    it('enables LocalSystem when caller is desktop, regardless of device-proxy config', () => {
+      // The Agent Gateway WS used to push `tool_execute` is orthogonal to
+      // the legacy device-proxy. A desktop Electron caller is already the
+      // execution target — no device-proxy prerequisite required.
       const context = createMockContext();
       const engine = createServerAgentToolsEngine(context, {
         agentConfig: { plugins: [LocalSystemManifest.identifier] },
         clientRuntime: 'desktop',
-        // Gateway is configured on the server (so `runtimeMode` becomes
-        // `local`), but no remote device has been registered or activated.
-        deviceContext: { gatewayConfigured: true },
         model: 'gpt-4',
         provider: 'openai',
       });
@@ -543,13 +543,18 @@ describe('createServerAgentToolsEngine', () => {
       expect(result.enabledToolIds).toContain(LocalSystemManifest.identifier);
     });
 
-    it('still requires gateway to be configured on the server', () => {
+    it('respects agent-level runtimeMode opt-out for desktop callers', () => {
+      // User has configured the agent to NOT use local runtime on desktop.
+      // Even though the caller is a desktop client, local-system stays off.
       const context = createMockContext();
       const engine = createServerAgentToolsEngine(context, {
-        agentConfig: { plugins: [LocalSystemManifest.identifier] },
+        agentConfig: {
+          chatConfig: {
+            runtimeEnv: { runtimeMode: { desktop: 'none' } },
+          },
+          plugins: [LocalSystemManifest.identifier],
+        },
         clientRuntime: 'desktop',
-        // No server-side gateway → no way to push tool_execute even if the
-        // client would be able to handle it.
         model: 'gpt-4',
         provider: 'openai',
       });
