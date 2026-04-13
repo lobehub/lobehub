@@ -46,6 +46,7 @@ import {
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
 
+import { dispatchClientTool } from './dispatchClientTool';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
 import { type IStreamEventManager } from './types';
 
@@ -1346,28 +1347,45 @@ export const createRuntimeExecutors = (
         ),
       };
 
-      // Execute tool using ToolExecutionService
-      log(`[${operationLogId}] Executing tool ${toolName} ...`);
-      const execution = await executeToolWithRetry(
-        () =>
-          toolExecutionService.executeTool(chatToolPayload, {
-            activeDeviceId: state.metadata?.activeDeviceId,
-            agentId: state.metadata?.agentId,
-            memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
-            serverDB: ctx.serverDB,
-            taskId: state.metadata?.taskId,
-            toolManifestMap: effectiveManifestMap,
-            toolResultMaxLength,
-            topicId: ctx.topicId,
-            userId: ctx.userId,
-          }),
-        {
-          isInterrupted: () => isOperationInterrupted(ctx),
-          maxRetries: TOOL_MAX_RETRIES,
-          operationLogId,
-          toolName,
-        },
-      );
+      // Route to client via Agent Gateway WS when the tool is marked
+      // executor='client' and the current stream manager can reach a gateway.
+      // Falls through to the normal server path if either is unavailable.
+      const canDispatchToClient =
+        chatToolPayload.executor === 'client' &&
+        typeof streamManager.sendToolExecute === 'function';
+
+      let execution: { result: ToolExecutionResultResponse; attempts: number };
+      if (canDispatchToClient) {
+        log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+        const dispatchResult = await dispatchClientTool(chatToolPayload, {
+          operationId,
+          streamManager,
+        });
+        execution = { attempts: 1, result: dispatchResult };
+      } else {
+        // Execute tool using ToolExecutionService
+        log(`[${operationLogId}] Executing tool ${toolName} ...`);
+        execution = await executeToolWithRetry(
+          () =>
+            toolExecutionService.executeTool(chatToolPayload, {
+              activeDeviceId: state.metadata?.activeDeviceId,
+              agentId: state.metadata?.agentId,
+              memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
+              serverDB: ctx.serverDB,
+              taskId: state.metadata?.taskId,
+              toolManifestMap: effectiveManifestMap,
+              toolResultMaxLength,
+              topicId: ctx.topicId,
+              userId: ctx.userId,
+            }),
+          {
+            isInterrupted: () => isOperationInterrupted(ctx),
+            maxRetries: TOOL_MAX_RETRIES,
+            operationLogId,
+            toolName,
+          },
+        );
+      }
 
       const executionResult = execution.result;
       const executionTime = executionResult.executionTime;
@@ -1626,26 +1644,40 @@ export const createRuntimeExecutors = (
 
           const batchAgentConfig = state.metadata?.agentConfig;
 
-          const execution = await executeToolWithRetry(
-            () =>
-              toolExecutionService.executeTool(chatToolPayload, {
-                activeDeviceId: state.metadata?.activeDeviceId,
-                agentId: state.metadata?.agentId,
-                memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
-                serverDB: ctx.serverDB,
-                taskId: state.metadata?.taskId,
-                toolManifestMap: batchManifestMap,
-                toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
-                topicId: ctx.topicId,
-                userId: ctx.userId,
-              }),
-            {
-              isInterrupted: () => isOperationInterrupted(ctx),
-              maxRetries: TOOL_MAX_RETRIES,
-              operationLogId,
-              toolName,
-            },
-          );
+          const canDispatchToClient =
+            chatToolPayload.executor === 'client' &&
+            typeof streamManager.sendToolExecute === 'function';
+
+          let execution: { result: ToolExecutionResultResponse; attempts: number };
+          if (canDispatchToClient) {
+            log(`[${operationLogId}] Dispatching tool ${toolName} to client via Agent Gateway`);
+            const dispatchResult = await dispatchClientTool(chatToolPayload, {
+              operationId,
+              streamManager,
+            });
+            execution = { attempts: 1, result: dispatchResult };
+          } else {
+            execution = await executeToolWithRetry(
+              () =>
+                toolExecutionService.executeTool(chatToolPayload, {
+                  activeDeviceId: state.metadata?.activeDeviceId,
+                  agentId: state.metadata?.agentId,
+                  memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
+                  serverDB: ctx.serverDB,
+                  taskId: state.metadata?.taskId,
+                  toolManifestMap: batchManifestMap,
+                  toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
+                  topicId: ctx.topicId,
+                  userId: ctx.userId,
+                }),
+              {
+                isInterrupted: () => isOperationInterrupted(ctx),
+                maxRetries: TOOL_MAX_RETRIES,
+                operationLogId,
+                toolName,
+              },
+            );
+          }
 
           const executionResult = execution.result;
           const executionTime = executionResult.executionTime;

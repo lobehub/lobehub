@@ -128,6 +128,8 @@ export const createServerAgentToolsEngine = (
     // Add default tools based on configuration
     defaultToolIds,
     enableChecker: createEnableChecker({
+      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron)
+      allowExplicitActivation: true,
       rules: {
         // User-selected plugins
         ...Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true])),

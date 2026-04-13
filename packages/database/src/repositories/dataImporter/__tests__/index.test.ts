@@ -18,7 +18,7 @@ let importer: DataImporterRepos;
 beforeEach(async () => {
   await clientDB.delete(Schema.users);
 
-  // 创建测试数据
+  // Create test data
   await clientDB.transaction(async (tx) => {
     await tx.insert(Schema.users).values({ id: userId });
   });

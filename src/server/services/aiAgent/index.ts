@@ -588,6 +588,9 @@ export class AiAgentService {
         LocalSystemManifest.identifier,
         RemoteDeviceManifest.identifier,
         ...(isBotConversation ? [MessageToolIdentifier] : []),
+        // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+        ...lobehubSkillManifests.map((m) => m.identifier),
+        ...klavisManifests.map((m) => m.identifier),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
@@ -614,6 +617,20 @@ export class AiAgentService {
       }
       for (const manifest of klavisManifests) {
         toolSourceMap[manifest.identifier] = 'klavis';
+      }
+
+      // Mark tools that must run on the client (desktop Electron) because they
+      // require local IPC / subprocess capabilities:
+      //   - local-system builtin: Electron IPC for file + command execution
+      //   - stdio MCP plugins: subprocess lives on the user's machine
+      // Dispatcher in RuntimeExecutors reads this to route via Agent Gateway WS.
+      if (manifestMap.has(LocalSystemManifest.identifier)) {
+        toolExecutorMap[LocalSystemManifest.identifier] = 'client';
+      }
+      for (const plugin of installedPlugins) {
+        if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
+          toolExecutorMap[plugin.identifier] = 'client';
+        }
       }
 
       log(

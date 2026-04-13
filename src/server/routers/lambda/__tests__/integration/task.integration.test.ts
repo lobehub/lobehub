@@ -419,6 +419,31 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('list participants', () => {
+    it('should populate participants from assignee agent', async () => {
+      const { agents } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(agents)
+        .set({ avatar: 'avatar.png', title: 'Agent One' })
+        .where(eq(agents.id, testAgentId));
+
+      await caller.create({ assigneeAgentId: testAgentId, instruction: 'Task A' });
+      await caller.create({ instruction: 'Task without assignee' });
+
+      const list = await caller.list({});
+      expect(list.data).toHaveLength(2);
+
+      const assigned = list.data.find((t) => t.assigneeAgentId === testAgentId)!;
+      expect(assigned.participants).toEqual([
+        { avatar: 'avatar.png', id: testAgentId, name: 'Agent One', type: 'agent' },
+      ]);
+
+      const unassigned = list.data.find((t) => !t.assigneeAgentId)!;
+      expect(unassigned.participants).toEqual([]);
+    });
+  });
+
   describe('heartbeat timeout detection', () => {
     it('should auto-detect timeout on detail and pause task', async () => {
       const task = await caller.create({
