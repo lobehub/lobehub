@@ -5,6 +5,7 @@ import type {
   ClientMessage,
   ConnectionStatus,
   ServerMessage,
+  ToolResultMessage,
 } from './types';
 
 // ─── Constants ───
@@ -144,6 +145,16 @@ export class AgentStreamClient extends TypedEmitter {
    */
   sendInterrupt(): void {
     this.sendMessage({ type: 'interrupt' });
+  }
+
+  /**
+   * Send a tool execution result back to the server.
+   * Correlated by toolCallId; the server's agent loop is blocked on BLPOP until this arrives.
+   * Returns true when the payload was handed off to the WebSocket, false when no live socket
+   * is available (caller should fall back to server-side BLPOP timeout).
+   */
+  sendToolResult(result: Omit<ToolResultMessage, 'type'>): boolean {
+    return this.sendMessage({ ...result, type: 'tool_result' });
   }
 
   /**
@@ -418,10 +429,12 @@ export class AgentStreamClient extends TypedEmitter {
 
   // ─── Helpers ───
 
-  private sendMessage(data: ClientMessage): void {
+  private sendMessage(data: ClientMessage): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
+      return true;
     }
+    return false;
   }
 
   private closeWebSocket(): void {

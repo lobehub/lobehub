@@ -52,6 +52,7 @@ function createMockClient(): GatewayConnection['client'] & {
       set.add(listener);
     }),
     sendInterrupt: vi.fn(),
+    sendToolResult: vi.fn(() => true),
   };
 }
 

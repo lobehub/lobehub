@@ -5,6 +5,7 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
+  ToolExecuteData,
 } from '@/libs/agent-stream';
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
@@ -146,6 +147,17 @@ export const createGatewayEventHandler = (
       case 'tool_start': {
         // Server creates tool messages in DB.
         // Loading is already active from stream_start (not cleared by stream_end).
+        break;
+      }
+
+      case 'tool_execute': {
+        // Fire-and-forget: the client-side tool may take a long time, and we
+        // must keep processing other events (stream_chunk, tool_end, etc.) on
+        // the same WebSocket. `internal_executeClientTool` guarantees it never
+        // throws and always sends exactly one `tool_result` back.
+        const data = event.data as ToolExecuteData | undefined;
+        if (!data) break;
+        void get().internal_executeClientTool(data, { operationId });
         break;
       }
 

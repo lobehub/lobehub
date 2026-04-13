@@ -401,6 +401,60 @@ describe('AgentStreamClient', () => {
     });
   });
 
+  describe('sendToolResult', () => {
+    it('should send a successful tool_result message', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      const ok = client.sendToolResult({
+        content: '{"files":["a.txt"]}',
+        success: true,
+        toolCallId: 'call_1',
+      });
+
+      expect(ok).toBe(true);
+      const toolResult = ws.sent.find((s) => JSON.parse(s).type === 'tool_result');
+      expect(toolResult).toBeDefined();
+      expect(JSON.parse(toolResult!)).toEqual({
+        content: '{"files":["a.txt"]}',
+        success: true,
+        toolCallId: 'call_1',
+        type: 'tool_result',
+      });
+    });
+
+    it('should send an error tool_result message', async () => {
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      client.sendToolResult({
+        content: null,
+        error: { message: 'ipc failed', type: 'ipc_error' },
+        success: false,
+        toolCallId: 'call_2',
+      });
+
+      const toolResult = ws.sent.find((s) => JSON.parse(s).type === 'tool_result');
+      expect(JSON.parse(toolResult!)).toEqual({
+        content: null,
+        error: { message: 'ipc failed', type: 'ipc_error' },
+        success: false,
+        toolCallId: 'call_2',
+        type: 'tool_result',
+      });
+    });
+
+    it('should return false when socket is not open', () => {
+      const client = createClient();
+      const ok = client.sendToolResult({
+        content: null,
+        success: false,
+        toolCallId: 'call_3',
+      });
+      expect(ok).toBe(false);
+    });
+  });
+
   describe('disconnect', () => {
     it('should clean up timers on disconnect', async () => {
       const client = createClient();

@@ -15,6 +15,7 @@ function createMockStore() {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
+    internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
     replaceMessages: vi.fn(),
   };
@@ -194,6 +195,56 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
       expect(store.replaceMessages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tool_execute', () => {
+    const toolExecuteData = {
+      apiName: 'readFile',
+      arguments: '{"path":"/tmp/a.txt"}',
+      executionTimeoutMs: 60_000,
+      identifier: 'local-system',
+      toolCallId: 'call_1',
+    };
+
+    it('forwards the payload to internal_executeClientTool with operationId', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('tool_execute', toolExecuteData));
+      await flush();
+
+      expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
+        operationId: 'op-1',
+      });
+    });
+
+    it('is fire-and-forget — does not block the event pipeline', async () => {
+      const store = createMockStore();
+      // Simulate a slow tool execution that never resolves
+      store.internal_executeClientTool.mockImplementation(() => new Promise(() => {}));
+      const handler = createHandler(store);
+
+      handler(makeEvent('tool_execute', toolExecuteData));
+      // If the handler awaited the action, this subsequent stream_chunk would
+      // be queued behind the pending promise forever. We assert it still runs.
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hi' }));
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ value: { content: 'hi' } }),
+        expect.any(Object),
+      );
+    });
+
+    it('ignores tool_execute events without data', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('tool_execute'));
+      await flush();
+
+      expect(store.internal_executeClientTool).not.toHaveBeenCalled();
     });
   });
 

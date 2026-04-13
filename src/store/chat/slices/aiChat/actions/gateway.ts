@@ -1,5 +1,6 @@
 import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
+import { isDesktop } from '@/const/version';
 import type {
   AgentStreamClientOptions,
   AgentStreamEvent,
@@ -20,7 +21,10 @@ type Setter = StoreSetter<ChatStore>;
 // ─── Types ───
 
 export interface GatewayConnection {
-  client: Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'sendInterrupt'>;
+  client: Pick<
+    AgentStreamClient,
+    'connect' | 'disconnect' | 'on' | 'sendInterrupt' | 'sendToolResult'
+  >;
   status: ConnectionStatus;
 }
 
@@ -229,6 +233,10 @@ export class GatewayActionImpl {
         threadId: context.threadId,
         topicId: context.topicId,
       },
+      // Tell the server this caller is a desktop Electron client so it can
+      // enable `executor: 'client'` tools (local-system, stdio MCP) and
+      // dispatch them back over the Agent Gateway WS.
+      clientRuntime: isDesktop ? 'desktop' : 'web',
       fileIds,
       parentMessageId,
       prompt: message,
