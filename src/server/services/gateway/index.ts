@@ -92,8 +92,15 @@ export class GatewayService {
             try {
               const status = await client.getStatus(provider.id);
               if (status.state.status === 'connected' || status.state.status === 'connecting') {
-                log('Gateway sync: %s already %s, skipping', provider.id, status.state.status);
                 skippedConnected++;
+                log('Gateway sync: %s already %s, skipping', provider.id, status.state.status);
+                continue;
+              }
+              // "error" means credential/config issue (e.g. session expired, unauthorized).
+              // Auto-retry is pointless — only user action (saving new credentials) can fix it.
+              if (status.state.status === 'error') {
+                skippedConnected++;
+                log('Gateway sync: %s in error (%s), skipping', provider.id, status.state.error);
                 continue;
               }
             } catch {
