@@ -41,6 +41,7 @@ vi.mock('electron', () => {
 
 // Mock electron-is
 vi.mock('electron-is', () => ({
+  linux: vi.fn(() => false),
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
 }));
@@ -178,6 +179,26 @@ describe('NotificationCtr', () => {
         urgency: 'normal',
       });
       expect(result).toEqual({ success: true });
+    });
+
+    it('should use low urgency on Linux to prevent GNOME Shell freeze', async () => {
+      const { linux } = await import('electron-is');
+      const { Notification } = await import('electron');
+      vi.mocked(linux).mockReturnValue(true);
+      vi.mocked(Notification.isSupported).mockReturnValue(true);
+      mockBrowserWindow.isVisible.mockReturnValue(false);
+
+      const promise = controller.showDesktopNotification(params);
+      vi.advanceTimersByTime(100);
+      await promise;
+
+      expect(Notification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          urgency: 'low',
+        }),
+      );
+
+      vi.mocked(linux).mockReturnValue(false);
     });
 
     it('should show notification when window is minimized', async () => {
