@@ -1771,11 +1771,14 @@ describe('RuntimeExecutors', () => {
       const result = await executors.call_tools_batch!(instruction, state);
 
       // Should query messages from database with agentId, threadId, and topicId
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-123',
-        threadId: 'thread-123',
-        topicId: 'topic-123',
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+        expect.any(Object),
+      );
 
       // Messages should be refreshed from database (4 messages from mock)
       expect(result.newState.messages).toHaveLength(4);
@@ -2099,11 +2102,14 @@ describe('RuntimeExecutors', () => {
       await executors.call_tools_batch!(instruction, state);
 
       // Should query messages with agentId, threadId, and topicId from state.metadata
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-abc',
-        threadId: 'thread-xyz',
-        topicId: 'topic-abc-123',
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-abc',
+          threadId: 'thread-xyz',
+          topicId: 'topic-abc-123',
+        },
+        expect.any(Object),
+      );
     });
 
     // LOBE-5143: After DB refresh, state.messages stores raw UIChatMessage[]
@@ -2235,11 +2241,14 @@ describe('RuntimeExecutors', () => {
       const result = await executors.call_tools_batch!(instruction, state);
 
       // Verify agentId is passed in the query
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-123',
-        threadId: 'thread-123',
-        topicId: undefined,
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: undefined,
+        },
+        expect.any(Object),
+      );
 
       // Expected: newState.messages should NOT be empty
       // The next call_llm step needs messages to work properly
