@@ -1,5 +1,6 @@
 import type {
   CheckpointConfig,
+  TaskItem,
   WorkspaceData,
   WorkspaceDocNode,
   WorkspaceTreeNode,
@@ -8,7 +9,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 
 import { merge } from '@/utils/merge';
 
-import type { NewTask, NewTaskComment, TaskCommentItem, TaskItem } from '../schemas/task';
+import type { NewTask, NewTaskComment, TaskCommentItem } from '../schemas/task';
 import { taskComments, taskDependencies, taskDocuments, tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
 
@@ -307,7 +308,7 @@ export class TaskModel {
       SELECT * FROM task_tree
     `);
 
-    return result.rows as TaskItem[];
+    return result.rows as unknown as TaskItem[];
   }
 
   /**
