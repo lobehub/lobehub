@@ -609,7 +609,11 @@ export class AiAgentService {
 
       log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
-      const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
+      // Use getAllPluginManifests so that dynamically activated tools (e.g., lobe-creds,
+      // lobe-cron) also have their manifest available in effectiveManifestMap at runtime.
+      // getEnabledPluginManifests(pluginIds) only includes tools in pluginIds/defaultToolIds,
+      // which misses tools that the activator may enable later.
+      const manifestMap = toolsEngine.getAllPluginManifests();
       manifestMap.forEach((manifest, id) => {
         toolManifestMap[id] = manifest;
       });
