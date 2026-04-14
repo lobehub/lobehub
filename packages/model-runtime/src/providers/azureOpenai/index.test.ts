@@ -4,7 +4,9 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as openaiCompatibleFactoryModule from '../../core/openaiCompatibleFactory';
+import * as streamsModule from '../../core/streams';
 import * as debugStreamModule from '../../utils/debugStream';
+import * as getModelPricingModule from '../../utils/getModelPricing';
 import { LobeAzureOpenAI } from './index';
 
 const bizErrorType = 'ProviderBizError';
@@ -74,6 +76,67 @@ describe('LobeAzureOpenAI', () => {
     });
 
     describe('streaming response', () => {
+      it('should strip unsupported params for gpt-5 models and include usage in stream options', async () => {
+        const mockProdStream = new ReadableStream() as any;
+        const mockDebugStream = new ReadableStream() as any;
+        const mockPricing = { units: [] };
+
+        instance = new LobeAzureOpenAI({
+          apiKey: 'test_key',
+          apiVersion: '2025-04-01-preview',
+          baseURL: 'https://test.openai.azure.com/',
+          id: 'lobehub',
+        });
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue({
+          tee: () => [mockProdStream, mockDebugStream],
+        } as any);
+        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
+        vi.spyOn(streamsModule, 'OpenAIStream').mockReturnValue(new ReadableStream());
+
+        await instance.chat({
+          frequency_penalty: 0.4,
+          logit_bias: { '42': 1 },
+          logprobs: true,
+          max_tokens: 256,
+          messages: [{ role: 'system', content: 'You are helpful.' }],
+          model: 'gpt-5.4',
+          presence_penalty: 0.3,
+          reasoning_effort: 'minimal',
+          temperature: 0.7,
+          top_logprobs: 2,
+          top_p: 0.9,
+        });
+
+        const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+
+        expect(createCall.frequency_penalty).toBeUndefined();
+        expect(createCall.logit_bias).toBeUndefined();
+        expect(createCall.logprobs).toBeUndefined();
+        expect(createCall.max_tokens).toBeUndefined();
+        expect(createCall.messages[0].role).toBe('developer');
+        expect(createCall.presence_penalty).toBeUndefined();
+        expect(createCall.reasoning_effort).toBe('low');
+        expect(createCall.stream).toBe(true);
+        expect(createCall.stream_options).toEqual({ include_usage: true });
+        expect(createCall.temperature).toBeUndefined();
+        expect(createCall.top_logprobs).toBeUndefined();
+        expect(createCall.top_p).toBeUndefined();
+
+        expect(getModelPricingModule.getModelPricing).toHaveBeenCalledWith('gpt-5.4', 'lobehub');
+        expect(streamsModule.OpenAIStream).toHaveBeenCalledWith(
+          mockProdStream,
+          expect.objectContaining({
+            inputStartAt: expect.any(Number),
+            payload: {
+              model: 'gpt-5.4',
+              pricing: mockPricing,
+              provider: 'lobehub',
+            },
+          }),
+        );
+      });
+
       it('should handle multiple data chunks correctly', async () => {
         const data = [
           {
