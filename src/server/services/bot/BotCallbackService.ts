@@ -316,7 +316,7 @@ export class BotCallbackService {
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
     const client = getMessageGatewayClient();
-    if (!client.isConfigured) return;
+    if (!client.isEnabled) return;
 
     client.startTyping(connectionId, platformThreadId).catch((err) => {
       log('renewGatewayTyping failed: %O', err);
@@ -325,7 +325,7 @@ export class BotCallbackService {
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
     const client = getMessageGatewayClient();
-    if (!client.isConfigured) return;
+    if (!client.isEnabled) return;
 
     client.stopTyping(connectionId, platformThreadId).catch((err) => {
       log('stopGatewayTyping failed: %O', err);

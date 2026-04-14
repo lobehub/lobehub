@@ -13,6 +13,7 @@ const mockGatewayClient = vi.hoisted(() => ({
   getStats: vi.fn(),
   getStatus: vi.fn(),
   isConfigured: false,
+  isEnabled: false,
 }));
 
 const mockGatewayEnv = vi.hoisted(() => ({
@@ -87,6 +88,7 @@ describe('GatewayService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGatewayClient.isConfigured = false;
+    mockGatewayClient.isEnabled = false;
     mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = undefined;
     mockGatewayManager.isRunning = false;
     mockGetServerDB.mockResolvedValue({});
@@ -99,20 +101,13 @@ describe('GatewayService', () => {
   // ─── useMessageGateway ───
 
   describe('useMessageGateway', () => {
-    it('returns false when ENABLED is not set', () => {
-      mockGatewayClient.isConfigured = true;
+    it('returns false when client is not enabled', () => {
+      mockGatewayClient.isEnabled = false;
       expect(service.useMessageGateway).toBe(false);
     });
 
-    it('returns false when client is not configured', () => {
-      mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
-      mockGatewayClient.isConfigured = false;
-      expect(service.useMessageGateway).toBe(false);
-    });
-
-    it('returns true when ENABLED=1 and client is configured', () => {
-      mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
-      mockGatewayClient.isConfigured = true;
+    it('returns true when client is enabled', () => {
+      mockGatewayClient.isEnabled = true;
       expect(service.useMessageGateway).toBe(true);
     });
   });
@@ -140,6 +135,7 @@ describe('GatewayService', () => {
       beforeEach(() => {
         mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
         mockGatewayClient.isConfigured = true;
+        mockGatewayClient.isEnabled = true;
       });
 
       it('calls syncGatewayConnections instead of starting local manager', async () => {
@@ -156,6 +152,7 @@ describe('GatewayService', () => {
     beforeEach(() => {
       mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
       mockGatewayClient.isConfigured = true;
+      mockGatewayClient.isEnabled = true;
     });
 
     it('skips webhook-mode providers', async () => {

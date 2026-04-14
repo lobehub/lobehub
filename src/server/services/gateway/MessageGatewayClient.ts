@@ -67,6 +67,16 @@ export class MessageGatewayClient {
     return !!(this.baseUrl && this.serviceToken);
   }
 
+  /**
+   * Whether the gateway should be used for active flows (typing, connect, etc.).
+   * Requires MESSAGE_GATEWAY_ENABLED=1 in addition to URL/token. This lets us
+   * disable the gateway during migration while keeping the client reachable
+   * for cleanup (via isConfigured).
+   */
+  get isEnabled(): boolean {
+    return gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' && this.isConfigured;
+  }
+
   // ─── Connection Management ───
 
   async connect(config: MessageGatewayConnectionConfig): Promise<{ status: string }> {

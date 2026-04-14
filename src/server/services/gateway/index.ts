@@ -2,7 +2,6 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
-import { gatewayEnv } from '@/envs/gateway';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import type { ConnectionMode } from '../bot/platforms';
@@ -24,7 +23,7 @@ export class GatewayService {
    * the client reachable for cleanup.
    */
   get useMessageGateway(): boolean {
-    return gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' && getMessageGatewayClient().isConfigured;
+    return getMessageGatewayClient().isEnabled;
   }
 
   async ensureRunning(): Promise<void> {
