@@ -57,6 +57,15 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * Contains sessionId, topicId, and threadId
    */
   context: ConversationContext;
+  /**
+   * Called as soon as the backend reports a newly created topic id, so callers
+   * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
+   * new topic while the AI response is still streaming.
+   *
+   * Only invoked when `context.isolatedTopic` is true; otherwise the store's
+   * own `switchTopic` handles the transition on the global chat store.
+   */
+  onTopicCreated?: (topicId: string) => void | Promise<void>;
 }
 
 /**
@@ -110,6 +119,7 @@ export class ConversationLifecycleActionImpl {
     messages: inputMessages,
     parentId: inputParentId,
     pageSelections,
+    onTopicCreated,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
     const { internal_execAgentRuntime, mainInputEditor } = this.#get();
@@ -491,12 +501,18 @@ export class ConversationLifecycleActionImpl {
         action: 'sendMessage/serverResponse',
       });
 
-      if (data.isCreateNewTopic && data.topicId && !context.isolatedTopic) {
-        // clearNewKey: true ensures the _new key data is cleared after topic creation
-        await this.#get().switchTopic(data.topicId, {
-          clearNewKey: true,
-          skipRefreshMessage: true,
-        });
+      if (data.isCreateNewTopic && data.topicId) {
+        if (context.isolatedTopic) {
+          // Notify the isolated caller immediately so its UI re-subscribes to
+          // the new topic key and picks up the streaming AI response.
+          await onTopicCreated?.(data.topicId);
+        } else {
+          // clearNewKey: true ensures the _new key data is cleared after topic creation
+          await this.#get().switchTopic(data.topicId, {
+            clearNewKey: true,
+            skipRefreshMessage: true,
+          });
+        }
       }
     } catch (e) {
       console.error(e);
