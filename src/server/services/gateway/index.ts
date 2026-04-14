@@ -29,6 +29,13 @@ export class GatewayService {
 
   async ensureRunning(): Promise<void> {
     if (this.useMessageGateway) {
+      // Stop local GatewayManager if running (switching to gateway mode)
+      const localManager = getGatewayManager();
+      if (localManager?.isRunning) {
+        await localManager.stop();
+        log('Stopped local GatewayManager (switching to gateway mode)');
+      }
+
       await this.syncGatewayConnections();
       return;
     }

@@ -186,6 +186,14 @@ describe('GatewayService', () => {
         expect(mockGatewayManager.start).not.toHaveBeenCalled();
         expect(mockGatewayClient.disconnectAll).not.toHaveBeenCalled();
       });
+
+      it('stops local GatewayManager if running when switching to gateway mode', async () => {
+        mockGatewayManager.isRunning = true;
+
+        await service.ensureRunning();
+
+        expect(mockGatewayManager.stop).toHaveBeenCalled();
+      });
     });
   });
 
