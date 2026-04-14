@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const CompactModelSelector = memo(() => {
+const CopilotModelSelect = memo(() => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
@@ -95,6 +95,6 @@ const CompactModelSelector = memo(() => {
   );
 });
 
-CompactModelSelector.displayName = 'CompactModelSelector';
+CopilotModelSelect.displayName = 'CopilotModelSelect';
 
-export default CompactModelSelector;
+export default CopilotModelSelect;

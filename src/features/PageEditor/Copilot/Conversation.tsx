@@ -5,7 +5,6 @@ import { memo, useCallback, useEffect, useMemo } from 'react';
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
 import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
-import CompactModelSelector from '@/features/ChatInput/CompactModelSelector';
 import {
   COMPACT_ACTION_BAR_CONTEXT,
   COMPACT_ACTION_BAR_STYLE,
@@ -22,6 +21,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
+import CopilotModelSelect from './CopilotModelSelect';
 import CopilotToolbar from './Toolbar';
 import Welcome from './Welcome';
 
@@ -83,7 +83,7 @@ const Conversation = memo(() => {
     [handleAgentChange],
   );
 
-  const modelSelector = useMemo(() => <CompactModelSelector />, []);
+  const modelSelector = useMemo(() => <CopilotModelSelect />, []);
 
   return (
     <DragUploadZone

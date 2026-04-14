@@ -10,7 +10,6 @@ import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { TopicTrigger } from '@/const/topic';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
 import { ActionBarContext } from '@/features/ChatInput/ActionBar/context';
-import CompactModelSelector from '@/features/ChatInput/CompactModelSelector';
 import {
   COMPACT_ACTION_BAR_CONTEXT,
   COMPACT_ACTION_BAR_STYLE,
@@ -18,6 +17,7 @@ import {
 } from '@/features/ChatInput/compactPreset';
 import { ChatInput, ChatList, ConversationProvider } from '@/features/Conversation';
 import { type ConversationHooks } from '@/features/Conversation/types';
+import CopilotModelSelect from '@/features/PageEditor/Copilot/CopilotModelSelect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -95,7 +95,7 @@ const TaskManagerConversation = memo(() => {
     [],
   );
 
-  const modelSelector = useMemo(() => <CompactModelSelector />, []);
+  const modelSelector = useMemo(() => <CopilotModelSelect />, []);
 
   return (
     <ConversationProvider
