@@ -1,6 +1,5 @@
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import { ClipboardList, LayoutGrid, LayoutList } from 'lucide-react';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { ClipboardList } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +21,8 @@ const TasksHeader = memo(() => {
           {t('taskList.activeTasks')}
         </Text>
       </Flexbox>
-      <div className={styles.switchGroup}>
+      {/* TODO: Kanban view not yet implemented — re-enable when ready */}
+      {/* <div className={styles.switchGroup}>
         <ActionIcon
           icon={LayoutList}
           size="small"
@@ -41,7 +41,7 @@ const TasksHeader = memo(() => {
           }}
           onClick={() => setViewMode('kanban')}
         />
-      </div>
+      </div> */}
     </div>
   );
 });
