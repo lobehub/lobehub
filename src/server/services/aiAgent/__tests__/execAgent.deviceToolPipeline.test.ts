@@ -315,8 +315,10 @@ describe('AiAgentService.execAgent - device tool pipeline (LOBE-5636)', () => {
       const callArgs = mockCreateOperation.mock.calls[0][0];
       const manifestMap = callArgs.toolSet.manifestMap;
 
-      // RemoteDevice should NOT be in manifestMap — no manual injection
-      expect(manifestMap[RemoteDeviceManifest.identifier]).toBeUndefined();
+      // RemoteDevice is present in manifestMap (discoverable builtin),
+      // but should NOT be in enabledToolIds when gateway is not configured
+      const enabledToolIds = callArgs.toolSet.enabledToolIds;
+      expect(enabledToolIds).not.toContain(RemoteDeviceManifest.identifier);
     });
   });
 
@@ -491,8 +493,8 @@ describe('AiAgentService.execAgent - device tool pipeline (LOBE-5636)', () => {
       const manifestMap = callArgs.toolSet.manifestMap;
 
       expect(manifestMap['test-tool']).toBe(mockManifest);
-      // No extra manifests added manually
-      expect(Object.keys(manifestMap)).toEqual(['test-tool']);
+      // manifestMap also includes discoverable builtin tools for activator discovery
+      expect(Object.keys(manifestMap)).toContain('test-tool');
     });
   });
 });
