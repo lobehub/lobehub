@@ -189,6 +189,10 @@ Use this method if your Slack app already has Event Subscriptions configured wit
 
   Enter **Application ID**, **Bot Token**, and **Signing Secret** in LobeHub's Slack channel settings. Set **Connection Mode** to **Webhook** in Advanced Settings. Save and copy the displayed **Webhook URL**.
 
+  ### Enable App Home Messaging
+
+  In the Slack API Dashboard → **App Home**, find the **Show Tabs** section, enable **Messages Tab**, and make sure **"Allow users to send Slash commands and messages from the messages tab"** is checked. This allows users to chat with the bot via direct messages.
+
   ### Configure Event Subscriptions
 
   In the Slack API Dashboard → **Event Subscriptions**, enable events, paste the Webhook URL as the **Request URL**, and subscribe to bot events: `app_mention`, `message.channels`, `message.groups`, `message.im`, `message.mpim`, `member_joined_channel`.
@@ -221,6 +225,7 @@ Use this method if your Slack app already has Event Subscriptions configured wit
 
 ## Troubleshooting
 
+- **DM shows "Sending messages to this app has been turned off":** In the Slack API Dashboard → **App Home** → **Show Tabs**, make sure **Messages Tab** is enabled and "Allow users to send Slash commands and messages from the messages tab" is checked. This is already enabled if you created the app using the Manifest template.
 - **Bot not responding:** Confirm the bot has been invited to the channel. For Socket Mode, ensure the App-Level Token is correct and Socket Mode is enabled in Slack app settings.
 - **Test Connection failed:** Double-check the Application ID and Bot Token. Ensure the app is installed to the workspace.
 - **Webhook verification failed (Webhook mode):** Make sure the Signing Secret matches and the Webhook URL is correct.
