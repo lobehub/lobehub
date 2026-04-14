@@ -81,6 +81,39 @@ describe('classifyLLMError', () => {
       expect(['retry', 'stop']).toContain(result.kind);
     });
 
+    // Regression: some third-party proxies surface HTTP status ONLY as a
+    // numeric `code` (no `status`/`statusCode`, no status digits in the
+    // message). Previously these fell through to `retry`, causing wasteful
+    // retry loops on permanent auth/permission failures.
+
+    it('treats numeric code=401 as stop when no status field is present', () => {
+      const result = classifyLLMError({ code: 401, message: 'upstream refused' });
+      expect(result.kind).toBe('stop');
+    });
+
+    it('treats numeric code=403 as stop when no status field is present', () => {
+      const result = classifyLLMError({ code: 403, message: 'upstream refused' });
+      expect(result.kind).toBe('stop');
+    });
+
+    it('treats numeric code=429 as retry when no status field is present', () => {
+      const result = classifyLLMError({ code: 429, message: 'upstream refused' });
+      expect(result.kind).toBe('retry');
+    });
+
+    it('treats nested numeric code as stop (proxy-wrapped auth failure)', () => {
+      const result = classifyLLMError({
+        error: { error: { code: 401, message: 'proxy refused upstream' } },
+      });
+      expect(result.kind).toBe('stop');
+    });
+
+    it('prefers explicit status over numeric code fallback', () => {
+      // status says 500 (retry), code says 401 (stop) — status wins.
+      const result = classifyLLMError({ code: 401, message: 'oops', status: 500 });
+      expect(result.kind).toBe('retry');
+    });
+
     it('preserves the original error message when normalizeSignal itself would throw', () => {
       // Force a normalizeSignal crash by making `.toLowerCase()` blow up on a
       // non-string message (via a Proxy that throws on Symbol.toPrimitive).

@@ -87,6 +87,17 @@ const tryExtractStatus = (message: string) => {
   return Number.isNaN(status) ? undefined : status;
 };
 
+// Some providers (notably bare HTTP proxies) only surface the HTTP status as a
+// numeric `code` on the error object, with no `status`/`statusCode`. Treat
+// those numeric codes as status so classifyKind can still map 401/403 to stop
+// and 429/5xx to retry without falling through to message-keyword matching.
+const numericStatusFromCode = (...codes: unknown[]): number | undefined => {
+  for (const code of codes) {
+    if (typeof code === 'number' && Number.isFinite(code)) return code;
+  }
+  return undefined;
+};
+
 const normalizeSignal = (error: unknown): LLMErrorSignal => {
   if (typeof error === 'string') {
     const message = error.toLowerCase();
@@ -95,11 +106,11 @@ const normalizeSignal = (error: unknown): LLMErrorSignal => {
 
   if (error instanceof Error) {
     const raw = error as Error & {
-      code?: string;
-      errorType?: string;
+      code?: unknown;
+      errorType?: unknown;
       status?: number;
       statusCode?: number;
-      type?: string;
+      type?: unknown;
     };
     const message = (raw.message || raw.name || 'unknown error').toLowerCase();
 
@@ -112,26 +123,26 @@ const normalizeSignal = (error: unknown): LLMErrorSignal => {
           ? raw.status
           : typeof raw.statusCode === 'number'
             ? raw.statusCode
-            : tryExtractStatus(message),
+            : (numericStatusFromCode(raw.code) ?? tryExtractStatus(message)),
     };
   }
 
   if (error && typeof error === 'object') {
     const raw = error as {
-      code?: string;
+      code?: unknown;
       error?: {
-        code?: string;
-        error?: { code?: string; message?: string; status?: number; type?: string };
-        errorType?: string;
+        code?: unknown;
+        error?: { code?: unknown; message?: string; status?: number; type?: unknown };
+        errorType?: unknown;
         message?: string;
         status?: number;
-        type?: string;
+        type?: unknown;
       };
-      errorType?: string;
+      errorType?: unknown;
       message?: string;
       status?: number;
       statusCode?: number;
-      type?: string;
+      type?: unknown;
     };
     const nested = raw.error;
     const nestedError = nested?.error;
@@ -157,7 +168,8 @@ const normalizeSignal = (error: unknown): LLMErrorSignal => {
               ? nested.status
               : typeof nestedError?.status === 'number'
                 ? nestedError.status
-                : tryExtractStatus(message),
+                : (numericStatusFromCode(raw.code, nested?.code, nestedError?.code) ??
+                  tryExtractStatus(message)),
     };
   }
 
