@@ -1,5 +1,6 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
+import { UNFINISHED_TASK_STATUSES } from './constants';
 import { systemPrompt } from './systemRole';
 import { TaskApiName } from './types';
 
@@ -71,19 +72,34 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List tasks with optional filters. Without filters, lists subtasks of the current task.',
+        'List tasks. Without any filters, returns top-level unfinished tasks of the current agent. Use parentIdentifier to drill into subtasks, or explicit filters to override defaults.',
       name: TaskApiName.listTasks,
       parameters: {
         properties: {
-          parentIdentifier: {
+          assigneeAgentId: {
             description:
-              'List subtasks of a specific parent task. Defaults to the current task if omitted.',
+              'Restrict to tasks assigned to this agent. Defaults to the current agent when omitted.',
             type: 'string',
           },
-          status: {
-            description: 'Filter by status.',
-            enum: ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'],
+          limit: { description: 'Max 1-100. Default 20.', type: 'number' },
+          offset: { description: 'Pagination offset.', type: 'number' },
+          parentIdentifier: {
+            description:
+              'List subtasks of this parent (e.g. "TASK-1"). When provided, disables the top-level default.',
             type: 'string',
+          },
+          priorities: {
+            description: 'Filter by priority values. 0=none, 1=urgent, 2=high, 3=normal, 4=low.',
+            items: { enum: [0, 1, 2, 3, 4], type: 'number' },
+            type: 'array',
+          },
+          statuses: {
+            description: `Filter by statuses. Defaults to [${UNFINISHED_TASK_STATUSES.map((s) => `"${s}"`).join(',')}] (unfinished) when no filters provided.`,
+            items: {
+              enum: ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'],
+              type: 'string',
+            },
+            type: 'array',
           },
         },
         required: [],

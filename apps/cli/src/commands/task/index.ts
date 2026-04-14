@@ -56,7 +56,7 @@ export function registerTaskCommand(program: Command) {
         const client = await getTrpcClient();
 
         const input: Record<string, any> = {};
-        if (options.status) input.status = options.status;
+        if (options.status) input.statuses = [options.status];
         if (options.root) input.parentTaskId = null;
         if (options.parent) input.parentTaskId = options.parent;
         if (options.agent) input.assigneeAgentId = options.agent;

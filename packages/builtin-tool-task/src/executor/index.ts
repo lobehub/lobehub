@@ -13,6 +13,7 @@ import { mutate } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { getTaskStoreState } from '@/store/task';
 
+import { UNFINISHED_TASK_STATUSES } from '../constants';
 import { TaskIdentifier } from '../manifest';
 import { TaskApiName } from '../types';
 
@@ -257,16 +258,20 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   listTasks = async (
-    params: { parentIdentifier?: string; status?: string },
+    params: {
+      assigneeAgentId?: string;
+      limit?: number;
+      offset?: number;
+      parentIdentifier?: string;
+      priorities?: number[];
+      statuses?: string[];
+    },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] listTasks - params:', params);
 
-      // TRPC list does NOT resolve parentTaskId, must resolve manually
-      let parentId: string | undefined;
-      let parentLabel = 'current task';
-
+      let parentTaskId: string | null | undefined;
       if (params.parentIdentifier) {
         const parent = await taskService.find(params.parentIdentifier);
         if (!parent.data) {
@@ -279,30 +284,41 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
             success: false,
           };
         }
-        parentId = parent.data.id;
-        parentLabel = parent.data.identifier;
-      } else {
-        parentId = getCurrentTaskId();
+        parentTaskId = parent.data.id;
       }
 
-      if (!parentId) {
-        return {
-          content: 'No task context available. Provide a parentIdentifier.',
-          error: { message: 'No task context', type: 'NoTaskContext' },
-          success: false,
-        };
-      }
+      const noFilters =
+        !params.parentIdentifier &&
+        !params.statuses?.length &&
+        !params.priorities?.length &&
+        !params.assigneeAgentId;
+
+      const limit = Math.min(params.limit ?? 20, 100);
+
+      const resolvedStatuses =
+        params.statuses ?? (noFilters ? [...UNFINISHED_TASK_STATUSES] : undefined);
+      const resolvedAgentId = params.assigneeAgentId ?? (noFilters ? ctx?.agentId : undefined);
+      const resolvedParentTaskId = parentTaskId ?? (noFilters ? null : undefined);
 
       const result = await taskService.list({
-        parentTaskId: parentId,
-        status: params.status,
+        assigneeAgentId: resolvedAgentId,
+        limit,
+        offset: params.offset ?? 0,
+        parentTaskId: resolvedParentTaskId,
+        priorities: params.priorities,
+        statuses: resolvedStatuses,
       });
 
-      const tasks = result.data || [];
+      const tasks = result.data ?? [];
 
       return {
-        content: formatTaskList(tasks as any[], parentLabel, params.status),
-        state: { count: tasks.length, success: true },
+        content: formatTaskList(tasks, {
+          assigneeAgentId: params.assigneeAgentId,
+          parentIdentifier: params.parentIdentifier,
+          priorities: params.priorities,
+          statuses: params.statuses,
+        }),
+        state: { count: tasks.length, success: true, total: result.total },
         success: true,
       };
     } catch (error) {

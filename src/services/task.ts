@@ -14,7 +14,8 @@ class TaskService {
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
-    status?: string;
+    priorities?: number[];
+    statuses?: string[];
   }) => lambdaClient.task.list.query(params);
 
   groupList = async (params: {

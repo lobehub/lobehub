@@ -1,4 +1,4 @@
-import { TaskIdentifier } from '@lobechat/builtin-tool-task';
+import { TaskIdentifier, UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -15,10 +15,12 @@ import { TaskService } from '@/server/services/task';
 import { type ServerRuntimeRegistration } from './types';
 
 const createTaskRuntime = ({
+  agentId,
   taskId,
   taskModel,
   taskService,
 }: {
+  agentId?: string;
   taskId?: string;
   taskModel: TaskModel;
   taskService: TaskService;
@@ -157,30 +159,51 @@ const createTaskRuntime = ({
     return { content: formatTaskEdited(task.identifier, changes), success: true };
   },
 
-  listTasks: async (args: { parentIdentifier?: string; status?: string }) => {
-    let parentId: string | undefined;
-    let parentLabel = 'current task';
-
+  listTasks: async (args: {
+    assigneeAgentId?: string;
+    limit?: number;
+    offset?: number;
+    parentIdentifier?: string;
+    priorities?: number[];
+    statuses?: string[];
+  }) => {
+    let parentTaskId: string | null | undefined;
     if (args.parentIdentifier) {
       const parent = await taskModel.resolve(args.parentIdentifier);
       if (!parent)
         return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
-      parentId = parent.id;
-      parentLabel = parent.identifier;
-    } else {
-      parentId = taskId;
+      parentTaskId = parent.id;
     }
 
-    if (!parentId) return { content: 'No task context available.', success: false };
+    const noFilters =
+      !args.parentIdentifier &&
+      !args.statuses?.length &&
+      !args.priorities?.length &&
+      !args.assigneeAgentId;
 
-    const subtasks = await taskModel.findSubtasks(parentId);
-    let filtered = subtasks;
-    if (args.status) {
-      filtered = subtasks.filter((t) => t.status === args.status);
-    }
+    const limit = Math.min(args.limit ?? 20, 100);
+
+    const resolvedStatuses =
+      args.statuses ?? (noFilters ? [...UNFINISHED_TASK_STATUSES] : undefined);
+    const resolvedAgentId = args.assigneeAgentId ?? (noFilters ? agentId : undefined);
+    const resolvedParentTaskId = parentTaskId ?? (noFilters ? null : undefined);
+
+    const result = await taskModel.list({
+      assigneeAgentId: resolvedAgentId,
+      limit,
+      offset: args.offset ?? 0,
+      parentTaskId: resolvedParentTaskId,
+      priorities: args.priorities,
+      statuses: resolvedStatuses,
+    });
 
     return {
-      content: formatTaskList(filtered, parentLabel, args.status),
+      content: formatTaskList(result.tasks, {
+        assigneeAgentId: args.assigneeAgentId,
+        parentIdentifier: args.parentIdentifier,
+        priorities: args.priorities,
+        statuses: args.statuses,
+      }),
       success: true,
     };
   },
@@ -234,7 +257,12 @@ export const taskRuntime: ServerRuntimeRegistration = {
     const taskModel = new TaskModel(context.serverDB, context.userId);
     const taskService = new TaskService(context.serverDB, context.userId);
 
-    return createTaskRuntime({ taskId: context.taskId, taskModel, taskService });
+    return createTaskRuntime({
+      agentId: context.agentId,
+      taskId: context.taskId,
+      taskModel,
+      taskService,
+    });
   },
   identifier: TaskIdentifier,
 };

@@ -85,23 +85,39 @@ export const formatTaskCreated = (
   return lines.join('\n');
 };
 
+export interface TaskListFilters {
+  assigneeAgentId?: string;
+  parentIdentifier?: string;
+  priorities?: number[];
+  statuses?: string[];
+}
+
+const buildTaskListLabel = (filters: TaskListFilters): string => {
+  if (filters.parentIdentifier) return `subtasks of ${filters.parentIdentifier}`;
+
+  const hasExplicitFilter =
+    filters.statuses?.length || filters.priorities?.length || filters.assigneeAgentId;
+  if (!hasExplicitFilter) return 'top-level unfinished tasks';
+
+  const parts: string[] = [];
+  if (filters.statuses?.length) parts.push(`status=[${filters.statuses.join(',')}]`);
+  if (filters.priorities?.length) {
+    parts.push(`priority=[${filters.priorities.map((p) => priorityLabel(p)).join(',')}]`);
+  }
+  if (filters.assigneeAgentId) parts.push(`agent=${filters.assigneeAgentId}`);
+  return `tasks matching ${parts.join(', ')}`;
+};
+
 /**
  * Format task list response
  */
-export const formatTaskList = (
-  tasks: TaskSummary[],
-  parentLabel: string,
-  filter?: string,
-): string => {
+export const formatTaskList = (tasks: TaskSummary[], filters: TaskListFilters): string => {
+  const label = buildTaskListLabel(filters);
   if (tasks.length === 0) {
-    const filterNote = filter ? ` with status "${filter}"` : '';
-    return `No subtasks found under ${parentLabel}${filterNote}.`;
+    return `No ${label}.`;
   }
 
-  return [
-    `${tasks.length} task(s) under ${parentLabel}:`,
-    ...tasks.map((t) => `  ${formatTaskLine(t)}`),
-  ].join('\n');
+  return [`${tasks.length} ${label}:`, ...tasks.map((t) => `  ${formatTaskLine(t)}`)].join('\n');
 };
 
 /**
