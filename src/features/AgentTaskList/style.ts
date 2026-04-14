@@ -1,6 +1,13 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
+  avatarFirst: css`
+    border: 2px solid ${cssVar.colorBgContainer};
+  `,
+  avatarOverlap: css`
+    margin-inline-start: -6px;
+    border: 2px solid ${cssVar.colorBgContainer};
+  `,
   container: css`
     align-self: center;
     width: min(100%, 960px);
