@@ -101,7 +101,10 @@ export class ToolResolver {
       tools.push(...newTools);
       enabledToolIds.push(activation.id);
 
-      if (activation.source) {
+      // Only set source if not already present — the operation-level sourceMap
+      // may already have the correct routing source (e.g., 'lobehubSkill', 'klavis')
+      // and the activation source ('discovery') should not overwrite it.
+      if (activation.source && !sourceMap[activation.id]) {
         sourceMap[activation.id] = this.mapSource(activation.source);
       }
     }
@@ -109,17 +112,14 @@ export class ToolResolver {
 
   private mapSource(source: string): ToolSource {
     switch (source) {
-      // Preserve routing-critical sources so BuiltinToolsExecutor
-      // can dispatch to the correct backend (MarketService / KlavisService)
-      case 'lobehubSkill':
-      case 'klavis':
-      case 'client': {
-        return source as ToolSource;
+      case 'device': {
+        return 'builtin';
       }
-      case 'device':
       case 'discovery':
       case 'active_tools':
-      case 'mention':
+      case 'mention': {
+        return 'builtin';
+      }
       default: {
         return 'builtin';
       }

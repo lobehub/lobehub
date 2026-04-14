@@ -1503,13 +1503,7 @@ export const createRuntimeExecutors = (
             activatedAtStep: state.stepCount,
             id: t.identifier,
             manifest: effectiveManifestMap[t.identifier],
-            // Preserve the original tool source (lobehubSkill, klavis, etc.)
-            // so BuiltinToolsExecutor can route correctly. Fall back to
-            // 'discovery' for tools without an explicit source mapping.
-            source:
-              state.operationToolSet?.sourceMap?.[t.identifier] ??
-              state.toolSourceMap?.[t.identifier] ??
-              ('discovery' as const),
+            source: 'discovery' as const,
           }));
 
         if (newActivations.length > 0) {
@@ -1845,10 +1839,7 @@ export const createRuntimeExecutors = (
             activatedAtStep: state.stepCount,
             id: t.identifier,
             manifest: batchEffectiveManifestMap[t.identifier],
-            source:
-              state.operationToolSet?.sourceMap?.[t.identifier] ??
-              state.toolSourceMap?.[t.identifier] ??
-              ('discovery' as const),
+            source: 'discovery' as const,
           }));
 
         for (const activation of newActivations) {
