@@ -18,13 +18,16 @@ const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
 
 const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 
-const hiddenSidebarSections = (s: GlobalState): string[] => s.status.hiddenSidebarSections || [];
+export const DEFAULT_HIDDEN_SECTIONS: string[] = ['memory'];
 
-const ALL_SIDEBAR_KEYS = ['pages', 'recents', 'agent', 'community', 'resource'];
+const hiddenSidebarSections = (s: GlobalState): string[] =>
+  s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+
+const ALL_SIDEBAR_KEYS = ['pages', 'recents', 'agent', 'community', 'resource', 'memory'];
 const ACCORDION_KEYS = new Set(['recents', 'agent']);
 
 export const DEFAULT_ZONES: SidebarZones = {
-  bottom: ['community', 'resource'],
+  bottom: ['community', 'resource', 'memory'],
   middle: ['recents', 'agent'],
   top: ['pages'],
 };

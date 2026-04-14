@@ -57,6 +57,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { alwaysVisible: true, id: 'agent', labelKey: 'navPanel.agent' },
   { id: 'community', labelKey: 'tab.community', routeId: 'community' },
   { id: 'resource', labelKey: 'tab.resource', routeId: 'resource' },
+  { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
 
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
