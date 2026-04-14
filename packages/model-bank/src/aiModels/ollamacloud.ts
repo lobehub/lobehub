@@ -5,6 +5,19 @@ const ollamaCloudModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-5.1 is our next-generation flagship model for agentic engineering, with significantly stronger coding capabilities than its predecessor. It achieves state-of-the-art performance on SWE-Bench Pro and leads GLM-5 by a wide margin.',
+    displayName: 'GLM-5.1',
+    enabled: true,
+    id: 'glm-5.1',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
