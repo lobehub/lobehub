@@ -1,7 +1,8 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { cx } from 'antd-style';
-import { Check, MessageCircle } from 'lucide-react';
+import { SendButton } from '@lobehub/editor/react';
+import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { Check, SquarePen } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -90,67 +91,69 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       return <CommentInput onCancel={() => setCommentMode(null)} onSubmit={handleCommentSubmit} />;
     }
 
+    const commentActions = actions.find((a) => a.type === 'comment');
+    const primaryActions = actions.find((a) => a.type !== 'comment');
+    const otherActions = actions
+      .filter((a) => a.type !== 'comment')
+      .slice(1)
+      .reverse();
+
     return (
-      <Flexbox horizontal gap={8} wrap={'wrap'}>
-        {actions.map((action, index) => {
-          if (action.type === 'link') {
-            return (
-              <button
-                className={styles.actionBtn}
-                key={action.key}
-                type="button"
-                onClick={() => {
-                  if (!action.url) return;
-                  try {
-                    const parsed = new URL(action.url);
-                    if (['http:', 'https:'].includes(parsed.protocol)) {
-                      window.open(action.url, '_blank', 'noopener,noreferrer');
-                    }
-                  } catch {
-                    // invalid URL
-                  }
+      <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {taskId && commentActions && (
+            <Tooltip title={commentActions.label || t('brief.addFeedback')}>
+              <Button
+                className={'brief-comment-btn'}
+                icon={SquarePen}
+                shape={'round'}
+                style={{
+                  color: cssVar.colorTextSecondary,
                 }}
-              >
-                {action.label}
-              </button>
-            );
-          }
+                onClick={() => setCommentMode({ type: 'feedback' })}
+              />
+            </Tooltip>
+          )}
+          {otherActions.map((action) => {
+            if (action.type === 'link') {
+              return (
+                <Button
+                  className={styles.actionBtn}
+                  href={action.url}
+                  key={action.key}
+                  shape={'round'}
+                >
+                  {action.label}
+                </Button>
+              );
+            }
 
-          if (action.type === 'comment') {
             return (
-              <button
+              <Button
                 className={styles.actionBtn}
+                disabled={loadingKey === action.key}
                 key={action.key}
-                type="button"
-                onClick={() => setCommentMode({ key: action.key, type: 'comment' })}
+                shape={'round'}
+                onClick={() => handleResolve(action.key)}
               >
                 {action.label}
-              </button>
+              </Button>
             );
-          }
-
-          return (
-            <button
-              className={cx(styles.actionBtn, index === 0 && styles.actionBtnPrimary)}
-              disabled={loadingKey === action.key}
-              key={action.key}
-              type="button"
-              onClick={() => handleResolve(action.key)}
+          })}
+          {primaryActions && (
+            // @ts-ignore
+            <SendButton
+              className={styles.actionBtnPrimary}
+              disabled={loadingKey === primaryActions.key}
+              iconPlacement={'end'}
+              shape={'round'}
+              variant={'filled'}
+              onClick={() => handleResolve(primaryActions.key)}
             >
-              {action.label}
-            </button>
-          );
-        })}
-        {taskId && (
-          <button
-            className={styles.actionBtn}
-            type="button"
-            onClick={() => setCommentMode({ type: 'feedback' })}
-          >
-            <Icon icon={MessageCircle} size={14} />
-            {t('brief.addFeedback')}
-          </button>
-        )}
+              {primaryActions.label}
+            </SendButton>
+          )}
+        </Flexbox>
       </Flexbox>
     );
   },

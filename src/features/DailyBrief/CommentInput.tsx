@@ -1,24 +1,9 @@
-import {
-  ReactCodemirrorPlugin,
-  ReactCodePlugin,
-  ReactHRPlugin,
-  ReactLinkHighlightPlugin,
-  ReactListPlugin,
-} from '@lobehub/editor';
-import { Editor, useEditor } from '@lobehub/editor/react';
-import { Button, Flexbox } from '@lobehub/ui';
+import { ChatInput, SendButton, useEditor } from '@lobehub/editor/react';
+import { Button, Flexbox, TextArea } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { styles } from './style';
-
-const PLUGINS = [
-  ReactListPlugin,
-  ReactCodePlugin,
-  ReactCodemirrorPlugin,
-  ReactHRPlugin,
-  ReactLinkHighlightPlugin,
-];
 
 interface CommentInputProps {
   onCancel: () => void;
@@ -42,26 +27,44 @@ const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
   }, [editor, onSubmit, submitting]);
 
   return (
-    <Flexbox gap={8}>
-      <div className={styles.editorWrapper}>
-        <Editor
-          content={''}
-          editor={editor}
-          placeholder={t('brief.commentPlaceholder')}
-          plugins={PLUGINS}
-          style={{ minHeight: 60 }}
-          type={'text'}
-        />
-      </div>
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button disabled={submitting} size={'small'} type={'text'} onClick={onCancel}>
-          {t('cancel', { ns: 'common' })}
-        </Button>
-        <Button loading={submitting} size={'small'} type={'primary'} onClick={handleSubmit}>
-          {t('brief.commentSubmit')}
-        </Button>
-      </Flexbox>
-    </Flexbox>
+    <ChatInput
+      gap={8}
+      maxHeight={100}
+      minHeight={30}
+      resize={false}
+      footer={
+        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} padding={8}>
+          <Button
+            disabled={submitting}
+            icon={ChevronLeft}
+            size={'small'}
+            type={'text'}
+            style={{
+              color: cssVar.colorTextDescription,
+            }}
+            onClick={onCancel}
+          >
+            {t('cancel', { ns: 'common' })}
+          </Button>
+          <SendButton
+            loading={submitting}
+            shape={'round'}
+            type={'primary'}
+            onClick={handleSubmit}
+          />
+        </Flexbox>
+      }
+    >
+      <TextArea
+        placeholder={t('brief.commentPlaceholder')}
+        style={{ padding: 0 }}
+        variant={'borderless'}
+        autoSize={{
+          minRows: 1,
+          maxRows: 4,
+        }}
+      />
+    </ChatInput>
   );
 });
 

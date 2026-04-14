@@ -1,1 +1,0 @@
-export const COLLAPSED_MAX_HEIGHT = 100;

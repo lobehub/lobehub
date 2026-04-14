@@ -31,21 +31,21 @@ interface BriefIconProps {
   type: BriefType;
 }
 
-const BriefIcon = memo<BriefIconProps>(({ size = 16, type }) => {
+const BriefIcon = memo<BriefIconProps>(({ size = 28, type }) => {
   const icon = BRIEF_TYPE_ICON[type] || Lightbulb;
   const color = BRIEF_TYPE_COLOR[type] || cssVar.colorPrimary;
 
   return (
     <Block
       align={'center'}
-      height={24}
+      height={size}
       justify={'center'}
-      width={24}
+      width={size}
       style={{
         background: BRIEF_TYPE_COLOR_BG[type],
       }}
     >
-      <Icon color={color} icon={icon} size={size} />
+      <Icon color={color} icon={icon} size={size * 0.6} />
     </Block>
   );
 });
