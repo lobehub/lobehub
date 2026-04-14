@@ -20,14 +20,22 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
+import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { sanitizeError } from '../../utils/sanitizeError';
 
 const azureImageLogger = debug('lobe-image:azure');
+
+const isAzureReasoningModel = (model: string) =>
+  model.includes('gpt-5') || model.includes('o1') || model.includes('o3');
+
 export class LobeAzureOpenAI implements LobeRuntimeAI {
   client: AzureOpenAI;
+  id: string;
 
-  constructor(params: { apiKey?: string; apiVersion?: string; baseURL?: string } = {}) {
+  constructor(
+    params: { apiKey?: string; apiVersion?: string; baseURL?: string; id?: string } = {},
+  ) {
     if (!params.apiKey || !params.baseURL)
       throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
@@ -39,6 +47,7 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
     });
 
     this.baseURL = params.baseURL;
+    this.id = params.id || ModelProvider.Azure;
   }
 
   baseURL: string;
@@ -63,11 +72,36 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
     }));
 
     try {
+      const azureChatParams = params as typeof params & { logit_bias?: Record<string, number> };
+
       // Create parameters with proper typing for OpenAI SDK, handling reasoning_effort compatibility
-      const { reasoning_effort, ...otherParams } = params;
+      const {
+        frequency_penalty: _frequency_penalty,
+        logit_bias: _logit_bias,
+        logprobs: _logprobs,
+        max_tokens: _max_tokens,
+        presence_penalty: _presence_penalty,
+        reasoning_effort,
+        temperature: _temperature,
+        top_logprobs: _top_logprobs,
+        top_p: _top_p,
+        ...otherParams
+      } = azureChatParams;
 
       // Convert 'minimal' to 'low' for OpenAI SDK compatibility
       const compatibleReasoningEffort = reasoning_effort === 'minimal' ? 'low' : reasoning_effort;
+      const unsupportedReasoningParams = isAzureReasoningModel(model)
+        ? {}
+        : {
+            frequency_penalty: _frequency_penalty,
+            logit_bias: _logit_bias,
+            logprobs: _logprobs,
+            max_tokens: _max_tokens,
+            presence_penalty: _presence_penalty,
+            temperature: _temperature,
+            top_logprobs: _top_logprobs,
+            top_p: _top_p,
+          };
 
       const baseParams = {
         messages: await convertOpenAIMessages(
@@ -75,17 +109,24 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
         ),
         model,
         ...otherParams,
+        ...unsupportedReasoningParams,
         max_completion_tokens: undefined,
         tool_choice: params.tools ? ('auto' as const) : undefined,
       };
+      const inputStartAt = Date.now();
+      const pricing = await getModelPricing(model, this.id);
 
       // Add reasoning_effort only if it exists and cast to proper type
       const openaiParams = compatibleReasoningEffort
         ? {
             ...baseParams,
             reasoning_effort: compatibleReasoningEffort as 'low' | 'medium' | 'high',
+            stream_options: enableStreaming ? { include_usage: true } : undefined,
           }
-        : baseParams;
+        : {
+            ...baseParams,
+            stream_options: enableStreaming ? { include_usage: true } : undefined,
+          };
 
       const response = enableStreaming
         ? await this.client.chat.completions.create({ ...openaiParams, stream: true })
@@ -96,13 +137,25 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
         if (process.env.DEBUG_AZURE_CHAT_COMPLETION === '1') {
           debugStream(debug.toReadableStream()).catch(console.error);
         }
-        return StreamingResponse(OpenAIStream(prod, { callbacks: options?.callback }), {
-          headers: options?.headers,
-        });
+        return StreamingResponse(
+          OpenAIStream(prod, {
+            callbacks: options?.callback,
+            inputStartAt,
+            payload: { model, pricing, provider: this.id },
+          }),
+          {
+            headers: options?.headers,
+          },
+        );
       } else {
         const stream = transformResponseToStream(response as OpenAI.ChatCompletion);
         return StreamingResponse(
-          OpenAIStream(stream, { callbacks: options?.callback, enableStreaming: false }),
+          OpenAIStream(stream, {
+            callbacks: options?.callback,
+            enableStreaming: false,
+            inputStartAt,
+            payload: { model, pricing, provider: this.id },
+          }),
           {
             headers: options?.headers,
           },
@@ -123,12 +176,12 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
       if (res.usage && options?.onUsage) {
         const { convertOpenAIUsage } = await import('../../core/usageConverters/openai');
         const { getModelPricing } = await import('../../utils/getModelPricing');
-        const pricing = await getModelPricing(payload.model, ModelProvider.Azure);
+        const pricing = await getModelPricing(payload.model, this.id);
         await options.onUsage(
           convertOpenAIUsage(res.usage as any, {
             model: payload.model,
             pricing,
-            provider: ModelProvider.Azure,
+            provider: this.id,
           }),
         );
       }
