@@ -76,6 +76,11 @@ const Toolbar = memo(() => {
                       topicTitle={topic.title}
                       onClose={() => setTopicPopoverOpen(false)}
                       onTopicChange={(id) => switchTopic(id)}
+                      onDelete={(deletedId) => {
+                        const store = useTaskChatStore.getState();
+                        void store.refreshTopics();
+                        if (store.activeTopicId === deletedId) store.switchTopic(null);
+                      }}
                     />
                   ))}
                 </Flexbox>
