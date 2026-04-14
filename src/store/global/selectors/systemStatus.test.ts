@@ -115,6 +115,34 @@ describe('systemStatusSelectors', () => {
       expect(items).toContain('resource');
       expect(items).toContain('memory');
     });
+
+    it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarSectionOrder: ['agent', 'recents'] },
+      });
+      const items = systemStatusSelectors.sidebarItems(s);
+      // accordion slot in the default list now uses the user's legacy order
+      expect(items).toEqual(['pages', 'agent', 'recents', 'community', 'resource', 'memory']);
+    });
+
+    it('should fall back to default when legacy `sidebarSectionOrder` is the default order', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarSectionOrder: ['recents', 'agent'] },
+      });
+      const items = systemStatusSelectors.sidebarItems(s);
+      expect(items).toEqual(DEFAULT_SIDEBAR_ITEMS);
+    });
+
+    it('should prefer `sidebarItems` over legacy `sidebarSectionOrder` when both are set', () => {
+      const s: GlobalState = merge(initialState, {
+        status: {
+          sidebarItems: ['pages', 'recents', 'agent', 'community', 'resource', 'memory'],
+          sidebarSectionOrder: ['agent', 'recents'],
+        },
+      });
+      const items = systemStatusSelectors.sidebarItems(s);
+      expect(items.indexOf('recents')).toBeLessThan(items.indexOf('agent'));
+    });
   });
 
   describe('reorderSidebarItems', () => {

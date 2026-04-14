@@ -188,6 +188,11 @@ export interface SystemStatus {
    * Flat ordered list of sidebar items.
    */
   sidebarItems?: string[];
+  /**
+   * Legacy accordion-only ordering (recents/agent) from the pre-rework sidebar.
+   * @deprecated Kept for one-time migration into `sidebarItems`.
+   */
+  sidebarSectionOrder?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
   /**
    * Whether to display tokens in short format

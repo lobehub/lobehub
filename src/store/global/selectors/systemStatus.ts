@@ -111,6 +111,33 @@ export const reorderSidebarItems = (items: string[], from: number, to: number): 
 const sidebarItems = (s: GlobalState): string[] => {
   const items = s.status.sidebarItems;
   if (items && items.length > 0) return withAllKnownKeys(items);
+
+  // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
+  // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
+  // slot inside the default list so users keep their custom accordion arrangement.
+  const legacy = s.status.sidebarSectionOrder;
+  if (legacy && legacy.length > 0) {
+    const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+    if (legacyAcc.length > 0) {
+      const seen = new Set<string>();
+      const merged: string[] = [];
+      for (const k of DEFAULT_SIDEBAR_ITEMS) {
+        if (SIDEBAR_ACCORDION_KEYS.has(k)) {
+          for (const lk of legacyAcc) {
+            if (!seen.has(lk)) {
+              merged.push(lk);
+              seen.add(lk);
+            }
+          }
+        } else if (!seen.has(k)) {
+          merged.push(k);
+          seen.add(k);
+        }
+      }
+      return withAllKnownKeys(merged);
+    }
+  }
+
   return DEFAULT_SIDEBAR_ITEMS;
 };
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
