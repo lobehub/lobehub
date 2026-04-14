@@ -1474,6 +1474,18 @@ describe('RuntimeExecutors', () => {
         errorType: 'ConversationParentMissing',
         parentId: 'deleted-parent',
       });
+
+      // Stream event must carry the normalized error, not raw SQL text —
+      // clients treat `error` events as terminal and surface data.error
+      // directly, so leaking driver output here would show up to users.
+      const errorEventPublishes = mockStreamManager.publishStreamEvent.mock.calls.filter(
+        ([, event]: [string, any]) => event.type === 'error',
+      );
+      expect(errorEventPublishes.length).toBeGreaterThan(0);
+      for (const [, event] of errorEventPublishes) {
+        expect(event.data.errorType).toBe('ConversationParentMissing');
+        expect(event.data.error).not.toMatch(/Failed query/);
+      }
     });
 
     it('should retry tool execution when kind is retry and eventually succeed', async () => {
