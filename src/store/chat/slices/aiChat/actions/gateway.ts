@@ -278,6 +278,9 @@ export class GatewayActionImpl {
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId: result.assistantMessageId,
       context: execContext,
+      // Server-side operation id — needed for tool_result dispatch back over
+      // the same WS that gatewayConnections is keyed on.
+      gatewayOperationId: result.operationId,
       operationId: gatewayOpId,
     });
 
@@ -344,6 +347,9 @@ export class GatewayActionImpl {
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId,
       context,
+      // Server-side operation id — needed for tool_result dispatch back over
+      // the same WS that gatewayConnections is keyed on.
+      gatewayOperationId: operationId,
       operationId: gatewayOpId,
     });
 

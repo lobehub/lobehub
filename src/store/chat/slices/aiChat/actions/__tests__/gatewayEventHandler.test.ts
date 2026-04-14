@@ -23,12 +23,13 @@ function createMockStore() {
 
 function createHandler(
   store: ReturnType<typeof createMockStore>,
-  overrides?: { assistantMessageId?: string },
+  overrides?: { assistantMessageId?: string; gatewayOperationId?: string },
 ) {
   const get = vi.fn(() => store) as any;
   return createGatewayEventHandler(get, {
     assistantMessageId: overrides?.assistantMessageId ?? 'msg-initial',
     context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+    gatewayOperationId: overrides?.gatewayOperationId,
     operationId: 'op-1',
   });
 }
@@ -216,6 +217,22 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
         operationId: 'op-1',
+      });
+    });
+
+    it('uses gatewayOperationId (WS key) when distinct from local operationId', async () => {
+      // Locally the handler tracks `op-1` (used for message dispatch), but
+      // the Agent Gateway WS is keyed on the server-side id `gw-op-server`.
+      // The action must receive the latter so it can look up the live
+      // AgentStreamClient in `gatewayConnections` and reply with tool_result.
+      const store = createMockStore();
+      const handler = createHandler(store, { gatewayOperationId: 'gw-op-server' });
+
+      handler(makeEvent('tool_execute', toolExecuteData));
+      await flush();
+
+      expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
+        operationId: 'gw-op-server',
       });
     });
 
