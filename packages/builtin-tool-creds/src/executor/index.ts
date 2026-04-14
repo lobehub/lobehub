@@ -386,6 +386,18 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         }
       }
 
+      if (!values || Object.keys(values).length === 0) {
+        return {
+          content:
+            'Failed to save credential: values must be a non-empty object of key-value pairs (e.g., { "API_KEY": "sk-xxx" }).',
+          error: {
+            message: 'values is empty or missing. Provide key-value pairs, not a raw string.',
+            type: 'InvalidParams',
+          },
+          success: false,
+        };
+      }
+
       log('[CredsExecutor] saveCreds - key:', params.key, 'name:', name);
 
       await lambdaClient.market.creds.createKV.mutate({
