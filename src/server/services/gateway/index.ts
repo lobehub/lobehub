@@ -33,30 +33,30 @@ export class GatewayService {
       return;
     }
 
-    // Not using external gateway — if the client is still reachable,
-    // disconnect leftover connections to prevent duplicates.
-    const client = getMessageGatewayClient();
-    if (client.isConfigured) {
-      try {
-        const result = await client.disconnectAll();
-        if (result.total > 0) {
-          log('Cleaning up %d gateway connections', result.total);
-        }
-      } catch (err) {
-        log('Gateway cleanup skipped (non-critical): %O', err);
-      }
-    }
-
     const existing = getGatewayManager();
     if (existing?.isRunning) {
       log('GatewayManager already running');
       return;
     }
 
+    // Start local connections first, then clean up gateway —
+    // brief overlap is better than a gap where messages are lost.
     const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
     await manager.start();
-
     log('GatewayManager started');
+
+    // Clean up leftover gateway connections to prevent duplicates.
+    const client = getMessageGatewayClient();
+    if (client.isConfigured) {
+      try {
+        const result = await client.disconnectAll();
+        if (result.total > 0) {
+          log('Cleaned up %d gateway connections', result.total);
+        }
+      } catch (err) {
+        log('Gateway cleanup skipped (non-critical): %O', err);
+      }
+    }
   }
 
   /**

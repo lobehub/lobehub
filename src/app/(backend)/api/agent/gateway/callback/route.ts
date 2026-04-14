@@ -30,6 +30,13 @@ const StateChangeSchema = z.object({
  * Authenticated with MESSAGE_GATEWAY_SERVICE_TOKEN.
  */
 export async function POST(request: NextRequest) {
+  // Ignore callbacks when gateway is disabled — connections are managed locally,
+  // and stale gateway callbacks (e.g. from disconnectAll during migration) could
+  // overwrite locally-managed status.
+  if (gatewayEnv.MESSAGE_GATEWAY_ENABLED !== '1') {
+    return new NextResponse(null, { status: 204 });
+  }
+
   const serviceToken = gatewayEnv.MESSAGE_GATEWAY_SERVICE_TOKEN;
   if (!serviceToken) {
     return NextResponse.json({ error: 'Service not configured' }, { status: 503 });
