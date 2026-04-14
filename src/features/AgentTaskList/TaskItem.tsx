@@ -1,8 +1,9 @@
+import type { TaskParticipant } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CheckCircle2, Circle } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAgentStore } from '@/store/agent';
@@ -39,7 +40,14 @@ const TaskItem = memo<TaskItemProps>(({ task }) => {
   const isDone = task.status === 'completed';
   const time = formatTime(task.updatedAt);
   const StatusIcon = isDone ? CheckCircle2 : Circle;
-  const participants = (task as any).participants ?? [];
+
+  const displayParticipants = useMemo(
+    () =>
+      ((task as any).participants ?? [])
+        .filter((p: TaskParticipant) => p.avatar || p.name)
+        .slice(0, 3),
+    [(task as any).participants],
+  );
 
   const handleClick = useCallback(() => {
     if (agentId) navigate(`/agent/${agentId}/tasks/${task.identifier}`);
@@ -52,17 +60,14 @@ const TaskItem = memo<TaskItemProps>(({ task }) => {
           <Text ellipsis style={{ fontSize: 15 }} weight="bold">
             {task.name || task.identifier}
           </Text>
-          {participants.length > 0 && (
+          {displayParticipants.length > 0 && (
             <Flexbox horizontal style={{ flexShrink: 0 }}>
-              {participants.slice(0, 3).map((p: any, i: number) => (
+              {displayParticipants.map((p: TaskParticipant, i: number) => (
                 <Avatar
                   avatar={p.avatar}
+                  className={i > 0 ? styles.avatarOverlap : styles.avatarFirst}
                   key={p.id}
                   size={20}
-                  style={{
-                    border: `2px solid ${cssVar.colorBgContainer}`,
-                    marginInlineStart: i > 0 ? -6 : 0,
-                  }}
                   title={p.name}
                 />
               ))}
