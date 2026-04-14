@@ -8,13 +8,16 @@ import { getStableNavigate } from '@/utils/stableNavigate';
  * Prefer over subscribing to `navigationRef` from `useGlobalStore` in components.
  */
 export function useStableNavigate(): NavigateFunction {
-  return useCallback<NavigateFunction>((to, options) => {
-    const navigate = getStableNavigate();
-    if (!navigate) return;
-    if (typeof to === 'number') {
-      navigate(to);
-    } else {
-      navigate(to, options);
-    }
-  }, []);
+  return useCallback(
+    ((to, options) => {
+      const navigate = getStableNavigate();
+      if (!navigate) return;
+      if (typeof to === 'number') {
+        navigate(to);
+      } else {
+        navigate(to, options);
+      }
+    }) as NavigateFunction,
+    [],
+  );
 }

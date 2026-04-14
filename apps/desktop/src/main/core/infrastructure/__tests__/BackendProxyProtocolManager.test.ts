@@ -43,6 +43,11 @@ vi.mock('electron', () => ({
   BrowserWindow: {
     getAllWindows: vi.fn(),
   },
+  net: {
+    fetch: vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      global.fetch(input as any, init as any),
+    ),
+  },
 }));
 
 describe('BackendProxyProtocolManager', () => {
