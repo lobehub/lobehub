@@ -215,10 +215,6 @@ class SlackWebhookClient implements PlatformClient {
   parseMessageId(compositeId: string): string {
     return compositeId;
   }
-
-  sanitizeUserInput(text: string): string {
-    return text.replaceAll(/<@[A-Z\d]+>\s*/g, '').trim();
-  }
 }
 
 // ---------- Socket Mode Client (persistent) ----------
@@ -407,10 +403,6 @@ class SlackSocketModeClient implements PlatformClient {
 
   parseMessageId(compositeId: string): string {
     return compositeId;
-  }
-
-  sanitizeUserInput(text: string): string {
-    return text.replaceAll(/<@[A-Z\d]+>\s*/g, '').trim();
   }
 }
 
