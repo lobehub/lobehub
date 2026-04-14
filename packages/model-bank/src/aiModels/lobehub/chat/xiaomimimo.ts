@@ -5,7 +5,7 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
+      search: false,
     },
     contextWindowTokens: 1_000_000,
     description:
@@ -51,7 +51,6 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['enableReasoning'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -59,7 +58,7 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
+      search: false,
       video: true,
       vision: true,
     },
@@ -83,7 +82,6 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['enableReasoning'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -91,7 +89,7 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
+      search: false,
     },
     contextWindowTokens: 262_144,
     description:
@@ -113,7 +111,6 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-03',
     settings: {
       extendParams: ['enableReasoning'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },
