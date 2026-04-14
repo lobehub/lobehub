@@ -49,6 +49,12 @@ import {
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
+import {
+  createConversationParentMissingError,
+  isParentMessageMissingError,
+  isPersistFatal,
+  markPersistFatal,
+} from './messagePersistErrors';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -327,6 +333,25 @@ export const createRuntimeExecutors = (
 
     // Get parentId from payload (parentId or parentMessageId depending on payload type)
     const parentId = llmPayload.parentId || (llmPayload as any).parentMessageId;
+
+    // Parent existence preflight (LOBE-7158 / LOBE-7154):
+    // If the parent was deleted concurrently (e.g. user deleted topic mid-run),
+    // assistant message creation below would hit a PG FK violation AFTER we've
+    // already done the LLM call and spent tokens. Check first — fail fast,
+    // save cost, and surface a typed error the frontend can act on instead of
+    // a raw SQL error.
+    if (parentId) {
+      const parentExists = await ctx.messageModel.findById(parentId);
+      if (!parentExists) {
+        const error = createConversationParentMissingError(parentId);
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(error, 'parent_message_preflight'),
+          stepIndex,
+          type: 'error',
+        });
+        throw error;
+      }
+    }
 
     // Get or create assistant message
     // If assistantMessageId is provided in payload, use existing message instead of creating new one
@@ -1461,6 +1486,21 @@ export const createRuntimeExecutors = (
         toolMessageId = toolMessage.id;
       } catch (error) {
         console.error('[StreamingToolExecutor] Failed to create tool message: %O', error);
+        // Don't silently swallow. Put the real error into trace (pino-only is
+        // not enough; ops needs agent-tracing to show the root cause).
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(error, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        const fatal = isParentMessageMissingError(error)
+          ? createConversationParentMissingError(payload.parentMessageId, error)
+          : error instanceof Error
+            ? error
+            : new Error(String(error));
+        // Mark so the outer catch (which normally converts tool-exec errors
+        // into event records and returns the unchanged state) re-throws.
+        throw markPersistFatal(fatal);
       }
 
       const newState = structuredClone(state);
@@ -1562,6 +1602,11 @@ export const createRuntimeExecutors = (
         },
       };
     } catch (error) {
+      // Persist-level failures (parent FK violation etc.) must propagate so
+      // the step fails — otherwise the swallow-and-continue path keeps
+      // running the agent on a broken conversation chain. See LOBE-7158.
+      if (isPersistFatal(error)) throw error;
+
       // Publish tool execution error event
       await streamManager.publishStreamEvent(operationId, {
         data: formatErrorEventData(error, 'tool_execution'),
@@ -1764,6 +1809,23 @@ export const createRuntimeExecutors = (
               `[${operationLogId}] Failed to create tool message for ${toolName}:`,
               error,
             );
+            // Don't silently swallow. Previously an empty `toolMessageIds`
+            // fell back to the original (already-deleted) parent, which made
+            // the next call_llm hit the same FK and surfaced as a raw PG
+            // error to the user — see LOBE-7158.
+            await streamManager.publishStreamEvent(operationId, {
+              data: formatErrorEventData(error, 'tool_message_persist'),
+              stepIndex,
+              type: 'error',
+            });
+            const fatal = isParentMessageMissingError(error)
+              ? createConversationParentMissingError(parentMessageId, error)
+              : error instanceof Error
+                ? error
+                : new Error(String(error));
+            // Marker so the outer catch (which normally just records
+            // per-tool exec errors) knows to propagate this one.
+            throw markPersistFatal(fatal);
           }
 
           // Collect tool result
@@ -1786,6 +1848,13 @@ export const createRuntimeExecutors = (
             toolName,
           };
         } catch (error) {
+          // Persist-level failures (e.g. parent FK violations) must propagate
+          // so the whole batch short-circuits. Without this the fallback to
+          // the already-deleted parent triggers another FK on the next step.
+          if (isPersistFatal(error)) {
+            throw error;
+          }
+
           console.error(`[${operationLogId}] Tool execution failed for ${toolName}:`, error);
 
           // Publish error event
@@ -2103,6 +2172,15 @@ export const createRuntimeExecutors = (
           toolName,
           error,
         );
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(error, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        if (isParentMessageMissingError(error)) {
+          throw createConversationParentMissingError(parentMessageId, error);
+        }
+        throw error;
       }
     }
 
