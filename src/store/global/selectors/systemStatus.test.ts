@@ -129,5 +129,58 @@ describe('systemStatusSelectors', () => {
       // middle kept from legacy
       expect(zones.middle).toEqual(['recents', 'agent']);
     });
+
+    it('should handle legacy order with all keys already present', () => {
+      const s: GlobalState = merge(initialState, {
+        status: {
+          sidebarSectionOrder: ['pages', 'recents', 'agent', 'community', 'resource', 'memory'],
+        },
+      });
+      const zones = systemStatusSelectors.sidebarZones(s);
+      expect(zones.top).toEqual(['pages']);
+      expect(zones.middle).toEqual(['recents', 'agent']);
+      expect(zones.bottom).toEqual(['community', 'resource', 'memory']);
+    });
+
+    it('should handle legacy order with no accordion keys', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarSectionOrder: ['pages', 'community'] },
+      });
+      const zones = systemStatusSelectors.sidebarZones(s);
+      // no accordion keys → all go to top
+      expect(zones.top).toContain('pages');
+      expect(zones.top).toContain('community');
+      // missing accordion keys seeded into default middle zone
+      expect(zones.middle).toEqual(['recents', 'agent']);
+    });
+
+    it('should append missing keys to bottom when sidebarZones exists but is incomplete', () => {
+      const s: GlobalState = merge(initialState, {
+        status: {
+          sidebarZones: {
+            bottom: ['community'],
+            middle: ['recents', 'agent'],
+            top: ['pages'],
+          },
+        },
+      });
+      const zones = systemStatusSelectors.sidebarZones(s);
+      // resource and memory were missing → appended to bottom
+      expect(zones.bottom).toEqual(['community', 'resource', 'memory']);
+      expect(zones.top).toEqual(['pages']);
+      expect(zones.middle).toEqual(['recents', 'agent']);
+    });
+
+    it('should handle legacy order with custom item ordering across zones', () => {
+      const s: GlobalState = merge(initialState, {
+        status: {
+          sidebarSectionOrder: ['pages', 'community', 'recents', 'agent', 'memory', 'resource'],
+        },
+      });
+      const zones = systemStatusSelectors.sidebarZones(s);
+      expect(zones.top).toEqual(['pages', 'community']);
+      expect(zones.middle).toEqual(['recents', 'agent']);
+      expect(zones.bottom).toEqual(['memory', 'resource']);
+    });
   });
 });
