@@ -1,6 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
+import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
 import { KlavisService } from '@/server/services/klavis';
@@ -25,7 +25,39 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: argsStr, source } = payload;
-    const args = safeParseJSON(argsStr) || {};
+    const parsed = safeParseJSON(argsStr);
+
+    // When JSON.parse fails, distinguish a truncated payload (typical when the
+    // model's max_tokens budget is exhausted mid-tool-call) from a plain schema
+    // violation — otherwise the model sees "required field missing" and retries
+    // with the same payload, burning time and tokens on each retry.
+    if (parsed === undefined && argsStr) {
+      const truncationReason = detectTruncatedJSON(argsStr);
+      if (truncationReason) {
+        const message =
+          `The tool call arguments JSON appears to be truncated (${truncationReason}), ` +
+          `likely because the model's max_tokens budget was exhausted ` +
+          `(possibly by extended-thinking tokens). ` +
+          `Either reduce the size of the content you are about to write, ` +
+          `or ask the user to increase the model's max_tokens ` +
+          `(and/or disable extended thinking or set a separate thinking budget). ` +
+          `Do not retry with the same payload.`;
+        log(
+          'Detected truncated arguments for %s:%s (%s): %s',
+          identifier,
+          apiName,
+          truncationReason,
+          argsStr,
+        );
+        return {
+          content: message,
+          error: { code: 'TRUNCATED_ARGUMENTS', message },
+          success: false,
+        };
+      }
+    }
+
+    const args = parsed || {};
 
     log(
       'Executing builtin tool: %s:%s (source: %s) with args: %O',
