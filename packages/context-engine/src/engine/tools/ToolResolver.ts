@@ -109,14 +109,17 @@ export class ToolResolver {
 
   private mapSource(source: string): ToolSource {
     switch (source) {
-      case 'device': {
-        return 'builtin';
+      // Preserve routing-critical sources so BuiltinToolsExecutor
+      // can dispatch to the correct backend (MarketService / KlavisService)
+      case 'lobehubSkill':
+      case 'klavis':
+      case 'client': {
+        return source as ToolSource;
       }
+      case 'device':
       case 'discovery':
       case 'active_tools':
-      case 'mention': {
-        return 'builtin';
-      }
+      case 'mention':
       default: {
         return 'builtin';
       }
