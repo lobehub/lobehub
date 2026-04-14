@@ -609,14 +609,33 @@ export class AiAgentService {
 
       log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
-      // Use getAllPluginManifests so that dynamically activated tools (e.g., lobe-creds,
-      // lobe-cron) also have their manifest available in effectiveManifestMap at runtime.
-      // getEnabledPluginManifests(pluginIds) only includes tools in pluginIds/defaultToolIds,
-      // which misses tools that the activator may enable later.
-      const manifestMap = toolsEngine.getAllPluginManifests();
+      // Start with the scoped manifest map (pluginIds + defaultToolIds)
+      const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
       manifestMap.forEach((manifest, id) => {
         toolManifestMap[id] = manifest;
       });
+
+      // Also include discoverable builtin tools that are not yet in the map,
+      // so the activator can find their manifests when dynamically enabling them
+      // (e.g., lobe-creds, lobe-cron). Exclude discoverable:false tools to prevent
+      // internal infrastructure tools from being surfaced to the activator.
+      for (const tool of builtinTools) {
+        if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
+          toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
+        }
+      }
+
+      // Include lobehub skill and klavis manifests for activator discovery
+      for (const manifest of lobehubSkillManifests) {
+        if (!toolManifestMap[manifest.identifier]) {
+          toolManifestMap[manifest.identifier] = manifest;
+        }
+      }
+      for (const manifest of klavisManifests) {
+        if (!toolManifestMap[manifest.identifier]) {
+          toolManifestMap[manifest.identifier] = manifest;
+        }
+      }
 
       for (const manifest of lobehubSkillManifests) {
         toolSourceMap[manifest.identifier] = 'lobehubSkill';
