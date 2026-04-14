@@ -276,11 +276,14 @@ export class GatewayActionImpl {
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
 
     // When the local operation is cancelled (e.g. user clicks stop), forward
-    // the interrupt over the Gateway WS so the server-side agent loop aborts.
-    // Closure captures `result.operationId` (server-side id, the key under
-    // `gatewayConnections`) so we don't depend on any metadata lookup.
-    this.#get().onOperationCancel(gatewayOpId, () => {
-      this.interruptGatewayAgent(result.operationId);
+    // the interrupt directly to the server via the existing tRPC endpoint.
+    // Closure captures `result.operationId` (the server-side id) so we don't
+    // depend on any metadata lookup. Fire-and-forget — errors are logged but
+    // never block the local cancel flow.
+    this.#get().onOperationCancel(gatewayOpId, async () => {
+      await aiAgentService
+        .interruptTask({ operationId: result.operationId })
+        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
     });
 
     const eventHandler = createGatewayEventHandler(this.#get, {
@@ -352,10 +355,12 @@ export class GatewayActionImpl {
 
     this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
 
-    // Forward local-op cancellation to the server-side agent loop over WS.
+    // Forward local-op cancellation to the server-side agent loop via tRPC.
     // See note in executeGatewayAgent for details.
-    this.#get().onOperationCancel(gatewayOpId, () => {
-      this.interruptGatewayAgent(operationId);
+    this.#get().onOperationCancel(gatewayOpId, async () => {
+      await aiAgentService
+        .interruptTask({ operationId })
+        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
     });
 
     const eventHandler = createGatewayEventHandler(this.#get, {

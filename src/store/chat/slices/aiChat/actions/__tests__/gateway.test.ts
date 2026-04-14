@@ -9,6 +9,7 @@ import { GatewayActionImpl } from '../gateway';
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
     execAgentTask: vi.fn(),
+    interruptTask: vi.fn(),
   },
 }));
 
@@ -400,7 +401,7 @@ describe('GatewayActionImpl', () => {
       );
     });
 
-    it('registers a cancel handler that forwards WS interrupt with the server operationId', async () => {
+    it('registers a cancel handler that calls aiAgentService.interruptTask with the server operationId', async () => {
       const onOperationCancel = vi.fn();
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
 
@@ -429,7 +430,9 @@ describe('GatewayActionImpl', () => {
 
       const action = new GatewayActionImpl(set as any, get, undefined);
       action.createClient = vi.fn(() => mockClient);
-      const interruptSpy = vi.spyOn(action, 'interruptGatewayAgent').mockImplementation(() => {});
+      const interruptTaskSpy = vi
+        .mocked(aiAgentService.interruptTask)
+        .mockResolvedValue({ operationId: 'server-op-xyz', success: true });
 
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
         agentId: 'agent-1',
@@ -454,10 +457,10 @@ describe('GatewayActionImpl', () => {
       // Handler was registered against the local operation id...
       expect(onOperationCancel).toHaveBeenCalledWith('gw-op-local', expect.any(Function));
 
-      // ...and, when invoked, interrupts the *server-side* operation id
+      // ...and, when invoked, fires tRPC interruptTask with the *server-side* operation id
       const [, handler] = onOperationCancel.mock.calls[0];
-      handler();
-      expect(interruptSpy).toHaveBeenCalledWith('server-op-xyz');
+      await handler();
+      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'server-op-xyz' });
     });
   });
 });
