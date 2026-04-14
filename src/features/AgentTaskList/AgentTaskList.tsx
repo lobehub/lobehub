@@ -1,8 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
-import { useAgentStore } from '@/store/agent';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
@@ -13,7 +12,7 @@ import TaskListHeader from './TaskListHeader';
 const MAX_DISPLAY = 5;
 
 const AgentTaskList = memo(() => {
-  const agentId = useAgentStore((s) => s.activeAgentId);
+  const { aid: agentId } = useParams<{ aid: string }>();
   const navigate = useNavigate();
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList(agentId);
