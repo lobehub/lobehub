@@ -204,6 +204,8 @@ Use this method if your Slack app already has Event Subscriptions configured wit
   | `/new`  | Same Webhook URL as above | Start a new conversation   |
   | `/stop` | Same Webhook URL as above | Stop the current execution |
 
+  > **Note:** The Request URL is required for Webhook mode. If you are using Socket Mode, we recommend creating the app from the Manifest template above, which automatically configures Slash Commands without manual setup.
+
   Also ensure you add the `commands` scope under **OAuth & Permissions** → **Bot Token Scopes**, and enable **Interactivity & Shortcuts** with the same Webhook URL as the Request URL.
 </Steps>
 

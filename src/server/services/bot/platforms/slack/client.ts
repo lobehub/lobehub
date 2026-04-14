@@ -428,13 +428,27 @@ export class SlackClientFactory extends ClientFactory {
     return new SlackWebhookClient(config, context);
   }
 
-  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+  async validateCredentials(
+    credentials: Record<string, string>,
+    settings?: Record<string, unknown>,
+  ): Promise<ValidationResult> {
     if (!credentials.botToken) {
       return { errors: [{ field: 'botToken', message: 'Bot Token is required' }], valid: false };
     }
     if (!credentials.signingSecret) {
       return {
         errors: [{ field: 'signingSecret', message: 'Signing Secret is required' }],
+        valid: false,
+      };
+    }
+    if (settings?.connectionMode === 'websocket' && !credentials.appToken) {
+      return {
+        errors: [
+          {
+            field: 'appToken',
+            message: 'App-Level Token is required for WebSocket (Socket Mode)',
+          },
+        ],
         valid: false,
       };
     }

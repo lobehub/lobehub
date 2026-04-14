@@ -201,6 +201,8 @@ LobeHub 支持两种 Slack 连接模式：
   | `/new`  | 与上方相同的 Webhook URL | Start a new conversation   |
   | `/stop` | 与上方相同的 Webhook URL | Stop the current execution |
 
+  > **注意：** Webhook 模式下 Request URL 为必填项。如果您使用 Socket Mode，推荐通过 Manifest 模板创建应用，Slash Commands 会自动配置，无需手动添加。
+
   同时确保在 **OAuth & Permissions** → **Bot Token Scopes** 中添加 `commands` 权限，并在 **Interactivity & Shortcuts** 中启用 Interactivity，将 Request URL 设为相同的 Webhook URL。
 </Steps>
 
