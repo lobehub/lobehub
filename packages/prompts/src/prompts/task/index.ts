@@ -573,4 +573,9 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   return sections.join('\n\n');
 };
 
-export { priorityLabel, statusIcon };
+export { briefIcon, priorityLabel, statusIcon, timeAgo };
+
+export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
+export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
+export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
+export { buildTaskListPrompt } from './buildTaskListPrompt';

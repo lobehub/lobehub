@@ -37,6 +37,7 @@ export {
 export { SkillContextProvider } from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
+export { TaskManagerContextInjector } from './TaskManagerContextInjector';
 export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
 export { ToolSystemRoleProvider } from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
@@ -98,6 +99,7 @@ export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
+export type { TaskManagerContextInjectorConfig } from './TaskManagerContextInjector';
 export type { ToolDiscoveryMeta, ToolDiscoveryProviderConfig } from './ToolDiscoveryProvider';
 export type { ToolSystemRoleConfig } from './ToolSystemRole';
 export type {

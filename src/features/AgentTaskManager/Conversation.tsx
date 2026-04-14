@@ -5,6 +5,7 @@ import { Flexbox, Text } from '@lobehub/ui';
 import debug from 'debug';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMatch } from 'react-router-dom';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { TopicTrigger } from '@/const/topic';
@@ -66,6 +67,10 @@ const Conversation = memo(() => {
     useTaskChatStore.getState().switchTopic(null);
   }, [activeAgentId]);
 
+  const detailMatch = useMatch('/agent/:aid/tasks/:taskId');
+  const isListRoute = !!useMatch('/agent/:aid/tasks');
+  const viewedTaskId = detailMatch?.params.taskId;
+
   const context = useMemo<ConversationContext>(
     () => ({
       agentId: activeAgentId,
@@ -73,8 +78,13 @@ const Conversation = memo(() => {
       scope: 'main',
       topicId: taskTopicId,
       topicTrigger: TopicTrigger.TaskManager,
+      viewedTask: viewedTaskId
+        ? { taskId: viewedTaskId, type: 'detail' }
+        : isListRoute
+          ? { type: 'list' }
+          : undefined,
     }),
-    [activeAgentId, taskTopicId],
+    [activeAgentId, taskTopicId, viewedTaskId, isListRoute],
   );
 
   const chatKey = messageMapKey(context);

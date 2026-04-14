@@ -201,4 +201,9 @@ export interface ConversationContext {
    * page-specific filtering. Only consumed during new-topic creation.
    */
   topicTrigger?: string;
+  /**
+   * Task Manager page the user is currently viewing. When set, streamingExecutor
+   * builds `RuntimeInitialContext.taskManager` from the task store.
+   */
+  viewedTask?: { type: 'list' } | { taskId: string; type: 'detail' };
 }
