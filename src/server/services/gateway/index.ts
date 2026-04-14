@@ -47,8 +47,8 @@ export class GatewayService {
     if (client.isConfigured) {
       try {
         const result = await client.disconnectAll();
-        if (result.disconnected > 0) {
-          log('Cleaned up %d/%d gateway connections', result.disconnected, result.total);
+        if (result.total > 0) {
+          log('Cleaning up %d gateway connections', result.total);
         }
       } catch (err) {
         log('Gateway cleanup skipped (non-critical): %O', err);

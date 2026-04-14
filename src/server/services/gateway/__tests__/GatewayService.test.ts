@@ -137,7 +137,7 @@ describe('GatewayService', () => {
 
       it('calls disconnectAll when gateway client is still reachable', async () => {
         mockGatewayClient.isConfigured = true;
-        mockGatewayClient.disconnectAll.mockResolvedValue({ disconnected: 3, total: 3 });
+        mockGatewayClient.disconnectAll.mockResolvedValue({ total: 3 });
 
         await service.ensureRunning();
 
@@ -147,7 +147,7 @@ describe('GatewayService', () => {
 
       it('skips cleanup when no leftover connections', async () => {
         mockGatewayClient.isConfigured = true;
-        mockGatewayClient.disconnectAll.mockResolvedValue({ disconnected: 0, total: 0 });
+        mockGatewayClient.disconnectAll.mockResolvedValue({ total: 0 });
 
         await service.ensureRunning();
 

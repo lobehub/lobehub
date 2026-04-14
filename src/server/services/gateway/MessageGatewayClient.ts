@@ -83,7 +83,7 @@ export class MessageGatewayClient {
     return res.json();
   }
 
-  async disconnectAll(): Promise<{ disconnected: number; total: number }> {
+  async disconnectAll(): Promise<{ total: number }> {
     log('Disconnecting all connections');
 
     const res = await this.fetch('/api/connections', { method: 'DELETE' });
