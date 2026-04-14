@@ -26,12 +26,8 @@ export const useAgentActionsDropdownMenu = ({
     s.updateSystemStatus,
   ]);
 
-  const myZone = sidebarZones.top.includes('agent')
-    ? 'top'
-    : sidebarZones.middle.includes('agent')
-      ? 'middle'
-      : 'bottom';
-  const zoneItems = sidebarZones[myZone as keyof typeof sidebarZones];
+  const myZone = sidebarZones.middle.includes('agent') ? 'middle' : 'bottom';
+  const zoneItems = sidebarZones[myZone];
   const visibleItems = zoneItems.filter((k) => !hiddenSections.includes(k));
   const visibleIndex = visibleItems.indexOf('agent');
   const isFirst = visibleIndex === 0;

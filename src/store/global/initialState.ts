@@ -195,7 +195,6 @@ export interface SystemStatus {
   sidebarZones?: {
     bottom: string[];
     middle: string[];
-    top: string[];
   };
   systemRoleExpandedMap: Record<string, boolean>;
   /**

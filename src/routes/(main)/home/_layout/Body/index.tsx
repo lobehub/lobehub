@@ -78,10 +78,6 @@ const Body = memo(() => {
   }, [topNavItems, bottomMenuItems]);
 
   // Filter hidden items per zone
-  const topKeys = useMemo(
-    () => sidebarZones.top.filter((k) => !hiddenSections.includes(k)),
-    [sidebarZones.top, hiddenSections],
-  );
   const middleKeys = useMemo(
     () => sidebarZones.middle.filter((k) => k === GroupKey.Agent || !hiddenSections.includes(k)),
     [sidebarZones.middle, hiddenSections],
@@ -157,15 +153,11 @@ const Body = memo(() => {
     return elements;
   }, [middleKeys, renderNavLink]);
 
-  const topNavLinks = topKeys.map(renderNavLink).filter(Boolean);
   const bottomNavLinks = bottomKeys.map(renderNavLink).filter(Boolean);
 
   return (
     <Flexbox flex={1} justify={'space-between'} paddingInline={4}>
-      <Flexbox gap={4}>
-        {topNavLinks.length > 0 && <Flexbox gap={1}>{topNavLinks}</Flexbox>}
-        {middleContent}
-      </Flexbox>
+      <Flexbox gap={4}>{middleContent}</Flexbox>
       {bottomNavLinks.length > 0 && (
         <Flexbox gap={1} paddingBlock={4} style={{ marginTop: 12, overflow: 'hidden' }}>
           {bottomNavLinks}

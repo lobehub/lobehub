@@ -429,7 +429,6 @@ export default {
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.zoneBottom': 'Bottom',
   'navPanel.zoneMiddle': 'Sections',
-  'navPanel.zoneTop': 'Top',
   'navPanel.hidden': 'Hidden',
   'navPanel.hideSection': 'Hide Section',
   'navPanel.lockedToSections': '{{name}} can only be placed in the Sections zone',

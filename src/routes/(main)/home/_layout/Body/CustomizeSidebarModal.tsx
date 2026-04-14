@@ -65,7 +65,6 @@ const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 const ZONE_LABELS: Record<ZoneKey, string> = {
   bottom: 'navPanel.zoneBottom',
   middle: 'navPanel.zoneMiddle',
-  top: 'navPanel.zoneTop',
 };
 
 // ---------------------------------------------------------------------------
@@ -232,7 +231,6 @@ const ZoneLabel = memo<{ label: string }>(({ label }) => (
 // ---------------------------------------------------------------------------
 
 const findZone = (id: string, zones: SidebarZones): ZoneKey | null => {
-  if (zones.top.includes(id)) return 'top';
   if (zones.middle.includes(id)) return 'middle';
   if (zones.bottom.includes(id)) return 'bottom';
   return null;
@@ -421,10 +419,6 @@ const CustomizeSidebarContent = memo(() => {
       onDragStart={handleDragStart}
     >
       <Flexbox gap={0}>
-        <ZoneLabel label={t(ZONE_LABELS.top as any)} />
-        {renderZone('top')}
-
-        <Divider style={{ margin: '4px 0' }} />
         <ZoneLabel label={t(ZONE_LABELS.middle as any)} />
         {renderZone('middle')}
 

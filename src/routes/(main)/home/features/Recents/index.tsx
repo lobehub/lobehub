@@ -52,12 +52,8 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   ]);
 
   // Find which zone 'recents' belongs to and its position within that zone
-  const myZone = sidebarZones.top.includes('recents')
-    ? 'top'
-    : sidebarZones.middle.includes('recents')
-      ? 'middle'
-      : 'bottom';
-  const zoneItems = sidebarZones[myZone as keyof typeof sidebarZones];
+  const myZone = sidebarZones.middle.includes('recents') ? 'middle' : 'bottom';
+  const zoneItems = sidebarZones[myZone];
   const visibleItems = zoneItems.filter((k) => !hiddenSections.includes(k));
   const visibleIndex = visibleItems.indexOf('recents');
   const isFirst = visibleIndex === 0;

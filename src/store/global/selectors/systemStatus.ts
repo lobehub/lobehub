@@ -28,39 +28,38 @@ const ACCORDION_KEYS = new Set(['recents', 'agent']);
 
 export const DEFAULT_ZONES: SidebarZones = {
   bottom: ['community', 'resource', 'memory'],
-  middle: ['recents', 'agent'],
-  top: ['pages'],
+  middle: ['pages', 'recents', 'agent'],
 };
 
 export interface SidebarZones {
   bottom: string[];
   middle: string[];
-  top: string[];
 }
 
 /** Derive zones from a legacy flat order based on accordion item positions. */
 const deriveZonesFromOrder = (order: string[]): SidebarZones => {
-  let firstAcc = -1;
   let lastAcc = -1;
   for (let i = 0; i < order.length; i++) {
-    if (ACCORDION_KEYS.has(order[i])) {
-      if (firstAcc === -1) firstAcc = i;
-      lastAcc = i;
-    }
+    if (ACCORDION_KEYS.has(order[i])) lastAcc = i;
   }
-  if (firstAcc === -1) return { bottom: [], middle: [], top: [...order] };
+  // No accordion keys → treat everything as middle (non-accordion middle items)
+  if (lastAcc === -1) return { bottom: [], middle: [...order] };
   return {
     bottom: order.slice(lastAcc + 1),
-    middle: order.slice(firstAcc, lastAcc + 1),
-    top: order.slice(0, firstAcc),
+    middle: order.slice(0, lastAcc + 1),
   };
 };
 
 const sidebarZones = (s: GlobalState): SidebarZones => {
-  const zones = s.status.sidebarZones;
-  if (zones && zones.top && zones.middle && zones.bottom) {
+  const stored = s.status.sidebarZones;
+  if (stored && stored.middle && stored.bottom) {
+    // Legacy stored shape may include a `top` field — fold it into the start of middle
+    const legacyTop = (stored as { top?: string[] }).top ?? [];
+    const middle = legacyTop.length > 0 ? [...legacyTop, ...stored.middle] : stored.middle;
+    const zones: SidebarZones = { bottom: stored.bottom, middle };
+
     // Ensure all known items are present (handles future additions)
-    const present = new Set([...zones.top, ...zones.middle, ...zones.bottom]);
+    const present = new Set([...zones.middle, ...zones.bottom]);
     const missing = ALL_SIDEBAR_KEYS.filter((k) => !present.has(k));
     if (missing.length === 0) return zones;
     return { ...zones, bottom: [...zones.bottom, ...missing] };
@@ -74,8 +73,8 @@ const sidebarZones = (s: GlobalState): SidebarZones => {
 
     // Seed missing keys into their default zone so new items (e.g. pages)
     // land in the correct zone instead of being blindly appended.
-    const present = new Set([...zones.top, ...zones.middle, ...zones.bottom]);
-    for (const zone of ['top', 'middle', 'bottom'] as const) {
+    const present = new Set([...zones.middle, ...zones.bottom]);
+    for (const zone of ['middle', 'bottom'] as const) {
       const missing = DEFAULT_ZONES[zone].filter((k) => !present.has(k));
       if (missing.length > 0) {
         zones[zone] = [...zones[zone], ...missing];
@@ -91,7 +90,7 @@ const sidebarZones = (s: GlobalState): SidebarZones => {
 /** Flat order derived from zones — for consumers that need a single array. */
 const sidebarSectionOrder = (s: GlobalState): string[] => {
   const z = sidebarZones(s);
-  return [...z.top, ...z.middle, ...z.bottom];
+  return [...z.middle, ...z.bottom];
 };
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
