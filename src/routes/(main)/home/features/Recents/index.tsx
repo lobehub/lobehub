@@ -26,6 +26,7 @@ import { useInitRecents } from '@/hooks/useInitRecents';
 import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
@@ -44,31 +45,27 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const { isRevalidating } = useInitRecents();
 
-  const [recentPageSize, sidebarZones, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
+  const [recentPageSize, sidebarItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.recentPageSize(s),
-    systemStatusSelectors.sidebarZones(s),
+    systemStatusSelectors.sidebarItems(s),
     systemStatusSelectors.hiddenSidebarSections(s),
     s.updateSystemStatus,
   ]);
 
-  // Find which zone 'recents' belongs to and its position within that zone
-  const myZone = sidebarZones.middle.includes('recents') ? 'middle' : 'bottom';
-  const zoneItems = sidebarZones[myZone];
-  const visibleItems = zoneItems.filter((k) => !hiddenSections.includes(k));
+  const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
   const visibleIndex = visibleItems.indexOf('recents');
   const isFirst = visibleIndex === 0;
   const isLast = visibleIndex === visibleItems.length - 1;
 
   const moveSection = useCallback(
     (direction: 'up' | 'down') => {
-      const items = [...zoneItems];
-      const idx = items.indexOf('recents');
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= items.length) return;
-      [items[idx], items[swapIdx]] = [items[swapIdx], items[idx]];
-      updateSystemStatus({ sidebarZones: { ...sidebarZones, [myZone]: items } });
+      const idx = sidebarItems.indexOf('recents');
+      if (idx === -1) return;
+      const next = reorderSidebarItems(sidebarItems, idx, direction === 'up' ? idx - 1 : idx + 1);
+      if (next === sidebarItems) return;
+      updateSystemStatus({ sidebarItems: next });
     },
-    [zoneItems, myZone, sidebarZones, updateSystemStatus],
+    [sidebarItems, updateSystemStatus],
   );
 
   const hideSection = useCallback(() => {

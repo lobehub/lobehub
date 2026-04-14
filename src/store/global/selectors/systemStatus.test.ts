@@ -4,7 +4,7 @@ import { merge } from '@/utils/merge';
 
 import { type GlobalState } from '../initialState';
 import { INITIAL_STATUS, initialState } from '../initialState';
-import { DEFAULT_ZONES, systemStatusSelectors } from './systemStatus';
+import { DEFAULT_SIDEBAR_ITEMS, reorderSidebarItems, systemStatusSelectors } from './systemStatus';
 
 // Mock version constants
 vi.mock('@/const/version', () => ({
@@ -89,113 +89,113 @@ describe('systemStatusSelectors', () => {
     });
   });
 
-  describe('sidebarZones', () => {
-    it('should return DEFAULT_ZONES when no data is set', () => {
-      expect(systemStatusSelectors.sidebarZones(initialState)).toEqual(DEFAULT_ZONES);
+  describe('sidebarItems', () => {
+    it('should return DEFAULT_SIDEBAR_ITEMS when no data is set', () => {
+      expect(systemStatusSelectors.sidebarItems(initialState)).toEqual(DEFAULT_SIDEBAR_ITEMS);
     });
 
-    it('should return stored zones when sidebarZones is complete', () => {
-      const customZones = {
-        bottom: ['memory', 'resource', 'community'],
-        middle: ['pages', 'agent', 'recents'],
-      };
+    it('should return stored items when set', () => {
+      const custom = ['agent', 'recents', 'pages', 'community', 'resource', 'memory'];
       const s: GlobalState = merge(initialState, {
-        status: { sidebarZones: customZones },
+        status: { sidebarItems: custom },
       });
-      expect(systemStatusSelectors.sidebarZones(s)).toEqual(customZones);
+      expect(systemStatusSelectors.sidebarItems(s)).toEqual(custom);
     });
 
-    it('should fold legacy stored `top` field into the start of middle', () => {
+    it('should append missing known keys to the end', () => {
       const s: GlobalState = merge(initialState, {
-        status: {
-          sidebarZones: {
-            bottom: ['community', 'resource', 'memory'],
-            middle: ['recents', 'agent'],
-            top: ['pages'],
-          } as any,
-        },
+        status: { sidebarItems: ['agent', 'recents'] },
       });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      expect(zones.middle).toEqual(['pages', 'recents', 'agent']);
-      expect(zones.bottom).toEqual(['community', 'resource', 'memory']);
-      expect(zones).not.toHaveProperty('top');
+      const items = systemStatusSelectors.sidebarItems(s);
+      // stored order preserved at the front
+      expect(items.slice(0, 2)).toEqual(['agent', 'recents']);
+      // every known key is present
+      expect(items).toContain('pages');
+      expect(items).toContain('community');
+      expect(items).toContain('resource');
+      expect(items).toContain('memory');
+    });
+  });
+
+  describe('reorderSidebarItems', () => {
+    const DEFAULT = ['pages', 'recents', 'agent', 'community', 'resource', 'memory'];
+
+    it('should move a non-accordion item normally', () => {
+      // move `community` (idx 3) up to idx 0
+      expect(reorderSidebarItems(DEFAULT, 3, 0)).toEqual([
+        'community',
+        'pages',
+        'recents',
+        'agent',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should place pages in middle zone when migrating legacy order ["recents","agent"]', () => {
-      const s: GlobalState = merge(initialState, {
-        status: { sidebarSectionOrder: ['recents', 'agent'] },
-      });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      expect(zones.middle).toContain('pages');
-      expect(zones.bottom).not.toContain('pages');
+    it('should snap a non-accordion item out when dragged between accordion items (drag down)', () => {
+      // `pages` (idx 0) dragged down to idx 2 (between recents & agent)
+      // after drag-down: push past the accordion block
+      expect(reorderSidebarItems(DEFAULT, 0, 2)).toEqual([
+        'recents',
+        'agent',
+        'pages',
+        'community',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should preserve pre-accordion items in middle and seed missing keys into default zones', () => {
-      const s: GlobalState = merge(initialState, {
-        status: { sidebarSectionOrder: ['community', 'recents', 'agent', 'resource'] },
-      });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      // community was explicitly placed before accordion → middle (pre-accordion)
-      expect(zones.middle).toContain('community');
-      // recents & agent are kept in middle
-      expect(zones.middle).toContain('recents');
-      expect(zones.middle).toContain('agent');
-      // pages was missing → seeded into default middle zone
-      expect(zones.middle).toContain('pages');
-      // memory was missing → seeded into default bottom zone
-      expect(zones.bottom).toContain('memory');
-      // resource was explicitly after accordion → bottom
-      expect(zones.bottom).toContain('resource');
+    it('should snap a non-accordion item out when dragged between accordion items (drag up)', () => {
+      // `community` (idx 3) dragged up to idx 2 (between recents & agent)
+      // after drag-up: place before the accordion block
+      expect(reorderSidebarItems(DEFAULT, 3, 2)).toEqual([
+        'pages',
+        'community',
+        'recents',
+        'agent',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should handle legacy order with all keys already present', () => {
-      const s: GlobalState = merge(initialState, {
-        status: {
-          sidebarSectionOrder: ['pages', 'recents', 'agent', 'community', 'resource', 'memory'],
-        },
-      });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      expect(zones.middle).toEqual(['pages', 'recents', 'agent']);
-      expect(zones.bottom).toEqual(['community', 'resource', 'memory']);
+    it('should move the whole accordion block when moving `recents` up past the block boundary', () => {
+      // `recents` (idx 1) moveUp → idx 0. Block [recents, agent] slides to top.
+      expect(reorderSidebarItems(DEFAULT, 1, 0)).toEqual([
+        'recents',
+        'agent',
+        'pages',
+        'community',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should handle legacy order with no accordion keys', () => {
-      const s: GlobalState = merge(initialState, {
-        status: { sidebarSectionOrder: ['pages', 'community'] },
-      });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      // no accordion keys → all explicit items land in middle
-      expect(zones.middle).toContain('pages');
-      expect(zones.middle).toContain('community');
-      // missing accordion keys seeded into default middle zone
-      expect(zones.middle).toContain('recents');
-      expect(zones.middle).toContain('agent');
+    it('should move the whole accordion block when moving `agent` down past the block boundary', () => {
+      // `agent` (idx 2) moveDown → idx 3. Block slides past community.
+      expect(reorderSidebarItems(DEFAULT, 2, 3)).toEqual([
+        'pages',
+        'community',
+        'recents',
+        'agent',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should append missing keys to bottom when sidebarZones exists but is incomplete', () => {
-      const s: GlobalState = merge(initialState, {
-        status: {
-          sidebarZones: {
-            bottom: ['community'],
-            middle: ['pages', 'recents', 'agent'],
-          },
-        },
-      });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      // resource and memory were missing → appended to bottom
-      expect(zones.bottom).toEqual(['community', 'resource', 'memory']);
-      expect(zones.middle).toEqual(['pages', 'recents', 'agent']);
+    it('should swap recents and agent within the block', () => {
+      // `recents` (idx 1) moveDown → idx 2. Within block, so just swap.
+      expect(reorderSidebarItems(DEFAULT, 1, 2)).toEqual([
+        'pages',
+        'agent',
+        'recents',
+        'community',
+        'resource',
+        'memory',
+      ]);
     });
 
-    it('should handle legacy order with custom item ordering across zones', () => {
-      const s: GlobalState = merge(initialState, {
-        status: {
-          sidebarSectionOrder: ['pages', 'community', 'recents', 'agent', 'memory', 'resource'],
-        },
-      });
-      const zones = systemStatusSelectors.sidebarZones(s);
-      expect(zones.middle).toEqual(['pages', 'community', 'recents', 'agent']);
-      expect(zones.bottom).toEqual(['memory', 'resource']);
+    it('should be a no-op when from === to', () => {
+      expect(reorderSidebarItems(DEFAULT, 2, 2)).toBe(DEFAULT);
     });
   });
 });

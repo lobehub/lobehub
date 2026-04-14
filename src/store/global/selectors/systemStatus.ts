@@ -23,74 +23,95 @@ export const DEFAULT_HIDDEN_SECTIONS: string[] = ['memory'];
 const hiddenSidebarSections = (s: GlobalState): string[] =>
   s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
 
-const ALL_SIDEBAR_KEYS = ['pages', 'recents', 'agent', 'community', 'resource', 'memory'];
-const ACCORDION_KEYS = new Set(['recents', 'agent']);
+export const DEFAULT_SIDEBAR_ITEMS: string[] = [
+  'pages',
+  'recents',
+  'agent',
+  'community',
+  'resource',
+  'memory',
+];
 
-export const DEFAULT_ZONES: SidebarZones = {
-  bottom: ['community', 'resource', 'memory'],
-  middle: ['pages', 'recents', 'agent'],
+/** Items that must stay contiguous in the sidebar list (accordion block). */
+export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'agent']);
+
+/** Append any known keys missing from `order` so new items don't disappear on upgrade. */
+const withAllKnownKeys = (order: string[]): string[] => {
+  const present = new Set(order);
+  const missing = DEFAULT_SIDEBAR_ITEMS.filter((k) => !present.has(k));
+  return missing.length === 0 ? order : [...order, ...missing];
 };
 
-export interface SidebarZones {
-  bottom: string[];
-  middle: string[];
-}
-
-/** Derive zones from a legacy flat order based on accordion item positions. */
-const deriveZonesFromOrder = (order: string[]): SidebarZones => {
-  let lastAcc = -1;
-  for (let i = 0; i < order.length; i++) {
-    if (ACCORDION_KEYS.has(order[i])) lastAcc = i;
+const accordionIndices = (items: string[]): number[] => {
+  const out: number[] = [];
+  for (let i = 0; i < items.length; i++) {
+    if (SIDEBAR_ACCORDION_KEYS.has(items[i])) out.push(i);
   }
-  // No accordion keys → treat everything as middle (non-accordion middle items)
-  if (lastAcc === -1) return { bottom: [], middle: [...order] };
-  return {
-    bottom: order.slice(lastAcc + 1),
-    middle: order.slice(0, lastAcc + 1),
-  };
+  return out;
 };
 
-const sidebarZones = (s: GlobalState): SidebarZones => {
-  const stored = s.status.sidebarZones;
-  if (stored && stored.middle && stored.bottom) {
-    // Legacy stored shape may include a `top` field — fold it into the start of middle
-    const legacyTop = (stored as { top?: string[] }).top ?? [];
-    const middle = legacyTop.length > 0 ? [...legacyTop, ...stored.middle] : stored.middle;
-    const zones: SidebarZones = { bottom: stored.bottom, middle };
-
-    // Ensure all known items are present (handles future additions)
-    const present = new Set([...zones.middle, ...zones.bottom]);
-    const missing = ALL_SIDEBAR_KEYS.filter((k) => !present.has(k));
-    if (missing.length === 0) return zones;
-    return { ...zones, bottom: [...zones.bottom, ...missing] };
+/**
+ * Reorder sidebar items while keeping the accordion block (recents + agent) contiguous.
+ * - If moving an accordion item across the block boundary, moves the whole block.
+ * - If moving a non-accordion item into the middle of the block, snaps it to the side
+ *   matching the drag direction.
+ */
+export const reorderSidebarItems = (items: string[], from: number, to: number): string[] => {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
+    return items;
   }
 
-  // Migration from legacy sidebarSectionOrder
-  const legacy = s.status.sidebarSectionOrder;
-  if (legacy && legacy.length > 0) {
-    // Derive zones from the keys the user explicitly ordered
-    const zones = deriveZonesFromOrder(legacy);
+  const key = items[from];
+  const accIdx = accordionIndices(items);
 
-    // Seed missing keys into their default zone so new items (e.g. pages)
-    // land in the correct zone instead of being blindly appended.
-    const present = new Set([...zones.middle, ...zones.bottom]);
-    for (const zone of ['middle', 'bottom'] as const) {
-      const missing = DEFAULT_ZONES[zone].filter((k) => !present.has(k));
-      if (missing.length > 0) {
-        zones[zone] = [...zones[zone], ...missing];
+  // Moving an accordion item across the block's outer boundary → move whole block together.
+  if (SIDEBAR_ACCORDION_KEYS.has(key) && accIdx.length >= 2) {
+    const first = accIdx[0];
+    const last = accIdx.at(-1)!;
+    const crossesBoundary = (from === first && to < first) || (from === last && to > last);
+    if (crossesBoundary) {
+      const block = items.slice(first, last + 1);
+      const without = [...items.slice(0, first), ...items.slice(last + 1)];
+      // After removing the block, adjust target index for upward/downward movement
+      const targetIdx = to < first ? to : to - (last - first + 1) + 1;
+      const clamped = Math.max(0, Math.min(without.length, targetIdx));
+      return [...without.slice(0, clamped), ...block, ...without.slice(clamped)];
+    }
+  }
+
+  // Standard reorder
+  const moved = [...items];
+  const [removed] = moved.splice(from, 1);
+  moved.splice(to, 0, removed);
+
+  // Non-accordion item that landed between accordion items → snap to the side matching drag direction.
+  if (!SIDEBAR_ACCORDION_KEYS.has(key)) {
+    const nextAcc = accordionIndices(moved);
+    if (nextAcc.length >= 2) {
+      const first = nextAcc[0];
+      const last = nextAcc.at(-1)!;
+      const contiguous = last - first === nextAcc.length - 1;
+      if (!contiguous) {
+        const pos = moved.indexOf(key);
+        if (pos > first && pos < last) {
+          const cleaned = [...moved];
+          cleaned.splice(pos, 1);
+          const cAcc = accordionIndices(cleaned);
+          const insertAt = from < to ? cAcc.at(-1)! + 1 : cAcc[0];
+          cleaned.splice(insertAt, 0, key);
+          return cleaned;
+        }
       }
     }
-
-    return zones;
   }
 
-  return DEFAULT_ZONES;
+  return moved;
 };
 
-/** Flat order derived from zones — for consumers that need a single array. */
-const sidebarSectionOrder = (s: GlobalState): string[] => {
-  const z = sidebarZones(s);
-  return [...z.middle, ...z.bottom];
+const sidebarItems = (s: GlobalState): string[] => {
+  const items = s.status.sidebarItems;
+  if (items && items.length > 0) return withAllKnownKeys(items);
+  return DEFAULT_SIDEBAR_ITEMS;
 };
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
@@ -187,8 +208,7 @@ export const systemStatusSelectors = {
   pagePageSize,
   portalWidth,
   recentPageSize,
-  sidebarSectionOrder,
-  sidebarZones,
+  sidebarItems,
   sessionGroupKeys,
   showChatHeader,
   showFilePanel,

@@ -1,16 +1,15 @@
 'use client';
 
 import {
-  closestCorners,
+  closestCenter,
+  type CollisionDetection,
   defaultDropAnimationSideEffects,
   DndContext,
   type DragEndEvent,
-  type DragOverEvent,
   DragOverlay,
   type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
-  useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -23,26 +22,23 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Modal } from '@lobehub/ui/base-ui';
-import { App, Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { create } from 'zustand';
 
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
-import { type SidebarZones, systemStatusSelectors } from '@/store/global/selectors';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { SIDEBAR_ACCORDION_KEYS } from '@/store/global/selectors/systemStatus';
 
 // ---------------------------------------------------------------------------
 // Types & constants
 // ---------------------------------------------------------------------------
 
-type ZoneKey = keyof SidebarZones;
-
-/** Items that must stay in the middle (Sections) zone. */
-const LOCKED_TO_MIDDLE = new Set(['recents', 'agent']);
+const ACCORDION_GROUP_ID = 'accordion-group';
 
 interface SidebarItemConfig {
   alwaysVisible?: boolean;
@@ -62,10 +58,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 
-const ZONE_LABELS: Record<ZoneKey, string> = {
-  bottom: 'navPanel.zoneBottom',
-  middle: 'navPanel.zoneMiddle',
-};
+const isAccordionKey = (id: string) => SIDEBAR_ACCORDION_KEYS.has(id);
 
 // ---------------------------------------------------------------------------
 // Modal store
@@ -87,20 +80,11 @@ export const openCustomizeSidebarModal = () =>
 // ---------------------------------------------------------------------------
 
 const styles = createStaticStyles(({ css }) => ({
-  emptyZone: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 40px;
+  accordionGroup: css`
+    margin-inline: -5px;
+    padding: 4px;
     border: 1px dashed ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
-
-    transition: all 0.2s ease-in-out;
-  `,
-  emptyZoneActive: css`
-    border-color: ${cssVar.colorPrimaryBorder};
-    background: ${cssVar.colorPrimaryBg};
   `,
   item: css`
     height: 40px;
@@ -122,10 +106,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  zone: css`
-    min-height: 4px;
-    border-radius: ${cssVar.borderRadius};
   `,
 }));
 
@@ -195,14 +175,48 @@ const SortableItem = memo<{
 });
 
 // ---------------------------------------------------------------------------
+// AccordionGroup — a non-draggable slot at the outer level that wraps a nested
+// SortableContext for accordion items. Registers with useSortable so other outer
+// items can reorder relative to its position, but has no drag activator of its own.
+// ---------------------------------------------------------------------------
+
+const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
+  const { setNodeRef, transform, transition } = useSortable({ id: ACCORDION_GROUP_ID });
+
+  return (
+    <div
+      className={styles.accordionGroup}
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+      }}
+    >
+      <Flexbox gap={2}>{children}</Flexbox>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Drag overlay item (static, no sortable hooks)
 // ---------------------------------------------------------------------------
 
 const OverlayItem = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('common');
+
+  // Accordion group overlay: render a compact representation
+  if (id === ACCORDION_GROUP_ID) {
+    return (
+      <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+        <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
+        <Text>{t('navPanel.agent' as any)}</Text>
+        <Text type={'secondary'}>+ {t('recents' as any)}</Text>
+      </Flexbox>
+    );
+  }
+
   const item = ITEM_MAP.get(id);
   if (!item) return null;
-
   const route = item.routeId ? getRouteById(item.routeId) : undefined;
 
   return (
@@ -215,72 +229,47 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
 });
 
 // ---------------------------------------------------------------------------
-// Zone label
-// ---------------------------------------------------------------------------
-
-const ZoneLabel = memo<{ label: string }>(({ label }) => (
-  <Flexbox paddingBlock={4} paddingInline={8}>
-    <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-      {label}
-    </Text>
-  </Flexbox>
-));
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const findZone = (id: string, zones: SidebarZones): ZoneKey | null => {
-  if (zones.middle.includes(id)) return 'middle';
-  if (zones.bottom.includes(id)) return 'bottom';
-  return null;
-};
-
-// ---------------------------------------------------------------------------
-// Droppable zone container (makes empty zones valid drop targets)
-// ---------------------------------------------------------------------------
-
-const DroppableZone = memo<{
-  children: React.ReactNode;
-  isDragging: boolean;
-  zoneKey: string;
-}>(({ zoneKey, isDragging, children }) => {
-  const { setNodeRef, isOver } = useDroppable({ id: zoneKey });
-  const hasChildren = children !== null;
-
-  return (
-    <Flexbox className={styles.zone} gap={2} ref={setNodeRef}>
-      {hasChildren ? (
-        children
-      ) : (
-        <div className={isOver ? cx(styles.emptyZone, styles.emptyZoneActive) : styles.emptyZone} />
-      )}
-    </Flexbox>
-  );
-});
-
-// ---------------------------------------------------------------------------
 // Main content
 // ---------------------------------------------------------------------------
 
-const CustomizeSidebarContent = memo(() => {
-  const { t } = useTranslation('common');
-  const { message } = App.useApp();
+/** Flatten outer list (with ACCORDION_GROUP_ID placeholder) + inner accordion items → full list. */
+const flattenItems = (outer: string[], inner: string[]): string[] =>
+  outer.flatMap((id) => (id === ACCORDION_GROUP_ID ? inner : [id]));
 
-  const [storeZones, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.sidebarZones(s),
+const CustomizeSidebarContent = memo(() => {
+  const [storeItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
+    systemStatusSelectors.sidebarItems(s),
     systemStatusSelectors.hiddenSidebarSections(s),
     s.updateSystemStatus,
   ]);
 
   // Local state for drag operations — only persisted on dragEnd
-  const [zones, setZones] = useState<SidebarZones>(storeZones);
+  const [items, setItems] = useState<string[]>(storeItems);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Sync local state when store changes (e.g. reset)
   useEffect(() => {
-    setZones(storeZones);
-  }, [storeZones]);
+    setItems(storeItems);
+  }, [storeItems]);
+
+  // Derive outer (with group placeholder) and inner (accordion items)
+  const { innerItems, outerItems } = useMemo(() => {
+    const outer: string[] = [];
+    const inner: string[] = [];
+    let insertedGroup = false;
+    for (const id of items) {
+      if (isAccordionKey(id)) {
+        inner.push(id);
+        if (!insertedGroup) {
+          outer.push(ACCORDION_GROUP_ID);
+          insertedGroup = true;
+        }
+      } else {
+        outer.push(id);
+      }
+    }
+    return { innerItems: inner, outerItems: outer };
+  }, [items]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -298,134 +287,88 @@ const CustomizeSidebarContent = memo(() => {
     [hiddenSections, updateSystemStatus],
   );
 
+  // Collision detection: restrict targets to the same container as the active item.
+  // - Active in inner (recents/agent) → only collide with inner items
+  // - Active in outer (pages/community/... or the group itself) → only collide with outer items
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const activeId = args.active.id as string;
+    const isInner = isAccordionKey(activeId);
+    const droppableContainers = args.droppableContainers.filter((c) => {
+      const id = c.id as string;
+      const targetIsInner = isAccordionKey(id);
+      return isInner === targetIsInner;
+    });
+    return closestCenter({ ...args, droppableContainers });
+  }, []);
+
   // ---- DnD handlers ----
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   }, []);
 
-  const handleDragOver = useCallback(
-    (event: DragOverEvent) => {
-      const { active, over } = event;
-      if (!over) return;
-
-      const activeItemId = active.id as string;
-      const overId = over.id as string;
-
-      // Locked items cannot leave the middle zone
-      if (LOCKED_TO_MIDDLE.has(activeItemId)) {
-        const toZone = findZone(overId, zones) ?? (overId as ZoneKey);
-        if (toZone !== 'middle') {
-          const item = ITEM_MAP.get(activeItemId);
-          if (item) {
-            message.info({
-              content: t('navPanel.lockedToSections' as any, { name: t(item.labelKey as any) }),
-              key: 'locked-to-sections',
-            });
-          }
-        }
-        return;
-      }
-
-      const fromZone = findZone(activeItemId, zones);
-      // over could be an item or a zone container id
-      const toZone = findZone(overId, zones) ?? (overId as ZoneKey);
-
-      if (!fromZone || !toZone || fromZone === toZone) return;
-
-      setZones((prev) => {
-        const fromItems = [...prev[fromZone]];
-        const toItems = [...prev[toZone as ZoneKey]];
-
-        const fromIdx = fromItems.indexOf(activeItemId);
-        if (fromIdx < 0) return prev;
-        fromItems.splice(fromIdx, 1);
-
-        // Insert at the position of the hovered item, or append
-        const overIdx = toItems.indexOf(overId);
-        toItems.splice(overIdx >= 0 ? overIdx : toItems.length, 0, activeItemId);
-
-        return { ...prev, [fromZone]: fromItems, [toZone]: toItems };
-      });
-    },
-    [zones, message, t],
-  );
-
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveId(null);
+      if (!over || active.id === over.id) return;
 
-      if (!over) return;
+      const activeKey = active.id as string;
+      const overKey = over.id as string;
 
-      const activeItemId = active.id as string;
-      const overId = over.id as string;
-
-      const zone = findZone(activeItemId, zones);
-      if (!zone) return;
-
-      // Within-container reorder
-      const items = zones[zone];
-      const oldIdx = items.indexOf(activeItemId);
-      const newIdx = items.indexOf(overId);
-
-      let finalZones = zones;
-      if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
-        finalZones = { ...zones, [zone]: arrayMove(items, oldIdx, newIdx) };
-        setZones(finalZones);
+      let next: string[];
+      if (isAccordionKey(activeKey)) {
+        // Inner reorder (recents ↔ agent)
+        const oldIdx = innerItems.indexOf(activeKey);
+        const newIdx = innerItems.indexOf(overKey);
+        if (oldIdx === -1 || newIdx === -1) return;
+        next = flattenItems(outerItems, arrayMove(innerItems, oldIdx, newIdx));
+      } else {
+        // Outer reorder (pages/community/... or the whole accordion group)
+        const oldIdx = outerItems.indexOf(activeKey);
+        const newIdx = outerItems.indexOf(overKey);
+        if (oldIdx === -1 || newIdx === -1) return;
+        next = flattenItems(arrayMove(outerItems, oldIdx, newIdx), innerItems);
       }
 
-      // Persist to store
-      updateSystemStatus({ sidebarZones: finalZones });
+      setItems(next);
+      updateSystemStatus({ sidebarItems: next });
     },
-    [zones, updateSystemStatus],
+    [innerItems, outerItems, updateSystemStatus],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
-    setZones(storeZones); // reset to stored state
-  }, [storeZones]);
+    setItems(storeItems);
+  }, [storeItems]);
 
-  // ---- Render zone ----
-
-  const renderZone = (zoneKey: ZoneKey) => {
-    const items = zones[zoneKey];
-
-    return (
-      <SortableContext id={zoneKey} items={items} strategy={verticalListSortingStrategy}>
-        <DroppableZone isDragging={!!activeId} zoneKey={zoneKey}>
-          {items.length === 0
-            ? null
-            : items.map((id) => (
-                <SortableItem
-                  hiddenSections={hiddenSections}
-                  id={id}
-                  key={id}
-                  onToggle={toggleSection}
-                />
-              ))}
-        </DroppableZone>
-      </SortableContext>
-    );
-  };
+  const renderItem = (id: string) => (
+    <SortableItem hiddenSections={hiddenSections} id={id} key={id} onToggle={toggleSection} />
+  );
 
   return (
     <DndContext
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetection}
       sensors={sensors}
       onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
-      onDragOver={handleDragOver}
       onDragStart={handleDragStart}
     >
-      <Flexbox gap={0}>
-        <ZoneLabel label={t(ZONE_LABELS.middle as any)} />
-        {renderZone('middle')}
-
-        <Divider style={{ margin: '4px 0' }} />
-        <ZoneLabel label={t(ZONE_LABELS.bottom as any)} />
-        {renderZone('bottom')}
-      </Flexbox>
+      <SortableContext items={outerItems} strategy={verticalListSortingStrategy}>
+        <Flexbox gap={2}>
+          {outerItems.map((id) =>
+            id === ACCORDION_GROUP_ID ? (
+              <AccordionGroup key={id}>
+                <SortableContext items={innerItems} strategy={verticalListSortingStrategy}>
+                  {innerItems.map(renderItem)}
+                </SortableContext>
+              </AccordionGroup>
+            ) : (
+              renderItem(id)
+            ),
+          )}
+        </Flexbox>
+      </SortableContext>
 
       {createPortal(
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({}) }}>

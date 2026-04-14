@@ -39,7 +39,7 @@ const Body = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
-  const sidebarZones = useGlobalStore(systemStatusSelectors.sidebarZones);
+  const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems);
   const hiddenSections = useGlobalStore(systemStatusSelectors.hiddenSidebarSections);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
@@ -77,15 +77,13 @@ const Body = memo(() => {
     return map;
   }, [topNavItems, bottomMenuItems]);
 
-  // Filter hidden items per zone
-  const middleKeys = useMemo(
-    () => sidebarZones.middle.filter((k) => k === GroupKey.Agent || !hiddenSections.includes(k)),
-    [sidebarZones.middle, hiddenSections],
+  // Items that must always be visible regardless of hiddenSections
+  const isVisible = useCallback(
+    (k: string) => k === GroupKey.Agent || !hiddenSections.includes(k),
+    [hiddenSections],
   );
-  const bottomKeys = useMemo(
-    () => sidebarZones.bottom.filter((k) => !hiddenSections.includes(k)),
-    [sidebarZones.bottom, hiddenSections],
-  );
+
+  const visibleKeys = useMemo(() => sidebarItems.filter(isVisible), [sidebarItems, isVisible]);
 
   const renderNavLink = useCallback(
     (key: string) => {
@@ -119,8 +117,9 @@ const Body = memo(() => {
     [navLinkItems, tab, getContextMenuItems, navigate],
   );
 
-  // Middle zone: group consecutive accordion items, interleave nav links
-  const middleContent = useMemo(() => {
+  // Render the flat list: group consecutive accordion items into an Accordion,
+  // interleave non-accordion keys as nav links.
+  const content = useMemo(() => {
     const elements: ReactElement[] = [];
     let accGroup: ReactElement[] = [];
 
@@ -139,7 +138,7 @@ const Body = memo(() => {
       }
     };
 
-    for (const key of middleKeys) {
+    for (const key of visibleKeys) {
       if (ACCORDION_KEYS.has(key)) {
         const comp = accordionComponents[key]?.(key);
         if (comp) accGroup.push(comp);
@@ -151,18 +150,11 @@ const Body = memo(() => {
     }
     flushAccordion();
     return elements;
-  }, [middleKeys, renderNavLink]);
-
-  const bottomNavLinks = bottomKeys.map(renderNavLink).filter(Boolean);
+  }, [visibleKeys, renderNavLink]);
 
   return (
-    <Flexbox flex={1} justify={'space-between'} paddingInline={4}>
-      <Flexbox gap={4}>{middleContent}</Flexbox>
-      {bottomNavLinks.length > 0 && (
-        <Flexbox gap={1} paddingBlock={4} style={{ marginTop: 12, overflow: 'hidden' }}>
-          {bottomNavLinks}
-        </Flexbox>
-      )}
+    <Flexbox flex={1} gap={4} paddingInline={4}>
+      {content}
       <CustomizeSidebarModal />
     </Flexbox>
   );

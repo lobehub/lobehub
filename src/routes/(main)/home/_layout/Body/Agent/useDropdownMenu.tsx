@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 
 import { useCreateMenuItems } from '../../hooks';
 
@@ -19,30 +20,27 @@ export const useAgentActionsDropdownMenu = ({
 }: AgentActionsDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation('common');
 
-  const [agentPageSize, sidebarZones, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
+  const [agentPageSize, sidebarItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.agentPageSize(s),
-    systemStatusSelectors.sidebarZones(s),
+    systemStatusSelectors.sidebarItems(s),
     systemStatusSelectors.hiddenSidebarSections(s),
     s.updateSystemStatus,
   ]);
 
-  const myZone = sidebarZones.middle.includes('agent') ? 'middle' : 'bottom';
-  const zoneItems = sidebarZones[myZone];
-  const visibleItems = zoneItems.filter((k) => !hiddenSections.includes(k));
+  const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
   const visibleIndex = visibleItems.indexOf('agent');
   const isFirst = visibleIndex === 0;
   const isLast = visibleIndex === visibleItems.length - 1;
 
   const moveSection = useCallback(
     (direction: 'up' | 'down') => {
-      const items = [...zoneItems];
-      const idx = items.indexOf('agent');
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= items.length) return;
-      [items[idx], items[swapIdx]] = [items[swapIdx], items[idx]];
-      updateSystemStatus({ sidebarZones: { ...sidebarZones, [myZone]: items } });
+      const idx = sidebarItems.indexOf('agent');
+      if (idx === -1) return;
+      const next = reorderSidebarItems(sidebarItems, idx, direction === 'up' ? idx - 1 : idx + 1);
+      if (next === sidebarItems) return;
+      updateSystemStatus({ sidebarItems: next });
     },
-    [zoneItems, myZone, sidebarZones, updateSystemStatus],
+    [sidebarItems, updateSystemStatus],
   );
 
   // Create menu items

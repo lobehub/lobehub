@@ -185,17 +185,9 @@ export interface SystemStatus {
   showVideoPanel?: boolean;
   showVideoTopicPanel?: boolean;
   /**
-   * Order of sidebar sections (e.g. ['recents', 'agent'])
-   * @deprecated Use sidebarZones instead. Kept for migration.
+   * Flat ordered list of sidebar items.
    */
-  sidebarSectionOrder?: string[];
-  /**
-   * Sidebar zone assignments — explicit per-zone item arrays
-   */
-  sidebarZones?: {
-    bottom: string[];
-    middle: string[];
-  };
+  sidebarItems?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
   /**
    * Whether to display tokens in short format
