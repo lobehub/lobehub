@@ -1389,6 +1389,12 @@ export const createRuntimeExecutors = (
         });
         execution = { attempts: 1, result: dispatchResult };
       } else {
+        // Inject source from sourceMap so BuiltinToolsExecutor can route
+        // lobehubSkill / klavis tools correctly (LLM responses don't carry source)
+        if (toolSource && !chatToolPayload.source) {
+          chatToolPayload.source = toolSource;
+        }
+
         // Execute tool using ToolExecutionService
         log(`[${operationLogId}] Executing tool ${toolName} ...`);
         execution = await executeToolWithRetry(
@@ -1683,6 +1689,15 @@ export const createRuntimeExecutors = (
             });
             execution = { attempts: 1, result: dispatchResult };
           } else {
+            // Inject source from sourceMap so BuiltinToolsExecutor can route
+            // lobehubSkill / klavis tools correctly (LLM responses don't carry source)
+            const batchToolSource =
+              state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
+              state.toolSourceMap?.[chatToolPayload.identifier];
+            if (batchToolSource && !chatToolPayload.source) {
+              chatToolPayload.source = batchToolSource;
+            }
+
             execution = await executeToolWithRetry(
               () =>
                 toolExecutionService.executeTool(chatToolPayload, {
