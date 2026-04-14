@@ -10,6 +10,22 @@ import { resetTestEnvironment } from './helpers';
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
 
+// Mock the tRPC client & agentRuntimeService so the import chain doesn't pull
+// server-only code (cloud business packages, redis envs) into the test env.
+vi.mock('@/libs/trpc/client', () => ({
+  lambdaClient: {
+    aiAgent: {
+      processHumanIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+    },
+  },
+}));
+
+vi.mock('@/services/agentRuntime', () => ({
+  agentRuntimeService: {
+    handleHumanIntervention: vi.fn().mockResolvedValue({ success: true }),
+  },
+}));
+
 beforeEach(() => {
   resetTestEnvironment();
 });
@@ -593,6 +609,309 @@ describe('ConversationControl actions', () => {
 
       // Should not call internal_execAgentRuntime when tool message not found
       expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+    });
+
+    describe('server-mode branch', () => {
+      it('should start a new Gateway op with resumeApproval.decision=approved and NOT run local runtime', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-1',
+          plugin: {
+            apiName: 'search',
+            arguments: '{"q":"test"}',
+            identifier: 'web-search',
+            type: 'default',
+          },
+          role: 'tool',
+          // `tool_call_id` is what the server uses to locate the pending tool
+          // call; the new Gateway op carries it forward via `resumeApproval`.
+          tool_call_id: 'call_xyz',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+
+          // Simulate a running server operation — presence of this op is
+          // what flips approve/reject into server-mode.
+          result.current.startOperation({
+            context: { agentId, topicId, threadId: null },
+            metadata: { serverOperationId: 'server-op-xyz' },
+            type: 'execServerAgentRuntime',
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const internal_execAgentRuntimeSpy = vi
+          .spyOn(result.current, 'internal_execAgentRuntime')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-1', 'group-1');
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: '',
+            parentMessageId: 'tool-msg-1',
+            resumeApproval: {
+              decision: 'approved',
+              parentMessageId: 'tool-msg-1',
+              toolCallId: 'call_xyz',
+            },
+          }),
+        );
+        expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
+      it('should fall through to client-mode runtime when no server operation is running', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'local-agent';
+        const topicId = 'local-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-1',
+          plugin: { identifier: 'x', type: 'default', arguments: '{}', apiName: 'y' },
+          role: 'tool',
+          tool_call_id: 'call_local',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+          state: {} as any,
+          context: { phase: 'init' } as any,
+          agentConfig: createMockResolvedAgentConfig(),
+        });
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const internal_execAgentRuntimeSpy = vi
+          .spyOn(result.current, 'internal_execAgentRuntime')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-1', 'group-1');
+        });
+
+        expect(executeGatewayAgentSpy).not.toHaveBeenCalled();
+        expect(internal_execAgentRuntimeSpy).toHaveBeenCalled();
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
+      it('resolves the running server op in a group scope context (scope/groupId forwarded to the lookup)', async () => {
+        // Regression: operationsByContext is keyed by the full messageMapKey
+        // including scope/groupId. If #hasRunningServerOp were to drop those
+        // fields, a group conversation's approve/reject would miss the op and
+        // fall back to client mode. Assert the server-mode branch fires with
+        // the group context intact.
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'server-agent';
+        const groupId = 'group-1';
+        const topicId = 'server-topic';
+        const scope = 'group' as const;
+        const chatKey = messageMapKey({ agentId, groupId, scope, topicId });
+
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-1',
+          plugin: { apiName: 'y', arguments: '{}', identifier: 'x', type: 'default' },
+          role: 'tool',
+          tool_call_id: 'call_group',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+
+          // Server op is indexed under the group-scope key. Without scope
+          // forwarding the lookup would hit the default 'main' bucket instead.
+          result.current.startOperation({
+            context: { agentId, groupId, scope, topicId, threadId: null },
+            metadata: { serverOperationId: 'server-op-group' },
+            type: 'execServerAgentRuntime',
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const internal_execAgentRuntimeSpy = vi
+          .spyOn(result.current, 'internal_execAgentRuntime')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-1', 'group-1', {
+            agentId,
+            groupId,
+            scope,
+            topicId,
+            threadId: null,
+          });
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeApproval: expect.objectContaining({ decision: 'approved' }),
+          }),
+        );
+        expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+    });
+  });
+
+  describe('rejectToolCalling server-mode branch', () => {
+    it('starts a new Gateway op with resumeApproval.decision=rejected', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'server-agent';
+      const topicId = 'server-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        role: 'tool',
+        tool_call_id: 'call_xyz',
+      } as any);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messagesMap: { [chatKey]: [toolMessage] },
+        });
+
+        result.current.startOperation({
+          context: { agentId, topicId, threadId: null },
+          metadata: { serverOperationId: 'server-op-xyz' },
+          type: 'execServerAgentRuntime',
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+
+      await act(async () => {
+        await result.current.rejectToolCalling('tool-msg-1', 'not appropriate');
+      });
+
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '',
+          parentMessageId: 'tool-msg-1',
+          resumeApproval: {
+            decision: 'rejected',
+            parentMessageId: 'tool-msg-1',
+            rejectionReason: 'not appropriate',
+            toolCallId: 'call_xyz',
+          },
+        }),
+      );
+
+      executeGatewayAgentSpy.mockRestore();
+    });
+  });
+
+  describe('rejectAndContinueToolCalling server-mode branch', () => {
+    it('starts a new Gateway op with resumeApproval.decision=rejected_continue and skips both local runtime and client rejectToolCalling', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'server-agent';
+      const topicId = 'server-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        role: 'tool',
+        tool_call_id: 'call_xyz',
+      } as any);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messagesMap: { [chatKey]: [toolMessage] },
+        });
+
+        result.current.startOperation({
+          context: { agentId, topicId, threadId: null },
+          metadata: { serverOperationId: 'server-op-xyz' },
+          type: 'execServerAgentRuntime',
+        });
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+      const internal_execAgentRuntimeSpy = vi
+        .spyOn(result.current, 'internal_execAgentRuntime')
+        .mockResolvedValue(undefined);
+      // Ensure client rejectToolCalling is NOT invoked in server-mode path —
+      // otherwise the server would see a duplicate halting `reject` before
+      // this continue signal lands.
+      const rejectToolCallingSpy = vi
+        .spyOn(result.current, 'rejectToolCalling')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.rejectAndContinueToolCalling('tool-msg-1', 'too risky');
+      });
+
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '',
+          parentMessageId: 'tool-msg-1',
+          resumeApproval: {
+            decision: 'rejected_continue',
+            parentMessageId: 'tool-msg-1',
+            rejectionReason: 'too risky',
+            toolCallId: 'call_xyz',
+          },
+        }),
+      );
+      expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+      expect(rejectToolCallingSpy).not.toHaveBeenCalled();
+
+      executeGatewayAgentSpy.mockRestore();
     });
   });
 

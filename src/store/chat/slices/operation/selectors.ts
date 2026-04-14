@@ -1,5 +1,5 @@
 import { type ChatStoreState } from '@/store/chat/initialState';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { messageMapKey, type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 
 import { type Operation, type OperationType } from './types';
 import { AI_RUNTIME_OPERATION_TYPES, INPUT_LOADING_OPERATION_TYPES } from './types';
@@ -165,13 +165,19 @@ const getCurrentOperationProgress = (s: ChatStoreState): number | undefined => {
 };
 
 /**
- * Get operations by context (agentId, topicId, threadId)
- * Useful for filtering operations for a specific conversation context
+ * Get operations by context (agentId, topicId, threadId, scope, groupId, subAgentId).
+ *
+ * Operations are indexed by `operationsByContext` under the full `messageMapKey`,
+ * which keys on scope/group/subAgent in addition to agent+topic. Callers that
+ * live inside a group or thread/sub-agent conversation MUST pass the matching
+ * scope/group info — omitting them computes the 'main' scope key, which silently
+ * returns an empty list and causes flows like approve/reject to fall back to the
+ * wrong branch. Same-shape input as messageMapKey for consistency.
  */
 const getOperationsByContext =
-  (context: { agentId: string; threadId?: string | null; topicId?: string | null }) =>
+  (context: MessageMapKeyInput) =>
   (s: ChatStoreState): Operation[] => {
-    const contextKey = messageMapKey({ agentId: context.agentId, topicId: context.topicId });
+    const contextKey = messageMapKey(context);
     const operationIds = s.operationsByContext[contextKey] || [];
     return operationIds
       .map((id) => s.operations[id])
@@ -189,7 +195,7 @@ const getOperationsByContext =
  * Use this for loading states in components that display a specific conversation
  */
 const hasRunningOperationByContext =
-  (context: { agentId: string; threadId?: string | null; topicId?: string | null }) =>
+  (context: MessageMapKeyInput) =>
   (s: ChatStoreState): boolean => {
     const operations = getOperationsByContext(context)(s);
     return operations.some((op) => op.status === 'running' && !op.metadata.isAborting);
