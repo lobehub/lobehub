@@ -4,7 +4,7 @@ import { merge } from '@/utils/merge';
 
 import { type GlobalState } from '../initialState';
 import { INITIAL_STATUS, initialState } from '../initialState';
-import { systemStatusSelectors } from './systemStatus';
+import { DEFAULT_ZONES, systemStatusSelectors } from './systemStatus';
 
 // Mock version constants
 vi.mock('@/const/version', () => ({
@@ -86,6 +86,48 @@ describe('systemStatusSelectors', () => {
         status: { portalWidth: undefined },
       });
       expect(systemStatusSelectors.portalWidth(noPortalWidth)).toBe(400);
+    });
+  });
+
+  describe('sidebarZones', () => {
+    it('should return DEFAULT_ZONES when no data is set', () => {
+      expect(systemStatusSelectors.sidebarZones(initialState)).toEqual(DEFAULT_ZONES);
+    });
+
+    it('should return stored zones when sidebarZones is complete', () => {
+      const customZones = {
+        bottom: ['memory', 'resource', 'community'],
+        middle: ['agent', 'recents'],
+        top: ['pages'],
+      };
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarZones: customZones },
+      });
+      expect(systemStatusSelectors.sidebarZones(s)).toEqual(customZones);
+    });
+
+    it('should place pages in top zone when migrating legacy order ["recents","agent"]', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarSectionOrder: ['recents', 'agent'] },
+      });
+      const zones = systemStatusSelectors.sidebarZones(s);
+      expect(zones.top).toContain('pages');
+      expect(zones.bottom).not.toContain('pages');
+    });
+
+    it('should preserve explicit legacy positions and seed missing keys into default zones', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarSectionOrder: ['community', 'recents', 'agent', 'resource'] },
+      });
+      const zones = systemStatusSelectors.sidebarZones(s);
+      // community was explicitly placed before accordion → top
+      expect(zones.top).toContain('community');
+      // pages was missing → seeded into default top zone
+      expect(zones.top).toContain('pages');
+      // memory was missing → seeded into default bottom zone
+      expect(zones.bottom).toContain('memory');
+      // middle kept from legacy
+      expect(zones.middle).toEqual(['recents', 'agent']);
     });
   });
 });

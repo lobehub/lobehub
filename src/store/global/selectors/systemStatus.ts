@@ -69,12 +69,20 @@ const sidebarZones = (s: GlobalState): SidebarZones => {
   // Migration from legacy sidebarSectionOrder
   const legacy = s.status.sidebarSectionOrder;
   if (legacy && legacy.length > 0) {
-    // Ensure all items present in legacy order
-    const all = [...legacy];
-    for (const key of ALL_SIDEBAR_KEYS) {
-      if (!all.includes(key)) all.push(key);
+    // Derive zones from the keys the user explicitly ordered
+    const zones = deriveZonesFromOrder(legacy);
+
+    // Seed missing keys into their default zone so new items (e.g. pages)
+    // land in the correct zone instead of being blindly appended.
+    const present = new Set([...zones.top, ...zones.middle, ...zones.bottom]);
+    for (const zone of ['top', 'middle', 'bottom'] as const) {
+      const missing = DEFAULT_ZONES[zone].filter((k) => !present.has(k));
+      if (missing.length > 0) {
+        zones[zone] = [...zones[zone], ...missing];
+      }
     }
-    return deriveZonesFromOrder(all);
+
+    return zones;
   }
 
   return DEFAULT_ZONES;
