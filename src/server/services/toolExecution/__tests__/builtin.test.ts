@@ -47,6 +47,9 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(result.error?.code).toBe('TRUNCATED_ARGUMENTS');
     expect(result.content).toMatch(/truncated/i);
     expect(result.content).toMatch(/max_tokens/);
+    // The raw truncated payload is echoed back so the model sees exactly what
+    // it produced and cannot blame upstream for a different payload.
+    expect(result.content).toContain(truncated);
     expect(mockApiHandler).not.toHaveBeenCalled();
   });
 
@@ -58,6 +61,7 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(result.success).toBe(false);
     expect(result.error?.code).toBe('TRUNCATED_ARGUMENTS');
     expect(result.content).toMatch(/unterminated string/);
+    expect(result.content).toContain(truncated);
     expect(mockApiHandler).not.toHaveBeenCalled();
   });
 
@@ -78,12 +82,27 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(result.content).toMatch(/Missing content/);
   });
 
-  it('does not short-circuit on balanced-but-invalid JSON', async () => {
+  it('returns INVALID_JSON_ARGUMENTS for balanced-but-invalid JSON (not truncated)', async () => {
+    // Balanced brackets but invalid syntax (unquoted key). Not a truncation,
+    // but still unparseable — reject with a non-truncation error rather than
+    // silently passing `{}` to the tool.
+    const invalid = '{title: "Report"}';
+
+    const result = await executor.execute(buildPayload(invalid), context);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('INVALID_JSON_ARGUMENTS');
+    expect(result.content).toMatch(/not valid JSON/);
+    expect(result.content).toContain(invalid);
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
+  it('still dispatches normally when argsStr is empty', async () => {
     mockApiHandler.mockResolvedValueOnce({ content: 'ok', success: true });
 
-    // Balanced brackets but invalid JSON syntax (unquoted key).
-    // Should fall through and dispatch with empty args, NOT truncation error.
-    const result = await executor.execute(buildPayload('{title: "Report"}'), context);
+    // Empty arguments are legitimate for tools that take no params —
+    // parse falls through to `{}` without triggering the invalid-JSON guard.
+    const result = await executor.execute(buildPayload(''), context);
 
     expect(mockApiHandler).toHaveBeenCalledWith({}, context);
     expect(result.success).toBe(true);
