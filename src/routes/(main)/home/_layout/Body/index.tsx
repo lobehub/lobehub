@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Accordion,
-  ActionIcon,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  type MenuProps,
-  type ReactElement,
-} from '@lobehub/ui';
+import { Accordion, ActionIcon, DropdownMenu, Flexbox, Icon, type MenuProps } from '@lobehub/ui';
 import { EyeOffIcon, MoreHorizontalIcon, SlidersHorizontalIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 

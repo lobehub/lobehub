@@ -221,7 +221,7 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
 
 const ZoneLabel = memo<{ label: string }>(({ label }) => (
   <Flexbox paddingBlock={4} paddingInline={8}>
-    <Text ellipsis size={12} type={'secondary'} weight={500}>
+    <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
       {label}
     </Text>
   </Flexbox>
