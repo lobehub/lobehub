@@ -25,9 +25,9 @@ import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useTaskChatStore } from '@/store/taskChat';
 
-import TaskManagerToolbar from './TaskManagerToolbar';
+import Toolbar from './Toolbar';
 
-const log = debug('lobe-render:agent-tasks:TaskManagerConversation');
+const log = debug('lobe-render:agent-task-manager:Conversation');
 
 const Search = actionMap['search'];
 
@@ -48,9 +48,9 @@ const Welcome = memo(() => {
   );
 });
 
-Welcome.displayName = 'TaskManagerWelcome';
+Welcome.displayName = 'Welcome';
 
-const TaskManagerConversation = memo(() => {
+const Conversation = memo(() => {
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   const taskTopicId = useTaskChatStore((s) => s.activeTopicId);
 
@@ -110,7 +110,7 @@ const TaskManagerConversation = memo(() => {
     >
       <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
         <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-          <TaskManagerToolbar />
+          <Toolbar />
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
             <ChatList welcome={<Welcome />} />
           </Flexbox>
@@ -129,6 +129,6 @@ const TaskManagerConversation = memo(() => {
   );
 });
 
-TaskManagerConversation.displayName = 'TaskManagerConversation';
+Conversation.displayName = 'Conversation';
 
-export default TaskManagerConversation;
+export default Conversation;

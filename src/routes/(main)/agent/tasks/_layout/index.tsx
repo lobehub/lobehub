@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 
-import TasksChatPanel from '@/features/AgentTasks/TasksChatPanel';
+import AgentTaskManager from '@/features/AgentTaskManager';
 import { useChatStore } from '@/store/chat';
 
 /**
@@ -35,7 +35,7 @@ const TasksLayout = memo(() => {
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Outlet />
       </Flexbox>
-      <TasksChatPanel />
+      <AgentTaskManager />
     </Flexbox>
   );
 });

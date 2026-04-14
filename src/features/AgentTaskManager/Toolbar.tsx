@@ -11,7 +11,7 @@ import TopicItem from '@/features/PageEditor/Copilot/TopicSelector/TopicItem';
 import { useGlobalStore } from '@/store/global';
 import { useTaskChatStore } from '@/store/taskChat';
 
-const TaskManagerToolbar = memo(() => {
+const Toolbar = memo(() => {
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
@@ -111,6 +111,6 @@ const TaskManagerToolbar = memo(() => {
   );
 });
 
-TaskManagerToolbar.displayName = 'TaskManagerToolbar';
+Toolbar.displayName = 'Toolbar';
 
-export default TaskManagerToolbar;
+export default Toolbar;

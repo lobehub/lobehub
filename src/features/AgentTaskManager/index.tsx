@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 import RightPanel from '@/features/RightPanel';
 
-import TaskManagerConversation from './TaskManagerConversation';
+import Conversation from './Conversation';
 
 /**
  * Tasks page right-side chat panel.
@@ -15,14 +15,14 @@ import TaskManagerConversation from './TaskManagerConversation';
  * The parent `_layout` sets `runtimePluginOverrides.forceActivated` on the
  * chat store so `lobe-task` is auto-activated for every LLM step here.
  */
-const TasksChatPanel = memo(() => {
+const AgentTaskManager = memo(() => {
   return (
     <RightPanel defaultWidth={420} maxWidth={720} minWidth={320}>
-      <TaskManagerConversation />
+      <Conversation />
     </RightPanel>
   );
 });
 
-TasksChatPanel.displayName = 'TasksChatPanel';
+AgentTaskManager.displayName = 'AgentTaskManager';
 
-export default TasksChatPanel;
+export default AgentTaskManager;
