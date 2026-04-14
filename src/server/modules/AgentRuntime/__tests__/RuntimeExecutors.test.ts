@@ -68,6 +68,7 @@ describe('RuntimeExecutors', () => {
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
       query: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateToolMessage: vi.fn().mockResolvedValue({ success: true }),
     };
 
     mockStreamManager = {
@@ -1656,6 +1657,293 @@ describe('RuntimeExecutors', () => {
       await executors.call_tool!(stopInstruction, state);
 
       expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
+    });
+
+    describe('skipCreateToolMessage (resumption after human approval)', () => {
+      it('should update existing tool message instead of creating a new one', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'pending-tool-msg-1',
+            skipCreateToolMessage: true,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        await executors.call_tool!(instruction, state);
+
+        expect(mockMessageModel.create).not.toHaveBeenCalled();
+        expect(mockMessageModel.updateToolMessage).toHaveBeenCalledWith(
+          'pending-tool-msg-1',
+          expect.objectContaining({
+            content: 'Tool result',
+            metadata: { toolExecutionTimeMs: 100 },
+          }),
+        );
+      });
+
+      it('should return the existing toolMessageId as parentMessageId for the next LLM step', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'pending-tool-msg-42',
+            skipCreateToolMessage: true,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-42',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        const result = await executors.call_tool!(instruction, state);
+
+        expect(result.nextContext?.payload?.parentMessageId).toBe('pending-tool-msg-42');
+      });
+
+      it('should fall back to creating a new tool message when skipCreateToolMessage is false', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'assistant-msg-7',
+            skipCreateToolMessage: false,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-7',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        await executors.call_tool!(instruction, state);
+
+        expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+        expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('request_human_approve executor', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [
+        {
+          content: 'assistant response',
+          id: 'assistant-msg-1',
+          role: 'assistant',
+        } as any,
+      ],
+      metadata: {
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: 'topic-123',
+      },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    const makePendingTools = () => [
+      {
+        apiName: 'search',
+        arguments: '{"q":"test"}',
+        id: 'tool-call-1',
+        identifier: 'web-search',
+        type: 'default' as const,
+      },
+      {
+        apiName: 'write',
+        arguments: '{"file":"a.md"}',
+        id: 'tool-call-2',
+        identifier: 'local-system',
+        type: 'default' as const,
+      },
+    ];
+
+    it('should create a pending tool message for each pendingToolsCalling', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const instruction = {
+        pendingToolsCalling: makePendingTools(),
+        type: 'request_human_approve' as const,
+      };
+
+      await executors.request_human_approve!(instruction, state);
+
+      expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentId: 'agent-123',
+          content: '',
+          parentId: 'assistant-msg-1',
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          parentId: 'assistant-msg-1',
+          pluginIntervention: { status: 'pending' },
+          tool_call_id: 'tool-call-2',
+        }),
+      );
+    });
+
+    it('should set state to waiting_for_human and copy pendingToolsCalling', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+      const pending = makePendingTools();
+
+      const result = await executors.request_human_approve!(
+        { pendingToolsCalling: pending, type: 'request_human_approve' as const },
+        state,
+      );
+
+      expect(result.newState.status).toBe('waiting_for_human');
+      expect(result.newState.pendingToolsCalling).toEqual(pending);
+    });
+
+    it('should publish tools_calling chunk with toolMessageIds mapping', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
+        (call: any[]) => call[2]?.chunkType === 'tools_calling',
+      );
+      expect(chunkCall).toBeTruthy();
+      expect(chunkCall![2].toolMessageIds).toEqual({
+        'tool-call-1': 'tool-msg-1',
+        'tool-call-2': 'tool-msg-2',
+      });
+    });
+
+    it('should skip message creation when skipCreateToolMessage is true', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.query.mockResolvedValueOnce([
+        { id: 'existing-tool-1', role: 'tool', tool_call_id: 'tool-call-1' },
+        { id: 'existing-tool-2', role: 'tool', tool_call_id: 'tool-call-2' },
+      ]);
+
+      await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          skipCreateToolMessage: true,
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+      const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
+        (call: any[]) => call[2]?.chunkType === 'tools_calling',
+      );
+      expect(chunkCall![2].toolMessageIds).toEqual({
+        'tool-call-1': 'existing-tool-1',
+        'tool-call-2': 'existing-tool-2',
+      });
+    });
+
+    it('should throw if no parent assistant message can be found', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({ messages: [] });
+      mockMessageModel.query.mockResolvedValueOnce([]);
+
+      await expect(
+        executors.request_human_approve!(
+          {
+            pendingToolsCalling: makePendingTools(),
+            type: 'request_human_approve' as const,
+          },
+          state,
+        ),
+      ).rejects.toThrow(/No assistant message found/);
+    });
+
+    it('should emit human_approve_required and tool_pending events', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const result = await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(result.events).toContainEqual(
+        expect.objectContaining({ type: 'human_approve_required' }),
+      );
+      expect(result.events).toContainEqual(expect.objectContaining({ type: 'tool_pending' }));
+    });
+
+    it('should NOT return a nextContext (operation pauses)', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const result = await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(result.nextContext).toBeUndefined();
     });
   });
 

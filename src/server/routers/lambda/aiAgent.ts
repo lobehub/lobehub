@@ -43,7 +43,7 @@ const GetOperationStatusSchema = z.object({
 });
 
 const ProcessHumanInterventionSchema = z.object({
-  action: z.enum(['approve', 'reject', 'input', 'select']),
+  action: z.enum(['approve', 'reject', 'reject_continue', 'input', 'select']),
   data: z
     .object({
       approvedToolCall: z.any().optional(),
@@ -54,6 +54,13 @@ const ProcessHumanInterventionSchema = z.object({
   operationId: z.string(),
   reason: z.string().optional(),
   stepIndex: z.number().optional().default(0),
+  /**
+   * ID of the pending `role='tool'` message targeted by this intervention.
+   * Required for approve / reject / reject_continue so the server can update
+   * the message's intervention status, content, and — on approve — hand the
+   * id to the `call_tool` short-circuit via `skipCreateToolMessage`.
+   */
+  toolMessageId: z.string().optional(),
 });
 
 const GetPendingInterventionsSchema = z
@@ -1079,7 +1086,7 @@ export const aiAgentRouter = router({
   processHumanIntervention: aiAgentProcedure
     .input(ProcessHumanInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, action, data, reason, stepIndex } = input;
+      const { operationId, action, data, reason, stepIndex, toolMessageId } = input;
 
       log(`Processing ${action} for operation ${operationId}`);
 
@@ -1088,6 +1095,7 @@ export const aiAgentRouter = router({
         action,
         operationId,
         stepIndex,
+        toolMessageId,
       };
 
       switch (action) {
@@ -1099,10 +1107,16 @@ export const aiAgentRouter = router({
             });
           }
           interventionParams.approvedToolCall = data.approvedToolCall;
+          // toolMessageId is required for the server to persist the
+          // intervention + short-circuit into call_tool; the handler itself
+          // no-ops when missing, so keep the schema permissive for legacy
+          // callers that haven't been updated yet.
           break;
         }
-        case 'reject': {
+        case 'reject':
+        case 'reject_continue': {
           interventionParams.rejectionReason = reason || 'Tool call rejected by user';
+          interventionParams.rejectAndContinue = action === 'reject_continue';
           break;
         }
         case 'input': {
