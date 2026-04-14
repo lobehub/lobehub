@@ -12,6 +12,7 @@ interface EditorCanvasProps {
   defaultValue?: string;
   editor?: IEditor;
   editorData?: unknown;
+  tooltipPopupContainer?: HTMLElement | null;
 }
 
 const EDITOR_PLUGINS = [
@@ -19,7 +20,12 @@ const EDITOR_PLUGINS = [
   ReactTablePlugin,
 ];
 
-const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor, editorData }) => {
+const EditorCanvas: FC<EditorCanvasProps> = ({
+  defaultValue,
+  editor,
+  editorData,
+  tooltipPopupContainer,
+}) => {
   const { content, type } = useMemo(() => {
     const hasValidEditorData =
       editorData && typeof editorData === 'object' && Object.keys(editorData).length > 0;
@@ -33,7 +39,7 @@ const EditorCanvas: FC<EditorCanvasProps> = ({ defaultValue, editor, editorData 
 
   return (
     <>
-      <TypoBar editor={editor} />
+      <TypoBar editor={editor} popupContainer={tooltipPopupContainer} />
       <Flexbox
         padding={16}
         style={{ cursor: 'text', maxHeight: '80vh', minHeight: '50vh', overflowY: 'auto' }}

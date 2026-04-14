@@ -16,12 +16,30 @@ import {
   StrikethroughIcon,
   UnderlineIcon,
 } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
+interface TypoBarProps {
+  editor?: IEditor;
+  popupContainer?: HTMLElement | null;
+}
+
+const TypoBar = memo<TypoBarProps>(({ editor, popupContainer }) => {
   const { t } = useTranslation('editor');
   const editorState = useEditorState(editor);
+
+  const baseTooltipProps = useMemo(
+    () => (popupContainer ? { popupContainer } : undefined),
+    [popupContainer],
+  );
+
+  const createTooltipProps = useCallback(
+    (hotkey?: string[]) => ({
+      ...baseTooltipProps,
+      ...(hotkey ? { hotkey } : {}),
+    }),
+    [baseTooltipProps],
+  );
 
   const items: ChatInputActionsProps['items'] = useMemo(
     () =>
@@ -32,7 +50,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'bold',
           label: t('typobar.bold'),
           onClick: editorState.bold,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Bold).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.Bold).keys),
         },
         {
           active: editorState.isItalic,
@@ -40,7 +58,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'italic',
           label: t('typobar.italic'),
           onClick: editorState.italic,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Italic).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.Italic).keys),
         },
         {
           active: editorState.isUnderline,
@@ -48,7 +66,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'underline',
           label: t('typobar.underline'),
           onClick: editorState.underline,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Underline).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.Underline).keys),
         },
         {
           active: editorState.isStrikethrough,
@@ -56,7 +74,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'strikethrough',
           label: t('typobar.strikethrough'),
           onClick: editorState.strikethrough,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.Strikethrough).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.Strikethrough).keys),
         },
         {
           type: 'divider',
@@ -67,20 +85,21 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'bulletList',
           label: t('typobar.bulletList'),
           onClick: editorState.bulletList,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.BulletList).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.BulletList).keys),
         },
         {
           icon: ListOrderedIcon,
           key: 'numberlist',
           label: t('typobar.numberList'),
           onClick: editorState.numberList,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.NumberList).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.NumberList).keys),
         },
         {
           icon: ListTodoIcon,
           key: 'tasklist',
           label: t('typobar.taskList'),
           onClick: editorState.checkList,
+          tooltipProps: baseTooltipProps,
         },
         {
           type: 'divider',
@@ -91,6 +110,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'blockquote',
           label: t('typobar.blockquote'),
           onClick: editorState.blockquote,
+          tooltipProps: baseTooltipProps,
         },
         {
           type: 'divider',
@@ -100,6 +120,7 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'math',
           label: t('typobar.tex'),
           onClick: editorState.insertMath,
+          tooltipProps: baseTooltipProps,
         },
         {
           active: editorState.isCode,
@@ -107,16 +128,17 @@ const TypoBar = memo<{ editor?: IEditor }>(({ editor }) => {
           key: 'code',
           label: t('typobar.code'),
           onClick: editorState.code,
-          tooltipProps: { hotkey: getHotkeyById(HotkeyEnum.CodeInline).keys },
+          tooltipProps: createTooltipProps(getHotkeyById(HotkeyEnum.CodeInline).keys),
         },
         {
           icon: SquareDashedBottomCodeIcon,
           key: 'codeblock',
           label: t('typobar.codeblock'),
           onClick: editorState.codeblock,
+          tooltipProps: baseTooltipProps,
         },
       ].filter(Boolean) as ChatInputActionsProps['items'],
-    [editorState],
+    [baseTooltipProps, createTooltipProps, editorState, t],
   );
 
   return (

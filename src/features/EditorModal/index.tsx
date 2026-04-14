@@ -15,6 +15,7 @@ interface EditorModalProps extends ModalProps {
 export const EditorModal = memo<EditorModalProps>(
   ({ value, editorData: initialEditorData, onConfirm, ...rest }) => {
     const [confirmLoading, setConfirmLoading] = useState(false);
+    const [modalPanel, setModalPanel] = useState<HTMLDivElement | null>(null);
     const { t } = useTranslation('common');
     const editor = useEditor();
 
@@ -25,6 +26,7 @@ export const EditorModal = memo<EditorModalProps>(
         closable={false}
         confirmLoading={confirmLoading}
         okText={t('ok')}
+        panelRef={setModalPanel}
         title={null}
         width={'min(90vw, 920px)'}
         styles={{
@@ -42,7 +44,12 @@ export const EditorModal = memo<EditorModalProps>(
         }}
         {...rest}
       >
-        <EditorCanvas defaultValue={value} editor={editor} editorData={initialEditorData} />
+        <EditorCanvas
+          defaultValue={value}
+          editor={editor}
+          editorData={initialEditorData}
+          tooltipPopupContainer={modalPanel}
+        />
       </Modal>
     );
   },
