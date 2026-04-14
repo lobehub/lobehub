@@ -275,6 +275,14 @@ export class GatewayActionImpl {
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
 
+    // When the local operation is cancelled (e.g. user clicks stop), forward
+    // the interrupt over the Gateway WS so the server-side agent loop aborts.
+    // Closure captures `result.operationId` (server-side id, the key under
+    // `gatewayConnections`) so we don't depend on any metadata lookup.
+    this.#get().onOperationCancel(gatewayOpId, () => {
+      this.interruptGatewayAgent(result.operationId);
+    });
+
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId: result.assistantMessageId,
       context: execContext,
@@ -343,6 +351,12 @@ export class GatewayActionImpl {
     });
 
     this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
+
+    // Forward local-op cancellation to the server-side agent loop over WS.
+    // See note in executeGatewayAgent for details.
+    this.#get().onOperationCancel(gatewayOpId, () => {
+      this.interruptGatewayAgent(operationId);
+    });
 
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId,

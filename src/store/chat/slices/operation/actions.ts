@@ -389,9 +389,13 @@ export class OperationActionsImpl {
       // Ignore abort errors
     }
 
-    // 2. Set isAborting flag immediately for execAgentRuntime operations
-    // This ensures UI (loading button) responds instantly to user cancellation
-    if (operation.type === 'execAgentRuntime') {
+    // 2. Set isAborting flag immediately for agent-runtime operations.
+    // This ensures UI (loading button) responds instantly to user cancellation.
+    // Applies to both client-side (execAgentRuntime) and Gateway-mode
+    // (execServerAgentRuntime) runs — the latter needs the flag so the UI
+    // transitions out of loading right away, without waiting for the
+    // round-trip WS `session_complete` after the server acknowledges interrupt.
+    if (operation.type === 'execAgentRuntime' || operation.type === 'execServerAgentRuntime') {
       this.#get().updateOperationMetadata(operationId, { isAborting: true });
     }
 
