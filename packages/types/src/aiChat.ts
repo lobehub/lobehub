@@ -68,6 +68,7 @@ export interface SendMessageServerParams {
   newTopic?: {
     title?: string;
     topicMessageIds?: string[];
+    trigger?: string;
   };
   newUserMessage: SendNewMessage;
   preloadMessages?: SendPreloadMessage[];
@@ -113,6 +114,7 @@ export const AiSendMessageServerSchema = z.object({
     .object({
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
+      trigger: z.string().optional(),
     })
     .optional(),
   preloadMessages: z.array(SendPreloadMessageSchema).optional(),

@@ -174,6 +174,7 @@ export const topicRouter = router({
           groupId: z.string().nullable().optional(),
           messages: z.array(z.string()).optional(),
           title: z.string(),
+          trigger: z.string().optional(),
         })
         .extend(basicContextSchema.shape),
     )
@@ -236,17 +237,23 @@ export const topicRouter = router({
         current: z.number().optional(),
         excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullable().optional(),
+        includeTriggers: z.array(z.string()).optional(),
         isInbox: z.boolean().optional(),
         pageSize: z.number().optional(),
         sessionId: z.string().nullable().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { sessionId, isInbox, groupId, excludeTriggers, ...rest } = input;
+      const { sessionId, isInbox, groupId, excludeTriggers, includeTriggers, ...rest } = input;
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
-        const result = await ctx.topicModel.query({ excludeTriggers, groupId, ...rest });
+        const result = await ctx.topicModel.query({
+          excludeTriggers,
+          groupId,
+          includeTriggers,
+          ...rest,
+        });
         return { items: result.items, total: result.total };
       }
 
@@ -260,6 +267,7 @@ export const topicRouter = router({
         ...rest,
         agentId: effectiveAgentId,
         excludeTriggers,
+        includeTriggers,
         isInbox,
       });
 

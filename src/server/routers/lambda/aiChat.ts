@@ -87,6 +87,7 @@ export const aiChatRouter = router({
           messages: input.newTopic.topicMessageIds,
           sessionId,
           title: input.newTopic.title,
+          trigger: input.newTopic.trigger,
         });
         topicId = topicItem.id;
         isCreateNewTopic = true;

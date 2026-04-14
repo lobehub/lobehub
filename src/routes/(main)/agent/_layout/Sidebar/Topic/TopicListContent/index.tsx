@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
@@ -18,6 +19,8 @@ import ByTimeMode from './ByTimeMode';
 import FlatMode from './FlatMode';
 import SearchResult from './SearchResult';
 
+const fetchParams = { excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS };
+
 const TopicListContent = memo(() => {
   const { t } = useTranslation('topic');
   const router = useQueryRoute();
@@ -30,7 +33,7 @@ const TopicListContent = memo(() => {
 
   const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
 
-  useFetchTopics({ excludeTriggers: ['cron', 'eval'] });
+  useFetchTopics(fetchParams);
 
   if (isInSearchMode) return <SearchResult />;
 

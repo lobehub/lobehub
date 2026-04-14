@@ -207,6 +207,24 @@ describe('TopicModel - Query', () => {
       expect(ids).toContain('null-trigger');
       expect(ids).not.toContain('cron-topic');
     });
+
+    it('should include only topics with specified triggers via includeTriggers', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'normal-topic', sessionId, userId, title: 'Normal' },
+        { id: 'task-topic', sessionId, userId, title: 'Task', trigger: 'task_manager' },
+        { id: 'run-topic', sessionId, userId, title: 'Run', trigger: 'run_task' },
+        { id: 'null-trigger', sessionId, userId, title: 'Null Trigger' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        includeTriggers: ['task_manager'],
+      });
+
+      // Only topics whose trigger is exactly 'task_manager' should be returned
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('task-topic');
+    });
   });
 
   describe('query with agentId filter', () => {

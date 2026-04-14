@@ -38,6 +38,7 @@ export default {
   'loadMore': 'Load More',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
+  'taskManager.welcome': 'Ask me about your tasks',
   'temp': 'Temporary',
   'title': 'Topic',
 };

@@ -126,6 +126,7 @@ export interface CreateTopicParams {
   messages?: string[];
   sessionId?: string | null;
   title: string;
+  trigger?: string;
 }
 
 export interface QueryTopicParams {
@@ -139,6 +140,10 @@ export interface QueryTopicParams {
    * Group ID to filter topics by
    */
   groupId?: string | null;
+  /**
+   * Include only topics whose trigger matches one of these values.
+   */
+  includeTriggers?: string[];
   /**
    * Whether this is an inbox agent query.
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)

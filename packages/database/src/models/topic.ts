@@ -37,6 +37,11 @@ interface QueryTopicParams {
    */
   groupId?: string | null;
   /**
+   * Include only topics whose trigger matches one of these values.
+   * Mutually complementary with excludeTriggers.
+   */
+  includeTriggers?: string[];
+  /**
    * Whether this is an inbox agent query.
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)
    */
@@ -64,6 +69,7 @@ export class TopicModel {
     containerId,
     current = 0,
     excludeTriggers,
+    includeTriggers,
     pageSize = 9999,
     groupId,
     isInbox,
@@ -73,6 +79,10 @@ export class TopicModel {
       excludeTriggers && excludeTriggers.length > 0
         ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
         : undefined;
+    const includeTriggerCondition =
+      includeTriggers && includeTriggers.length > 0
+        ? inArray(topics.trigger, includeTriggers)
+        : undefined;
 
     // If groupId is provided, query topics by groupId directly
     if (groupId) {
@@ -80,6 +90,7 @@ export class TopicModel {
         eq(topics.userId, this.userId),
         eq(topics.groupId, groupId),
         excludeTriggerCondition,
+        includeTriggerCondition,
       );
 
       const [items, totalResult] = await Promise.all([
@@ -157,14 +168,28 @@ export class TopicModel {
             updatedAt: topics.updatedAt,
           })
           .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition))
+          .where(
+            and(
+              eq(topics.userId, this.userId),
+              agentCondition,
+              excludeTriggerCondition,
+              includeTriggerCondition,
+            ),
+          )
           .orderBy(desc(topics.favorite), desc(topics.updatedAt))
           .limit(pageSize)
           .offset(offset),
         this.db
           .select({ count: count(topics.id) })
           .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition)),
+          .where(
+            and(
+              eq(topics.userId, this.userId),
+              agentCondition,
+              excludeTriggerCondition,
+              includeTriggerCondition,
+            ),
+          ),
       ]);
 
       return { items, total: totalResult[0].count };
@@ -175,6 +200,7 @@ export class TopicModel {
       eq(topics.userId, this.userId),
       this.matchContainer(containerId),
       excludeTriggerCondition,
+      includeTriggerCondition,
     );
 
     const [items, totalResult] = await Promise.all([

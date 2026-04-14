@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
@@ -18,7 +19,7 @@ import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
-const fetchParams = { excludeTriggers: ['cron', 'eval'] };
+const fetchParams = { excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS };
 
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');

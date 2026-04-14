@@ -5,6 +5,7 @@ import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useChatStore } from '@/store/chat';
@@ -18,11 +19,13 @@ interface TopicProps {
   itemKey: string;
 }
 
+const fetchParams = { excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS };
+
 const Topic = memo<TopicProps>(({ itemKey }) => {
   const { t } = useTranslation(['topic', 'common']);
   const [topicCount] = useChatStore((s) => [topicSelectors.currentTopicCount(s)]);
   const dropdownMenu = useTopicActionsDropdownMenu();
-  const { isRevalidating } = useFetchTopics({ excludeTriggers: ['cron', 'eval'] });
+  const { isRevalidating } = useFetchTopics(fetchParams);
 
   return (
     <AccordionItem
