@@ -29,20 +29,12 @@ export class GatewayService {
 
   async ensureRunning(): Promise<void> {
     if (this.useMessageGateway) {
-      // Stop local GatewayManager if running (switching to gateway mode)
-      const localManager = getGatewayManager();
-      if (localManager?.isRunning) {
-        await localManager.stop();
-        log('Stopped local GatewayManager (switching to gateway mode)');
-      }
-
       await this.syncGatewayConnections();
       return;
     }
 
     // Not using external gateway — if the client is still reachable,
-    // disconnect leftover connections to prevent duplicates
-    // (e.g. switching from gateway to in-process mode).
+    // disconnect leftover connections to prevent duplicates.
     const client = getMessageGatewayClient();
     if (client.isConfigured) {
       try {

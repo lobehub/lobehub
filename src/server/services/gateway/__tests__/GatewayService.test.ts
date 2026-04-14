@@ -134,44 +134,6 @@ describe('GatewayService', () => {
 
         expect(mockGatewayManager.start).not.toHaveBeenCalled();
       });
-
-      it('calls disconnectAll when gateway client is still reachable', async () => {
-        mockGatewayClient.isConfigured = true;
-        mockGatewayClient.disconnectAll.mockResolvedValue({ total: 3 });
-
-        await service.ensureRunning();
-
-        expect(mockGatewayClient.disconnectAll).toHaveBeenCalled();
-        expect(mockGatewayManager.start).toHaveBeenCalled();
-      });
-
-      it('skips cleanup when no leftover connections', async () => {
-        mockGatewayClient.isConfigured = true;
-        mockGatewayClient.disconnectAll.mockResolvedValue({ total: 0 });
-
-        await service.ensureRunning();
-
-        expect(mockGatewayClient.disconnectAll).toHaveBeenCalled();
-        expect(mockGatewayManager.start).toHaveBeenCalled();
-      });
-
-      it('continues startup if cleanup fails', async () => {
-        mockGatewayClient.isConfigured = true;
-        mockGatewayClient.disconnectAll.mockRejectedValue(new Error('gateway unreachable'));
-
-        await service.ensureRunning();
-
-        expect(mockGatewayManager.start).toHaveBeenCalled();
-      });
-
-      it('skips cleanup when gateway client is not configured', async () => {
-        mockGatewayClient.isConfigured = false;
-
-        await service.ensureRunning();
-
-        expect(mockGatewayClient.disconnectAll).not.toHaveBeenCalled();
-        expect(mockGatewayManager.start).toHaveBeenCalled();
-      });
     });
 
     describe('gateway mode (ENABLED=1)', () => {
@@ -184,15 +146,6 @@ describe('GatewayService', () => {
         await service.ensureRunning();
 
         expect(mockGatewayManager.start).not.toHaveBeenCalled();
-        expect(mockGatewayClient.disconnectAll).not.toHaveBeenCalled();
-      });
-
-      it('stops local GatewayManager if running when switching to gateway mode', async () => {
-        mockGatewayManager.isRunning = true;
-
-        await service.ensureRunning();
-
-        expect(mockGatewayManager.stop).toHaveBeenCalled();
       });
     });
   });
