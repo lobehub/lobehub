@@ -23,7 +23,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { Modal } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { App, Divider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -266,6 +266,7 @@ const DroppableZone = memo<{
 
 const CustomizeSidebarContent = memo(() => {
   const { t } = useTranslation('common');
+  const { message } = App.useApp();
 
   const [storeZones, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.sidebarZones(s),
@@ -313,7 +314,19 @@ const CustomizeSidebarContent = memo(() => {
       const overId = over.id as string;
 
       // Locked items cannot leave the middle zone
-      if (LOCKED_TO_MIDDLE.has(activeItemId)) return;
+      if (LOCKED_TO_MIDDLE.has(activeItemId)) {
+        const toZone = findZone(overId, zones) ?? (overId as ZoneKey);
+        if (toZone !== 'middle') {
+          const item = ITEM_MAP.get(activeItemId);
+          if (item) {
+            message.info({
+              content: t('navPanel.lockedToSections' as any, { name: t(item.labelKey as any) }),
+              key: 'locked-to-sections',
+            });
+          }
+        }
+        return;
+      }
 
       const fromZone = findZone(activeItemId, zones);
       // over could be an item or a zone container id
@@ -336,7 +349,7 @@ const CustomizeSidebarContent = memo(() => {
         return { ...prev, [fromZone]: fromItems, [toZone]: toItems };
       });
     },
-    [zones],
+    [zones, message, t],
   );
 
   const handleDragEnd = useCallback(

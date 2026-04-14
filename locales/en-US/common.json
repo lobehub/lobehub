@@ -348,6 +348,7 @@
   "navPanel.hidden": "Hidden",
   "navPanel.hideSection": "Hide Section",
   "navPanel.library": "Library",
+  "navPanel.lockedToSections": "{{name}} can only be placed in the Sections zone",
   "navPanel.moveDown": "Move Down",
   "navPanel.moveUp": "Move Up",
   "navPanel.pinned": "Pinned",

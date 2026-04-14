@@ -348,6 +348,7 @@
   "navPanel.hidden": "已隐藏",
   "navPanel.hideSection": "隐藏分组",
   "navPanel.library": "资源库",
+  "navPanel.lockedToSections": "{{name}} 只能放在「分组」区域",
   "navPanel.moveDown": "下移",
   "navPanel.moveUp": "上移",
   "navPanel.pinned": "已固定",
