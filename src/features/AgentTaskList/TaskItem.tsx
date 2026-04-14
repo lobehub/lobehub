@@ -1,4 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CheckCircle2, Circle } from 'lucide-react';
@@ -39,6 +39,7 @@ const TaskItem = memo<TaskItemProps>(({ task }) => {
   const isDone = task.status === 'completed';
   const time = formatTime(task.updatedAt);
   const StatusIcon = isDone ? CheckCircle2 : Circle;
+  const participants = (task as any).participants ?? [];
 
   const handleClick = useCallback(() => {
     if (agentId) navigate(`/agent/${agentId}/tasks/${task.identifier}`);
@@ -47,9 +48,27 @@ const TaskItem = memo<TaskItemProps>(({ task }) => {
   return (
     <div className={styles.item} onClick={handleClick}>
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-        <Text ellipsis style={{ fontSize: 15 }} weight="bold">
-          {task.name || task.identifier}
-        </Text>
+        <Flexbox horizontal align="center" gap={8}>
+          <Text ellipsis style={{ fontSize: 15 }} weight="bold">
+            {task.name || task.identifier}
+          </Text>
+          {participants.length > 0 && (
+            <Flexbox horizontal style={{ flexShrink: 0 }}>
+              {participants.slice(0, 3).map((p: any, i: number) => (
+                <Avatar
+                  avatar={p.avatar}
+                  key={p.id}
+                  size={20}
+                  style={{
+                    border: `2px solid ${cssVar.colorBgContainer}`,
+                    marginInlineStart: i > 0 ? -6 : 0,
+                  }}
+                  title={p.name}
+                />
+              ))}
+            </Flexbox>
+          )}
+        </Flexbox>
         {task.description && (
           <Text
             ellipsis
