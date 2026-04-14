@@ -1,3 +1,5 @@
+import { type BriefType } from '@lobechat/types';
+
 export interface AgentAvatarInfo {
   avatar: string | null;
   backgroundColor: string | null;
@@ -22,6 +24,6 @@ export interface BriefItem {
   taskId: string | null;
   title: string;
   topicId: string | null;
-  type: string;
+  type: BriefType;
   userId: string;
 }

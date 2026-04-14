@@ -1,10 +1,9 @@
+import { type BriefType } from '@lobechat/types';
 import { Block, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import type { CircleDot } from 'lucide-react';
 import { CheckCheckIcon, EyeIcon, Lightbulb, PencilRulerIcon, SirenIcon } from 'lucide-react';
 import { memo } from 'react';
-
-type BriefType = 'decision' | 'error' | 'insight' | 'result';
 
 const BRIEF_TYPE_ICON: Record<BriefType, typeof CircleDot> = {
   decision: PencilRulerIcon,
