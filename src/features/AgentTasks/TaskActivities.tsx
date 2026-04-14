@@ -1,3 +1,4 @@
+import type { TaskDetailActivityAuthor } from '@lobechat/types';
 import { ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Input } from 'antd';
 import { cssVar } from 'antd-style';
@@ -6,8 +7,6 @@ import { ArrowUp, BotMessageSquare, MessageCircle, MessagesSquare, Zap } from 'l
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
@@ -20,14 +19,13 @@ const typeIconMap = {
 };
 
 const ActivityItem = memo<{
-  agentId?: string | null;
+  author?: TaskDetailActivityAuthor;
   content?: string;
   summary?: string;
   time?: string;
   title?: string;
   type: string;
-}>(({ type, title, content, summary, time, agentId }) => {
-  const agent = useAgentStore((s) => agentByIdSelectors.getAgentById(agentId ?? '')(s));
+}>(({ type, title, content, summary, time, author }) => {
   const LucideIcon = typeIconMap[type as keyof typeof typeIconMap] ?? MessageCircle;
   const relTime = time ? dayjs(time).fromNow() : '';
 
@@ -40,19 +38,17 @@ const ActivityItem = memo<{
     displayText = title || summary || 'posted a brief';
   }
 
-  const agentName = agent?.title;
-
   return (
     <div className={styles.activityItem}>
-      {agent?.avatar ? (
-        <Avatar avatar={agent.avatar} size={24} />
+      {author?.avatar ? (
+        <Avatar avatar={author.avatar} size={24} />
       ) : (
         <div className={styles.activityAvatar}>
           <LucideIcon size={12} />
         </div>
       )}
       <Text ellipsis style={{ color: cssVar.colorTextSecondary }}>
-        {agentName && <span style={{ fontWeight: 500 }}>{agentName} </span>}
+        {author?.name && <span style={{ fontWeight: 500 }}>{author.name} </span>}
         {displayText}
         {relTime && (
           <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>
@@ -134,7 +130,7 @@ const TaskActivities = memo(() => {
 
       {activities.map((act, index) => (
         <ActivityItem
-          agentId={act.agentId}
+          author={act.author}
           content={act.content}
           key={act.id ?? index}
           summary={act.summary}
