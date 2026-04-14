@@ -1,7 +1,7 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { ThreadStatus, ThreadType, UserInterventionConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -109,6 +109,12 @@ const ExecAgentSchema = z
     prompt: z.string(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
+    /**
+     * User intervention configuration for tool approvals.
+     * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
+     * so tool calls auto-execute without waiting for human approval.
+     */
+    userInterventionConfig: UserInterventionConfigSchema.optional(),
   })
   .refine((data) => data.agentId || data.slug, {
     message: 'Either agentId or slug must be provided',
@@ -541,6 +547,7 @@ export const aiAgentRouter = router({
       existingMessageIds = [],
       fileIds,
       parentMessageId,
+      userInterventionConfig,
     } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
@@ -559,6 +566,7 @@ export const aiAgentRouter = router({
         // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
         resume: !!parentMessageId,
         slug,
+        userInterventionConfig,
       });
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
