@@ -83,6 +83,19 @@ export class MessageGatewayClient {
     return res.json();
   }
 
+  async disconnectAll(): Promise<{ disconnected: number; total: number }> {
+    log('Disconnecting all connections');
+
+    const res = await this.fetch('/api/connections', { method: 'DELETE' });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`message-gateway disconnect-all failed (${res.status}): ${error}`);
+    }
+
+    return res.json();
+  }
+
   async disconnect(connectionId: string): Promise<{ status: string }> {
     log('Disconnecting %s', connectionId);
 

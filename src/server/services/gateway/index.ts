@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { gatewayEnv } from '@/envs/gateway';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import type { ConnectionMode } from '../bot/platforms';
@@ -17,18 +18,34 @@ const isVercel = !!process.env.VERCEL_ENV;
 
 export class GatewayService {
   /**
-   * Check if the external message-gateway is configured.
-   * When enabled, all platforms are registered on the gateway for
-   * connection management and typing persistence.
+   * Whether to use the external message-gateway for connection management.
+   * Requires MESSAGE_GATEWAY_ENABLED=1 plus URL/TOKEN to be configured.
+   * This allows disabling the gateway (for migration) while keeping
+   * the client reachable for cleanup.
    */
   get useMessageGateway(): boolean {
-    return getMessageGatewayClient().isConfigured;
+    return gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' && getMessageGatewayClient().isConfigured;
   }
 
   async ensureRunning(): Promise<void> {
     if (this.useMessageGateway) {
       await this.syncGatewayConnections();
       return;
+    }
+
+    // Not using external gateway — if the client is still reachable,
+    // disconnect leftover connections to prevent duplicates
+    // (e.g. switching from gateway to in-process mode).
+    const client = getMessageGatewayClient();
+    if (client.isConfigured) {
+      try {
+        const result = await client.disconnectAll();
+        if (result.disconnected > 0) {
+          log('Cleaned up %d/%d gateway connections', result.disconnected, result.total);
+        }
+      } catch (err) {
+        log('Gateway cleanup skipped (non-critical): %O', err);
+      }
     }
 
     const existing = getGatewayManager();
