@@ -44,30 +44,35 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const { isRevalidating } = useInitRecents();
 
-  const [recentPageSize, sidebarSectionOrder, hiddenSections, updateSystemStatus] = useGlobalStore(
-    (s) => [
-      systemStatusSelectors.recentPageSize(s),
-      systemStatusSelectors.sidebarSectionOrder(s),
-      systemStatusSelectors.hiddenSidebarSections(s),
-      s.updateSystemStatus,
-    ],
-  );
+  const [recentPageSize, sidebarZones, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
+    systemStatusSelectors.recentPageSize(s),
+    systemStatusSelectors.sidebarZones(s),
+    systemStatusSelectors.hiddenSidebarSections(s),
+    s.updateSystemStatus,
+  ]);
 
-  const visibleOrder = sidebarSectionOrder.filter((k) => !hiddenSections.includes(k));
-  const visibleIndex = visibleOrder.indexOf('recents');
+  // Find which zone 'recents' belongs to and its position within that zone
+  const myZone = sidebarZones.top.includes('recents')
+    ? 'top'
+    : sidebarZones.middle.includes('recents')
+      ? 'middle'
+      : 'bottom';
+  const zoneItems = sidebarZones[myZone as keyof typeof sidebarZones];
+  const visibleItems = zoneItems.filter((k) => !hiddenSections.includes(k));
+  const visibleIndex = visibleItems.indexOf('recents');
   const isFirst = visibleIndex === 0;
-  const isLast = visibleIndex === visibleOrder.length - 1;
+  const isLast = visibleIndex === visibleItems.length - 1;
 
   const moveSection = useCallback(
     (direction: 'up' | 'down') => {
-      const newOrder = [...sidebarSectionOrder];
-      const idx = newOrder.indexOf('recents');
+      const items = [...zoneItems];
+      const idx = items.indexOf('recents');
       const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= newOrder.length) return;
-      [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
-      updateSystemStatus({ sidebarSectionOrder: newOrder });
+      if (swapIdx < 0 || swapIdx >= items.length) return;
+      [items[idx], items[swapIdx]] = [items[swapIdx], items[idx]];
+      updateSystemStatus({ sidebarZones: { ...sidebarZones, [myZone]: items } });
     },
-    [sidebarSectionOrder, updateSystemStatus],
+    [zoneItems, myZone, sidebarZones, updateSystemStatus],
   );
 
   const hideSection = useCallback(() => {
@@ -130,7 +135,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
     isLast,
     moveSection,
     hideSection,
-    visibleOrder.length,
+    visibleItems.length,
   ]);
 
   if (!isLogin) return null;

@@ -19,8 +19,69 @@ const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
 const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 
 const hiddenSidebarSections = (s: GlobalState): string[] => s.status.hiddenSidebarSections || [];
-const sidebarSectionOrder = (s: GlobalState): string[] =>
-  s.status.sidebarSectionOrder || ['recents', 'agent'];
+
+const ALL_SIDEBAR_KEYS = ['pages', 'recents', 'agent', 'community', 'resource'];
+const ACCORDION_KEYS = new Set(['recents', 'agent']);
+
+export const DEFAULT_ZONES: SidebarZones = {
+  bottom: ['community', 'resource'],
+  middle: ['recents', 'agent'],
+  top: ['pages'],
+};
+
+export interface SidebarZones {
+  bottom: string[];
+  middle: string[];
+  top: string[];
+}
+
+/** Derive zones from a legacy flat order based on accordion item positions. */
+const deriveZonesFromOrder = (order: string[]): SidebarZones => {
+  let firstAcc = -1;
+  let lastAcc = -1;
+  for (let i = 0; i < order.length; i++) {
+    if (ACCORDION_KEYS.has(order[i])) {
+      if (firstAcc === -1) firstAcc = i;
+      lastAcc = i;
+    }
+  }
+  if (firstAcc === -1) return { bottom: [], middle: [], top: [...order] };
+  return {
+    bottom: order.slice(lastAcc + 1),
+    middle: order.slice(firstAcc, lastAcc + 1),
+    top: order.slice(0, firstAcc),
+  };
+};
+
+const sidebarZones = (s: GlobalState): SidebarZones => {
+  const zones = s.status.sidebarZones;
+  if (zones && zones.top && zones.middle && zones.bottom) {
+    // Ensure all known items are present (handles future additions)
+    const present = new Set([...zones.top, ...zones.middle, ...zones.bottom]);
+    const missing = ALL_SIDEBAR_KEYS.filter((k) => !present.has(k));
+    if (missing.length === 0) return zones;
+    return { ...zones, bottom: [...zones.bottom, ...missing] };
+  }
+
+  // Migration from legacy sidebarSectionOrder
+  const legacy = s.status.sidebarSectionOrder;
+  if (legacy && legacy.length > 0) {
+    // Ensure all items present in legacy order
+    const all = [...legacy];
+    for (const key of ALL_SIDEBAR_KEYS) {
+      if (!all.includes(key)) all.push(key);
+    }
+    return deriveZonesFromOrder(all);
+  }
+
+  return DEFAULT_ZONES;
+};
+
+/** Flat order derived from zones — for consumers that need a single array. */
+const sidebarSectionOrder = (s: GlobalState): string[] => {
+  const z = sidebarZones(s);
+  return [...z.top, ...z.middle, ...z.bottom];
+};
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
@@ -117,6 +178,7 @@ export const systemStatusSelectors = {
   portalWidth,
   recentPageSize,
   sidebarSectionOrder,
+  sidebarZones,
   sessionGroupKeys,
   showChatHeader,
   showFilePanel,
