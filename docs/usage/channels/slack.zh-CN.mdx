@@ -53,6 +53,13 @@ LobeHub 支持两种 Slack 连接模式：
     bot_user:
       display_name: LobeHub Assistant
       always_online: true
+    slash_commands:
+      - command: /new
+        description: Start a new conversation
+        should_escape: false
+      - command: /stop
+        description: Stop the current execution
+        should_escape: false
   oauth_config:
     scopes:
       bot:
@@ -60,6 +67,7 @@ LobeHub 支持两种 Slack 连接模式：
         - channels:history
         - channels:read
         - chat:write
+        - commands
         - groups:history
         - groups:read
         - im:history
@@ -81,12 +89,14 @@ LobeHub 支持两种 Slack 连接模式：
         - member_joined_channel
         - assistant_thread_started
         - assistant_thread_context_changed
+    interactivity:
+      is_enabled: true
     org_deploy_enabled: false
     socket_mode_enabled: true
     token_rotation_enabled: false
   ```
 
-  > **注意：** `socket_mode_enabled: true` 表示无需配置 Request URL。事件通过 WebSocket 推送。
+  > **注意：** `socket_mode_enabled: true` 表示无需配置 Request URL。事件（包括 Slash Commands）通过 WebSocket 推送。
 
   ### 创建应用
 
@@ -151,6 +161,8 @@ LobeHub 支持两种 Slack 连接模式：
 
 在 LobeHub 点击 **测试连接**，然后进入 Slack，将机器人邀请到频道，通过 `@LobeHub Assistant` 提及它，确认是否正常响应。
 
+> **Slash Commands：** 如果您使用了上方的 Manifest 模板，`/new` 和 `/stop` 命令已自动配置。在 Slack 输入 `/new` 可以重置对话，输入 `/stop` 可以停止当前执行。您也可以通过 `@bot /new` 的方式使用这些命令。
+
 ---
 
 ## Webhook 设置（备选方案）
@@ -179,6 +191,17 @@ LobeHub 支持两种 Slack 连接模式：
   在 Slack API 控制台 → **Event Subscriptions** 中，启用事件，将 Webhook URL 粘贴为 **Request URL**，订阅事件：`app_mention`、`message.channels`、`message.groups`、`message.im`、`message.mpim`、`member_joined_channel`。
 
   ![](/blog/assets8f3657f3785fc04c42b0f53c17daa72e.webp)
+
+  ### 配置 Slash Commands（可选）
+
+  在 Slack API 控制台 → **Slash Commands** 中，点击 **Create New Command**，添加以下命令：
+
+  | Command | Request URL        | Short Description          |
+  | ------- | ------------------ | -------------------------- |
+  | `/new`  | 与上方相同的 Webhook URL | Start a new conversation   |
+  | `/stop` | 与上方相同的 Webhook URL | Stop the current execution |
+
+  同时确保在 **OAuth & Permissions** → **Bot Token Scopes** 中添加 `commands` 权限，并在 **Interactivity & Shortcuts** 中启用 Interactivity，将 Request URL 设为相同的 Webhook URL。
 </Steps>
 
 ## 配置参考
