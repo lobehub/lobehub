@@ -1,6 +1,9 @@
 {
   "about": "Über",
   "advanceSettings": "Erweiterte Einstellungen",
+  "agentOnboardingPromo.actionLabel": "Jetzt ausprobieren",
+  "agentOnboardingPromo.description": "Die klassische Einrichtung ist abgeschlossen. Probiere den neuen dialogbasierten Ablauf aus und gestalte deinen Agent in wenigen kurzen Schritten.",
+  "agentOnboardingPromo.title": "Dialogbasierte Einrichtung ausprobieren",
   "alert.cloud.action": "Jetzt ausprobieren",
   "alert.cloud.desc": "Alle registrierten Nutzer erhalten monatlich {{credit}} kostenlose Rechen-Credits – keine Einrichtung erforderlich. Inklusive globaler Cloud-Synchronisierung und erweiterter Websuche.",
   "alert.cloud.descOnMobile": "Alle registrierten Nutzer erhalten monatlich {{credit}} kostenlose Rechen-Credits – keine Einrichtung erforderlich.",

@@ -1,6 +1,9 @@
 {
   "about": "À propos",
   "advanceSettings": "Paramètres avancés",
+  "agentOnboardingPromo.actionLabel": "Essayer maintenant",
+  "agentOnboardingPromo.description": "L’intégration classique est terminée. Essayez le nouveau parcours conversationnel pour configurer votre agent en quelques échanges.",
+  "agentOnboardingPromo.title": "Essayer l’intégration conversationnelle",
   "alert.cloud.action": "Essayer maintenant",
   "alert.cloud.desc": "Tous les utilisateurs enregistrés reçoivent {{credit}} crédits de calcul gratuits par mois — aucune configuration requise. Inclut la synchronisation cloud mondiale et la recherche web avancée.",
   "alert.cloud.descOnMobile": "Tous les utilisateurs enregistrés reçoivent {{credit}} crédits de calcul gratuits par mois — aucune configuration requise.",

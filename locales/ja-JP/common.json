@@ -1,6 +1,9 @@
 {
   "about": "情報",
   "advanceSettings": "詳細設定",
+  "agentOnboardingPromo.actionLabel": "今すぐ試す",
+  "agentOnboardingPromo.description": "クラシックなオンボーディングは完了しました。新しい対話式フローで、短いやり取りのうちにエージェントを整えましょう。",
+  "agentOnboardingPromo.title": "対話式オンボーディングを試す",
   "alert.cloud.action": "今すぐ試す",
   "alert.cloud.desc": "すべての登録ユーザーは毎月{{credit}}の無料コンピューティングクレジットを受け取れます—設定は不要です。グローバルクラウド同期と高度なウェブ検索が含まれます。",
   "alert.cloud.descOnMobile": "すべての登録ユーザーは毎月{{credit}}の無料コンピューティングクレジットを受け取れます—設定は不要です。",

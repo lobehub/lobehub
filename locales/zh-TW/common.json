@@ -1,6 +1,9 @@
 {
   "about": "關於",
   "advanceSettings": "進階設定",
+  "agentOnboardingPromo.actionLabel": "立即試用",
+  "agentOnboardingPromo.description": "你已完成經典引導。試試新的對話式引導流程，用幾輪交流快速完成助理設定。",
+  "agentOnboardingPromo.title": "試試對話式引導",
   "alert.cloud.action": "免費體驗",
   "alert.cloud.desc": "所有註冊用戶每月可獲得 {{credit}} 免費運算點數—無需設定。包含全球雲端同步與進階網頁搜尋功能。",
   "alert.cloud.descOnMobile": "所有註冊用戶每月可獲得 {{credit}} 免費運算點數—無需設定。",
