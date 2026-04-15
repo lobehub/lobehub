@@ -1,3 +1,13 @@
+// ── Task type aliases ──
+
+export type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+
+export type TaskPriority = 0 | 1 | 2 | 3 | 4;
+
+export type TaskActivityType = 'brief' | 'comment' | 'topic';
+
+// ── Config types ──
+
 export interface CheckpointConfig {
   onAgentRequest?: boolean;
   tasks?: {
@@ -158,7 +168,7 @@ export interface TaskDetailActivity {
   summary?: string;
   time?: string;
   title?: string;
-  type: 'brief' | 'comment' | 'topic';
+  type: TaskActivityType;
 }
 
 export interface TaskDetailData {

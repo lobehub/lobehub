@@ -1,4 +1,4 @@
-import type { TaskParticipant } from '@lobechat/types';
+import type { TaskParticipant, TaskStatus } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
@@ -12,7 +12,7 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import { styles } from './style';
 
-const statusColorMap: Record<string, string> = {
+const statusColorMap: Record<TaskStatus, string> = {
   backlog: cssVar.colorTextQuaternary,
   canceled: cssVar.colorTextQuaternary,
   completed: cssVar.colorSuccess,
@@ -36,7 +36,7 @@ const TaskItem = memo<TaskItemProps>(({ task }) => {
   const navigate = useNavigate();
 
   const displayStatus = taskListSelectors.getDisplayStatus(task.status);
-  const color = statusColorMap[task.status] ?? cssVar.colorTextQuaternary;
+  const color = statusColorMap[task.status as TaskStatus] ?? cssVar.colorTextQuaternary;
   const isDone = task.status === 'completed';
   const time = formatTime(task.updatedAt);
   const StatusIcon = isDone ? CheckCircle2 : Circle;
