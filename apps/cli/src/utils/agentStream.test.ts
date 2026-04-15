@@ -279,6 +279,8 @@ describe('streamAgentEventsViaWebSocket', () => {
     await flush();
 
     const ws = capturedWs!;
+    // Note: serverUrl is not set here, and JSON.stringify drops undefined keys,
+    // so the parsed auth message will not contain a `serverUrl` field.
     expect(ws.sent.map((s) => JSON.parse(s))).toEqual([
       { token: 'test-token', tokenType: 'jwt', type: 'auth' },
       { lastEventId: '', type: 'resume' },
@@ -288,10 +290,11 @@ describe('streamAgentEventsViaWebSocket', () => {
     await promise;
   });
 
-  it('should send tokenType=apiKey when the caller uses an API key', async () => {
+  it('should send tokenType=apiKey and serverUrl when the caller uses an API key', async () => {
     const promise = streamAgentEventsViaWebSocket({
       gatewayUrl: 'https://gw.test.com',
       operationId: 'op-1',
+      serverUrl: 'https://app.lobehub.com',
       token: 'lh_sk_abc',
       tokenType: 'apiKey',
     });
@@ -299,7 +302,10 @@ describe('streamAgentEventsViaWebSocket', () => {
     await flush();
 
     const ws = capturedWs!;
+    // serverUrl is forwarded so the gateway can call back to /api/v1/users/me
+    // to verify the API key.
     expect(ws.sent.map((s) => JSON.parse(s))[0]).toEqual({
+      serverUrl: 'https://app.lobehub.com',
       token: 'lh_sk_abc',
       tokenType: 'apiKey',
       type: 'auth',
