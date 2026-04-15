@@ -30,29 +30,33 @@ export class ConversationControlActionImpl {
   }
 
   /**
-   * Detect whether the given context has a running server-mode agent op.
-   * When true, approve/reject/reject_continue should skip the local
-   * `internal_execAgentRuntime` path and instead start a **new** Gateway op
-   * carrying a `resumeApproval` decision — mirroring the "interrupt + new op"
-   * pattern from LOBE-7142 so we don't need to reach into the paused op's
-   * state to resume it in-place.
+   * Decide whether approve/reject/reject_continue should go through the
+   * Gateway resume path (new op carrying `resumeApproval`) instead of the
+   * local `internal_execAgentRuntime` path. Mirrors the "interrupt + new op"
+   * pattern from LOBE-7142.
    *
-   * Must forward scope/groupId/subAgentId from the incoming context:
-   * `operationsByContext` is keyed on the full `messageMapKey`, so a
-   * thread/group/sub-agent conversation whose call site omits these fields
-   * would silently lookup the 'main' scope bucket, miss the running server
-   * op, and fall back to client-mode — exactly the bug this helper exists
-   * to prevent.
+   * Uses the same `isGatewayModeEnabled()` lab flag that routes the initial
+   * send, so approve/reject align with how the conversation was dispatched.
+   *
+   * We deliberately do **not** look for a living `execServerAgentRuntime`
+   * op here. The server's `waiting_for_human` → `agent_runtime_end` signal
+   * marks the paused op `completed` client-side, and `startOperation` runs
+   * `cleanupCompletedOperations(30_000)` on every new op, which means the
+   * paused op is typically gone by the time the user clicks approve — so
+   * scanning for it would flip us back into client-mode against a live
+   * Gateway backend.
    */
-  #hasRunningServerOp = (context: ConversationContext): boolean => {
-    return this.#getRunningServerOps(context).length > 0;
+  #shouldUseGatewayResume = (): boolean => {
+    return this.#get().isGatewayModeEnabled();
   };
 
   /**
    * Return running (non-aborting) `execServerAgentRuntime` ops in the given
-   * context. Used both to detect Gateway mode and to snapshot the set of
-   * paused ops before starting a resume op so we can retire them once the
-   * resume has successfully taken over.
+   * context. Used only to snapshot paused ops before starting a resume op
+   * so we can retire them if the server-side `agent_runtime_end` signal is
+   * delayed or missing — see `#completeOpsById`. In steady state with the
+   * coordinator fix active, this returns an empty list by the time approve
+   * runs because the server already completed the op.
    */
   #getRunningServerOps = (context: ConversationContext) => {
     const { agentId, groupId, scope, subAgentId, topicId, threadId } = context;
@@ -210,7 +214,7 @@ export class ConversationControlActionImpl {
     // message, persists `intervention=approved`, dispatches the approved
     // tool, and streams results back on the new op. No in-place resume of
     // the paused op — simpler state + avoids stepIndex races.
-    if (this.#hasRunningServerOp(effectiveContext)) {
+    if (this.#shouldUseGatewayResume()) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -221,7 +225,7 @@ export class ConversationControlActionImpl {
       }
       // Snapshot paused op IDs before the resume call; retire them only
       // after executeGatewayAgent succeeds so a transient failure leaves
-      // the running marker intact and `#hasRunningServerOp` still flags
+      // the running marker intact and `#shouldUseGatewayResume` still flags
       // Gateway mode on retry.
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
       try {
@@ -612,7 +616,7 @@ export class ConversationControlActionImpl {
     // fallback guard in case the server-side human_approve agent_runtime_end
     // was missed, while preserving the paused-op marker on failure so a
     // retry still hits the Gateway branch.
-    if (this.#hasRunningServerOp(effectiveContext)) {
+    if (this.#shouldUseGatewayResume()) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
@@ -667,7 +671,7 @@ export class ConversationControlActionImpl {
     // the LLM loop with the rejection content surfaced as user feedback.
     // Skip the client-mode `rejectToolCalling` chain below — that would fire
     // a duplicate halting `reject` before this continue signal.
-    if (this.#hasRunningServerOp(effectiveContext)) {
+    if (this.#shouldUseGatewayResume()) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(

@@ -641,8 +641,8 @@ describe('ConversationControl actions', () => {
             messagesMap: { [chatKey]: [toolMessage] },
           });
 
-          // Simulate a running server operation — presence of this op is
-          // what flips approve/reject into server-mode.
+          // Presence of an `execServerAgentRuntime` op (any status) is one
+          // half of the Gateway-resume signal; the other is the lab flag.
           result.current.startOperation({
             context: { agentId, topicId, threadId: null },
             metadata: { serverOperationId: 'server-op-xyz' },
@@ -650,6 +650,7 @@ describe('ConversationControl actions', () => {
           });
         });
 
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
@@ -688,6 +689,78 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
 
+      it('should still take the Gateway branch when the server already ended the paused op (post-coordinator-fix state)', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-1',
+          plugin: {
+            apiName: 'search',
+            arguments: '{"q":"test"}',
+            identifier: 'web-search',
+            type: 'default',
+          },
+          role: 'tool',
+          tool_call_id: 'call_xyz',
+        } as any);
+
+        let serverOpId: string | undefined;
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+
+          serverOpId = result.current.startOperation({
+            context: { agentId, topicId, threadId: null },
+            metadata: { serverOperationId: 'server-op-xyz' },
+            type: 'execServerAgentRuntime',
+          }).operationId;
+
+          // Simulate the coordinator's `waiting_for_human` → `agent_runtime_end`
+          // signal arriving before the user clicks approve: the op is already
+          // `completed` when the Gateway-branch decision runs.
+          result.current.completeOperation(serverOpId!);
+        });
+
+        expect(result.current.operations[serverOpId!]!.status).toBe('completed');
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+        const internal_execAgentRuntimeSpy = vi
+          .spyOn(result.current, 'internal_execAgentRuntime')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-1', 'group-1');
+        });
+
+        // Critical regression guard: with `#hasRunningServerOp` the branch
+        // was missed here (no running op → fell through to client-mode).
+        // The combined `isGatewayModeEnabled() + any execServerAgentRuntime`
+        // check keeps us on the Gateway path.
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeApproval: expect.objectContaining({
+              decision: 'approved',
+              toolCallId: 'call_xyz',
+            }),
+          }),
+        );
+        expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
       it('should leave the paused server op running when the Gateway resume call fails so retries stay on the server-mode path', async () => {
         const { result } = renderHook(() => useChatStore());
 
@@ -722,6 +795,7 @@ describe('ConversationControl actions', () => {
           });
         });
 
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
@@ -829,6 +903,7 @@ describe('ConversationControl actions', () => {
           });
         });
 
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
         vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
         const executeGatewayAgentSpy = vi
           .spyOn(result.current, 'executeGatewayAgent')
@@ -888,6 +963,7 @@ describe('ConversationControl actions', () => {
         });
       });
 
+      vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
       vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
@@ -944,6 +1020,7 @@ describe('ConversationControl actions', () => {
         });
       });
 
+      vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
       vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
