@@ -21,7 +21,7 @@ export const documentHistories = pgTable(
 
     editorData: jsonb('editor_data').$type<Record<string, any>>().notNull(),
     saveSource: text('save_source', {
-      enum: ['autosave', 'manual', 'restore', 'system'],
+      enum: ['autosave', 'manual', 'restore', 'system', 'llm_call'],
     }).notNull(),
     savedAt: timestamptz('saved_at').notNull(),
   },

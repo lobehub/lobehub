@@ -9,4 +9,5 @@ export const DOCUMENT_HISTORY_SOURCE_LIMITS: Record<DocumentHistorySaveSource, n
   manual: 20,
   restore: 5,
   system: 5,
+  llm_call: 5,
 };

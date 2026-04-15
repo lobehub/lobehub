@@ -8,6 +8,8 @@ import type {
   GetHistoryItemOutput,
   ListHistoryInput,
   ListHistoryOutput,
+  SaveDocumentHistoryInput,
+  SaveDocumentHistoryOutput,
   UpdateDocumentInput,
   UpdateDocumentOutput,
 } from '@/server/routers/lambda/_schema/documentHistory';
@@ -115,6 +117,7 @@ export interface DocumentHistoryClientSurface {
     uniqueKey?: string,
   ) => Promise<GetHistoryItemOutput>;
   listDocumentHistory: (params: ListDocumentHistoryParams) => Promise<ListHistoryOutput>;
+  saveDocumentHistory: (params: SaveDocumentHistoryInput) => Promise<SaveDocumentHistoryOutput>;
   updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
 
@@ -199,6 +202,14 @@ export class DocumentService {
           ? result.savedAt.toISOString()
           : result.savedAt
         : undefined,
+    };
+  }
+
+  async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {
+    const result = await lambdaClient.document.saveDocumentHistory.mutate(params);
+
+    return {
+      savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
   }
 }

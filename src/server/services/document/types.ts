@@ -1,6 +1,6 @@
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 
-export type DocumentHistorySaveSource = 'autosave' | 'manual' | 'restore' | 'system';
+export type DocumentHistorySaveSource = 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 
 export interface CompareDocumentHistoryItemsParams {
   documentId: string;
@@ -68,4 +68,8 @@ export interface UpdateDocumentResult {
   historyAppended: boolean;
   id: string;
   savedAt?: Date;
+}
+
+export interface SaveDocumentHistoryResult {
+  savedAt: Date;
 }

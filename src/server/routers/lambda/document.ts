@@ -13,6 +13,7 @@ import {
   compareDocumentHistoryItemsInputSchema,
   getDocumentHistoryItemInputSchema,
   listDocumentHistoryInputSchema,
+  saveDocumentHistoryInputSchema,
   updateDocumentInputSchema,
 } from './_schema/documentHistory';
 
@@ -159,6 +160,17 @@ export const documentRouter = router({
       return ctx.documentService.compareDocumentHistoryItems(input, {
         historySince: getFreeDocumentHistorySince(),
       });
+    }),
+
+  saveDocumentHistory: documentProcedure
+    .input(saveDocumentHistoryInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const editorData = JSON.parse(input.editorData);
+      return ctx.documentService.saveDocumentHistory(
+        input.documentId,
+        editorData,
+        input.saveSource,
+      );
     }),
 
   getFolderBreadcrumb: documentProcedure

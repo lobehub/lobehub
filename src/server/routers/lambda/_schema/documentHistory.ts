@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-export const documentHistorySaveSourceSchema = z.enum(['autosave', 'manual', 'restore', 'system']);
+export const documentHistorySaveSourceSchema = z.enum([
+  'autosave',
+  'manual',
+  'restore',
+  'system',
+  'llm_call',
+]);
 
 export const listDocumentHistoryInputSchema = z
   .object({
@@ -39,6 +45,12 @@ export const updateDocumentInputSchema = z.object({
   restoreFromHistoryId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema.optional(),
   title: z.string().optional(),
+});
+
+export const saveDocumentHistoryInputSchema = z.object({
+  documentId: z.string(),
+  editorData: z.string(),
+  saveSource: documentHistorySaveSourceSchema,
 });
 
 export interface DocumentHistoryListItem {
@@ -81,6 +93,16 @@ export interface UpdateDocumentOutput {
   savedAt?: string;
 }
 
+export interface SaveDocumentHistoryInput {
+  documentId: string;
+  editorData: string;
+  saveSource: DocumentHistorySaveSource;
+}
+
+export interface SaveDocumentHistoryOutput {
+  savedAt: string;
+}
+
 export interface ListHistoryInput {
   beforeId?: string;
   beforeSavedAt?: string;
@@ -118,6 +140,7 @@ export interface DocumentHistoryRouterService {
   ) => Promise<CompareHistoryItemsOutput>;
   getDocumentHistoryItem: (params: GetHistoryItemInput) => Promise<GetHistoryItemOutput>;
   listDocumentHistory: (params: ListHistoryInput) => Promise<ListHistoryOutput>;
+  saveDocumentHistory: (params: SaveDocumentHistoryInput) => Promise<SaveDocumentHistoryOutput>;
   updateDocument: (
     id: string,
     params: Omit<UpdateDocumentInput, 'id'>,

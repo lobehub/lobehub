@@ -218,6 +218,7 @@ const HistoryPanel = memo(() => {
   const saveSourceLabels = useMemo<Record<DocumentHistorySaveSource, string>>(
     () => ({
       autosave: t('pageEditor.history.saveSource.autosave', { ns: 'file' }),
+      llm_call: t('pageEditor.history.saveSource.llm_call', { ns: 'file' }),
       manual: t('pageEditor.history.saveSource.manual', { ns: 'file' }),
       restore: t('pageEditor.history.saveSource.restore', { ns: 'file' }),
       system: t('pageEditor.history.saveSource.system', { ns: 'file' }),

@@ -117,6 +117,7 @@ export default {
     'Restore the version saved on {{savedAt}}? This will create a new current version.',
   'pageEditor.history.restoreConfirm.title': 'Restore {{savedAt}}',
   'pageEditor.history.saveSource.autosave': 'Auto Save',
+  'pageEditor.history.saveSource.llm_call': 'AI Edit',
   'pageEditor.history.saveSource.manual': 'Manual Save',
   'pageEditor.history.saveSource.restore': 'Restore',
   'pageEditor.history.saveSource.system': 'System',

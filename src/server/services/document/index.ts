@@ -16,9 +16,11 @@ import type {
   CompareDocumentHistoryItemsParams,
   CompareDocumentHistoryItemsResult,
   DocumentHistoryAccessOptions,
+  DocumentHistorySaveSource,
   GetDocumentHistoryItemParams,
   ListDocumentHistoryParams,
   ListDocumentHistoryResult,
+  SaveDocumentHistoryResult,
   UpdateDocumentParams,
   UpdateDocumentResult,
 } from './types';
@@ -186,6 +188,30 @@ export class DocumentService {
     options?: DocumentHistoryAccessOptions,
   ): Promise<CompareDocumentHistoryItemsResult> {
     return this.documentHistoryService.compareDocumentHistoryItems(params, options);
+  }
+
+  /**
+   * Save a document history snapshot explicitly.
+   */
+  async saveDocumentHistory(
+    documentId: string,
+    editorData: Record<string, any>,
+    saveSource: DocumentHistorySaveSource,
+  ): Promise<SaveDocumentHistoryResult> {
+    const currentDocument = await this.documentModel.findById(documentId);
+    if (!currentDocument) {
+      throw new Error(`Document not found: ${documentId}`);
+    }
+
+    const savedAt = new Date();
+    await this.documentHistoryService.createHistory({
+      documentId,
+      editorData,
+      saveSource,
+      savedAt,
+    });
+
+    return { savedAt };
   }
 
   /**

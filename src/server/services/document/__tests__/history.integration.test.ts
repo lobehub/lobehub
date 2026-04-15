@@ -406,6 +406,31 @@ describe('DocumentHistoryService', () => {
 
       expect(remainingRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.autosave);
     });
+
+    it('should trim llm_call history to 5 independently', async () => {
+      const doc = await createTestDocument('Hello');
+
+      for (let i = 0; i < 10; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { llm: i },
+          saveSource: 'llm_call',
+          savedAt: new Date(`2026-04-01T${String(i).padStart(2, '0')}:00:00Z`),
+        });
+      }
+
+      const llmCallRows = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(
+          and(
+            eq(documentHistories.documentId, doc.id),
+            eq(documentHistories.saveSource, 'llm_call'),
+          ),
+        );
+
+      expect(llmCallRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.llm_call);
+    });
   });
 
   describe('getDocumentHistoryItem', () => {

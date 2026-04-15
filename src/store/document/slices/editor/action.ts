@@ -25,7 +25,7 @@ export interface SaveMetadata {
 
 export interface SaveExecutionOptions {
   restoreFromHistoryId?: string;
-  saveSource?: 'autosave' | 'manual' | 'restore' | 'system';
+  saveSource?: 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 }
 
 type Setter = StoreSetter<DocumentStore>;

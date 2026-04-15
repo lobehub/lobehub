@@ -684,6 +684,34 @@ describe('DocumentService', () => {
     });
   });
 
+  describe('saveDocumentHistory', () => {
+    it('should create a history entry for an existing document', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+
+      const result = await service.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData: { blocks: [] },
+          saveSource: 'llm_call',
+          savedAt: expect.any(Date),
+        }),
+      );
+      expect(result.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('should throw when document does not exist', async () => {
+      mockDocumentModel.findById.mockResolvedValue(undefined);
+
+      await expect(service.saveDocumentHistory('missing-doc', {}, 'manual')).rejects.toThrow(
+        'Document not found: missing-doc',
+      );
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+    });
+  });
+
   describe('parseDocument', () => {
     const mockCleanup = vi.fn();
 
