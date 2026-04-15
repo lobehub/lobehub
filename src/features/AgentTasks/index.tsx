@@ -1,2 +1,2 @@
-export { default as AgentTasksPage } from './AgentTasksPage';
-export { default as TaskDetailPage } from './TaskDetailPage';
+export { TaskDetailPage } from './AgentTaskDetail';
+export { AgentTasksPage } from './AgentTaskList';

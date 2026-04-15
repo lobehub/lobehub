@@ -4,11 +4,12 @@ import { memo, useEffect } from 'react';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
+import WideScreenContainer from '@/features/WideScreenContainer';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import Breadcrumb from './Breadcrumb';
-import { styles } from './style';
+import Breadcrumb from '../shared/Breadcrumb';
+import { styles } from '../shared/style';
 import TaskActivities from './TaskActivities';
 import TaskDetailHeader from './TaskDetailHeader';
 import TaskInstruction from './TaskInstruction';
@@ -38,10 +39,21 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={saveStatus !== 'idle' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
+        left={
+          <>
+            <Breadcrumb agentId={agentId} taskId={taskId} />
+            {saveStatus !== 'idle' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
+          </>
+        }
+        styles={{
+          left: {
+            paddingLeft: 4,
+            gap: 8,
+          },
+        }}
       />
-      <Breadcrumb agentId={agentId} />
-      <div className={styles.container}>
+
+      <WideScreenContainer>
         {isLoading ? (
           <Loading debugId="TaskDetail" />
         ) : (
@@ -59,7 +71,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
             <TaskProperties />
           </div>
         )}
-      </div>
+      </WideScreenContainer>
     </Flexbox>
   );
 });
