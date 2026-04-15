@@ -1,5 +1,5 @@
 import { formatTodoStateSummary } from '@lobechat/prompts';
-import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinToolResult } from '@lobechat/types';
 
 import type {
   ClearTodosParams,
@@ -33,21 +33,34 @@ export interface GTDRuntimeService {
   }) => Promise<PlanDocument>;
   findPlanById: (id: string) => Promise<PlanDocument | null>;
   findPlanByTopic: (topicId: string) => Promise<PlanDocument | null>;
+  /**
+   * Update the user-facing plan fields (goal / description / context).
+   * `topicId` is forwarded so client implementations can refresh their SWR cache;
+   * server implementations can safely ignore it.
+   */
   updatePlan: (
     id: string,
-    args: {
-      content?: string;
-      description?: string;
-      goal?: string;
-      metadata?: Record<string, any>;
-    },
+    args: { content?: string; description?: string; goal?: string },
+    topicId?: string,
   ) => Promise<PlanDocument>;
+  /**
+   * Silently update the plan document's metadata (used for todos sync).
+   * Should NOT trigger UI refresh on the client.
+   */
+  updatePlanMetadata: (id: string, metadata: Record<string, any>) => Promise<void>;
 }
 
 export interface GTDRuntimeContext {
+  /**
+   * Existing todos supplied by the caller (client: from stepContext / pluginState).
+   * When undefined, the runtime resolves todos from the plan document's metadata.
+   */
+  currentTodos?: TodoItem[];
+  /** Tool call message ID — used as `parentMessageId` for execTask/execTasks. */
+  messageId?: string;
+  signal?: AbortSignal;
   taskId?: string;
   topicId?: string;
-  userId?: string;
 }
 
 const toPlan = (doc: PlanDocument, completed = false): Plan => ({
@@ -77,22 +90,21 @@ export class GTDExecutionRuntime {
     this.service = service;
   }
 
+  private async resolveExistingTodos(context: GTDRuntimeContext): Promise<TodoItem[]> {
+    if (context.currentTodos) return context.currentTodos;
+    if (!context.topicId) return [];
+    const plan = await this.service.findPlanByTopic(context.topicId);
+    return readTodosFromPlan(plan);
+  }
+
   private async syncTodosToPlan(topicId: string, todos: TodoState): Promise<void> {
     try {
       const plan = await this.service.findPlanByTopic(topicId);
       if (!plan) return;
-      await this.service.updatePlan(plan.id, {
-        metadata: { ...plan.metadata, todos },
-      });
+      await this.service.updatePlanMetadata(plan.id, { ...plan.metadata, todos });
     } catch (error) {
       console.warn('Failed to sync todos to plan:', error);
     }
-  }
-
-  private async loadExistingTodos(topicId?: string): Promise<TodoItem[]> {
-    if (!topicId) return [];
-    const plan = await this.service.findPlanByTopic(topicId);
-    return readTodosFromPlan(plan);
   }
 
   // ==================== Todo APIs ====================
@@ -100,7 +112,7 @@ export class GTDExecutionRuntime {
   createTodos = async (
     params: CreateTodosParams,
     context: GTDRuntimeContext,
-  ): Promise<BuiltinServerRuntimeOutput> => {
+  ): Promise<BuiltinToolResult> => {
     const itemsToAdd: TodoItem[] = params.items
       ? params.items
       : params.adds
@@ -111,7 +123,7 @@ export class GTDExecutionRuntime {
       return { content: 'No items provided to add.', success: false };
     }
 
-    const existingTodos = await this.loadExistingTodos(context.topicId);
+    const existingTodos = await this.resolveExistingTodos(context);
     const updatedTodos = [...existingTodos, ...itemsToAdd];
     const now = new Date().toISOString();
 
@@ -120,9 +132,7 @@ export class GTDExecutionRuntime {
 
     const todoState: TodoState = { items: updatedTodos, updatedAt: now };
 
-    if (context.topicId) {
-      await this.syncTodosToPlan(context.topicId, todoState);
-    }
+    if (context.topicId) await this.syncTodosToPlan(context.topicId, todoState);
 
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
@@ -137,14 +147,14 @@ export class GTDExecutionRuntime {
   updateTodos = async (
     params: UpdateTodosParams,
     context: GTDRuntimeContext,
-  ): Promise<BuiltinServerRuntimeOutput> => {
+  ): Promise<BuiltinToolResult> => {
     const { operations } = params;
 
     if (!operations || operations.length === 0) {
       return { content: 'No operations provided.', success: false };
     }
 
-    const existingTodos = await this.loadExistingTodos(context.topicId);
+    const existingTodos = await this.resolveExistingTodos(context);
     const updatedTodos = [...existingTodos];
     const results: string[] = [];
 
@@ -199,9 +209,7 @@ export class GTDExecutionRuntime {
 
     const todoState: TodoState = { items: updatedTodos, updatedAt: now };
 
-    if (context.topicId) {
-      await this.syncTodosToPlan(context.topicId, todoState);
-    }
+    if (context.topicId) await this.syncTodosToPlan(context.topicId, todoState);
 
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
@@ -213,10 +221,10 @@ export class GTDExecutionRuntime {
   clearTodos = async (
     params: ClearTodosParams,
     context: GTDRuntimeContext,
-  ): Promise<BuiltinServerRuntimeOutput> => {
+  ): Promise<BuiltinToolResult> => {
     const { mode } = params;
 
-    const existingTodos = await this.loadExistingTodos(context.topicId);
+    const existingTodos = await this.resolveExistingTodos(context);
 
     if (existingTodos.length === 0) {
       const now = new Date().toISOString();
@@ -251,9 +259,7 @@ export class GTDExecutionRuntime {
     const now = new Date().toISOString();
     const todoState: TodoState = { items: updatedTodos, updatedAt: now };
 
-    if (context.topicId) {
-      await this.syncTodosToPlan(context.topicId, todoState);
-    }
+    if (context.topicId) await this.syncTodosToPlan(context.topicId, todoState);
 
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
@@ -267,8 +273,10 @@ export class GTDExecutionRuntime {
   createPlan = async (
     params: CreatePlanParams,
     context: GTDRuntimeContext,
-  ): Promise<BuiltinServerRuntimeOutput> => {
+  ): Promise<BuiltinToolResult> => {
     try {
+      if (context.signal?.aborted) return { stop: true, success: false };
+
       if (!context.topicId) {
         return { content: 'Cannot create plan: no topic selected', success: false };
       }
@@ -293,7 +301,6 @@ export class GTDExecutionRuntime {
     } catch (e) {
       const err = e as Error;
       return {
-        content: `Error creating plan: ${err.message}`,
         error: { body: e, message: err.message, type: 'PluginServerError' },
         success: false,
       };
@@ -303,8 +310,10 @@ export class GTDExecutionRuntime {
   updatePlan = async (
     params: UpdatePlanParams,
     context: GTDRuntimeContext,
-  ): Promise<BuiltinServerRuntimeOutput> => {
+  ): Promise<BuiltinToolResult> => {
     try {
+      if (context.signal?.aborted) return { stop: true, success: false };
+
       if (!context.topicId) {
         return { content: 'Cannot update plan: no topic selected', success: false };
       }
@@ -316,11 +325,11 @@ export class GTDExecutionRuntime {
         return { content: `Plan not found: ${planId}`, success: false };
       }
 
-      const updatedDoc = await this.service.updatePlan(planId, {
-        content: planContext,
-        description,
-        goal,
-      });
+      const updatedDoc = await this.service.updatePlan(
+        planId,
+        { content: planContext, description, goal },
+        context.topicId,
+      );
 
       const plan = toPlan(updatedDoc, completed ?? false);
       plan.context = planContext ?? existingDoc.content ?? undefined;
@@ -333,7 +342,6 @@ export class GTDExecutionRuntime {
     } catch (e) {
       const err = e as Error;
       return {
-        content: `Error updating plan: ${err.message}`,
         error: { body: e, message: err.message, type: 'PluginServerError' },
         success: false,
       };
@@ -342,7 +350,10 @@ export class GTDExecutionRuntime {
 
   // ==================== Async Tasks API ====================
 
-  execTask = async (params: ExecTaskParams): Promise<BuiltinServerRuntimeOutput> => {
+  execTask = async (
+    params: ExecTaskParams,
+    context: GTDRuntimeContext,
+  ): Promise<BuiltinToolResult> => {
     const { description, instruction, inheritMessages, timeout, runInClient } = params;
 
     if (!description || !instruction) {
@@ -354,14 +365,16 @@ export class GTDExecutionRuntime {
 
     return {
       content: `🚀 Triggered async task for ${runInClient ? 'client-side' : ''} execution:\n- ${description}`,
-      state: { parentMessageId: '', task, type: stateType },
-      // @ts-expect-error — stop is consumed by AgentRuntime when routing execTask/execTasks
+      state: { parentMessageId: context.messageId ?? '', task, type: stateType },
       stop: true,
       success: true,
     };
   };
 
-  execTasks = async (params: ExecTasksParams): Promise<BuiltinServerRuntimeOutput> => {
+  execTasks = async (
+    params: ExecTasksParams,
+    context: GTDRuntimeContext,
+  ): Promise<BuiltinToolResult> => {
     const { tasks } = params;
 
     if (!tasks || tasks.length === 0) {
@@ -376,8 +389,7 @@ export class GTDExecutionRuntime {
 
     return {
       content: `🚀 Triggered ${taskCount} async task${taskCount > 1 ? 's' : ''} for ${executionMode} execution:\n${taskList}`,
-      state: { parentMessageId: '', tasks, type: stateType },
-      // @ts-expect-error — stop is consumed by AgentRuntime when routing execTask/execTasks
+      state: { parentMessageId: context.messageId ?? '', tasks, type: stateType },
       stop: true,
       success: true,
     };

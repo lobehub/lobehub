@@ -35,6 +35,12 @@ const createGTDRuntimeService = (serverDB: LobeChatDatabase, userId: string): GT
     updatedAt: doc.updatedAt,
   });
 
+  const loadPlanOrThrow = async (id: string) => {
+    const doc = await documentModel.findById(id);
+    if (!doc) throw new Error(`Plan not found after update: ${id}`);
+    return toPlanDocument(doc);
+  };
+
   return {
     createPlan: async ({ topicId, goal, description, content }) => {
       const doc = await documentModel.create({
@@ -65,24 +71,25 @@ const createGTDRuntimeService = (serverDB: LobeChatDatabase, userId: string): GT
       return first ? toPlanDocument(first) : null;
     },
 
-    updatePlan: async (id, args) => {
+    updatePlan: async (id, { goal, description, content }) => {
       const updateData: Record<string, any> = {};
-      if (args.goal !== undefined) updateData.title = args.goal;
-      if (args.description !== undefined) updateData.description = args.description;
-      if (args.content !== undefined) {
-        updateData.content = args.content;
-        updateData.totalCharCount = args.content.length;
-        updateData.totalLineCount = args.content.split('\n').length;
+      if (goal !== undefined) updateData.title = goal;
+      if (description !== undefined) updateData.description = description;
+      if (content !== undefined) {
+        updateData.content = content;
+        updateData.totalCharCount = content.length;
+        updateData.totalLineCount = content.split('\n').length;
       }
-      if (args.metadata !== undefined) updateData.metadata = args.metadata;
 
       if (Object.keys(updateData).length > 0) {
         await documentModel.update(id, updateData);
       }
 
-      const doc = await documentModel.findById(id);
-      if (!doc) throw new Error(`Plan not found after update: ${id}`);
-      return toPlanDocument(doc);
+      return loadPlanOrThrow(id);
+    },
+
+    updatePlanMetadata: async (id, metadata) => {
+      await documentModel.update(id, { metadata });
     },
   };
 };
