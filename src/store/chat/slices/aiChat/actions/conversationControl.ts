@@ -50,8 +50,9 @@ export class ConversationControlActionImpl {
 
   /**
    * Return running (non-aborting) `execServerAgentRuntime` ops in the given
-   * context. Used both to detect Gateway mode and to clean up the paused op
-   * once a resume op takes over — see `#completeRunningServerOps`.
+   * context. Used both to detect Gateway mode and to snapshot the set of
+   * paused ops before starting a resume op so we can retire them once the
+   * resume has successfully taken over.
    */
   #getRunningServerOps = (context: ConversationContext) => {
     const { agentId, groupId, scope, subAgentId, topicId, threadId } = context;
@@ -71,20 +72,19 @@ export class ConversationControlActionImpl {
   };
 
   /**
-   * Client-side fallback guard that clears orphan server ops before starting
-   * a Gateway resume op. The server now emits `agent_runtime_end` right after
-   * `human_approve_required` (see `RuntimeExecutors.request_human_approve`),
-   * but if that event hasn't been processed yet — or the user is resuming
-   * against a server that lacks the fix — the old op would linger as
-   * "running" forever and keep the loading spinner on. Completing it before
-   * executeGatewayAgent ensures the UI resets before the new op's events
-   * arrive, and is a no-op when the server signal already fired.
+   * Client-side fallback guard that retires paused server ops once a Gateway
+   * resume op has started successfully. The server emits `agent_runtime_end`
+   * after `human_approve_required`, but if that event is delayed or the
+   * backend lacks the fix the paused op would linger as "running" and keep
+   * the loading spinner on. Callers must snapshot the IDs *before*
+   * `executeGatewayAgent` and only invoke this helper after the resume call
+   * resolves — completing eagerly on failure would erase the running marker
+   * while the server is still paused, causing retries to miss the Gateway
+   * branch and fall through to client-mode.
    */
-  #completeRunningServerOps = (context: ConversationContext): void => {
+  #completeOpsById = (opIds: readonly string[]): void => {
     const { completeOperation } = this.#get();
-    for (const op of this.#getRunningServerOps(context)) {
-      completeOperation(op.id);
-    }
+    for (const id of opIds) completeOperation(id);
   };
 
   stopGenerateMessage = (): void => {
@@ -219,10 +219,11 @@ export class ConversationControlActionImpl {
         completeOperation(operationId);
         return;
       }
-      // Clear the paused op before spinning up the resume op so the UI
-      // loading state doesn't bleed across ops if the server-side
-      // agent_runtime_end hasn't been processed yet.
-      this.#completeRunningServerOps(effectiveContext);
+      // Snapshot paused op IDs before the resume call; retire them only
+      // after executeGatewayAgent succeeds so a transient failure leaves
+      // the running marker intact and `#hasRunningServerOp` still flags
+      // Gateway mode on retry.
+      const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
       try {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
@@ -234,6 +235,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
         const err = error as Error;
@@ -606,8 +608,10 @@ export class ConversationControlActionImpl {
     // Server-mode: start a **new** Gateway op carrying `decision='rejected'`.
     // Server persists the rejection on the target tool message and halts the
     // conversation. The new op's `agent_runtime_end` clears the loading
-    // state on the client; `#completeRunningServerOps` is a fallback guard
-    // in case the server-side human_approve agent_runtime_end was missed.
+    // state on the client; the snapshot-then-retire dance below is a
+    // fallback guard in case the server-side human_approve agent_runtime_end
+    // was missed, while preserving the paused-op marker on failure so a
+    // retry still hits the Gateway branch.
     if (this.#hasRunningServerOp(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
@@ -617,7 +621,7 @@ export class ConversationControlActionImpl {
         completeOperation(operationId);
         return;
       }
-      this.#completeRunningServerOps(effectiveContext);
+      const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
       try {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
@@ -630,6 +634,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#completeOpsById(pausedOpIds);
       } catch (error) {
         console.error('[rejectToolCalling][server] Gateway resume failed:', error);
       }
@@ -671,7 +676,7 @@ export class ConversationControlActionImpl {
         return;
       }
 
-      this.#completeRunningServerOps(effectiveContext);
+      const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
 
       const { operationId } = startOperation({
         type: 'rejectToolCalling',
@@ -712,6 +717,7 @@ export class ConversationControlActionImpl {
             toolCallId,
           },
         });
+        this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
         const err = error as Error;

@@ -688,6 +688,63 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
 
+      it('should leave the paused server op running when the Gateway resume call fails so retries stay on the server-mode path', async () => {
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'server-agent';
+        const topicId = 'server-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-1',
+          plugin: {
+            apiName: 'search',
+            arguments: '{"q":"test"}',
+            identifier: 'web-search',
+            type: 'default',
+          },
+          role: 'tool',
+          tool_call_id: 'call_xyz',
+        } as any);
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [toolMessage] },
+            messagesMap: { [chatKey]: [toolMessage] },
+          });
+
+          result.current.startOperation({
+            context: { agentId, topicId, threadId: null },
+            metadata: { serverOperationId: 'server-op-xyz' },
+            type: 'execServerAgentRuntime',
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockRejectedValue(new Error('network error'));
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-1', 'group-1');
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalled();
+
+        // On failure, the paused server op must stay `running` — otherwise a
+        // retry would see no running server op and fall through to the
+        // non-Gateway path while the backend is still awaiting human input.
+        const serverOps = Object.values(result.current.operations).filter(
+          (op: any) => op.type === 'execServerAgentRuntime',
+        );
+        expect(serverOps).toHaveLength(1);
+        expect(serverOps[0]!.status).toBe('running');
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
       it('should fall through to client-mode runtime when no server operation is running', async () => {
         const { result } = renderHook(() => useChatStore());
 
