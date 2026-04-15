@@ -684,6 +684,10 @@ export default {
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
   'settingModel.enableMaxTokens.title': 'Enable Max Tokens Limit',
   'settingModel.enableReasoningEffort.title': 'Enable Reasoning Effort Adjustment',
+  'settingModel.failover.add': 'Add failover model',
+  'settingModel.failover.desc':
+    'Models are tried in order. The first model that matches required capabilities is used, and later models take over automatically if the active one errors.',
+  'settingModel.failover.title': 'Failover Models',
   'settingModel.frequencyPenalty.desc':
     'The higher the value, the more diverse and rich the vocabulary; the lower the value, the simpler and more straightforward the language.',
   'settingModel.frequencyPenalty.title': 'Vocabulary Richness',

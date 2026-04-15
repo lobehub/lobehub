@@ -46,6 +46,7 @@ import {
   type ToolExecutionResultResponse,
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
+import { selectAgentModelCandidates } from '@/services/chat/failover';
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
@@ -331,6 +332,36 @@ export const createRuntimeExecutors = (
 
     log(`${stagePrefix} Starting operation`);
 
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    const supportsCapability = (
+      m: string,
+      p: string,
+      capability: 'functionCall' | 'video' | 'vision',
+    ) => {
+      const info = LOBE_DEFAULT_MODEL_LIST.find((item) => item.id === m && item.providerId === p);
+
+      switch (capability) {
+        case 'functionCall': {
+          return info?.abilities?.functionCall ?? true;
+        }
+        case 'video': {
+          return info?.abilities?.video ?? false;
+        }
+        case 'vision': {
+          return info?.abilities?.vision ?? true;
+        }
+      }
+    };
+
+    const { candidates: modelCandidates } = selectAgentModelCandidates({
+      failoverModels: ctx.agentConfig?.chatConfig?.failoverModels,
+      messages: llmPayload.messages as UIChatMessage[],
+      primary: { model, provider },
+      supportsCapability,
+      tools,
+    });
+    const initialCandidate = modelCandidates[0] || { model, provider };
+
     // Get parentId from payload (parentId or parentMessageId depending on payload type)
     const parentId = llmPayload.parentId || (llmPayload as any).parentMessageId;
 
@@ -367,9 +398,9 @@ export const createRuntimeExecutors = (
       assistantMessageItem = await ctx.messageModel.create({
         agentId: state.metadata!.agentId!,
         content: '',
-        model,
+        model: initialCandidate.model,
         parentId,
-        provider,
+        provider: initialCandidate.provider,
         role: 'assistant',
         threadId: state.metadata?.threadId,
         topicId: state.metadata?.topicId,
@@ -382,8 +413,8 @@ export const createRuntimeExecutors = (
     await streamManager.publishStreamEvent(operationId, {
       data: {
         assistantMessage: assistantMessageItem,
-        model,
-        provider,
+        model: initialCandidate.model,
+        provider: initialCandidate.provider,
         ...(stepLabel && { stepLabel }),
       },
       stepIndex,
@@ -393,672 +424,647 @@ export const createRuntimeExecutors = (
     try {
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
 
-      // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
-      // Rebuild params from agentConfig at execution time (capabilities built dynamically)
+      const BUFFER_INTERVAL = 50;
+      const maxAttempts = LLM_MAX_RETRIES + 1;
       const agentConfig = ctx.agentConfig;
-      let processedMessages;
-      if (agentConfig) {
-        const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+      let lastCandidateError: unknown;
 
-        // Extract <refer_topic> tags from messages and fetch summaries.
-        // Skip if messages already contain injected topic_reference_context
-        // (e.g., from client-side contextEngineering preprocessing) to avoid double injection.
-        let topicReferences;
-        const alreadyHasTopicRefs = (
-          llmPayload.messages as Array<{ content: string | unknown }>
-        ).some(
-          (m) => typeof m.content === 'string' && m.content.includes('topic_reference_context'),
-        );
+      for (const [candidateIndex, candidate] of modelCandidates.entries()) {
+        const activeModel = candidate.model;
+        const activeProvider = candidate.provider;
+        let processedMessages;
+        lastCandidateError = undefined;
 
-        if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
-          const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
-          const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId);
-          topicReferences = await resolveTopicReferences(
-            llmPayload.messages as Array<{ content: string | unknown }>,
-            async (topicId) => topicModel.findById(topicId),
-            async (topicId) => {
-              const topic = await topicModel.findById(topicId);
-              return messageModel.query(
-                {
-                  agentId: topic?.agentId ?? undefined,
-                  groupId: topic?.groupId ?? undefined,
-                  topicId,
-                },
-                { postProcessUrl: buildPostProcessUrl(ctx) },
-              );
-            },
+        // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
+        if (agentConfig) {
+          let topicReferences;
+          const alreadyHasTopicRefs = (
+            llmPayload.messages as Array<{ content: string | unknown }>
+          ).some(
+            (m) => typeof m.content === 'string' && m.content.includes('topic_reference_context'),
           );
-        }
 
-        // Fetch agent documents for context injection
-        let agentDocuments: AgentContextDocument[] | undefined;
-        const agentId = state.metadata?.agentId;
-        if (agentId && ctx.serverDB && ctx.userId) {
-          try {
-            const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-            const docs = await agentDocService.getAgentDocuments(agentId);
-            if (docs.length > 0) {
-              agentDocuments = docs.map((doc) => ({
-                content: doc.content,
-                description: doc.description ?? undefined,
-                filename: doc.filename,
-                id: doc.id,
-                loadPosition: normalizeDocumentPosition(
-                  doc.policy?.context?.position || doc.policyLoadPosition,
-                ),
-                loadRules: doc.loadRules,
-                policyId: doc.templateId,
-                policyLoad: doc.policyLoad as 'always' | 'progressive',
-                policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
-                title: doc.title,
-              }));
-              log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
-            }
-          } catch (error) {
-            log('Failed to resolve agent documents for agent %s: %O', agentId, error);
+          if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
+            const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+            const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId);
+            topicReferences = await resolveTopicReferences(
+              llmPayload.messages as Array<{ content: string | unknown }>,
+              async (topicId) => topicModel.findById(topicId),
+              async (topicId) => {
+                const topic = await topicModel.findById(topicId);
+                return messageModel.query(
+                  {
+                    agentId: topic?.agentId ?? undefined,
+                    groupId: topic?.groupId ?? undefined,
+                    topicId,
+                  },
+                  { postProcessUrl: buildPostProcessUrl(ctx) },
+                );
+              },
+            );
           }
-        }
 
-        // Detect onboarding agent and build context injection
-        let onboardingContext: OnboardingContext | undefined;
-        const isOnboardingAgent =
-          agentConfig?.slug === 'web-onboarding' ||
-          resolved.enabledToolIds.includes('lobe-web-onboarding');
-        const alreadyHasOnboardingContext = (
-          llmPayload.messages as Array<{ content: string | unknown }>
-        ).some((message) => {
-          if (typeof message.content !== 'string') return false;
-
-          return (
-            message.content.includes('<onboarding_context>') ||
-            message.content.includes('<current_soul_document>') ||
-            message.content.includes('<current_user_persona>')
-          );
-        });
-
-        if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
-          try {
-            const { formatWebOnboardingStateMessage } =
-              await import('@lobechat/builtin-tool-web-onboarding/utils');
-            const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-            const onboardingState = await onboardingService.getState();
-            const phaseGuidance = formatWebOnboardingStateMessage(onboardingState);
-
-            // Fetch SOUL.md from inbox agent's documents
-            let soulContent: string | null = null;
+          let agentDocuments: AgentContextDocument[] | undefined;
+          const agentId = state.metadata?.agentId;
+          if (agentId && ctx.serverDB && ctx.userId) {
             try {
-              const inboxAgentId = await onboardingService.getInboxAgentId();
-              if (inboxAgentId) {
-                const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-                const soulDoc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
-                soulContent = soulDoc?.content ?? null;
+              const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+              const docs = await agentDocService.getAgentDocuments(agentId);
+              if (docs.length > 0) {
+                agentDocuments = docs.map((doc) => ({
+                  content: doc.content,
+                  description: doc.description ?? undefined,
+                  filename: doc.filename,
+                  id: doc.id,
+                  loadPosition: normalizeDocumentPosition(
+                    doc.policy?.context?.position || doc.policyLoadPosition,
+                  ),
+                  loadRules: doc.loadRules,
+                  policyId: doc.templateId,
+                  policyLoad: doc.policyLoad as 'always' | 'progressive',
+                  policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat,
+                  title: doc.title,
+                }));
+                log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
               }
             } catch (error) {
-              log('Failed to fetch SOUL.md for onboarding context: %O', error);
+              log('Failed to resolve agent documents for agent %s: %O', agentId, error);
             }
+          }
 
-            // Fetch user persona
-            let personaContent: string | null = null;
+          let onboardingContext: OnboardingContext | undefined;
+          const isOnboardingAgent =
+            agentConfig?.slug === 'web-onboarding' ||
+            resolved.enabledToolIds.includes('lobe-web-onboarding');
+          const alreadyHasOnboardingContext = (
+            llmPayload.messages as Array<{ content: string | unknown }>
+          ).some((message) => {
+            if (typeof message.content !== 'string') return false;
+
+            return (
+              message.content.includes('<onboarding_context>') ||
+              message.content.includes('<current_soul_document>') ||
+              message.content.includes('<current_user_persona>')
+            );
+          });
+
+          if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
             try {
-              const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
-              const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
-              const persona = await personaModel.getLatestPersonaDocument();
-              personaContent = persona?.persona ?? null;
+              const { formatWebOnboardingStateMessage } =
+                await import('@lobechat/builtin-tool-web-onboarding/utils');
+              const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+              const onboardingState = await onboardingService.getState();
+              const phaseGuidance = formatWebOnboardingStateMessage(onboardingState);
+
+              let soulContent: string | null = null;
+              try {
+                const inboxAgentId = await onboardingService.getInboxAgentId();
+                if (inboxAgentId) {
+                  const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+                  const soulDoc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
+                  soulContent = soulDoc?.content ?? null;
+                }
+              } catch (error) {
+                log('Failed to fetch SOUL.md for onboarding context: %O', error);
+              }
+
+              let personaContent: string | null = null;
+              try {
+                const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+                const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+                const persona = await personaModel.getLatestPersonaDocument();
+                personaContent = persona?.persona ?? null;
+              } catch (error) {
+                log('Failed to fetch user persona for onboarding context: %O', error);
+              }
+
+              onboardingContext = { personaContent, phaseGuidance, soulContent };
+              log(
+                'Built onboarding context for agent %s, phase: %s',
+                agentId,
+                onboardingState.phase,
+              );
             } catch (error) {
-              log('Failed to fetch user persona for onboarding context: %O', error);
+              log('Failed to build onboarding context: %O', error);
             }
-
-            onboardingContext = { personaContent, phaseGuidance, soulContent };
-            log('Built onboarding context for agent %s, phase: %s', agentId, onboardingState.phase);
-          } catch (error) {
-            log('Failed to build onboarding context: %O', error);
           }
+
+          const lobehubSkillAgentId = state.metadata?.agentId;
+          const lobehubSkillTopicId = state.metadata?.topicId;
+          const lobehubSkillAgentMeta = state.metadata?.agentConfig as
+            | { description?: string | null; title?: string | null }
+            | undefined;
+
+          let lobehubSkillTopicTitle = '';
+          if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
+            try {
+              const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId);
+              const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
+              lobehubSkillTopicTitle = topicRecord?.title ?? '';
+            } catch (error) {
+              log('Failed to load topic title for lobehub skill placeholders: %O', error);
+            }
+          }
+
+          const lobehubSkillVariables: Record<string, string> = {
+            agent_description: lobehubSkillAgentMeta?.description ?? '',
+            agent_id: lobehubSkillAgentId ?? '',
+            agent_title: lobehubSkillAgentMeta?.title ?? '',
+            topic_id: lobehubSkillTopicId ?? '',
+            topic_title: lobehubSkillTopicTitle,
+          };
+
+          const contextEngineInput = {
+            agentDocuments,
+            additionalVariables: {
+              ...state.metadata?.deviceSystemInfo,
+              ...lobehubSkillVariables,
+            },
+            userTimezone: ctx.userTimezone,
+            capabilities: {
+              isCanUseFC: (m: string, p: string) => supportsCapability(m, p, 'functionCall'),
+              isCanUseVideo: (m: string, p: string) => supportsCapability(m, p, 'video'),
+              isCanUseVision: (m: string, p: string) => supportsCapability(m, p, 'vision'),
+            },
+            botPlatformContext: ctx.botPlatformContext,
+            discordContext: ctx.discordContext,
+            enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+            evalContext: ctx.evalContext,
+            forceFinish: state.forceFinish,
+            historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
+            knowledge: {
+              fileContents: agentConfig.files
+                ?.filter((f: { enabled?: boolean | null }) => f.enabled === true)
+                .map((f: { content?: string | null; id?: string; name?: string }) => ({
+                  content: f.content ?? '',
+                  fileId: f.id ?? '',
+                  filename: f.name ?? '',
+                })),
+              knowledgeBases: agentConfig.knowledgeBases
+                ?.filter((kb: { enabled?: boolean | null }) => kb.enabled === true)
+                .map((kb: { id?: string; name?: string }) => ({
+                  id: kb.id ?? '',
+                  name: kb.name ?? '',
+                })),
+            },
+            messages: llmPayload.messages as UIChatMessage[],
+            model: activeModel,
+            provider: activeProvider,
+            systemRole: agentConfig.systemRole ?? undefined,
+            toolDiscoveryConfig,
+            toolsConfig: {
+              manifests: Object.values(resolved.manifestMap),
+              tools: resolved.enabledToolIds,
+            },
+            userMemory: state.metadata?.userMemory,
+            ...(resolvedSkills?.enabledSkills?.length && {
+              skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
+            }),
+            ...(topicReferences && { topicReferences }),
+            ...(onboardingContext && { onboardingContext }),
+          };
+
+          processedMessages = await serverMessagesEngine(contextEngineInput);
+
+          const {
+            messages: _inputMsgs,
+            toolsConfig: _toolsConfig,
+            ...contextEngineInputLite
+          } = contextEngineInput;
+          events.push({
+            input: {
+              ...contextEngineInputLite,
+              toolCount: _toolsConfig?.tools?.length ?? 0,
+            },
+            output: processedMessages,
+            type: 'context_engine_result',
+          } as any);
+        } else {
+          processedMessages = llmPayload.messages;
         }
 
-        // Build additional placeholder variables for the lobehub builtin skill
-        // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
-        // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
-        // model's prompt without needing a separate context injector.
-        //
-        // - agent_title / agent_description: read directly from agentConfig,
-        //   which is the result of AgentModel.getAgentConfig() and already
-        //   contains the full enriched agent record (title, description, ...).
-        //   No extra query needed.
-        // - topic_title: requires a single primary-key lookup against the
-        //   topics table. Skipped when topicId is missing or the lookup fails
-        //   (best-effort, falls back to empty string so the template still
-        //   renders cleanly).
-        const lobehubSkillAgentId = state.metadata?.agentId;
-        const lobehubSkillTopicId = state.metadata?.topicId;
-        const lobehubSkillAgentMeta = state.metadata?.agentConfig as
-          | { description?: string | null; title?: string | null }
-          | undefined;
+        const modelRuntime = await initModelRuntimeFromDB(
+          ctx.serverDB,
+          ctx.userId!,
+          activeProvider,
+        );
+        const stream = ctx.stream ?? true;
+        const chatPayload = { messages: processedMessages, model: activeModel, stream, tools };
 
-        let lobehubSkillTopicTitle = '';
-        if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
-          try {
-            const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId);
-            const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
-            lobehubSkillTopicTitle = topicRecord?.title ?? '';
-          } catch (error) {
-            log('Failed to load topic title for lobehub skill placeholders: %O', error);
+        let textBuffer = '';
+        let reasoningBuffer = '';
+        let textBufferTimer: NodeJS.Timeout | null = null;
+        let reasoningBufferTimer: NodeJS.Timeout | null = null;
+
+        const flushTextBuffer = async () => {
+          const delta = textBuffer;
+          textBuffer = '';
+
+          if (!!delta) {
+            log(`[${operationLogId}] flushTextBuffer:`, delta);
+            events.push({ chunk: { text: delta, type: 'text' }, type: 'llm_stream' });
+
+            const publishStart = Date.now();
+            await streamManager.publishStreamChunk(operationId, stepIndex, {
+              chunkType: 'text',
+              content: delta,
+            });
+            timing(
+              '[%s] flushTextBuffer published at %d, took %dms, length: %d',
+              operationLogId,
+              publishStart,
+              Date.now() - publishStart,
+              delta.length,
+            );
           }
-        }
-
-        const lobehubSkillVariables: Record<string, string> = {
-          agent_id: lobehubSkillAgentId ?? '',
-          agent_title: lobehubSkillAgentMeta?.title ?? '',
-          agent_description: lobehubSkillAgentMeta?.description ?? '',
-          topic_id: lobehubSkillTopicId ?? '',
-          topic_title: lobehubSkillTopicTitle,
         };
 
-        const contextEngineInput = {
-          agentDocuments,
-          additionalVariables: {
-            ...state.metadata?.deviceSystemInfo,
-            ...lobehubSkillVariables,
-          },
-          userTimezone: ctx.userTimezone,
-          capabilities: {
-            isCanUseFC: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
-              return info?.abilities?.functionCall ?? true;
-            },
-            isCanUseVideo: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
-              return info?.abilities?.video ?? false;
-            },
-            isCanUseVision: (m: string, p: string) => {
-              const info = LOBE_DEFAULT_MODEL_LIST.find(
-                (item) => item.id === m && item.providerId === p,
-              );
-              return info?.abilities?.vision ?? true;
-            },
-          },
-          botPlatformContext: ctx.botPlatformContext,
-          discordContext: ctx.discordContext,
-          enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
-          evalContext: ctx.evalContext,
-          forceFinish: state.forceFinish,
-          historyCount: agentConfig.chatConfig?.historyCount ?? undefined,
-          knowledge: {
-            fileContents: agentConfig.files
-              ?.filter((f: { enabled?: boolean | null }) => f.enabled === true)
-              .map((f: { content?: string | null; id?: string; name?: string }) => ({
-                content: f.content ?? '',
-                fileId: f.id ?? '',
-                filename: f.name ?? '',
-              })),
-            knowledgeBases: agentConfig.knowledgeBases
-              ?.filter((kb: { enabled?: boolean | null }) => kb.enabled === true)
-              .map((kb: { id?: string; name?: string }) => ({
-                id: kb.id ?? '',
-                name: kb.name ?? '',
-              })),
-          },
-          messages: llmPayload.messages as UIChatMessage[],
-          model,
-          provider,
-          systemRole: agentConfig.systemRole ?? undefined,
-          toolDiscoveryConfig,
-          toolsConfig: {
-            manifests: Object.values(resolved.manifestMap),
-            tools: resolved.enabledToolIds,
-          },
-          userMemory: state.metadata?.userMemory,
+        const flushReasoningBuffer = async () => {
+          const delta = reasoningBuffer;
+          reasoningBuffer = '';
 
-          // Skills configuration for <available_skills> injection
-          ...(resolvedSkills?.enabledSkills?.length && {
-            skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
-          }),
+          if (!!delta) {
+            log(`[${operationLogId}] flushReasoningBuffer:`, delta);
+            events.push({ chunk: { text: delta, type: 'reasoning' }, type: 'llm_stream' });
 
-          // Topic reference summaries
-          ...(topicReferences && { topicReferences }),
-          ...(onboardingContext && { onboardingContext }),
+            const publishStart = Date.now();
+            await streamManager.publishStreamChunk(operationId, stepIndex, {
+              chunkType: 'reasoning',
+              reasoning: delta,
+            });
+            timing(
+              '[%s] flushReasoningBuffer published at %d, took %dms, length: %d',
+              operationLogId,
+              publishStart,
+              Date.now() - publishStart,
+              delta.length,
+            );
+          }
         };
 
-        processedMessages = await serverMessagesEngine(contextEngineInput);
-
-        // Emit context engine event for tracing
-        // Omit large/redundant fields to reduce snapshot size:
-        // - input.messages: reconstructible from step's messagesBaseline + messagesDelta
-        // - input.toolsConfig: static per operation, ~47KB of manifests repeated every call_llm step
-        // Keep output (processedMessages) — needed by inspect CLI for --env, --system-role, -m
-        const {
-          messages: _inputMsgs,
-          toolsConfig: _toolsConfig,
-          ...contextEngineInputLite
-        } = contextEngineInput;
-        events.push({
-          input: {
-            ...contextEngineInputLite,
-            toolCount: _toolsConfig?.tools?.length ?? 0,
-          },
-          output: processedMessages,
-          type: 'context_engine_result',
-        } as any);
-      } else {
-        processedMessages = llmPayload.messages;
-      }
-
-      // Initialize ModelRuntime (read user's keyVaults from database)
-      const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
-
-      // Construct ChatStreamPayload
-      const stream = ctx.stream ?? true;
-      const chatPayload = { messages: processedMessages, model, stream, tools };
-
-      // Buffer: accumulate text and reasoning, send every 50ms
-      const BUFFER_INTERVAL = 50;
-      let textBuffer = '';
-      let reasoningBuffer = '';
-
-      let textBufferTimer: NodeJS.Timeout | null = null;
-      let reasoningBufferTimer: NodeJS.Timeout | null = null;
-
-      const flushTextBuffer = async () => {
-        const delta = textBuffer;
-        textBuffer = '';
-
-        if (!!delta) {
-          log(`[${operationLogId}] flushTextBuffer:`, delta);
-
-          // Build standard Agent Runtime event
-          events.push({
-            chunk: { text: delta, type: 'text' },
-            type: 'llm_stream',
-          });
-
-          const publishStart = Date.now();
-          await streamManager.publishStreamChunk(operationId, stepIndex, {
-            chunkType: 'text',
-            content: delta,
-          });
-          timing(
-            '[%s] flushTextBuffer published at %d, took %dms, length: %d',
-            operationLogId,
-            publishStart,
-            Date.now() - publishStart,
-            delta.length,
-          );
-        }
-      };
-
-      const flushReasoningBuffer = async () => {
-        const delta = reasoningBuffer;
-
-        reasoningBuffer = '';
-
-        if (!!delta) {
-          log(`[${operationLogId}] flushReasoningBuffer:`, delta);
-
-          events.push({
-            chunk: { text: delta, type: 'reasoning' },
-            type: 'llm_stream',
-          });
-
-          const publishStart = Date.now();
-          await streamManager.publishStreamChunk(operationId, stepIndex, {
-            chunkType: 'reasoning',
-            reasoning: delta,
-          });
-          timing(
-            '[%s] flushReasoningBuffer published at %d, took %dms, length: %d',
-            operationLogId,
-            publishStart,
-            Date.now() - publishStart,
-            delta.length,
-          );
-        }
-      };
-
-      const maxAttempts = LLM_MAX_RETRIES + 1;
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let content = '';
-        let toolsCalling: ChatToolPayload[] = [];
-        let tool_calls: MessageToolCall[] = [];
-        let thinkingContent = '';
-        const imageList: any[] = [];
-        let grounding: any = null;
-        let currentStepUsage: any = undefined;
-        let streamError: any = undefined;
-        const contentParts: ContentPart[] = [];
-        const reasoningParts: ContentPart[] = [];
-        const hasContentImages = false;
-        const hasReasoningImages = false;
-        textBuffer = '';
-        reasoningBuffer = '';
-
-        const clearAttemptBuffers = () => {
-          if (textBufferTimer) {
-            clearTimeout(textBufferTimer);
-            textBufferTimer = null;
-          }
-
-          if (reasoningBufferTimer) {
-            clearTimeout(reasoningBufferTimer);
-            reasoningBufferTimer = null;
-          }
-
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          let content = '';
+          let toolsCalling: ChatToolPayload[] = [];
+          let tool_calls: MessageToolCall[] = [];
+          let thinkingContent = '';
+          const imageList: any[] = [];
+          let grounding: any = null;
+          let currentStepUsage: any = undefined;
+          let streamError: any = undefined;
+          const contentParts: ContentPart[] = [];
+          const reasoningParts: ContentPart[] = [];
+          const hasContentImages = false;
+          const hasReasoningImages = false;
           textBuffer = '';
           reasoningBuffer = '';
-        };
 
-        try {
-          log(
-            `${stagePrefix} calling model-runtime chat (attempt %d/%d, model: %s, messages: %d, tools: %d)`,
-            attempt,
-            maxAttempts,
-            model,
-            processedMessages.length,
-            tools?.length ?? 0,
-          );
+          const clearAttemptBuffers = () => {
+            if (textBufferTimer) {
+              clearTimeout(textBufferTimer);
+              textBufferTimer = null;
+            }
 
-          // Call model-runtime chat
-          const response = await modelRuntime.chat(chatPayload, {
-            callback: {
-              onCompletion: async (data) => {
-                // Capture usage (may or may not include cost)
-                if (data.usage) {
-                  currentStepUsage = data.usage;
-                }
-              },
-              onGrounding: async (groundingData) => {
-                log(`[${operationLogId}][grounding] %O`, groundingData);
-                grounding = groundingData;
+            if (reasoningBufferTimer) {
+              clearTimeout(reasoningBufferTimer);
+              reasoningBufferTimer = null;
+            }
 
-                await streamManager.publishStreamChunk(operationId, stepIndex, {
-                  chunkType: 'grounding',
-                  grounding: groundingData,
-                });
-              },
-              onText: async (text) => {
-                timing(
-                  '[%s] onText received chunk at %d, length: %d',
-                  operationLogId,
-                  Date.now(),
-                  text.length,
-                );
-                content += text;
-
-                textBuffer += text;
-
-                // If no timer exists, create one
-                if (!textBufferTimer) {
-                  textBufferTimer = setTimeout(async () => {
-                    await flushTextBuffer();
-                    textBufferTimer = null;
-                  }, BUFFER_INTERVAL);
-                }
-              },
-              onThinking: async (reasoning) => {
-                timing(
-                  '[%s] onThinking received chunk at %d, length: %d',
-                  operationLogId,
-                  Date.now(),
-                  reasoning.length,
-                );
-                thinkingContent += reasoning;
-
-                // Buffer reasoning content
-                reasoningBuffer += reasoning;
-
-                // If no timer exists, create one
-                if (!reasoningBufferTimer) {
-                  reasoningBufferTimer = setTimeout(async () => {
-                    await flushReasoningBuffer();
-                    reasoningBufferTimer = null;
-                  }, BUFFER_INTERVAL);
-                }
-              },
-              onToolsCalling: async ({ toolsCalling: raw }) => {
-                const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
-                // Attach source (origin) and executor (dispatch target) for routing
-                const payload = resolvedCalls.map((p) => ({
-                  ...p,
-                  executor: resolved.executorMap?.[p.identifier],
-                  source: resolved.sourceMap[p.identifier],
-                }));
-                // log(`[${operationLogId}][toolsCalling]`, payload);
-                toolsCalling = payload;
-                tool_calls = raw;
-
-                // If textBuffer exists, flush it first
-                if (!!textBuffer) {
-                  await flushTextBuffer();
-                }
-
-                await streamManager.publishStreamChunk(operationId, stepIndex, {
-                  chunkType: 'tools_calling',
-                  toolsCalling: payload,
-                });
-              },
-              onError: async (errorData) => {
-                streamError = errorData;
-                console.error(`[${operationLogId}][stream_error]`, errorData);
-              },
-            },
-            metadata: {
-              operationId,
-              topicId: state.metadata?.topicId,
-              trigger: state.metadata?.trigger,
-            },
-            user: ctx.userId,
-          });
-
-          // Consume stream to ensure all callbacks complete execution
-          await consumeStreamUntilDone(response);
-
-          // If a stream error was captured via onError callback, throw to propagate the error
-          if (streamError) {
-            const streamExecutionError = new Error(
-              typeof streamError.message === 'string'
-                ? `LLM stream error: ${streamError.message}`
-                : `LLM stream error: ${JSON.stringify(streamError)}`,
-            );
-            const { message: _message, ...restStreamError } = streamError as Record<
-              string,
-              unknown
-            >;
-            Object.assign(streamExecutionError, restStreamError);
-            throw streamExecutionError;
-          }
-
-          await flushTextBuffer();
-          await flushReasoningBuffer();
-          clearAttemptBuffers();
-
-          log(
-            `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
-            content.length,
-            thinkingContent.length,
-            toolsCalling.length,
-            currentStepUsage ? 'yes' : 'none',
-          );
-
-          if (thinkingContent) {
-            log(`[${operationLogId}][reasoning]`, thinkingContent);
-          }
-          if (content) {
-            log(`[${operationLogId}][content]`, content);
-          }
-          if (toolsCalling.length > 0) {
-            log(`[${operationLogId}][toolsCalling] `, toolsCalling);
-          }
-
-          // Log usage information
-          if (currentStepUsage) {
-            log(`[${operationLogId}][usage] %O`, currentStepUsage);
-          }
-
-          // Add a complete llm_stream event (including all streaming chunks)
-          events.push({
-            result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
-            type: 'llm_result',
-          });
-
-          // Publish stream end event
-          await streamManager.publishStreamEvent(operationId, {
-            data: {
-              finalContent: content,
-              grounding,
-              ...(stepLabel && { stepLabel }),
-              imageList: imageList.length > 0 ? imageList : undefined,
-              reasoning: thinkingContent || undefined,
-              toolsCalling,
-              usage: currentStepUsage,
-            },
-            stepIndex,
-            type: 'stream_end',
-          });
-
-          log('[%s:%d] call_llm completed', operationId, stepIndex);
-
-          // ===== 1. First save original usage to message.metadata =====
-          // Determine final content - use serialized parts if has images, otherwise plain text
-          const finalContent = hasContentImages ? serializePartsForStorage(contentParts) : content;
-
-          // Determine final reasoning - handle multimodal reasoning
-          let finalReasoning: any = undefined;
-          if (hasReasoningImages) {
-            // Has images, use multimodal format
-            finalReasoning = {
-              content: serializePartsForStorage(reasoningParts),
-              isMultimodal: true,
-            };
-          } else if (thinkingContent) {
-            // Has text from reasoning but no images
-            finalReasoning = {
-              content: thinkingContent,
-            };
-          }
+            textBuffer = '';
+            reasoningBuffer = '';
+          };
 
           try {
-            // Build metadata object
-            const metadata: Record<string, any> = {};
-            if (currentStepUsage && typeof currentStepUsage === 'object') {
-              Object.assign(metadata, currentStepUsage);
-            }
-            if (hasContentImages) {
-              metadata.isMultimodal = true;
-            }
-
-            await ctx.messageModel.update(assistantMessageItem.id, {
-              content: finalContent,
-              imageList: imageList.length > 0 ? imageList : undefined,
-              metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-              reasoning: finalReasoning,
-              search: grounding,
-              tools: toolsCalling.length > 0 ? toolsCalling : undefined,
-            });
-          } catch (error) {
-            console.error('[call_llm] Failed to update message:', error);
-          }
-
-          // ===== 2. Then accumulate to AgentState =====
-          const newState = structuredClone(state);
-
-          // Carry the persisted DB id so downstream executors (notably
-          // `request_human_approve`) can look up the parent assistant from
-          // `state.messages` without an extra DB round-trip. Without the id
-          // the lookup at `request_human_approve` (which filters on `m.id`)
-          // falls through to a DB query; when human-approve fires on the
-          // fresh LLM turn, both code paths miss and the op errors with
-          // "No assistant message found as parent for pending tool messages".
-          newState.messages.push({
-            content,
-            id: assistantMessageItem.id,
-            reasoning: finalReasoning,
-            role: 'assistant',
-            tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
-          });
-
-          if (currentStepUsage) {
-            // Use UsageCounter to uniformly accumulate usage and cost
-            const { usage, cost } = UsageCounter.accumulateLLM({
-              cost: newState.cost,
-              model: llmPayload.model,
-              modelUsage: currentStepUsage,
-              provider: llmPayload.provider,
-              usage: newState.usage,
-            });
-
-            newState.usage = usage;
-            if (cost) newState.cost = cost;
-          }
-
-          // Propagate stepLabel from instruction to state metadata for hook consumers
-          if (stepLabel) {
-            if (!newState.metadata) newState.metadata = {};
-            newState.metadata._stepLabel = stepLabel;
-          }
-
-          return {
-            events,
-            newState,
-            nextContext: {
-              payload: {
-                hasToolsCalling: toolsCalling.length > 0,
-                // Pass assistant message ID as parentMessageId for tool calls
-                parentMessageId: assistantMessageItem.id,
-                result: { content, tool_calls },
-                toolsCalling,
-              } as GeneralAgentCallLLMResultPayload,
-              phase: 'llm_result',
-              session: {
-                eventCount: events.length,
-                messageCount: newState.messages.length,
-                sessionId: operationId,
-                status: 'running',
-                stepCount: state.stepCount + 1,
-              },
-              stepUsage: currentStepUsage,
-            },
-          };
-        } catch (error) {
-          clearAttemptBuffers();
-
-          const classified = classifyLLMError(error);
-          const interrupted = await isOperationInterrupted(ctx);
-
-          if (!interrupted && shouldRetryLLM(classified.kind, attempt, LLM_MAX_RETRIES)) {
-            const delayMs = getLLMRetryDelayMs(attempt);
-
             log(
-              '[%s] LLM call failed with kind=%s (attempt %d/%d), retrying in %dms ...',
-              operationLogId,
-              classified.kind,
+              `${stagePrefix} calling model-runtime chat (attempt %d/%d, model: %s, messages: %d, tools: %d)`,
               attempt,
               maxAttempts,
-              delayMs,
+              activeModel,
+              processedMessages.length,
+              tools?.length ?? 0,
             );
 
-            await streamManager.publishStreamEvent(operationId, {
-              data: { attempt: attempt + 1, delayMs, maxAttempts },
-              stepIndex,
-              type: 'stream_retry',
+            // Call model-runtime chat
+            const response = await modelRuntime.chat(chatPayload, {
+              callback: {
+                onCompletion: async (data) => {
+                  // Capture usage (may or may not include cost)
+                  if (data.usage) {
+                    currentStepUsage = data.usage;
+                  }
+                },
+                onGrounding: async (groundingData) => {
+                  log(`[${operationLogId}][grounding] %O`, groundingData);
+                  grounding = groundingData;
+
+                  await streamManager.publishStreamChunk(operationId, stepIndex, {
+                    chunkType: 'grounding',
+                    grounding: groundingData,
+                  });
+                },
+                onText: async (text) => {
+                  timing(
+                    '[%s] onText received chunk at %d, length: %d',
+                    operationLogId,
+                    Date.now(),
+                    text.length,
+                  );
+                  content += text;
+
+                  textBuffer += text;
+
+                  // If no timer exists, create one
+                  if (!textBufferTimer) {
+                    textBufferTimer = setTimeout(async () => {
+                      await flushTextBuffer();
+                      textBufferTimer = null;
+                    }, BUFFER_INTERVAL);
+                  }
+                },
+                onThinking: async (reasoning) => {
+                  timing(
+                    '[%s] onThinking received chunk at %d, length: %d',
+                    operationLogId,
+                    Date.now(),
+                    reasoning.length,
+                  );
+                  thinkingContent += reasoning;
+
+                  // Buffer reasoning content
+                  reasoningBuffer += reasoning;
+
+                  // If no timer exists, create one
+                  if (!reasoningBufferTimer) {
+                    reasoningBufferTimer = setTimeout(async () => {
+                      await flushReasoningBuffer();
+                      reasoningBufferTimer = null;
+                    }, BUFFER_INTERVAL);
+                  }
+                },
+                onToolsCalling: async ({ toolsCalling: raw }) => {
+                  const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
+                  // Attach source (origin) and executor (dispatch target) for routing
+                  const payload = resolvedCalls.map((p) => ({
+                    ...p,
+                    executor: resolved.executorMap?.[p.identifier],
+                    source: resolved.sourceMap[p.identifier],
+                  }));
+                  // log(`[${operationLogId}][toolsCalling]`, payload);
+                  toolsCalling = payload;
+                  tool_calls = raw;
+
+                  // If textBuffer exists, flush it first
+                  if (!!textBuffer) {
+                    await flushTextBuffer();
+                  }
+
+                  await streamManager.publishStreamChunk(operationId, stepIndex, {
+                    chunkType: 'tools_calling',
+                    toolsCalling: payload,
+                  });
+                },
+                onError: async (errorData) => {
+                  streamError = errorData;
+                  console.error(`[${operationLogId}][stream_error]`, errorData);
+                },
+              },
+              metadata: {
+                operationId,
+                topicId: state.metadata?.topicId,
+                trigger: state.metadata?.trigger,
+              },
+              user: ctx.userId,
             });
 
-            await sleep(delayMs);
+            // Consume stream to ensure all callbacks complete execution
+            await consumeStreamUntilDone(response);
 
-            if (await isOperationInterrupted(ctx)) {
-              throw error;
+            // If a stream error was captured via onError callback, throw to propagate the error
+            if (streamError) {
+              const streamExecutionError = new Error(
+                typeof streamError.message === 'string'
+                  ? `LLM stream error: ${streamError.message}`
+                  : `LLM stream error: ${JSON.stringify(streamError)}`,
+              );
+              const { message: _message, ...restStreamError } = streamError as Record<
+                string,
+                unknown
+              >;
+              Object.assign(streamExecutionError, restStreamError);
+              throw streamExecutionError;
             }
 
-            continue;
-          }
+            await flushTextBuffer();
+            await flushReasoningBuffer();
+            clearAttemptBuffers();
 
-          throw error;
+            log(
+              `[${operationLogId}] finish model-runtime calling | content: %d chars | reasoning: %d chars | tools: %d | usage: %s`,
+              content.length,
+              thinkingContent.length,
+              toolsCalling.length,
+              currentStepUsage ? 'yes' : 'none',
+            );
+
+            if (thinkingContent) {
+              log(`[${operationLogId}][reasoning]`, thinkingContent);
+            }
+            if (content) {
+              log(`[${operationLogId}][content]`, content);
+            }
+            if (toolsCalling.length > 0) {
+              log(`[${operationLogId}][toolsCalling] `, toolsCalling);
+            }
+
+            // Log usage information
+            if (currentStepUsage) {
+              log(`[${operationLogId}][usage] %O`, currentStepUsage);
+            }
+
+            // Add a complete llm_stream event (including all streaming chunks)
+            events.push({
+              result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
+              type: 'llm_result',
+            });
+
+            // Publish stream end event
+            await streamManager.publishStreamEvent(operationId, {
+              data: {
+                finalContent: content,
+                grounding,
+                ...(stepLabel && { stepLabel }),
+                imageList: imageList.length > 0 ? imageList : undefined,
+                reasoning: thinkingContent || undefined,
+                toolsCalling,
+                usage: currentStepUsage,
+              },
+              stepIndex,
+              type: 'stream_end',
+            });
+
+            log('[%s:%d] call_llm completed', operationId, stepIndex);
+
+            // ===== 1. First save original usage to message.metadata =====
+            // Determine final content - use serialized parts if has images, otherwise plain text
+            const finalContent = hasContentImages
+              ? serializePartsForStorage(contentParts)
+              : content;
+
+            // Determine final reasoning - handle multimodal reasoning
+            let finalReasoning: any = undefined;
+            if (hasReasoningImages) {
+              // Has images, use multimodal format
+              finalReasoning = {
+                content: serializePartsForStorage(reasoningParts),
+                isMultimodal: true,
+              };
+            } else if (thinkingContent) {
+              // Has text from reasoning but no images
+              finalReasoning = {
+                content: thinkingContent,
+              };
+            }
+
+            try {
+              // Build metadata object
+              const metadata: Record<string, any> = {};
+              if (currentStepUsage && typeof currentStepUsage === 'object') {
+                Object.assign(metadata, currentStepUsage);
+              }
+              if (hasContentImages) {
+                metadata.isMultimodal = true;
+              }
+
+              await ctx.messageModel.update(assistantMessageItem.id, {
+                content: finalContent,
+                imageList: imageList.length > 0 ? imageList : undefined,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+                model: activeModel,
+                provider: activeProvider,
+                reasoning: finalReasoning,
+                search: grounding,
+                tools: toolsCalling.length > 0 ? toolsCalling : undefined,
+              });
+            } catch (error) {
+              console.error('[call_llm] Failed to update message:', error);
+            }
+
+            // ===== 2. Then accumulate to AgentState =====
+            const newState = structuredClone(state);
+
+            // Carry the persisted DB id so downstream executors (notably
+            // `request_human_approve`) can look up the parent assistant from
+            // `state.messages` without an extra DB round-trip. Without the id
+            // the lookup at `request_human_approve` (which filters on `m.id`)
+            // falls through to a DB query; when human-approve fires on the
+            // fresh LLM turn, both code paths miss and the op errors with
+            // "No assistant message found as parent for pending tool messages".
+            newState.messages.push({
+              content,
+              id: assistantMessageItem.id,
+              reasoning: finalReasoning,
+              role: 'assistant',
+              tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
+            });
+
+            if (currentStepUsage) {
+              // Use UsageCounter to uniformly accumulate usage and cost
+              const { usage, cost } = UsageCounter.accumulateLLM({
+                cost: newState.cost,
+                model: activeModel,
+                modelUsage: currentStepUsage,
+                provider: activeProvider,
+                usage: newState.usage,
+              });
+
+              newState.usage = usage;
+              if (cost) newState.cost = cost;
+            }
+
+            // Propagate stepLabel from instruction to state metadata for hook consumers
+            if (stepLabel) {
+              if (!newState.metadata) newState.metadata = {};
+              newState.metadata._stepLabel = stepLabel;
+            }
+
+            return {
+              events,
+              newState,
+              nextContext: {
+                payload: {
+                  hasToolsCalling: toolsCalling.length > 0,
+                  // Pass assistant message ID as parentMessageId for tool calls
+                  parentMessageId: assistantMessageItem.id,
+                  result: { content, tool_calls },
+                  toolsCalling,
+                } as GeneralAgentCallLLMResultPayload,
+                phase: 'llm_result',
+                session: {
+                  eventCount: events.length,
+                  messageCount: newState.messages.length,
+                  sessionId: operationId,
+                  status: 'running',
+                  stepCount: state.stepCount + 1,
+                },
+                stepUsage: currentStepUsage,
+              },
+            };
+          } catch (error) {
+            clearAttemptBuffers();
+
+            const classified = classifyLLMError(error);
+            const interrupted = await isOperationInterrupted(ctx);
+
+            if (!interrupted && shouldRetryLLM(classified.kind, attempt, LLM_MAX_RETRIES)) {
+              const delayMs = getLLMRetryDelayMs(attempt);
+
+              log(
+                '[%s] LLM call failed with kind=%s (attempt %d/%d), retrying in %dms ...',
+                operationLogId,
+                classified.kind,
+                attempt,
+                maxAttempts,
+                delayMs,
+              );
+
+              await streamManager.publishStreamEvent(operationId, {
+                data: { attempt: attempt + 1, delayMs, maxAttempts },
+                stepIndex,
+                type: 'stream_retry',
+              });
+
+              await sleep(delayMs);
+
+              if (await isOperationInterrupted(ctx)) {
+                throw error;
+              }
+
+              continue;
+            }
+
+            lastCandidateError = error;
+            break;
+          }
         }
+
+        if (candidateIndex < modelCandidates.length - 1 && lastCandidateError) {
+          await streamManager.publishStreamEvent(operationId, {
+            data: {
+              fromModel: activeModel,
+              fromProvider: activeProvider,
+              nextModel: modelCandidates[candidateIndex + 1].model,
+              nextProvider: modelCandidates[candidateIndex + 1].provider,
+            },
+            stepIndex,
+            type: 'stream_retry',
+          });
+
+          continue;
+        }
+
+        if (lastCandidateError) throw lastCandidateError;
       }
 
-      throw new Error('LLM execution retry loop exited unexpectedly');
+      throw lastCandidateError || new Error('LLM execution retry loop exited unexpectedly');
     } catch (error) {
       // Publish error event
       await streamManager.publishStreamEvent(operationId, {

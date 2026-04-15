@@ -1833,4 +1833,139 @@ describe('call_llm executor', () => {
       expect(errorArg.body.traceId).toBe(localTraceId);
     });
   });
+
+  describe('Model failover', () => {
+    it('should switch to a vision-capable fallback before the first call when images are attached', async () => {
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const state = createInitialState();
+      const instruction = createCallLLMInstruction({
+        messages: [
+          createUserMessage({
+            imageList: [{ alt: 'image', id: 'img-1', url: 'https://example.com/1.png' }] as any,
+          }),
+        ],
+        model: 'text-only-model',
+        provider: 'openai',
+      });
+
+      mockStore.dbMessagesMap[context.messageKey] = [];
+      mockStore.operations[context.operationId] = {
+        abortController: new AbortController(),
+        childOperationIds: [],
+        context: {
+          agentId: context.agentId,
+          messageId: context.parentId,
+          topicId: context.topicId,
+        },
+        id: context.operationId,
+        metadata: { startTime: Date.now() },
+        status: 'running',
+        type: 'execAgentRuntime',
+      } as any;
+
+      const { aiModelSelectors } = await import('@/store/aiInfra');
+      vi.spyOn(aiModelSelectors, 'isModelSupportVision').mockImplementation(
+        (model) => () => model === 'gpt-4o',
+      );
+      mockStreamResponse({ content: 'vision response' });
+
+      const executors = createAgentExecutors({
+        agentConfig: {
+          agentConfig: {
+            chatConfig: { failoverModels: [{ model: 'gpt-4o', provider: 'openai' }] },
+            model: 'text-only-model',
+            provider: 'openai',
+          } as any,
+          chatConfig: {} as any,
+          isBuiltinAgent: false,
+          plugins: [],
+        },
+        get: () => mockStore,
+        messageKey: context.messageKey,
+        operationId: context.operationId,
+        parentId: context.parentId,
+      });
+
+      await executors.call_llm!(instruction, state);
+
+      expect(chatService.createAssistantMessageStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({
+            model: 'gpt-4o',
+            provider: 'openai',
+          }),
+        }),
+      );
+    });
+
+    it('should retry with the next configured failover model after an error', async () => {
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const state = createInitialState();
+      const instruction = createCallLLMInstruction({
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+      });
+
+      mockStore.dbMessagesMap[context.messageKey] = [];
+      mockStore.operations[context.operationId] = {
+        abortController: new AbortController(),
+        childOperationIds: [],
+        context: {
+          agentId: context.agentId,
+          messageId: context.parentId,
+          topicId: context.topicId,
+        },
+        id: context.operationId,
+        metadata: { startTime: Date.now() },
+        status: 'running',
+        type: 'execAgentRuntime',
+      } as any;
+
+      vi.mocked(chatService.createAssistantMessageStream)
+        .mockImplementationOnce(async (params: any) => {
+          params.onErrorHandle?.({
+            body: { provider: 'openai' },
+            message: 'primary failed',
+            type: 'ProviderBizError',
+          });
+          params.onFinish?.('', { type: 'error' });
+        })
+        .mockImplementationOnce(async (params: any) => {
+          params.onMessageHandle?.({ text: 'fallback response', type: 'text' });
+          await params.onFinish?.('fallback response', { type: 'stop' });
+        });
+      const initialCallCount = vi.mocked(chatService.createAssistantMessageStream).mock.calls
+        .length;
+
+      const executors = createAgentExecutors({
+        agentConfig: {
+          agentConfig: {
+            chatConfig: { failoverModels: [{ model: 'gpt-4o', provider: 'openai' }] },
+            model: 'gpt-4o-mini',
+            provider: 'openai',
+          } as any,
+          chatConfig: {} as any,
+          isBuiltinAgent: false,
+          plugins: [],
+        },
+        get: () => mockStore,
+        messageKey: context.messageKey,
+        operationId: context.operationId,
+        parentId: context.parentId,
+      });
+
+      await executors.call_llm!(instruction, state);
+
+      const newCalls = vi
+        .mocked(chatService.createAssistantMessageStream)
+        .mock.calls.slice(initialCallCount);
+
+      expect(newCalls).toHaveLength(2);
+      expect(newCalls[1][0]).toMatchObject({
+        params: { model: 'gpt-4o', provider: 'openai' },
+      });
+    });
+  });
 });
