@@ -455,6 +455,7 @@ export default {
   'taskSchedule.seconds': '秒',
   'taskSchedule.title': '执行计划',
   'taskDetail.activities': '活动',
+  'taskDetail.activitiesEmpty': 'No activity yet',
   'taskDetail.blockedBy': '被 {{id}} 阻塞',
   'taskDetail.commentPlaceholder': '留下评论...',
   'taskDetail.deleteConfirm.content': '此操作不可撤销。',

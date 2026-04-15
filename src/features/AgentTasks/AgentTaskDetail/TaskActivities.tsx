@@ -1,15 +1,16 @@
-import type { TaskActivityType, TaskDetailActivityAuthor } from '@lobechat/types';
-import { ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Input } from 'antd';
+import type { TaskActivityType, TaskDetailActivity } from '@lobechat/types';
+import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Divider, Tree } from 'antd';
+import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowUp, BotMessageSquare, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { BotMessageSquare, ChevronDown, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
-import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
+import { taskActivitySelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
 
@@ -19,130 +20,93 @@ const typeIconMap: Record<TaskActivityType, LucideIcon> = {
   topic: MessagesSquare,
 };
 
-const ActivityItem = memo<{
-  author?: TaskDetailActivityAuthor;
-  content?: string;
-  summary?: string;
-  time?: string;
-  title?: string;
-  type: TaskActivityType;
-}>(({ type, title, content, summary, time, author }) => {
-  const LucideIcon = typeIconMap[type] ?? MessageCircle;
-  const relTime = time ? dayjs(time).fromNow() : '';
-
-  let displayText = '';
-  if (type === 'comment') {
-    displayText = content || 'left a comment';
-  } else if (type === 'topic') {
-    displayText = title || 'started a topic';
-  } else if (type === 'brief') {
-    displayText = title || summary || 'posted a brief';
+const getActivityDisplayText = (act: TaskDetailActivity): string => {
+  if (act.type === 'comment') {
+    return act.content || 'left a comment';
   }
-
-  return (
-    <div className={styles.activityItem}>
-      {author?.avatar ? (
-        <Avatar avatar={author.avatar} size={24} />
-      ) : (
-        <div className={styles.activityAvatar}>
-          <LucideIcon size={12} />
-        </div>
-      )}
-      <Text ellipsis style={{ color: cssVar.colorTextSecondary }}>
-        {author?.name && <span style={{ fontWeight: 500 }}>{author.name} </span>}
-        {displayText}
-        {relTime && (
-          <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>
-            · {relTime}
-          </span>
-        )}
-      </Text>
-    </div>
-  );
-});
-
-const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
-  const { t } = useTranslation('chat');
-  const addComment = useTaskStore((s) => s.addComment);
-  const [comment, setComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const hasComment = comment.trim().length > 0;
-
-  const handleSubmit = useCallback(async () => {
-    const trimmed = comment.trim();
-    if (!trimmed || submitting) return;
-    setSubmitting(true);
-    try {
-      await addComment(taskId, trimmed);
-      setComment('');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [taskId, comment, addComment, submitting]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        handleSubmit();
-      }
-    },
-    [handleSubmit],
-  );
-
-  return (
-    <div className={styles.commentBox}>
-      <Input.TextArea
-        autoSize={{ maxRows: 8, minRows: 3 }}
-        className={styles.commentInput}
-        placeholder={t('taskDetail.commentPlaceholder')}
-        value={comment}
-        variant="borderless"
-        onChange={(e) => setComment(e.target.value)}
-        onKeyDown={handleKeyDown}
-      />
-      <Flexbox horizontal className={styles.commentActions} gap={4}>
-        <ActionIcon
-          disabled={!hasComment || submitting}
-          icon={ArrowUp}
-          loading={submitting}
-          size="small"
-          onClick={handleSubmit}
-        />
-      </Flexbox>
-    </div>
-  );
-});
+  if (act.type === 'topic') {
+    return act.title || 'started a topic';
+  }
+  if (act.type === 'brief') {
+    return act.title || act.summary || 'posted a brief';
+  }
+  return '';
+};
 
 const TaskActivities = memo(() => {
   const { t } = useTranslation('chat');
   const activities = useTaskStore(taskActivitySelectors.activeTaskActivities);
-  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
+
+  const activityTreeData = useMemo((): DataNode[] => {
+    return activities.map((act, index) => {
+      const TypeIcon = typeIconMap[act.type] ?? MessageCircle;
+      const relTime = act.time ? dayjs(act.time).fromNow() : '';
+      const displayText = getActivityDisplayText(act);
+      const key = act.id ?? `activity-${index}`;
+
+      return {
+        icon: act.author?.avatar ? (
+          <Avatar avatar={act.author.avatar} size={24} />
+        ) : (
+          <div className={styles.activityAvatar}>
+            <TypeIcon size={12} />
+          </div>
+        ),
+        key,
+        title: (
+          <Text ellipsis style={{ color: cssVar.colorTextSecondary }}>
+            {act.author?.name && <span style={{ fontWeight: 500 }}>{act.author.name} </span>}
+            {displayText}
+            {relTime && (
+              <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>
+                · {relTime}
+              </span>
+            )}
+          </Text>
+        ),
+      };
+    });
+  }, [activities]);
 
   return (
-    <Flexbox gap={0}>
-      <Flexbox horizontal align="center" className={styles.activityDivider} gap={8}>
-        <Icon icon={BotMessageSquare} size={18} style={{ color: cssVar.colorTextSecondary }} />
-        <Text style={{ fontSize: cssVar.fontSize }} weight="bold">
-          {t('taskDetail.activities')}
-        </Text>
-      </Flexbox>
-
-      {activities.map((act, index) => (
-        <ActivityItem
-          author={act.author}
-          content={act.content}
-          key={act.id ?? index}
-          summary={act.summary}
-          time={act.time}
-          title={act.title}
-          type={act.type}
-        />
-      ))}
-
-      {taskId && <CommentInput taskId={taskId} />}
-    </Flexbox>
+    <>
+      <Divider dashed />
+      <Accordion defaultExpandedKeys={['activities']} gap={0}>
+        <AccordionItem
+          itemKey="activities"
+          paddingBlock={4}
+          paddingInline={8}
+          title={
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
+              <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                {t('taskDetail.activities')}
+              </Text>
+            </Flexbox>
+          }
+        >
+          {activityTreeData.length > 0 ? (
+            <Tree
+              blockNode
+              defaultExpandAll
+              showIcon
+              showLine
+              className={styles.subtaskTree}
+              selectable={false}
+              style={{ marginTop: 8 }}
+              switcherIcon={<Icon icon={ChevronDown} size={14} />}
+              treeData={activityTreeData}
+            />
+          ) : (
+            <Empty
+              description={t('taskDetail.activitiesEmpty')}
+              icon={BotMessageSquare}
+              style={{ marginTop: 8 }}
+            />
+          )}
+        </AccordionItem>
+      </Accordion>
+    </>
   );
 });
 

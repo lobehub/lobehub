@@ -1,6 +1,13 @@
-import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
-import { InputNumber, Popover, Select } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Flexbox,
+  InputNumber,
+  Popover,
+  Segmented,
+  Select,
+  Text,
+} from '@lobehub/ui';
 import { TimerIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -11,18 +18,6 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 type ScheduleMode = 'interval' | 'scheduler';
 type IntervalUnit = 'hours' | 'minutes' | 'seconds';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  label: css`
-    flex-shrink: 0;
-    width: 80px;
-  `,
-  row: css`
-    min-height: 44px;
-    padding-block: 10px;
-    padding-inline: 0;
-  `,
-}));
 
 interface IntervalTabProps {
   currentInterval: number;
@@ -67,10 +62,19 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
   };
 
   const handleValueChange = useCallback(
-    (val: number | null) => {
-      setLocalValue(val ?? undefined);
+    (val: number | string | null) => {
+      let normalized: number | undefined;
+      if (val === null || val === '') {
+        normalized = undefined;
+      } else if (typeof val === 'string') {
+        const n = Number(val);
+        normalized = Number.isNaN(n) ? undefined : n;
+      } else {
+        normalized = val;
+      }
+      setLocalValue(normalized);
       if (!taskId) return;
-      const seconds = toSeconds(val, localUnit);
+      const seconds = toSeconds(normalized ?? null, localUnit);
       updatePeriodicInterval(taskId, seconds);
     },
     [taskId, localUnit, updatePeriodicInterval],
@@ -92,18 +96,20 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
   }, [taskId, updatePeriodicInterval]);
 
   return (
-    <Flexbox gap={8}>
-      <Flexbox horizontal align="center" className={styles.row} gap={16}>
-        <Text className={styles.label}>{t('taskSchedule.every')}</Text>
+    <>
+      <Flexbox horizontal align="center" gap={16} justify={'space-between'}>
+        <Text weight={500}>{t('taskSchedule.every')}</Text>
         <Flexbox horizontal align="center" gap={8}>
           <InputNumber
             min={1}
             placeholder="10"
+            size={'small'}
             style={{ width: 80 }}
             value={localValue}
             onChange={handleValueChange}
           />
           <Select
+            size={'small'}
             style={{ width: 90 }}
             value={localUnit}
             variant="outlined"
@@ -117,13 +123,11 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
         </Flexbox>
       </Flexbox>
       {currentInterval > 0 && (
-        <Flexbox horizontal justify="flex-end" style={{ paddingBlockEnd: 4 }}>
-          <Text style={{ cursor: 'pointer', fontSize: 12 }} type="secondary" onClick={handleClear}>
-            {t('taskSchedule.clear')}
-          </Text>
-        </Flexbox>
+        <Button size={'small'} onClick={handleClear}>
+          {t('taskSchedule.clear')}
+        </Button>
       )}
-    </Flexbox>
+    </>
   );
 });
 
@@ -156,7 +160,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const [mode, setMode] = useState<ScheduleMode>('interval');
 
   const content = (
-    <Flexbox gap={12} style={{ minWidth: 340, padding: 4 }}>
+    <Flexbox gap={16} style={{ minWidth: 300, padding: 4 }}>
       <Segmented
         block
         value={mode}
@@ -175,7 +179,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   return (
-    <Popover content={content} placement="bottomLeft" trigger="click">
+    <Popover content={content} placement="bottomRight" trigger="click">
       {children ? (
         <div onClick={(e) => e.stopPropagation()}>{children}</div>
       ) : (
