@@ -306,8 +306,4 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       .toLowerCase()
       .replaceAll(/(_[a-z])/g, (group) => group.toUpperCase().replace('_', ''));
   };
-
-  private maskSensitiveUrl = (url: string) => {
-    return maskSensitiveUrl(url);
-  };
 }
