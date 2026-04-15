@@ -10,11 +10,9 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
-import { styles } from '../shared/style';
 import TaskActivities from './TaskActivities';
 import TaskDetailDeleteAction from './TaskDetailDeleteAction';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
-import TaskDetailScheduleAction from './TaskDetailScheduleAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
@@ -43,6 +41,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
+        right={<TaskDetailDeleteAction />}
         left={
           <>
             <Breadcrumb agentId={agentId} taskId={taskId} />
@@ -61,25 +60,23 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         {isLoading ? (
           <Loading debugId="TaskDetail" />
         ) : (
-          <div className={styles.detailLayout}>
-            <div className={styles.detailMain}>
-              <TaskDetailTitleInput />
-              <Flexbox gap={8}>
-                <TaskParentBar />
-                <TaskModelConfig />
-                <Flexbox horizontal align="center" gap={8}>
+          <>
+            <Flexbox horizontal gap={16}>
+              <Flexbox flex={1}>
+                <TaskDetailTitleInput />
+                <Flexbox align={'flex-start'} gap={8}>
+                  <TaskParentBar />
+                  <TaskModelConfig />
                   <TaskDetailRunPauseAction />
-                  <TaskDetailScheduleAction />
-                  <TaskDetailDeleteAction />
                 </Flexbox>
               </Flexbox>
-              <Divider />
-              <TaskInstruction />
-              <TaskSubtasks />
-              <TaskActivities />
-            </div>
-            <TaskProperties />
-          </div>
+              <TaskProperties />
+            </Flexbox>
+            <Divider />
+            <TaskInstruction />
+            <TaskSubtasks />
+            <TaskActivities />
+          </>
         )}
       </WideScreenContainer>
     </Flexbox>
