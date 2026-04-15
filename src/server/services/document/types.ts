@@ -1,20 +1,16 @@
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 
-import type { JsonPatchDelta } from './diff/json';
-
 export type DocumentHistorySaveSource = 'autosave' | 'manual' | 'restore' | 'system';
 
-export type DocumentHistoryStorageKind = 'head' | 'patch' | 'snapshot';
-
-export interface CompareDocumentHistoryVersionsParams {
+export interface CompareDocumentHistoryItemsParams {
   documentId: string;
-  fromVersion: number;
-  toVersion: number;
+  fromHistoryId: string;
+  toHistoryId: string;
 }
 
-export interface CompareDocumentHistoryVersionsResult {
-  from: DocumentHistoryVersionResult;
-  to: DocumentHistoryVersionResult;
+export interface CompareDocumentHistoryItemsResult {
+  from: DocumentHistoryItemResult;
+  to: DocumentHistoryItemResult;
 }
 
 export interface DocumentHistoryAccessOptions {
@@ -22,95 +18,54 @@ export interface DocumentHistoryAccessOptions {
 }
 
 export interface DocumentHistoryListItem {
+  id: string;
   isCurrent: boolean;
   savedAt: Date;
   saveSource: DocumentHistorySaveSource;
-  storageKind: DocumentHistoryStorageKind;
-  version: number;
 }
 
-export interface DocumentHistoryVersionResult {
+export interface DocumentHistoryItemResult {
   editorData: Record<string, any>;
+  id: string;
   isCurrent: boolean;
   savedAt: Date;
   saveSource: DocumentHistorySaveSource;
-  version: number;
 }
 
-export interface GetDocumentHistoryVersionParams {
+export interface GetDocumentHistoryItemParams {
   documentId: string;
-  version: number;
+  historyId: string;
 }
 
 export interface ListDocumentHistoryParams {
-  beforeVersion?: number;
+  beforeId?: string;
+  beforeSavedAt?: Date;
   documentId: string;
   includeCurrent?: boolean;
   limit?: number;
 }
 
 export interface ListDocumentHistoryResult {
-  headVersion: number;
   items: DocumentHistoryListItem[];
-  nextBeforeVersion?: number;
+  nextBeforeId?: string;
+  nextBeforeSavedAt?: Date;
 }
 
 export type DatabaseLike = LobeChatDatabase | Transaction;
 
-export interface HistoryRowReference {
-  baseVersion: number | null;
-  documentId: string;
-  payload: unknown;
-  storageKind: string;
-  version: number;
-}
-
-export interface PersistedDocumentHistory {
-  baseVersion: number | null;
-  documentId: string;
-  id?: string;
-  payload: JsonPatchDelta | Record<string, any>;
-  savedAt: Date;
-  saveSource: DocumentHistorySaveSource;
-  storageKind: Exclude<DocumentHistoryStorageKind, 'head'>;
-  version: number;
-}
-
-export interface ResolvedHistoryVersion {
-  editorData: Record<string, any>;
-  version: number;
-}
-
-export interface RewriteDocumentHistoryOptions {
-  dryRun?: boolean;
-  forceRewrite?: boolean;
-  limit?: number;
-}
-
-export interface RewriteDocumentHistoryResult {
-  afterPatchCount: number;
-  afterSnapshotCount: number;
-  beforePatchCount: number;
-  beforeSnapshotCount: number;
-  documentId: string;
-  retainedRows: number;
-  rewritten: boolean;
-  trimmedRows: number;
-}
-
-export interface VersionedUpdateDocumentParams {
+export interface UpdateDocumentParams {
   content?: string;
   editorData?: Record<string, any>;
   fileType?: string;
   metadata?: Record<string, any>;
   parentId?: string | null;
-  restoreFromVersion?: number;
+  restoreFromHistoryId?: string;
   saveSource?: DocumentHistorySaveSource;
   title?: string;
 }
 
-export interface VersionedUpdateDocumentResult {
+export interface UpdateDocumentResult {
   historyAppended: boolean;
   id: string;
-  version: number;
+  savedAt?: Date;
 }

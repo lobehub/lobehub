@@ -55,10 +55,9 @@ describe('DocumentService', () => {
     };
 
     mockDocumentHistoryService = {
-      appendCurrentHead: vi.fn(),
-      compactHistory: vi.fn(),
-      compareDocumentHistoryVersions: vi.fn(),
-      getDocumentHistoryVersion: vi.fn(),
+      compareDocumentHistoryItems: vi.fn(),
+      createHistory: vi.fn(),
+      getDocumentHistoryItem: vi.fn(),
       listDocumentHistory: vi.fn(),
     };
 
@@ -330,7 +329,9 @@ describe('DocumentService', () => {
 
   describe('document history', () => {
     it('should delegate listDocumentHistory to DocumentHistoryService', async () => {
-      const mockResult = { headVersion: 3, items: [{ isCurrent: true, version: 3 }] };
+      const mockResult = {
+        items: [{ id: 'head', isCurrent: true, saveSource: 'system', savedAt: new Date() }],
+      };
       mockDocumentHistoryService.listDocumentHistory.mockResolvedValue(mockResult);
 
       const result = await service.listDocumentHistory({ documentId: 'doc-1' });
@@ -344,40 +345,61 @@ describe('DocumentService', () => {
       expect(result).toEqual(mockResult);
     });
 
-    it('should delegate getDocumentHistoryVersion to DocumentHistoryService', async () => {
-      const mockResult = { editorData: { blocks: [] }, isCurrent: true, version: 2 };
-      mockDocumentHistoryService.getDocumentHistoryVersion.mockResolvedValue(mockResult);
+    it('should delegate getDocumentHistoryItem to DocumentHistoryService', async () => {
+      const mockResult = {
+        editorData: { blocks: [] },
+        id: 'hist-1',
+        isCurrent: true,
+        saveSource: 'system',
+        savedAt: new Date(),
+      };
+      mockDocumentHistoryService.getDocumentHistoryItem.mockResolvedValue(mockResult);
 
-      const result = await service.getDocumentHistoryVersion({ documentId: 'doc-1', version: 2 });
+      const result = await service.getDocumentHistoryItem({
+        documentId: 'doc-1',
+        historyId: 'hist-1',
+      });
 
-      expect(mockDocumentHistoryService.getDocumentHistoryVersion).toHaveBeenCalledWith(
+      expect(mockDocumentHistoryService.getDocumentHistoryItem).toHaveBeenCalledWith(
         {
           documentId: 'doc-1',
-          version: 2,
+          historyId: 'hist-1',
         },
         undefined,
       );
       expect(result).toEqual(mockResult);
     });
 
-    it('should delegate compareDocumentHistoryVersions to DocumentHistoryService', async () => {
+    it('should delegate compareDocumentHistoryItems to DocumentHistoryService', async () => {
       const mockResult = {
-        from: { editorData: { blocks: [{ id: '1' }] }, isCurrent: false, version: 1 },
-        to: { editorData: { blocks: [{ id: '2' }] }, isCurrent: true, version: 2 },
+        from: {
+          editorData: { blocks: [{ id: '1' }] },
+          id: 'hist-1',
+          isCurrent: false,
+          saveSource: 'autosave',
+          savedAt: new Date(),
+        },
+        to: {
+          editorData: { blocks: [{ id: '2' }] },
+          id: 'head',
+          isCurrent: true,
+          saveSource: 'system',
+          savedAt: new Date(),
+        },
       };
-      mockDocumentHistoryService.compareDocumentHistoryVersions.mockResolvedValue(mockResult);
+      mockDocumentHistoryService.compareDocumentHistoryItems.mockResolvedValue(mockResult);
 
-      const result = await service.compareDocumentHistoryVersions({
+      const result = await service.compareDocumentHistoryItems({
         documentId: 'doc-1',
-        fromVersion: 1,
-        toVersion: 2,
+        fromHistoryId: 'hist-1',
+        toHistoryId: 'head',
       });
 
-      expect(mockDocumentHistoryService.compareDocumentHistoryVersions).toHaveBeenCalledWith(
+      expect(mockDocumentHistoryService.compareDocumentHistoryItems).toHaveBeenCalledWith(
         {
           documentId: 'doc-1',
-          fromVersion: 1,
-          toVersion: 2,
+          fromHistoryId: 'hist-1',
+          toHistoryId: 'head',
         },
         undefined,
       );
@@ -501,7 +523,6 @@ describe('DocumentService', () => {
       fileId: null,
       id: 'doc-1',
       updatedAt: new Date('2026-04-11T00:00:00.000Z'),
-      version: 1,
       ...overrides,
     });
 
@@ -520,11 +541,11 @@ describe('DocumentService', () => {
           totalLineCount: 2,
         }),
       );
-      expect(mockDocumentHistoryService.appendCurrentHead).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1', version: 1 });
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
     });
 
-    it('should append history and bump version when editorData changes', async () => {
+    it('should append history when editorData changes', async () => {
       const editorData = { blocks: [{ type: 'paragraph', text: 'Hello' }] };
       mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
@@ -533,18 +554,18 @@ describe('DocumentService', () => {
 
       expect(mockDocumentModel.update).toHaveBeenCalledWith(
         'doc-1',
-        expect.objectContaining({ editorData, version: 2 }),
+        expect.objectContaining({ editorData }),
       );
-      expect(mockDocumentHistoryService.appendCurrentHead).toHaveBeenCalledWith(
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           documentId: 'doc-1',
           editorData: { blocks: [] },
           saveSource: 'manual',
-          version: 1,
         }),
       );
-      expect(mockDocumentHistoryService.compactHistory).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: true, id: 'doc-1', version: 2 });
+      expect(result.historyAppended).toBe(true);
+      expect(result.id).toBe('doc-1');
+      expect(result.savedAt).toBeInstanceOf(Date);
     });
 
     it('should skip history when editorData is unchanged', async () => {
@@ -558,9 +579,8 @@ describe('DocumentService', () => {
         'doc-1',
         expect.objectContaining({ editorData }),
       );
-      expect(mockDocumentHistoryService.appendCurrentHead).not.toHaveBeenCalled();
-      expect(mockDocumentHistoryService.compactHistory).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1', version: 1 });
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
     });
 
     it('should update title and filename together', async () => {

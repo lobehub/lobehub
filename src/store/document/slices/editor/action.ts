@@ -24,7 +24,7 @@ export interface SaveMetadata {
 }
 
 export interface SaveExecutionOptions {
-  restoreFromVersion?: number;
+  restoreFromHistoryId?: string;
   saveSource?: 'autosave' | 'manual' | 'restore' | 'system';
 }
 
@@ -179,7 +179,7 @@ export class EditorActionImpl {
         editorData: JSON.stringify(currentEditorData),
         id,
         metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
-        restoreFromVersion: options?.restoreFromVersion,
+        restoreFromHistoryId: options?.restoreFromHistoryId,
         saveSource: options?.saveSource,
         title: metadata?.title,
       });
@@ -190,11 +190,11 @@ export class EditorActionImpl {
         type: 'updateDocument',
         value: {
           editorData: structuredClone(currentEditorData),
-          headVersion: result.version,
+
           isDirty: false,
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
-          lastUpdatedTime: new Date(),
+          lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
           saveStatus: 'saved',
         },
       });

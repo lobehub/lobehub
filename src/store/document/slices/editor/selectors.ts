@@ -21,7 +21,6 @@ const saveStatus = (id: string) => (s: DocumentStore) => s.documents[id]?.saveSt
 const content = (id: string) => (s: DocumentStore) => s.documents[id]?.content ?? '';
 
 const editorData = (id: string) => (s: DocumentStore) => s.documents[id]?.editorData;
-const headVersion = (id: string) => (s: DocumentStore) => s.documents[id]?.headVersion ?? 1;
 
 const sourceType = (id: string) => (s: DocumentStore) => s.documents[id]?.sourceType;
 
@@ -48,11 +47,6 @@ const activeContent = (s: DocumentStore) => {
 const activeEditorData = (s: DocumentStore) => {
   const doc = activeDocument(s);
   return doc?.editorData;
-};
-
-const activeHeadVersion = (s: DocumentStore) => {
-  const doc = activeDocument(s);
-  return doc?.headVersion ?? 1;
 };
 
 const activeSourceType = (s: DocumentStore) => {
@@ -95,7 +89,6 @@ export const editorSelectors = {
   activeDocument,
   activeDocumentId,
   activeEditorData,
-  activeHeadVersion,
   activeIsDirty,
   activeLastUpdatedTime,
   activeSaveStatus,
@@ -105,7 +98,6 @@ export const editorSelectors = {
   content,
   documentById,
   editorData,
-  headVersion,
   hasDocument,
   isDocumentLoading,
   isDirty,

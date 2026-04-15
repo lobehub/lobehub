@@ -1,24 +1,32 @@
 import { z } from 'zod';
 
 export const documentHistorySaveSourceSchema = z.enum(['autosave', 'manual', 'restore', 'system']);
-export const documentHistoryStorageKindSchema = z.enum(['snapshot', 'patch', 'head']);
 
-export const listDocumentHistoryInputSchema = z.object({
-  beforeVersion: z.number().optional(),
+export const listDocumentHistoryInputSchema = z
+  .object({
+    beforeId: z.string().optional(),
+    beforeSavedAt: z.string().datetime().optional(),
+    documentId: z.string(),
+    includeCurrent: z.boolean().optional(),
+    limit: z.number().int().min(1).optional(),
+  })
+  .refine(
+    (data) => (!data.beforeId && !data.beforeSavedAt) || (!!data.beforeId && !!data.beforeSavedAt),
+    {
+      message: 'beforeId and beforeSavedAt must be provided together',
+      path: ['beforeSavedAt'],
+    },
+  );
+
+export const getDocumentHistoryItemInputSchema = z.object({
   documentId: z.string(),
-  includeCurrent: z.boolean().optional(),
-  limit: z.number().optional(),
+  historyId: z.string(),
 });
 
-export const getDocumentHistoryVersionInputSchema = z.object({
+export const compareDocumentHistoryItemsInputSchema = z.object({
   documentId: z.string(),
-  version: z.number(),
-});
-
-export const compareDocumentHistoryVersionsInputSchema = z.object({
-  documentId: z.string(),
-  fromVersion: z.number(),
-  toVersion: z.number(),
+  fromHistoryId: z.string(),
+  toHistoryId: z.string(),
 });
 
 export const updateDocumentInputSchema = z.object({
@@ -28,67 +36,68 @@ export const updateDocumentInputSchema = z.object({
   id: z.string(),
   metadata: z.record(z.any()).optional(),
   parentId: z.string().nullable().optional(),
-  restoreFromVersion: z.number().optional(),
+  restoreFromHistoryId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema.optional(),
   title: z.string().optional(),
 });
 
 export interface DocumentHistoryListItem {
+  id: string;
   isCurrent: boolean;
   savedAt: string;
   saveSource: DocumentHistorySaveSource;
-  storageKind: DocumentHistoryStorageKind;
-  version: number;
 }
 
 export interface ListHistoryOutput {
-  headVersion: number;
   items: DocumentHistoryListItem[];
-  nextBeforeVersion?: number;
+  nextBeforeId?: string;
+  nextBeforeSavedAt?: string;
 }
 
-export interface GetHistoryVersionOutput {
+export interface GetHistoryItemOutput {
   editorData: Record<string, any>;
+  id: string;
   isCurrent: boolean;
   savedAt: string;
   saveSource: DocumentHistorySaveSource;
-  version: number;
 }
 
-export interface CompareHistoryVersionState {
+export interface CompareHistoryItemState {
   editorData: Record<string, any>;
+  id: string;
   isCurrent: boolean;
   savedAt: string;
-  version: number;
+  saveSource: DocumentHistorySaveSource;
 }
 
-export interface CompareHistoryVersionsOutput {
-  from: CompareHistoryVersionState;
-  to: CompareHistoryVersionState;
+export interface CompareHistoryItemsOutput {
+  from: CompareHistoryItemState;
+  to: CompareHistoryItemState;
 }
 
 export interface UpdateDocumentOutput {
   historyAppended: boolean;
   id: string;
-  version: number;
+  savedAt?: string;
 }
 
 export interface ListHistoryInput {
-  beforeVersion?: number;
+  beforeId?: string;
+  beforeSavedAt?: string;
   documentId: string;
   includeCurrent?: boolean;
   limit?: number;
 }
 
-export interface GetHistoryVersionInput {
+export interface GetHistoryItemInput {
   documentId: string;
-  version: number;
+  historyId: string;
 }
 
-export interface CompareHistoryVersionsInput {
+export interface CompareHistoryItemsInput {
   documentId: string;
-  fromVersion: number;
-  toVersion: number;
+  fromHistoryId: string;
+  toHistoryId: string;
 }
 
 export interface UpdateDocumentInput {
@@ -98,16 +107,16 @@ export interface UpdateDocumentInput {
   id: string;
   metadata?: Record<string, any>;
   parentId?: string | null;
-  restoreFromVersion?: number;
+  restoreFromHistoryId?: string;
   saveSource?: DocumentHistorySaveSource;
   title?: string;
 }
 
 export interface DocumentHistoryRouterService {
-  compareDocumentHistoryVersions: (
-    params: CompareHistoryVersionsInput,
-  ) => Promise<CompareHistoryVersionsOutput>;
-  getDocumentHistoryVersion: (params: GetHistoryVersionInput) => Promise<GetHistoryVersionOutput>;
+  compareDocumentHistoryItems: (
+    params: CompareHistoryItemsInput,
+  ) => Promise<CompareHistoryItemsOutput>;
+  getDocumentHistoryItem: (params: GetHistoryItemInput) => Promise<GetHistoryItemOutput>;
   listDocumentHistory: (params: ListHistoryInput) => Promise<ListHistoryOutput>;
   updateDocument: (
     id: string,
@@ -116,4 +125,3 @@ export interface DocumentHistoryRouterService {
 }
 
 export type DocumentHistorySaveSource = z.infer<typeof documentHistorySaveSourceSchema>;
-export type DocumentHistoryStorageKind = z.infer<typeof documentHistoryStorageKindSchema>;

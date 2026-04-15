@@ -81,7 +81,6 @@ export class DocumentModel {
           title: documents.title,
           totalCharCount: documents.totalCharCount,
           totalLineCount: documents.totalLineCount,
-          version: documents.version,
           updatedAt: documents.updatedAt,
           userId: documents.userId,
           // Exclude large fields: content, pages, editorData
@@ -103,7 +102,6 @@ export class DocumentModel {
       content: null,
       editorData: null,
       pages: null,
-      version: item.version,
     })) as DocumentItem[];
 
     return { items, total: totalResult[0].count };

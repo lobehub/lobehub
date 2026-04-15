@@ -80,7 +80,6 @@ describe('DocumentModel', () => {
       expect(result).toBeDefined();
       expect(result.content).toBe('Test content');
       expect(result.fileId).toBe(file.id);
-      expect(result.version).toBe(1);
     });
   });
 

@@ -1,11 +1,12 @@
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 
 import type { DocumentHistoryItem, NewDocumentHistory } from '../schemas';
-import { documentHistories } from '../schemas';
+import { documentHistories, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface QueryDocumentHistoryParams {
-  beforeVersion?: number;
+  beforeId?: string;
+  beforeSavedAt?: Date;
   documentId: string;
   limit?: number;
 }
@@ -20,6 +21,16 @@ export class DocumentHistoryModel {
   }
 
   create = async (params: Omit<NewDocumentHistory, 'userId'>): Promise<DocumentHistoryItem> => {
+    const [document] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.id, params.documentId), eq(documents.userId, this.userId)))
+      .limit(1);
+
+    if (!document) {
+      throw new Error('Document not found');
+    }
+
     const [result] = await this.db
       .insert(documentHistories)
       .values({ ...params, userId: this.userId })
@@ -59,25 +70,6 @@ export class DocumentHistoryModel {
     return result;
   };
 
-  findByDocumentIdAndVersion = async (
-    documentId: string,
-    version: number,
-  ): Promise<DocumentHistoryItem | undefined> => {
-    const [result] = await this.db
-      .select()
-      .from(documentHistories)
-      .where(
-        and(
-          eq(documentHistories.documentId, documentId),
-          eq(documentHistories.version, version),
-          eq(documentHistories.userId, this.userId),
-        ),
-      )
-      .limit(1);
-
-    return result;
-  };
-
   findLatestByDocumentId = async (documentId: string): Promise<DocumentHistoryItem | undefined> => {
     const [result] = await this.db
       .select()
@@ -88,14 +80,15 @@ export class DocumentHistoryModel {
           eq(documentHistories.userId, this.userId),
         ),
       )
-      .orderBy(desc(documentHistories.version))
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
       .limit(1);
 
     return result;
   };
 
   list = async ({
-    beforeVersion,
+    beforeId,
+    beforeSavedAt,
     documentId,
     limit = 50,
   }: QueryDocumentHistoryParams): Promise<DocumentHistoryItem[]> => {
@@ -104,19 +97,25 @@ export class DocumentHistoryModel {
       eq(documentHistories.userId, this.userId),
     ];
 
-    if (beforeVersion !== undefined) {
-      conditions.push(lt(documentHistories.version, beforeVersion));
+    if (beforeSavedAt !== undefined) {
+      if (beforeId !== undefined) {
+        const cursorCondition = or(
+          lt(documentHistories.savedAt, beforeSavedAt),
+          and(eq(documentHistories.savedAt, beforeSavedAt), lt(documentHistories.id, beforeId)),
+        );
+        if (cursorCondition) {
+          conditions.push(cursorCondition);
+        }
+      } else {
+        conditions.push(lt(documentHistories.savedAt, beforeSavedAt));
+      }
     }
 
     return this.db
       .select()
       .from(documentHistories)
       .where(and(...conditions))
-      .orderBy(
-        desc(documentHistories.savedAt),
-        desc(documentHistories.version),
-        desc(documentHistories.id),
-      )
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
       .limit(limit);
   };
 

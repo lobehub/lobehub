@@ -9,7 +9,7 @@ import { useDocumentStore } from '../../store';
 // Mock services
 vi.mock('@/services/document', () => ({
   documentService: {
-    updateDocument: vi.fn().mockResolvedValue({ historyAppended: false, id: 'doc-1', version: 1 }),
+    updateDocument: vi.fn().mockResolvedValue({ historyAppended: false, id: 'doc-1' }),
   },
 }));
 
@@ -34,7 +34,6 @@ describe('DocumentStore - Editor Actions', () => {
     vi.mocked(documentService.updateDocument).mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
-      version: 1,
     });
 
     // Reset store state before each test
@@ -144,20 +143,21 @@ describe('DocumentStore - Editor Actions', () => {
       expect(mockEditor.setDocument).not.toHaveBeenCalled();
     });
 
-    it('should initialize headVersion from fetched document data', () => {
+    it('should initialize document with editor data', () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;
+      const editorData = { blocks: [{ type: 'paragraph' }] };
 
       act(() => {
         result.current.initDocumentWithEditor({
           documentId: 'doc-1',
           editor: mockEditor,
-          headVersion: 12,
+          editorData,
           sourceType: 'page',
         });
       });
 
-      expect(result.current.documents['doc-1'].headVersion).toBe(12);
+      expect(result.current.documents['doc-1'].editorData).toEqual(editorData);
     });
   });
 
@@ -323,7 +323,7 @@ describe('DocumentStore - Editor Actions', () => {
       const mockEditor = {
         getDocument: vi.fn((type: string) => {
           if (type === 'markdown') return '# Test';
-          if (type === 'json') return { type: 'doc', version: 2 };
+          if (type === 'json') return { type: 'doc', updated: true };
           return null;
         }),
         setDocument: vi.fn(),
@@ -334,7 +334,7 @@ describe('DocumentStore - Editor Actions', () => {
           content: '# Test',
           documentId: 'doc-1',
           editor: mockEditor,
-          editorData: { type: 'doc', version: 1 },
+          editorData: { type: 'doc' },
           sourceType: 'page',
         });
       });
@@ -347,7 +347,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       expect(result.current.documents['doc-1']).toMatchObject({
         content: '# Test',
-        editorData: { type: 'doc', version: 2 },
+        editorData: { type: 'doc', updated: true },
         isDirty: true,
       });
     });
@@ -416,14 +416,13 @@ describe('DocumentStore - Editor Actions', () => {
   });
 
   describe('performSave', () => {
-    it('should save metadata-only updates and keep headVersion unchanged when history is not appended', async () => {
+    it('should save metadata-only updates when history is not appended', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;
 
       vi.mocked(documentService.updateDocument).mockResolvedValue({
         historyAppended: false,
         id: 'doc-1',
-        version: 3,
       });
 
       act(() => {
@@ -431,7 +430,6 @@ describe('DocumentStore - Editor Actions', () => {
           content: '# Test',
           documentId: 'doc-1',
           editor: mockEditor,
-          headVersion: 3,
           sourceType: 'page',
         });
       });
@@ -451,17 +449,17 @@ describe('DocumentStore - Editor Actions', () => {
           title: 'Updated Title',
         }),
       );
-      expect(result.current.documents['doc-1'].headVersion).toBe(3);
+      expect(result.current.documents['doc-1'].isDirty).toBe(false);
     });
 
-    it('should pass restore metadata through updateDocument and update headVersion after success', async () => {
+    it('should pass restore metadata through updateDocument', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;
 
       vi.mocked(documentService.updateDocument).mockResolvedValue({
         historyAppended: true,
         id: 'doc-1',
-        version: 7,
+        savedAt: '2026-04-15T10:00:00.000Z',
       });
 
       act(() => {
@@ -469,7 +467,6 @@ describe('DocumentStore - Editor Actions', () => {
           content: '# Test',
           documentId: 'doc-1',
           editor: mockEditor,
-          headVersion: 4,
           sourceType: 'page',
         });
         result.current.markDirty('doc-1');
@@ -477,7 +474,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       await act(async () => {
         await result.current.performSave('doc-1', undefined, {
-          restoreFromVersion: 2,
+          restoreFromHistoryId: 'hist-2',
           saveSource: 'restore',
         });
       });
@@ -486,11 +483,10 @@ describe('DocumentStore - Editor Actions', () => {
         expect.objectContaining({
           content: '# Test',
           id: 'doc-1',
-          restoreFromVersion: 2,
+          restoreFromHistoryId: 'hist-2',
           saveSource: 'restore',
         }),
       );
-      expect(result.current.documents['doc-1'].headVersion).toBe(7);
       expect(result.current.documents['doc-1'].isDirty).toBe(false);
     });
   });

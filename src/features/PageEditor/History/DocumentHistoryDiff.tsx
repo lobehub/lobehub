@@ -11,8 +11,10 @@ import { useTranslation } from 'react-i18next';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useClientDataSWR } from '@/libs/swr';
-import type { CompareHistoryVersionsOutput } from '@/server/routers/lambda/_schema/documentHistory';
+import type { CompareHistoryItemsOutput } from '@/server/routers/lambda/_schema/documentHistory';
 import { documentService } from '@/services/document';
+import { useDocumentStore } from '@/store/document';
+import { editorSelectors } from '@/store/document/slices/editor';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -53,63 +55,63 @@ const normalizeEditorState = (value: unknown): SerializedEditorState | null => {
 
 interface DocumentHistoryDiffProps {
   documentId: string;
-  headVersion: number;
-  version: number;
+  historyId: string;
 }
 
-const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(
-  ({ documentId, headVersion, version }) => {
-    const { t } = useTranslation('file');
+const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(({ documentId, historyId }) => {
+  const { t } = useTranslation('file');
+  const lastUpdatedTime = useDocumentStore(
+    (s) => editorSelectors.lastUpdatedTime(documentId)(s) ?? null,
+  );
 
-    const { data, error, isLoading } = useClientDataSWR<CompareHistoryVersionsOutput>(
-      ['page-editor-document-history-compare', documentId, version, headVersion],
-      async () =>
-        documentService.compareDocumentHistoryVersions({
-          documentId,
-          fromVersion: version,
-          toVersion: headVersion,
-        }),
-    );
-
-    const labels = useMemo<NonNullable<LexicalDiffProps['labels']>>(
-      () => ({
-        new: t('pageEditor.history.compareCurrentLabel', { version: headVersion }),
-        old: t('pageEditor.history.itemVersionLabel', { version }),
+  const { data, error, isLoading } = useClientDataSWR<CompareHistoryItemsOutput>(
+    ['page-editor-document-history-compare', documentId, historyId, lastUpdatedTime],
+    async () =>
+      documentService.compareDocumentHistoryItems({
+        documentId,
+        fromHistoryId: historyId,
+        toHistoryId: 'head',
       }),
-      [headVersion, t, version],
-    );
-    const normalizedValues = useMemo(() => {
-      const oldValue = normalizeEditorState(data?.from.editorData);
-      const newValue = normalizeEditorState(data?.to.editorData);
+  );
 
-      return { newValue, oldValue };
-    }, [data?.from.editorData, data?.to.editorData]);
+  const labels = useMemo<NonNullable<LexicalDiffProps['labels']>>(
+    () => ({
+      new: t('pageEditor.history.compareCurrentLabel'),
+      old: t('pageEditor.history.compareOldLabel'),
+    }),
+    [t],
+  );
+  const normalizedValues = useMemo(() => {
+    const oldValue = normalizeEditorState(data?.from.editorData);
+    const newValue = normalizeEditorState(data?.to.editorData);
 
-    return (
-      <Flexbox className={styles.container} flex={1} gap={0}>
-        {isLoading && !data ? (
-          <Flexbox align={'center'} className={styles.empty} justify={'center'}>
-            <Loading debugId={'DocumentHistoryDiff'} />
-          </Flexbox>
-        ) : error || !data || !normalizedValues.oldValue || !normalizedValues.newValue ? (
-          <Flexbox align={'center'} className={styles.empty} justify={'center'}>
-            <Empty description={t('pageEditor.history.compareError')} icon={GitCompareArrowsIcon} />
-          </Flexbox>
-        ) : (
-          <div className={styles.content}>
-            <LexicalDiff
-              appearance={'borderless'}
-              labels={labels}
-              newValue={normalizedValues.newValue}
-              oldValue={normalizedValues.oldValue}
-              variant="chat"
-            />
-          </div>
-        )}
-      </Flexbox>
-    );
-  },
-);
+    return { newValue, oldValue };
+  }, [data?.from.editorData, data?.to.editorData]);
+
+  return (
+    <Flexbox className={styles.container} flex={1} gap={0}>
+      {isLoading && !data ? (
+        <Flexbox align={'center'} className={styles.empty} justify={'center'}>
+          <Loading debugId={'DocumentHistoryDiff'} />
+        </Flexbox>
+      ) : error || !data || !normalizedValues.oldValue || !normalizedValues.newValue ? (
+        <Flexbox align={'center'} className={styles.empty} justify={'center'}>
+          <Empty description={t('pageEditor.history.compareError')} icon={GitCompareArrowsIcon} />
+        </Flexbox>
+      ) : (
+        <div className={styles.content}>
+          <LexicalDiff
+            appearance={'borderless'}
+            labels={labels}
+            newValue={normalizedValues.newValue}
+            oldValue={normalizedValues.oldValue}
+            variant="chat"
+          />
+        </div>
+      )}
+    </Flexbox>
+  );
+});
 
 DocumentHistoryDiff.displayName = 'DocumentHistoryDiff';
 

@@ -13,14 +13,14 @@ import { type LobeDocument } from '@/types/document';
 import { FileService } from '../file';
 import { DocumentHistoryService } from './history';
 import type {
-  CompareDocumentHistoryVersionsParams,
-  CompareDocumentHistoryVersionsResult,
+  CompareDocumentHistoryItemsParams,
+  CompareDocumentHistoryItemsResult,
   DocumentHistoryAccessOptions,
-  GetDocumentHistoryVersionParams,
+  GetDocumentHistoryItemParams,
   ListDocumentHistoryParams,
   ListDocumentHistoryResult,
-  VersionedUpdateDocumentParams,
-  VersionedUpdateDocumentResult,
+  UpdateDocumentParams,
+  UpdateDocumentResult,
 } from './types';
 
 const log = debug('lobe-chat:service:document');
@@ -174,22 +174,18 @@ export class DocumentService {
     return this.documentHistoryService.listDocumentHistory(params, options);
   }
 
-  async getDocumentHistoryVersion(
-    params: GetDocumentHistoryVersionParams,
+  async getDocumentHistoryItem(
+    params: GetDocumentHistoryItemParams,
     options?: DocumentHistoryAccessOptions,
   ) {
-    return this.documentHistoryService.getDocumentHistoryVersion(params, options);
+    return this.documentHistoryService.getDocumentHistoryItem(params, options);
   }
 
-  async compareDocumentHistoryVersions(
-    params: CompareDocumentHistoryVersionsParams,
+  async compareDocumentHistoryItems(
+    params: CompareDocumentHistoryItemsParams,
     options?: DocumentHistoryAccessOptions,
-  ): Promise<CompareDocumentHistoryVersionsResult> {
-    return this.documentHistoryService.compareDocumentHistoryVersions(params, options);
-  }
-
-  async compactDocumentHistory(id: string, limit?: number) {
-    return this.documentHistoryService.compactHistory(id, limit);
+  ): Promise<CompareDocumentHistoryItemsResult> {
+    return this.documentHistoryService.compareDocumentHistoryItems(params, options);
   }
 
   /**
@@ -240,10 +236,7 @@ export class DocumentService {
   /**
    * Update document
    */
-  async updateDocument(
-    id: string,
-    params: VersionedUpdateDocumentParams,
-  ): Promise<VersionedUpdateDocumentResult> {
+  async updateDocument(id: string, params: UpdateDocumentParams): Promise<UpdateDocumentResult> {
     return this.db.transaction(async (tx) => {
       const transactionDb = tx as unknown as LobeChatDatabase;
       const documentModel = new DocumentModel(transactionDb, this.userId);
@@ -255,7 +248,6 @@ export class DocumentService {
         throw new Error(`Document not found: ${id}`);
       }
 
-      const currentVersion = (currentDocument as DocumentItem & { version?: number }).version ?? 1;
       const currentEditorData = (currentDocument.editorData ?? {}) as Record<string, any>;
       const nextEditorData = params.editorData;
       const historyAppended =
@@ -290,16 +282,16 @@ export class DocumentService {
         updates.parentId = params.parentId;
       }
 
+      let savedAt: Date | undefined;
+
       if (historyAppended) {
-        await documentHistoryService.appendCurrentHead({
+        savedAt = new Date();
+        await documentHistoryService.createHistory({
           documentId: id,
           editorData: currentEditorData,
           saveSource: params.saveSource ?? 'autosave',
-          savedAt: currentDocument.updatedAt,
-          version: currentVersion,
+          savedAt,
         });
-
-        updates.version = currentVersion + 1;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -316,7 +308,7 @@ export class DocumentService {
       return {
         historyAppended,
         id,
-        version: historyAppended ? currentVersion + 1 : currentVersion,
+        savedAt,
       };
     });
   }

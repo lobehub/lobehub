@@ -1,7 +1,7 @@
-import { index, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { createNanoId } from '../utils/idGenerator';
-import { createdAt, timestamptz, varchar255 } from './_helpers';
+import { timestamptz, varchar255 } from './_helpers';
 import { documents } from './file';
 import { users } from './user';
 
@@ -19,21 +19,13 @@ export const documentHistories = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    version: integer('version').notNull(),
-    storageKind: text('storage_kind', { enum: ['snapshot', 'patch'] }).notNull(),
-    payload: jsonb('payload').$type<Record<string, any>>().notNull(),
-    baseVersion: integer('base_version'),
+    editorData: jsonb('editor_data').$type<Record<string, any>>().notNull(),
     saveSource: text('save_source', {
       enum: ['autosave', 'manual', 'restore', 'system'],
     }).notNull(),
     savedAt: timestamptz('saved_at').notNull(),
-    createdAt: createdAt(),
   },
   (table) => [
-    uniqueIndex('document_histories_document_id_version_unique').on(
-      table.documentId,
-      table.version,
-    ),
     index('document_histories_document_id_saved_at_idx').on(table.documentId, table.savedAt),
     index('document_histories_user_id_saved_at_idx').on(table.userId, table.savedAt),
   ],

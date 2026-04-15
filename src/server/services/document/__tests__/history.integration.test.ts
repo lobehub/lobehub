@@ -1,592 +1,399 @@
 // @vitest-environment node
-import { type LobeChatDatabase } from '@lobechat/database';
-import { documentHistories, documents, users } from '@lobechat/database/schemas';
-import { getTestDB } from '@lobechat/database/test-utils';
-import { and, asc, eq } from 'drizzle-orm';
+import { documentHistories, documents, files, users } from '@lobechat/database/schemas';
+import { desc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '@/database/core/getTestDB';
+import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
+import type { LobeChatDatabase } from '@/database/type';
+
 import { DocumentHistoryService } from '../history';
-import { DocumentService } from '../index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
-const userId = 'document-history-service-integration-user';
+const userId = 'document-history-service-test-user-id';
+const userId2 = 'document-history-service-test-user-id-2';
 
-const createEditorData = (text: string) => ({
-  content: [
-    {
-      content: [{ text, type: 'text' }],
-      type: 'paragraph',
-    },
-  ],
-  type: 'doc',
+const documentModel = new DocumentModel(serverDB, userId);
+const fileModel = new FileModel(serverDB, userId);
+const historyService = new DocumentHistoryService(serverDB, userId);
+const historyService2 = new DocumentHistoryService(serverDB, userId2);
+
+beforeEach(async () => {
+  await serverDB.delete(users);
+  await serverDB.insert(users).values([{ id: userId }, { id: userId2 }]);
 });
 
-const createLexicalTextNode = (id: string, text: string) => ({
-  detail: 0,
-  format: 0,
-  id,
-  mode: 'normal',
-  style: '',
-  text,
-  type: 'text',
-  version: 1,
+afterEach(async () => {
+  await serverDB.delete(documentHistories);
+  await serverDB.delete(documents);
+  await serverDB.delete(files);
+  await serverDB.delete(users);
 });
 
-const createLexicalParagraphNode = (id: string, text?: string) => ({
-  children: text ? [createLexicalTextNode(`${id}-text`, text)] : [],
-  direction: null,
-  format: 'start',
-  id,
-  indent: 0,
-  textFormat: 0,
-  textStyle: '',
-  type: 'paragraph',
-  version: 1,
-});
-
-const createLexicalEditorData = (nodes: ReturnType<typeof createLexicalParagraphNode>[]) => ({
-  root: {
-    children: nodes,
-    direction: null,
-    format: '',
-    id: 'root',
-    indent: 0,
-    type: 'root',
-    version: 1,
-  },
-});
-
-const createLexicalEditorDataFromTexts = (prefix: string, texts: string[]) =>
-  createLexicalEditorData(
-    texts.map((text, index) => createLexicalParagraphNode(`${prefix}-${index + 1}`, text)),
-  );
-
-describe('Document history integration', () => {
-  beforeEach(async () => {
-    await serverDB.delete(users).where(eq(users.id, userId));
-    await serverDB.insert(users).values({ id: userId });
+const createTestDocument = async (content: string, editorData?: Record<string, any>) => {
+  const { id: fileId } = await fileModel.create({
+    fileType: 'text/plain',
+    name: 'test.txt',
+    size: 100,
+    url: 'https://example.com/test.txt',
   });
 
-  afterEach(async () => {
-    await serverDB.delete(users).where(eq(users.id, userId));
+  const doc = await documentModel.create({
+    content,
+    editorData,
+    fileId,
+    fileType: 'text/plain',
+    filename: 'test.txt',
+    source: 'api',
+    sourceType: 'api',
+    title: 'Test Document',
+    totalCharCount: content.length,
+    totalLineCount: content.split('\n').length,
   });
 
-  it('should list, resolve, and compare history versions from editorData-only updates', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const version1 = createEditorData('v1');
-    const version2 = createEditorData('v2');
-    const version3 = createEditorData('v3');
+  return doc;
+};
 
-    const document = await documentService.createDocument({
-      content: 'v1',
-      editorData: version1,
-      title: 'History doc',
-    });
+describe('DocumentHistoryService', () => {
+  describe('createHistory & listDocumentHistory', () => {
+    it('should create history entries and list them with head included', async () => {
+      const doc = await createTestDocument('Hello');
 
-    await documentService.updateDocument(document.id, {
-      editorData: version2,
-      saveSource: 'manual',
-    });
-    await documentService.updateDocument(document.id, {
-      editorData: version3,
-      saveSource: 'autosave',
-    });
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
 
-    const historyList = await documentService.listDocumentHistory({
-      documentId: document.id,
-      includeCurrent: true,
-    });
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-02T10:00:00Z'),
+      });
 
-    expect(historyList.headVersion).toBe(3);
-    expect(historyList.items.map((item) => item.version)).toEqual([3, 2, 1]);
-    expect(historyList.items[0]).toMatchObject({
-      isCurrent: true,
-      storageKind: 'head',
-      version: 3,
-    });
-    expect(historyList.items[1]).toMatchObject({
-      isCurrent: false,
-      saveSource: 'autosave',
-      version: 2,
-    });
-    expect(historyList.items[2]).toMatchObject({
-      isCurrent: false,
-      saveSource: 'manual',
-      storageKind: 'snapshot',
-      version: 1,
-    });
-
-    const resolvedVersion1 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 1,
-    });
-    const resolvedVersion2 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 2,
-    });
-    const resolvedVersion3 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 3,
-    });
-
-    expect(resolvedVersion1.editorData).toEqual(version1);
-    expect(resolvedVersion1.isCurrent).toBe(false);
-    expect(resolvedVersion2.editorData).toEqual(version2);
-    expect(resolvedVersion2.isCurrent).toBe(false);
-    expect(resolvedVersion3.editorData).toEqual(version3);
-    expect(resolvedVersion3.isCurrent).toBe(true);
-
-    const comparison = await documentService.compareDocumentHistoryVersions({
-      documentId: document.id,
-      fromVersion: 1,
-      toVersion: 3,
-    });
-
-    expect(comparison.from.editorData).toEqual(version1);
-    expect(comparison.to.editorData).toEqual(version3);
-    expect(comparison.to.isCurrent).toBe(true);
-  });
-
-  it('should trim obsolete snapshot-only history rows during compaction', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const historyService = new DocumentHistoryService(serverDB, userId);
-    const version1 = createEditorData('v1');
-    const version2 = createEditorData('v2');
-    const version3 = createEditorData('v3');
-    const version4 = createEditorData('v4');
-
-    const document = await documentService.createDocument({
-      content: 'v1',
-      editorData: version1,
-      title: 'Compaction doc',
-    });
-
-    await documentService.updateDocument(document.id, { editorData: version2 });
-    await documentService.updateDocument(document.id, { editorData: version3 });
-    await documentService.updateDocument(document.id, { editorData: version4 });
-
-    await historyService.compactHistory(document.id, 2);
-
-    const retainedRows = await serverDB.query.documentHistories.findMany({
-      orderBy: [asc(documentHistories.version)],
-      where: eq(documentHistories.documentId, document.id),
-    });
-
-    expect(retainedRows.map((row) => row.version)).toEqual([2, 3]);
-    expect(retainedRows.map((row) => row.storageKind)).toEqual(['snapshot', 'snapshot']);
-    expect(retainedRows[0].baseVersion).toBeNull();
-    expect(retainedRows[1].baseVersion).toBeNull();
-
-    const historyList = await documentService.listDocumentHistory({
-      documentId: document.id,
-      includeCurrent: true,
-    });
-
-    expect(historyList.headVersion).toBe(4);
-    expect(historyList.items.map((item) => item.version)).toEqual([4, 3, 2]);
-
-    await expect(
-      historyService.getDocumentHistoryVersion({ documentId: document.id, version: 1 }),
-    ).rejects.toThrow(`Document history version not found: ${document.id}@1`);
-
-    const resolvedVersion2 = await historyService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 2,
-    });
-    const resolvedVersion3 = await historyService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 3,
-    });
-
-    expect(resolvedVersion2.editorData).toEqual(version2);
-    expect(resolvedVersion3.editorData).toEqual(version3);
-  });
-
-  it('should rebuild the retained window into a fresh checkpoint snapshot during compaction', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const historyService = new DocumentHistoryService(serverDB, userId);
-    const initialNodes = [
-      createLexicalParagraphNode('empty-1'),
-      createLexicalParagraphNode('empty-2'),
-      createLexicalParagraphNode('empty-3'),
-      createLexicalParagraphNode('body-1', 'alpha'),
-      createLexicalParagraphNode('body-2', 'beta'),
-      createLexicalParagraphNode('body-3', 'gamma'),
-      createLexicalParagraphNode('body-4', 'delta'),
-      createLexicalParagraphNode('body-5', 'epsilon'),
-    ];
-    const version1 = createLexicalEditorData(initialNodes);
-    const version2 = createLexicalEditorData(initialNodes.filter((node) => node.id !== 'empty-1'));
-    const version3 = createLexicalEditorData(
-      initialNodes.filter((node) => node.id !== 'empty-1' && node.id !== 'empty-2'),
-    );
-    const version4 = createLexicalEditorData(
-      initialNodes.filter((node) => !['empty-1', 'empty-2', 'empty-3'].includes(String(node.id))),
-    );
-
-    const document = await documentService.createDocument({
-      content: 'Patch compaction doc',
-      editorData: version1,
-      title: 'Patch compaction doc',
-    });
-
-    await documentService.updateDocument(document.id, { editorData: version2 });
-    await documentService.updateDocument(document.id, { editorData: version3 });
-    await documentService.updateDocument(document.id, { editorData: version4 });
-
-    await historyService.compactHistory(document.id, 2);
-
-    const retainedRows = await serverDB.query.documentHistories.findMany({
-      orderBy: [asc(documentHistories.version)],
-      where: eq(documentHistories.documentId, document.id),
-    });
-
-    expect(retainedRows.map((row) => row.version)).toEqual([2, 3]);
-    expect(retainedRows.map((row) => row.storageKind)).toEqual(['snapshot', 'patch']);
-    expect(retainedRows[0].baseVersion).toBeNull();
-    expect(retainedRows[1].baseVersion).toBe(2);
-
-    const resolvedVersion2 = await historyService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 2,
-    });
-    const resolvedVersion3 = await historyService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 3,
-    });
-
-    expect(resolvedVersion2.editorData).toEqual(version2);
-    expect(resolvedVersion3.editorData).toEqual(version3);
-  });
-
-  it('should limit front-end history queries to versions saved within the last 30 days', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const now = Date.now();
-    const historySince = new Date(now - 30 * 24 * 60 * 60 * 1000);
-    const oldSavedAt = new Date(now - 40 * 24 * 60 * 60 * 1000);
-    const recentSavedAt = new Date(now - 5 * 24 * 60 * 60 * 1000);
-
-    const version1 = createEditorData('v1');
-    const version2 = createEditorData('v2');
-    const version3 = createEditorData('v3');
-
-    const document = await documentService.createDocument({
-      content: 'v1',
-      editorData: version1,
-      title: 'History access window doc',
-    });
-
-    await documentService.updateDocument(document.id, {
-      editorData: version2,
-      saveSource: 'manual',
-    });
-    await documentService.updateDocument(document.id, {
-      editorData: version3,
-      saveSource: 'manual',
-    });
-
-    await serverDB
-      .update(documentHistories)
-      .set({ savedAt: oldSavedAt })
-      .where(
-        and(
-          eq(documentHistories.documentId, document.id),
-          eq(documentHistories.version, 1),
-          eq(documentHistories.userId, userId),
-        ),
-      );
-
-    await serverDB
-      .update(documentHistories)
-      .set({ savedAt: recentSavedAt })
-      .where(
-        and(
-          eq(documentHistories.documentId, document.id),
-          eq(documentHistories.version, 2),
-          eq(documentHistories.userId, userId),
-        ),
-      );
-
-    const historyList = await documentService.listDocumentHistory(
-      {
-        documentId: document.id,
+      const result = await historyService.listDocumentHistory({
+        documentId: doc.id,
         includeCurrent: true,
-      },
-      { historySince },
-    );
+        limit: 10,
+      });
 
-    expect(historyList.items.map((item) => item.version)).toEqual([3, 2]);
-
-    await expect(
-      documentService.getDocumentHistoryVersion(
-        {
-          documentId: document.id,
-          version: 1,
-        },
-        { historySince },
-      ),
-    ).rejects.toThrow(`Document history version not found: ${document.id}@1`);
-
-    const currentVersion = await documentService.getDocumentHistoryVersion(
-      {
-        documentId: document.id,
-        version: 3,
-      },
-      { historySince },
-    );
-
-    expect(currentVersion.isCurrent).toBe(true);
-    expect(currentVersion.editorData).toEqual(version3);
-  });
-
-  it('should store patches for keyed editor node deletions instead of snapshots', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const initialNodes = [
-      createLexicalParagraphNode('empty-1'),
-      createLexicalParagraphNode('empty-2'),
-      createLexicalParagraphNode('empty-3'),
-      createLexicalParagraphNode('body-1', 'alpha'),
-      createLexicalParagraphNode('body-2', 'beta'),
-      createLexicalParagraphNode('body-3', 'gamma'),
-      createLexicalParagraphNode('body-4', 'delta'),
-      createLexicalParagraphNode('body-5', 'epsilon'),
-    ];
-    const version1 = createLexicalEditorData(initialNodes);
-    const version2 = createLexicalEditorData(initialNodes.filter((node) => node.id !== 'empty-1'));
-    const version3 = createLexicalEditorData(
-      initialNodes.filter((node) => node.id !== 'empty-1' && node.id !== 'empty-2'),
-    );
-    const version4 = createLexicalEditorData(
-      initialNodes.filter((node) => !['empty-1', 'empty-2', 'empty-3'].includes(String(node.id))),
-    );
-
-    const document = await documentService.createDocument({
-      content: 'History patch doc',
-      editorData: version1,
-      title: 'History patch doc',
+      expect(result.items).toHaveLength(3);
+      expect(result.items[0].id).toBe('head');
+      expect(result.items[0].isCurrent).toBe(true);
+      expect(result.items[1].saveSource).toBe('manual');
+      expect(result.items[2].saveSource).toBe('autosave');
     });
 
-    await documentService.updateDocument(document.id, { editorData: version2 });
-    await documentService.updateDocument(document.id, { editorData: version3 });
-    await documentService.updateDocument(document.id, { editorData: version4 });
+    it('should respect includeCurrent=false', async () => {
+      const doc = await createTestDocument('Hello');
 
-    const retainedRows = await serverDB.query.documentHistories.findMany({
-      orderBy: [asc(documentHistories.version)],
-      where: eq(documentHistories.documentId, document.id),
-    });
-
-    expect(retainedRows.map((row) => row.version)).toEqual([1, 2, 3]);
-    expect(retainedRows.map((row) => row.storageKind)).toEqual(['snapshot', 'patch', 'patch']);
-    expect(retainedRows[1].baseVersion).toBe(1);
-    expect(retainedRows[2].baseVersion).toBe(2);
-
-    const resolvedVersion2 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 2,
-    });
-    const resolvedVersion3 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 3,
-    });
-
-    expect(resolvedVersion2.editorData).toEqual(version2);
-    expect(resolvedVersion3.editorData).toEqual(version3);
-  });
-
-  it('should rebuild existing snapshot-only history rows using current diff rules', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const historyService = new DocumentHistoryService(serverDB, userId);
-    const initialNodes = [
-      createLexicalParagraphNode('empty-1'),
-      createLexicalParagraphNode('empty-2'),
-      createLexicalParagraphNode('empty-3'),
-      createLexicalParagraphNode('body-1', 'alpha'),
-      createLexicalParagraphNode('body-2', 'beta'),
-      createLexicalParagraphNode('body-3', 'gamma'),
-      createLexicalParagraphNode('body-4', 'delta'),
-    ];
-    const version1 = createLexicalEditorData(initialNodes);
-    const version2 = createLexicalEditorData(initialNodes.filter((node) => node.id !== 'empty-1'));
-    const version3 = createLexicalEditorData(
-      initialNodes.filter((node) => !['empty-1', 'empty-2'].includes(String(node.id))),
-    );
-    const version4 = createLexicalEditorData(
-      initialNodes.filter((node) => !['empty-1', 'empty-2', 'empty-3'].includes(String(node.id))),
-    );
-
-    const document = await documentService.createDocument({
-      content: 'History rewrite doc',
-      editorData: version1,
-      title: 'History rewrite doc',
-    });
-
-    await serverDB
-      .update(documents)
-      .set({ editorData: version4, version: 4 })
-      .where(eq(documents.id, document.id));
-
-    await serverDB.insert(documentHistories).values([
-      {
-        documentId: document.id,
-        id: 'history-row-v1',
-        payload: version1,
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
         saveSource: 'autosave',
-        savedAt: new Date('2026-04-12T08:00:00.000Z'),
-        storageKind: 'snapshot',
-        userId,
-        version: 1,
-      },
-      {
-        documentId: document.id,
-        id: 'history-row-v2',
-        payload: version2,
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
+
+      const result = await historyService.listDocumentHistory({
+        documentId: doc.id,
+        includeCurrent: false,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].isCurrent).toBe(false);
+    });
+
+    it('should paginate correctly using beforeSavedAt and beforeId cursor', async () => {
+      const doc = await createTestDocument('Hello');
+      const baseDate = new Date('2026-04-01T10:00:00Z');
+
+      // Create multiple history rows with the same savedAt to test id tie-breaker
+      for (let i = 0; i < 5; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i },
+          saveSource: 'manual',
+          savedAt: new Date(baseDate.getTime()),
+        });
+      }
+
+      // Fetch all rows and sort by (savedAt DESC, id DESC) to know expected order
+      const allRows = await serverDB
+        .select({ id: documentHistories.id, savedAt: documentHistories.savedAt })
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, doc.id))
+        .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id));
+
+      const sortedIds = allRows.map((r) => r.id);
+      expect(sortedIds).toHaveLength(5);
+
+      const firstPage = await historyService.listDocumentHistory({
+        documentId: doc.id,
+        includeCurrent: false,
+        limit: 2,
+      });
+
+      expect(firstPage.items.map((i) => i.id)).toEqual(sortedIds.slice(0, 2));
+      expect(firstPage.nextBeforeSavedAt).toBeDefined();
+      expect(firstPage.nextBeforeId).toBeDefined();
+
+      const secondPage = await historyService.listDocumentHistory({
+        beforeId: firstPage.nextBeforeId,
+        beforeSavedAt: firstPage.nextBeforeSavedAt,
+        documentId: doc.id,
+        includeCurrent: false,
+        limit: 2,
+      });
+
+      expect(secondPage.items.map((i) => i.id)).toEqual(sortedIds.slice(2, 4));
+      expect(secondPage.nextBeforeSavedAt).toBeDefined();
+      expect(secondPage.nextBeforeId).toBeDefined();
+
+      const thirdPage = await historyService.listDocumentHistory({
+        beforeId: secondPage.nextBeforeId,
+        beforeSavedAt: secondPage.nextBeforeSavedAt,
+        documentId: doc.id,
+        includeCurrent: false,
+        limit: 2,
+      });
+
+      expect(thirdPage.items.map((i) => i.id)).toEqual(sortedIds.slice(4, 5));
+      expect(thirdPage.nextBeforeSavedAt).toBeUndefined();
+      expect(thirdPage.nextBeforeId).toBeUndefined();
+    });
+
+    it('should not duplicate head when paginating with includeCurrent=true and same timestamp', async () => {
+      const doc = await createTestDocument('Hello');
+      const sharedDate = new Date('2026-04-01T10:00:00Z');
+
+      // Create enough history rows so pagination has a second page
+      for (let i = 0; i < 3; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i },
+          saveSource: 'manual',
+          savedAt: sharedDate,
+        });
+      }
+
+      // Force document updatedAt to match the history savedAt
+      await documentModel.update(doc.id, { updatedAt: sharedDate });
+
+      const firstPage = await historyService.listDocumentHistory({
+        documentId: doc.id,
+        includeCurrent: true,
+        limit: 2,
+      });
+
+      expect(firstPage.items[0].id).toBe('head');
+      expect(firstPage.items).toHaveLength(2);
+      expect(firstPage.nextBeforeSavedAt).toBeDefined();
+      expect(firstPage.nextBeforeId).toBeDefined();
+
+      // Paginating past the first page should never include head again
+      const secondPage = await historyService.listDocumentHistory({
+        beforeId: firstPage.nextBeforeId,
+        beforeSavedAt: firstPage.nextBeforeSavedAt,
+        documentId: doc.id,
+        includeCurrent: true,
+        limit: 2,
+      });
+
+      for (const item of secondPage.items) {
+        expect(item.id).not.toBe('head');
+      }
+    });
+
+    it('should emit a cursor when limit=1 and includeCurrent=true', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-02T10:00:00Z'),
+      });
+
+      // limit=1 with includeCurrent=true is promoted to an effective limit of 2
+      // so that head plus at least one history item can be returned without
+      // creating a cursor that would skip a dropped row.
+      const firstPage = await historyService.listDocumentHistory({
+        documentId: doc.id,
+        includeCurrent: true,
+        limit: 1,
+      });
+
+      expect(firstPage.items[0].id).toBe('head');
+      expect(firstPage.items).toHaveLength(2);
+      expect(firstPage.nextBeforeSavedAt).toBeDefined();
+      expect(firstPage.nextBeforeId).toBeDefined();
+
+      const secondPage = await historyService.listDocumentHistory({
+        beforeId: firstPage.nextBeforeId,
+        beforeSavedAt: firstPage.nextBeforeSavedAt,
+        documentId: doc.id,
+        includeCurrent: true,
+        limit: 1,
+      });
+
+      expect(secondPage.items[0].id).not.toBe('head');
+      expect(secondPage.items).toHaveLength(1);
+    });
+
+    it('should filter out entries older than historySince', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
         saveSource: 'autosave',
-        savedAt: new Date('2026-04-12T08:01:00.000Z'),
-        storageKind: 'snapshot',
-        userId,
-        version: 2,
-      },
-      {
-        documentId: document.id,
-        id: 'history-row-v3',
-        payload: version3,
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-12T08:02:00.000Z'),
-        storageKind: 'snapshot',
-        userId,
-        version: 3,
-      },
-    ]);
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
 
-    const result = await historyService.rebuildHistory(document.id);
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-10T10:00:00Z'),
+      });
 
-    expect(result.beforeSnapshotCount).toBe(3);
-    expect(result.afterPatchCount).toBe(2);
-    expect(result.afterSnapshotCount).toBe(1);
-    expect(result.rewritten).toBe(true);
+      const result = await historyService.listDocumentHistory(
+        { documentId: doc.id, includeCurrent: true, limit: 10 },
+        { historySince: new Date('2026-04-05T00:00:00Z') },
+      );
 
-    const retainedRows = await serverDB.query.documentHistories.findMany({
-      orderBy: [asc(documentHistories.version)],
-      where: eq(documentHistories.documentId, document.id),
+      const historyItems = result.items.filter((i) => i.id !== 'head');
+      expect(historyItems).toHaveLength(1);
+      expect(historyItems[0].saveSource).toBe('manual');
     });
-
-    expect(retainedRows.map((row) => row.id)).toEqual([
-      'history-row-v1',
-      'history-row-v2',
-      'history-row-v3',
-    ]);
-    expect(retainedRows.map((row) => row.storageKind)).toEqual(['snapshot', 'patch', 'patch']);
-    expect(retainedRows[1].baseVersion).toBe(1);
-    expect(retainedRows[2].baseVersion).toBe(2);
-
-    const resolvedVersion2 = await historyService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 2,
-    });
-    const resolvedVersion3 = await historyService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 3,
-    });
-
-    expect(resolvedVersion2.editorData).toEqual(version2);
-    expect(resolvedVersion3.editorData).toEqual(version3);
   });
 
-  it('should keep rekeyed lexical versions as patches when content stays structurally aligned', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const paragraphTexts = Array.from(
-      { length: 18 },
-      (_, index) =>
-        `Paragraph ${index + 1}: ${'semantic content '.repeat(8).trim()} section ${index + 1}.`,
-    );
-    const version1 = createLexicalEditorDataFromTexts('base', paragraphTexts);
-    const version2 = createLexicalEditorDataFromTexts(
-      'rekeyed',
-      paragraphTexts.map((text, index) =>
-        index === 7 ? text.replace('section 8.', 'section 8 updated.') : text,
-      ),
-    );
-    const version3 = createLexicalEditorDataFromTexts(
-      'next',
-      paragraphTexts.map((text, index) =>
-        index === 7 ? text.replace('section 8.', 'section 8 updated twice.') : text,
-      ),
-    );
+  describe('getDocumentHistoryItem', () => {
+    it('should resolve head as current document state', async () => {
+      const doc = await createTestDocument('Head content', { blocks: [] });
 
-    const document = await documentService.createDocument({
-      content: 'History rekey doc',
-      editorData: version1,
-      title: 'History rekey doc',
+      const result = await historyService.getDocumentHistoryItem({
+        documentId: doc.id,
+        historyId: 'head',
+      });
+
+      expect(result.id).toBe('head');
+      expect(result.isCurrent).toBe(true);
+      expect(result.editorData).toEqual({ blocks: [] });
+      expect(result.saveSource).toBe('system');
     });
 
-    await documentService.updateDocument(document.id, { editorData: version2 });
-    await documentService.updateDocument(document.id, { editorData: version3 });
+    it('should return a persisted history item', async () => {
+      const doc = await createTestDocument('Hello');
+      const savedAt = new Date('2026-04-01T10:00:00Z');
 
-    const retainedRows = await serverDB.query.documentHistories.findMany({
-      orderBy: [asc(documentHistories.version)],
-      where: eq(documentHistories.documentId, document.id),
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { version: 42 },
+        saveSource: 'manual',
+        savedAt,
+      });
+
+      const [row] = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, doc.id));
+
+      const result = await historyService.getDocumentHistoryItem({
+        documentId: doc.id,
+        historyId: row!.id,
+      });
+
+      expect(result.id).toBe(row!.id);
+      expect(result.isCurrent).toBe(false);
+      expect(result.editorData).toEqual({ version: 42 });
+      expect(result.saveSource).toBe('manual');
     });
 
-    expect(retainedRows.map((row) => row.version)).toEqual([1, 2]);
-    expect(retainedRows.map((row) => row.storageKind)).toEqual(['snapshot', 'patch']);
-    expect(retainedRows[1].baseVersion).toBe(1);
+    it('should throw when history item is older than historySince', async () => {
+      const doc = await createTestDocument('Hello');
 
-    const resolvedVersion2 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 2,
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
+
+      const [row] = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, doc.id));
+
+      await expect(
+        historyService.getDocumentHistoryItem(
+          { documentId: doc.id, historyId: row!.id },
+          { historySince: new Date('2026-04-05T00:00:00Z') },
+        ),
+      ).rejects.toThrow();
     });
 
-    expect(resolvedVersion2.editorData).toEqual(version2);
+    it('should throw for a historyId belonging to another user', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
+
+      const [row] = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, doc.id));
+
+      await expect(
+        historyService2.getDocumentHistoryItem({
+          documentId: doc.id,
+          historyId: row!.id,
+        }),
+      ).rejects.toThrow();
+    });
   });
 
-  it('should create a new checkpoint snapshot after every ten stored history versions', async () => {
-    const documentService = new DocumentService(serverDB, userId);
-    const texts = Array.from(
-      { length: 18 },
-      (_, index) => `Paragraph ${index + 1}: ${'semantic content '.repeat(8).trim()}.`,
-    );
-    const versions = [createLexicalEditorDataFromTexts('checkpoint', texts)];
+  describe('compareDocumentHistoryItems', () => {
+    it('should compare a history item against head', async () => {
+      const doc = await createTestDocument('Current', { current: true });
 
-    for (let version = 2; version <= 12; version += 1) {
-      const textIndex = (version - 2) % texts.length;
-      texts[textIndex] = `${texts[textIndex]} revision ${version}`;
-      versions.push(createLexicalEditorDataFromTexts('checkpoint', [...texts]));
-    }
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { old: true },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-01T10:00:00Z'),
+      });
 
-    const document = await documentService.createDocument({
-      content: 'v1',
-      editorData: versions[0],
-      title: 'Checkpoint interval doc',
+      const [row] = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, doc.id));
+
+      const result = await historyService.compareDocumentHistoryItems({
+        documentId: doc.id,
+        fromHistoryId: row!.id,
+        toHistoryId: 'head',
+      });
+
+      expect(result.from.editorData).toEqual({ old: true });
+      expect(result.to.editorData).toEqual({ current: true });
+      expect(result.to.isCurrent).toBe(true);
     });
-
-    for (const version of versions.slice(1)) {
-      await documentService.updateDocument(document.id, { editorData: version });
-    }
-
-    const retainedRows = await serverDB.query.documentHistories.findMany({
-      orderBy: [asc(documentHistories.version)],
-      where: eq(documentHistories.documentId, document.id),
-    });
-
-    expect(retainedRows.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    expect(
-      retainedRows.filter((row) => row.storageKind === 'snapshot').map((row) => row.version),
-    ).toEqual([1, 11]);
-    expect(
-      retainedRows.filter((row) => row.storageKind === 'patch').map((row) => row.baseVersion),
-    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-
-    const resolvedVersion10 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 10,
-    });
-    const resolvedVersion11 = await documentService.getDocumentHistoryVersion({
-      documentId: document.id,
-      version: 11,
-    });
-
-    expect(resolvedVersion10.editorData).toEqual(versions[9]);
-    expect(resolvedVersion11.editorData).toEqual(versions[10]);
   });
 });

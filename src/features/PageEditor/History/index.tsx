@@ -151,14 +151,7 @@ const styles = createStaticStyles(({ css }) => ({
       0 0 0 2px ${cssVar.colorPrimaryBorder},
       0 0 0 6px ${cssVar.colorBgContainer};
   `,
-  version: css`
-    flex-shrink: 0;
 
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.4;
-    white-space: nowrap;
-  `,
   versionActions: css`
     pointer-events: none;
     flex-shrink: 0;
@@ -200,17 +193,17 @@ const HistoryPanel = memo(() => {
   const editor = usePageEditorStore(selectors.editor);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
 
-  const headVersion = useDocumentStore((s) =>
-    documentId ? editorSelectors.headVersion(documentId)(s) : 1,
-  );
   const markDirty = useDocumentStore((s) => s.markDirty);
   const performSave = useDocumentStore((s) => s.performSave);
+  const lastUpdatedTime = useDocumentStore(
+    (s) => editorSelectors.lastUpdatedTime(documentId!)(s) ?? null,
+  );
 
-  const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
+  const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const compareInstanceRef = useRef<ModalInstance | null>(null);
 
   const { data, isLoading } = useClientDataSWR<ListHistoryOutput>(
-    documentId ? ['page-editor-document-history', documentId, headVersion] : null,
+    documentId ? ['page-editor-document-history', documentId, lastUpdatedTime] : null,
     async () =>
       documentService.listDocumentHistory({
         documentId: documentId!,
@@ -241,36 +234,35 @@ const HistoryPanel = memo(() => {
         content: t('pageEditor.history.restoreConfirm.content', {
           ns: 'file',
           savedAt: formatAbsoluteTime(item.savedAt),
-          version: item.version,
         }),
         okText: t('pageEditor.history.restore', { ns: 'file' }),
         onOk: async () => {
-          setRestoringVersion(item.version);
+          setRestoringHistoryId(item.id);
 
           try {
-            const result = await documentService.getDocumentHistoryVersion(
-              { documentId, version: item.version },
+            const result = await documentService.getDocumentHistoryItem(
+              { documentId, historyId: item.id },
               `page-editor-history-${documentId}`,
             );
 
             editor.setDocument('json', JSON.stringify(result.editorData));
             markDirty(documentId);
             await performSave(documentId, undefined, {
-              restoreFromVersion: item.version,
+              restoreFromHistoryId: item.id,
               saveSource: 'restore',
             });
             onSuccess?.();
           } catch (error) {
-            console.error('[PageEditor] Failed to restore version:', error);
+            console.error('[PageEditor] Failed to restore history item:', error);
             message.error(t('pageEditor.history.restoreError', { ns: 'file' }));
             throw error;
           } finally {
-            setRestoringVersion(null);
+            setRestoringHistoryId(null);
           }
         },
         title: t('pageEditor.history.restoreConfirm.title', {
           ns: 'file',
-          version: item.version,
+          savedAt: formatAbsoluteTime(item.savedAt),
         }),
       });
     },
@@ -278,19 +270,18 @@ const HistoryPanel = memo(() => {
   );
 
   const openCompareModal = useCallback(
-    (initialVersion: number) => {
+    (initialHistoryId: string) => {
       compareInstanceRef.current?.destroy();
       const instance = openDocumentCompareModal({
         documentId: documentId!,
-        headVersion,
-        initialVersion,
+        initialHistoryId,
         items,
         onRestore: (item) => handleRestore(item, () => instance.close()),
         saveSourceLabels,
       });
       compareInstanceRef.current = instance;
     },
-    [documentId, handleRestore, headVersion, items, saveSourceLabels],
+    [documentId, handleRestore, items, saveSourceLabels],
   );
 
   if (!documentId) return null;
@@ -353,10 +344,10 @@ const HistoryPanel = memo(() => {
               </Flexbox>
 
               {group.items.map((item) => {
-                const isRestoring = restoringVersion === item.version;
+                const isRestoring = restoringHistoryId === item.id;
 
                 return (
-                  <Flexbox className={styles.row} gap={0} key={item.version}>
+                  <Flexbox className={styles.row} gap={0} key={item.id}>
                     <div
                       className={cx(
                         styles.rowDot,
@@ -374,7 +365,7 @@ const HistoryPanel = memo(() => {
                         item.isCurrent && styles.rowCurrent,
                         !item.isCurrent && styles.rowBodyClickable,
                       )}
-                      onClick={item.isCurrent ? undefined : () => openCompareModal(item.version)}
+                      onClick={item.isCurrent ? undefined : () => openCompareModal(item.id)}
                     >
                       <Flexbox
                         horizontal
@@ -382,12 +373,6 @@ const HistoryPanel = memo(() => {
                         gap={6}
                         style={{ minWidth: 0, overflow: 'hidden' }}
                       >
-                        <Text className={styles.version}>
-                          {t('pageEditor.history.itemVersionLabel', {
-                            ns: 'file',
-                            version: item.version,
-                          })}
-                        </Text>
                         {item.isCurrent && (
                           <Tag variant={'borderless'}>
                             {t('pageEditor.history.current', { ns: 'file' })}

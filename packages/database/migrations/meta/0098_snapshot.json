@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "5d44d9cc-8c23-4366-b533-724789e8079d",
+  "id": "cabb477f-3c4c-46af-9421-16bb0f1926b9",
   "policies": {},
   "prevId": "9f1fcd61-445c-446c-8511-1f40f014e0ae",
   "roles": {},
@@ -3883,29 +3883,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "storage_kind": {
-          "name": "storage_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
+        "editor_data": {
+          "name": "editor_data",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
-        },
-        "base_version": {
-          "name": "base_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         },
         "save_source": {
           "name": "save_source",
@@ -3918,37 +3900,9 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {
-        "document_histories_document_id_version_unique": {
-          "name": "document_histories_document_id_version_unique",
-          "columns": [
-            {
-              "expression": "document_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "version",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "document_histories_document_id_saved_at_idx": {
           "name": "document_histories_document_id_saved_at_idx",
           "columns": [
@@ -4075,13 +4029,6 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
         },
         "pages": {
           "name": "pages",

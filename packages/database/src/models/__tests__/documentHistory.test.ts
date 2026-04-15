@@ -64,51 +64,42 @@ describe('DocumentHistoryModel', () => {
 
       const created = await historyModel.create({
         documentId,
-        payload: { editorData: { blocks: [] } },
+        editorData: { blocks: [] },
         saveSource: 'autosave',
         savedAt: new Date('2026-04-11T00:00:00.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
 
       expect(created).toMatchObject({
         documentId,
         saveSource: 'autosave',
-        storageKind: 'snapshot',
         userId,
-        version: 1,
       });
 
       const stored = await historyModel.findById(created.id);
       expect(stored).toMatchObject({
         documentId,
-        version: 1,
-        payload: { editorData: { blocks: [] } },
+        editorData: { blocks: [] },
       });
     });
 
-    it('should enforce unique document version history rows', async () => {
-      const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
-
-      await historyModel.create({
-        documentId,
-        payload: { editorData: { blocks: [{ id: 'a' }] } },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:00.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
-      });
+    it('should reject history rows for documents owned by another user', async () => {
+      const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
 
       await expect(
         historyModel.create({
-          documentId,
-          payload: { editorData: { blocks: [{ id: 'b' }] } },
+          documentId: otherDocumentId,
+          editorData: { blocks: [] },
           saveSource: 'manual',
-          savedAt: new Date('2026-04-11T00:01:00.000Z'),
-          storageKind: 'patch',
-          version: 1,
+          savedAt: new Date('2026-04-11T00:00:00.000Z'),
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow('Document not found');
+
+      const stored = await serverDB
+        .select()
+        .from(documentHistories)
+        .where(eq(documentHistories.documentId, otherDocumentId));
+
+      expect(stored).toHaveLength(0);
     });
   });
 
@@ -118,84 +109,80 @@ describe('DocumentHistoryModel', () => {
 
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'autosave',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 2 } },
+        editorData: { tag: 2 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:02.000Z'),
-        storageKind: 'patch',
-        version: 2,
       });
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 3 } },
+        editorData: { tag: 3 },
         saveSource: 'restore',
         savedAt: new Date('2026-04-11T00:00:03.000Z'),
-        storageKind: 'snapshot',
-        version: 3,
       });
 
       const rows = await historyModel.list({ documentId });
 
-      expect(rows.map((row) => row.version)).toEqual([3, 2, 1]);
-      expect(rows[0]).toMatchObject({ saveSource: 'restore', storageKind: 'snapshot' });
+      expect(rows.map((row) => (row.editorData as any).tag)).toEqual([3, 2, 1]);
+      expect(rows[0]).toMatchObject({ saveSource: 'restore' });
     });
 
-    it('should support pagination anchors and limits', async () => {
+    it('should support pagination via beforeSavedAt and limit', async () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
 
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'autosave',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 2 } },
+        editorData: { tag: 2 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:02.000Z'),
-        storageKind: 'patch',
-        version: 2,
       });
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 3 } },
+        editorData: { tag: 3 },
         saveSource: 'restore',
         savedAt: new Date('2026-04-11T00:00:03.000Z'),
-        storageKind: 'snapshot',
-        version: 3,
       });
 
-      const anchored = await historyModel.list({ beforeVersion: 3, documentId, limit: 1 });
+      const anchored = await historyModel.list({
+        beforeSavedAt: new Date('2026-04-11T00:00:03.000Z'),
+        documentId,
+        limit: 1,
+      });
       expect(anchored).toHaveLength(1);
-      expect(anchored[0]?.version).toBe(2);
+      expect((anchored[0]?.editorData as any).tag).toBe(2);
     });
   });
 
-  describe('findByDocumentIdAndVersion', () => {
-    it('should find a history row by document id and version', async () => {
+  describe('findLatestByDocumentId', () => {
+    it('should return the most recent history row by savedAt', async () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
 
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
+      });
+      const latest = await historyModel.create({
+        documentId,
+        editorData: { tag: 2 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-11T00:00:02.000Z'),
       });
 
-      const row = await historyModel.findByDocumentIdAndVersion(documentId, 1);
-      expect(row).toMatchObject({ documentId, version: 1, userId });
+      const row = await historyModel.findLatestByDocumentId(documentId);
+      expect(row?.id).toBe(latest.id);
     });
   });
 
@@ -206,19 +193,15 @@ describe('DocumentHistoryModel', () => {
 
       const created = await historyModel.create({
         documentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
       const otherCreated = await historyModel2.create({
         documentId: otherDocumentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
 
       await historyModel.delete(created.id);
@@ -236,27 +219,21 @@ describe('DocumentHistoryModel', () => {
 
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
       await historyModel.create({
         documentId,
-        payload: { editorData: { version: 2 } },
+        editorData: { tag: 2 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:02.000Z'),
-        storageKind: 'patch',
-        version: 2,
       });
       await historyModel2.create({
         documentId: otherDocumentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
 
       await historyModel.deleteByDocumentId(documentId);
@@ -270,35 +247,21 @@ describe('DocumentHistoryModel', () => {
   });
 
   describe('schema assumptions', () => {
-    it('should keep document version defaulted to 1 for new documents', async () => {
-      const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
-
-      const document = await serverDB.query.documents.findFirst({
-        where: eq(documents.id, documentId),
-      });
-
-      expect(document?.version).toBe(1);
-    });
-
     it('should keep user scoped history rows isolated', async () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
       const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
 
       const first = await historyModel.create({
         documentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
       await historyModel2.create({
         documentId: otherDocumentId,
-        payload: { editorData: { version: 1 } },
+        editorData: { tag: 1 },
         saveSource: 'manual',
         savedAt: new Date('2026-04-11T00:00:01.000Z'),
-        storageKind: 'snapshot',
-        version: 1,
       });
 
       const rows = await historyModel.list({ documentId });

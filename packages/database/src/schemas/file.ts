@@ -67,7 +67,6 @@ export const documents = pgTable(
 
     // Metadata
     metadata: jsonb('metadata').$type<Record<string, any>>(),
-    version: integer('version').notNull().default(1),
 
     // Page/chunk data
     pages: jsonb('pages').$type<LobeDocumentPage[]>(),

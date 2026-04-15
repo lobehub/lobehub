@@ -110,7 +110,7 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-inline: 4px;
     font-size: 10px;
   `,
-  version: css`
+  time: css`
     font-size: 12px;
     font-weight: 600;
     line-height: 1.3;
@@ -150,13 +150,13 @@ const createGroups = (
 
 interface HistorySidebarProps {
   items: DocumentHistoryListItem[];
-  onSelect: (version: number) => void;
+  onSelect: (historyId: string) => void;
   saveSourceLabels: Record<DocumentHistorySaveSource, string>;
-  selectedVersion: number | null;
+  selectedHistoryId: string | null;
 }
 
 const HistorySidebar = memo<HistorySidebarProps>(
-  ({ items, onSelect, saveSourceLabels, selectedVersion }) => {
+  ({ items, onSelect, saveSourceLabels, selectedHistoryId }) => {
     const { t } = useTranslation('file');
     const { styles } = useStyles();
 
@@ -182,11 +182,11 @@ const HistorySidebar = memo<HistorySidebarProps>(
             <div className={styles.group}>
               <div className={styles.rail} />
               {group.items.map((item) => {
-                const isSelected = selectedVersion === item.version;
+                const isSelected = selectedHistoryId === item.id;
                 const disabled = item.isCurrent;
 
                 return (
-                  <div className={styles.row} key={item.version}>
+                  <div className={styles.row} key={item.id}>
                     <div
                       className={cx(
                         styles.dot,
@@ -202,16 +202,12 @@ const HistorySidebar = memo<HistorySidebarProps>(
                       )}
                       onClick={() => {
                         if (disabled) return;
-                        onSelect(item.version);
+                        onSelect(item.id);
                       }}
                     >
                       <Flexbox gap={2}>
                         <Flexbox horizontal align={'center'} gap={4}>
-                          <Text className={styles.version}>
-                            {t('pageEditor.history.itemVersionLabel', {
-                              version: item.version,
-                            })}
-                          </Text>
+                          <Text className={styles.time}>{dayjs(item.savedAt).format('HH:mm')}</Text>
                           {item.isCurrent && (
                             <Tag className={styles.tag} variant={'borderless'}>
                               {t('pageEditor.history.current')}

@@ -1,21 +1,17 @@
 import { z } from 'zod';
 
-import {
-  DOCUMENT_HISTORY_RETENTION_LIMIT,
-  FREE_DOCUMENT_HISTORY_WINDOW_DAYS,
-} from '@/const/documentHistory';
+import { FREE_DOCUMENT_HISTORY_WINDOW_DAYS } from '@/const/documentHistory';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { createAsyncCaller } from '@/server/routers/async';
 import { DocumentService } from '@/server/services/document';
 
 import {
-  compareDocumentHistoryVersionsInputSchema,
-  getDocumentHistoryVersionInputSchema,
+  compareDocumentHistoryItemsInputSchema,
+  getDocumentHistoryItemInputSchema,
   listDocumentHistoryInputSchema,
   updateDocumentInputSchema,
 } from './_schema/documentHistory';
@@ -138,23 +134,29 @@ export const documentRouter = router({
   listDocumentHistory: documentProcedure
     .input(listDocumentHistoryInputSchema)
     .query(async ({ ctx, input }) => {
-      return ctx.documentService.listDocumentHistory(input, {
+      return ctx.documentService.listDocumentHistory(
+        {
+          ...input,
+          beforeSavedAt: input.beforeSavedAt ? new Date(input.beforeSavedAt) : undefined,
+        },
+        {
+          historySince: getFreeDocumentHistorySince(),
+        },
+      );
+    }),
+
+  getDocumentHistoryItem: documentProcedure
+    .input(getDocumentHistoryItemInputSchema)
+    .query(async ({ ctx, input }) => {
+      return ctx.documentService.getDocumentHistoryItem(input, {
         historySince: getFreeDocumentHistorySince(),
       });
     }),
 
-  getDocumentHistoryVersion: documentProcedure
-    .input(getDocumentHistoryVersionInputSchema)
+  compareDocumentHistoryItems: documentProcedure
+    .input(compareDocumentHistoryItemsInputSchema)
     .query(async ({ ctx, input }) => {
-      return ctx.documentService.getDocumentHistoryVersion(input, {
-        historySince: getFreeDocumentHistorySince(),
-      });
-    }),
-
-  compareDocumentHistoryVersions: documentProcedure
-    .input(compareDocumentHistoryVersionsInputSchema)
-    .query(async ({ ctx, input }) => {
-      return ctx.documentService.compareDocumentHistoryVersions(input, {
+      return ctx.documentService.compareDocumentHistoryItems(input, {
         historySince: getFreeDocumentHistorySince(),
       });
     }),
@@ -234,18 +236,6 @@ export const documentRouter = router({
         ...params,
         editorData,
       });
-
-      if (result.historyAppended && result.version - 1 > DOCUMENT_HISTORY_RETENTION_LIMIT) {
-        void createAsyncCaller({ userId: ctx.userId })
-          .then((asyncCaller) =>
-            asyncCaller.document.compactHistory({
-              documentId: id,
-            }),
-          )
-          .catch((error) => {
-            console.error('Failed to schedule document history compaction:', error);
-          });
-      }
 
       return result;
     }),

@@ -94,23 +94,22 @@ const useStyles = createStyles(({ css, token }) => ({
 
 export interface CompareContentProps {
   documentId: string;
-  headVersion: number;
-  initialVersion: number;
+  initialHistoryId: string;
   items: DocumentHistoryListItem[];
   onRestore: (item: DocumentHistoryListItem) => void;
   saveSourceLabels: Record<DocumentHistorySaveSource, string>;
 }
 
 const CompareContent = memo<CompareContentProps>(
-  ({ documentId, headVersion, initialVersion, items, onRestore, saveSourceLabels }) => {
+  ({ documentId, initialHistoryId, items, onRestore, saveSourceLabels }) => {
     const { t } = useTranslation('file');
     const { styles } = useStyles();
 
-    const [selectedVersion, setSelectedVersion] = useState<number>(initialVersion);
+    const [selectedHistoryId, setSelectedHistoryId] = useState<string>(initialHistoryId);
 
     const selectedItem = useMemo(
-      () => items.find((item) => item.version === selectedVersion) ?? null,
-      [items, selectedVersion],
+      () => items.find((item) => item.id === selectedHistoryId) ?? null,
+      [items, selectedHistoryId],
     );
 
     if (!selectedItem) return null;
@@ -123,13 +122,10 @@ const CompareContent = memo<CompareContentProps>(
           <div className={styles.cmpbar}>
             <Flexbox horizontal align={'center'} gap={4}>
               <span className={styles.badgeOld}>
-                {t('pageEditor.history.itemVersionLabel', { version: selectedItem.version })}
+                {dayjs(selectedItem.savedAt).format('MMM D, HH:mm')}
               </span>
               <Text className={styles.arrow}>→</Text>
-              <span className={styles.badgeNew}>
-                {t('pageEditor.history.itemVersionLabel', { version: headVersion })}{' '}
-                {t('pageEditor.history.current')}
-              </span>
+              <span className={styles.badgeNew}>{t('pageEditor.history.current')}</span>
               <Text className={styles.meta} type={'secondary'}>
                 {dayjs(selectedItem.savedAt).fromNow()} ·{' '}
                 {saveSourceLabels[selectedItem.saveSource]}
@@ -138,23 +134,19 @@ const CompareContent = memo<CompareContentProps>(
             {canRestore && (
               <Button icon={RotateCcwIcon} size={'small'} onClick={() => onRestore(selectedItem)}>
                 {t('pageEditor.history.restore')}{' '}
-                {t('pageEditor.history.itemVersionLabel', { version: selectedItem.version })}
+                {dayjs(selectedItem.savedAt).format('MMM D, HH:mm')}
               </Button>
             )}
           </div>
           <div className={styles.diffBody}>
-            <DocumentHistoryDiff
-              documentId={documentId}
-              headVersion={headVersion}
-              version={selectedItem.version}
-            />
+            <DocumentHistoryDiff documentId={documentId} historyId={selectedItem.id} />
           </div>
         </div>
         <HistorySidebar
           items={items}
           saveSourceLabels={saveSourceLabels}
-          selectedVersion={selectedVersion}
-          onSelect={setSelectedVersion}
+          selectedHistoryId={selectedHistoryId}
+          onSelect={setSelectedHistoryId}
         />
       </div>
     );

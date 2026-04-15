@@ -2,10 +2,10 @@ import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import type {
-  CompareHistoryVersionsInput,
-  CompareHistoryVersionsOutput,
-  GetHistoryVersionInput,
-  GetHistoryVersionOutput,
+  CompareHistoryItemsInput,
+  CompareHistoryItemsOutput,
+  GetHistoryItemInput,
+  GetHistoryItemOutput,
   ListHistoryInput,
   ListHistoryOutput,
   UpdateDocumentInput,
@@ -30,15 +30,13 @@ const serializeHistoryTimestamp = <T extends { savedAt: Date | string }>(
 
 const serializeHistoryList = <
   T extends {
-    headVersion: number;
     items: Array<{
+      id: string;
       isCurrent: boolean;
       saveSource: ListHistoryOutput['items'][number]['saveSource'];
       savedAt: Date | string;
-      storageKind: ListHistoryOutput['items'][number]['storageKind'];
-      version: number;
     }>;
-    nextBeforeVersion?: number;
+    nextBeforeSavedAt?: Date | string;
   },
 >(
   result: T,
@@ -48,38 +46,43 @@ const serializeHistoryList = <
     ...item,
     savedAt: serializeSavedAt(item.savedAt),
   })),
+  nextBeforeSavedAt: result.nextBeforeSavedAt
+    ? serializeSavedAt(result.nextBeforeSavedAt)
+    : undefined,
 });
 
-const serializeHistoryVersion = <
+const serializeHistoryItem = <
   T extends {
-    editorData: GetHistoryVersionOutput['editorData'];
+    editorData: GetHistoryItemOutput['editorData'];
+    id: string;
     isCurrent: boolean;
-    saveSource: GetHistoryVersionOutput['saveSource'];
+    saveSource: GetHistoryItemOutput['saveSource'];
     savedAt: Date | string;
-    version: number;
   },
 >(
   result: T,
-): GetHistoryVersionOutput => serializeHistoryTimestamp(result);
+): GetHistoryItemOutput => serializeHistoryTimestamp(result);
 
 const serializeHistoryComparison = <
   T extends {
     from: {
-      editorData: CompareHistoryVersionsOutput['from']['editorData'];
+      editorData: CompareHistoryItemsOutput['from']['editorData'];
+      id: string;
       isCurrent: boolean;
+      saveSource: CompareHistoryItemsOutput['from']['saveSource'];
       savedAt: Date | string;
-      version: number;
     };
     to: {
-      editorData: CompareHistoryVersionsOutput['to']['editorData'];
+      editorData: CompareHistoryItemsOutput['to']['editorData'];
+      id: string;
       isCurrent: boolean;
+      saveSource: CompareHistoryItemsOutput['to']['saveSource'];
       savedAt: Date | string;
-      version: number;
     };
   },
 >(
   result: T,
-): CompareHistoryVersionsOutput => ({
+): CompareHistoryItemsOutput => ({
   from: serializeHistoryTimestamp(result.from),
   to: serializeHistoryTimestamp(result.to),
 });
@@ -97,20 +100,20 @@ export interface CreateDocumentParams {
 
 export interface ListDocumentHistoryParams extends ListHistoryInput {}
 
-export interface GetDocumentHistoryVersionParams extends GetHistoryVersionInput {}
+export interface GetDocumentHistoryItemParams extends GetHistoryItemInput {}
 
-export interface CompareDocumentHistoryVersionsParams extends CompareHistoryVersionsInput {}
+export interface CompareDocumentHistoryItemsParams extends CompareHistoryItemsInput {}
 
 export interface UpdateDocumentParams extends UpdateDocumentInput {}
 
 export interface DocumentHistoryClientSurface {
-  compareDocumentHistoryVersions: (
-    params: CompareDocumentHistoryVersionsParams,
-  ) => Promise<CompareHistoryVersionsOutput>;
-  getDocumentHistoryVersion: (
-    params: GetDocumentHistoryVersionParams,
+  compareDocumentHistoryItems: (
+    params: CompareDocumentHistoryItemsParams,
+  ) => Promise<CompareHistoryItemsOutput>;
+  getDocumentHistoryItem: (
+    params: GetDocumentHistoryItemParams,
     uniqueKey?: string,
-  ) => Promise<GetHistoryVersionOutput>;
+  ) => Promise<GetHistoryItemOutput>;
   listDocumentHistory: (params: ListDocumentHistoryParams) => Promise<ListHistoryOutput>;
   updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
@@ -139,29 +142,29 @@ export class DocumentService {
     return serializeHistoryList(result);
   }
 
-  async getDocumentHistoryVersion(
-    params: GetDocumentHistoryVersionParams,
+  async getDocumentHistoryItem(
+    params: GetDocumentHistoryItemParams,
     uniqueKey?: string,
-  ): Promise<GetHistoryVersionOutput> {
+  ): Promise<GetHistoryItemOutput> {
     if (uniqueKey) {
       return abortableRequest.execute(uniqueKey, async (signal) => {
-        const result = await lambdaClient.document.getDocumentHistoryVersion.query(params, {
+        const result = await lambdaClient.document.getDocumentHistoryItem.query(params, {
           signal,
         });
 
-        return serializeHistoryVersion(result);
+        return serializeHistoryItem(result);
       });
     }
 
-    const result = await lambdaClient.document.getDocumentHistoryVersion.query(params);
+    const result = await lambdaClient.document.getDocumentHistoryItem.query(params);
 
-    return serializeHistoryVersion(result);
+    return serializeHistoryItem(result);
   }
 
-  async compareDocumentHistoryVersions(
-    params: CompareDocumentHistoryVersionsParams,
-  ): Promise<CompareHistoryVersionsOutput> {
-    const result = await lambdaClient.document.compareDocumentHistoryVersions.query(params);
+  async compareDocumentHistoryItems(
+    params: CompareDocumentHistoryItemsParams,
+  ): Promise<CompareHistoryItemsOutput> {
+    const result = await lambdaClient.document.compareDocumentHistoryItems.query(params);
 
     return serializeHistoryComparison(result);
   }
@@ -187,7 +190,16 @@ export class DocumentService {
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
-    return lambdaClient.document.updateDocument.mutate(params);
+    const result = await lambdaClient.document.updateDocument.mutate(params);
+
+    return {
+      ...result,
+      savedAt: result.savedAt
+        ? result.savedAt instanceof Date
+          ? result.savedAt.toISOString()
+          : result.savedAt
+        : undefined,
+    };
   }
 }
 
