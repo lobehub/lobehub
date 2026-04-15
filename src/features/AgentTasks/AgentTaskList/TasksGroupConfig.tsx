@@ -1,5 +1,7 @@
-import { ActionIcon, Flexbox, Icon, Segmented, Select, Text } from '@lobehub/ui';
+import { type FormItemProps } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Form, Icon, Segmented, Select } from '@lobehub/ui';
 import { Popover, Switch } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
@@ -8,19 +10,28 @@ import {
   Settings2Icon,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
-import { styles } from '../shared/style';
 import type { TaskGroupBy, TaskListViewOptions, TaskOrderBy } from './listViewOptions';
 
 interface TasksHeaderProps {
   options: TaskListViewOptions;
   setOptions: (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => void;
 }
+
+const styles = createStaticStyles(({ css, cssVar }) => {
+  return {
+    form: css`
+      label {
+        font-size: 13px !important;
+        color: ${cssVar.colorTextSecondary} !important;
+      }
+    `,
+  };
+});
 
 const GROUPING_OPTIONS: Array<{ label: string; value: TaskGroupBy }> = [
   { label: 'No grouping', value: 'none' },
@@ -39,7 +50,6 @@ const ORDER_OPTIONS: Array<{ label: string; value: TaskOrderBy }> = [
 ];
 
 const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
-  const { t } = useTranslation('chat');
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const setViewMode = useTaskStore((s) => s.setViewMode);
@@ -51,19 +61,9 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
   );
   const isSubGroupingEnabled = options.groupBy !== 'none';
 
-  const panelContent = (
-    <Flexbox className={styles.viewConfigPanel} gap={12}>
-      <Segmented
-        block
-        value={viewMode}
-        options={[
-          { icon: <Icon icon={LayoutList} />, label: 'List', value: 'list' },
-          { disabled: true, icon: <Icon icon={LayoutGrid} />, label: 'Board', value: 'kanban' },
-        ]}
-        onChange={(value) => setViewMode(value as 'kanban' | 'list')}
-      />
-      <div className={styles.viewConfigRow}>
-        <Text type={'secondary'}>Grouping</Text>
+  const formItems: FormItemProps[] = [
+    {
+      children: (
         <Select
           options={GROUPING_OPTIONS}
           size={'small'}
@@ -77,23 +77,29 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
             }));
           }}
         />
-      </div>
-      {isSubGroupingEnabled && (
-        <div className={styles.viewConfigRow}>
-          <Text type={'secondary'}>Sub-grouping</Text>
-          <Select
-            options={subGroupingOptions}
-            size={'small'}
-            style={{ width: 150 }}
-            value={options.subGroupBy}
-            onChange={(value: TaskGroupBy) => {
-              setOptions((prev) => ({ ...prev, subGroupBy: value }));
-            }}
-          />
-        </div>
-      )}
-      <div className={styles.viewConfigRow}>
-        <Text type={'secondary'}>Ordering</Text>
+      ),
+      label: 'Grouping',
+    },
+    ...(isSubGroupingEnabled
+      ? [
+          {
+            children: (
+              <Select
+                options={subGroupingOptions}
+                size={'small'}
+                style={{ width: 150 }}
+                value={options.subGroupBy}
+                onChange={(value: TaskGroupBy) => {
+                  setOptions((prev) => ({ ...prev, subGroupBy: value }));
+                }}
+              />
+            ),
+            label: 'Sub-grouping',
+          } satisfies FormItemProps,
+        ]
+      : []),
+    {
+      children: (
         <Flexbox horizontal align={'center'} gap={8}>
           <ActionIcon
             icon={options.orderDirection === 'asc' ? ArrowDownWideNarrow : ArrowUpNarrowWide}
@@ -115,9 +121,11 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
             }}
           />
         </Flexbox>
-      </div>
-      <div className={styles.viewConfigRow}>
-        <Text type={'secondary'}>Order completed by recency</Text>
+      ),
+      label: 'Ordering',
+    },
+    {
+      children: (
         <Switch
           checked={options.orderCompletedByRecency}
           size={'small'}
@@ -125,7 +133,32 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
             setOptions((prev) => ({ ...prev, orderCompletedByRecency: checked }));
           }}
         />
-      </div>
+      ),
+      label: 'Order completed by recency',
+    },
+  ];
+
+  const panelContent = (
+    <Flexbox gap={12} width={320}>
+      <Segmented
+        block
+        value={viewMode}
+        options={[
+          { icon: <Icon icon={LayoutList} />, label: 'List', value: 'list' },
+          { disabled: true, icon: <Icon icon={LayoutGrid} />, label: 'Board', value: 'kanban' },
+        ]}
+        onChange={(value) => setViewMode(value as 'kanban' | 'list')}
+      />
+      <Form
+        className={styles.form}
+        items={formItems}
+        itemsType={'flat'}
+        size={'small'}
+        variant={'borderless'}
+        styles={{
+          item: { padding: 0 },
+        }}
+      />
     </Flexbox>
   );
 

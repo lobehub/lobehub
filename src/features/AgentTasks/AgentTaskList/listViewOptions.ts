@@ -37,6 +37,44 @@ export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
   subGroupBy: 'none',
 };
 
+const TASK_GROUP_BY_SET = new Set<TaskGroupBy>(['assignee', 'none', 'priority', 'status']);
+const TASK_ORDER_BY_SET = new Set<TaskOrderBy>([
+  'assignee',
+  'createdAt',
+  'priority',
+  'status',
+  'title',
+  'updatedAt',
+]);
+const TASK_ORDER_DIRECTION_SET = new Set<TaskOrderDirection>(['asc', 'desc']);
+
+export const normalizeTaskListViewOptions = (
+  value?: Partial<TaskListViewOptions> | null,
+): TaskListViewOptions => {
+  const next = value ?? {};
+  const groupBy = TASK_GROUP_BY_SET.has(next.groupBy as TaskGroupBy)
+    ? (next.groupBy as TaskGroupBy)
+    : DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy;
+  const subGroupBy = TASK_GROUP_BY_SET.has(next.subGroupBy as TaskGroupBy)
+    ? (next.subGroupBy as TaskGroupBy)
+    : DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy;
+
+  return {
+    groupBy,
+    orderBy: TASK_ORDER_BY_SET.has(next.orderBy as TaskOrderBy)
+      ? (next.orderBy as TaskOrderBy)
+      : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderBy,
+    orderCompletedByRecency:
+      typeof next.orderCompletedByRecency === 'boolean'
+        ? next.orderCompletedByRecency
+        : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderCompletedByRecency,
+    orderDirection: TASK_ORDER_DIRECTION_SET.has(next.orderDirection as TaskOrderDirection)
+      ? (next.orderDirection as TaskOrderDirection)
+      : DEFAULT_TASK_LIST_VIEW_OPTIONS.orderDirection,
+    subGroupBy: groupBy === 'none' || subGroupBy !== groupBy ? subGroupBy : 'none',
+  };
+};
+
 const PRIORITY_LABEL_MAP: Record<number, string> = {
   0: 'No priority',
   1: 'Urgent',
@@ -245,13 +283,17 @@ const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
 export const sortGroupEntries = (
   entries: Array<[TaskGroupMeta, TaskListItem[]]>,
   groupBy: TaskGroupBy,
+  orderDirection?: TaskOrderDirection,
 ): Array<[TaskGroupMeta, TaskListItem[]]> => {
   if (groupBy === 'none') return entries;
+  const direction = orderDirection ?? 'asc';
 
   return [...entries].sort(([groupA], [groupB]) => {
     const rankA = getGroupRank(groupA, groupBy);
     const rankB = getGroupRank(groupB, groupBy);
-    if (rankA !== rankB) return rankA - rankB;
-    return groupA.label.localeCompare(groupB.label);
+    if (rankA !== rankB) return direction === 'asc' ? rankA - rankB : rankB - rankA;
+    return direction === 'asc'
+      ? groupA.label.localeCompare(groupB.label)
+      : groupB.label.localeCompare(groupA.label);
   });
 };

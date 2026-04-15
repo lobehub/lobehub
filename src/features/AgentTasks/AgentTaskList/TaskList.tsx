@@ -134,6 +134,10 @@ const TaskList = memo<TaskListProps>(({ options }) => {
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
   const groupedTaskEntries = useMemo(() => {
     const sortedTasks = [...tasks].sort((a, b) => compareTaskItems(a, b, options, inboxAgentId));
+    const primaryGroupOrderDirection =
+      options.orderBy === groupBy ? options.orderDirection : undefined;
+    const subGroupOrderDirection =
+      options.orderBy === effectiveSubGroupBy ? options.orderDirection : undefined;
 
     const primaryGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
     for (const task of sortedTasks) {
@@ -151,6 +155,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
     const primaryGroups = sortGroupEntries(
       [...primaryGroupMap.values()].map((group) => [group.meta, group.items]),
       groupBy,
+      primaryGroupOrderDirection,
     );
 
     return primaryGroups.map(([meta, groupedTasks]) => {
@@ -181,6 +186,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
         subGroups: sortGroupEntries(
           [...subGroupMap.values()].map((group) => [group.meta, group.items]),
           effectiveSubGroupBy,
+          subGroupOrderDirection,
         ),
       };
     });

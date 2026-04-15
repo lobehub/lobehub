@@ -9,6 +9,7 @@ import { useTaskStore } from '@/store/task';
 
 import Breadcrumb from '../shared/Breadcrumb';
 import type { TaskListViewOptions } from './listViewOptions';
+import { normalizeTaskListViewOptions } from './listViewOptions';
 import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
@@ -19,11 +20,12 @@ interface AgentTasksPageProps {
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList(agentId);
-  const viewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
+  const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
+  const viewOptions = normalizeTaskListViewOptions(rawViewOptions);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
-      const next = updater(viewOptions);
+      const next = normalizeTaskListViewOptions(updater(viewOptions));
       updateSystemStatus({ taskListViewOptions: next }, 'updateTaskListViewOptions');
     },
     [updateSystemStatus, viewOptions],
