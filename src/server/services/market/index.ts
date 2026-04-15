@@ -548,7 +548,7 @@ export class MarketService {
             })),
             identifier: providerId,
             meta: {
-              avatar: icon || providerConfig?.icon || '🔗',
+              avatar: icon || '🔗',
               description: `LobeHub Skill: ${providerLabel}`,
               tags: ['lobehub-skill', providerId],
               title: providerLabel,
