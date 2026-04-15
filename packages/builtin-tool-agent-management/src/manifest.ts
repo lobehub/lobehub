@@ -157,6 +157,67 @@ export const AgentManagementManifest: BuiltinToolManifest = {
       },
     },
 
+    {
+      description:
+        'Get the detailed configuration and metadata of an agent, including its system prompt, model, provider, plugins, and other settings.',
+      name: AgentManagementApiName.getAgentDetail,
+      parameters: {
+        properties: {
+          agentId: {
+            description: 'The ID of the agent to get details for',
+            type: 'string',
+          },
+        },
+        required: ['agentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Duplicate an existing agent to create a copy with the same configuration. Optionally provide a new title for the duplicated agent.',
+      name: AgentManagementApiName.duplicateAgent,
+      parameters: {
+        properties: {
+          agentId: {
+            description: 'The ID of the agent to duplicate',
+            type: 'string',
+          },
+          newTitle: {
+            description:
+              'Optional new title for the duplicated agent. If not provided, the original title with a "Copy" suffix will be used.',
+            type: 'string',
+          },
+        },
+        required: ['agentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Install a plugin/tool for an agent. Use 'official' source for builtin tools, Klavis integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
+      name: AgentManagementApiName.installPlugin,
+      parameters: {
+        properties: {
+          agentId: {
+            description: 'The ID of the agent to install the plugin for',
+            type: 'string',
+          },
+          identifier: {
+            description: 'The plugin identifier to install',
+            type: 'string',
+          },
+          source: {
+            description:
+              "Plugin source: 'official' (builtin tools, Klavis, LobehubSkill) or 'market' (MCP marketplace)",
+            enum: ['official', 'market'],
+            type: 'string',
+          },
+        },
+        required: ['agentId', 'identifier', 'source'],
+        type: 'object',
+      },
+    },
+
     // ==================== Search ====================
     {
       description:

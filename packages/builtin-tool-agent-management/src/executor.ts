@@ -27,6 +27,9 @@ import {
   type CallAgentState,
   type CreateAgentParams,
   type DeleteAgentParams,
+  type DuplicateAgentParams,
+  type GetAgentDetailParams,
+  type InstallPluginParams,
   type SearchAgentParams,
   type UpdateAgentParams,
 } from './types';
@@ -53,6 +56,21 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
 
   deleteAgent = async (params: DeleteAgentParams): Promise<BuiltinToolResult> => {
     return runtime.deleteAgent(params.agentId);
+  };
+
+  getAgentDetail = async (params: GetAgentDetailParams): Promise<BuiltinToolResult> => {
+    return runtime.getAgentDetail(params.agentId);
+  };
+
+  duplicateAgent = async (params: DuplicateAgentParams): Promise<BuiltinToolResult> => {
+    return runtime.duplicateAgent(params.agentId, params.newTitle);
+  };
+
+  installPlugin = async (params: InstallPluginParams): Promise<BuiltinToolResult> => {
+    return runtime.installPlugin(params.agentId, {
+      identifier: params.identifier,
+      source: params.source,
+    });
   };
 
   // ==================== Search ====================

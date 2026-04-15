@@ -242,6 +242,98 @@ export class AgentManagerRuntime {
     }
   }
 
+  /**
+   * Get detailed agent configuration by ID
+   */
+  async getAgentDetail(agentId: string): Promise<BuiltinToolResult> {
+    try {
+      const config = await this.agentService.getAgentConfigById(agentId);
+
+      if (!config) {
+        return {
+          content: `Agent "${agentId}" not found.`,
+          success: false,
+        };
+      }
+
+      const agentConfig = config as Record<string, unknown>;
+
+      const detail = {
+        config: {
+          model: agentConfig.model as string | undefined,
+          openingMessage: agentConfig.openingMessage as string | undefined,
+          openingQuestions: agentConfig.openingQuestions as string[] | undefined,
+          plugins: agentConfig.plugins as string[] | undefined,
+          provider: agentConfig.provider as string | undefined,
+          systemRole: agentConfig.systemRole as string | undefined,
+        },
+        meta: {
+          avatar: agentConfig.avatar as string | undefined,
+          backgroundColor: agentConfig.backgroundColor as string | undefined,
+          description: agentConfig.description as string | undefined,
+          tags: agentConfig.tags as string[] | undefined,
+          title: agentConfig.title as string | undefined,
+        },
+      };
+
+      const parts: string[] = [];
+      if (detail.meta.title) parts.push(`**${detail.meta.title}**`);
+      if (detail.meta.description) parts.push(detail.meta.description);
+      if (detail.config.model)
+        parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
+      if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      if (detail.config.systemRole) {
+        const truncated =
+          detail.config.systemRole.length > 200
+            ? detail.config.systemRole.slice(0, 200) + '...'
+            : detail.config.systemRole;
+        parts.push(`System Prompt: ${truncated}`);
+      }
+
+      return {
+        content:
+          parts.length > 0 ? parts.join('\n') : `Agent "${agentId}" found (no details available).`,
+        state: {
+          agentId,
+          config: detail.config,
+          meta: detail.meta,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      return this.handleError(error, 'Failed to get agent detail');
+    }
+  }
+
+  /**
+   * Duplicate an existing agent
+   */
+  async duplicateAgent(agentId: string, newTitle?: string): Promise<BuiltinToolResult> {
+    try {
+      const result = await this.agentService.duplicateAgent(agentId, newTitle);
+
+      if (!result) {
+        return {
+          content: `Failed to duplicate agent "${agentId}". Agent may not exist.`,
+          success: false,
+        };
+      }
+
+      return {
+        content: `Successfully duplicated agent. New agent ID: ${result.agentId}${newTitle ? ` with title "${newTitle}"` : ''}`,
+        state: {
+          newAgentId: result.agentId,
+          sourceAgentId: agentId,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      return this.handleError(error, 'Failed to duplicate agent');
+    }
+  }
+
   // ==================== Search ====================
 
   /**
@@ -427,7 +519,6 @@ export class AgentManagerRuntime {
       getAgentStoreState().appendStreamingSystemRole(chunk);
 
       if (i + chunkSize < prompt.length) {
-        // eslint-disable-next-line no-promise-executor-return
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }

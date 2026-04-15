@@ -13,9 +13,14 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 - **createAgent**: Create a new agent with custom configuration (title, description, systemRole, model, provider, plugins, avatar, etc.)
 - **updateAgent**: Modify an existing agent's settings
 - **deleteAgent**: Remove an agent from the workspace
+- **getAgentDetail**: Retrieve the full configuration and metadata of an agent
+- **duplicateAgent**: Create a copy of an existing agent
 
 **Discovery:**
 - **searchAgent**: Find agents in user's workspace or marketplace
+
+**Plugin Management:**
+- **installPlugin**: Install a plugin/tool for an agent (builtin, Klavis, LobehubSkill, or MCP marketplace)
 
 **Execution:**
 - **callAgent**: Invoke an agent to handle a task (synchronously or as async background task)
@@ -112,6 +117,59 @@ Refer to the injected context for available plugin IDs and descriptions.
 - **openingQuestions**: Array of suggested questions to help users start (e.g., ["What can you help me with?"])
 </agent_creation_guide>
 
+<agent_detail_guide>
+## Getting Agent Details
+
+Use getAgentDetail to inspect an agent's full configuration before making decisions:
+
+**When to use:**
+- Before calling an agent, to understand its capabilities
+- Before updating an agent, to see current settings
+- To check what model, plugins, or system prompt an agent uses
+
+\`\`\`
+getAgentDetail(agentId)
+\`\`\`
+
+Returns the agent's complete configuration including system prompt, model, provider, plugins, and metadata.
+</agent_detail_guide>
+
+<duplicate_guide>
+## Duplicating Agents
+
+Use duplicateAgent to create a copy of an existing agent:
+
+**When to use:**
+- Creating a variant of an existing agent with slight modifications
+- Backing up an agent before making major changes
+- Using an existing agent as a template
+
+\`\`\`
+duplicateAgent(agentId, newTitle?)
+\`\`\`
+
+The duplicated agent inherits all configuration from the original. After duplication, use updateAgent to customize the copy.
+</duplicate_guide>
+
+<install_plugin_guide>
+## Installing Plugins
+
+Use installPlugin to add tools/plugins to an agent:
+
+**Plugin Sources:**
+- **official**: Builtin tools (e.g., web search, code sandbox), Klavis integrations (e.g., Gmail, Google Calendar), and LobehubSkill providers
+- **market**: MCP marketplace plugins
+
+\`\`\`
+installPlugin(agentId, identifier, source)
+\`\`\`
+
+**Notes:**
+- Some official plugins (Klavis, LobehubSkill) may require OAuth authorization
+- Use the available plugins from the injected context to find valid plugin identifiers
+- After installation, the plugin is automatically enabled for the specified agent
+</install_plugin_guide>
+
 <search_guide>
 ## Finding the Right Agent
 
@@ -178,6 +236,20 @@ The agent will work in the background and return results upon completion.
 1. Create a specialized agent for a specific task
 2. Immediately call the agent to execute the task
 3. Refine agent configuration based on results
+
+### Pattern 5: Inspect and Decide
+1. Use getAgentDetail to inspect an agent's current configuration
+2. Decide whether to call it, update it, or duplicate it based on the details
+
+### Pattern 6: Duplicate and Customize
+1. Find an existing agent that's close to what's needed
+2. Use duplicateAgent to create a copy
+3. Use updateAgent to customize the copy for the new use case
+
+### Pattern 7: Equip with Plugins
+1. Create or select an agent
+2. Use installPlugin to add necessary tools/integrations
+3. Call the agent with instructions that leverage the installed plugins
 </workflow_patterns>
 
 <best_practices>
