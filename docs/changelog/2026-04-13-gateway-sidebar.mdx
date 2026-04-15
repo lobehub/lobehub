@@ -1,0 +1,34 @@
+---
+title: Agent Gateway & Customizable Sidebar
+description: >-
+  Server-side agent execution via Gateway mode, customizable sidebar layout,
+  agent workspace with document management, and new model support.
+tags:
+  - Gateway
+  - Sidebar
+  - Agent Workspace
+  - Task Manager
+---
+
+# Agent Gateway & Customizable Sidebar
+
+Server-side agent execution over WebSocket, a fully customizable sidebar, and a new agent workspace for managing documents and tasks.
+
+## Key Updates
+
+- Gateway mode: agents now execute server-side and stream results back over WebSocket, with auto-reconnect when switching topics and seamless resume after disconnects
+- Customizable sidebar: choose which items appear in the sidebar and reorder them through a new customize modal, plus a recents section with search, rename, and quick actions
+- Agent workspace: a right-side panel for managing agent documents — browse, rename, delete files, and view document history all in one place
+- Task manager: a dedicated task manager view with its own topic state, so running tasks no longer interfere with your main conversations
+- Prompt rewrite & translate: rewrite or translate your prompt directly in the chat input before sending
+- Desktop CLI: the LobeHub CLI is now embedded in the desktop app and can be installed to your PATH from settings
+- Screen capture: capture your screen with an overlay picker and attach it directly to a conversation
+- New models: GLM-5.1 from Zhipu, Seedance 2.0 video generation, and a new StreamLake provider
+
+## Experience Improvements
+
+- Desktop app now uses Electron's native fetch for remote requests, improving connection reliability
+- Loading states during optimistic updates prevent flickering when the assistant is thinking
+- Agent details pages load correctly on refresh instead of showing a perpetual spinner
+- Improved error classification for insufficient balance and deactivated accounts shows clearer messages
+- Fixed a context engine crash when non-string content was passed to document injection

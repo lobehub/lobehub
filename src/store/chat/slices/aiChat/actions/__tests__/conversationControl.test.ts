@@ -85,6 +85,49 @@ describe('ConversationControl actions', () => {
 
       expect(result.current.operations[operationId!].status).toBe('running');
     });
+
+    it('cancels Gateway-mode execServerAgentRuntime ops and invokes their cancel handler', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: TEST_IDS.SESSION_ID,
+          activeTopicId: TEST_IDS.TOPIC_ID,
+        });
+      });
+
+      let operationId!: string;
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        });
+        operationId = res.operationId;
+      });
+
+      const cancelHandler = vi.fn();
+      act(() => {
+        result.current.onOperationCancel(operationId, cancelHandler);
+      });
+
+      expect(result.current.operations[operationId].status).toBe('running');
+
+      act(() => {
+        result.current.stopGenerateMessage();
+      });
+
+      // Operation gets cancelled and the handler (which would fire the WS interrupt
+      // in real code) is invoked with the operation context.
+      expect(result.current.operations[operationId].status).toBe('cancelled');
+      expect(cancelHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId,
+          type: 'execServerAgentRuntime',
+        }),
+      );
+      // isAborting flag is also flipped so the UI loading state clears immediately.
+      expect(result.current.operations[operationId].metadata.isAborting).toBe(true);
+    });
   });
 
   describe('cancelSendMessageInServer', () => {

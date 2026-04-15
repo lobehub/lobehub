@@ -31,10 +31,15 @@ export class ConversationControlActionImpl {
   stopGenerateMessage = (): void => {
     const { activeAgentId, activeTopicId, cancelOperations } = this.#get();
 
-    // Cancel all running execAgentRuntime operations in the current context
+    // Cancel running agent-runtime operations in the current context —
+    // both client-side (execAgentRuntime) and Gateway-mode
+    // (execServerAgentRuntime). For the Gateway-mode branch, a cancel
+    // handler registered in `executeGatewayAgent` / `reconnectToGatewayOperation`
+    // picks up the cancellation and forwards an `interrupt` frame over the
+    // Agent Gateway WebSocket so the server-side loop aborts.
     cancelOperations(
       {
-        type: 'execAgentRuntime',
+        type: ['execAgentRuntime', 'execServerAgentRuntime'],
         status: 'running',
         agentId: activeAgentId,
         topicId: activeTopicId,

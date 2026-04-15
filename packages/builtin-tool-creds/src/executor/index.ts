@@ -370,21 +370,49 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
-      log('[CredsExecutor] saveCreds - key:', params.key, 'name:', params.name);
+      // Normalize params: AI may send `displayName` instead of `name`,
+      // or `value` (env-style string) instead of `values` (Record)
+      const raw = params as any;
+      const name: string = params.name || raw.displayName || params.key;
+
+      let values: Record<string, string> = params.values;
+      if (!values && typeof raw.value === 'string') {
+        values = {};
+        for (const line of (raw.value as string).split('\n')) {
+          const idx = line.indexOf('=');
+          if (idx > 0) {
+            values[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+          }
+        }
+      }
+
+      if (!values || Object.keys(values).length === 0) {
+        return {
+          content:
+            'Failed to save credential: values must be a non-empty object of key-value pairs (e.g., { "API_KEY": "sk-xxx" }).',
+          error: {
+            message: 'values is empty or missing. Provide key-value pairs, not a raw string.',
+            type: 'InvalidParams',
+          },
+          success: false,
+        };
+      }
+
+      log('[CredsExecutor] saveCreds - key:', params.key, 'name:', name);
 
       await lambdaClient.market.creds.createKV.mutate({
         description: params.description,
         key: params.key,
-        name: params.name,
+        name,
         type: params.type as 'kv-env' | 'kv-header',
-        values: params.values,
+        values,
       });
 
       return {
-        content: `Credential "${params.name}" saved successfully with key "${params.key}"`,
+        content: `Credential "${name}" saved successfully with key "${params.key}"`,
         state: {
           key: params.key,
-          message: `Credential "${params.name}" saved successfully`,
+          message: `Credential "${name}" saved successfully`,
           success: true,
         },
         success: true,

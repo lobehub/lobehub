@@ -1,5 +1,6 @@
 import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
+import { isDesktop } from '@/const/version';
 import type {
   AgentStreamClientOptions,
   AgentStreamEvent,
@@ -20,7 +21,10 @@ type Setter = StoreSetter<ChatStore>;
 // ─── Types ───
 
 export interface GatewayConnection {
-  client: Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'sendInterrupt'>;
+  client: Pick<
+    AgentStreamClient,
+    'connect' | 'disconnect' | 'on' | 'sendInterrupt' | 'sendToolResult'
+  >;
   status: ConnectionStatus;
 }
 
@@ -229,6 +233,10 @@ export class GatewayActionImpl {
         threadId: context.threadId,
         topicId: context.topicId,
       },
+      // Tell the server this caller is a desktop Electron client so it can
+      // enable `executor: 'client'` tools (local-system, stdio MCP) and
+      // dispatch them back over the Agent Gateway WS.
+      clientRuntime: isDesktop ? 'desktop' : 'web',
       fileIds,
       parentMessageId,
       prompt: message,
@@ -267,9 +275,23 @@ export class GatewayActionImpl {
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
 
+    // When the local operation is cancelled (e.g. user clicks stop), forward
+    // the interrupt directly to the server via the existing tRPC endpoint.
+    // Closure captures `result.operationId` (the server-side id) so we don't
+    // depend on any metadata lookup. Fire-and-forget — errors are logged but
+    // never block the local cancel flow.
+    this.#get().onOperationCancel(gatewayOpId, async () => {
+      await aiAgentService
+        .interruptTask({ operationId: result.operationId })
+        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
+    });
+
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId: result.assistantMessageId,
       context: execContext,
+      // Server-side operation id — needed for tool_result dispatch back over
+      // the same WS that gatewayConnections is keyed on.
+      gatewayOperationId: result.operationId,
       operationId: gatewayOpId,
     });
 
@@ -333,9 +355,20 @@ export class GatewayActionImpl {
 
     this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
 
+    // Forward local-op cancellation to the server-side agent loop via tRPC.
+    // See note in executeGatewayAgent for details.
+    this.#get().onOperationCancel(gatewayOpId, async () => {
+      await aiAgentService
+        .interruptTask({ operationId })
+        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
+    });
+
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId,
       context,
+      // Server-side operation id — needed for tool_result dispatch back over
+      // the same WS that gatewayConnections is keyed on.
+      gatewayOperationId: operationId,
       operationId: gatewayOpId,
     });
 

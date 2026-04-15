@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageGatewayClient } from '../MessageGatewayClient';
 
+const mockGatewayEnv = vi.hoisted(() => ({
+  MESSAGE_GATEWAY_ENABLED: undefined as string | undefined,
+}));
+
+vi.mock('@/envs/gateway', () => ({
+  gatewayEnv: mockGatewayEnv,
+}));
+
 describe('MessageGatewayClient', () => {
   let client: MessageGatewayClient;
 
@@ -22,6 +30,24 @@ describe('MessageGatewayClient', () => {
     it('returns false when token is missing', () => {
       const c = new MessageGatewayClient('https://example.com', '');
       expect(c.isConfigured).toBe(false);
+    });
+  });
+
+  describe('isEnabled', () => {
+    it('returns false when configured but MESSAGE_GATEWAY_ENABLED is not 1', () => {
+      mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = undefined;
+      expect(client.isEnabled).toBe(false);
+    });
+
+    it('returns false when MESSAGE_GATEWAY_ENABLED=1 but not configured', () => {
+      mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
+      const c = new MessageGatewayClient('', '');
+      expect(c.isEnabled).toBe(false);
+    });
+
+    it('returns true when MESSAGE_GATEWAY_ENABLED=1 and configured', () => {
+      mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
+      expect(client.isEnabled).toBe(true);
     });
   });
 

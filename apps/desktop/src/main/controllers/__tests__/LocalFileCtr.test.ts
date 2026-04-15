@@ -5,11 +5,14 @@ import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  fetchMock: vi.fn(),
 }));
 
-const fetchMock = vi.fn();
+vi.mock('@/utils/net-fetch', () => ({
+  netFetch: fetchMock,
+}));
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({
@@ -36,8 +39,6 @@ vi.mock('electron', () => ({
     openPath: vi.fn(),
   },
 }));
-
-vi.stubGlobal('fetch', fetchMock);
 
 // Mock node:fs/promises and node:fs
 vi.mock('node:fs/promises', () => ({

@@ -28,6 +28,13 @@ export interface ExecAgentParams {
   appContext?: ExecAgentAppContext;
   /** Whether to auto-start execution after creating operation (default: true) */
   autoStart?: boolean;
+  /**
+   * Runtime of the client initiating this request. Used by the server to
+   * enable `executor: 'client'` tools (e.g. local-system) when the caller
+   * is a desktop Electron client that will receive `tool_execute` events
+   * over the same Agent Gateway WebSocket.
+   */
+  clientRuntime?: 'desktop' | 'web';
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId?: string;
   /** Optional existing message IDs to include in context */

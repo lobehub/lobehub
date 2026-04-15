@@ -2,7 +2,7 @@
 
 import { ThemeProvider } from '@lobehub/ui';
 import { type ComponentType, type ReactElement } from 'react';
-import { lazy, memo, Suspense, useCallback, useEffect } from 'react';
+import { lazy, memo, Suspense, useCallback, useLayoutEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import {
   createBrowserRouter,
@@ -17,6 +17,7 @@ import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { useGlobalStore } from '@/store/global';
+import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
@@ -121,27 +122,16 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
 };
 
 /**
- * Component to register navigate function in global store
- * This allows navigation to be triggered from anywhere in the app, including stores
- *
- * @example
- * import { NavigatorRegistrar } from '@/utils/dynamicPage';
- *
- * // In router root layout:
- * const RootLayout = () => (
- *   <>
- *     <NavigatorRegistrar />
- *     <YourMainLayout />
- *   </>
- * );
+ * Syncs React Router's `navigate` into `navigationRef` (see `getStableNavigate` / `useStableNavigate`).
+ * Mounted once on {@link RouterRoot} so imperative navigation works app-wide (desktop + mobile).
  */
 export const NavigatorRegistrar = memo(() => {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    useGlobalStore.setState({ navigate });
+  useLayoutEffect(() => {
+    useGlobalStore.setState({ navigationRef: { current: navigate } });
     return () => {
-      useGlobalStore.setState({ navigate: undefined });
+      useGlobalStore.setState({ navigationRef: createNavigationRef() });
     };
   }, [navigate]);
 
@@ -155,6 +145,7 @@ export interface CreateAppRouterOptions {
 const RouterRoot = memo(() => (
   <SPAGlobalProvider>
     <BusinessGlobalProvider>
+      <NavigatorRegistrar />
       <Outlet />
     </BusinessGlobalProvider>
   </SPAGlobalProvider>

@@ -29,6 +29,10 @@ Sandbox mode: {{sandbox_enabled}}
 - **getPlaintextCred**: Retrieve the plaintext value of a credential by key. Only use when you need to actually use the credential.
 - **injectCredsToSandbox**: Inject credentials into the sandbox environment. Only available when sandbox mode is enabled.
 - **saveCreds**: Save new credentials securely. Use when user wants to store sensitive information.
+  - Parameters: \`key\` (unique identifier, lowercase with hyphens), \`name\` (display name), \`type\` ("kv-env" or "kv-header"), \`values\` (object of key-value pairs, NOT a string), \`description\` (optional)
+  - Example: \`saveCreds({ key: "openai", name: "OpenAI API Key", type: "kv-env", values: { "OPENAI_API_KEY": "sk-xxx" } })\`
+  - For multiple env vars: \`saveCreds({ key: "my-config", name: "My Config", type: "kv-env", values: { "APP_URL": "http://localhost:3000", "DB_URL": "postgres://..." } })\`
+  - IMPORTANT: \`values\` must be a JSON object (Record<string, string>), NOT a raw string. Each environment variable should be a separate key-value pair in the object.
 </tooling>
 
 <oauth_providers>
@@ -61,7 +65,7 @@ Proactively suggest saving credentials when you detect:
 When suggesting to save, always:
 1. Explain that the credential will be encrypted and stored securely
 2. Ask the user for a meaningful name and optional description
-3. Use the \`saveCreds\` tool to store it
+3. Use the \`saveCreds\` tool to store it with \`values\` as a JSON object (e.g., \`{ "API_KEY": "sk-xxx" }\`), NOT a raw string
 </credential_saving_triggers>
 
 <sandbox_integration>

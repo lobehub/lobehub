@@ -15,6 +15,7 @@ function createMockStore() {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
+    internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
     replaceMessages: vi.fn(),
   };
@@ -22,12 +23,13 @@ function createMockStore() {
 
 function createHandler(
   store: ReturnType<typeof createMockStore>,
-  overrides?: { assistantMessageId?: string },
+  overrides?: { assistantMessageId?: string; gatewayOperationId?: string },
 ) {
   const get = vi.fn(() => store) as any;
   return createGatewayEventHandler(get, {
     assistantMessageId: overrides?.assistantMessageId ?? 'msg-initial',
     context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+    gatewayOperationId: overrides?.gatewayOperationId,
     operationId: 'op-1',
   });
 }
@@ -194,6 +196,72 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
       expect(store.replaceMessages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tool_execute', () => {
+    const toolExecuteData = {
+      apiName: 'readFile',
+      arguments: '{"path":"/tmp/a.txt"}',
+      executionTimeoutMs: 60_000,
+      identifier: 'local-system',
+      toolCallId: 'call_1',
+    };
+
+    it('forwards the payload to internal_executeClientTool with operationId', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('tool_execute', toolExecuteData));
+      await flush();
+
+      expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
+        operationId: 'op-1',
+      });
+    });
+
+    it('uses gatewayOperationId (WS key) when distinct from local operationId', async () => {
+      // Locally the handler tracks `op-1` (used for message dispatch), but
+      // the Agent Gateway WS is keyed on the server-side id `gw-op-server`.
+      // The action must receive the latter so it can look up the live
+      // AgentStreamClient in `gatewayConnections` and reply with tool_result.
+      const store = createMockStore();
+      const handler = createHandler(store, { gatewayOperationId: 'gw-op-server' });
+
+      handler(makeEvent('tool_execute', toolExecuteData));
+      await flush();
+
+      expect(store.internal_executeClientTool).toHaveBeenCalledWith(toolExecuteData, {
+        operationId: 'gw-op-server',
+      });
+    });
+
+    it('is fire-and-forget — does not block the event pipeline', async () => {
+      const store = createMockStore();
+      // Simulate a slow tool execution that never resolves
+      store.internal_executeClientTool.mockImplementation(() => new Promise(() => {}));
+      const handler = createHandler(store);
+
+      handler(makeEvent('tool_execute', toolExecuteData));
+      // If the handler awaited the action, this subsequent stream_chunk would
+      // be queued behind the pending promise forever. We assert it still runs.
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'hi' }));
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ value: { content: 'hi' } }),
+        expect.any(Object),
+      );
+    });
+
+    it('ignores tool_execute events without data', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('tool_execute'));
+      await flush();
+
+      expect(store.internal_executeClientTool).not.toHaveBeenCalled();
     });
   });
 

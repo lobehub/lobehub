@@ -280,9 +280,30 @@ describe('streamAgentEventsViaWebSocket', () => {
 
     const ws = capturedWs!;
     expect(ws.sent.map((s) => JSON.parse(s))).toEqual([
-      { token: 'test-token', type: 'auth' },
+      { token: 'test-token', tokenType: 'jwt', type: 'auth' },
       { lastEventId: '', type: 'resume' },
     ]);
+
+    ws.simulateMessage({ id: '1', type: 'session_complete' });
+    await promise;
+  });
+
+  it('should send tokenType=apiKey when the caller uses an API key', async () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 'lh_sk_abc',
+      tokenType: 'apiKey',
+    });
+
+    await flush();
+
+    const ws = capturedWs!;
+    expect(ws.sent.map((s) => JSON.parse(s))[0]).toEqual({
+      token: 'lh_sk_abc',
+      tokenType: 'apiKey',
+      type: 'auth',
+    });
 
     ws.simulateMessage({ id: '1', type: 'session_complete' });
     await promise;

@@ -10,5 +10,7 @@ export type {
   StreamChunkType,
   StreamStartData,
   ToolEndData,
+  ToolExecuteData,
+  ToolResultMessage,
   ToolStartData,
 } from './types';

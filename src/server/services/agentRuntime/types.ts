@@ -120,8 +120,16 @@ export interface AgentExecutionParams {
   externalRetryCount?: number;
   humanInput?: any;
   operationId: string;
+  /**
+   * Whether a rejection should resume execution by treating the rejected tool
+   * content as user input (maps to client `rejectAndContinueToolCalling`).
+   * When false or unset, a rejection halts the operation.
+   */
+  rejectAndContinue?: boolean;
   rejectionReason?: string;
   stepIndex: number;
+  /** ID of the pending tool message targeted by the intervention. */
+  toolMessageId?: string;
 }
 
 export interface AgentExecutionResult {

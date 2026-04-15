@@ -123,13 +123,15 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  // When an external message gateway is configured, use ensureRunning to sync
-  // connections via the gateway instead of starting bots in-process.
+  // When the external message gateway is enabled, sync connections via gateway.
   if (process.env.MESSAGE_GATEWAY_URL && process.env.MESSAGE_GATEWAY_SERVICE_TOKEN) {
     const { GatewayService } = await import('@/server/services/gateway');
     const service = new GatewayService();
-    await service.ensureRunning();
-    return Response.json({ ensureRunning: true, reason: 'synced via external message gateway' });
+
+    if (service.useMessageGateway) {
+      await service.ensureRunning();
+      return Response.json({ ensureRunning: true });
+    }
   }
 
   const platforms = platformRegistry.listPlatforms();

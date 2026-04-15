@@ -1,7 +1,7 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import { type TaskCurrentActivity, type TaskStatusResult } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { ThreadStatus, ThreadType, UserInterventionConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -43,7 +43,7 @@ const GetOperationStatusSchema = z.object({
 });
 
 const ProcessHumanInterventionSchema = z.object({
-  action: z.enum(['approve', 'reject', 'input', 'select']),
+  action: z.enum(['approve', 'reject', 'reject_continue', 'input', 'select']),
   data: z
     .object({
       approvedToolCall: z.any().optional(),
@@ -54,6 +54,13 @@ const ProcessHumanInterventionSchema = z.object({
   operationId: z.string(),
   reason: z.string().optional(),
   stepIndex: z.number().optional().default(0),
+  /**
+   * ID of the pending `role='tool'` message targeted by this intervention.
+   * Required for approve / reject / reject_continue so the server can update
+   * the message's intervention status, content, and — on approve — hand the
+   * id to the `call_tool` short-circuit via `skipCreateToolMessage`.
+   */
+  toolMessageId: z.string().optional(),
 });
 
 const GetPendingInterventionsSchema = z
@@ -91,6 +98,12 @@ const ExecAgentSchema = z
       .optional(),
     /** Whether to auto-start execution after creating operation */
     autoStart: z.boolean().optional().default(true),
+    /**
+     * Runtime of the client initiating this request.
+     * 'desktop' enables `executor: 'client'` tools (local-system, stdio MCP)
+     * to be dispatched over the Agent Gateway WS.
+     */
+    clientRuntime: z.enum(['desktop', 'web']).optional(),
     /** Explicit device ID to bind to the topic and activate for this run */
     deviceId: z.string().optional(),
     /** Optional existing message IDs to include in context */
@@ -103,6 +116,12 @@ const ExecAgentSchema = z
     prompt: z.string(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
+    /**
+     * User intervention configuration for tool approvals.
+     * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
+     * so tool calls auto-execute without waiting for human approval.
+     */
+    userInterventionConfig: UserInterventionConfigSchema.optional(),
   })
   .refine((data) => data.agentId || data.slug, {
     message: 'Either agentId or slug must be provided',
@@ -530,10 +549,12 @@ export const aiAgentRouter = router({
       prompt,
       appContext,
       autoStart = true,
+      clientRuntime,
       deviceId,
       existingMessageIds = [],
       fileIds,
       parentMessageId,
+      userInterventionConfig,
     } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
@@ -543,6 +564,7 @@ export const aiAgentRouter = router({
         agentId,
         appContext,
         autoStart,
+        clientRuntime,
         deviceId,
         existingMessageIds,
         fileIds,
@@ -551,6 +573,7 @@ export const aiAgentRouter = router({
         // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
         resume: !!parentMessageId,
         slug,
+        userInterventionConfig,
       });
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
@@ -1063,7 +1086,7 @@ export const aiAgentRouter = router({
   processHumanIntervention: aiAgentProcedure
     .input(ProcessHumanInterventionSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, action, data, reason, stepIndex } = input;
+      const { operationId, action, data, reason, stepIndex, toolMessageId } = input;
 
       log(`Processing ${action} for operation ${operationId}`);
 
@@ -1072,6 +1095,7 @@ export const aiAgentRouter = router({
         action,
         operationId,
         stepIndex,
+        toolMessageId,
       };
 
       switch (action) {
@@ -1083,10 +1107,16 @@ export const aiAgentRouter = router({
             });
           }
           interventionParams.approvedToolCall = data.approvedToolCall;
+          // toolMessageId is required for the server to persist the
+          // intervention + short-circuit into call_tool; the handler itself
+          // no-ops when missing, so keep the schema permissive for legacy
+          // callers that haven't been updated yet.
           break;
         }
-        case 'reject': {
+        case 'reject':
+        case 'reject_continue': {
           interventionParams.rejectionReason = reason || 'Tool call rejected by user';
+          interventionParams.rejectAndContinue = action === 'reject_continue';
           break;
         }
         case 'input': {

@@ -351,6 +351,7 @@
   "navPanel.moveDown": "下移",
   "navPanel.moveUp": "上移",
   "navPanel.pinned": "已固定",
+  "navPanel.resetDefault": "恢复默认",
   "navPanel.searchAgent": "搜索助理…",
   "navPanel.searchRecent": "搜索最近…",
   "navPanel.searchResultEmpty": "暂无搜索结果",

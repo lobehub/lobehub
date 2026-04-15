@@ -32,7 +32,7 @@ vi.mock('@/server/services/aiAgent', () => ({
 }));
 
 vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
-  getMessageGatewayClient: vi.fn().mockReturnValue({ isConfigured: false }),
+  getMessageGatewayClient: vi.fn().mockReturnValue({ isConfigured: false, isEnabled: false }),
 }));
 
 vi.mock('@/server/services/queue/impls', () => ({
