@@ -10,9 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
+import { styles } from '../shared/style';
 
-/** Count all nodes recursively */
 const countNodes = (nodes: TaskDetailSubtask[]): { completed: number; total: number } => {
   let total = 0;
   let completed = 0;
@@ -27,13 +26,6 @@ const countNodes = (nodes: TaskDetailSubtask[]): { completed: number; total: num
   return { completed, total };
 };
 
-/**
- * Recursive tree item with Linear-style connecting lines.
- *
- * Line model per child wrapper:
- * - Non-last child: full-height border-left (vertical line continues)
- * - Last child: border-left only to row center (L-shape, line stops)
- */
 const SubtaskTreeItem = memo<{
   isLast: boolean;
   node: TaskDetailSubtask;

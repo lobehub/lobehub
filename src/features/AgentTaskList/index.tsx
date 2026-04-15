@@ -1,1 +1,1 @@
-export { default } from './AgentTaskList';
+export { default } from '@/features/AgentTasks/features/AgentTaskCardList';

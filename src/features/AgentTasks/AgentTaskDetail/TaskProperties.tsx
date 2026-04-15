@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
+import { styles } from '../shared/style';
 
 interface StatusMeta {
   color: string;
@@ -82,8 +82,6 @@ const TaskProperties = memo(() => {
           await completeTask(taskId);
           break;
         }
-        // 'running' → Run Task button; 'paused' → Pause button; 'failed' → system
-        // No default
       }
     },
     [taskId, status, cancelTask, completeTask, resumeTask],
@@ -97,7 +95,6 @@ const TaskProperties = memo(() => {
     [taskId, priority, updateTask],
   );
 
-  // 'running'/'paused' → via action buttons; 'failed' → system only
   const userSelectableStatuses: TaskStatus[] = ['backlog', 'completed', 'canceled'];
 
   const statusItems: MenuProps['items'] = userSelectableStatuses.map((key) => {
@@ -145,7 +142,6 @@ const TaskProperties = memo(() => {
 
       {!collapsed && (
         <Flexbox gap={0}>
-          {/* Status */}
           <Dropdown menu={{ items: statusItems }} trigger={['click']}>
             <Flexbox horizontal align="center" className={styles.propertyRow} gap={10}>
               <Icon icon={statusMeta.icon} size={16} style={{ color: statusMeta.color }} />
@@ -153,7 +149,6 @@ const TaskProperties = memo(() => {
             </Flexbox>
           </Dropdown>
 
-          {/* Priority */}
           <Dropdown menu={{ items: priorityItems }} trigger={['click']}>
             <Flexbox horizontal align="center" className={styles.propertyRow} gap={10}>
               <Icon

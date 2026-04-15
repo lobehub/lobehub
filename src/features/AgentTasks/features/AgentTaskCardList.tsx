@@ -1,18 +1,18 @@
-import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback } from 'react';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Divider } from 'antd';
+import { Fragment, memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAgentStore } from '@/store/agent';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
-import TaskItem from './TaskItem';
+import AgentTaskItem from './AgentTaskItem';
 import TaskListHeader from './TaskListHeader';
 
 const MAX_DISPLAY = 5;
 
-const AgentTaskList = memo(() => {
+const AgentTaskCardList = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const navigate = useNavigate();
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
@@ -30,15 +30,19 @@ const AgentTaskList = memo(() => {
   const displayTasks = tasks.slice(0, MAX_DISPLAY);
 
   return (
-    <div className={styles.container}>
-      <TaskListHeader onViewAll={handleViewAll} />
-      <Flexbox gap={8}>
-        {displayTasks.map((task) => (
-          <TaskItem key={task.identifier} task={task} />
+    <Block shadow variant={'outlined'}>
+      <TaskListHeader count={tasks.length} onViewAll={handleViewAll} />
+      <Divider style={{ margin: 0 }} />
+      <Flexbox gap={2} padding={2}>
+        {displayTasks.map((task, index) => (
+          <Fragment key={task.identifier}>
+            <AgentTaskItem task={task} />
+            {index !== displayTasks.length - 1 && <Divider dashed style={{ margin: 0 }} />}
+          </Fragment>
         ))}
       </Flexbox>
-    </div>
+    </Block>
   );
 });
 
-export default AgentTaskList;
+export default AgentTaskCardList;

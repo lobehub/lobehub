@@ -46,7 +46,6 @@ const IntervalTab = memo(() => {
   const currentInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const updatePeriodicInterval = useTaskStore((s) => s.updatePeriodicInterval);
 
-  // Derive display unit and value from seconds
   const derived = useMemo(() => {
     if (!currentInterval || currentInterval === 0)
       return { displayValue: undefined, unit: 'minutes' as IntervalUnit };
@@ -60,7 +59,6 @@ const IntervalTab = memo(() => {
   const [localUnit, setLocalUnit] = useState<IntervalUnit>(derived.unit);
   const [localValue, setLocalValue] = useState<number | undefined>(derived.displayValue);
 
-  // Resync local state when active task changes
   useEffect(() => {
     setLocalUnit(derived.unit);
     setLocalValue(derived.displayValue);

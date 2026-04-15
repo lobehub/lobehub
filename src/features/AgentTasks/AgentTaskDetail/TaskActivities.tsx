@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
+import { styles } from '../shared/style';
 
 const typeIconMap: Record<TaskActivityType, LucideIcon> = {
   brief: Zap,
