@@ -39,6 +39,43 @@ export interface ToolsEngineConfig {
 }
 
 /**
+ * A manifest is usable by ToolsEngine only if it has a non-empty `api` array.
+ * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)` unconditionally,
+ * so any entry with `api` missing / non-array will crash the whole tools build.
+ * Sources that populate manifests (installed plugins, Klavis, LobeHub skills, MCP)
+ * have no shared schema validation, so we guard defensively at the merge point.
+ */
+const isValidToolManifest = (m: ToolManifest | undefined): m is ToolManifest =>
+  !!m && typeof m === 'object' && Array.isArray((m as ToolManifest).api);
+
+const dropInvalidManifests = (manifests: (ToolManifest | undefined)[], source: string) => {
+  const valid: ToolManifest[] = [];
+  const dropped: Array<{ identifier?: string; reason: string }> = [];
+
+  for (const m of manifests) {
+    if (isValidToolManifest(m)) {
+      valid.push(m);
+    } else if (m) {
+      dropped.push({
+        identifier: (m as { identifier?: string }).identifier,
+        reason: Array.isArray((m as { api?: unknown }).api)
+          ? 'unknown'
+          : 'missing `api` field (expected array)',
+      });
+    }
+  }
+
+  if (dropped.length > 0) {
+    console.warn(
+      `[toolEngineering] Dropped ${dropped.length} invalid manifest(s) from ${source}:`,
+      dropped,
+    );
+  }
+
+  return valid;
+};
+
+/**
  * Initialize ToolsEngine with current manifest schemas and configurable options
  */
 export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine => {
@@ -62,13 +99,14 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     .map((tool) => tool.manifest as ToolManifest)
     .filter(Boolean);
 
-  // Combine all manifests
+  // Combine all manifests, dropping entries that would crash ToolsEngine.
+  // Each source is filtered separately so the warning pinpoints the origin.
   const allManifests = [
-    ...pluginManifests,
-    ...builtinManifests,
-    ...klavisManifests,
-    ...lobehubSkillManifests,
-    ...additionalManifests,
+    ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
+    ...dropInvalidManifests(builtinManifests, 'builtinTools'),
+    ...dropInvalidManifests(klavisManifests, 'klavis'),
+    ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
+    ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
 
   return new ToolsEngine({
