@@ -3,10 +3,15 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { FormInstance } from 'antd';
 import type { ComponentProps, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ProxyForm from './ProxyForm';
+
+interface MockFormValues {
+  [key: string]: unknown;
+}
 
 const setProxySettingsMock = vi.hoisted(() => vi.fn());
 const testProxyConfigMock = vi.hoisted(() => vi.fn());
@@ -79,8 +84,8 @@ vi.mock('@lobehub/ui', async () => {
       items,
       onValuesChange,
     }: {
-      form?: ReturnType<typeof AntdForm.useForm>[0];
-      initialValues?: Record<string, string | boolean | undefined>;
+      form?: FormInstance<MockFormValues>;
+      initialValues?: MockFormValues;
       items: Array<{
         children: Array<{
           children: ReactNode;
@@ -90,10 +95,7 @@ vi.mock('@lobehub/ui', async () => {
           valuePropName?: string;
         }>;
       }>;
-      onValuesChange?: (
-        changedValues: Record<string, unknown>,
-        values: Record<string, unknown>,
-      ) => void;
+      onValuesChange?: (changedValues: MockFormValues, values: MockFormValues) => void;
     }) => (
       <AntdForm form={form} initialValues={initialValues} onValuesChange={onValuesChange}>
         {items.map((group, groupIndex) => (
@@ -184,5 +186,144 @@ describe('ProxyForm', () => {
     });
 
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('resets unsaved proxy changes back to persisted settings', async () => {
+    const user = userEvent.setup();
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.click(screen.getByRole('button', { name: 'proxy.resetButton' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'proxy.resetButton' })).not.toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'proxy.server' })).toHaveValue('');
+      expect(screen.getByRole('textbox', { name: 'proxy.port' })).toHaveValue('');
+    });
+  });
+
+  it('renders auth fields and blocks saving when proxy credentials are missing', async () => {
+    const user = userEvent.setup();
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.click(screen.getAllByRole('switch')[1]);
+
+    expect(screen.getByPlaceholderText('proxy.username_placeholder')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('proxy.password_placeholder')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
+
+    await waitFor(() => {
+      expect(setProxySettingsMock).not.toHaveBeenCalled();
+      expect(screen.getByText('proxy.validation.usernameRequired')).toBeInTheDocument();
+      expect(screen.getByText('proxy.validation.passwordRequired')).toBeInTheDocument();
+    });
+  });
+
+  it('blocks saving when the proxy port is outside the valid range', async () => {
+    const user = userEvent.setup();
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '70000');
+    await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
+
+    await waitFor(() => {
+      expect(setProxySettingsMock).not.toHaveBeenCalled();
+      expect(screen.getByText('proxy.validation.portInvalid')).toBeInTheDocument();
+    });
+  });
+
+  it('saves a valid proxy configuration from the save bar', async () => {
+    const user = userEvent.setup();
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
+
+    await waitFor(() => {
+      expect(setProxySettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enableProxy: true,
+          proxyPort: '7890',
+          proxyServer: '127.0.0.1',
+          proxyType: 'http',
+        }),
+      );
+    });
+  });
+
+  it('reverts the enable switch and shows an error when auto-saving fails', async () => {
+    const user = userEvent.setup();
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+
+    setProxySettingsMock.mockRejectedValueOnce(new Error('boom'));
+
+    await user.click(screen.getAllByRole('switch')[0]);
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('proxy.saveFailed');
+      expect(screen.getAllByRole('switch')[0]).toHaveAttribute('aria-checked', 'true');
+    });
+  });
+
+  it('tests a valid proxy configuration successfully', async () => {
+    const user = userEvent.setup();
+
+    testProxyConfigMock.mockResolvedValue({ responseTime: 42, success: true });
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
+
+    await waitFor(() => {
+      expect(testProxyConfigMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enableProxy: true,
+          proxyPort: '7890',
+          proxyServer: '127.0.0.1',
+          proxyType: 'http',
+        }),
+        'https://www.google.com',
+      );
+      expect(toastSuccessMock).toHaveBeenCalledWith('proxy.testSuccessWithTime');
+    });
+  });
+
+  it('surfaces proxy connectivity failures from the test action', async () => {
+    const user = userEvent.setup();
+
+    testProxyConfigMock.mockResolvedValue({ message: 'connect ECONNREFUSED', success: false });
+
+    render(<ProxyForm />);
+
+    await user.click(screen.getAllByRole('switch')[0]);
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('proxy.testFailed: connect ECONNREFUSED');
+    });
   });
 });

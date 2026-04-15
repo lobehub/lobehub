@@ -15,9 +15,8 @@ import SaveBar from './SaveBar';
 import { useProxyDirty } from './useProxyDirty';
 
 const PROXY_TYPES = ['http', 'https', 'socks5'] as const;
-const IP_HOST_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
-const DOMAIN_HOST_REGEX =
-  /^[\dA-Z]([\dA-Z-]*[\dA-Z])?(\.[\dA-Z]([\dA-Z-]*[\dA-Z])?)*$/i;
+const IP_HOST_REGEX = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+const DOMAIN_HOST_REGEX = /^[\dA-Z](?:[\dA-Z-]*[\dA-Z])?(?:\.[\dA-Z](?:[\dA-Z-]*[\dA-Z])?)*$/i;
 
 const isFormValidationError = (
   error: unknown,
@@ -25,12 +24,10 @@ const isFormValidationError = (
   errorFields: unknown[];
 } => typeof error === 'object' && error !== null && 'errorFields' in error;
 
-const isSupportedProxyType = (
-  value?: string,
-): value is (typeof PROXY_TYPES)[number] => PROXY_TYPES.includes(value as (typeof PROXY_TYPES)[number]);
+const isSupportedProxyType = (value?: string): value is (typeof PROXY_TYPES)[number] =>
+  PROXY_TYPES.includes(value as (typeof PROXY_TYPES)[number]);
 
-const isValidProxyHost = (host: string) =>
-  IP_HOST_REGEX.test(host) || DOMAIN_HOST_REGEX.test(host);
+const isValidProxyHost = (host: string) => IP_HOST_REGEX.test(host) || DOMAIN_HOST_REGEX.test(host);
 
 const isCompleteProxyConfig = (config: Partial<NetworkProxySettings>) => {
   if (!config.enableProxy) return true;
@@ -46,7 +43,7 @@ const isCompleteProxyConfig = (config: Partial<NetworkProxySettings>) => {
   if (Number.isNaN(port) || port < 1 || port > 65_535) return false;
 
   if (config.proxyRequireAuth) {
-    if (!config.proxyUsername?.trim() || !config.proxyPassword?.trim()) return false;
+    return Boolean(config.proxyUsername?.trim() && config.proxyPassword?.trim());
   }
 
   return true;
