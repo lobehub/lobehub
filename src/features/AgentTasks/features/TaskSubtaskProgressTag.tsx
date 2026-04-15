@@ -148,7 +148,11 @@ const TaskSubtaskProgressTag = memo<TaskSubtaskProgressTagProps>(
 
     if (!hasDropdown) return tag;
 
-    return <DropdownMenu items={navigationItems}>{tag}</DropdownMenu>;
+    return (
+      <DropdownMenu items={navigationItems} trigger={'both'}>
+        {tag}
+      </DropdownMenu>
+    );
   },
 );
 

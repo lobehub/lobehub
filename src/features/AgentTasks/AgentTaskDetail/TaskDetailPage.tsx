@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { memo, useEffect } from 'react';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
@@ -11,7 +12,10 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import Breadcrumb from '../shared/Breadcrumb';
 import { styles } from '../shared/style';
 import TaskActivities from './TaskActivities';
-import TaskDetailHeader from './TaskDetailHeader';
+import TaskDetailDeleteAction from './TaskDetailDeleteAction';
+import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
+import TaskDetailScheduleAction from './TaskDetailScheduleAction';
+import TaskDetailTitleInput from './TaskDetailTitleInput';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
@@ -59,11 +63,17 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         ) : (
           <div className={styles.detailLayout}>
             <div className={styles.detailMain}>
-              <TaskDetailHeader />
-              <TaskParentBar />
-              <div style={{ paddingBlock: 8 }}>
+              <TaskDetailTitleInput />
+              <Flexbox gap={8}>
+                <TaskParentBar />
                 <TaskModelConfig />
-              </div>
+                <Flexbox horizontal align="center" gap={8}>
+                  <TaskDetailRunPauseAction />
+                  <TaskDetailScheduleAction />
+                  <TaskDetailDeleteAction />
+                </Flexbox>
+              </Flexbox>
+              <Divider />
               <TaskInstruction />
               <TaskSubtasks />
               <TaskActivities />
