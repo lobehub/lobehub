@@ -1,11 +1,11 @@
 import { ActionIcon } from '@lobehub/ui';
 import { App } from 'antd';
-import { cssVar } from 'antd-style';
 import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -22,8 +22,7 @@ const TaskDetailDeleteAction = memo(() => {
   return (
     <ActionIcon
       icon={Trash2}
-      size="small"
-      style={{ color: cssVar.colorTextTertiary }}
+      size={DESKTOP_HEADER_ICON_SIZE}
       onClick={() => {
         modal.confirm({
           centered: true,

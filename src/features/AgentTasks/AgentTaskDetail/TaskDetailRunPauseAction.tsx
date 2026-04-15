@@ -1,4 +1,5 @@
-import { Button } from 'antd';
+import { Button } from '@lobehub/ui';
+import { CircleStop, PlayIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +23,7 @@ const TaskDetailRunPauseAction = memo(() => {
   if (!canRun && !canPause) return null;
 
   return (
-    <Button size="small" type={canRun ? 'primary' : 'default'} onClick={handleRunOrPause}>
+    <Button icon={canRun ? PlayIcon : CircleStop} type={'primary'} onClick={handleRunOrPause}>
       {canRun ? t('taskDetail.runTask') : t('taskDetail.pauseTask')}
     </Button>
   );

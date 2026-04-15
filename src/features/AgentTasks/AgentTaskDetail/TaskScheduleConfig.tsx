@@ -2,6 +2,7 @@ import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { InputNumber, Popover, Select } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { TimerIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,10 +41,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const IntervalTab = memo(() => {
+interface IntervalTabProps {
+  currentInterval: number;
+  taskId?: string;
+}
+
+const IntervalTab = memo<IntervalTabProps>(({ currentInterval, taskId }) => {
   const { t } = useTranslation('chat');
-  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const currentInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const updatePeriodicInterval = useTaskStore((s) => s.updatePeriodicInterval);
 
   const derived = useMemo(() => {
@@ -150,10 +154,23 @@ const SchedulerTab = memo(() => {
   );
 });
 
-const TaskScheduleConfig = memo(() => {
+interface TaskScheduleConfigProps {
+  children?: ReactNode;
+  currentInterval?: number;
+  taskId?: string;
+}
+
+const TaskScheduleConfig = memo(function TaskScheduleConfig({
+  children,
+  currentInterval,
+  taskId,
+}: TaskScheduleConfigProps) {
   const { t } = useTranslation('chat');
-  const currentInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
-  const isConfigured = currentInterval > 0;
+  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const activeTaskInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
+  const finalTaskId = taskId ?? activeTaskId;
+  const finalCurrentInterval = currentInterval ?? activeTaskInterval;
+  const isConfigured = finalCurrentInterval > 0;
 
   const [mode, setMode] = useState<ScheduleMode>('interval');
 
@@ -168,18 +185,31 @@ const TaskScheduleConfig = memo(() => {
         ]}
         onChange={(v) => setMode(String(v) as ScheduleMode)}
       />
-      {mode === 'interval' ? <IntervalTab /> : <SchedulerTab />}
+      {mode === 'interval' ? (
+        <IntervalTab currentInterval={finalCurrentInterval} taskId={finalTaskId} />
+      ) : (
+        <SchedulerTab />
+      )}
     </Flexbox>
   );
 
   return (
     <Popover content={content} placement="bottomLeft" trigger="click">
-      <ActionIcon
-        className={isConfigured ? styles.configured : undefined}
-        icon={TimerIcon}
-        size="small"
-        title={t('taskSchedule.title')}
-      />
+      {children ? (
+        <div
+          className={isConfigured ? styles.configured : undefined}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      ) : (
+        <ActionIcon
+          className={isConfigured ? styles.configured : undefined}
+          icon={TimerIcon}
+          size="small"
+          title={t('taskSchedule.title')}
+        />
+      )}
     </Popover>
   );
 });
