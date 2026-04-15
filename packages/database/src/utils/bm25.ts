@@ -28,6 +28,10 @@ export function sanitizeBm25Query(query: string, options: SanitizeBm25QueryOptio
     .split(/\s+/)
     .map((word) => word.trim())
     .filter((word) => !dropBooleanOperators || !BM25_BOOLEAN_OPERATORS.has(word.toUpperCase()))
+    // NOTICE:
+    // Keep `<` and `>` in this escape set. Angle-bracket wrapped tokens can be
+    // interpreted as range-query boundaries by the BM25 parser and may trigger
+    // parse failures when the boundary contains multiple terms.
     .map((word) => word.replaceAll(/[+&|!(){}[\]^"~*?:\\/<>]/g, '\\$&'))
     .filter(Boolean);
 
