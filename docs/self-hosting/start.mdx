@@ -90,6 +90,84 @@ Similar to Vercel with regional options. Good for specific geographic requiremen
 | File storage      | Local/RustFS | External S3 | Varies          |
 | Database          | Included     | External    | Varies          |
 
+## Self-Hosted vs LobeHub Cloud
+
+<Callout type={'info'}>
+  The self-hosted (open-source) LobeHub ships the full core product — chat, agents, knowledge base, tool calling, and MCP. The features below are **only available on [LobeHub Cloud](https://lobehub.com)** and are not supported in self-hosted deployments.
+</Callout>
+
+### Subscription & Billing
+
+- **Subscription tiers** — Free / Pro / Team / Enterprise with monthly / yearly toggle
+- **Online payments** — Hosted Stripe Checkout (Zarinpal in Iran)
+- **Credits & auto top-up** — One-time credit packages; automatic refill with email notifications when balance falls below a threshold
+- **Billing dashboard** — Current plan, invoice history, payment methods, per-model / per-feature spend and token breakdowns
+- **Free video quota** — Daily per-user allowance for video generation
+
+### Model Provider Aggregation
+
+- **Unified `lobehub` provider** — Single logical provider that aggregates OpenAI, Anthropic, Google, Bedrock and others with per-model routing
+- **Channel failover** — Automatic fallback to a backup provider on upstream failure
+- **Health monitoring** — Per-channel / per-model error-rate alerts that keep the hosted inference endpoints available
+- **First-party chat & TTS endpoints** — Hosted inference endpoints you can use without bringing your own API key
+
+### Risk Control & Security
+
+- **IP / user bans** — Blocking and allow-list overrides, synced to the edge
+- **Captcha** — Cloudflare Turnstile on sign-up / sign-in
+- **Chat content safety scanning** — Pre-generation compliance checks
+- **Email domain guard** — Blocks disposable / suspicious email domains at sign-up
+- **Anomaly detection** — Triggers on high spend, suspicious routes, and other abuse signals
+- **Risk audit log** — Full trail of risk-control decisions
+
+### Referral Program
+
+- **Invite codes & links** — Issuance, backfill, and visualization of the invite tree
+- **Reward distribution** — Invitee status tracking and automatic reward payout
+- **Anti-fraud** — Abuse checks along the referral flow
+
+### Hosted Bot Platforms
+
+- **Multi-platform gateway** — Hosted integrations for Discord, Telegram, Slack, Feishu (Lark), QQ, WeChat, with unified message dispatch
+
+<Callout type={'info'}>
+  The open-source repo contains the Bot SDK source, which you can use to implement a single-platform integration yourself. However, the multi-platform dispatch, job orchestration, and message fan-out rely on Cloud-only managed services.
+</Callout>
+
+### Account Lifecycle
+
+- **Self-service account deletion** — Soft-delete with a cooling-off window during which deletion can be revoked
+- **Unverified account cleanup** — Scheduled purge of abandoned sign-ups
+- **Operational notifications** — Email + Discord templates for risk, auto-top-up, and provider-health alerts
+
+### Agent Evaluation & Benchmarking
+
+- **Agent eval workflows** — Run test cases, trajectories, and benchmarks such as LOCOMO
+- **Memory extraction benchmark** — Automated evaluation of long-term memory quality
+- **Personalized welcome agents** — Auto-generated starter agents for new users
+
+### Managed MCP Integration
+
+- **Managed MCP** — One-click connection to hosted MCP servers via LobeHub Cloud (including the OAuth callback flow)
+
+### White-label & Branding
+
+- **Branded provider cards** — Cloud-only white-label surface
+
+### Operational Cron Jobs
+
+- Subscription expiry, budget reset, scheduled account deletion, referral reward settlement, and similar business-level cron jobs
+
+<Callout type={'info'}>
+  Self-hosted deployments can run their own cron jobs via external schedulers (GitHub Actions, Cloudflare Workers Cron, etc.), but the business jobs above are Cloud-only features and have no corresponding implementation in the open-source codebase.
+</Callout>
+
+---
+
+<Callout type={'info'}>
+  If you only need the core product capabilities — chat, agents, knowledge base, tool calling, MCP — self-hosted LobeHub is fully sufficient. For commercial, operational, or risk-control capabilities, consider [LobeHub Cloud](https://lobehub.com).
+</Callout>
+
 ## Prerequisites
 
 Before deploying LobeHub, gather the following:
