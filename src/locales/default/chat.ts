@@ -254,7 +254,7 @@ export default {
   'operation.execAgentRuntime': 'Preparing response',
   'operation.execClientTask': 'Executing task',
   'operation.execServerAgentRuntime':
-    'Running… You can switch tasks or close the page — the task will keep going.',
+    'Task is running in the server. You are safe to leave this page',
   'operation.sendMessage': 'Sending message',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',
