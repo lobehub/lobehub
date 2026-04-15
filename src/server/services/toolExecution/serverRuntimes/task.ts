@@ -32,16 +32,9 @@ const createTaskRuntime = ({
     parentIdentifier?: string;
     priority?: number;
     sortOrder?: number;
-    review?: {
-      autoRetry?: boolean;
-      criteria?: Array<{ name: string; threshold: number }>;
-      enabled?: boolean;
-      maxIterations?: number;
-    };
   }) => {
     let parentTaskId: string | undefined;
     let parentLabel: string | undefined;
-    let parentConfig: Record<string, any> | undefined;
 
     if (args.parentIdentifier) {
       const parent = await taskModel.resolve(args.parentIdentifier);
@@ -49,19 +42,9 @@ const createTaskRuntime = ({
         return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
       parentTaskId = parent.id;
       parentLabel = parent.identifier;
-      parentConfig = parent.config as Record<string, any>;
-    }
-
-    // Build config: explicit review > inherited from parent
-    let config: Record<string, any> | undefined;
-    if (args.review) {
-      config = { review: { enabled: true, ...args.review } };
-    } else if (parentConfig?.review) {
-      config = { review: parentConfig.review };
     }
 
     const task = await taskModel.create({
-      ...(config && { config }),
       assigneeAgentId: agentId,
       instruction: args.instruction,
       name: args.name,
@@ -103,12 +86,6 @@ const createTaskRuntime = ({
     name?: string;
     priority?: number;
     removeDependencies?: string[];
-    review?: {
-      autoRetry?: boolean;
-      criteria?: Array<{ name: string; threshold: number }>;
-      enabled?: boolean;
-      maxIterations?: number;
-    };
   }) => {
     const task = await taskModel.resolve(args.identifier);
     if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
@@ -136,12 +113,6 @@ const createTaskRuntime = ({
 
     if (Object.keys(updateData).length > 0) {
       ops.push(taskModel.update(task.id, updateData));
-    }
-
-    // TODO [LOBE-7199]: align criteria/rubrics schema and switch to typed updateReviewConfig
-    if (args.review) {
-      ops.push(taskModel.updateTaskConfig(task.id, { review: { enabled: true, ...args.review } }));
-      changes.push('review config updated');
     }
 
     const applyDeps = async (

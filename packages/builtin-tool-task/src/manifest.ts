@@ -11,7 +11,7 @@ export const TaskManifest: BuiltinToolManifest = {
     // ==================== Task CRUD ====================
     {
       description:
-        'Create a new task. Optionally attach it as a subtask by specifying parentIdentifier. Review config is inherited from parent task by default.',
+        'Create a new task. Optionally attach it as a subtask by specifying parentIdentifier.',
       name: TaskApiName.createTask,
       parameters: {
         properties: {
@@ -36,34 +36,6 @@ export const TaskManifest: BuiltinToolManifest = {
             description:
               'Sort order within parent task. Lower values appear first. Use to control display order (e.g. chapter 1=0, chapter 2=1, etc.).',
             type: 'number',
-          },
-          review: {
-            description:
-              'Review config. If omitted, inherits from parent task. Set to configure LLM-as-Judge auto-review.',
-            properties: {
-              autoRetry: {
-                description: 'Auto-retry on failure. Default true.',
-                type: 'boolean',
-              },
-              criteria: {
-                description: 'Review criteria with name and threshold (0-100).',
-                items: {
-                  properties: {
-                    name: { description: 'Criterion name, e.g. "内容准确性"', type: 'string' },
-                    threshold: { description: 'Pass threshold (0-100)', type: 'number' },
-                  },
-                  required: ['name', 'threshold'],
-                  type: 'object',
-                },
-                type: 'array',
-              },
-              enabled: { description: 'Enable review. Default false.', type: 'boolean' },
-              maxIterations: {
-                description: 'Max review iterations. Default 3.',
-                type: 'number',
-              },
-            },
-            type: 'object',
           },
         },
         required: ['name', 'instruction'],
@@ -124,7 +96,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority), dependencies (batched), or review config. Status changes go through updateTaskStatus.",
+        "Edit a task's fields (name, description, instruction, priority) or dependencies (batched). Status changes go through updateTaskStatus.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
@@ -159,26 +131,6 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Identifiers of existing dependencies to remove.',
             items: { type: 'string' },
             type: 'array',
-          },
-          review: {
-            description: 'Update review config.',
-            properties: {
-              autoRetry: { type: 'boolean' },
-              criteria: {
-                items: {
-                  properties: {
-                    name: { type: 'string' },
-                    threshold: { type: 'number' },
-                  },
-                  required: ['name', 'threshold'],
-                  type: 'object',
-                },
-                type: 'array',
-              },
-              enabled: { type: 'boolean' },
-              maxIterations: { type: 'number' },
-            },
-            type: 'object',
           },
         },
         required: ['identifier'],
@@ -225,7 +177,7 @@ export const TaskManifest: BuiltinToolManifest = {
   identifier: TaskIdentifier,
   meta: {
     avatar: '\uD83D\uDCCB',
-    description: 'Create, list, edit, delete tasks with dependencies and review config',
+    description: 'Create, list, edit, delete tasks with dependencies',
     title: 'Task Tools',
   },
   systemRole: systemPrompt,

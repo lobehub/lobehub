@@ -56,12 +56,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       name: string;
       parentIdentifier?: string;
       priority?: number;
-      review?: {
-        autoRetry?: boolean;
-        criteria?: Array<{ name: string; threshold: number }>;
-        enabled?: boolean;
-        maxIterations?: number;
-      };
       sortOrder?: number;
     },
     ctx?: BuiltinToolContext,
@@ -83,10 +77,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           error: { message: 'No data returned', type: 'CreateFailed' },
           success: false,
         };
-      }
-
-      if (params.review) {
-        await taskService.updateConfig(task.id, { review: { enabled: true, ...params.review } });
       }
 
       return {
@@ -147,19 +137,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       name?: string;
       priority?: number;
       removeDependencies?: string[];
-      review?: {
-        autoRetry?: boolean;
-        criteria?: Array<{ name: string; threshold: number }>;
-        enabled?: boolean;
-        maxIterations?: number;
-      };
     },
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] editTask - params:', params);
 
-      const { identifier, review, addDependencies, removeDependencies } = params;
+      const { identifier, addDependencies, removeDependencies } = params;
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
@@ -189,12 +173,6 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       if (Object.keys(updateData).length > 0) {
         ops.push(store.updateTask(identifier, updateData));
-      }
-
-      if (review) {
-        // TODO [LOBE-7199]: align criteria/rubrics schema and switch to typed store.updateReview
-        ops.push(taskService.updateConfig(identifier, { review: { enabled: true, ...review } }));
-        changes.push('review config updated');
       }
 
       if (addDependencies?.length) {
