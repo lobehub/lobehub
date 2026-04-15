@@ -4,6 +4,26 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 export type { ExecAgentResult };
 
+/**
+ * Resume instruction for an operation that hit `human_approve_required`. When
+ * present, the new op acts as the "continue" step: server reads the target tool
+ * message, writes the user's decision, and either re-dispatches the tool
+ * (approved) or feeds the rejection back to the LLM as user feedback
+ * (rejected / rejected_continue).
+ *
+ * Kept as a top-level field (not folded into `appContext`) so the server schema
+ * can validate it independently.
+ */
+export interface ResumeApprovalParam {
+  decision: 'approved' | 'rejected' | 'rejected_continue';
+  /** ID of the pending `role='tool'` message this decision targets. */
+  parentMessageId: string;
+  /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+  rejectionReason?: string;
+  /** tool_call_id of the pending tool call being approved/rejected. */
+  toolCallId: string;
+}
+
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: {
@@ -27,6 +47,8 @@ export interface ExecAgentTaskParams {
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId?: string;
   prompt: string;
+  /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
+  resumeApproval?: ResumeApprovalParam;
   slug?: string;
 }
 

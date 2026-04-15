@@ -33,6 +33,7 @@
   "jina.description": "2020년에 설립된 Jina AI는 선도적인 검색 AI 기업으로, 벡터 모델, 재정렬기, 소형 언어 모델을 포함한 검색 스택을 통해 신뢰성 높고 고품질의 생성형 및 멀티모달 검색 앱을 구축합니다.",
   "kimicodingplan.description": "문샷 AI의 Kimi Code는 K2.5를 포함한 Kimi 모델에 접근하여 코딩 작업을 수행할 수 있습니다.",
   "lmstudio.description": "LM Studio는 데스크탑에서 LLM을 개발하고 실험할 수 있는 애플리케이션입니다.",
+  "lobehub.description": "LobeHub Cloud는 공식 API를 사용하여 AI 모델에 접근하며, 모델 토큰에 연동된 크레딧으로 사용량을 측정합니다.",
   "longcat.description": "LongCat은 Meituan에서 독자적으로 개발한 생성형 AI 대형 모델 시리즈입니다. 이는 효율적인 계산 아키텍처와 강력한 멀티모달 기능을 통해 내부 기업 생산성을 향상시키고 혁신적인 애플리케이션을 가능하게 하기 위해 설계되었습니다.",
   "minimax.description": "2021년에 설립된 MiniMax는 텍스트, 음성, 비전 등 멀티모달 기반의 범용 AI를 개발하며, 조 단위 파라미터의 MoE 텍스트 모델과 Hailuo AI와 같은 앱을 제공합니다.",
   "minimaxcodingplan.description": "MiniMax 토큰 플랜은 고정 요금 구독을 통해 M2.7을 포함한 MiniMax 모델에 접근하여 코딩 작업을 수행할 수 있습니다.",

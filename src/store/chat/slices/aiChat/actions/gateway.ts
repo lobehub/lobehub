@@ -7,7 +7,7 @@ import type {
   ConnectionStatus,
 } from '@/libs/agent-stream';
 import { AgentStreamClient } from '@/libs/agent-stream/client';
-import { aiAgentService } from '@/services/aiAgent';
+import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import type { ChatStore } from '@/store/chat/store';
@@ -217,8 +217,15 @@ export class GatewayActionImpl {
     onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
+    /**
+     * Resume a paused op waiting on `human_approve_required`. Forwarded to
+     * `aiAgentService.execAgentTask` so the new server-side op knows to apply
+     * the user's decision to the target tool message instead of starting from
+     * a fresh user prompt.
+     */
+    resumeApproval?: ResumeApprovalParam;
   }): Promise<ExecAgentResult> => {
-    const { context, fileIds, message, onComplete, parentMessageId } = params;
+    const { context, fileIds, message, onComplete, parentMessageId, resumeApproval } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
@@ -240,6 +247,7 @@ export class GatewayActionImpl {
       fileIds,
       parentMessageId,
       prompt: message,
+      resumeApproval,
     });
 
     // If server created a new topic, fetch messages first then switch topic
@@ -266,9 +274,13 @@ export class GatewayActionImpl {
       this.#get().internal_updateTopicLoading(result.topicId, true);
     }
 
-    // Create a dedicated operation for gateway execution with correct context
+    // Create a dedicated operation for gateway execution with correct context.
+    // Stash the server operation id in metadata so human-intervention flows
+    // (approve/reject/reject_continue) can look it up and call the server
+    // without needing an out-of-band lookup.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context: execContext,
+      metadata: { serverOperationId: result.operationId },
       type: 'execServerAgentRuntime',
     });
 
@@ -347,9 +359,11 @@ export class GatewayActionImpl {
       topicId,
     };
 
-    // Create a local operation for UI loading state
+    // Create a local operation for UI loading state, stashing the server op id
+    // so intervention flows can find it after reconnect as well.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context,
+      metadata: { serverOperationId: operationId },
       type: 'execServerAgentRuntime',
     });
 

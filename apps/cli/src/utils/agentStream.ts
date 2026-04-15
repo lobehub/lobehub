@@ -20,6 +20,12 @@ interface StreamOptions {
 interface WebSocketStreamOptions extends StreamOptions {
   gatewayUrl: string;
   operationId: string;
+  /**
+   * LobeHub server URL the gateway should call back to when verifying
+   * an apiKey token (via `/api/v1/users/me`). Required when
+   * `tokenType === 'apiKey'`; ignored for JWT.
+   */
+  serverUrl?: string;
   token: string;
   /**
    * How the gateway should verify `token`. `jwt` is the default for
@@ -173,7 +179,7 @@ const HEARTBEAT_INTERVAL = 30_000;
 export async function streamAgentEventsViaWebSocket(
   options: WebSocketStreamOptions,
 ): Promise<void> {
-  const { gatewayUrl, operationId, token, tokenType = 'jwt', ...streamOpts } = options;
+  const { gatewayUrl, operationId, serverUrl, token, tokenType = 'jwt', ...streamOpts } = options;
   const wsUrl = urlJoin(
     gatewayUrl.replace(/^http/, 'ws'),
     `/ws?operationId=${encodeURIComponent(operationId)}`,
@@ -197,7 +203,10 @@ export async function streamAgentEventsViaWebSocket(
     };
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ token, tokenType, type: 'auth' }));
+      // `serverUrl` is required so the gateway can call back to verify an
+      // apiKey token. Harmless (but unused) for JWT, so we always include it
+      // when available to match the device-gateway-client contract.
+      ws.send(JSON.stringify({ serverUrl, token, tokenType, type: 'auth' }));
     };
 
     ws.onmessage = (event) => {

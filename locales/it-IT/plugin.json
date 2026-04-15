@@ -564,6 +564,7 @@
   "skillDetail.tabs.tools": "Funzionalità",
   "skillDetail.tools": "Strumenti",
   "skillDetail.trustWarning": "Utilizza solo connettori di sviluppatori di cui ti fidi. LobeHub non controlla quali strumenti vengano resi disponibili dagli sviluppatori e non può garantire che funzionino come previsto o che non vengano modificati.",
+  "skillInstallBanner.dismiss": "Chiudi",
   "skillInstallBanner.title": "Aggiungi abilità a Lobe AI",
   "store.actions.cancel": "Annulla",
   "store.actions.configure": "Configura",

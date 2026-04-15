@@ -202,7 +202,6 @@
     "@lexical/utils": "^0.42.0",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/agent-templates": "workspace:*",
-    "@lobechat/builtin-agent-onboarding": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/builtin-skills": "workspace:*",
     "@lobechat/builtin-tool-activator": "workspace:*",

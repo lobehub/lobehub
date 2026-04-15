@@ -9,6 +9,8 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 export const agentDocumentSWRKeys = {
   documents: (agentId: string) => ['agent-documents', agentId] as const,
+  readDocument: (agentId: string, id: string) =>
+    ['workspace-agent-document-editor', agentId, id] as const,
 };
 
 const VALID_DOCUMENT_POSITIONS = new Set<AgentContextDocument['loadPosition']>(
@@ -27,6 +29,10 @@ export const normalizeAgentDocumentPosition = (
 
 const revalidateAgentDocuments = async (agentId: string) => {
   await mutate(agentDocumentSWRKeys.documents(agentId));
+};
+
+const revalidateReadDocument = async (agentId: string, id: string) => {
+  await mutate(agentDocumentSWRKeys.readDocument(agentId, id));
 };
 
 class AgentDocumentService {
@@ -99,6 +105,7 @@ class AgentDocumentService {
   renameDocument = async (params: { agentId: string; id: string; newTitle: string }) => {
     const result = await lambdaClient.agentDocument.renameDocument.mutate(params);
     await revalidateAgentDocuments(params.agentId);
+    await revalidateReadDocument(params.agentId, params.id);
 
     return result;
   };
