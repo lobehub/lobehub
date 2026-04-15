@@ -18,7 +18,6 @@ const TaskInstruction = memo(() => {
 
   const editorData = useMemo(() => ({ content: instruction ?? '' }), [instruction]);
 
-  // Clean up pending debounce on unmount or task switch
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);

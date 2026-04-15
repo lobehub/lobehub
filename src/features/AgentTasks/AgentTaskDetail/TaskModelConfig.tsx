@@ -12,7 +12,6 @@ const TaskModelConfig = memo(() => {
   const taskProvider = useTaskStore(taskDetailSelectors.activeTaskProvider);
   const updateTaskModelConfig = useTaskStore((s) => s.updateTaskModelConfig);
 
-  // Fallback to agent's default model when task has no override
   const agentModel = useAgentStore(agentSelectors.currentAgentModel);
   const agentProvider = useAgentStore(agentSelectors.currentAgentModelProvider);
 

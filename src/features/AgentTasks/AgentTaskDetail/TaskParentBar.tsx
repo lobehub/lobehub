@@ -10,7 +10,7 @@ import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
+import { styles } from '../shared/style';
 
 interface SiblingTask {
   identifier: string;

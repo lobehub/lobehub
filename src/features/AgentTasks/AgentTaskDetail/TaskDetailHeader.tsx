@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import { styles } from './style';
+import { styles } from '../shared/style';
 import TaskScheduleConfig from './TaskScheduleConfig';
 
 const DEBOUNCE_MS = 300;
