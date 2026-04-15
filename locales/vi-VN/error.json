@@ -60,6 +60,7 @@
   "response.520": "Chúng tôi xin lỗi, máy chủ gặp sự cố bất ngờ khiến không thể hoàn tất yêu cầu của bạn. Vui lòng thử lại sau, chúng tôi đang khắc phục sự cố.",
   "response.522": "Chúng tôi xin lỗi, kết nối máy chủ đã hết thời gian chờ và không thể phản hồi kịp thời. Có thể do mạng không ổn định hoặc máy chủ tạm thời không truy cập được. Vui lòng thử lại sau.",
   "response.524": "Chúng tôi xin lỗi, máy chủ đã hết thời gian chờ trong khi đợi phản hồi. Có thể do phản hồi chậm. Vui lòng thử lại sau.",
+  "response.AccountDeactivated": "Tài khoản của bạn đã bị vô hiệu hóa hoặc tạm ngưng. Điều này có thể do chính sách, bảo mật hoặc quá trình xem xét tài khoản. Vui lòng liên hệ bộ phận hỗ trợ của nhà cung cấp để được trợ giúp.",
   "response.AgentRuntimeError": "Lỗi thực thi mô hình ngôn ngữ Lobe. Vui lòng kiểm tra và thử lại dựa trên thông tin sau.",
   "response.ComfyUIBizError": "Đã xảy ra lỗi khi yêu cầu dịch vụ ComfyUI. Vui lòng kiểm tra thông tin bên dưới hoặc thử lại.",
   "response.ComfyUIEmptyResult": "Không có hình ảnh nào được tạo bởi ComfyUI. Vui lòng kiểm tra cấu hình mô hình hoặc thử lại.",

@@ -521,9 +521,21 @@ export class MarketService {
             log('getLobehubSkillManifests: connection missing providerId: %O', connection);
             continue;
           }
-          const providerName =
-            (connection as any).providerName || (connection as any).name || providerId;
           const icon = (connection as any).icon;
+
+          // Look up the provider's display name from the static registry.
+          // connection.providerName is the *user's* display name on that provider,
+          // NOT the provider's own name (e.g., "LiJian" instead of "Linear").
+          // Static label map — avoids importing LOBEHUB_SKILL_PROVIDERS which
+          // pulls in react-icons (client-side only). Keep in sync with lobehubSkill.ts.
+          const PROVIDER_LABELS: Record<string, string> = {
+            github: 'GitHub',
+            linear: 'Linear',
+            microsoft: 'Outlook Calendar',
+            twitter: 'X (Twitter)',
+            vercel: 'Vercel',
+          };
+          const providerLabel = PROVIDER_LABELS[providerId] || providerId;
 
           const { tools } = await this.market.skills.listTools(providerId);
           if (!tools || tools.length === 0) continue;
@@ -537,9 +549,9 @@ export class MarketService {
             identifier: providerId,
             meta: {
               avatar: icon || '🔗',
-              description: `LobeHub Skill: ${providerName}`,
+              description: `LobeHub Skill: ${providerLabel}`,
               tags: ['lobehub-skill', providerId],
-              title: providerName,
+              title: providerLabel,
             },
             type: 'builtin',
           };

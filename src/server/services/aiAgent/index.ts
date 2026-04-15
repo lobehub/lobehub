@@ -781,6 +781,12 @@ export class AiAgentService {
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        ...(resolvedAgentId && {
+          currentAgent: {
+            id: resolvedAgentId,
+            title: agentConfig.title ?? undefined,
+          },
+        }),
       };
     }
 

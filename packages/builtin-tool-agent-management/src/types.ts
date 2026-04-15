@@ -10,40 +10,35 @@ export const AgentManagementIdentifier = 'lobe-agent-management';
  * Agent Management API Names
  */
 export const AgentManagementApiName = {
-  
-  
   // ==================== Execution ====================
-/** Call an agent to handle a task */
-callAgent: 'callAgent',
-  
-  
+  /** Call an agent to handle a task */
+  callAgent: 'callAgent',
 
+  // ==================== Agent CRUD ====================
+  /** Create a new agent */
+  createAgent: 'createAgent',
 
-// ==================== Agent CRUD ====================
-/** Create a new agent */
-createAgent: 'createAgent',
-  
-  
+  /** Delete an agent */
+  deleteAgent: 'deleteAgent',
 
+  /** Duplicate an existing agent */
+  duplicateAgent: 'duplicateAgent',
 
-/** Delete an agent */
-deleteAgent: 'deleteAgent',
+  /** Get detailed configuration of an agent */
+  getAgentDetail: 'getAgentDetail',
 
-  
-  
-  
+  /** Install a plugin for an agent */
+  installPlugin: 'installPlugin',
 
+  // ==================== Search ====================
+  /** Search agents (user's own and marketplace) */
+  searchAgent: 'searchAgent',
 
-// ==================== Search ====================
-/** Search agents (user's own and marketplace) */
-searchAgent: 'searchAgent',
+  /** Update an existing agent */
+  updateAgent: 'updateAgent',
 
-  
-  
-  
-
-/** Update an existing agent */
-updateAgent: 'updateAgent',
+  /** Update an agent's system prompt */
+  updatePrompt: 'updatePrompt',
 } as const;
 
 export type AgentManagementApiNameType =
@@ -250,6 +245,19 @@ export interface SearchAgentState {
   totalCount: number;
 }
 
+// ==================== Update Prompt ====================
+
+export interface UpdatePromptParams {
+  /**
+   * The agent ID to update the prompt for
+   */
+  agentId: string;
+  /**
+   * The new system prompt content
+   */
+  prompt: string;
+}
+
 // ==================== Call Agent ====================
 
 export interface CallAgentParams {
@@ -279,6 +287,115 @@ export interface CallAgentParams {
    */
   timeout?: number;
 }
+
+// ==================== Get Agent Detail ====================
+
+export interface GetAgentDetailParams {
+  /**
+   * The agent ID to get details for
+   */
+  agentId: string;
+}
+
+export interface GetAgentDetailState {
+  /**
+   * The agent ID
+   */
+  agentId: string;
+  /**
+   * Agent configuration
+   */
+  config?: {
+    model?: string;
+    openingMessage?: string;
+    openingQuestions?: string[];
+    plugins?: string[];
+    provider?: string;
+    systemRole?: string;
+  };
+  /**
+   * Agent metadata
+   */
+  meta?: {
+    avatar?: string;
+    backgroundColor?: string;
+    description?: string;
+    tags?: string[];
+    title?: string;
+  };
+  /**
+   * Whether the retrieval was successful
+   */
+  success: boolean;
+}
+
+// ==================== Duplicate Agent ====================
+
+export interface DuplicateAgentParams {
+  /**
+   * The agent ID to duplicate
+   */
+  agentId: string;
+  /**
+   * Optional new title for the duplicated agent
+   */
+  newTitle?: string;
+}
+
+export interface DuplicateAgentState {
+  /**
+   * The new agent's ID
+   */
+  newAgentId?: string;
+  /**
+   * The original agent ID
+   */
+  sourceAgentId: string;
+  /**
+   * Whether the duplication was successful
+   */
+  success: boolean;
+}
+
+// ==================== Install Plugin ====================
+
+export type InstallPluginSource = 'official' | 'market';
+
+export interface InstallPluginParams {
+  /**
+   * The agent ID to install the plugin for
+   */
+  agentId: string;
+  /**
+   * The plugin identifier to install
+   */
+  identifier: string;
+  /**
+   * Plugin source: 'official' (builtin/klavis/lobehub-skill) or 'market' (MCP marketplace)
+   */
+  source: InstallPluginSource;
+}
+
+export interface InstallPluginState {
+  /**
+   * Whether the plugin was installed successfully
+   */
+  installed: boolean;
+  /**
+   * The plugin identifier
+   */
+  pluginId: string;
+  /**
+   * The plugin display name
+   */
+  pluginName?: string;
+  /**
+   * Whether the operation was successful
+   */
+  success: boolean;
+}
+
+// ==================== Call Agent ====================
 
 export interface CallAgentState {
   /**

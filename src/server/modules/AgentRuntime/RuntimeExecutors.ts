@@ -49,6 +49,12 @@ import {
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
+import {
+  createConversationParentMissingError,
+  isParentMessageMissingError,
+  isPersistFatal,
+  markPersistFatal,
+} from './messagePersistErrors';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -327,6 +333,25 @@ export const createRuntimeExecutors = (
 
     // Get parentId from payload (parentId or parentMessageId depending on payload type)
     const parentId = llmPayload.parentId || (llmPayload as any).parentMessageId;
+
+    // Parent existence preflight (LOBE-7158 / LOBE-7154):
+    // If the parent was deleted concurrently (e.g. user deleted topic mid-run),
+    // assistant message creation below would hit a PG FK violation AFTER we've
+    // already done the LLM call and spent tokens. Check first — fail fast,
+    // save cost, and surface a typed error the frontend can act on instead of
+    // a raw SQL error.
+    if (parentId) {
+      const parentExists = await ctx.messageModel.findById(parentId);
+      if (!parentExists) {
+        const error = createConversationParentMissingError(parentId);
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(error, 'parent_message_preflight'),
+          stepIndex,
+          type: 'error',
+        });
+        throw error;
+      }
+    }
 
     // Get or create assistant message
     // If assistantMessageId is provided in payload, use existing message instead of creating new one
@@ -939,8 +964,16 @@ export const createRuntimeExecutors = (
           // ===== 2. Then accumulate to AgentState =====
           const newState = structuredClone(state);
 
+          // Carry the persisted DB id so downstream executors (notably
+          // `request_human_approve`) can look up the parent assistant from
+          // `state.messages` without an extra DB round-trip. Without the id
+          // the lookup at `request_human_approve` (which filters on `m.id`)
+          // falls through to a DB query; when human-approve fires on the
+          // fresh LLM turn, both code paths miss and the op errors with
+          // "No assistant message found as parent for pending tool messages".
           newState.messages.push({
             content,
+            id: assistantMessageItem.id,
             reasoning: finalReasoning,
             role: 'assistant',
             tool_calls: tool_calls.length > 0 ? tool_calls : undefined,
@@ -1442,25 +1475,60 @@ export const createRuntimeExecutors = (
         type: 'tool_end',
       });
 
-      // Finally update database
+      // Finally persist to database. In resumption mode (skipCreateToolMessage),
+      // the pending tool message already exists from request_human_approve, so
+      // we update it in-place rather than inserting a new row — inserting would
+      // either duplicate the tool_call_id or violate parent_id FK (LOBE-7154).
       let toolMessageId: string | undefined;
       try {
-        const toolMessage = await ctx.messageModel.create({
-          agentId: state.metadata!.agentId!,
-          content: executionResult.content,
-          metadata: { toolExecutionTimeMs: executionTime },
-          parentId: payload.parentMessageId,
-          plugin: chatToolPayload as any,
-          pluginError: executionResult.error,
-          pluginState: executionResult.state,
-          role: 'tool',
-          threadId: state.metadata?.threadId,
-          tool_call_id: chatToolPayload.id,
-          topicId: state.metadata?.topicId,
-        });
-        toolMessageId = toolMessage.id;
+        if (payload.skipCreateToolMessage) {
+          toolMessageId = payload.parentMessageId;
+          await ctx.messageModel.updateToolMessage(toolMessageId, {
+            content: executionResult.content,
+            metadata: { toolExecutionTimeMs: executionTime },
+            pluginError: executionResult.error,
+            pluginState: executionResult.state,
+          });
+          log(
+            '[%s:%d] Updated existing tool message %s (skipCreateToolMessage)',
+            operationId,
+            stepIndex,
+            toolMessageId,
+          );
+        } else {
+          const toolMessage = await ctx.messageModel.create({
+            agentId: state.metadata!.agentId!,
+            content: executionResult.content,
+            metadata: { toolExecutionTimeMs: executionTime },
+            parentId: payload.parentMessageId,
+            plugin: chatToolPayload as any,
+            pluginError: executionResult.error,
+            pluginState: executionResult.state,
+            role: 'tool',
+            threadId: state.metadata?.threadId,
+            tool_call_id: chatToolPayload.id,
+            topicId: state.metadata?.topicId,
+          });
+          toolMessageId = toolMessage.id;
+        }
       } catch (error) {
-        console.error('[StreamingToolExecutor] Failed to create tool message: %O', error);
+        console.error('[StreamingToolExecutor] Failed to persist tool message: %O', error);
+        // Normalize BEFORE publishing so clients (which treat `error` stream
+        // events as terminal and surface `event.data.error` directly) see the
+        // typed business error, not the raw SQL / driver text.
+        const fatal = isParentMessageMissingError(error)
+          ? createConversationParentMissingError(payload.parentMessageId, error)
+          : error instanceof Error
+            ? error
+            : new Error(String(error));
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(fatal, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        // Mark so the outer catch (which normally converts tool-exec errors
+        // into event records and returns the unchanged state) re-throws.
+        throw markPersistFatal(fatal);
       }
 
       const newState = structuredClone(state);
@@ -1562,6 +1630,11 @@ export const createRuntimeExecutors = (
         },
       };
     } catch (error) {
+      // Persist-level failures (parent FK violation etc.) must propagate so
+      // the step fails — otherwise the swallow-and-continue path keeps
+      // running the agent on a broken conversation chain. See LOBE-7158.
+      if (isPersistFatal(error)) throw error;
+
       // Publish tool execution error event
       await streamManager.publishStreamEvent(operationId, {
         data: formatErrorEventData(error, 'tool_execution'),
@@ -1764,6 +1837,23 @@ export const createRuntimeExecutors = (
               `[${operationLogId}] Failed to create tool message for ${toolName}:`,
               error,
             );
+            // Normalize BEFORE publishing — clients treat `error` stream
+            // events as terminal and surface `event.data.error` directly, so
+            // a raw SQL error here would leak driver text to the user before
+            // the ConversationParentMissing throw is consumed. See LOBE-7158.
+            const fatal = isParentMessageMissingError(error)
+              ? createConversationParentMissingError(parentMessageId, error)
+              : error instanceof Error
+                ? error
+                : new Error(String(error));
+            await streamManager.publishStreamEvent(operationId, {
+              data: formatErrorEventData(fatal, 'tool_message_persist'),
+              stepIndex,
+              type: 'error',
+            });
+            // Marker so the outer catch (which normally just records
+            // per-tool exec errors) knows to propagate this one.
+            throw markPersistFatal(fatal);
           }
 
           // Collect tool result
@@ -1786,6 +1876,13 @@ export const createRuntimeExecutors = (
             toolName,
           };
         } catch (error) {
+          // Persist-level failures (e.g. parent FK violations) must propagate
+          // so the whole batch short-circuits. Without this the fallback to
+          // the already-deleted parent triggers another FK on the next step.
+          if (isPersistFatal(error)) {
+            throw error;
+          }
+
           console.error(`[${operationLogId}] Tool execution failed for ${toolName}:`, error);
 
           // Publish error event
@@ -1984,9 +2081,18 @@ export const createRuntimeExecutors = (
 
   /**
    * Human approval
+   *
+   * Mirrors the client executor (`createAgentExecutors.ts:1072-1177`):
+   * - Creates one `role='tool'` message per pending tool call with
+   *   `pluginIntervention: { status: 'pending' }` so approval UI has a target.
+   * - When `skipCreateToolMessage` is true (resumption via `/run` after a
+   *   previous op already persisted them), skip creation.
+   * - Publishes the `toolCallId -> toolMessageId` mapping alongside the
+   *   `tools_calling` stream chunk so the client can hydrate its local
+   *   message map without waiting for `agent_runtime_end`.
    */
   request_human_approve: async (instruction, state) => {
-    const { pendingToolsCalling } = instruction as Extract<
+    const { pendingToolsCalling, skipCreateToolMessage } = instruction as Extract<
       AgentInstruction,
       { type: 'request_human_approve' }
     >;
@@ -2010,12 +2116,122 @@ export const createRuntimeExecutors = (
     newState.status = 'waiting_for_human';
     newState.pendingToolsCalling = pendingToolsCalling;
 
-    // Notify frontend to display approval UI through streaming system
+    // Map of toolCallId -> toolMessageId, populated either by creating fresh
+    // pending tool messages or (in resumption mode) by looking up existing ones.
+    const toolMessageIds: Record<string, string> = {};
+
+    if (skipCreateToolMessage) {
+      // Resumption mode: tool messages already exist in DB. Look them up by
+      // tool_call_id so we can still ship the mapping to the client.
+      log('[%s:%d] Resuming with existing tool messages', operationId, stepIndex);
+      try {
+        const dbMessages = await ctx.messageModel.query({
+          agentId: state.metadata?.agentId,
+          threadId: state.metadata?.threadId,
+          topicId: state.metadata?.topicId,
+        });
+        for (const toolPayload of pendingToolsCalling) {
+          const existing = dbMessages.find(
+            (m: any) => m.role === 'tool' && m.tool_call_id === toolPayload.id,
+          );
+          if (existing) {
+            toolMessageIds[toolPayload.id] = existing.id;
+          }
+        }
+      } catch (error) {
+        console.error(
+          '[%s:%d] Failed to look up existing tool messages: %O',
+          operationId,
+          stepIndex,
+          error,
+        );
+      }
+    } else {
+      // Find parent assistant message. Prefer state.messages (already in
+      // memory from call_llm); fall back to DB query if the runtime has been
+      // rehydrated without recent messages.
+      let parentAssistantId: string | undefined = (state.messages ?? [])
+        .slice()
+        .reverse()
+        .find((m: any) => m.role === 'assistant' && m.id)?.id;
+
+      if (!parentAssistantId) {
+        try {
+          const dbMessages = await ctx.messageModel.query({
+            agentId: state.metadata?.agentId,
+            threadId: state.metadata?.threadId,
+            topicId: state.metadata?.topicId,
+          });
+          parentAssistantId = dbMessages
+            .slice()
+            .reverse()
+            .find((m: any) => m.role === 'assistant')?.id;
+        } catch (error) {
+          console.error(
+            '[%s:%d] Failed to query DB for parent assistant: %O',
+            operationId,
+            stepIndex,
+            error,
+          );
+        }
+      }
+
+      if (!parentAssistantId) {
+        throw new Error(
+          `[request_human_approve] No assistant message found as parent for pending tool messages (op=${operationId})`,
+        );
+      }
+
+      for (const toolPayload of pendingToolsCalling) {
+        const toolName = `${toolPayload.identifier}/${toolPayload.apiName}`;
+        try {
+          const toolMessage = await ctx.messageModel.create({
+            agentId: state.metadata!.agentId!,
+            content: '',
+            parentId: parentAssistantId,
+            plugin: toolPayload as any,
+            pluginIntervention: { status: 'pending' },
+            role: 'tool',
+            threadId: state.metadata?.threadId,
+            tool_call_id: toolPayload.id,
+            topicId: state.metadata?.topicId,
+          });
+
+          toolMessageIds[toolPayload.id] = toolMessage.id;
+
+          // Intentionally DO NOT push the empty placeholder into
+          // newState.messages. When the approval resumes, the `call_tool`
+          // executor (skip-create branch) appends the resolved tool message
+          // to state.messages itself. Pushing a placeholder here produced
+          // two entries for the same tool_call_id — see LOBE-7151 review P2.
+
+          log(
+            '[%s:%d] Created pending tool message %s for %s',
+            operationId,
+            stepIndex,
+            toolMessage.id,
+            toolName,
+          );
+        } catch (error) {
+          console.error(
+            '[%s:%d] Failed to create pending tool message for %s: %O',
+            operationId,
+            stepIndex,
+            toolName,
+            error,
+          );
+          throw error;
+        }
+      }
+    }
+
+    // Notify frontend to display approval UI through streaming system.
+    // `toolMessageIds` is a new optional field; legacy consumers ignore it.
     await streamManager.publishStreamChunk(operationId, stepIndex, {
-      // Use operationId as messageId
       chunkType: 'tools_calling',
+      toolMessageIds,
       toolsCalling: pendingToolsCalling as any,
-    });
+    } as any);
 
     const events: AgentEvent[] = [
       {
@@ -2103,6 +2319,19 @@ export const createRuntimeExecutors = (
           toolName,
           error,
         );
+        // Normalize BEFORE publishing so clients surface the typed business
+        // error instead of the raw driver text (see LOBE-7158 review).
+        const fatal = isParentMessageMissingError(error)
+          ? createConversationParentMissingError(parentMessageId, error)
+          : error instanceof Error
+            ? error
+            : new Error(String(error));
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(fatal, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        throw fatal;
       }
     }
 

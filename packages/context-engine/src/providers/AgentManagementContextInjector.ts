@@ -88,6 +88,12 @@ export interface AgentManagementContext {
   availablePlugins?: AvailablePluginInfo[];
   /** Available providers and models */
   availableProviders?: AvailableProviderInfo[];
+  /**
+   * The current responding agent's id and title.
+   * Exposed so the model can use Agent Management tools (updateAgent, getAgentDetail,
+   * installPlugin, etc.) to manage itself when the user asks to modify the current agent.
+   */
+  currentAgent?: { id: string; title?: string };
   /** Agents @mentioned by the user — supervisor should delegate to these via callAgent */
   mentionedAgents?: RuntimeMentionedAgent[];
 }
@@ -106,6 +112,14 @@ export interface AgentManagementContextInjectorConfig {
  */
 const defaultFormatContext = (context: AgentManagementContext): string => {
   const parts: string[] = [];
+
+  // Add current agent identity so the model can self-manage
+  if (context.currentAgent) {
+    const titleAttr = context.currentAgent.title
+      ? ` title="${escapeXml(context.currentAgent.title)}"`
+      : '';
+    parts.push(`<current_agent id="${escapeXml(context.currentAgent.id)}"${titleAttr} />`);
+  }
 
   // Add available models section
   if (context.availableProviders && context.availableProviders.length > 0) {
@@ -203,6 +217,11 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   const hasAgents = context.availableAgents && context.availableAgents.length > 0;
 
   const instructionParts: string[] = [];
+  if (context.currentAgent) {
+    instructionParts.push(
+      'The `current_agent` tag is YOU — your own agent ID. When the user asks to modify your settings (model, plugins, system prompt, etc.), use this ID with updateAgent, getAgentDetail, installPlugin, or other Agent Management tools to manage yourself. Do NOT call yourself via callAgent.',
+    );
+  }
   if (hasModelsOrPlugins) {
     instructionParts.push(
       'When creating or updating agents using the Agent Management tools, you can select from these available models and plugins. Use the exact IDs from this context when specifying model/provider/plugins parameters.',

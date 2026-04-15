@@ -60,6 +60,7 @@
   "response.520": "很抱歉，伺服器遇到了意外的問題，導致無法完成您的請求。請稍後再試，我們正努力解決這個問題。",
   "response.522": "很抱歉，伺服器連接超時，未能及時響應您的請求。可能是網路不穩定或伺服器暫時無法訪問。請稍後再試，我們正在努力恢復服務。",
   "response.524": "很抱歉，伺服器在等回覆時超時了，可能是因為回應太慢，請稍後再試",
+  "response.AccountDeactivated": "您的帳戶已被停用或暫停。這可能是由於政策、安全性或帳戶審核等原因所致。請聯絡服務提供者的支援團隊以取得協助。",
   "response.AgentRuntimeError": "Lobe 語言模型運行時執行出錯，請根據以下信息排查或重試",
   "response.ComfyUIBizError": "請求 ComfyUI 服務時發生錯誤，請根據以下資訊進行排查或重試",
   "response.ComfyUIEmptyResult": "ComfyUI 未產生任何圖像，請檢查模型設定或重試",
