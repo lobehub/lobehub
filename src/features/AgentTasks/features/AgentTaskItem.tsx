@@ -63,7 +63,13 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
           <Text ellipsis weight={500}>
             {task.name || task.identifier}
           </Text>
-          <TaskSubtaskProgressTag subtasks={taskDetail?.subtasks} />
+          <TaskSubtaskProgressTag
+            currentIdentifier={task.identifier}
+            subtasks={taskDetail?.subtasks}
+            onSubtaskClick={(identifier) => {
+              if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
+            }}
+          />
         </Flexbox>
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
           <TaskTriggerTag

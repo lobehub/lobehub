@@ -1,6 +1,6 @@
 import { type FormItemProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Form, Icon, Segmented, Select } from '@lobehub/ui';
-import { Popover, Switch } from 'antd';
+import { ActionIcon, Flexbox, Form, Icon, Popover, Segmented, Select } from '@lobehub/ui';
+import { Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,
@@ -134,12 +134,13 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           }}
         />
       ),
+      minWidth: undefined,
       label: 'Order completed by recency',
     },
   ];
 
   const panelContent = (
-    <Flexbox gap={12} width={320}>
+    <Flexbox gap={12} width={280}>
       <Segmented
         block
         value={viewMode}
