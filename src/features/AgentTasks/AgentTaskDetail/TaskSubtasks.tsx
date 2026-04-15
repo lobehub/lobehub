@@ -1,89 +1,107 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Progress } from 'antd';
+import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Divider, Tree } from 'antd';
+import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { ChevronDown, ListTodoIcon } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import TaskStatusTag from '../features/TaskStatusTag';
+import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
 import { styles } from '../shared/style';
 
-const countNodes = (nodes: TaskDetailSubtask[]): { completed: number; total: number } => {
-  let total = 0;
-  let completed = 0;
-  const walk = (list: TaskDetailSubtask[]) => {
-    for (const node of list) {
-      total++;
-      if (node.status === 'completed') completed++;
-      if (node.children) walk(node.children);
+type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+
+const TASK_STATUS_SET = new Set<TaskStatus>([
+  'backlog',
+  'canceled',
+  'completed',
+  'failed',
+  'paused',
+  'running',
+]);
+
+const toTaskStatus = (status: string): TaskStatus =>
+  TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
+
+interface TaskTreeNode {
+  children: TaskTreeNode[];
+  task: TaskDetailSubtask;
+}
+
+const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
+  if (subtasks.some((item) => (item.children?.length ?? 0) > 0)) {
+    return subtasks.map((task) => ({
+      children: buildTree(task.children ?? []),
+      task,
+    }));
+  }
+
+  const nodeMap = new Map(
+    subtasks.map((task) => [
+      task.identifier,
+      { children: [] as TaskTreeNode[], task } satisfies TaskTreeNode,
+    ]),
+  );
+  const roots: TaskTreeNode[] = [];
+
+  for (const task of subtasks) {
+    const node = nodeMap.get(task.identifier);
+    if (!node) continue;
+
+    const parentIdentifier = task.blockedBy;
+    const parent = parentIdentifier ? nodeMap.get(parentIdentifier) : undefined;
+    if (parent && parent.task.identifier !== task.identifier) {
+      parent.children.push(node);
+      continue;
     }
-  };
-  walk(nodes);
-  return { completed, total };
+
+    roots.push(node);
+  }
+
+  return roots;
 };
 
-const SubtaskTreeItem = memo<{
-  isLast: boolean;
-  node: TaskDetailSubtask;
-  onNavigate: (identifier: string) => void;
-}>(({ node, isLast, onNavigate }) => {
-  const done = node.status === 'completed';
-  const children = node.children;
-  const hasChildren = children && children.length > 0;
+const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
+  return tree.map((node) => {
+    const isCompleted = node.task.status === 'completed';
+    const status = toTaskStatus(node.task.status);
 
-  return (
-    <div className={isLast ? styles.treeBranchLast : styles.treeBranch}>
-      <div className={styles.treeRow} onClick={() => onNavigate(node.identifier)}>
-        {done ? (
-          <div className={styles.subtaskCircleDone}>
-            <Check color={cssVar.colorTextLightSolid} size={10} strokeWidth={3} />
-          </div>
-        ) : (
-          <div className={styles.subtaskCircle} />
-        )}
+    return {
+      children: toTreeData(node.children),
+      icon: (
+        <div onClick={(e) => e.stopPropagation()}>
+          <TaskStatusTag size={16} status={status} taskIdentifier={node.task.identifier} />
+        </div>
+      ),
+      key: node.task.identifier,
+      title: (
         <Text
           ellipsis
+          as={'span'}
           style={{
-            color: done ? cssVar.colorTextQuaternary : undefined,
-            flex: 1,
-            textDecoration: done ? 'line-through' : undefined,
+            color: isCompleted ? cssVar.colorTextQuaternary : undefined,
+            textDecoration: isCompleted ? 'line-through' : undefined,
           }}
         >
-          {node.name || node.identifier}
+          {node.task.name || node.task.identifier}
         </Text>
-      </div>
-      {hasChildren && (
-        <div>
-          {children.map((child, i) => (
-            <SubtaskTreeItem
-              isLast={i === children.length - 1}
-              key={child.identifier}
-              node={child}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-});
+      ),
+    };
+  });
+};
 
 const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
   const navigate = useNavigate();
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
-
-  const [collapsed, setCollapsed] = useState(false);
-
-  const { completed: completedCount, total: totalCount } = useMemo(
-    () => countNodes(subtasks),
-    [subtasks],
-  );
+  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
 
   const handleNavigate = useCallback(
     (identifier: string) => {
@@ -92,52 +110,53 @@ const TaskSubtasks = memo(() => {
     [agentId, navigate],
   );
 
+  const treeData = useMemo(() => {
+    if (subtasks.length === 0) return [];
+    return toTreeData(buildTree(subtasks));
+  }, [subtasks]);
+
   if (subtasks.length === 0) return null;
 
-  const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
   return (
-    <Flexbox gap={0} style={{ marginBlockStart: 16 }}>
-      <Flexbox
-        horizontal
-        align="center"
-        className={styles.subtaskHeader}
-        gap={8}
-        onClick={() => setCollapsed(!collapsed)}
-      >
-        <Icon
-          icon={collapsed ? ChevronRight : ChevronDown}
-          size={12}
-          style={{ color: cssVar.colorTextTertiary }}
-        />
-        <Text style={{ fontSize: cssVar.fontSizeSM }} weight="bold">
-          {t('taskDetail.subtasks')}
-        </Text>
-        <Progress
-          percent={percent}
-          showInfo={false}
-          size={14}
-          strokeColor={cssVar.colorPrimary}
-          type="circle"
-        />
-        <Text style={{ color: cssVar.colorTextQuaternary, fontSize: cssVar.fontSizeSM }}>
-          {completedCount}/{totalCount}
-        </Text>
-      </Flexbox>
-
-      {!collapsed && (
-        <div style={{ paddingInlineStart: 22 }}>
-          {subtasks.map((node, i) => (
-            <SubtaskTreeItem
-              isLast={i === subtasks.length - 1}
-              key={node.identifier}
-              node={node}
-              onNavigate={handleNavigate}
-            />
-          ))}
-        </div>
-      )}
-    </Flexbox>
+    <>
+      <Divider dashed />
+      <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
+        <AccordionItem
+          itemKey="subtasks"
+          paddingBlock={4}
+          paddingInline={8}
+          title={
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
+              <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                {t('taskDetail.subtasks')}
+              </Text>
+              <TaskSubtaskProgressTag
+                currentIdentifier={taskId}
+                subtasks={subtasks}
+                onSubtaskClick={handleNavigate}
+              />
+            </Flexbox>
+          }
+        >
+          <Tree
+            blockNode
+            defaultExpandAll
+            showIcon
+            showLine
+            className={styles.subtaskTree}
+            style={{ marginTop: 8 }}
+            switcherIcon={<Icon icon={ChevronDown} size={14} />}
+            treeData={treeData}
+            onSelect={(keys) => {
+              const key = keys[0];
+              if (!key) return;
+              handleNavigate(String(key));
+            }}
+          />
+        </AccordionItem>
+      </Accordion>
+    </>
   );
 });
 

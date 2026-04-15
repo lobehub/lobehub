@@ -10,6 +10,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
+import CommentInput from './CommentInput';
 import TaskActivities from './TaskActivities';
 import TaskDetailDeleteAction from './TaskDetailDeleteAction';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
@@ -39,7 +40,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   useFetchTaskDetail(taskId);
 
   return (
-    <Flexbox flex={1} height={'100%'}>
+    <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
       <NavHeader
         right={<TaskDetailDeleteAction />}
         left={
@@ -55,29 +56,39 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
           },
         }}
       />
-
-      <WideScreenContainer>
-        {isLoading ? (
-          <Loading debugId="TaskDetail" />
-        ) : (
-          <>
-            <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
-              <Flexbox flex={1}>
-                <TaskDetailTitleInput />
-                <Flexbox align={'flex-start'} gap={8}>
-                  <TaskParentBar />
-                  <TaskModelConfig />
-                  <TaskDetailRunPauseAction />
+      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
+        <WideScreenContainer>
+          {isLoading ? (
+            <Loading debugId="TaskDetail" />
+          ) : (
+            <>
+              <Flexbox
+                horizontal
+                align={'flex-start'}
+                gap={16}
+                justify={'space-between'}
+                style={{ paddingTop: 24 }}
+              >
+                <Flexbox flex={1}>
+                  <TaskDetailTitleInput />
+                  <Flexbox align={'flex-start'} gap={16}>
+                    <TaskParentBar />
+                    <TaskModelConfig />
+                    <TaskDetailRunPauseAction />
+                  </Flexbox>
+                  <Divider />
                 </Flexbox>
+                <TaskProperties />
               </Flexbox>
-              <TaskProperties />
-            </Flexbox>
-            <Divider />
-            <TaskInstruction />
-            <TaskSubtasks />
-            <TaskActivities />
-          </>
-        )}
+              <TaskInstruction />
+              <TaskSubtasks />
+              <TaskActivities />
+            </>
+          )}
+        </WideScreenContainer>
+      </Flexbox>
+      <WideScreenContainer style={{ flexShrink: 0, paddingBottom: 8 }}>
+        <CommentInput taskId={taskId} />
       </WideScreenContainer>
     </Flexbox>
   );

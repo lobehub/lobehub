@@ -383,6 +383,7 @@
   "task.status.initializing": "任务启动中…",
   "task.subtask": "子任务",
   "taskDetail.activities": "活动",
+  "taskDetail.activitiesEmpty": "暂无活动记录",
   "taskDetail.blockedBy": "被 {{id}} 阻塞",
   "taskDetail.commentPlaceholder": "留下评论...",
   "taskDetail.deleteConfirm.content": "此操作不可撤销。",
