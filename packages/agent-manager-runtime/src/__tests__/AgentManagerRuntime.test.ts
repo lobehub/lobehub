@@ -407,13 +407,15 @@ describe('AgentManagerRuntime', () => {
     it('should get agent detail successfully', async () => {
       vi.mocked(mockAgentService.getAgentConfigById).mockResolvedValue({
         avatar: '🤖',
+        chatConfig: {} as any,
         description: 'A test agent',
         model: 'gpt-4o',
+        params: {} as any,
         plugins: ['web-search'],
         provider: 'openai',
         systemRole: 'You are helpful',
         title: 'Test Agent',
-      });
+      } as any);
 
       const result = await runtime.getAgentDetail('agent-id');
 

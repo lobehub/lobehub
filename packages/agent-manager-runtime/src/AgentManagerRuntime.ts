@@ -116,6 +116,9 @@ export class AgentManagerRuntime {
     params: UpdateAgentConfigParams,
   ): Promise<BuiltinToolResult> {
     try {
+      // Ensure agent is loaded in store before reading its config
+      await this.ensureAgentLoaded(agentId);
+
       const state = getAgentStoreState();
       const agentStore = getAgentStoreState();
       const resultState: UpdateAgentConfigState = { success: true };
@@ -130,7 +133,7 @@ export class AgentManagerRuntime {
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
         const { pluginId, enabled } = params.togglePlugin;
-        const currentPlugins = previousConfig.plugins || [];
+        const currentPlugins = previousConfig?.plugins || [];
         const isCurrentlyEnabled = currentPlugins.includes(pluginId);
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
@@ -256,23 +259,25 @@ export class AgentManagerRuntime {
         };
       }
 
-      const agentConfig = config as Record<string, unknown>;
+      // The merged config may contain extra fields from the DB agent row
+      // (e.g., description, tags) that aren't on LobeAgentConfig type
+      const raw = config as Record<string, any>;
 
       const detail = {
         config: {
-          model: agentConfig.model as string | undefined,
-          openingMessage: agentConfig.openingMessage as string | undefined,
-          openingQuestions: agentConfig.openingQuestions as string[] | undefined,
-          plugins: agentConfig.plugins as string[] | undefined,
-          provider: agentConfig.provider as string | undefined,
-          systemRole: agentConfig.systemRole as string | undefined,
+          model: config.model,
+          openingMessage: config.openingMessage,
+          openingQuestions: config.openingQuestions,
+          plugins: config.plugins,
+          provider: config.provider,
+          systemRole: config.systemRole,
         },
         meta: {
-          avatar: agentConfig.avatar as string | undefined,
-          backgroundColor: agentConfig.backgroundColor as string | undefined,
-          description: agentConfig.description as string | undefined,
-          tags: agentConfig.tags as string[] | undefined,
-          title: agentConfig.title as string | undefined,
+          avatar: config.avatar,
+          backgroundColor: config.backgroundColor,
+          description: raw.description as string | undefined,
+          tags: raw.tags as string[] | undefined,
+          title: config.title,
         },
       };
 
@@ -472,9 +477,10 @@ export class AgentManagerRuntime {
    */
   async updatePrompt(agentId: string, params: UpdatePromptParams): Promise<BuiltinToolResult> {
     try {
+      await this.ensureAgentLoaded(agentId);
       const state = getAgentStoreState();
       const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
-      const previousPrompt = previousConfig.systemRole;
+      const previousPrompt = previousConfig?.systemRole;
 
       if (params.streaming) {
         await this.streamUpdatePrompt(agentId, params.prompt);
@@ -636,15 +642,7 @@ export class AgentManagerRuntime {
         const builtinTool = builtinTools.find((t) => t.identifier === identifier);
 
         if (builtinTool) {
-          const agentState = getAgentStoreState();
-          const currentPlugins =
-            agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
-
-          if (!currentPlugins.includes(identifier)) {
-            await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-              plugins: [...currentPlugins, identifier],
-            });
-          }
+          await this.enablePluginForAgent(agentId, identifier);
 
           return {
             content: `Successfully enabled builtin tool: ${builtinTool.meta?.title || identifier}`,
@@ -684,6 +682,22 @@ export class AgentManagerRuntime {
   }
 
   // ==================== Private Helper Methods ====================
+
+  /**
+   * Ensure the agent config is loaded into the Zustand store.
+   * When operating on agents that aren't currently open/active,
+   * their config won't be in the agentMap. This fetches and dispatches it.
+   */
+  private async ensureAgentLoaded(agentId: string): Promise<void> {
+    const state = getAgentStoreState();
+    const existing = state.agentMap[agentId];
+    if (existing) return;
+
+    const config = await this.agentService.getAgentConfigById(agentId);
+    if (config) {
+      getAgentStoreState().internal_dispatchAgentMap(agentId, config);
+    }
+  }
 
   private async handleKlavisInstall(
     agentId: string,
@@ -947,8 +961,9 @@ export class AgentManagerRuntime {
   }
 
   private async enablePluginForAgent(agentId: string, pluginId: string): Promise<void> {
+    await this.ensureAgentLoaded(agentId);
     const agentState = getAgentStoreState();
-    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
+    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins || [];
 
     if (!currentPlugins.includes(pluginId)) {
       await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {

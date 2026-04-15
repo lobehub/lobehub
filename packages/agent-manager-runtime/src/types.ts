@@ -13,7 +13,7 @@ export interface IAgentService {
     sessionId?: string;
   }>;
   duplicateAgent: (agentId: string, newTitle?: string) => Promise<{ agentId: string } | null>;
-  getAgentConfigById: (agentId: string) => Promise<Record<string, unknown> | null>;
+  getAgentConfigById: (agentId: string) => Promise<LobeAgentConfig | null>;
   queryAgents: (params: { keyword?: string; limit?: number }) => Promise<
     Array<{
       avatar?: string | null;
