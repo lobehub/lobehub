@@ -1,5 +1,4 @@
 import { Block, Flexbox, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -85,9 +84,16 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
           </TaskScheduleConfig>
           <AgentAvatars agents={task.participants} />
           {time && (
-            <span style={{ color: cssVar.colorTextTertiary, fontSize: cssVar.fontSizeSM }}>
+            <Text
+              align={'right'}
+              fontSize={12}
+              type={'secondary'}
+              style={{
+                width: 36,
+              }}
+            >
               {time}
-            </span>
+            </Text>
           )}
         </Flexbox>
       </Flexbox>
