@@ -32,12 +32,12 @@ interface HistoryDayGroup {
   label: string;
 }
 
-const TIMELINE_DOT_SIZE = 10;
-const TIMELINE_LINE_INSET = 19;
-const TIMELINE_ROW_PADDING_TOP = 5;
+const TIMELINE_DOT_SIZE = 6;
+const TIMELINE_LINE_INSET = 14;
+const TIMELINE_ROW_PADDING_TOP = 6;
 const TIMELINE_ROW_PADDING_INLINE = 8;
-const TIMELINE_ROW_PADDING_BOTTOM = 5;
-const TIMELINE_DOT_TOP = 11;
+const TIMELINE_ROW_PADDING_BOTTOM = 6;
+const TIMELINE_DOT_TOP = 12;
 const TIMELINE_CONTENT_OFFSET = TIMELINE_LINE_INSET + TIMELINE_DOT_SIZE / 2 + 10;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -45,26 +45,21 @@ const styles = createStaticStyles(({ css }) => ({
     height: 100%;
     padding: 24px;
   `,
-  groupCount: css`
-    font-size: 12px;
-    line-height: 1;
-  `,
   groupHeader: css`
     position: sticky;
     z-index: 1;
     inset-block-start: 0;
 
-    padding-block: 16px 3px;
-    padding-inline-start: ${TIMELINE_CONTENT_OFFSET + 8}px;
+    padding-block: 14px 2px;
+    padding-inline-start: ${TIMELINE_CONTENT_OFFSET}px;
 
     background: ${cssVar.colorBgContainer};
   `,
   groupLabel: css`
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
+    color: ${cssVar.colorTextSecondary};
   `,
   headerButton: css`
     padding-inline: 8px;
@@ -88,14 +83,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillSecondary};
   `,
-  meta: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
   row: css`
     position: relative;
     padding-block: 1px;
@@ -112,7 +99,7 @@ const styles = createStaticStyles(({ css }) => ({
   rowBody: css`
     padding-block: ${TIMELINE_ROW_PADDING_TOP}px ${TIMELINE_ROW_PADDING_BOTTOM}px;
     padding-inline: ${TIMELINE_ROW_PADDING_INLINE}px;
-    border-radius: 10px;
+    border-radius: 6px;
     transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
     &:hover {
@@ -132,7 +119,7 @@ const styles = createStaticStyles(({ css }) => ({
   rowDot: css`
     position: absolute;
     inset-block-start: ${TIMELINE_DOT_TOP}px;
-    inset-inline-start: 6px;
+    inset-inline-start: ${TIMELINE_LINE_INSET - TIMELINE_DOT_SIZE / 2}px;
 
     width: ${TIMELINE_DOT_SIZE}px;
     height: ${TIMELINE_DOT_SIZE}px;
@@ -140,7 +127,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 999px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: 0 0 0 4px ${cssVar.colorBgContainer};
+    box-shadow: 0 0 0 3px ${cssVar.colorBgContainer};
   `,
   rowDotCurrent: css`
     border-color: ${cssVar.colorPrimary};
@@ -149,7 +136,22 @@ const styles = createStaticStyles(({ css }) => ({
   rowDotRestore: css`
     box-shadow:
       0 0 0 2px ${cssVar.colorPrimaryBorder},
-      0 0 0 6px ${cssVar.colorBgContainer};
+      0 0 0 4px ${cssVar.colorBgContainer};
+  `,
+  rowTime: css`
+    flex-shrink: 0;
+    font-size: 13px;
+    line-height: 1;
+    color: ${cssVar.colorText};
+  `,
+  rowMeta: css`
+    overflow: hidden;
+
+    font-size: 13px;
+    line-height: 1;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 
   versionActions: css`
@@ -161,7 +163,13 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const formatAbsoluteTime = (savedAt: string) => dayjs(savedAt).format('MMMM D, YYYY h:mm A');
-const formatDayGroupLabel = (savedAt: string) => dayjs(savedAt).format('MMMM D, YYYY');
+const formatDayGroupLabel = (savedAt: string) => {
+  const d = dayjs(savedAt);
+  const now = dayjs();
+  if (d.isSame(now, 'day')) return 'Today';
+  if (d.isSame(now.subtract(1, 'day'), 'day')) return 'Yesterday';
+  return d.format('MMMM D, YYYY');
+};
 
 const createHistoryDayGroups = (items: DocumentHistoryListItem[]): HistoryDayGroup[] => {
   const groups = new Map<string, HistoryDayGroup>();
@@ -328,24 +336,14 @@ const HistoryPanel = memo(() => {
         <Flexbox className={styles.list} gap={0}>
           <div className={styles.rail} />
           {groups.map((group) => (
-            <Flexbox gap={4} key={group.key}>
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.groupHeader}
-                distribution={'space-between'}
-                gap={12}
-              >
-                <Text className={styles.groupLabel} type={'secondary'}>
-                  {group.label}
-                </Text>
-                <Text className={styles.groupCount} type={'secondary'}>
-                  {group.items.length}
-                </Text>
+            <Flexbox gap={0} key={group.key}>
+              <Flexbox horizontal align={'center'} className={styles.groupHeader}>
+                <Text className={styles.groupLabel}>{group.label}</Text>
               </Flexbox>
 
               {group.items.map((item) => {
                 const isRestoring = restoringHistoryId === item.id;
+                const timeLabel = dayjs(item.savedAt).format('h:mm A');
 
                 return (
                   <Flexbox className={styles.row} gap={0} key={item.id}>
@@ -368,23 +366,24 @@ const HistoryPanel = memo(() => {
                       )}
                       onClick={item.isCurrent ? undefined : () => openCompareModal(item.id)}
                     >
-                      <Flexbox
-                        horizontal
-                        align={'center'}
-                        gap={6}
-                        style={{ minWidth: 0, overflow: 'hidden' }}
-                      >
-                        {item.isCurrent && (
-                          <Tag variant={'borderless'}>
-                            {t('pageEditor.history.current', { ns: 'file' })}
-                          </Tag>
-                        )}
-                        <Tooltip title={formatAbsoluteTime(item.savedAt)}>
-                          <Text className={styles.meta} type={'secondary'}>
-                            {dayjs(item.savedAt).fromNow()} · {saveSourceLabels[item.saveSource]}
-                          </Text>
-                        </Tooltip>
-                      </Flexbox>
+                      <Tooltip title={formatAbsoluteTime(item.savedAt)}>
+                        <Flexbox
+                          horizontal
+                          align={'center'}
+                          gap={8}
+                          style={{ minWidth: 0, overflow: 'hidden' }}
+                        >
+                          <span className={styles.rowTime}>{timeLabel}</span>
+                          {item.isCurrent && (
+                            <Tag size={'small'} variant={'borderless'}>
+                              {t('pageEditor.history.current', { ns: 'file' })}
+                            </Tag>
+                          )}
+                          <span className={styles.rowMeta}>
+                            {saveSourceLabels[item.saveSource]}
+                          </span>
+                        </Flexbox>
+                      </Tooltip>
                       {!item.isCurrent && (
                         <Flexbox
                           horizontal
