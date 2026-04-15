@@ -2191,15 +2191,11 @@ export const createRuntimeExecutors = (
 
           toolMessageIds[toolPayload.id] = toolMessage.id;
 
-          // Reflect the new tool message in runtime state so downstream
-          // short-circuit logic (`human_approved_tool` -> `call_tool`) can
-          // locate it without re-querying the DB.
-          newState.messages.push({
-            content: '',
-            id: toolMessage.id,
-            role: 'tool',
-            tool_call_id: toolPayload.id,
-          } as any);
+          // Intentionally DO NOT push the empty placeholder into
+          // newState.messages. When the approval resumes, the `call_tool`
+          // executor (skip-create branch) appends the resolved tool message
+          // to state.messages itself. Pushing a placeholder here produced
+          // two entries for the same tool_call_id — see LOBE-7151 review P2.
 
           log(
             '[%s:%d] Created pending tool message %s for %s',

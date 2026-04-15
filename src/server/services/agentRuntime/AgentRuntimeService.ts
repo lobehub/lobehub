@@ -1649,8 +1649,17 @@ export class AgentRuntimeService {
         : (state.pendingToolsCalling ?? []);
 
       if (rejectAndContinue) {
-        // C: resume with rejection as user feedback
-        newState.status = newState.pendingToolsCalling.length > 0 ? 'waiting_for_human' : 'running';
+        // C: persist the rejection, then either (a) wait for the remaining
+        // pending tools to be resolved or (b) resume LLM once this is the
+        // last one. Returning a `phase: 'user_input'` nextContext while
+        // pendingToolsCalling is non-empty would cause executeStep to run
+        // runtime.step immediately, resuming the LLM with an unresolved
+        // batch — see LOBE-7151 review P1.
+        if (newState.pendingToolsCalling.length > 0) {
+          newState.status = 'waiting_for_human';
+          return { newState, nextContext: undefined };
+        }
+        newState.status = 'running';
         const nextContext: AgentRuntimeContext = { phase: 'user_input' };
         return { newState, nextContext };
       }

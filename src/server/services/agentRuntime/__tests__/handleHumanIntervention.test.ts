@@ -232,19 +232,10 @@ describe('AgentRuntimeService.handleHumanIntervention', () => {
   });
 
   describe('reject_continue path', () => {
-    it('returns nextContext with phase=user_input', async () => {
-      const state = makeState();
-
-      const result = await (service as any).handleHumanIntervention({} as any, state, {
-        rejectAndContinue: true,
-        rejectionReason: 'nope',
-        toolMessageId: 'tool-msg-1',
-      });
-
-      expect(result.nextContext).toEqual({ phase: 'user_input' });
-    });
-
-    it('keeps state waiting_for_human when other tools remain pending', async () => {
+    it('stays paused (nextContext=undefined) when other tools are still pending', async () => {
+      // makeState() has 2 pending; pluginQuery resolves tool-call-1 → 1 left.
+      // Returning a `phase: 'user_input'` context here would resume the LLM
+      // before the remaining pending tools are decided (LOBE-7151 review P1).
       const state = makeState();
       mockDBPluginQuery.mockResolvedValueOnce({ toolCallId: 'tool-call-1' });
 
@@ -255,9 +246,10 @@ describe('AgentRuntimeService.handleHumanIntervention', () => {
       });
 
       expect(result.newState.status).toBe('waiting_for_human');
+      expect(result.nextContext).toBeUndefined();
     });
 
-    it('transitions to running when last pending tool is rejected+continued', async () => {
+    it('returns nextContext with phase=user_input only when this is the last pending tool', async () => {
       const state = makeState({
         pendingToolsCalling: [
           { apiName: 'search', arguments: '{}', id: 'tool-call-1', identifier: 'web-search' },
@@ -272,6 +264,7 @@ describe('AgentRuntimeService.handleHumanIntervention', () => {
       });
 
       expect(result.newState.status).toBe('running');
+      expect(result.nextContext).toEqual({ phase: 'user_input' });
     });
 
     it('still persists intervention=rejected on the tool message', async () => {

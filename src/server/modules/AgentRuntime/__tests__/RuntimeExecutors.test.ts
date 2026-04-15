@@ -1712,7 +1712,8 @@ describe('RuntimeExecutors', () => {
 
         const result = await executors.call_tool!(instruction, state);
 
-        expect(result.nextContext?.payload?.parentMessageId).toBe('pending-tool-msg-42');
+        const nextPayload = result.nextContext?.payload as { parentMessageId?: string } | undefined;
+        expect(nextPayload?.parentMessageId).toBe('pending-tool-msg-42');
       });
 
       it('should fall back to creating a new tool message when skipCreateToolMessage is false', async () => {
