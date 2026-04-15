@@ -80,18 +80,7 @@ const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
         </div>
       ),
       key: node.task.identifier,
-      title: (
-        <Text
-          ellipsis
-          as={'span'}
-          style={{
-            color: isCompleted ? cssVar.colorTextQuaternary : undefined,
-            textDecoration: isCompleted ? 'line-through' : undefined,
-          }}
-        >
-          {node.task.name || node.task.identifier}
-        </Text>
-      ),
+      title: node.task.name || node.task.identifier,
     };
   });
 };

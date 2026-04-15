@@ -76,10 +76,10 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
                     <TaskModelConfig />
                     <TaskDetailRunPauseAction />
                   </Flexbox>
-                  <Divider />
                 </Flexbox>
                 <TaskProperties />
               </Flexbox>
+              <Divider />
               <TaskInstruction />
               <TaskSubtasks />
               <TaskActivities />
