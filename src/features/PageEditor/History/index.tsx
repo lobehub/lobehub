@@ -32,18 +32,26 @@ interface HistoryDayGroup {
   label: string;
 }
 
-const TIMELINE_DOT_SIZE = 6;
-const TIMELINE_LINE_INSET = 14;
+const TIMELINE_DOT_SIZE = 8;
+const TIMELINE_LINE_INSET = 16;
 const TIMELINE_ROW_PADDING_TOP = 6;
 const TIMELINE_ROW_PADDING_INLINE = 8;
 const TIMELINE_ROW_PADDING_BOTTOM = 6;
-const TIMELINE_DOT_TOP = 12;
 const TIMELINE_CONTENT_OFFSET = TIMELINE_LINE_INSET + TIMELINE_DOT_SIZE / 2 + 10;
 
 const styles = createStaticStyles(({ css }) => ({
   empty: css`
     height: 100%;
     padding: 24px;
+  `,
+  dotArea: css`
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: ${TIMELINE_DOT_SIZE}px;
+    margin-inline-start: ${TIMELINE_LINE_INSET - TIMELINE_DOT_SIZE / 2}px;
   `,
   groupHeader: css`
     position: sticky;
@@ -56,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   groupLabel: css`
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     line-height: 1;
     color: ${cssVar.colorTextSecondary};
@@ -84,10 +92,6 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillSecondary};
   `,
   row: css`
-    position: relative;
-    padding-block: 1px;
-    padding-inline-start: ${TIMELINE_CONTENT_OFFSET}px;
-
     &:hover,
     &:focus-within {
       .history-actions {
@@ -97,9 +101,14 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   rowBody: css`
+    flex: 1;
+
+    min-width: 0;
+    margin-inline-start: ${TIMELINE_CONTENT_OFFSET - TIMELINE_LINE_INSET - TIMELINE_DOT_SIZE / 2}px;
     padding-block: ${TIMELINE_ROW_PADDING_TOP}px ${TIMELINE_ROW_PADDING_BOTTOM}px;
     padding-inline: ${TIMELINE_ROW_PADDING_INLINE}px;
     border-radius: 6px;
+
     transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
     &:hover {
@@ -117,10 +126,6 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   rowDot: css`
-    position: absolute;
-    inset-block-start: ${TIMELINE_DOT_TOP}px;
-    inset-inline-start: ${TIMELINE_LINE_INSET - TIMELINE_DOT_SIZE / 2}px;
-
     width: ${TIMELINE_DOT_SIZE}px;
     height: ${TIMELINE_DOT_SIZE}px;
     border: 1px solid ${cssVar.colorBorder};
@@ -140,14 +145,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   rowTime: css`
     flex-shrink: 0;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1;
     color: ${cssVar.colorText};
   `,
   rowMeta: css`
     overflow: hidden;
 
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1;
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
@@ -346,14 +351,16 @@ const HistoryPanel = memo(() => {
                 const timeLabel = dayjs(item.savedAt).format('h:mm A');
 
                 return (
-                  <Flexbox className={styles.row} gap={0} key={item.id}>
-                    <div
-                      className={cx(
-                        styles.rowDot,
-                        item.isCurrent && styles.rowDotCurrent,
-                        item.saveSource === 'restore' && styles.rowDotRestore,
-                      )}
-                    />
+                  <Flexbox horizontal align={'center'} className={styles.row} gap={0} key={item.id}>
+                    <div className={styles.dotArea}>
+                      <div
+                        className={cx(
+                          styles.rowDot,
+                          item.isCurrent && styles.rowDotCurrent,
+                          item.saveSource === 'restore' && styles.rowDotRestore,
+                        )}
+                      />
+                    </div>
                     <Flexbox
                       horizontal
                       align={'center'}
@@ -375,7 +382,7 @@ const HistoryPanel = memo(() => {
                         >
                           <span className={styles.rowTime}>{timeLabel}</span>
                           {item.isCurrent && (
-                            <Tag size={'small'} variant={'borderless'}>
+                            <Tag color={'blue'} size={'small'} style={{ margin: 0 }}>
                               {t('pageEditor.history.current', { ns: 'file' })}
                             </Tag>
                           )}
