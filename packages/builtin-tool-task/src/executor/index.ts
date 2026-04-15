@@ -8,7 +8,7 @@ import {
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
-import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult, TaskStatus } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
@@ -16,7 +16,7 @@ import { mutate } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { getTaskStoreState } from '@/store/task';
 
-import { UNFINISHED_TASK_STATUSES } from '../constants';
+import { normalizeListTasksParams } from '../listTasks';
 import { TaskIdentifier } from '../manifest';
 import { TaskApiName } from '../types';
 
@@ -213,14 +213,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       offset?: number;
       parentIdentifier?: string;
       priorities?: number[];
-      statuses?: string[];
+      statuses?: TaskStatus[];
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] listTasks - params:', params);
 
-      let parentTaskId: string | null | undefined;
+      let parentTaskId: string | undefined;
       if (params.parentIdentifier) {
         const parent = await taskService.find(params.parentIdentifier);
         if (!parent.data) {
@@ -236,37 +236,17 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         parentTaskId = parent.data.id;
       }
 
-      const noFilters =
-        !params.parentIdentifier &&
-        !params.statuses?.length &&
-        !params.priorities?.length &&
-        !params.assigneeAgentId;
-
-      const limit = Math.min(params.limit ?? 20, 100);
-
-      const resolvedStatuses =
-        params.statuses ?? (noFilters ? [...UNFINISHED_TASK_STATUSES] : undefined);
-      const resolvedAgentId = params.assigneeAgentId ?? (noFilters ? ctx?.agentId : undefined);
-      const resolvedParentTaskId = parentTaskId ?? (noFilters ? null : undefined);
-
-      const result = await taskService.list({
-        assigneeAgentId: resolvedAgentId,
-        limit,
-        offset: params.offset ?? 0,
-        parentTaskId: resolvedParentTaskId,
-        priorities: params.priorities,
-        statuses: resolvedStatuses,
+      const normalized = normalizeListTasksParams(params, {
+        currentAgentId: ctx?.agentId,
+        parentTaskId,
       });
+
+      const result = await getTaskStoreState().fetchTaskList(normalized.query);
 
       const tasks = result.data ?? [];
 
       return {
-        content: formatTaskList(tasks, {
-          assigneeAgentId: params.assigneeAgentId,
-          parentIdentifier: params.parentIdentifier,
-          priorities: params.priorities,
-          statuses: params.statuses,
-        }),
+        content: formatTaskList(tasks, normalized.displayFilters),
         state: { count: tasks.length, success: true, total: result.total },
         success: true,
       };

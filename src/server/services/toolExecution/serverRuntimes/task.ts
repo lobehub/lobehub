@@ -1,4 +1,4 @@
-import { TaskIdentifier, UNFINISHED_TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -9,6 +9,7 @@ import {
   formatTaskList,
   priorityLabel,
 } from '@lobechat/prompts';
+import type { TaskStatus } from '@lobechat/types';
 
 import { TaskModel } from '@/database/models/task';
 import { TaskService } from '@/server/services/task';
@@ -163,9 +164,9 @@ const createTaskRuntime = ({
     offset?: number;
     parentIdentifier?: string;
     priorities?: number[];
-    statuses?: string[];
+    statuses?: TaskStatus[];
   }) => {
-    let parentTaskId: string | null | undefined;
+    let parentTaskId: string | undefined;
     if (args.parentIdentifier) {
       const parent = await taskModel.resolve(args.parentIdentifier);
       if (!parent)
@@ -173,35 +174,15 @@ const createTaskRuntime = ({
       parentTaskId = parent.id;
     }
 
-    const noFilters =
-      !args.parentIdentifier &&
-      !args.statuses?.length &&
-      !args.priorities?.length &&
-      !args.assigneeAgentId;
-
-    const limit = Math.min(args.limit ?? 20, 100);
-
-    const resolvedStatuses =
-      args.statuses ?? (noFilters ? [...UNFINISHED_TASK_STATUSES] : undefined);
-    const resolvedAgentId = args.assigneeAgentId ?? (noFilters ? agentId : undefined);
-    const resolvedParentTaskId = parentTaskId ?? (noFilters ? null : undefined);
-
-    const result = await taskModel.list({
-      assigneeAgentId: resolvedAgentId,
-      limit,
-      offset: args.offset ?? 0,
-      parentTaskId: resolvedParentTaskId,
-      priorities: args.priorities,
-      statuses: resolvedStatuses,
+    const normalized = normalizeListTasksParams(args, {
+      currentAgentId: agentId,
+      parentTaskId,
     });
 
+    const result = await taskModel.list(normalized.query);
+
     return {
-      content: formatTaskList(result.tasks, {
-        assigneeAgentId: args.assigneeAgentId,
-        parentIdentifier: args.parentIdentifier,
-        priorities: args.priorities,
-        statuses: args.statuses,
-      }),
+      content: formatTaskList(result.tasks, normalized.displayFilters),
       success: true,
     };
   },

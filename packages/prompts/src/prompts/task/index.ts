@@ -1,4 +1,4 @@
-import type { TaskDetailData, TaskDetailWorkspaceNode } from '@lobechat/types';
+import type { TaskDetailData, TaskDetailWorkspaceNode, TaskStatus } from '@lobechat/types';
 
 // ── Formatting helpers for Task tool responses ──
 
@@ -87,17 +87,19 @@ export const formatTaskCreated = (
 
 export interface TaskListFilters {
   assigneeAgentId?: string;
+  isDefaultScope?: boolean;
+  isForCurrentAgent?: boolean;
   parentIdentifier?: string;
   priorities?: number[];
-  statuses?: string[];
+  statuses?: TaskStatus[];
 }
 
 const buildTaskListLabel = (filters: TaskListFilters): string => {
-  if (filters.parentIdentifier) return `subtasks of ${filters.parentIdentifier}`;
-
-  const hasExplicitFilter =
-    filters.statuses?.length || filters.priorities?.length || filters.assigneeAgentId;
-  if (!hasExplicitFilter) return 'top-level unfinished tasks';
+  if (filters.isDefaultScope) {
+    return filters.isForCurrentAgent
+      ? 'top-level unfinished tasks of the current agent'
+      : 'top-level unfinished tasks';
+  }
 
   const parts: string[] = [];
   if (filters.statuses?.length) parts.push(`status=[${filters.statuses.join(',')}]`);
@@ -105,7 +107,14 @@ const buildTaskListLabel = (filters: TaskListFilters): string => {
     parts.push(`priority=[${filters.priorities.map((p) => priorityLabel(p)).join(',')}]`);
   }
   if (filters.assigneeAgentId) parts.push(`agent=${filters.assigneeAgentId}`);
-  return `tasks matching ${parts.join(', ')}`;
+
+  if (filters.parentIdentifier) {
+    return parts.length > 0
+      ? `subtasks of ${filters.parentIdentifier} matching ${parts.join(', ')}`
+      : `subtasks of ${filters.parentIdentifier}`;
+  }
+
+  return parts.length > 0 ? `tasks matching ${parts.join(', ')}` : 'tasks';
 };
 
 /**

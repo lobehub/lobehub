@@ -36,6 +36,9 @@ export class TaskListSliceActionImpl {
     await mutate([FETCH_TASK_GROUP_LIST_KEY, listAgentId]);
   };
 
+  fetchTaskList = async (params: Parameters<typeof taskService.list>[0]) =>
+    taskService.list(params);
+
   refreshTaskList = async (): Promise<void> => {
     const { listAgentId } = this.#get();
     await Promise.all([
@@ -88,7 +91,7 @@ export class TaskListSliceActionImpl {
     return useClientDataSWR(
       enabled && agentId ? [FETCH_TASK_LIST_KEY, agentId] : null,
       async ([, id]: [string, string]) => {
-        return taskService.list({ assigneeAgentId: id });
+        return this.fetchTaskList({ assigneeAgentId: id });
       },
       {
         fallbackData: { data: [], success: true, total: 0 },

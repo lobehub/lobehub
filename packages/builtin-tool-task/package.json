@@ -7,6 +7,9 @@
     "./executor": "./src/executor/index.ts"
   },
   "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/prompts": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   }

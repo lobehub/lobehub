@@ -1,6 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
-import { UNFINISHED_TASK_STATUSES } from './constants';
+import { TASK_STATUSES, UNFINISHED_TASK_STATUSES } from './constants';
+import { DEFAULT_LIST_TASK_LIMIT } from './listTasks';
 import { systemPrompt } from './systemRole';
 import { TaskApiName } from './types';
 
@@ -44,20 +45,20 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'List tasks. Without any filters, returns top-level unfinished tasks of the current agent. Use parentIdentifier to drill into subtasks, or explicit filters to override defaults.',
+        'List tasks. Without any filters, returns top-level unfinished tasks of the current agent. If you provide any filter, omitted filters are not applied implicitly.',
       name: TaskApiName.listTasks,
       parameters: {
         properties: {
           assigneeAgentId: {
             description:
-              'Restrict to tasks assigned to this agent. Defaults to the current agent when omitted.',
+              'Restrict to tasks assigned to this agent. When omitted, no assignee filter is applied unless listTasks is called without any filters, which defaults to the current agent.',
             type: 'string',
           },
-          limit: { description: 'Max 1-100. Default 20.', type: 'number' },
+          limit: { description: `Max 1-100. Default ${DEFAULT_LIST_TASK_LIMIT}.`, type: 'number' },
           offset: { description: 'Pagination offset.', type: 'number' },
           parentIdentifier: {
             description:
-              'List subtasks of this parent (e.g. "TASK-1"). When provided, disables the top-level default.',
+              'List subtasks of this parent (e.g. "TASK-1"). When omitted, no parent filter is applied unless listTasks is called without any filters, which defaults to top-level tasks.',
             type: 'string',
           },
           priorities: {
@@ -66,9 +67,9 @@ export const TaskManifest: BuiltinToolManifest = {
             type: 'array',
           },
           statuses: {
-            description: `Filter by statuses. Defaults to [${UNFINISHED_TASK_STATUSES.map((s) => `"${s}"`).join(',')}] (unfinished) when no filters provided.`,
+            description: `Filter by statuses. When omitted, no status filter is applied unless listTasks is called without any filters, which defaults to [${UNFINISHED_TASK_STATUSES.map((s) => `"${s}"`).join(', ')}].`,
             items: {
-              enum: ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'],
+              enum: [...TASK_STATUSES],
               type: 'string',
             },
             type: 'array',
