@@ -160,7 +160,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const [mode, setMode] = useState<ScheduleMode>('interval');
 
   const content = (
-    <Flexbox gap={16} style={{ minWidth: 300, padding: 4 }}>
+    <Flexbox gap={16} style={{ minWidth: 300, padding: 4 }} onClick={(e) => e.stopPropagation()}>
       <Segmented
         block
         value={mode}
@@ -183,7 +183,12 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
       {children ? (
         <div onClick={(e) => e.stopPropagation()}>{children}</div>
       ) : (
-        <ActionIcon icon={TimerIcon} size="small" title={t('taskSchedule.title')} />
+        <ActionIcon
+          icon={TimerIcon}
+          size="small"
+          title={t('taskSchedule.title')}
+          onClick={(e) => e.stopPropagation()}
+        />
       )}
     </Popover>
   );
