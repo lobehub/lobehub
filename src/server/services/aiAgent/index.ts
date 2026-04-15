@@ -28,6 +28,7 @@ import type {
   ExecGroupAgentResult,
   ExecSubAgentTaskParams,
   ExecSubAgentTaskResult,
+  MessagePluginItem,
   UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
@@ -413,6 +414,13 @@ export class AiAgentService {
     // state both reflect the decision before the first step runs. Validates
     // the parent is actually a pending tool message tied to the tool call we
     // were asked about — guards against stale / double-clicks.
+    //
+    // Note: `messages` and `message_plugins` live in separate tables. The
+    // `messageModel.findById` query returns the `messages` row only — the
+    // tool_call_id / apiName / identifier / arguments / type fields live on
+    // the plugin row and must be fetched separately.
+    let resumeApprovalPlugin: MessagePluginItem | undefined;
+
     if (resumeApproval) {
       if (!resumeParentMessage) {
         throw new Error('resumeApproval requires parentMessageId to point at a tool message');
@@ -422,11 +430,22 @@ export class AiAgentService {
           `resumeApproval.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
         );
       }
-      const existingToolCallId = (resumeParentMessage as any).tool_call_id;
-      if (existingToolCallId && existingToolCallId !== resumeApproval.toolCallId) {
+
+      resumeApprovalPlugin = await this.messageModel.findMessagePlugin(
+        resumeApproval.parentMessageId,
+      );
+      if (!resumeApprovalPlugin) {
+        throw new Error(
+          `resumeApproval: no plugin row for tool message ${resumeApproval.parentMessageId}`,
+        );
+      }
+      if (
+        resumeApprovalPlugin.toolCallId &&
+        resumeApprovalPlugin.toolCallId !== resumeApproval.toolCallId
+      ) {
         throw new Error(
           `resumeApproval.toolCallId mismatch for message ${resumeApproval.parentMessageId}: ` +
-            `stored=${existingToolCallId}, requested=${resumeApproval.toolCallId}`,
+            `stored=${resumeApprovalPlugin.toolCallId}, requested=${resumeApproval.toolCallId}`,
         );
       }
 
@@ -1311,23 +1330,22 @@ export class AiAgentService {
     // decision is persisted, there's nothing meaningful to do differently
     // server-side, and letting the LLM produce a brief acknowledgement keeps
     // the conversation cleanly terminated either way.
-    if (resumeApproval && resumeParentMessage) {
+    if (resumeApproval && resumeApprovalPlugin) {
       if (resumeApproval.decision === 'approved') {
         // Ask the runtime to execute the approved tool directly. Matches the
         // `phase: 'human_approved_tool'` contract used by the in-place
         // handleHumanIntervention flow — the runner generates a `call_tool`
-        // instruction keyed on this payload.
-        const toolPlugin = (resumeParentMessage as any).plugin as
-          | { apiName?: string; arguments?: string; identifier?: string; type?: string }
-          | undefined;
+        // instruction keyed on this payload. All tool metadata comes from
+        // the plugin row fetched above; missing any of identifier/apiName
+        // breaks the server-side tool executor dispatch.
         initialContext = {
           payload: {
             approvedToolCall: {
-              apiName: toolPlugin?.apiName,
-              arguments: toolPlugin?.arguments,
+              apiName: resumeApprovalPlugin.apiName,
+              arguments: resumeApprovalPlugin.arguments,
               id: resumeApproval.toolCallId,
-              identifier: toolPlugin?.identifier,
-              type: toolPlugin?.type ?? 'default',
+              identifier: resumeApprovalPlugin.identifier,
+              type: resumeApprovalPlugin.type ?? 'default',
             },
             assistantMessageId: assistantMessageRecord.id,
             parentMessageId: resumeApproval.parentMessageId,
