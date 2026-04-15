@@ -280,7 +280,7 @@
     "@opentelemetry/resources": "^2.2.0",
     "@opentelemetry/sdk-metrics": "^2.2.0",
     "@opentelemetry/winston-transport": "^0.19.0",
-    "@react-pdf/renderer": "^4.3.2",
+    "@react-pdf/renderer": "4.4.1",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@saintno/comfyui-sdk": "^0.2.49",
