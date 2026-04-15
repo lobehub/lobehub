@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 
 import { useCreateMenuItems } from '../../hooks';
 
@@ -19,30 +20,27 @@ export const useAgentActionsDropdownMenu = ({
 }: AgentActionsDropdownMenuProps): MenuProps['items'] => {
   const { t } = useTranslation('common');
 
-  const [agentPageSize, sidebarSectionOrder, hiddenSections, updateSystemStatus] = useGlobalStore(
-    (s) => [
-      systemStatusSelectors.agentPageSize(s),
-      systemStatusSelectors.sidebarSectionOrder(s),
-      systemStatusSelectors.hiddenSidebarSections(s),
-      s.updateSystemStatus,
-    ],
-  );
+  const [agentPageSize, sidebarItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
+    systemStatusSelectors.agentPageSize(s),
+    systemStatusSelectors.sidebarItems(s),
+    systemStatusSelectors.hiddenSidebarSections(s),
+    s.updateSystemStatus,
+  ]);
 
-  const visibleOrder = sidebarSectionOrder.filter((k) => !hiddenSections.includes(k));
-  const visibleIndex = visibleOrder.indexOf('agent');
+  const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
+  const visibleIndex = visibleItems.indexOf('agent');
   const isFirst = visibleIndex === 0;
-  const isLast = visibleIndex === visibleOrder.length - 1;
+  const isLast = visibleIndex === visibleItems.length - 1;
 
   const moveSection = useCallback(
     (direction: 'up' | 'down') => {
-      const newOrder = [...sidebarSectionOrder];
-      const idx = newOrder.indexOf('agent');
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= newOrder.length) return;
-      [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
-      updateSystemStatus({ sidebarSectionOrder: newOrder });
+      const idx = sidebarItems.indexOf('agent');
+      if (idx === -1) return;
+      const next = reorderSidebarItems(sidebarItems, idx, direction === 'up' ? idx - 1 : idx + 1);
+      if (next === sidebarItems) return;
+      updateSystemStatus({ sidebarItems: next });
     },
-    [sidebarSectionOrder, updateSystemStatus],
+    [sidebarItems, updateSystemStatus],
   );
 
   // Create menu items
@@ -104,7 +102,7 @@ export const useAgentActionsDropdownMenu = ({
     isFirst,
     isLast,
     moveSection,
-    visibleOrder.length,
+    visibleItems.length,
     t,
   ]);
 };

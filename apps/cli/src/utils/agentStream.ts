@@ -21,6 +21,11 @@ interface WebSocketStreamOptions extends StreamOptions {
   gatewayUrl: string;
   operationId: string;
   token: string;
+  /**
+   * How the gateway should verify `token`. `jwt` is the default for
+   * backwards compatibility with existing callers.
+   */
+  tokenType?: 'jwt' | 'apiKey';
 }
 
 /**
@@ -168,13 +173,13 @@ const HEARTBEAT_INTERVAL = 30_000;
 export async function streamAgentEventsViaWebSocket(
   options: WebSocketStreamOptions,
 ): Promise<void> {
-  const { gatewayUrl, operationId, token, ...streamOpts } = options;
+  const { gatewayUrl, operationId, token, tokenType = 'jwt', ...streamOpts } = options;
   const wsUrl = urlJoin(
     gatewayUrl.replace(/^http/, 'ws'),
     `/ws?operationId=${encodeURIComponent(operationId)}`,
   );
 
-  log.debug(`Connecting to gateway: ${wsUrl}`);
+  log.debug(`Connecting to gateway: ${wsUrl} (auth: ${tokenType})`);
 
   return new Promise<void>((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
@@ -192,7 +197,7 @@ export async function streamAgentEventsViaWebSocket(
     };
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ token, type: 'auth' }));
+      ws.send(JSON.stringify({ token, tokenType, type: 'auth' }));
     };
 
     ws.onmessage = (event) => {

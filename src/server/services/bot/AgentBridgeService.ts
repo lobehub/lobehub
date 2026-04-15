@@ -546,7 +546,7 @@ export class AgentBridgeService {
       client && botContext?.platformThreadId
         ? !!client.getMessenger(botContext.platformThreadId).triggerTyping
         : true;
-    const useGatewayTyping = gwClient.isConfigured && platformSupportsTyping;
+    const useGatewayTyping = gwClient.isEnabled && platformSupportsTyping;
 
     let progressMessage: SentMessage | undefined;
     if (useGatewayTyping) {

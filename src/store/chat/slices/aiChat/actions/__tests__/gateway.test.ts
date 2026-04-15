@@ -9,6 +9,7 @@ import { GatewayActionImpl } from '../gateway';
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
     execAgentTask: vi.fn(),
+    interruptTask: vi.fn(),
   },
 }));
 
@@ -52,6 +53,7 @@ function createMockClient(): GatewayConnection['client'] & {
       set.add(listener);
     }),
     sendInterrupt: vi.fn(),
+    sendToolResult: vi.fn(() => true),
   };
 }
 
@@ -280,6 +282,7 @@ describe('GatewayActionImpl', () => {
         associateMessageWithOperation: vi.fn(),
         connectToGateway: vi.fn(),
         internal_updateTopicLoading: vi.fn(),
+        onOperationCancel: vi.fn(),
         replaceMessages: vi.fn(),
         switchTopic: vi.fn(),
       })) as any;
@@ -396,6 +399,68 @@ describe('GatewayActionImpl', () => {
           prompt: '',
         }),
       );
+    });
+
+    it('registers a cancel handler that calls aiAgentService.interruptTask with the server operationId', async () => {
+      const onOperationCancel = vi.fn();
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-local' }));
+
+      const mockClient = createMockClient();
+      const state: Record<string, any> = { gatewayConnections: {} };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel,
+        replaceMessages: vi.fn(),
+        startOperation,
+        switchTopic: vi.fn(),
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => mockClient);
+      const interruptTaskSpy = vi
+        .mocked(aiAgentService.interruptTask)
+        .mockResolvedValue({ operationId: 'server-op-xyz', success: true });
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-xyz',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Hello',
+      });
+
+      // Handler was registered against the local operation id...
+      expect(onOperationCancel).toHaveBeenCalledWith('gw-op-local', expect.any(Function));
+
+      // ...and, when invoked, fires tRPC interruptTask with the *server-side* operation id
+      const [, handler] = onOperationCancel.mock.calls[0];
+      await handler();
+      expect(interruptTaskSpy).toHaveBeenCalledWith({ operationId: 'server-op-xyz' });
     });
   });
 });

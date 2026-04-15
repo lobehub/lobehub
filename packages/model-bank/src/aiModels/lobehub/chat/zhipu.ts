@@ -8,7 +8,7 @@ export const zhipuChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
+      search: false,
     },
     contextWindowTokens: 200_000,
     description:
@@ -27,7 +27,6 @@ export const zhipuChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-27',
     settings: {
       extendParams: ['enableReasoning'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },

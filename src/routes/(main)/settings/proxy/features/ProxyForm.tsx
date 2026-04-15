@@ -2,21 +2,17 @@
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Alert, Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
+import { Form, Skeleton, toast } from '@lobehub/ui';
 import { Button, Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
-import { Loader2Icon } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { desktopSettingsService } from '@/services/electron/settings';
 import { useElectronStore } from '@/store/electron';
 
-interface ProxyTestResult {
-  message?: string;
-  responseTime?: number;
-  success: boolean;
-}
+import SaveBar from './SaveBar';
+import { useProxyDirty } from './useProxyDirty';
 
 const ProxyForm = () => {
   const { t } = useTranslation('electron');
@@ -24,9 +20,6 @@ const ProxyForm = () => {
   const [testUrl, setTestUrl] = useState('https://www.google.com');
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [testResult, setTestResult] = useState<ProxyTestResult | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const isEnableProxy = AntdForm.useWatch('enableProxy', form);
   const proxyRequireAuth = AntdForm.useWatch('proxyRequireAuth', form);
@@ -37,28 +30,35 @@ const ProxyForm = () => {
   ]);
   const { data: proxySettings, isLoading } = useGetProxySettings();
 
+  const { isDirty } = useProxyDirty(form, proxySettings);
+
+  const initializedRef = useRef(false);
   useEffect(() => {
-    if (proxySettings) {
+    if (proxySettings && !initializedRef.current) {
       form.setFieldsValue(proxySettings);
-      setHasUnsavedChanges(false);
+      initializedRef.current = true;
     }
   }, [form, proxySettings]);
 
-  // Listen for form value changes
-  const handleValuesChange = useCallback(() => {
-    setLoading(true);
-    setHasUnsavedChanges(true);
-    setTestResult(null); // Clear the previous test result
-    setLoading(false);
-  }, []);
+  const handleValuesChange = useCallback(
+    (changed: Partial<NetworkProxySettings>) => {
+      if ('enableProxy' in changed) {
+        const next = changed.enableProxy;
+        setProxySettings({ enableProxy: next }).catch((error) => {
+          form.setFieldsValue({ enableProxy: !next });
+          const message = error instanceof Error ? error.message : String(error);
+          toast.error(t('proxy.saveFailed', { error: message }));
+        });
+      }
+    },
+    [form, setProxySettings, t],
+  );
 
-  // Save configuration
   const handleSave = useCallback(async () => {
     try {
       setIsSaving(true);
       const values = await form.validateFields();
       await setProxySettings(values);
-      setHasUnsavedChanges(false);
     } catch {
       // validation error
     } finally {
@@ -66,43 +66,33 @@ const ProxyForm = () => {
     }
   }, [form, setProxySettings]);
 
-  // Reset configuration
   const handleReset = useCallback(() => {
-    if (proxySettings) {
-      form.setFieldsValue(proxySettings);
-      setHasUnsavedChanges(false);
-      setTestResult(null);
-    }
+    if (proxySettings) form.setFieldsValue(proxySettings);
   }, [form, proxySettings]);
 
-  // Test proxy configuration
   const handleTest = useCallback(async () => {
     try {
       setIsTesting(true);
-      setTestResult(null);
 
-      // Validate form and get current configuration
       const values = await form.validateFields();
       const config: NetworkProxySettings = {
         ...proxySettings,
         ...values,
       };
 
-      // Use the new testProxyConfig method to test the proxy being configured by the user
       const result = await desktopSettingsService.testProxyConfig(config, testUrl);
-
-      setTestResult(result);
+      if (result.success) {
+        toast.success(t('proxy.testSuccessWithTime', { time: result.responseTime }));
+      } else {
+        toast.error(`${t('proxy.testFailed')}: ${result.message ?? ''}`);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const result: ProxyTestResult = {
-        message: errorMessage,
-        success: false,
-      };
-      setTestResult(result);
+      toast.error(`${t('proxy.testFailed')}: ${errorMessage}`);
     } finally {
       setIsTesting(false);
     }
-  }, [proxySettings, testUrl, form]);
+  }, [proxySettings, testUrl, form, t]);
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
 
@@ -118,7 +108,6 @@ const ProxyForm = () => {
         valuePropName: 'checked',
       },
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.enable'),
   };
 
@@ -149,7 +138,6 @@ const ProxyForm = () => {
         name: 'proxyPort',
       },
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.basicSettings'),
   };
 
@@ -179,7 +167,6 @@ const ProxyForm = () => {
           ]
         : []),
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.authSettings'),
   };
 
@@ -187,54 +174,28 @@ const ProxyForm = () => {
     children: [
       {
         children: (
-          <Flexbox gap={8}>
-            <Space.Compact style={{ width: '100%' }}>
-              <Input
-                placeholder={t('proxy.testUrlPlaceholder')}
-                style={{ flex: 1 }}
-                value={testUrl}
-                onChange={(e) => setTestUrl(e.target.value)}
-              />
-              <Button loading={isTesting} type="default" onClick={handleTest}>
-                {t('proxy.testButton')}
-              </Button>
-            </Space.Compact>
-            {/* Test result display */}
-            {!testResult ? null : testResult.success ? (
-              <Alert
-                closable
-                type={'success'}
-                title={
-                  <Flexbox horizontal align="center" gap={8}>
-                    {t('proxy.testSuccessWithTime', { time: testResult.responseTime })}
-                  </Flexbox>
-                }
-              />
-            ) : (
-              <Alert
-                closable
-                type={'error'}
-                variant={'outlined'}
-                title={
-                  <Flexbox horizontal align="center" gap={8}>
-                    {t('proxy.testFailed')}: {testResult.message}
-                  </Flexbox>
-                }
-              />
-            )}
-          </Flexbox>
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              placeholder={t('proxy.testUrlPlaceholder')}
+              style={{ flex: 1 }}
+              value={testUrl}
+              onChange={(e) => setTestUrl(e.target.value)}
+            />
+            <Button loading={isTesting} type="default" onClick={handleTest}>
+              {t('proxy.testButton')}
+            </Button>
+          </Space.Compact>
         ),
         desc: t('proxy.testDescription'),
         label: t('proxy.testUrl'),
         minWidth: undefined,
       },
     ],
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
     title: t('proxy.connectionTest'),
   };
 
   return (
-    <Flexbox gap={24}>
+    <>
       <Form
         collapsible={false}
         form={form}
@@ -245,27 +206,8 @@ const ProxyForm = () => {
         onValuesChange={handleValuesChange}
         {...FORM_STYLE}
       />
-      <Flexbox align="end" justify="flex-end">
-        {hasUnsavedChanges && (
-          <span style={{ color: 'var(--ant-color-warning)', marginBottom: 8 }}>
-            {t('proxy.unsavedChanges')}
-          </span>
-        )}
-        <Flexbox horizontal gap={8}>
-          <Button
-            disabled={!hasUnsavedChanges}
-            loading={isSaving}
-            type="primary"
-            onClick={handleSave}
-          >
-            {t('proxy.saveButton')}
-          </Button>
-          <Button disabled={!hasUnsavedChanges || isSaving} onClick={handleReset}>
-            {t('proxy.resetButton')}
-          </Button>
-        </Flexbox>
-      </Flexbox>
-    </Flexbox>
+      <SaveBar isDirty={isDirty} isSaving={isSaving} onReset={handleReset} onSave={handleSave} />
+    </>
   );
 };
 

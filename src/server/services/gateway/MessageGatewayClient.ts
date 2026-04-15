@@ -67,6 +67,16 @@ export class MessageGatewayClient {
     return !!(this.baseUrl && this.serviceToken);
   }
 
+  /**
+   * Whether the gateway should be used for active flows (typing, connect, etc.).
+   * Requires MESSAGE_GATEWAY_ENABLED=1 in addition to URL/token. This lets us
+   * disable the gateway during migration while keeping the client reachable
+   * for cleanup (via isConfigured).
+   */
+  get isEnabled(): boolean {
+    return gatewayEnv.MESSAGE_GATEWAY_ENABLED === '1' && this.isConfigured;
+  }
+
   // ─── Connection Management ───
 
   async connect(config: MessageGatewayConnectionConfig): Promise<{ status: string }> {
@@ -78,6 +88,19 @@ export class MessageGatewayClient {
       const error = await res.text();
       log('Connect failed: %s', error);
       throw new Error(`message-gateway connect failed (${res.status}): ${error}`);
+    }
+
+    return res.json();
+  }
+
+  async disconnectAll(): Promise<{ total: number }> {
+    log('Disconnecting all connections');
+
+    const res = await this.fetch('/api/connections', { method: 'DELETE' });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`message-gateway disconnect-all failed (${res.status}): ${error}`);
     }
 
     return res.json();

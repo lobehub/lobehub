@@ -223,6 +223,7 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      clientRuntime,
       deviceId: requestedDeviceId,
       botPlatformContext,
       discordContext,
@@ -565,6 +566,7 @@ export class AiAgentService {
           chatConfig: agentConfig.chatConfig ?? undefined,
           plugins: agentPlugins,
         },
+        clientRuntime,
         deviceContext: gatewayConfigured
           ? {
               autoActivated: activeDeviceId ? true : undefined,
@@ -588,6 +590,9 @@ export class AiAgentService {
         LocalSystemManifest.identifier,
         RemoteDeviceManifest.identifier,
         ...(isBotConversation ? [MessageToolIdentifier] : []),
+        // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+        ...lobehubSkillManifests.map((m) => m.identifier),
+        ...klavisManifests.map((m) => m.identifier),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
 
@@ -604,10 +609,33 @@ export class AiAgentService {
 
       log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
+      // Start with the scoped manifest map (pluginIds + defaultToolIds)
       const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
       manifestMap.forEach((manifest, id) => {
         toolManifestMap[id] = manifest;
       });
+
+      // Also include discoverable builtin tools that are not yet in the map,
+      // so the activator can find their manifests when dynamically enabling them
+      // (e.g., lobe-creds, lobe-cron). Exclude discoverable:false tools to prevent
+      // internal infrastructure tools from being surfaced to the activator.
+      for (const tool of builtinTools) {
+        if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
+          toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
+        }
+      }
+
+      // Include lobehub skill and klavis manifests for activator discovery
+      for (const manifest of lobehubSkillManifests) {
+        if (!toolManifestMap[manifest.identifier]) {
+          toolManifestMap[manifest.identifier] = manifest;
+        }
+      }
+      for (const manifest of klavisManifests) {
+        if (!toolManifestMap[manifest.identifier]) {
+          toolManifestMap[manifest.identifier] = manifest;
+        }
+      }
 
       for (const manifest of lobehubSkillManifests) {
         toolSourceMap[manifest.identifier] = 'lobehubSkill';
@@ -620,13 +648,28 @@ export class AiAgentService {
       // require local IPC / subprocess capabilities:
       //   - local-system builtin: Electron IPC for file + command execution
       //   - stdio MCP plugins: subprocess lives on the user's machine
-      // Dispatcher in RuntimeExecutors reads this to route via Agent Gateway WS.
-      if (manifestMap.has(LocalSystemManifest.identifier)) {
-        toolExecutorMap[LocalSystemManifest.identifier] = 'client';
-      }
-      for (const plugin of installedPlugins) {
-        if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
-          toolExecutorMap[plugin.identifier] = 'client';
+      //
+      // Two triggers, in priority order:
+      //  (a) `clientRuntime === 'desktop'` — the caller itself is an Electron
+      //      client on the Agent Gateway WS and is ready to receive
+      //      `tool_execute`. This is the Phase 6.4 path and is authoritative
+      //      regardless of whether DEVICE_GATEWAY (the legacy device-proxy) is
+      //      also configured.
+      //  (b) `!gatewayConfigured` — no DEVICE_GATEWAY configured on the server,
+      //      so legacy Remote Device proxy isn't an option and any client
+      //      tooling falls through to the Gateway WS (standalone Electron).
+      //
+      // When DEVICE_GATEWAY is configured AND the caller is a web client, we
+      // leave executor unset so tools route via RemoteDevice proxy.
+      const shouldDispatchToClient = clientRuntime === 'desktop' || !gatewayConfigured;
+      if (shouldDispatchToClient) {
+        if (manifestMap.has(LocalSystemManifest.identifier)) {
+          toolExecutorMap[LocalSystemManifest.identifier] = 'client';
+        }
+        for (const plugin of installedPlugins) {
+          if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
+            toolExecutorMap[plugin.identifier] = 'client';
+          }
         }
       }
 

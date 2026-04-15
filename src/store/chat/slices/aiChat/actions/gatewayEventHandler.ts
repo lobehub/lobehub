@@ -5,6 +5,7 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
+  ToolExecuteData,
 } from '@/libs/agent-stream';
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
@@ -37,10 +38,17 @@ export const createGatewayEventHandler = (
   params: {
     assistantMessageId: string;
     context: ConversationContext;
+    /**
+     * Server-side operation id — used to look up the `AgentStreamClient` in
+     * `gatewayConnections` so we can `sendToolResult` back over the same WS.
+     * Defaults to `operationId` when the caller does not distinguish the two.
+     */
+    gatewayOperationId?: string;
     operationId: string;
   },
 ) => {
   const { context, operationId } = params;
+  const gatewayOperationId = params.gatewayOperationId ?? operationId;
 
   // Dispatch context — ensures internal_dispatchMessage resolves the correct messageMapKey
   const dispatchContext = { operationId };
@@ -146,6 +154,21 @@ export const createGatewayEventHandler = (
       case 'tool_start': {
         // Server creates tool messages in DB.
         // Loading is already active from stream_start (not cleared by stream_end).
+        break;
+      }
+
+      case 'tool_execute': {
+        // Fire-and-forget: the client-side tool may take a long time, and we
+        // must keep processing other events (stream_chunk, tool_end, etc.) on
+        // the same WebSocket. `internal_executeClientTool` guarantees it never
+        // throws and always sends exactly one `tool_result` back.
+        //
+        // Use `gatewayOperationId` (server-side id, the key under
+        // `gatewayConnections`) so the action can look up the WS to reply on
+        // — NOT the local `operationId` used for `dispatchContext`.
+        const data = event.data as ToolExecuteData | undefined;
+        if (!data) break;
+        void get().internal_executeClientTool(data, { operationId: gatewayOperationId });
         break;
       }
 

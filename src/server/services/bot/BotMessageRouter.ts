@@ -408,7 +408,9 @@ export class BotMessageRouter {
     const charLimit = (info.settings?.charLimit as number) || undefined;
     const displayToolCalls = info.settings?.displayToolCalls !== false;
 
-    /** Try dispatching a text command. Returns true if handled. */
+    /** Try dispatching a text command. Returns true if handled.
+     *  Strips platform mention artifacts (e.g. Slack's `<@U123>`) before
+     *  checking so that "@bot /new" correctly resolves to the /new command. */
     const tryDispatch = async (
       thread: {
         id: string;
@@ -417,7 +419,8 @@ export class BotMessageRouter {
       },
       text: string | undefined,
     ): Promise<boolean> => {
-      const result = BotMessageRouter.dispatchTextCommand(text, commands);
+      const sanitized = client.sanitizeUserInput?.(text ?? '') ?? text;
+      const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return false;
       await result.command.handler({
         args: result.args,
@@ -559,7 +562,7 @@ export class BotMessageRouter {
     });
 
     // Register slash command handlers (native + text-based)
-    this.registerCommands(bot, commands);
+    this.registerCommands(bot, commands, client);
 
     // Register onNewMessage handler based on platform config
     const dmEnabled = info.settings?.dm?.enabled ?? false;
@@ -712,7 +715,7 @@ export class BotMessageRouter {
    * To add a new command, add an entry to `buildCommands()` — it will be
    * automatically registered on all platforms.
    */
-  private registerCommands(bot: Chat<any>, commands: BotCommand[]): void {
+  private registerCommands(bot: Chat<any>, commands: BotCommand[], client: PlatformClient): void {
     // --- Native slash commands (Slack, Discord) ---
     for (const cmd of commands) {
       bot.onSlashCommand(`/${cmd.name}`, async (event) => {
@@ -729,11 +732,14 @@ export class BotMessageRouter {
     // Platforms that don't support native onSlashCommand send /commands as
     // regular text messages. This handler intercepts them in unsubscribed
     // threads (e.g. first command in a group chat or DM).
+    // The regex also matches mention-prefixed messages (e.g. "<@U123> /new")
+    // so that platforms like Slack can dispatch commands from @-mentions.
     const namePattern = commands.map((c) => c.name).join('|');
-    const regex = new RegExp(`^\\/(?:${namePattern})(?:\\s|$|@)`);
+    const regex = new RegExp(`(?:^|\\s)\\/(?:${namePattern})(?:\\s|$|@)`);
     bot.onNewMessage(regex, async (thread, message) => {
       if (message.author.isBot === true) return;
-      const result = BotMessageRouter.dispatchTextCommand(message.text, commands);
+      const sanitized = client.sanitizeUserInput?.(message.text ?? '') ?? message.text;
+      const result = BotMessageRouter.dispatchTextCommand(sanitized, commands);
       if (!result) return;
       await result.command.handler({
         args: result.args,

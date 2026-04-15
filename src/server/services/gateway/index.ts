@@ -17,12 +17,13 @@ const isVercel = !!process.env.VERCEL_ENV;
 
 export class GatewayService {
   /**
-   * Check if the external message-gateway is configured.
-   * When enabled, all platforms are registered on the gateway for
-   * connection management and typing persistence.
+   * Whether to use the external message-gateway for connection management.
+   * Requires MESSAGE_GATEWAY_ENABLED=1 plus URL/TOKEN to be configured.
+   * This allows disabling the gateway (for migration) while keeping
+   * the client reachable for cleanup.
    */
   get useMessageGateway(): boolean {
-    return getMessageGatewayClient().isConfigured;
+    return getMessageGatewayClient().isEnabled;
   }
 
   async ensureRunning(): Promise<void> {
@@ -37,10 +38,24 @@ export class GatewayService {
       return;
     }
 
+    // Start local connections first, then clean up gateway —
+    // brief overlap is better than a gap where messages are lost.
     const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
     await manager.start();
-
     log('GatewayManager started');
+
+    // Clean up leftover gateway connections to prevent duplicates.
+    const client = getMessageGatewayClient();
+    if (client.isConfigured) {
+      try {
+        const result = await client.disconnectAll();
+        if (result.total > 0) {
+          log('Cleaned up %d gateway connections', result.total);
+        }
+      } catch (err) {
+        log('Gateway cleanup skipped (non-critical): %O', err);
+      }
+    }
   }
 
   /**
@@ -56,6 +71,10 @@ export class GatewayService {
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
+    let totalSynced = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+
     // Sync all registered platforms
     for (const definition of platformRegistry.listPlatforms()) {
       const platform = definition.id;
@@ -66,7 +85,10 @@ export class GatewayService {
           gateKeeper,
         );
 
-        log('Gateway sync: found %d enabled providers for %s', providers.length, platform);
+        let synced = 0;
+        let skippedWebhook = 0;
+        let skippedConnected = 0;
+        let failed = 0;
 
         for (const provider of providers) {
           try {
@@ -74,26 +96,26 @@ export class GatewayService {
             const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
 
             // Webhook-mode platforms don't need persistent gateway connections.
-            // Run the platform client locally via GatewayManager instead
-            // (e.g. Telegram setWebhook, QQ credential verification).
+            // The webhook URL is set once when the user saves the bot config
+            // (via startClientViaGateway). No action needed during periodic sync.
             if (connectionMode === 'webhook') {
-              const manager = createGatewayManager({
-                definitions: platformRegistry.listPlatforms(),
-              });
-              await manager.startClient(platform, provider.applicationId, provider.userId);
-              log(
-                'Gateway sync: started webhook-mode %s:%s locally',
-                platform,
-                provider.applicationId,
-              );
+              skippedWebhook++;
               continue;
             }
 
             // For persistent connections, check gateway status before reconnecting
             try {
               const status = await client.getStatus(provider.id);
-              if (status.state.status === 'connected') {
-                log('Gateway sync: %s already connected, skipping', provider.id);
+              if (status.state.status === 'connected' || status.state.status === 'connecting') {
+                skippedConnected++;
+                log('Gateway sync: %s already %s, skipping', provider.id, status.state.status);
+                continue;
+              }
+              // "error" means credential/config issue (e.g. session expired, unauthorized).
+              // Auto-retry is pointless — only user action (saving new credentials) can fix it.
+              if (status.state.status === 'error') {
+                skippedConnected++;
+                log('Gateway sync: %s in error (%s), skipping', provider.id, status.state.error);
                 continue;
               }
             } catch {
@@ -101,7 +123,7 @@ export class GatewayService {
             }
 
             const webhookPath = `/api/agent/webhooks/${platform}/${provider.applicationId}`;
-            await client.connect({
+            const result = await client.connect({
               applicationId: provider.applicationId,
               connectionId: provider.id,
               connectionMode,
@@ -111,21 +133,51 @@ export class GatewayService {
               webhookPath,
             });
 
+            // Gateway returns "connecting" for async persistent connections
+            // (e.g. Discord WebSocket), "connected" for sync webhook-mode.
+            const runtimeStatus =
+              result.status === 'connected'
+                ? BOT_RUNTIME_STATUSES.connected
+                : BOT_RUNTIME_STATUSES.starting;
+
             await updateBotRuntimeStatus({
               applicationId: provider.applicationId,
               platform,
-              status: BOT_RUNTIME_STATUSES.connected,
+              status: runtimeStatus,
             });
 
-            log('Gateway sync: connected %s:%s', platform, provider.applicationId);
+            synced++;
+            log('Gateway sync: %s %s:%s', result.status, platform, provider.applicationId);
           } catch (err) {
+            failed++;
             log('Gateway sync: failed to connect %s:%s: %O', platform, provider.applicationId, err);
           }
         }
+
+        log(
+          'Gateway sync: %s — total=%d synced=%d skippedWebhook=%d skippedConnected=%d failed=%d',
+          platform,
+          providers.length,
+          synced,
+          skippedWebhook,
+          skippedConnected,
+          failed,
+        );
+
+        totalSynced += synced;
+        totalSkipped += skippedWebhook + skippedConnected;
+        totalFailed += failed;
       } catch (err) {
         log('Gateway sync: error syncing platform %s: %O', platform, err);
       }
     }
+
+    log(
+      'Gateway sync complete: synced=%d skipped=%d failed=%d',
+      totalSynced,
+      totalSkipped,
+      totalFailed,
+    );
   }
 
   async stop(): Promise<void> {

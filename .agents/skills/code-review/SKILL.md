@@ -46,7 +46,7 @@ description: 'Code review checklist for LobeHub. Use when reviewing PRs, diffs, 
 - Newly written code duplicates existing utilities in `packages/utils` or shared modules?
 - Copy-pasted blocks with slight variation — extract into shared function
 - `antd` imports replaceable with `@lobehub/ui` wrapped components (`Input`, `Button`, `Modal`, `Avatar`, etc.)
-- Use `antd-style` token system, not hardcoded colors
+- Use `antd-style` token system, not hardcoded colors; prefer `createStaticStyles` + `cssVar.*` over `createStyles` + `token` unless runtime computation is required
 
 ### Database
 

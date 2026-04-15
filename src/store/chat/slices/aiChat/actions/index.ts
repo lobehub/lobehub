@@ -3,6 +3,8 @@ import { type StateCreator } from 'zustand/vanilla';
 import { type ChatStore } from '@/store/chat/store';
 import { flattenActions } from '@/store/utils/flattenActions';
 
+import { type ClientToolExecutionAction } from './clientToolExecution';
+import { ClientToolExecutionActionImpl } from './clientToolExecution';
 import { type ConversationControlAction } from './conversationControl';
 import { ConversationControlActionImpl } from './conversationControl';
 import { type ConversationLifecycleAction } from './conversationLifecycle';
@@ -17,6 +19,7 @@ import { type StreamingStatesAction } from './streamingStates';
 import { StreamingStatesActionImpl } from './streamingStates';
 
 export type ChatAIChatAction = ChatMemoryAction &
+  ClientToolExecutionAction &
   ConversationLifecycleAction &
   ConversationControlAction &
   GatewayAction &
@@ -35,6 +38,7 @@ export const chatAiChat: StateCreator<
 ) =>
   flattenActions<ChatAIChatAction>([
     new ChatMemoryActionImpl(...params),
+    new ClientToolExecutionActionImpl(...params),
     new ConversationLifecycleActionImpl(...params),
     new ConversationControlActionImpl(...params),
     new GatewayActionImpl(...params),

@@ -195,7 +195,7 @@ describe('AgentEvalDatasetModel', () => {
     it('should order by createdAt descending', async () => {
       const results = await datasetModel.query();
 
-      // 最新的应该在前面
+      // The newest should come first
       // Order may vary, just check we got results
       expect(results.length).toBeGreaterThanOrEqual(2);
     });
