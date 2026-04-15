@@ -518,7 +518,7 @@ describe('buildPayloadFromKeyVaults', () => {
       });
     });
 
-    it('Azure: returns apiKey, baseURL, azureApiVersion and runtimeProvider', () => {
+    it('Azure: returns apiKey, baseURL and runtimeProvider', () => {
       const keyVaults = {
         apiKey: 'azure-api-key',
         baseURL: 'https://my-azure.openai.azure.com',
@@ -529,7 +529,6 @@ describe('buildPayloadFromKeyVaults', () => {
 
       expect(payload).toEqual({
         apiKey: 'azure-api-key',
-        azureApiVersion: '2024-06-01',
         baseURL: 'https://my-azure.openai.azure.com',
         runtimeProvider: ModelProvider.Azure,
       });
@@ -645,7 +644,7 @@ describe('buildPayloadFromKeyVaults', () => {
   });
 
   describe('custom provider with sdkType should include provider-specific fields', () => {
-    it('custom provider with Azure sdkType includes azureApiVersion', () => {
+    it('custom provider with Azure sdkType keeps apiKey and baseURL only', () => {
       const keyVaults = {
         apiKey: 'custom-azure-key',
         baseURL: 'https://custom-azure.openai.azure.com',
@@ -654,7 +653,8 @@ describe('buildPayloadFromKeyVaults', () => {
       // Simulates a custom provider where runtimeProvider is resolved to 'azure'
       const payload = buildPayloadFromKeyVaults(keyVaults, ModelProvider.Azure);
 
-      expect(payload.azureApiVersion).toBe('2024-06-01');
+      expect(payload.apiKey).toBe('custom-azure-key');
+      expect(payload.baseURL).toBe('https://custom-azure.openai.azure.com');
       expect(payload.runtimeProvider).toBe(ModelProvider.Azure);
     });
 

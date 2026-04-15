@@ -1,7 +1,6 @@
 import debug from 'debug';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
-import { AzureOpenAI } from 'openai';
 
 import { responsesAPIModels, systemToUserModels } from '../../const/models';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
@@ -44,6 +43,23 @@ const appendAzureSearchTool = (
       }),
     } as any,
   ];
+};
+
+const normalizeAzureBaseURL = (value?: string) => {
+  if (!value) return value;
+
+  const url = new URL(value);
+  const normalizedPathname = url.pathname.replace(/\/+$/, '');
+  const openaiIndex = normalizedPathname.indexOf('/openai');
+
+  url.pathname =
+    openaiIndex === -1
+      ? `${normalizedPathname === '/' ? '' : normalizedPathname}/openai/v1`
+      : '/openai/v1';
+  url.search = '';
+  url.hash = '';
+
+  return url.toString().replace(/\/$/, '');
 };
 
 const maskSensitiveUrl = (url: string) => {
@@ -102,15 +118,6 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
     },
     useResponseModels: [...responsesAPIModels],
   },
-  customClient: {
-    createClient: (options) =>
-      new AzureOpenAI({
-        apiKey: options.apiKey,
-        apiVersion: options.apiVersion,
-        dangerouslyAllowBrowser: true,
-        endpoint: options.baseURL,
-      }),
-  },
   debug: {
     chatCompletion: () => process.env.DEBUG_AZURE_CHAT_COMPLETION === '1',
     responses: () => process.env.DEBUG_AZURE_RESPONSES === '1',
@@ -150,6 +157,16 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
 });
 
 export class LobeAzureOpenAI extends BaseAzureOpenAI {
+  constructor(options: Record<string, any> = {}) {
+    const { endpoint, ...rest } = options;
+    const baseURL = normalizeAzureBaseURL(rest.baseURL ?? endpoint);
+
+    super({
+      ...rest,
+      ...(baseURL ? { baseURL } : {}),
+    });
+  }
+
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     try {
       return await super.chat(payload, options);

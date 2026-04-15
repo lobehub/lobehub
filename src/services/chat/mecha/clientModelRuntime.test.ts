@@ -121,11 +121,10 @@ describe('ModelRuntimeOnClient', () => {
         expect(runtime['_runtime'].baseURL).toBe('user-openai-endpoint');
       });
 
-      it('Azure provider: with apiKey, apiVersion, endpoint', async () => {
+      it('Azure provider: with apiKey and endpoint', async () => {
         await mockProviderKeyVaults(ModelProvider.Azure, {
           apiKey: 'user-azure-key',
           endpoint: 'user-azure-endpoint',
-          apiVersion: '2024-06-01',
         });
 
         const runtime = await initializeWithClientStore({

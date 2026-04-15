@@ -61,7 +61,6 @@ interface ProviderIniOptions extends Record<string, any> {
  */
 interface RouterOptionItem extends ProviderIniOptions {
   apiType?: ApiType;
-  apiVersionMapping?: Record<string, string>;
   id?: string;
   remark?: string;
 }
@@ -256,21 +255,12 @@ export const createRouterRuntime = ({
       remark?: string;
       runtime: LobeRuntimeAI;
     }> {
-      const {
-        apiType: optionApiType,
-        apiVersion: optionApiVersion,
-        apiVersionMapping,
-        id: channelId,
-        remark,
-        ...optionOverrides
-      } = optionItem;
+      const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
-      const resolvedApiVersion = apiVersionMapping?.[model] ?? optionApiVersion;
       const finalOptions = {
         ...this._params,
         ...this._options,
         ...optionOverrides,
-        ...(resolvedApiVersion ? { apiVersion: resolvedApiVersion } : {}),
       };
 
       /**

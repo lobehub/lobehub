@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { AzureOpenAI } from 'openai';
+import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,7 +22,6 @@ describe('LobeAzureOpenAI', () => {
     instance = new LobeAzureOpenAI({
       baseURL: 'https://test.openai.azure.com/',
       apiKey: 'test_key',
-      apiVersion: '2023-03-15-preview',
     });
 
     // 使用 vi.spyOn 来模拟 streamChatCompletions 方法
@@ -48,12 +47,11 @@ describe('LobeAzureOpenAI', () => {
     it('should create an instance of OpenAIClient with correct parameters', () => {
       const baseURL = 'https://test.openai.azure.com/';
       const apiKey = 'test_key';
-      const apiVersion = '2023-03-15-preview';
 
-      const instance = new LobeAzureOpenAI({ baseURL, apiKey, apiVersion });
+      const instance = new LobeAzureOpenAI({ baseURL, apiKey });
 
-      expect(instance.client).toBeInstanceOf(AzureOpenAI);
-      expect(instance.baseURL).toBe(baseURL);
+      expect(instance.client).toBeInstanceOf(OpenAI);
+      expect(instance.baseURL).toBe('https://test.openai.azure.com/openai/v1');
     });
   });
 
@@ -84,7 +82,6 @@ describe('LobeAzureOpenAI', () => {
 
         instance = new LobeAzureOpenAI({
           apiKey: 'test_key',
-          apiVersion: '2025-04-01-preview',
           baseURL: 'https://test.openai.azure.com/',
           id: 'lobehub',
         });
@@ -141,7 +138,6 @@ describe('LobeAzureOpenAI', () => {
 
         instance = new LobeAzureOpenAI({
           apiKey: 'test_key',
-          apiVersion: '2025-04-01-preview',
           baseURL: 'https://test.openai.azure.com/',
           id: 'lobehub',
         });
@@ -301,7 +297,7 @@ describe('LobeAzureOpenAI', () => {
         } catch (e) {
           // Assert
           expect(e).toEqual({
-            endpoint: 'https://***.openai.azure.com/',
+            endpoint: 'https://***.openai.azure.com/openai/v1',
             error: {
               code: 'DeploymentNotFound',
               message: 'Deployment not found',
@@ -329,7 +325,7 @@ describe('LobeAzureOpenAI', () => {
         } catch (e) {
           // Assert
           expect(e).toEqual({
-            endpoint: 'https://***.openai.azure.com/',
+            endpoint: 'https://***.openai.azure.com/openai/v1',
             errorType: 'AgentRuntimeError',
             provider: 'azure',
             error: {
@@ -438,7 +434,7 @@ describe('LobeAzureOpenAI', () => {
       await expect(
         instance.createImage({ model: 'gpt-image-1', params: { prompt: 'moon' } }),
       ).rejects.toMatchObject({
-        endpoint: 'https://***.openai.azure.com/',
+        endpoint: 'https://***.openai.azure.com/openai/v1',
         errorType: 'AgentRuntimeError',
         provider: 'azure',
         error: {
@@ -457,7 +453,7 @@ describe('LobeAzureOpenAI', () => {
       await expect(
         instance.createImage({ model: 'gpt-image-1', params: { prompt: 'stars' } }),
       ).rejects.toEqual({
-        endpoint: 'https://***.openai.azure.com/',
+        endpoint: 'https://***.openai.azure.com/openai/v1',
         errorType: 'AgentRuntimeError',
         provider: 'azure',
         error: {

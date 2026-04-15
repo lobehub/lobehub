@@ -86,7 +86,7 @@ describe('createRouterRuntime', () => {
       );
     });
 
-    it('should prefer apiVersionMapping over apiVersion for the current model', async () => {
+    it('should preserve unsupported version fields without applying special routing logic', async () => {
       const constructorCalls: any[] = [];
 
       class MockRuntime implements LobeRuntimeAI {
@@ -122,7 +122,10 @@ describe('createRouterRuntime', () => {
       expect(constructorCalls[0]).toEqual(
         expect.objectContaining({
           apiKey: 'test-key',
-          apiVersion: '2025-04-01-preview',
+          apiVersion: '2024-01-01',
+          apiVersionMapping: {
+            'gpt-5.4': '2025-04-01-preview',
+          },
           id: 'test-runtime',
         }),
       );
