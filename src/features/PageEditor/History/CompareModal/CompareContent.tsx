@@ -13,6 +13,7 @@ import type {
 } from '@/server/routers/lambda/_schema/documentHistory';
 
 import DocumentHistoryDiff from '../DocumentHistoryDiff';
+import { formatHistoryAbsoluteTime } from '../formatHistoryDate';
 import HistorySidebar from './HistorySidebar';
 
 const useStyles = createStyles(({ css, token }) => ({
@@ -72,7 +73,7 @@ const useStyles = createStyles(({ css, token }) => ({
     min-height: 0;
   `,
   diffBody: css`
-    overflow: hidden;
+    overflow: auto;
     flex: 1;
     min-height: 0;
   `,
@@ -121,11 +122,11 @@ const CompareContent = memo<CompareContentProps>(
         <div className={styles.diffArea}>
           <div className={styles.cmpbar}>
             <Flexbox horizontal align={'center'} gap={4}>
-              <span className={styles.badgeOld}>
-                {dayjs(selectedItem.savedAt).format('MMM D, HH:mm')}
-              </span>
+              <span className={styles.badgeNew}>{t('pageEditor.history.compareCurrentLabel')}</span>
               <Text className={styles.arrow}>→</Text>
-              <span className={styles.badgeNew}>{t('pageEditor.history.current')}</span>
+              <span className={styles.badgeOld}>
+                {formatHistoryAbsoluteTime(selectedItem.savedAt)}
+              </span>
               <Text className={styles.meta} type={'secondary'}>
                 {dayjs(selectedItem.savedAt).fromNow()} ·{' '}
                 {saveSourceLabels[selectedItem.saveSource]}
@@ -133,8 +134,7 @@ const CompareContent = memo<CompareContentProps>(
             </Flexbox>
             {canRestore && (
               <Button icon={RotateCcwIcon} size={'small'} onClick={() => onRestore(selectedItem)}>
-                {t('pageEditor.history.restore')}{' '}
-                {dayjs(selectedItem.savedAt).format('MMM D, HH:mm')}
+                {t('pageEditor.history.restore')} {formatHistoryAbsoluteTime(selectedItem.savedAt)}
               </Button>
             )}
           </div>

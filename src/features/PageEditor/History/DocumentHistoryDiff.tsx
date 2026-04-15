@@ -9,7 +9,7 @@ import { GitCompareArrowsIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import CircleLoading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
 import type { CompareHistoryItemsOutput } from '@/server/routers/lambda/_schema/documentHistory';
 import { documentService } from '@/services/document';
@@ -69,15 +69,15 @@ const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(({ documentId, histor
     async () =>
       documentService.compareDocumentHistoryItems({
         documentId,
-        fromHistoryId: historyId,
-        toHistoryId: 'head',
+        fromHistoryId: 'head',
+        toHistoryId: historyId,
       }),
   );
 
   const labels = useMemo<NonNullable<LexicalDiffProps['labels']>>(
     () => ({
-      new: t('pageEditor.history.compareCurrentLabel'),
-      old: t('pageEditor.history.compareOldLabel'),
+      new: t('pageEditor.history.compareOldLabel'),
+      old: t('pageEditor.history.compareCurrentLabel'),
     }),
     [t],
   );
@@ -92,7 +92,7 @@ const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(({ documentId, histor
     <Flexbox className={styles.container} flex={1} gap={0}>
       {isLoading && !data ? (
         <Flexbox align={'center'} className={styles.empty} justify={'center'}>
-          <Loading debugId={'DocumentHistoryDiff'} />
+          <CircleLoading />;
         </Flexbox>
       ) : error || !data || !normalizedValues.oldValue || !normalizedValues.newValue ? (
         <Flexbox align={'center'} className={styles.empty} justify={'center'}>

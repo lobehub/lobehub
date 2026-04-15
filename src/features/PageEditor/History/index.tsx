@@ -1,11 +1,11 @@
 'use client';
 
 import { ActionIcon, Button, Empty, Flexbox, Tag, Text } from '@lobehub/ui';
-import type { ModalInstance } from '@lobehub/ui/base-ui';
+import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { App, Tooltip } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { ArrowLeftIcon, Clock3Icon, RotateCcwIcon } from 'lucide-react';
+import { ArrowLeftIcon, ArrowLeftRightIcon, Clock3Icon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,6 +25,7 @@ import { editorSelectors } from '@/store/document/slices/editor';
 
 import { selectors, usePageEditorStore } from '../store';
 import { openDocumentCompareModal } from './CompareModal';
+import { formatHistoryAbsoluteTime, formatHistoryRowTime } from './formatHistoryDate';
 
 interface HistoryDayGroup {
   items: DocumentHistoryListItem[];
@@ -32,175 +33,142 @@ interface HistoryDayGroup {
   label: string;
 }
 
-const TIMELINE_DOT_SIZE = 8;
-const TIMELINE_LINE_INSET = 16;
-const TIMELINE_ROW_PADDING_TOP = 6;
-const TIMELINE_ROW_PADDING_INLINE = 8;
-const TIMELINE_ROW_PADDING_BOTTOM = 6;
-const TIMELINE_CONTENT_OFFSET = TIMELINE_LINE_INSET + TIMELINE_DOT_SIZE / 2 + 10;
+type TagColor = 'default' | 'success' | 'purple' | 'geekblue' | 'gold' | 'processing';
+
+const SOURCE_TAG_COLOR: Record<DocumentHistorySaveSource, TagColor> = {
+  autosave: 'default',
+  llm_call: 'purple',
+  manual: 'success',
+  restore: 'geekblue',
+  system: 'gold',
+};
 
 const styles = createStaticStyles(({ css }) => ({
   empty: css`
     height: 100%;
     padding: 24px;
   `,
-  dotArea: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: ${TIMELINE_DOT_SIZE}px;
-    margin-inline-start: ${TIMELINE_LINE_INSET - TIMELINE_DOT_SIZE / 2}px;
-  `,
   groupHeader: css`
     position: sticky;
     z-index: 1;
     inset-block-start: 0;
 
-    padding-block: 14px 2px;
-    padding-inline-start: ${TIMELINE_CONTENT_OFFSET}px;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+
+    padding-block: 14px 6px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
 
     background: ${cssVar.colorBgContainer};
   `,
-  groupLabel: css`
-    font-size: 14px;
-    font-weight: 500;
+  groupTitle: css`
+    font-size: 12px;
+    font-weight: 700;
     line-height: 1;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorText};
+  `,
+  groupCount: css`
+    font-size: 11px;
+    line-height: 1;
+    color: ${cssVar.colorTextTertiary};
   `,
   headerButton: css`
     padding-inline: 8px;
   `,
   list: css`
-    position: relative;
-
     overflow-y: auto;
     flex: 1;
-
     min-height: 0;
     padding-block: 0 20px;
-    padding-inline: 8px 12px;
-  `,
-  rail: css`
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: ${TIMELINE_LINE_INSET}px;
-
-    width: 1px;
-
-    background: ${cssVar.colorFillSecondary};
   `,
   row: css`
+    cursor: pointer;
+
+    position: relative;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 16px;
+
+    transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
+
     &:hover,
     &:focus-within {
+      background: ${cssVar.colorFillQuaternary};
+
+      .history-source-tag {
+        opacity: 0;
+      }
+
       .history-actions {
         pointer-events: auto;
         opacity: 1;
       }
     }
   `,
-  rowBody: css`
-    flex: 1;
-
-    min-width: 0;
-    margin-inline-start: ${TIMELINE_CONTENT_OFFSET - TIMELINE_LINE_INSET - TIMELINE_DOT_SIZE / 2}px;
-    padding-block: ${TIMELINE_ROW_PADDING_TOP}px ${TIMELINE_ROW_PADDING_BOTTOM}px;
-    padding-inline: ${TIMELINE_ROW_PADDING_INLINE}px;
-    border-radius: 6px;
-
-    transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  rowBodyClickable: css`
-    cursor: pointer;
-  `,
   rowCurrent: css`
-    background: ${cssVar.colorFillTertiary};
+    cursor: default;
 
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
+    &:hover,
+    &:focus-within {
+      background: transparent;
+
+      .history-source-tag {
+        opacity: 1;
+      }
     }
-  `,
-  rowDot: css`
-    width: ${TIMELINE_DOT_SIZE}px;
-    height: ${TIMELINE_DOT_SIZE}px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 999px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: 0 0 0 3px ${cssVar.colorBgContainer};
-  `,
-  rowDotCurrent: css`
-    border-color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimary};
-  `,
-  rowDotRestore: css`
-    box-shadow:
-      0 0 0 2px ${cssVar.colorPrimaryBorder},
-      0 0 0 4px ${cssVar.colorBgContainer};
   `,
   rowTime: css`
     flex-shrink: 0;
-    font-size: 14px;
+
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     line-height: 1;
     color: ${cssVar.colorText};
   `,
-  rowMeta: css`
-    overflow: hidden;
-
+  rowTimeCurrent: css`
     font-size: 14px;
-    line-height: 1;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: ${cssVar.colorPrimary};
   `,
-
-  versionActions: css`
-    pointer-events: none;
+  currentBadge: css`
     flex-shrink: 0;
+    margin: 0;
+  `,
+  rowSpacer: css`
+    flex: 1;
+  `,
+  sourceTag: css`
+    flex-shrink: 0;
+    margin: 0;
+    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
+  `,
+  actions: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset-block: 50%;
+    inset-inline-end: 10px;
+    transform: translateY(-50%);
+
+    display: flex;
+    gap: 2px;
+    align-items: center;
+
     opacity: 0;
+
     transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
   `,
 }));
 
-const formatAbsoluteTime = (savedAt: string) => dayjs(savedAt).format('MMMM D, YYYY h:mm A');
-const formatDayGroupLabel = (savedAt: string) => {
-  const d = dayjs(savedAt);
-  const now = dayjs();
-  if (d.isSame(now, 'day')) return 'Today';
-  if (d.isSame(now.subtract(1, 'day'), 'day')) return 'Yesterday';
-  return d.format('MMMM D, YYYY');
-};
-
-const createHistoryDayGroups = (items: DocumentHistoryListItem[]): HistoryDayGroup[] => {
-  const groups = new Map<string, HistoryDayGroup>();
-
-  for (const item of items) {
-    const key = dayjs(item.savedAt).format('YYYY-MM-DD');
-    const group = groups.get(key);
-
-    if (group) {
-      group.items.push(item);
-      continue;
-    }
-
-    groups.set(key, {
-      items: [item],
-      key,
-      label: formatDayGroupLabel(item.savedAt),
-    });
-  }
-
-  return [...groups.values()];
-};
-
 const HistoryPanel = memo(() => {
   const { t } = useTranslation(['common', 'file']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
 
   const documentId = usePageEditorStore(selectors.documentId);
   const editor = usePageEditorStore(selectors.editor);
@@ -227,7 +195,34 @@ const HistoryPanel = memo(() => {
   );
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
-  const groups = useMemo(() => createHistoryDayGroups(items), [items]);
+  const groups = useMemo<HistoryDayGroup[]>(() => {
+    const now = dayjs();
+    const todayLabel = t('pageEditor.history.dayLabel.today', { ns: 'file' });
+    const yesterdayLabel = t('pageEditor.history.dayLabel.yesterday', { ns: 'file' });
+
+    const map = new Map<string, HistoryDayGroup>();
+
+    for (const item of items) {
+      const d = dayjs(item.savedAt);
+      const key = d.format('YYYY-MM-DD');
+      const group = map.get(key);
+
+      if (group) {
+        group.items.push(item);
+        continue;
+      }
+
+      let label: string;
+      if (d.isSame(now, 'day')) label = todayLabel;
+      else if (d.isSame(now.subtract(1, 'day'), 'day')) label = yesterdayLabel;
+      else label = d.format('MMMM D, YYYY');
+
+      map.set(key, { items: [item], key, label });
+    }
+
+    return [...map.values()];
+  }, [items, t]);
+
   const saveSourceLabels = useMemo<Record<DocumentHistorySaveSource, string>>(
     () => ({
       autosave: t('pageEditor.history.saveSource.autosave', { ns: 'file' }),
@@ -243,11 +238,11 @@ const HistoryPanel = memo(() => {
     (item: DocumentHistoryListItem, onSuccess?: () => void) => {
       if (!documentId || !editor || item.isCurrent) return;
 
-      modal.confirm({
+      confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: t('pageEditor.history.restoreConfirm.content', {
           ns: 'file',
-          savedAt: formatAbsoluteTime(item.savedAt),
+          savedAt: formatHistoryAbsoluteTime(item.savedAt),
         }),
         okText: t('pageEditor.history.restore', { ns: 'file' }),
         onOk: async () => {
@@ -274,13 +269,10 @@ const HistoryPanel = memo(() => {
             setRestoringHistoryId(null);
           }
         },
-        title: t('pageEditor.history.restoreConfirm.title', {
-          ns: 'file',
-          savedAt: formatAbsoluteTime(item.savedAt),
-        }),
+        title: t('pageEditor.history.restoreConfirm.title', { ns: 'file' }),
       });
     },
-    [documentId, editor, markDirty, message, modal, performSave, t],
+    [documentId, editor, markDirty, message, performSave, t],
   );
 
   const openCompareModal = useCallback(
@@ -339,77 +331,80 @@ const HistoryPanel = memo(() => {
         </Flexbox>
       ) : (
         <Flexbox className={styles.list} gap={0}>
-          <div className={styles.rail} />
           {groups.map((group) => (
             <Flexbox gap={0} key={group.key}>
-              <Flexbox horizontal align={'center'} className={styles.groupHeader}>
-                <Text className={styles.groupLabel}>{group.label}</Text>
-              </Flexbox>
+              <div className={styles.groupHeader}>
+                <span className={styles.groupTitle}>{group.label}</span>
+                <span className={styles.groupCount}>
+                  {t('pageEditor.history.versionCount', {
+                    count: group.items.length,
+                    ns: 'file',
+                  })}
+                </span>
+              </div>
 
               {group.items.map((item) => {
                 const isRestoring = restoringHistoryId === item.id;
-                const timeLabel = dayjs(item.savedAt).format('h:mm A');
+                const timeLabel = formatHistoryRowTime(item.savedAt);
 
                 return (
-                  <Flexbox horizontal align={'center'} className={styles.row} gap={0} key={item.id}>
-                    <div className={styles.dotArea}>
-                      <div
-                        className={cx(
-                          styles.rowDot,
-                          item.isCurrent && styles.rowDotCurrent,
-                          item.saveSource === 'restore' && styles.rowDotRestore,
-                        )}
-                      />
-                    </div>
-                    <Flexbox
-                      horizontal
-                      align={'center'}
-                      distribution={'space-between'}
-                      gap={8}
-                      className={cx(
-                        styles.rowBody,
-                        item.isCurrent && styles.rowCurrent,
-                        !item.isCurrent && styles.rowBodyClickable,
-                      )}
-                      onClick={item.isCurrent ? undefined : () => openCompareModal(item.id)}
+                  <div
+                    className={cx(styles.row, item.isCurrent && styles.rowCurrent)}
+                    key={item.id}
+                    onClick={item.isCurrent ? undefined : () => openCompareModal(item.id)}
+                  >
+                    <Tooltip title={formatHistoryAbsoluteTime(item.savedAt)}>
+                      <span className={cx(styles.rowTime, item.isCurrent && styles.rowTimeCurrent)}>
+                        {timeLabel}
+                      </span>
+                    </Tooltip>
+
+                    {item.isCurrent && (
+                      <Tag
+                        className={styles.currentBadge}
+                        color={'processing'}
+                        size={'small'}
+                        variant={'borderless'}
+                      >
+                        {t('pageEditor.history.current', { ns: 'file' })}
+                      </Tag>
+                    )}
+
+                    <span className={styles.rowSpacer} />
+
+                    <Tag
+                      className={cx(styles.sourceTag, 'history-source-tag')}
+                      color={SOURCE_TAG_COLOR[item.saveSource]}
+                      size={'small'}
+                      variant={'borderless'}
                     >
-                      <Tooltip title={formatAbsoluteTime(item.savedAt)}>
-                        <Flexbox
-                          horizontal
-                          align={'center'}
-                          gap={8}
-                          style={{ minWidth: 0, overflow: 'hidden' }}
-                        >
-                          <span className={styles.rowTime}>{timeLabel}</span>
-                          {item.isCurrent && (
-                            <Tag color={'blue'} size={'small'} style={{ margin: 0 }}>
-                              {t('pageEditor.history.current', { ns: 'file' })}
-                            </Tag>
-                          )}
-                          <span className={styles.rowMeta}>
-                            {saveSourceLabels[item.saveSource]}
-                          </span>
-                        </Flexbox>
-                      </Tooltip>
-                      {!item.isCurrent && (
-                        <Flexbox
-                          horizontal
-                          align={'center'}
-                          className={`history-actions ${styles.versionActions}`}
-                          gap={6}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <ActionIcon
-                            icon={RotateCcwIcon}
-                            loading={isRestoring}
-                            size={{ blockSize: 26, borderRadius: '50%', size: 14 }}
-                            title={t('pageEditor.history.restore', { ns: 'file' })}
-                            onClick={() => handleRestore(item)}
-                          />
-                        </Flexbox>
-                      )}
-                    </Flexbox>
-                  </Flexbox>
+                      {saveSourceLabels[item.saveSource]}
+                    </Tag>
+
+                    {!item.isCurrent && (
+                      <Flexbox
+                        horizontal
+                        align={'center'}
+                        className={cx(styles.actions, 'history-actions')}
+                        gap={2}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <ActionIcon
+                          icon={ArrowLeftRightIcon}
+                          size={{ blockSize: 26, borderRadius: '50%', size: 14 }}
+                          title={t('pageEditor.history.compare', { ns: 'file' })}
+                          onClick={() => openCompareModal(item.id)}
+                        />
+                        <ActionIcon
+                          icon={RotateCcwIcon}
+                          loading={isRestoring}
+                          size={{ blockSize: 26, borderRadius: '50%', size: 14 }}
+                          title={t('pageEditor.history.restore', { ns: 'file' })}
+                          onClick={() => handleRestore(item)}
+                        />
+                      </Flexbox>
+                    )}
+                  </div>
                 );
               })}
             </Flexbox>

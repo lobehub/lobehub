@@ -11,6 +11,8 @@ import type {
   DocumentHistorySaveSource,
 } from '@/server/routers/lambda/_schema/documentHistory';
 
+import { formatHistoryRowTime } from '../formatHistoryDate';
+
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
     overflow-y: auto;
@@ -207,7 +209,7 @@ const HistorySidebar = memo<HistorySidebarProps>(
                     >
                       <Flexbox gap={2}>
                         <Flexbox horizontal align={'center'} gap={4}>
-                          <Text className={styles.time}>{dayjs(item.savedAt).format('HH:mm')}</Text>
+                          <Text className={styles.time}>{formatHistoryRowTime(item.savedAt)}</Text>
                           {item.isCurrent && (
                             <Tag className={styles.tag} variant={'borderless'}>
                               {t('pageEditor.history.current')}
