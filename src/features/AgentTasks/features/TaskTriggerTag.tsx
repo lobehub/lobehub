@@ -2,12 +2,16 @@ import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-const formatInterval = (seconds: number) => {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
-  if (seconds % 60 === 0) return `${seconds / 60}m`;
-  return `${seconds}s`;
+const formatInterval = (
+  seconds: number,
+  t: (key: string, options?: { count?: number }) => string,
+) => {
+  if (seconds < 60) return t('taskSchedule.unit.second', { count: seconds });
+  if (seconds % 3600 === 0) return t('taskSchedule.unit.hour', { count: seconds / 3600 });
+  if (seconds % 60 === 0) return t('taskSchedule.unit.minute', { count: seconds / 60 });
+  return t('taskSchedule.unit.second', { count: seconds });
 };
 
 interface TaskTriggerTagProps {
@@ -19,24 +23,31 @@ interface TaskTriggerTagProps {
 
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
   ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
+    const { t } = useTranslation('chat');
     const data = useMemo(() => {
       if (schedulePattern) {
         const timezone = scheduleTimezone ? ` (${scheduleTimezone})` : '';
         return {
-          tooltip: `Schedule · ${schedulePattern} ${timezone}`,
+          tooltip: t('taskSchedule.tag.schedule', {
+            schedule: schedulePattern,
+            timezone,
+          }),
           text: `${schedulePattern} ${timezone}`,
         };
       }
 
       if (heartbeatInterval && heartbeatInterval > 0) {
+        const every = t('taskSchedule.tag.every', {
+          interval: formatInterval(heartbeatInterval, t),
+        });
         return {
-          tooltip: `Heartbeat · every ${formatInterval(heartbeatInterval)}`,
-          text: `every ${formatInterval(heartbeatInterval)}`,
+          tooltip: t('taskSchedule.tag.heartbeat', { every }),
+          text: every,
         };
       }
 
       return undefined;
-    }, [heartbeatInterval, schedulePattern, scheduleTimezone]);
+    }, [heartbeatInterval, schedulePattern, scheduleTimezone, t]);
 
     if (mode === 'inline') {
       return (
@@ -44,7 +55,7 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
           <Flexbox horizontal align="center" gap={10}>
             <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
             <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
-              {data?.text ?? 'Add schedule'}
+              {data?.text ?? t('taskSchedule.tag.add')}
             </Text>
           </Flexbox>
         </Tooltip>

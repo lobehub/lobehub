@@ -31,7 +31,7 @@ const AgentAvatars = memo<AgentAvatarsProps>(({ agents }) => {
           avatar: agent?.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
           background: agent.backgroundColor || cssVar.colorBgContainer,
           key: agent.id || index.toString(),
-          title: agent?.title || (isInbox ? 'Lobe AI' : t('defaultSession')),
+          title: agent?.title || (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession')),
         };
       })}
     />

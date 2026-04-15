@@ -3,23 +3,38 @@ import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { TreeDownRightIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-const getActivityText = (activity?: TaskDetailActivity) => {
+const getActivityText = (
+  activity: TaskDetailActivity | undefined,
+  t: (key: string, options?: Record<string, string | number>) => string,
+) => {
   if (!activity) return undefined;
 
   if (activity.type === 'comment') return activity.content || undefined;
   if (activity.type === 'topic') {
-    const title = activity.title || 'Untitled topic';
-    return activity.seq ? `Topic #${activity.seq}: ${title}` : `Topic: ${title}`;
+    const title = activity.title || t('taskDetail.latestActivity.untitledTopic');
+    return activity.seq
+      ? t('taskDetail.latestActivity.topicWithSeq', { seq: activity.seq, title })
+      : t('taskDetail.latestActivity.topic', { title });
   }
 
   const briefTitle = activity.title || activity.summary;
-  if (!briefTitle) return activity.briefType ? `Brief (${activity.briefType})` : 'Brief';
+  if (!briefTitle) {
+    return activity.briefType
+      ? t('taskDetail.latestActivity.briefWithTypeOnly', { type: activity.briefType })
+      : t('taskDetail.latestActivity.briefOnly');
+  }
 
-  if (activity.resolvedAction) return `${briefTitle} · ${activity.resolvedAction}`;
+  if (activity.resolvedAction) {
+    return t('taskDetail.latestActivity.briefWithAction', {
+      action: activity.resolvedAction,
+      title: briefTitle,
+    });
+  }
   return activity.briefType
-    ? `Brief (${activity.briefType}): ${briefTitle}`
-    : `Brief: ${briefTitle}`;
+    ? t('taskDetail.latestActivity.briefWithType', { type: activity.briefType, title: briefTitle })
+    : t('taskDetail.latestActivity.brief', { title: briefTitle });
 };
 
 interface TaskLatestActivityProps {
@@ -27,6 +42,7 @@ interface TaskLatestActivityProps {
 }
 
 const TaskLatestActivity = memo<TaskLatestActivityProps>(({ activities }) => {
+  const { t } = useTranslation('chat');
   const latestActivityText = useMemo(() => {
     if (!activities || activities.length === 0) return undefined;
 
@@ -36,8 +52,8 @@ const TaskLatestActivity = memo<TaskLatestActivityProps>(({ activities }) => {
       return timeB - timeA;
     })[0];
 
-    return getActivityText(latest);
-  }, [activities]);
+    return getActivityText(latest, t);
+  }, [activities, t]);
 
   if (!latestActivityText) return null;
 

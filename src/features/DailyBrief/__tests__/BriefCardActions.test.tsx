@@ -10,10 +10,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
-        'brief.resolved': 'Resolved',
+        'brief.resolved': 'Marked as resolved',
         'cancel': 'Cancel',
-        'brief.commentPlaceholder': 'Enter feedback...',
-        'brief.commentSubmit': 'Submit',
+        'brief.commentPlaceholder': 'Share your feedback...',
+        'brief.commentSubmit': 'Submit feedback',
       };
       return map[key] || key;
     },
@@ -46,8 +46,11 @@ describe('BriefCardActions', () => {
   });
 
   it('should render comment action button', () => {
-    render(<BriefCardActions briefId="brief-1" briefType="decision" />);
-    expect(screen.getByText('Feedback')).toBeInTheDocument();
+    const { container } = render(
+      <BriefCardActions briefId="brief-1" briefType="decision" taskId="task-1" />,
+    );
+    const commentButton = container.querySelector('.brief-comment-btn');
+    expect(commentButton).toBeInTheDocument();
   });
 
   it('should call resolveBrief on resolve button click', async () => {
@@ -60,20 +63,23 @@ describe('BriefCardActions', () => {
   });
 
   it('should hide action buttons when comment button clicked', () => {
-    render(<BriefCardActions briefId="brief-1" briefType="decision" />);
-
-    fireEvent.click(screen.getByText('Feedback'));
+    const { container } = render(
+      <BriefCardActions briefId="brief-1" briefType="decision" taskId="task-1" />,
+    );
+    const commentButton = container.querySelector('.brief-comment-btn');
+    expect(commentButton).toBeInTheDocument();
+    fireEvent.click(commentButton!);
 
     // CommentInput replaces action buttons
     expect(screen.queryByText('Approve')).not.toBeInTheDocument();
-    expect(screen.getByText('Submit')).toBeInTheDocument();
+    expect(screen.getByText('Submit feedback')).toBeInTheDocument();
     expect(screen.getByText('Cancel')).toBeInTheDocument();
   });
 
   it('should show resolved state when resolvedAction is set', () => {
     render(<BriefCardActions briefId="brief-1" briefType="decision" resolvedAction="approve" />);
 
-    expect(screen.getByText('Resolved')).toBeInTheDocument();
+    expect(screen.getByText('Marked as resolved')).toBeInTheDocument();
     expect(screen.queryByText('Approve')).not.toBeInTheDocument();
   });
 
