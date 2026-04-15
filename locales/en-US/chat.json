@@ -384,6 +384,7 @@
   "task.status.initializing": "Initializing task...",
   "task.subtask": "Subtask",
   "taskDetail.activities": "Activity",
+  "taskDetail.activitiesEmpty": "No activity yet",
   "taskDetail.blockedBy": "Blocked by {{id}}",
   "taskDetail.commentPlaceholder": "Leave a comment...",
   "taskDetail.deleteConfirm.content": "This action cannot be undone.",

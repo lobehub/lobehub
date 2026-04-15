@@ -10,7 +10,6 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
-import { styles } from '../shared/style';
 
 const TASK_STATUS_SET = new Set([
   'backlog',
@@ -53,10 +52,10 @@ const TaskParentBar = memo(() => {
       });
   }, [parent?.identifier]);
 
-  if (!parent) return null;
+  if (!parent) return <Flexbox height={8} />;
 
   return (
-    <Flexbox horizontal align="center" className={styles.parentBar} gap={8}>
+    <Flexbox horizontal align="center" gap={8}>
       <Text fontSize={12} type={'secondary'}>
         {t('taskDetail.subIssueOf')}
       </Text>

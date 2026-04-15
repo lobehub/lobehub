@@ -1,125 +1,19 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Task list page
-  breadcrumb: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-  container: css`
-    overflow-y: auto;
-    flex: 1;
-  `,
-  content: css`
-    align-self: center;
-    width: min(100%, 960px);
-    padding-block: 16px;
-    padding-inline: 16px;
-  `,
-  header: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-block-end: 12px;
-  `,
-  switchGroup: css`
-    display: flex;
-    gap: 2px;
-
-    padding: 2px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
-  `,
-
-  // Task detail page
-  detailContent: css`
-    align-self: center;
-    width: min(100%, 960px);
-    padding-block: 16px;
-    padding-inline: 16px;
-  `,
-  detailLayout: css`
-    display: flex;
-    gap: 24px;
-    align-self: center;
-
-    width: min(100%, 1280px);
-    padding-block: 16px;
-    padding-inline: 16px;
-  `,
-  detailMain: css`
-    flex: 1;
-    min-width: 0;
-  `,
-
-  // Properties sidebar
-  propertiesPanel: css`
-    flex-shrink: 0;
-    align-self: flex-start;
-
-    width: 240px;
-    padding: 8px;
-    border: 1px solid ${cssVar.colorFillTertiary};
-    border-radius: 10px;
-  `,
-  propertiesHeader: css`
-    cursor: pointer;
-    padding-block: 4px;
-    padding-inline: 6px;
-  `,
-  propertyRow: css`
-    cursor: pointer;
-
-    padding-block: 6px;
-    padding-inline: 6px;
-    border-radius: 6px;
-
-    transition: background 0.2s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  titleInput: css`
-    flex: 1;
-
-    padding: 0;
-
-    font-size: 28px;
-    font-weight: 600;
-    line-height: 1.3;
-  `,
-
   // Parent bar
   parentBar: css`
     padding-block: 6px;
   `,
-  parentLink: css`
-    cursor: pointer;
 
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 6px;
+  titleInput: css`
+    flex: 1;
 
-    transition: background 0.2s ${cssVar.motionEaseInOut};
+    padding-inline: 0;
 
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  navItem: css`
-    cursor: pointer;
-
-    min-height: 34px;
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    transition: background 0.2s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1.3;
   `,
 
   // Subtasks
@@ -127,45 +21,22 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
     padding-block: 6px;
   `,
-  /* Tree branch: non-last child — vertical line extends full height */
-  treeBranch: css`
-    position: relative;
-    margin-inline-start: 8px;
+  subtaskTree: css`
+    .ant-tree-node-content-wrapper {
+      overflow: hidden;
+      display: flex;
+      gap: 4px;
+      align-items: center;
 
-    /* Vertical line: aligned with the center of the circle (8px from left) */
-    padding-inline-start: 24px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+      min-height: 36px;
+      padding-block: 2px;
 
-    /* Horizontal connector: from vertical line to circle */
-    &::before {
-      content: '';
-
-      position: absolute;
-      inset-block-start: 18px;
-      inset-inline-start: 0;
-
-      width: 16px;
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      color: ${cssVar.colorTextSecondary};
     }
-  `,
-  /* Tree branch: last child — L-shape connector, vertical line stops */
-  treeBranchLast: css`
-    position: relative;
-    margin-inline-start: 8px;
-    padding-inline-start: 24px;
 
-    /* L-shape: vertical from top to row center + horizontal to circle */
-    &::before {
-      content: '';
-
-      position: absolute;
-      inset-block-start: 0;
-      inset-inline-start: 0;
-
-      width: 16px;
-      height: 18px;
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-      border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+    .ant-tree-switcher {
+      margin-inline-end: 0;
+      color: ${cssVar.colorTextDescription};
     }
   `,
   treeRow: css`
@@ -185,41 +56,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillQuaternary};
     }
   `,
-  subtaskCircle: css`
-    flex-shrink: 0;
-
-    width: 16px;
-    height: 16px;
-    border: 1.5px solid ${cssVar.colorTextQuaternary};
-    border-radius: 50%;
-  `,
-  subtaskCircleDone: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-  `,
 
   // Activities
-  activityDivider: css`
-    margin-block-start: 16px;
-    padding-block: 10px;
-    border-block-start: 1px solid ${cssVar.colorFillTertiary};
-  `,
-  activityItem: css`
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    min-height: 36px;
-    padding-block: 8px;
-  `,
   activityAvatar: css`
     display: flex;
     flex-shrink: 0;
