@@ -1,8 +1,9 @@
-import type { TaskDetailActivityAuthor } from '@lobechat/types';
+import type { TaskActivityType, TaskDetailActivityAuthor } from '@lobechat/types';
 import { ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Input } from 'antd';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
+import type { LucideIcon } from 'lucide-react';
 import { ArrowUp, BotMessageSquare, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +13,7 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 
 import { styles } from './style';
 
-const typeIconMap = {
+const typeIconMap: Record<TaskActivityType, LucideIcon> = {
   brief: Zap,
   comment: MessageCircle,
   topic: MessagesSquare,
@@ -24,9 +25,9 @@ const ActivityItem = memo<{
   summary?: string;
   time?: string;
   title?: string;
-  type: string;
+  type: TaskActivityType;
 }>(({ type, title, content, summary, time, author }) => {
-  const LucideIcon = typeIconMap[type as keyof typeof typeIconMap] ?? MessageCircle;
+  const LucideIcon = typeIconMap[type] ?? MessageCircle;
   const relTime = time ? dayjs(time).fromNow() : '';
 
   let displayText = '';
