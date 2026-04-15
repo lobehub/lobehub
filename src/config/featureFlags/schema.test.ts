@@ -107,6 +107,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       welcome_suggest: true,
       knowledge_base: false,
       rag_eval: true,
+      agent_onboarding: true,
       market: true,
       speech_to_text: true,
       changelog: false,
@@ -130,6 +131,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       showWelcomeSuggest: true,
       enableKnowledgeBase: false,
       enableRAGEval: true,
+      enableAgentOnboarding: true,
       showMarket: true,
       enableSTT: true,
       showCloudPromotion: true,
@@ -142,6 +144,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     const userId = 'user-123';
     const config = {
       edit_agent: ['user-123', 'user-456'],
+      agent_onboarding: ['user-123'],
       create_session: ['user-789'],
       dalle: true,
       knowledge_base: ['user-123'],
@@ -151,6 +154,7 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.isAgentEditable).toBe(true); // user-123 is in allowlist
 
+    expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableKnowledgeBase).toBe(true); // user-123 is in allowlist
   });
 
@@ -169,12 +173,14 @@ describe('mapFeatureFlagsEnvToState', () => {
 
   it('should return false for array flags when no user ID provided', () => {
     const config = {
+      agent_onboarding: ['user-1'],
       edit_agent: ['user-123', 'user-456'],
       create_session: true,
     };
 
     const mappedState = mapFeatureFlagsEnvToState(config);
 
+    expect(mappedState.enableAgentOnboarding).toBe(false);
     expect(mappedState.isAgentEditable).toBe(false);
   });
 
@@ -182,6 +188,7 @@ describe('mapFeatureFlagsEnvToState', () => {
     const userId = 'user-123';
     const config = {
       edit_agent: ['user-123'],
+      agent_onboarding: ['user-123'],
       create_session: true,
       dalle: false,
       ai_image: ['user-456'],
@@ -193,6 +200,7 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.isAgentEditable).toBe(true);
 
+    expect(mappedState.enableAgentOnboarding).toBe(true);
     expect(mappedState.showAiImage).toBe(false);
     expect(mappedState.enableKnowledgeBase).toBe(true);
     expect(mappedState.enableRAGEval).toBe(true);

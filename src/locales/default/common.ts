@@ -7,6 +7,10 @@ export default {
   'alert.cloud.descOnMobile':
     'All registered users get {{credit}} free computing credits per month—no setup needed.',
   'alert.cloud.title': '{{name}} beta is live',
+  'agentOnboardingPromo.actionLabel': 'Try it now',
+  'agentOnboardingPromo.description':
+    'Classic onboarding is complete. Try the new conversational flow to shape your agent in a few quick turns.',
+  'agentOnboardingPromo.title': 'Try conversational onboarding',
   'appLoading.appIdle': 'Ready to start',
   'appLoading.appInitializing': 'Application is starting...',
   'appLoading.failed':

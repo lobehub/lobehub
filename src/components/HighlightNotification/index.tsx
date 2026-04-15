@@ -4,14 +4,16 @@ import { HeartFilled } from '@ant-design/icons';
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
-import { type ReactNode } from 'react';
+import type { HTMLAttributeAnchorTarget, ReactNode } from 'react';
 import { memo } from 'react';
 
 export interface HighlightNotificationProps {
   actionHref?: string;
   actionLabel?: ReactNode;
+  actionTarget?: HTMLAttributeAnchorTarget;
   description?: ReactNode;
   image?: string;
+  onAction?: () => void;
   onActionClick?: () => void;
   onClose?: () => void;
   open?: boolean;
@@ -63,7 +65,18 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const HighlightNotification = memo<HighlightNotificationProps>(
-  ({ open, onClose, onActionClick, image, title, description, actionLabel, actionHref }) => {
+  ({
+    actionHref,
+    actionLabel,
+    actionTarget = '_blank',
+    description,
+    image,
+    onAction,
+    onActionClick,
+    onClose,
+    open,
+    title,
+  }) => {
     if (!open) return null;
 
     return (
@@ -74,18 +87,30 @@ const HighlightNotification = memo<HighlightNotificationProps>(
           <Flexbox gap={4} padding={12}>
             {title && <div className={styles.title}>{title}</div>}
             {description && <div className={styles.description}>{description}</div>}
-            {actionLabel && (
+            {actionLabel && actionHref && (
               <a
                 className={styles.action}
-                href={actionHref || '/'}
+                href={actionHref}
                 rel="noopener noreferrer"
-                target="_blank"
+                target={actionTarget}
                 onClick={onActionClick}
               >
                 <Button block icon={HeartFilled} size="small" type="primary">
                   {actionLabel}
                 </Button>
               </a>
+            )}
+            {actionLabel && !actionHref && (
+              <Button
+                block
+                className={styles.action}
+                icon={HeartFilled}
+                size="small"
+                type="primary"
+                onClick={onAction}
+              >
+                {actionLabel}
+              </Button>
             )}
           </Flexbox>
         </Flexbox>
