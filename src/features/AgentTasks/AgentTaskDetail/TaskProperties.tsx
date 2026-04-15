@@ -1,11 +1,15 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
 import { Block, Text } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { INBOX_SESSION_ID } from '@/const/session';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
+import { taskDetailSelectors, taskListSelectors } from '@/store/task/selectors';
 
+import AgentAvatars from '../features/AgentAvatars';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
@@ -37,13 +41,33 @@ const PRIORITY_META: Record<TaskPriority, PriorityMeta> = {
 };
 
 const TaskProperties = memo(() => {
-  const { t } = useTranslation('chat');
-  const [collapsed, setCollapsed] = useState(false);
+  const { t } = useTranslation(['chat', 'common']);
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
+  const taskList = useTaskStore(taskListSelectors.taskList);
+
+  const participants = useMemo(
+    () => taskList.find((task) => task.identifier === taskId)?.participants ?? [],
+    [taskId, taskList],
+  );
+  const firstParticipant = participants[0];
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const firstParticipantMeta = useAgentStore(
+    agentSelectors.getAgentMetaById(firstParticipant?.id || ''),
+  );
+  const isInboxParticipant =
+    firstParticipant?.id === INBOX_SESSION_ID ||
+    (!!inboxAgentId && firstParticipant?.id === inboxAgentId);
+  const firstParticipantName =
+    firstParticipantMeta?.title?.trim() ||
+    firstParticipant?.name ||
+    (isInboxParticipant ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
+  const restCount = Math.max(participants.length - 1, 0);
+  const participantLabel =
+    participants.length <= 1 ? firstParticipantName : `${firstParticipantName} (+${restCount})`;
 
   if (!taskId) return null;
 
@@ -63,7 +87,7 @@ const TaskProperties = memo(() => {
           variant={'borderless'}
         >
           <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
-          <Text>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
+          <Text weight={500}>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
         </Block>
       </TaskStatusTag>
 
@@ -78,7 +102,7 @@ const TaskProperties = memo(() => {
           variant={'borderless'}
         >
           <TaskPriorityTag disableDropdown priority={priority} size={16} taskIdentifier={taskId} />
-          <Text>{t(`taskDetail.${priorityMeta.labelKey}` as never)}</Text>
+          <Text weight={500}>{t(`taskDetail.${priorityMeta.labelKey}` as never)}</Text>
         </Block>
       </TaskPriorityTag>
 
@@ -95,6 +119,20 @@ const TaskProperties = memo(() => {
           <TaskTriggerTag heartbeatInterval={heartbeatInterval} mode="inline" />
         </Block>
       </TaskScheduleConfig>
+
+      {participants.length > 0 && (
+        <Block
+          horizontal
+          align="center"
+          gap={8}
+          paddingBlock={4}
+          paddingInline={'6px 8px'}
+          variant={'borderless'}
+        >
+          <AgentAvatars agents={participants} size={20} />
+          <Text weight={500}>{participantLabel}</Text>
+        </Block>
+      )}
     </Block>
   );
 });

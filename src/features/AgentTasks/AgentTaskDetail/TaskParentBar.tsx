@@ -1,6 +1,5 @@
 import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import { Button, Flexbox, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -69,8 +68,7 @@ const TaskParentBar = memo(() => {
           if (agentId) navigate(`/agent/${agentId}/tasks/${parent.identifier}`);
         }}
       >
-        <Text style={{ color: cssVar.colorTextSecondary }}>{parent.identifier}</Text>
-        <Text weight="bold">{parent.name}</Text>
+        <Text weight={500}>{parent.name}</Text>
       </Button>
       {parentSubtasks.length > 0 && (
         <TaskSubtaskProgressTag
