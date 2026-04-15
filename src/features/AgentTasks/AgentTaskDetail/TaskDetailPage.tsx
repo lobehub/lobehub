@@ -61,7 +61,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
           <Loading debugId="TaskDetail" />
         ) : (
           <>
-            <Flexbox horizontal gap={16}>
+            <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
               <Flexbox flex={1}>
                 <TaskDetailTitleInput />
                 <Flexbox align={'flex-start'} gap={8}>

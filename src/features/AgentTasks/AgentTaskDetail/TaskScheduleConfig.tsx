@@ -13,23 +13,6 @@ type ScheduleMode = 'interval' | 'scheduler';
 type IntervalUnit = 'hours' | 'minutes' | 'seconds';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  configured: css`
-    position: relative;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block-start: 4px;
-      inset-inline-end: 4px;
-
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-
-      background: ${cssVar.colorPrimary};
-    }
-  `,
   label: css`
     flex-shrink: 0;
     width: 80px;
@@ -170,8 +153,6 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const activeTaskInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const finalTaskId = taskId ?? activeTaskId;
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
-  const isConfigured = finalCurrentInterval > 0;
-
   const [mode, setMode] = useState<ScheduleMode>('interval');
 
   const content = (
@@ -196,19 +177,9 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   return (
     <Popover content={content} placement="bottomLeft" trigger="click">
       {children ? (
-        <div
-          className={isConfigured ? styles.configured : undefined}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {children}
-        </div>
+        <div onClick={(e) => e.stopPropagation()}>{children}</div>
       ) : (
-        <ActionIcon
-          className={isConfigured ? styles.configured : undefined}
-          icon={TimerIcon}
-          size="small"
-          title={t('taskSchedule.title')}
-        />
+        <ActionIcon icon={TimerIcon} size="small" title={t('taskSchedule.title')} />
       )}
     </Popover>
   );
