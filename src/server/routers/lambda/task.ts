@@ -498,7 +498,7 @@ export const taskRouter = router({
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
       await model.delete(task.id);
-      return { message: 'Task deleted', success: true };
+      return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:delete]', error);

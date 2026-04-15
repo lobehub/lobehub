@@ -250,6 +250,12 @@ export const formatTaskEdited = (identifier: string, changes: string[]): string 
   `Task ${identifier} updated:\n  ${changes.join('\n  ')}`;
 
 /**
+ * Format deleteTask response
+ */
+export const formatTaskDeleted = (identifier: string, name?: string | null): string =>
+  name ? `Task ${identifier} "${name}" has been deleted.` : `Task ${identifier} has been deleted.`;
+
+/**
  * Format dependency change response
  */
 export const formatDependencyAdded = (task: string, dependsOn: string): string =>

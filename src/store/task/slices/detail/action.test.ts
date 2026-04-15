@@ -129,7 +129,7 @@ describe('TaskDetailSliceAction', () => {
   });
 
   describe('deleteTask', () => {
-    it('should remove from map and clear activeTaskId', async () => {
+    it('should remove from map, clear activeTaskId, and return deleted task data', async () => {
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {
@@ -137,10 +137,15 @@ describe('TaskDetailSliceAction', () => {
         },
       });
 
-      vi.mocked(taskService.delete).mockResolvedValue({ success: true } as any);
+      vi.mocked(taskService.delete).mockResolvedValue({
+        data: { identifier: 'T-1', name: 'Test Task' },
+        success: true,
+      } as any);
 
-      await useTaskStore.getState().deleteTask('T-1');
+      const result = await useTaskStore.getState().deleteTask('T-1');
 
+      expect(result?.identifier).toBe('T-1');
+      expect(result?.name).toBe('Test Task');
       expect(useTaskStore.getState().taskDetailMap['T-1']).toBeUndefined();
       expect(useTaskStore.getState().activeTaskId).toBeUndefined();
     });
@@ -154,10 +159,27 @@ describe('TaskDetailSliceAction', () => {
 
       vi.mocked(taskService.delete).mockImplementation(async () => {
         expect(useTaskStore.getState().isDeletingTask).toBe(true);
-        return { success: true } as any;
+        return { data: { identifier: 'T-1' }, success: true } as any;
       });
 
       await useTaskStore.getState().deleteTask('T-1');
+      expect(useTaskStore.getState().isDeletingTask).toBe(false);
+    });
+
+    it('should rollback optimistic delete and propagate error on failure', async () => {
+      const snapshot = {
+        identifier: 'T-1',
+        instruction: 'Test',
+        name: 'Original',
+        status: 'backlog',
+      };
+      useTaskStore.setState({ taskDetailMap: { 'T-1': snapshot as any } });
+
+      vi.mocked(taskService.delete).mockRejectedValue(new Error('server down'));
+
+      await expect(useTaskStore.getState().deleteTask('T-1')).rejects.toThrow('server down');
+
+      expect(useTaskStore.getState().taskDetailMap['T-1']).toEqual(snapshot);
       expect(useTaskStore.getState().isDeletingTask).toBe(false);
     });
   });

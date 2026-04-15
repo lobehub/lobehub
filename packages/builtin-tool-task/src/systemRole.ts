@@ -5,7 +5,7 @@ export const systemPrompt = `You have access to Task management tools. Use them 
 - **viewTask**: View details of a specific task by identifier
 - **editTask**: Modify a task's name, instruction, priority, dependencies (addDependency/removeDependency), or review config
 - **updateTaskStatus**: Change a task's status (e.g. mark as completed when done, or cancel if no longer needed)
-- **deleteTask**: Delete a task
+- **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible
 
 When planning work:
 1. Create tasks for each major piece of work (use parentIdentifier to organize as subtasks)

@@ -10,6 +10,7 @@ import type { TaskDetailDispatch } from './reducer';
 import { taskDetailReducer } from './reducer';
 
 type CreatedTask = NonNullable<Awaited<ReturnType<typeof taskService.create>>['data']>;
+type DeletedTask = NonNullable<Awaited<ReturnType<typeof taskService.delete>>['data']>;
 
 // config / heartbeatInterval / heartbeatTimeout are not exposed here:
 // - model/provider goes through configSlice.updateTaskModelConfig
@@ -79,21 +80,29 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
-  deleteTask = async (id: string): Promise<void> => {
+  deleteTask = async (identifier: string): Promise<DeletedTask | null> => {
+    const snapshot = this.#get().taskDetailMap[identifier];
     this.#set({ isDeletingTask: true }, false, 'deleteTask/start');
     try {
-      this.internal_dispatchTaskDetail({ id, type: 'deleteTaskDetail' });
+      this.internal_dispatchTaskDetail({ id: identifier, type: 'deleteTaskDetail' });
 
-      await taskService.delete(id);
+      const result = await taskService.delete(identifier);
 
-      if (this.#get().activeTaskId === id) {
+      if (this.#get().activeTaskId === identifier) {
         this.#set({ activeTaskId: undefined }, false, 'deleteTask/clearActive');
       }
 
       await this.#get().refreshTaskList();
+      return result.data ?? null;
     } catch (error) {
-      console.error('[TaskStore] Failed to delete task:', error);
-      await this.internal_refreshTaskDetail(id);
+      if (snapshot) {
+        this.internal_dispatchTaskDetail({
+          id: identifier,
+          type: 'setTaskDetail',
+          value: snapshot,
+        });
+      }
+      throw error;
     } finally {
       this.#set({ isDeletingTask: false }, false, 'deleteTask/end');
     }

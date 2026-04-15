@@ -1,5 +1,6 @@
 import {
   formatTaskCreated,
+  formatTaskDeleted,
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
@@ -111,26 +112,17 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
   deleteTask = async (
     params: { identifier: string },
-    ctx?: BuiltinToolContext,
+    _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] deleteTask - params:', params);
 
-      const found = await taskService.find(params.identifier);
-      if (!found.data) {
-        return {
-          content: `Task not found: ${params.identifier}`,
-          error: { message: `Task not found: ${params.identifier}`, type: 'TaskNotFound' },
-          success: false,
-        };
-      }
-
-      await taskService.delete(found.data.id);
-      await refreshTaskUI(undefined, ctx?.agentId);
+      const deleted = await getTaskStoreState().deleteTask(params.identifier);
+      const label = deleted?.identifier ?? params.identifier;
 
       return {
-        content: `Task ${found.data.identifier} "${found.data.name || ''}" has been deleted.`,
-        state: { success: true },
+        content: formatTaskDeleted(label, deleted?.name),
+        state: { identifier: label, success: true },
         success: true,
       };
     } catch (error) {

@@ -3,6 +3,7 @@ import {
   formatDependencyAdded,
   formatDependencyRemoved,
   formatTaskCreated,
+  formatTaskDeleted,
   formatTaskDetail,
   formatTaskEdited,
   formatTaskList,
@@ -89,7 +90,7 @@ const createTaskRuntime = ({
     await taskModel.delete(task.id);
 
     return {
-      content: `Task ${task.identifier} "${task.name || ''}" has been deleted.`,
+      content: formatTaskDeleted(task.identifier, task.name),
       success: true,
     };
   },
