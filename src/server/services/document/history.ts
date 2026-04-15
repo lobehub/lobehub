@@ -1,8 +1,11 @@
 import type { DocumentItem } from '@lobechat/database/schemas';
 import { documentHistories, documents } from '@lobechat/database/schemas';
-import { and, desc, eq, gte, lt, or } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lt, or } from 'drizzle-orm';
 
-import { DOCUMENT_HISTORY_LIST_LIMIT } from '@/const/documentHistory';
+import {
+  DOCUMENT_HISTORY_LIST_LIMIT,
+  DOCUMENT_HISTORY_SOURCE_LIMITS,
+} from '@/const/documentHistory';
 
 import type {
   CompareDocumentHistoryItemsParams,
@@ -53,6 +56,8 @@ export class DocumentHistoryService {
       savedAt: params.savedAt,
       userId: this.userId,
     });
+
+    await this.trimHistoryBySource(params.documentId, params.saveSource);
   };
 
   compareDocumentHistoryItems = async (
@@ -206,5 +211,41 @@ export class DocumentHistoryService {
     return this.db.query.documents.findFirst({
       where: and(eq(documents.id, documentId), eq(documents.userId, this.userId)),
     });
+  };
+
+  private trimHistoryBySource = async (
+    documentId: string,
+    saveSource: DocumentHistorySaveSource,
+  ) => {
+    const limit = DOCUMENT_HISTORY_SOURCE_LIMITS[saveSource];
+    const BATCH_SIZE = 100;
+
+    const rowsToDelete = await this.db
+      .select({ id: documentHistories.id })
+      .from(documentHistories)
+      .where(
+        and(
+          eq(documentHistories.documentId, documentId),
+          eq(documentHistories.userId, this.userId),
+          eq(documentHistories.saveSource, saveSource),
+        ),
+      )
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
+      .offset(limit)
+      .limit(BATCH_SIZE);
+
+    if (rowsToDelete.length === 0) return;
+
+    await this.db.delete(documentHistories).where(
+      and(
+        eq(documentHistories.documentId, documentId),
+        eq(documentHistories.userId, this.userId),
+        eq(documentHistories.saveSource, saveSource),
+        inArray(
+          documentHistories.id,
+          rowsToDelete.map((r) => r.id),
+        ),
+      ),
+    );
   };
 }

@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { documentHistories, documents, files, users } from '@lobechat/database/schemas';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { DOCUMENT_HISTORY_SOURCE_LIMITS } from '@/const/documentHistory';
 import { getTestDB } from '@/database/core/getTestDB';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -277,6 +278,133 @@ describe('DocumentHistoryService', () => {
       const historyItems = result.items.filter((i) => i.id !== 'head');
       expect(historyItems).toHaveLength(1);
       expect(historyItems[0].saveSource).toBe('manual');
+    });
+
+    it('should trim autosave history to 20 and manual history to 20 independently', async () => {
+      const doc = await createTestDocument('Hello');
+
+      for (let i = 0; i < 25; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i },
+          saveSource: 'autosave',
+          savedAt: new Date(`2026-04-01T${String(i).padStart(2, '0')}:00:00Z`),
+        });
+      }
+
+      for (let i = 0; i < 25; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i + 100 },
+          saveSource: 'manual',
+          savedAt: new Date(`2026-04-02T${String(i).padStart(2, '0')}:00:00Z`),
+        });
+      }
+
+      const autosaveRows = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(
+          and(
+            eq(documentHistories.documentId, doc.id),
+            eq(documentHistories.saveSource, 'autosave'),
+          ),
+        )
+        .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id));
+
+      const manualRows = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(
+          and(eq(documentHistories.documentId, doc.id), eq(documentHistories.saveSource, 'manual')),
+        )
+        .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id));
+
+      expect(autosaveRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.autosave);
+      expect(manualRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.manual);
+
+      // Verify the newest items are retained (latest autosave should be v=24)
+      const latestAutosave = await serverDB
+        .select({ editorData: documentHistories.editorData })
+        .from(documentHistories)
+        .where(
+          and(
+            eq(documentHistories.documentId, doc.id),
+            eq(documentHistories.saveSource, 'autosave'),
+          ),
+        )
+        .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
+        .limit(1);
+
+      expect(latestAutosave[0].editorData).toEqual({ v: 24 });
+    });
+
+    it('should trim restore history to 5 and system history to 5 independently', async () => {
+      const doc = await createTestDocument('Hello');
+
+      for (let i = 0; i < 10; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { restore: i },
+          saveSource: 'restore',
+          savedAt: new Date(`2026-04-01T${String(i).padStart(2, '0')}:00:00Z`),
+        });
+      }
+
+      for (let i = 0; i < 10; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { system: i },
+          saveSource: 'system',
+          savedAt: new Date(`2026-04-02T${String(i).padStart(2, '0')}:00:00Z`),
+        });
+      }
+
+      const restoreRows = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(
+          and(
+            eq(documentHistories.documentId, doc.id),
+            eq(documentHistories.saveSource, 'restore'),
+          ),
+        );
+
+      const systemRows = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(
+          and(eq(documentHistories.documentId, doc.id), eq(documentHistories.saveSource, 'system')),
+        );
+
+      expect(restoreRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.restore);
+      expect(systemRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.system);
+    });
+
+    it('should handle large overflow trimming without error', async () => {
+      const doc = await createTestDocument('Hello');
+
+      // Seed 150 autosave rows to exercise the batch deletion path
+      for (let i = 0; i < 150; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i },
+          saveSource: 'autosave',
+          savedAt: new Date(2026, 3, 1, 0, i, 0),
+        });
+      }
+
+      const remainingRows = await serverDB
+        .select({ id: documentHistories.id })
+        .from(documentHistories)
+        .where(
+          and(
+            eq(documentHistories.documentId, doc.id),
+            eq(documentHistories.saveSource, 'autosave'),
+          ),
+        );
+
+      expect(remainingRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.autosave);
     });
   });
 
