@@ -26,6 +26,14 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     margin-block-start: 8px;
   `,
+  actionContent: css`
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+  `,
   card: css`
     position: fixed;
     z-index: 1000;
@@ -79,6 +87,13 @@ const HighlightNotification = memo<HighlightNotificationProps>(
   }) => {
     if (!open) return null;
 
+    const actionContent = actionLabel ? (
+      <span className={styles.actionContent}>
+        <HeartFilled />
+        <span>{actionLabel}</span>
+      </span>
+    ) : null;
+
     return (
       <Flexbox className={styles.card}>
         <ActionIcon className={styles.closeButton} icon={X} size={14} onClick={onClose} />
@@ -95,8 +110,8 @@ const HighlightNotification = memo<HighlightNotificationProps>(
                 target={actionTarget}
                 onClick={onActionClick}
               >
-                <Button block icon={HeartFilled} size="small" type="primary">
-                  {actionLabel}
+                <Button block size="small" type="primary">
+                  {actionContent}
                 </Button>
               </a>
             )}
@@ -104,12 +119,11 @@ const HighlightNotification = memo<HighlightNotificationProps>(
               <Button
                 block
                 className={styles.action}
-                icon={HeartFilled}
                 size="small"
                 type="primary"
                 onClick={onAction}
               >
-                {actionLabel}
+                {actionContent}
               </Button>
             )}
           </Flexbox>

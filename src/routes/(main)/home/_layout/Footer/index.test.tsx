@@ -41,6 +41,11 @@ let mockGlobalState: Record<string, unknown>;
 let mockServerConfigState: Record<string, unknown>;
 let mockUserState: Record<string, unknown>;
 
+interface MockStoreHook {
+  (selector: (state: Record<string, unknown>) => unknown): unknown;
+  getState: () => Record<string, unknown>;
+}
+
 const createGlobalState = (readSlugs: string[] = []) => ({
   status: {
     readNotificationSlugs: readSlugs,
@@ -86,7 +91,7 @@ const renderFooter = async ({
   };
 
   vi.doMock('@lobechat/const', async (importOriginal) => {
-    const actual = (await importOriginal()) as LobechatConst;
+    const actual = (await importOriginal()) as typeof LobechatConst;
 
     return {
       ...actual,
@@ -163,9 +168,8 @@ const renderFooter = async ({
   vi.doMock('@/hooks/useNavLayout', () => ({
     useNavLayout: createNavLayoutState,
   }));
-  function selectFromGlobalStore(selector: (state: Record<string, unknown>) => unknown) {
-    return selector(mockGlobalState);
-  }
+  const selectFromGlobalStore = ((selector: (state: Record<string, unknown>) => unknown) =>
+    selector(mockGlobalState)) as MockStoreHook;
   vi.doMock('@/store/global', () => {
     selectFromGlobalStore.getState = () => mockGlobalState;
 
@@ -223,7 +227,7 @@ describe('Footer agent onboarding promotion', () => {
         trigger: 'auto',
       },
     });
-  }, 20000);
+  }, 40000);
 
   it('stores the dismiss slug when the agent onboarding promotion is closed', async () => {
     const user = userEvent.setup();

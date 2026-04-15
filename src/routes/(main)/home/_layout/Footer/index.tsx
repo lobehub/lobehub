@@ -33,6 +33,8 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 import { prefetchRoute } from '@/utils/router';
 
+import { resolveFooterPromotionState } from './promotionPipeline';
+
 const AGENT_ONBOARDING_PROMO_SLUG = 'agent-onboarding-promo-v1';
 
 const PRODUCT_HUNT_NOTIFICATION = {
@@ -60,7 +62,7 @@ const Footer = memo(() => {
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
-  const isMobile = useServerConfigStore((s) => s.isMobile);
+  const isMobile = useServerConfigStore((s) => !!s.isMobile);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const [agentOnboardingFinished, agentOnboardingStarted, classicOnboardingFinished, isDevMode] =
     useUserStore((s) => [
@@ -86,19 +88,36 @@ const Footer = memo(() => {
     return now >= PRODUCT_HUNT_NOTIFICATION.startTime && now <= PRODUCT_HUNT_NOTIFICATION.endTime;
   }, []);
 
-  const isAgentOnboardingPromoAvailable =
-    !isDesktop &&
-    !isMobile &&
-    serverConfigInit &&
-    !!enableAgentOnboarding &&
-    classicOnboardingFinished &&
-    !agentOnboardingStarted &&
-    !agentOnboardingFinished;
-
-  const shouldAutoShowAgentOnboardingPromo =
-    isAgentOnboardingPromoAvailable && !isAgentOnboardingPromoRead;
-  const shouldAutoShowProductHuntCard =
-    serverConfigInit && !isAgentOnboardingPromoAvailable && !isProductHuntNotificationRead;
+  const {
+    shouldAutoShowAgentOnboardingPromo,
+    shouldAutoShowProductHuntCard,
+    shouldShowProductHuntMenuEntry,
+  } = useMemo(
+    () =>
+      resolveFooterPromotionState({
+        agentOnboardingFinished,
+        agentOnboardingStarted,
+        classicOnboardingFinished,
+        enableAgentOnboarding: !!enableAgentOnboarding,
+        isAgentOnboardingPromoRead,
+        isDesktop,
+        isMobile,
+        isProductHuntNotificationRead,
+        isWithinProductHuntWindow: isWithinTimeWindow,
+        serverConfigInit,
+      }),
+    [
+      agentOnboardingFinished,
+      agentOnboardingStarted,
+      classicOnboardingFinished,
+      enableAgentOnboarding,
+      isAgentOnboardingPromoRead,
+      isMobile,
+      isProductHuntNotificationRead,
+      isWithinTimeWindow,
+      serverConfigInit,
+    ],
+  );
 
   const trackPromotionEvent = useCallback(
     (eventName: string, properties: Record<string, string>) => {
@@ -133,7 +152,7 @@ const Footer = memo(() => {
   }, [shouldAutoShowAgentOnboardingPromo, trackPromotionEvent]);
 
   useEffect(() => {
-    if (!shouldAutoShowProductHuntCard || !isWithinTimeWindow) return;
+    if (!shouldAutoShowProductHuntCard) return;
 
     setIsProductHuntCardOpen(true);
     trackPromotionEvent('product_hunt_card_viewed', {
@@ -299,7 +318,7 @@ const Footer = memo(() => {
             },
           ]
         : []),
-      ...(!isAgentOnboardingPromoAvailable && isWithinTimeWindow
+      ...(shouldShowProductHuntMenuEntry
         ? [
             {
               icon: <Icon icon={Rocket} />,
@@ -317,9 +336,8 @@ const Footer = memo(() => {
       footer.showEvalEntry,
       handleOpenFeedbackModal,
       handleOpenProductHuntCard,
-      isAgentOnboardingPromoAvailable,
       isDevMode,
-      isWithinTimeWindow,
+      shouldShowProductHuntMenuEntry,
       t,
     ],
   );
