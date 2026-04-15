@@ -12,10 +12,12 @@ import {
   Feather,
   FileClockIcon,
   FlaskConical,
+  MessageCircle,
   Rocket,
   Settings2,
   SettingsIcon,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -47,6 +49,7 @@ const PRODUCT_HUNT_NOTIFICATION = {
 
 interface PromotionCard {
   actionHref?: string;
+  actionIcon?: ReactNode;
   actionLabel: string;
   description: string;
   image?: string;
@@ -218,6 +221,7 @@ const Footer = memo(() => {
   const activePromotion = useMemo<PromotionCard | undefined>(() => {
     if (isAgentOnboardingCardOpen) {
       return {
+        actionIcon: <Icon icon={MessageCircle} size={14} />,
         actionLabel: t('agentOnboardingPromo.actionLabel'),
         description: t('agentOnboardingPromo.description'),
         onAction: handleAgentOnboardingAction,
@@ -387,6 +391,7 @@ const Footer = memo(() => {
         <HighlightNotification
           open
           actionHref={activePromotion.actionHref}
+          actionIcon={activePromotion.actionIcon}
           actionLabel={activePromotion.actionLabel}
           description={activePromotion.description}
           image={activePromotion.image}

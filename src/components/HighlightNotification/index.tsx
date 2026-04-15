@@ -9,6 +9,7 @@ import { memo } from 'react';
 
 export interface HighlightNotificationProps {
   actionHref?: string;
+  actionIcon?: ReactNode;
   actionLabel?: ReactNode;
   actionTarget?: HTMLAttributeAnchorTarget;
   description?: ReactNode;
@@ -75,6 +76,7 @@ const styles = createStaticStyles(({ css }) => ({
 const HighlightNotification = memo<HighlightNotificationProps>(
   ({
     actionHref,
+    actionIcon = <HeartFilled />,
     actionLabel,
     actionTarget = '_blank',
     description,
@@ -89,7 +91,7 @@ const HighlightNotification = memo<HighlightNotificationProps>(
 
     const actionContent = actionLabel ? (
       <span className={styles.actionContent}>
-        <HeartFilled />
+        {actionIcon && <span>{actionIcon}</span>}
         <span>{actionLabel}</span>
       </span>
     ) : null;

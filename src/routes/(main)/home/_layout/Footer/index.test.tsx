@@ -11,8 +11,9 @@ vi.mock('react-i18next', () => ({
     t: (key: string) =>
       ({
         'agentOnboardingPromo.actionLabel': 'Try it now',
-        'agentOnboardingPromo.description': 'Complete your setup with the new conversational flow.',
-        'agentOnboardingPromo.title': 'Try conversational onboarding',
+        'agentOnboardingPromo.description':
+          'Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.',
+        'agentOnboardingPromo.title': 'Quick Wizard',
         'changelog': 'Changelog',
         'productHunt.actionLabel': 'Support us',
         'productHunt.description': 'Support us on Product Hunt.',
@@ -73,6 +74,11 @@ const renderFooter = async ({
 }: RenderFooterOptions = {}) => {
   vi.resetModules();
   analyticsTrack.mockReset();
+  vi.stubGlobal('localStorage', {
+    getItem: vi.fn(() => null),
+    removeItem: vi.fn(),
+    setItem: vi.fn(),
+  });
 
   mockGlobalState = createGlobalState(readSlugs);
   mockServerConfigState = {
@@ -202,6 +208,7 @@ const renderFooter = async ({
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.doUnmock('@lobechat/const');
   vi.doUnmock('@lobehub/analytics/react');
   vi.doUnmock('@/components/ChangelogModal');
@@ -219,7 +226,7 @@ describe('Footer agent onboarding promotion', () => {
     await renderFooter();
 
     expect(screen.getByTestId('highlight-notification')).toBeInTheDocument();
-    expect(screen.getByText('Try conversational onboarding')).toBeInTheDocument();
+    expect(screen.getByText('Quick Wizard')).toBeInTheDocument();
     expect(analyticsTrack).toHaveBeenCalledWith({
       name: 'agent_onboarding_promo_viewed',
       properties: {

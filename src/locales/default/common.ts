@@ -9,8 +9,8 @@ export default {
   'alert.cloud.title': '{{name}} beta is live',
   'agentOnboardingPromo.actionLabel': 'Try it now',
   'agentOnboardingPromo.description':
-    'Classic onboarding is complete. Try the new conversational flow to shape your agent in a few quick turns.',
-  'agentOnboardingPromo.title': 'Try conversational onboarding',
+    'Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.',
+  'agentOnboardingPromo.title': 'Quick Wizard',
   'appLoading.appIdle': 'Ready to start',
   'appLoading.appInitializing': 'Application is starting...',
   'appLoading.failed':
