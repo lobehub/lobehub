@@ -1,3 +1,4 @@
+import type { TaskPriority, TaskStatus } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Dropdown, type MenuProps } from 'antd';
 import { cssVar } from 'antd-style';
@@ -24,8 +25,6 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from './style';
 
-type TaskStatus = 'backlog' | 'running' | 'paused' | 'completed' | 'canceled' | 'failed';
-
 interface StatusMeta {
   color: string;
   icon: LucideIcon;
@@ -46,7 +45,7 @@ interface PriorityMeta {
   labelKey: string;
 }
 
-const PRIORITY_META: Record<number, PriorityMeta> = {
+const PRIORITY_META: Record<TaskPriority, PriorityMeta> = {
   0: { icon: MinusCircle, labelKey: 'priority.none' },
   1: { icon: AlertCircle, labelKey: 'priority.urgent' },
   2: { icon: SignalHigh, labelKey: 'priority.high' },
@@ -113,7 +112,7 @@ const TaskProperties = memo(() => {
 
   const priorityItems: MenuProps['items'] = Object.keys(PRIORITY_META).map((key) => {
     const num = Number(key);
-    const meta = PRIORITY_META[num];
+    const meta = PRIORITY_META[num as TaskPriority];
     return {
       icon: <Icon icon={meta.icon} size={16} style={{ color: cssVar.colorTextSecondary }} />,
       key,
@@ -123,7 +122,7 @@ const TaskProperties = memo(() => {
   });
 
   const statusMeta = status ? STATUS_META[status] : STATUS_META.backlog;
-  const priorityMeta = PRIORITY_META[priority] ?? PRIORITY_META[0];
+  const priorityMeta = PRIORITY_META[priority as TaskPriority] ?? PRIORITY_META[0];
 
   return (
     <Flexbox className={styles.propertiesPanel} gap={0}>
