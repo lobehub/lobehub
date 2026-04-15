@@ -351,6 +351,7 @@
   "navPanel.moveDown": "Переместить вниз",
   "navPanel.moveUp": "Переместить вверх",
   "navPanel.pinned": "Закреплено",
+  "navPanel.resetDefault": "Сбросить настройки по умолчанию",
   "navPanel.searchAgent": "Поиск агента...",
   "navPanel.searchRecent": "Поиск недавних...",
   "navPanel.searchResultEmpty": "Результаты не найдены",

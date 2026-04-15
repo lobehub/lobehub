@@ -10,6 +10,7 @@ import {
   Settings2Icon,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useTaskStore } from '@/store/task';
@@ -33,31 +34,35 @@ const styles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
-const GROUPING_OPTIONS: Array<{ label: string; value: TaskGroupBy }> = [
-  { label: 'No grouping', value: 'none' },
-  { label: 'Status', value: 'status' },
-  { label: 'Assignee', value: 'assignee' },
-  { label: 'Priority', value: 'priority' },
-];
-
-const ORDER_OPTIONS: Array<{ label: string; value: TaskOrderBy }> = [
-  { label: 'Status', value: 'status' },
-  { label: 'Priority', value: 'priority' },
-  { label: 'Updated at', value: 'updatedAt' },
-  { label: 'Created at', value: 'createdAt' },
-  { label: 'Assignee', value: 'assignee' },
-  { label: 'Title', value: 'title' },
-];
-
 const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
+  const { t } = useTranslation('chat');
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const setViewMode = useTaskStore((s) => s.setViewMode);
+  const groupingOptions = useMemo<Array<{ label: string; value: TaskGroupBy }>>(
+    () => [
+      { label: t('taskList.groupBy.none'), value: 'none' },
+      { label: t('taskList.groupBy.status'), value: 'status' },
+      { label: t('taskList.groupBy.assignee'), value: 'assignee' },
+      { label: t('taskList.groupBy.priority'), value: 'priority' },
+    ],
+    [t],
+  );
+  const orderOptions = useMemo<Array<{ label: string; value: TaskOrderBy }>>(
+    () => [
+      { label: t('taskList.orderBy.status'), value: 'status' },
+      { label: t('taskList.orderBy.priority'), value: 'priority' },
+      { label: t('taskList.orderBy.updatedAt'), value: 'updatedAt' },
+      { label: t('taskList.orderBy.createdAt'), value: 'createdAt' },
+      { label: t('taskList.orderBy.assignee'), value: 'assignee' },
+      { label: t('taskList.orderBy.title'), value: 'title' },
+    ],
+    [t],
+  );
 
   const subGroupingOptions = useMemo(
-    () =>
-      GROUPING_OPTIONS.filter((item) => item.value !== options.groupBy || item.value === 'none'),
-    [options.groupBy],
+    () => groupingOptions.filter((item) => item.value !== options.groupBy || item.value === 'none'),
+    [groupingOptions, options.groupBy],
   );
   const isSubGroupingEnabled = options.groupBy !== 'none';
 
@@ -65,7 +70,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
     {
       children: (
         <Select
-          options={GROUPING_OPTIONS}
+          options={groupingOptions}
           size={'small'}
           style={{ width: 150 }}
           value={options.groupBy}
@@ -78,7 +83,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           }}
         />
       ),
-      label: 'Grouping',
+      label: t('taskList.form.grouping'),
     },
     ...(isSubGroupingEnabled
       ? [
@@ -94,7 +99,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
                 }}
               />
             ),
-            label: 'Sub-grouping',
+            label: t('taskList.form.subGrouping'),
           } satisfies FormItemProps,
         ]
       : []),
@@ -112,7 +117,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
             }}
           />
           <Select
-            options={ORDER_OPTIONS}
+            options={orderOptions}
             size={'small'}
             style={{ width: 112 }}
             value={options.orderBy}
@@ -122,7 +127,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           />
         </Flexbox>
       ),
-      label: 'Ordering',
+      label: t('taskList.form.ordering'),
     },
     {
       children: (
@@ -135,7 +140,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
         />
       ),
       minWidth: undefined,
-      label: 'Order completed by recency',
+      label: t('taskList.form.orderCompletedByRecency'),
     },
   ];
 
@@ -145,8 +150,13 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
         block
         value={viewMode}
         options={[
-          { icon: <Icon icon={LayoutList} />, label: 'List', value: 'list' },
-          { disabled: true, icon: <Icon icon={LayoutGrid} />, label: 'Board', value: 'kanban' },
+          { icon: <Icon icon={LayoutList} />, label: t('taskList.view.list'), value: 'list' },
+          {
+            disabled: true,
+            icon: <Icon icon={LayoutGrid} />,
+            label: t('taskList.view.board'),
+            value: 'kanban',
+          },
         ]}
         onChange={(value) => setViewMode(value as 'kanban' | 'list')}
       />

@@ -1,8 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useSize } from 'ahooks';
 import { describe, expect, it, vi } from 'vitest';
 
-import BriefCardSummary from '../BriefCardSummary';
-import { COLLAPSED_MAX_HEIGHT } from '../const';
+import BriefCardSummary, { COLLAPSED_MAX_HEIGHT } from '../BriefCardSummary';
+
+vi.mock('ahooks', () => ({
+  useSize: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -18,25 +22,19 @@ vi.mock('react-i18next', () => ({
 
 describe('BriefCardSummary', () => {
   it('should render summary text', () => {
+    vi.mocked(useSize).mockReturnValue(undefined);
     render(<BriefCardSummary summary="Test summary content" />);
     expect(screen.getByText('Test summary content')).toBeInTheDocument();
   });
 
   it('should not show expand link when content does not overflow', () => {
+    vi.mocked(useSize).mockReturnValue({ height: COLLAPSED_MAX_HEIGHT - 10, width: 100 });
     render(<BriefCardSummary summary="Short" />);
     expect(screen.queryByText('Show more')).not.toBeInTheDocument();
   });
 
   it('should show expand link and toggle when content overflows', () => {
-    // Mock scrollHeight to simulate overflow
-    const originalDescriptor = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'scrollHeight',
-    );
-    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
-      configurable: true,
-      value: COLLAPSED_MAX_HEIGHT + 50,
-    });
+    vi.mocked(useSize).mockReturnValue({ height: COLLAPSED_MAX_HEIGHT + 50, width: 100 });
 
     render(<BriefCardSummary summary="A very long summary that overflows" />);
 
@@ -48,10 +46,5 @@ describe('BriefCardSummary', () => {
 
     fireEvent.click(screen.getByText('Show less'));
     expect(screen.getByText('Show more')).toBeInTheDocument();
-
-    // Restore
-    if (originalDescriptor) {
-      Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalDescriptor);
-    }
   });
 });

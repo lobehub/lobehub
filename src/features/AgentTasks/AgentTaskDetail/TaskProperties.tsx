@@ -64,7 +64,7 @@ const TaskProperties = memo(() => {
   const firstParticipantName =
     firstParticipantMeta?.title?.trim() ||
     firstParticipant?.name ||
-    (isInboxParticipant ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
+    (isInboxParticipant ? t('inbox.title') : t('defaultSession', { ns: 'common' }));
   const restCount = Math.max(participants.length - 1, 0);
   const participantLabel =
     participants.length <= 1 ? firstParticipantName : `${firstParticipantName} (+${restCount})`;

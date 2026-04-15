@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import type { LucideIcon } from 'lucide-react';
 import { BotMessageSquare, ChevronDown, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import type { UseTranslationResponse } from 'react-i18next';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
@@ -20,15 +21,18 @@ const typeIconMap: Record<TaskActivityType, LucideIcon> = {
   topic: MessagesSquare,
 };
 
-const getActivityDisplayText = (act: TaskDetailActivity): string => {
+const getActivityDisplayText = (
+  act: TaskDetailActivity,
+  t: UseTranslationResponse<'chat'>['t'],
+): string => {
   if (act.type === 'comment') {
-    return act.content || 'left a comment';
+    return act.content || t('taskDetail.activities.fallback.comment');
   }
   if (act.type === 'topic') {
-    return act.title || 'started a topic';
+    return act.title || t('taskDetail.activities.fallback.topic');
   }
   if (act.type === 'brief') {
-    return act.title || act.summary || 'posted a brief';
+    return act.title || act.summary || t('taskDetail.activities.fallback.brief');
   }
   return '';
 };
@@ -41,7 +45,7 @@ const TaskActivities = memo(() => {
     return activities.map((act, index) => {
       const TypeIcon = typeIconMap[act.type] ?? MessageCircle;
       const relTime = act.time ? dayjs(act.time).fromNow() : '';
-      const displayText = getActivityDisplayText(act);
+      const displayText = getActivityDisplayText(act, t);
       const key = act.id ?? `activity-${index}`;
 
       return {
@@ -66,7 +70,7 @@ const TaskActivities = memo(() => {
         ),
       };
     });
-  }, [activities]);
+  }, [activities, t]);
 
   return (
     <>

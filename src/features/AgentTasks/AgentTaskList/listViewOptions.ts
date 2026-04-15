@@ -75,29 +75,12 @@ export const normalizeTaskListViewOptions = (
   };
 };
 
-const PRIORITY_LABEL_MAP: Record<number, string> = {
-  0: 'No priority',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Normal',
-  4: 'Low',
-};
-
 const PRIORITY_RANK_MAP: Record<number, number> = {
   0: 4,
   1: 0,
   2: 1,
   3: 2,
   4: 3,
-};
-
-const STATUS_GROUP_LABEL_MAP: Record<NonNullable<TaskGroupMeta['status']>, string> = {
-  backlog: 'Backlog',
-  canceled: 'Canceled',
-  completed: 'Done',
-  failed: 'Failed',
-  paused: 'Paused',
-  running: 'In progress',
 };
 
 const STATUS_GROUP_RANK_MAP: Record<NonNullable<TaskGroupMeta['status']>, number> = {
@@ -128,14 +111,15 @@ const getTaskAssigneeMeta = (task: TaskListItem, inboxAgentId?: string): TaskGro
     return {
       groupBy: 'assignee',
       key: 'assignee:unassigned',
-      label: 'Unassigned',
+      label: t('taskList.unassigned', { ns: 'chat' }),
     };
   }
 
   const isInboxAgent =
     participant.id === INBOX_SESSION_ID || (!!inboxAgentId && participant.id === inboxAgentId);
   const displayTitle =
-    participant.title?.trim() || (isInboxAgent ? 'Lobe AI' : t('defaultSession', { ns: 'common' }));
+    participant.title?.trim() ||
+    (isInboxAgent ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' }));
 
   return {
     assignee: {
@@ -238,19 +222,34 @@ export const getTaskGroupMeta = (
     }
     case 'priority': {
       const priority = getPriorityValue(task);
+      const labelKeyMap: Record<number, string> = {
+        0: 'taskDetail.priority.none',
+        1: 'taskDetail.priority.urgent',
+        2: 'taskDetail.priority.high',
+        3: 'taskDetail.priority.normal',
+        4: 'taskDetail.priority.low',
+      };
       return {
         groupBy: 'priority',
         key: `priority:${priority}`,
-        label: PRIORITY_LABEL_MAP[priority] ?? PRIORITY_LABEL_MAP[0],
+        label: t(labelKeyMap[priority] ?? labelKeyMap[0], { ns: 'chat' }),
         priority,
       };
     }
     case 'status': {
       const groupedStatus = getTaskStatusGroup(task);
+      const labelKeyMap: Record<NonNullable<TaskGroupMeta['status']>, string> = {
+        backlog: 'taskDetail.status.backlog',
+        canceled: 'taskDetail.status.canceled',
+        completed: 'taskDetail.status.completed',
+        failed: 'taskDetail.status.failed',
+        paused: 'taskDetail.status.paused',
+        running: 'taskDetail.status.running',
+      };
       return {
         groupBy: 'status',
         key: `status:${groupedStatus}`,
-        label: STATUS_GROUP_LABEL_MAP[groupedStatus],
+        label: t(labelKeyMap[groupedStatus], { ns: 'chat' }),
         status: groupedStatus,
       };
     }
@@ -258,7 +257,7 @@ export const getTaskGroupMeta = (
       return {
         groupBy: 'none',
         key: 'all',
-        label: 'All tasks',
+        label: t('taskList.all', { ns: 'chat' }),
       };
     }
   }

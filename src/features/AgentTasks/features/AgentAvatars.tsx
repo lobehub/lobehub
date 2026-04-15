@@ -15,7 +15,7 @@ interface AgentAvatarsProps {
 }
 
 const AgentAvatars = memo<AgentAvatarsProps>(({ agents, size = 22 }) => {
-  const { t } = useTranslation('common');
+  const { t } = useTranslation(['chat', 'common']);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   if (agents.length === 0) return null;
 
@@ -31,7 +31,9 @@ const AgentAvatars = memo<AgentAvatarsProps>(({ agents, size = 22 }) => {
           avatar: agent?.avatar || (isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR),
           background: agent?.backgroundColor || cssVar.colorBgContainer,
           key: agent.id || index.toString(),
-          title: agent?.title || (isInbox ? 'Lobe AI' : t('defaultSession')),
+          title:
+            agent?.title ||
+            (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' })),
         };
       })}
     />

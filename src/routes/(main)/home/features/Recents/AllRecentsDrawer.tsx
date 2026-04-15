@@ -2,7 +2,7 @@
 
 import { Empty, Flexbox, SearchBar } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -10,6 +10,8 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentService } from '@/services/recent';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { ALL_RECENTS_DRAWER_SWR_PREFIX } from '@/store/home/slices/recent/action';
 
 import RecentListItem from './Item';
@@ -22,6 +24,8 @@ interface AllRecentsDrawerProps {
 const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   const { data: recents, isLoading } = useClientDataSWR(
     open ? [ALL_RECENTS_DRAWER_SWR_PREFIX, open] : null,
@@ -34,6 +38,19 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
     if (!keyword) return recents;
     return recents.filter((item) => item.title.toLowerCase().includes(keyword));
   }, [recents, searchKeyword]);
+
+  const fallbackAgentId = activeAgentId || inboxAgentId;
+  const getRecentRoute = useCallback(
+    (item: (typeof filteredRecents)[number]) => {
+      if (item.type !== 'task') return item.routePath;
+      const targetAgentId = item.agentId || fallbackAgentId;
+      const taskId = item.id;
+      if (!targetAgentId || !taskId) return item.routePath;
+
+      return `/agent/${targetAgentId}/tasks/${taskId}`;
+    },
+    [fallbackAgentId],
+  );
 
   return (
     <SideBarDrawer
@@ -68,7 +85,7 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
             <Link
               key={`${item.type}-${item.id}`}
               style={{ color: 'inherit', textDecoration: 'none' }}
-              to={item.routePath}
+              to={getRecentRoute(item)}
             >
               <RecentListItem {...item} />
             </Link>

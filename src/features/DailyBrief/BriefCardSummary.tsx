@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { styles } from './style';
 
-const COLLAPSED_MAX_HEIGHT = 240;
+export const COLLAPSED_MAX_HEIGHT = 240;
 
 interface BriefCardSummaryProps {
   summary: string;

@@ -46,12 +46,9 @@ const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
           >
             {t('cancel', { ns: 'common' })}
           </Button>
-          <SendButton
-            loading={submitting}
-            shape={'round'}
-            type={'primary'}
-            onClick={handleSubmit}
-          />
+          <SendButton loading={submitting} shape={'round'} type={'primary'} onClick={handleSubmit}>
+            {t('brief.commentSubmit')}
+          </SendButton>
         </Flexbox>
       }
     >

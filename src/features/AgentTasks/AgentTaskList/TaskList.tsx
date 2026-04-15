@@ -14,6 +14,7 @@ import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { ClipboardCheckIcon, UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
@@ -126,6 +127,7 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
 );
 
 const TaskList = memo<TaskListProps>(({ options }) => {
+  const { t } = useTranslation('chat');
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
@@ -197,7 +199,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
   if (tasks.length === 0) {
     return (
       <Center height={'80vh'} width={'100%'}>
-        <Empty description={'No tasks yet'} icon={ClipboardCheckIcon} />
+        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
       </Center>
     );
   }

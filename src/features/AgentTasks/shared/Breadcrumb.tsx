@@ -25,7 +25,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
 
   const isInboxAgent = agentId === INBOX_SESSION_ID || (!!inboxAgentId && agentId === inboxAgentId);
   const agentName =
-    agentMeta?.title?.trim() || (isInboxAgent ? 'Lobe AI' : tCommon('defaultSession'));
+    agentMeta?.title?.trim() || (isInboxAgent ? t('inbox.title') : tCommon('defaultSession'));
   const agentAvatar = agentMeta?.avatar || (isInboxAgent ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
 
   return (

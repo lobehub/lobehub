@@ -52,6 +52,15 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     );
     const actions = useBriefStore(actionSelector) || DEFAULT_BRIEF_ACTIONS[briefType] || [];
 
+    const getActionLabel = useCallback(
+      (action: BriefAction) => {
+        const i18nKey = `brief.action.${action.key}`;
+        const translated = t(i18nKey);
+        return translated === i18nKey ? action.label : translated;
+      },
+      [t],
+    );
+
     const handleResolve = useCallback(
       async (key: string) => {
         setLoadingKey(key);
@@ -102,7 +111,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
         <Flexbox horizontal align={'center'} gap={8}>
           {taskId && commentActions && (
-            <Tooltip title={commentActions.label || t('brief.addFeedback')}>
+            <Tooltip title={getActionLabel(commentActions) || t('brief.addFeedback')}>
               <Button
                 className={'brief-comment-btn'}
                 icon={SquarePen}
@@ -123,7 +132,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                   key={action.key}
                   shape={'round'}
                 >
-                  {action.label}
+                  {getActionLabel(action)}
                 </Button>
               );
             }
@@ -136,7 +145,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                 shape={'round'}
                 onClick={() => handleResolve(action.key)}
               >
-                {action.label}
+                {getActionLabel(action)}
               </Button>
             );
           })}
@@ -150,7 +159,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
               variant={'filled'}
               onClick={() => handleResolve(primaryActions.key)}
             >
-              {primaryActions.label}
+              {getActionLabel(primaryActions)}
             </SendButton>
           )}
         </Flexbox>
