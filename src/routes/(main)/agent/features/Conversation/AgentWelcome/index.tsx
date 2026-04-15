@@ -6,7 +6,7 @@ import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import AgentTaskList from '@/features/AgentTaskList';
+import AgentTaskList from '@/features/AgentHome/TaskList';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';

@@ -4,7 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import AgentTaskList from '@/features/AgentTaskList';
+import AgentTaskList from '@/features/AgentHome/TaskList';
 import ToolAuthAlert from '@/routes/(main)/agent/features/Conversation/AgentWelcome/ToolAuthAlert';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
