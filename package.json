@@ -539,6 +539,7 @@
       "ffmpeg-static"
     ],
     "overrides": {
+      "@react-pdf/image": "3.0.4",
       "@types/react": "19.2.13",
       "better-auth": "1.4.6",
       "better-call": "1.1.8",
