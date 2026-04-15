@@ -580,6 +580,7 @@ export default {
   'workflow.toolDisplayName.updateTodos': 'Updated todos',
   'workflow.toolDisplayName.upsertDocumentByFilename': 'Updated a document',
   'workflow.toolDisplayName.writeLocalFile': 'Wrote a file',
+  'workflow.awaitingConfirmation': 'Awaiting your confirmation',
   'workflow.working': 'Working...',
   'workingPanel.agentDocuments': 'Agent Documents',
   'workingPanel.progress': 'Progress',

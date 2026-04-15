@@ -12,8 +12,9 @@ vi.mock('@lobehub/ui/brand', () => ({
   LogoThree: () => null,
 }));
 
-const { chatInputSpy, mockState } = vi.hoisted(() => ({
+const { chatInputSpy, messageItemSpy, mockState } = vi.hoisted(() => ({
   chatInputSpy: vi.fn(),
+  messageItemSpy: vi.fn(),
   mockState: {
     displayMessages: [] as Array<{ content?: string; id: string; role: string }>,
   },
@@ -50,7 +51,11 @@ vi.mock('@/features/Conversation', () => ({
       ))}
     </div>
   ),
-  MessageItem: ({ id }: { id: string }) => <div data-testid={`message-item-${id}`}>{id}</div>,
+  MessageItem: (props: { defaultWorkflowExpanded?: boolean; id: string }) => {
+    messageItemSpy(props);
+
+    return <div data-testid={`message-item-${props.id}`}>{props.id}</div>;
+  },
   conversationSelectors: {
     displayMessages: (state: typeof mockState) => state.displayMessages,
   },
@@ -80,6 +85,7 @@ vi.mock('./Welcome', () => ({
 describe('AgentOnboardingConversation', () => {
   beforeEach(() => {
     chatInputSpy.mockClear();
+    messageItemSpy.mockClear();
     mockState.displayMessages = [];
   });
 
@@ -127,5 +133,20 @@ describe('AgentOnboardingConversation', () => {
 
     expect(screen.getByTestId('message-item-assistant-2')).toBeInTheDocument();
     expect(screen.queryByText('finish')).not.toBeInTheDocument();
+  });
+
+  it('passes collapsed workflow default to onboarding message items', () => {
+    mockState.displayMessages = [
+      { id: 'assistant-1', role: 'assistant' },
+      { id: 'user-1', role: 'user' },
+    ];
+
+    render(<AgentOnboardingConversation />);
+
+    expect(messageItemSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultWorkflowExpanded: false,
+      }),
+    );
   });
 });

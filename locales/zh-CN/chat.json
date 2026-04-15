@@ -465,6 +465,7 @@
   "viewMode.fullWidth": "全宽显示",
   "viewMode.normal": "普通",
   "viewMode.wideScreen": "宽屏",
+  "workflow.awaitingConfirmation": "需要你确认",
   "workflow.failedSuffix": "（失败）",
   "workflow.thoughtForDuration": "思考了 {{duration}}",
   "workflow.toolDisplayName.activateDevice": "激活了设备",

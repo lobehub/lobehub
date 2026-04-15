@@ -45,6 +45,9 @@ export const ActivateToolsInspector = memo<
   const identifiers = args?.identifiers || partialArgs?.identifiers;
   const activatedTools = pluginState?.activatedTools;
   const notFoundList = pluginState?.notFound ?? [];
+  const requestedTools = identifiers?.map((id) => ({ identifier: id, name: id })) ?? [];
+  const visibleTools =
+    activatedTools && activatedTools.length > 0 ? activatedTools : requestedTools;
 
   // Streaming / Loading: show identifiers from arguments
   if (isArgumentsStreaming || isLoading) {
@@ -89,9 +92,9 @@ export const ActivateToolsInspector = memo<
           </Flexbox>
         </Tooltip>
       )}
-      {activatedTools && activatedTools.length > 0 && (
+      {visibleTools.length > 0 && (
         <span className={styles.tools}>
-          {activatedTools.map((tool) => (
+          {visibleTools.map((tool) => (
             <span className={styles.tool} key={tool.identifier}>
               {tool.avatar && <Avatar avatar={tool.avatar} size={18} title={tool.name} />}
               <span>{tool.name}</span>

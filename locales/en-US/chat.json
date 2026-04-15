@@ -465,6 +465,7 @@
   "viewMode.fullWidth": "Full Width",
   "viewMode.normal": "Standard",
   "viewMode.wideScreen": "Widescreen",
+  "workflow.awaitingConfirmation": "Awaiting your confirmation",
   "workflow.failedSuffix": "(failed)",
   "workflow.thoughtForDuration": "Thought for {{duration}}",
   "workflow.toolDisplayName.activateDevice": "Activated device",
