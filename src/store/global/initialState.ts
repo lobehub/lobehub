@@ -194,6 +194,13 @@ export interface SystemStatus {
    */
   sidebarSectionOrder?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
+  taskListViewOptions?: {
+    groupBy: 'assignee' | 'none' | 'priority' | 'status';
+    orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
+    orderCompletedByRecency: boolean;
+    orderDirection: 'asc' | 'desc';
+    subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
+  };
   /**
    * Whether to display tokens in short format
    */
@@ -253,6 +260,13 @@ export const INITIAL_STATUS = {
   agentPageSize: 5,
   chatInputHeight: 64,
   recentPageSize: 5,
+  taskListViewOptions: {
+    groupBy: 'status',
+    orderBy: 'updatedAt',
+    orderCompletedByRecency: true,
+    orderDirection: 'asc',
+    subGroupBy: 'none',
+  },
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
   dismissedBannerIds: [],
