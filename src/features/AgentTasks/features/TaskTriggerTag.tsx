@@ -1,4 +1,4 @@
-import { Block, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -12,12 +12,13 @@ const formatInterval = (seconds: number) => {
 
 interface TaskTriggerTagProps {
   heartbeatInterval?: number | null;
+  mode?: 'inline' | 'tag';
   schedulePattern?: string | null;
   scheduleTimezone?: string | null;
 }
 
 const TaskTriggerTag = memo<TaskTriggerTagProps>(
-  ({ heartbeatInterval, schedulePattern, scheduleTimezone }) => {
+  ({ heartbeatInterval, mode = 'tag', schedulePattern, scheduleTimezone }) => {
     const data = useMemo(() => {
       if (schedulePattern) {
         const timezone = scheduleTimezone ? ` (${scheduleTimezone})` : '';
@@ -36,6 +37,19 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
 
       return undefined;
     }, [heartbeatInterval, schedulePattern, scheduleTimezone]);
+
+    if (mode === 'inline') {
+      return (
+        <Tooltip title={data?.tooltip}>
+          <Flexbox horizontal align="center" gap={10}>
+            <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
+            <Text type={data ? undefined : 'secondary'}>
+              {data?.text ?? 'Add schedule/trigger'}
+            </Text>
+          </Flexbox>
+        </Tooltip>
+      );
+    }
 
     if (!data) return null;
 

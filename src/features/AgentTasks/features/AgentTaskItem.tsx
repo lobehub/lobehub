@@ -8,10 +8,11 @@ import { useAgentStore } from '@/store/agent';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
+import TaskScheduleConfig from '../AgentTaskDetail/TaskScheduleConfig';
 import AgentAvatars from './AgentAvatars';
 import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
-import TaskStatusIcon from './TaskStatusIcon';
+import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
 
@@ -59,7 +60,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
       <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
         <Flexbox horizontal align="center" gap={8}>
           <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
-          <TaskStatusIcon status={status} />
+          <TaskStatusTag status={status} taskIdentifier={task.identifier} />
           <Text ellipsis weight={500}>
             {task.name || task.identifier}
           </Text>
@@ -72,11 +73,16 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
           />
         </Flexbox>
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          <TaskTriggerTag
-            heartbeatInterval={taskDetail?.heartbeat?.interval}
-            schedulePattern={task.schedulePattern}
-            scheduleTimezone={task.scheduleTimezone}
-          />
+          <TaskScheduleConfig
+            currentInterval={taskDetail?.heartbeat?.interval ?? 0}
+            taskId={task.identifier}
+          >
+            <TaskTriggerTag
+              heartbeatInterval={taskDetail?.heartbeat?.interval}
+              schedulePattern={task.schedulePattern}
+              scheduleTimezone={task.scheduleTimezone}
+            />
+          </TaskScheduleConfig>
           <AgentAvatars agents={task.participants} />
           {time && (
             <span style={{ color: cssVar.colorTextTertiary, fontSize: cssVar.fontSizeSM }}>
