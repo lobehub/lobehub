@@ -675,6 +675,16 @@ describe('ConversationControl actions', () => {
         );
         expect(internal_execAgentRuntimeSpy).not.toHaveBeenCalled();
 
+        // Fallback guard: the paused `execServerAgentRuntime` op in this
+        // context must be completed so the loading state doesn't bleed
+        // across ops when the server-side `agent_runtime_end` for
+        // `waiting_for_human` hasn't landed yet.
+        const pausedServerOps = Object.values(result.current.operations).filter(
+          (op: any) => op.type === 'execServerAgentRuntime',
+        );
+        expect(pausedServerOps).toHaveLength(1);
+        expect(pausedServerOps[0]!.status).toBe('completed');
+
         executeGatewayAgentSpy.mockRestore();
       });
 

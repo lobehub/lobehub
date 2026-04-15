@@ -45,8 +45,17 @@ export class ConversationControlActionImpl {
    * to prevent.
    */
   #hasRunningServerOp = (context: ConversationContext): boolean => {
+    return this.#getRunningServerOps(context).length > 0;
+  };
+
+  /**
+   * Return running (non-aborting) `execServerAgentRuntime` ops in the given
+   * context. Used both to detect Gateway mode and to clean up the paused op
+   * once a resume op takes over — see `#completeRunningServerOps`.
+   */
+  #getRunningServerOps = (context: ConversationContext) => {
     const { agentId, groupId, scope, subAgentId, topicId, threadId } = context;
-    if (!agentId) return false;
+    if (!agentId) return [];
     const ops = operationSelectors.getOperationsByContext({
       agentId,
       groupId,
@@ -55,10 +64,27 @@ export class ConversationControlActionImpl {
       threadId: threadId ?? null,
       topicId: topicId ?? null,
     })(this.#get());
-    return ops.some(
+    return ops.filter(
       (op) =>
         op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
     );
+  };
+
+  /**
+   * Client-side fallback guard that clears orphan server ops before starting
+   * a Gateway resume op. The server now emits `agent_runtime_end` right after
+   * `human_approve_required` (see `RuntimeExecutors.request_human_approve`),
+   * but if that event hasn't been processed yet — or the user is resuming
+   * against a server that lacks the fix — the old op would linger as
+   * "running" forever and keep the loading spinner on. Completing it before
+   * executeGatewayAgent ensures the UI resets before the new op's events
+   * arrive, and is a no-op when the server signal already fired.
+   */
+  #completeRunningServerOps = (context: ConversationContext): void => {
+    const { completeOperation } = this.#get();
+    for (const op of this.#getRunningServerOps(context)) {
+      completeOperation(op.id);
+    }
   };
 
   stopGenerateMessage = (): void => {
@@ -193,6 +219,10 @@ export class ConversationControlActionImpl {
         completeOperation(operationId);
         return;
       }
+      // Clear the paused op before spinning up the resume op so the UI
+      // loading state doesn't bleed across ops if the server-side
+      // agent_runtime_end hasn't been processed yet.
+      this.#completeRunningServerOps(effectiveContext);
       try {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
@@ -575,8 +605,9 @@ export class ConversationControlActionImpl {
 
     // Server-mode: start a **new** Gateway op carrying `decision='rejected'`.
     // Server persists the rejection on the target tool message and halts the
-    // conversation. The paused op stays where it was; the new op's
-    // `agent_runtime_end` clears the loading state on the client.
+    // conversation. The new op's `agent_runtime_end` clears the loading
+    // state on the client; `#completeRunningServerOps` is a fallback guard
+    // in case the server-side human_approve agent_runtime_end was missed.
     if (this.#hasRunningServerOp(effectiveContext)) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
@@ -586,6 +617,7 @@ export class ConversationControlActionImpl {
         completeOperation(operationId);
         return;
       }
+      this.#completeRunningServerOps(effectiveContext);
       try {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
@@ -638,6 +670,8 @@ export class ConversationControlActionImpl {
         );
         return;
       }
+
+      this.#completeRunningServerOps(effectiveContext);
 
       const { operationId } = startOperation({
         type: 'rejectToolCalling',

@@ -3,7 +3,6 @@ import { type StateCreator } from 'zustand';
 import { useChatStore } from '@/store/chat';
 
 import { type Store as ConversationStore } from '../../action';
-import { dataSelectors } from '../data/selectors';
 
 /**
  * Tool Interaction Actions
@@ -87,7 +86,7 @@ export const toolSlice: StateCreator<
 
   rejectToolCall: async (toolMessageId: string, reason?: string) => {
     const state = get();
-    const { hooks, updateMessagePlugin, updateMessageContent, waitForPendingArgsUpdate } = state;
+    const { context, hooks, waitForPendingArgsUpdate } = state;
 
     // Wait for any pending args update to complete before rejection
     await waitForPendingArgsUpdate(toolMessageId);
@@ -98,23 +97,14 @@ export const toolSlice: StateCreator<
       if (shouldProceed === false) return;
     }
 
-    const toolMessage = dataSelectors.getDbMessageById(toolMessageId)(state);
-    if (!toolMessage) return;
-
-    // Update intervention status to rejected
-    await updateMessagePlugin(toolMessageId, {
-      intervention: {
-        rejectedReason: reason,
-        status: 'rejected',
-      },
-    });
-
-    // Update tool message content with rejection reason
-    const toolContent = !!reason
-      ? `User reject this tool calling with reason: ${reason}`
-      : 'User reject this tool calling without reason';
-
-    await updateMessageContent(toolMessageId, toolContent);
+    // Delegate to global ChatStore with context for correct conversation scope.
+    // In Gateway mode this also starts a new op carrying resumeApproval={decision:'rejected'}
+    // so the server releases the paused confirmation; without this the server op stays
+    // awaiting confirmation and the client loading state never clears.
+    // `chatStore.rejectToolCalling` does its own tool-message existence guard, so the
+    // lookup that used to live here is redundant.
+    const chatStore = useChatStore.getState();
+    await chatStore.rejectToolCalling(toolMessageId, reason, context);
   },
 
   skipToolInteraction: async (toolMessageId: string, reason?: string) => {

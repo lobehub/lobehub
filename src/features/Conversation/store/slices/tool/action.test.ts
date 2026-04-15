@@ -6,6 +6,7 @@ import { createStore } from '../../index';
 
 // Mock dependencies
 const mockApproveToolCalling = vi.fn();
+const mockRejectToolCalling = vi.fn();
 const mockRejectAndContinueToolCalling = vi.fn();
 
 vi.mock('@/store/chat', () => ({
@@ -14,6 +15,7 @@ vi.mock('@/store/chat', () => ({
       messagesMap: {},
       operations: {},
       approveToolCalling: mockApproveToolCalling,
+      rejectToolCalling: mockRejectToolCalling,
       rejectAndContinueToolCalling: mockRejectAndContinueToolCalling,
       cancelOperations: vi.fn(),
       cancelOperation: vi.fn(),
@@ -193,7 +195,40 @@ describe('Tool Actions', () => {
       });
 
       expect(onToolRejected).toHaveBeenCalledWith('tool-call-1', 'Reason');
-      // Should not proceed when hook returns false
+      expect(mockRejectToolCalling).not.toHaveBeenCalled();
+    });
+
+    it('should delegate to ChatStore.rejectToolCalling with context', async () => {
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().rejectToolCall('tool-call-1', 'Reason');
+      });
+
+      expect(mockRejectToolCalling).toHaveBeenCalledWith('tool-call-1', 'Reason', context);
+    });
+
+    it('should pass agent_builder scope context correctly', async () => {
+      const context: ConversationContext = {
+        agentId: 'builder-agent',
+        topicId: 'builder-topic',
+        threadId: 'builder-thread',
+        scope: 'agent_builder',
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().rejectToolCall('tool-call-1', 'Reason');
+      });
+
+      expect(mockRejectToolCalling).toHaveBeenCalledWith('tool-call-1', 'Reason', context);
     });
   });
 
