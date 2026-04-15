@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { ActivateToolsParams, ActivateToolsState } from '../../../types';
+import type { ActivatedToolInfo, ActivateToolsParams, ActivateToolsState } from '../../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   notFoundHint: css`
@@ -45,7 +45,8 @@ export const ActivateToolsInspector = memo<
   const identifiers = args?.identifiers || partialArgs?.identifiers;
   const activatedTools = pluginState?.activatedTools;
   const notFoundList = pluginState?.notFound ?? [];
-  const requestedTools = identifiers?.map((id) => ({ identifier: id, name: id })) ?? [];
+  const requestedTools: ActivatedToolInfo[] =
+    identifiers?.map((id) => ({ apiCount: 0, identifier: id, name: id })) ?? [];
   const visibleTools =
     activatedTools && activatedTools.length > 0 ? activatedTools : requestedTools;
 
