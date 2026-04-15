@@ -28,7 +28,7 @@ import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
 import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
 import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
 import TaskStatusIcon from '../features/TaskStatusIcon';
-import type { TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
+import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
 import { compareTaskItems, getTaskGroupMeta, sortGroupEntries } from './listViewOptions';
 
 interface TaskListProps {
@@ -59,6 +59,13 @@ const PRIORITY_ICON_MAP = {
   3: PriorityMediumIcon,
   4: PriorityLowIcon,
 } as const;
+
+const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>(['assignee', 'none', 'priority', 'status']);
+
+const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: TaskGroupBy) => {
+  if (!value) return fallback;
+  return TASK_GROUP_BY_VALUES.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
+};
 
 const renderGroupPrefix = (group: TaskGroupMeta) => {
   if (group.groupBy === 'assignee') {
@@ -122,13 +129,16 @@ const TaskList = memo<TaskListProps>(({ options }) => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
-  const effectiveSubGroupBy = options.groupBy === 'none' ? 'none' : options.subGroupBy;
+  const groupBy = normalizeGroupBy(options.groupBy, 'status');
+  const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
+  const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
   const groupedTaskEntries = useMemo(() => {
     const sortedTasks = [...tasks].sort((a, b) => compareTaskItems(a, b, options, inboxAgentId));
 
     const primaryGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
     for (const task of sortedTasks) {
-      const primaryGroup = getTaskGroupMeta(task, options.groupBy, inboxAgentId);
+      const primaryGroup = getTaskGroupMeta(task, groupBy, inboxAgentId);
+      if (!primaryGroup?.key) continue;
       const bucket = primaryGroupMap.get(primaryGroup.key);
 
       if (bucket) {
@@ -140,7 +150,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
 
     const primaryGroups = sortGroupEntries(
       [...primaryGroupMap.values()].map((group) => [group.meta, group.items]),
-      options.groupBy,
+      groupBy,
     );
 
     return primaryGroups.map(([meta, groupedTasks]) => {
@@ -155,6 +165,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
       const subGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
       for (const task of groupedTasks) {
         const subGroup = getTaskGroupMeta(task, effectiveSubGroupBy, inboxAgentId);
+        if (!subGroup?.key) continue;
         const bucket = subGroupMap.get(subGroup.key);
 
         if (bucket) {
@@ -173,7 +184,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
         ),
       };
     });
-  }, [effectiveSubGroupBy, inboxAgentId, options, tasks]);
+  }, [effectiveSubGroupBy, groupBy, inboxAgentId, options, tasks]);
 
   if (!isInit) return null;
 
@@ -185,7 +196,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
     );
   }
 
-  if (options.groupBy === 'none') {
+  if (groupBy === 'none') {
     return renderTaskListBlock(groupedTaskEntries[0]?.items ?? []);
   }
 
