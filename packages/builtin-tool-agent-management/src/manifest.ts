@@ -218,6 +218,27 @@ export const AgentManagementManifest: BuiltinToolManifest = {
       },
     },
 
+    // ==================== Prompt ====================
+    {
+      description:
+        "Update an agent's system prompt. Use this instead of updateAgent when you only need to change the system prompt — it's simpler, avoids nested config objects, and clears stale editor data automatically.",
+      name: AgentManagementApiName.updatePrompt,
+      parameters: {
+        properties: {
+          agentId: {
+            description: 'The ID of the agent to update the prompt for',
+            type: 'string',
+          },
+          prompt: {
+            description: 'The new system prompt content',
+            type: 'string',
+          },
+        },
+        required: ['agentId', 'prompt'],
+        type: 'object',
+      },
+    },
+
     // ==================== Search ====================
     {
       description:

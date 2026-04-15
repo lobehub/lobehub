@@ -127,8 +127,28 @@ export class AgentManagerRuntime {
       // Get current config for merging
       const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
 
+      // Guard against LLM double-encoding: if config/meta is a JSON string, parse it.
+      // Use `as any` to bypass TS narrowing — at runtime LLMs can send strings for
+      // typed object params.
+      let rawConfig: any = params.config;
+      if (typeof rawConfig === 'string') {
+        try {
+          rawConfig = JSON.parse(rawConfig);
+        } catch {
+          rawConfig = undefined;
+        }
+      }
+      let rawMeta: any = params.meta;
+      if (typeof rawMeta === 'string') {
+        try {
+          rawMeta = JSON.parse(rawMeta);
+        } catch {
+          rawMeta = undefined;
+        }
+      }
+
       // Build the final config update, merging togglePlugin into config.plugins
-      let finalConfig = params.config ? { ...params.config } : {};
+      let finalConfig = rawConfig ? { ...rawConfig } : {};
 
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
@@ -153,6 +173,12 @@ export class AgentManagerRuntime {
           pluginId,
         };
         contentParts.push(`plugin ${pluginId} ${shouldEnable ? 'enabled' : 'disabled'}`);
+      }
+
+      // When systemRole is updated, clear editorData so the UI
+      // doesn't show stale rich-text content that contradicts the new prompt
+      if ('systemRole' in finalConfig && !('editorData' in finalConfig)) {
+        finalConfig = { ...finalConfig, editorData: null };
       }
 
       // Handle config update
@@ -186,19 +212,19 @@ export class AgentManagerRuntime {
       }
 
       // Handle meta update
-      if (params.meta && Object.keys(params.meta).length > 0) {
+      if (rawMeta && Object.keys(rawMeta).length > 0) {
         const previousMeta = agentSelectors.getAgentMetaById(agentId)(state);
-        const metaUpdatedFields = Object.keys(params.meta);
+        const metaUpdatedFields = Object.keys(rawMeta);
         const metaPreviousValues: Record<string, unknown> = {};
 
         for (const field of metaUpdatedFields) {
           metaPreviousValues[field] = (previousMeta as unknown as Record<string, unknown>)[field];
         }
 
-        await agentStore.optimisticUpdateAgentMeta(agentId, params.meta);
+        await agentStore.optimisticUpdateAgentMeta(agentId, rawMeta);
 
         resultState.meta = {
-          newValues: params.meta,
+          newValues: rawMeta,
           previousValues: metaPreviousValues as Record<string, unknown>,
           updatedFields: metaUpdatedFields,
         };
@@ -486,6 +512,7 @@ export class AgentManagerRuntime {
         await this.streamUpdatePrompt(agentId, params.prompt);
       } else {
         await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+          editorData: null,
           systemRole: params.prompt,
         });
       }

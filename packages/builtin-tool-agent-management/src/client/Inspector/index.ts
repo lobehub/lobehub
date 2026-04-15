@@ -8,6 +8,7 @@ import { GetAgentDetailInspector } from './GetAgentDetail';
 import { InstallPluginInspector } from './InstallPlugin';
 import { SearchAgentInspector } from './SearchAgent';
 import { UpdateAgentInspector } from './UpdateAgent';
+import { UpdatePromptInspector } from './UpdatePrompt';
 
 /**
  * Agent Management Inspector Components Registry
@@ -23,4 +24,5 @@ export const AgentManagementInspectors: Record<string, BuiltinInspector> = {
   [AgentManagementApiName.installPlugin]: InstallPluginInspector as BuiltinInspector,
   [AgentManagementApiName.searchAgent]: SearchAgentInspector as BuiltinInspector,
   [AgentManagementApiName.updateAgent]: UpdateAgentInspector as BuiltinInspector,
+  [AgentManagementApiName.updatePrompt]: UpdatePromptInspector as BuiltinInspector,
 };

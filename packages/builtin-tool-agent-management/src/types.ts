@@ -36,6 +36,9 @@ export const AgentManagementApiName = {
 
   /** Update an existing agent */
   updateAgent: 'updateAgent',
+
+  /** Update an agent's system prompt */
+  updatePrompt: 'updatePrompt',
 } as const;
 
 export type AgentManagementApiNameType =
@@ -240,6 +243,19 @@ export interface SearchAgentState {
    * Total count of matching agents
    */
   totalCount: number;
+}
+
+// ==================== Update Prompt ====================
+
+export interface UpdatePromptParams {
+  /**
+   * The agent ID to update the prompt for
+   */
+  agentId: string;
+  /**
+   * The new system prompt content
+   */
+  prompt: string;
 }
 
 // ==================== Call Agent ====================

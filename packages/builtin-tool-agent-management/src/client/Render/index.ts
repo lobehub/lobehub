@@ -6,6 +6,7 @@ import GetAgentDetailRender from './GetAgentDetail';
 import InstallPluginRender from './InstallPlugin';
 import SearchAgentRender from './SearchAgent';
 import UpdateAgentRender from './UpdateAgent';
+import UpdatePromptRender from './UpdatePrompt';
 
 /**
  * Agent Management Tool Render Components Registry
@@ -18,6 +19,7 @@ export const AgentManagementRenders = {
   [AgentManagementApiName.installPlugin]: InstallPluginRender,
   [AgentManagementApiName.searchAgent]: SearchAgentRender,
   [AgentManagementApiName.updateAgent]: UpdateAgentRender,
+  [AgentManagementApiName.updatePrompt]: UpdatePromptRender,
 };
 
 export { default as CallAgentRender } from './CallAgent';
@@ -27,3 +29,4 @@ export { default as GetAgentDetailRender } from './GetAgentDetail';
 export { default as InstallPluginRender } from './InstallPlugin';
 export { default as SearchAgentRender } from './SearchAgent';
 export { default as UpdateAgentRender } from './UpdateAgent';
+export { default as UpdatePromptRender } from './UpdatePrompt';
