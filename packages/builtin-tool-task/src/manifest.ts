@@ -124,13 +124,19 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's name, instruction, priority, or dependencies. Use addDependency/removeDependency to manage execution order.",
+        "Edit a task's fields (name, description, instruction, priority), dependencies (batched), or review config. Status changes go through updateTaskStatus.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
-          addDependency: {
+          addDependencies: {
             description:
-              'Add a dependency — this task will block until the specified task completes. Provide the identifier (e.g. "TASK-2").',
+              'Identifiers of tasks this task should block on (e.g. ["TASK-2", "TASK-3"]).',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          description: {
+            description:
+              'Human-readable description (displayed in UI). Separate from instruction, which guides the agent.',
             type: 'string',
           },
           identifier: {
@@ -149,9 +155,10 @@ export const TaskManifest: BuiltinToolManifest = {
             description: 'Updated priority level: 0=none, 1=urgent, 2=high, 3=normal, 4=low.',
             type: 'number',
           },
-          removeDependency: {
-            description: 'Remove a dependency. Provide the identifier of the dependency to remove.',
-            type: 'string',
+          removeDependencies: {
+            description: 'Identifiers of existing dependencies to remove.',
+            items: { type: 'string' },
+            type: 'array',
           },
           review: {
             description: 'Update review config.',

@@ -30,7 +30,9 @@ const TaskInstruction = memo(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const markdown = String(editor.getDocument('markdown') ?? '');
-      updateTask(taskId, { instruction: markdown });
+      updateTask(taskId, { instruction: markdown }).catch((e) => {
+        console.error('[TaskInstruction] Failed to save:', e);
+      });
     }, DEBOUNCE_MS);
   }, [editor, taskId, updateTask]);
 

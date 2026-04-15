@@ -3,7 +3,7 @@ export const systemPrompt = `You have access to Task management tools. Use them 
 - **createTask**: Create a new task. Use parentIdentifier to make it a subtask. Review config is inherited when parentIdentifier is provided, or specify custom review criteria
 - **listTasks**: List tasks. Defaults to top-level unfinished tasks of the current agent. Use filters (parentIdentifier, statuses, priorities) to narrow down
 - **viewTask**: View details of a specific task by identifier
-- **editTask**: Modify a task's name, instruction, priority, dependencies (addDependency/removeDependency), or review config
+- **editTask**: Modify a task's fields (name, description, instruction, priority), dependencies (addDependencies/removeDependencies, batch), or review config. For status changes use updateTaskStatus
 - **updateTaskStatus**: Change a task's status (e.g. mark as completed when done, or cancel if no longer needed)
 - **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible
 

@@ -96,12 +96,13 @@ const createTaskRuntime = ({
   },
 
   editTask: async (args: {
-    addDependency?: string;
+    addDependencies?: string[];
+    description?: string;
     identifier: string;
     instruction?: string;
     name?: string;
     priority?: number;
-    removeDependency?: string;
+    removeDependencies?: string[];
     review?: {
       autoRetry?: boolean;
       criteria?: Array<{ name: string; threshold: number }>;
@@ -114,6 +115,7 @@ const createTaskRuntime = ({
 
     const updateData: Record<string, any> = {};
     const changes: string[] = [];
+    const ops: Promise<unknown>[] = [];
 
     if (args.name !== undefined) {
       updateData.name = args.name;
@@ -123,35 +125,63 @@ const createTaskRuntime = ({
       updateData.instruction = args.instruction;
       changes.push(`instruction updated`);
     }
+    if (args.description !== undefined) {
+      updateData.description = args.description;
+      changes.push('description updated');
+    }
     if (args.priority !== undefined) {
       updateData.priority = args.priority;
       changes.push(`priority → ${priorityLabel(args.priority)}`);
     }
+
+    if (Object.keys(updateData).length > 0) {
+      ops.push(taskModel.update(task.id, updateData));
+    }
+
+    // TODO [LOBE-7199]: align criteria/rubrics schema and switch to typed updateReviewConfig
     if (args.review) {
-      await taskModel.updateTaskConfig(task.id, { review: { enabled: true, ...args.review } });
+      ops.push(taskModel.updateTaskConfig(task.id, { review: { enabled: true, ...args.review } }));
       changes.push('review config updated');
     }
 
-    if (Object.keys(updateData).length > 0) {
-      await taskModel.update(task.id, updateData);
+    const applyDeps = async (
+      ids: string[],
+      apply: (depId: string) => Promise<unknown>,
+      onChange: (depIdentifier: string) => void,
+    ): Promise<string | undefined> => {
+      const resolved = await Promise.all(
+        ids.map((id) => taskModel.resolve(id).then((r) => ({ id, resolved: r }))),
+      );
+      const missing = resolved.find((r) => !r.resolved);
+      if (missing) return `Dependency task not found: ${missing.id}`;
+
+      await Promise.all(resolved.map(({ resolved: dep }) => apply(dep!.id)));
+      resolved.forEach(({ resolved: dep }) => onChange(dep!.identifier));
+    };
+
+    const depResults: Promise<string | undefined>[] = [];
+    if (args.addDependencies?.length) {
+      depResults.push(
+        applyDeps(
+          args.addDependencies,
+          (depId) => taskModel.addDependency(task.id, depId),
+          (depIdentifier) => changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
+        ),
+      );
+    }
+    if (args.removeDependencies?.length) {
+      depResults.push(
+        applyDeps(
+          args.removeDependencies,
+          (depId) => taskModel.removeDependency(task.id, depId),
+          (depIdentifier) => changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
+        ),
+      );
     }
 
-    // Handle dependencies
-    if (args.addDependency) {
-      const dep = await taskModel.resolve(args.addDependency);
-      if (!dep)
-        return { content: `Dependency task not found: ${args.addDependency}`, success: false };
-      await taskModel.addDependency(task.id, dep.id);
-      changes.push(formatDependencyAdded(task.identifier, dep.identifier));
-    }
-
-    if (args.removeDependency) {
-      const dep = await taskModel.resolve(args.removeDependency);
-      if (!dep)
-        return { content: `Dependency task not found: ${args.removeDependency}`, success: false };
-      await taskModel.removeDependency(task.id, dep.id);
-      changes.push(formatDependencyRemoved(task.identifier, dep.identifier));
-    }
+    const [, depErrors] = await Promise.all([Promise.all(ops), Promise.all(depResults)]);
+    const firstDepError = depErrors.find((e) => e);
+    if (firstDepError) return { content: firstDepError, success: false };
 
     return { content: formatTaskEdited(task.identifier, changes), success: true };
   },

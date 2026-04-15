@@ -1,6 +1,8 @@
 import type { TaskDetailData } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
+import { t } from 'i18next';
 
+import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -142,10 +144,11 @@ export class TaskDetailSliceActionImpl {
       await taskService.update(id, data);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
     } catch (error) {
-      console.error('[TaskStore] Failed to update task:', error);
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
       // Revert by refreshing from server
       await this.internal_refreshTaskDetail(id);
+      message.error(t('taskDetail.updateFailed', { ns: 'chat' }));
+      throw error;
     }
   };
 

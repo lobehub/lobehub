@@ -1,4 +1,6 @@
 import {
+  formatDependencyAdded,
+  formatDependencyRemoved,
   formatTaskCreated,
   formatTaskDeleted,
   formatTaskDetail,
@@ -138,12 +140,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
   editTask = async (
     params: {
-      addDependency?: string;
+      addDependencies?: string[];
+      description?: string;
       identifier: string;
       instruction?: string;
       name?: string;
       priority?: number;
-      removeDependency?: string;
+      removeDependencies?: string[];
       review?: {
         autoRetry?: boolean;
         criteria?: Array<{ name: string; threshold: number }>;
@@ -151,24 +154,22 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         maxIterations?: number;
       };
     },
-    ctx?: BuiltinToolContext,
+    _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] editTask - params:', params);
 
-      const found = await taskService.find(params.identifier);
-      if (!found.data) {
-        return {
-          content: `Task not found: ${params.identifier}`,
-          error: { message: `Task not found: ${params.identifier}`, type: 'TaskNotFound' },
-          success: false,
-        };
-      }
-
-      const task = found.data;
+      const { identifier, review, addDependencies, removeDependencies } = params;
+      const store = getTaskStoreState();
       const changes: string[] = [];
-      const updateData: Record<string, unknown> = {};
+      const ops: Promise<unknown>[] = [];
 
+      const updateData: {
+        description?: string;
+        instruction?: string;
+        name?: string;
+        priority?: number;
+      } = {};
       if (params.name !== undefined) {
         updateData.name = params.name;
         changes.push(`name → "${params.name}"`);
@@ -177,35 +178,43 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         updateData.instruction = params.instruction;
         changes.push('instruction updated');
       }
+      if (params.description !== undefined) {
+        updateData.description = params.description;
+        changes.push('description updated');
+      }
       if (params.priority !== undefined) {
         updateData.priority = params.priority;
         changes.push(`priority → ${priorityLabel(params.priority)}`);
       }
 
       if (Object.keys(updateData).length > 0) {
-        await taskService.update(task.id, updateData);
+        ops.push(store.updateTask(identifier, updateData));
       }
 
-      if (params.review) {
-        await taskService.updateConfig(task.id, { review: { enabled: true, ...params.review } });
+      if (review) {
+        // TODO [LOBE-7199]: align criteria/rubrics schema and switch to typed store.updateReview
+        ops.push(taskService.updateConfig(identifier, { review: { enabled: true, ...review } }));
         changes.push('review config updated');
       }
 
-      // TRPC addDependency/removeDependency resolve both params
-      if (params.addDependency) {
-        await taskService.addDependency(task.identifier, params.addDependency);
-        changes.push(`dependency added: blocks on ${params.addDependency}`);
+      if (addDependencies?.length) {
+        addDependencies.forEach((dep) => {
+          ops.push(store.addDependency(identifier, dep));
+          changes.push(formatDependencyAdded(identifier, dep));
+        });
       }
-      if (params.removeDependency) {
-        await taskService.removeDependency(task.identifier, params.removeDependency);
-        changes.push(`dependency removed: ${params.removeDependency}`);
+      if (removeDependencies?.length) {
+        removeDependencies.forEach((dep) => {
+          ops.push(store.removeDependency(identifier, dep));
+          changes.push(formatDependencyRemoved(identifier, dep));
+        });
       }
 
-      await refreshTaskUI(task.id, ctx?.agentId);
+      await Promise.all(ops);
 
       return {
-        content: formatTaskEdited(task.identifier, changes),
-        state: { identifier: task.identifier, success: true },
+        content: formatTaskEdited(identifier, changes),
+        state: { identifier, success: true },
         success: true,
       };
     } catch (error) {
