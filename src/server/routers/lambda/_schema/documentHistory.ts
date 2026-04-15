@@ -67,7 +67,7 @@ export interface ListHistoryOutput {
 }
 
 export interface GetHistoryItemOutput {
-  editorData: Record<string, any>;
+  editorData: Record<string, any> | null;
   id: string;
   isCurrent: boolean;
   savedAt: string;
@@ -75,7 +75,7 @@ export interface GetHistoryItemOutput {
 }
 
 export interface CompareHistoryItemState {
-  editorData: Record<string, any>;
+  editorData: Record<string, any> | null;
   id: string;
   isCurrent: boolean;
   savedAt: string;

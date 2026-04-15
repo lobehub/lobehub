@@ -5,6 +5,7 @@ import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { documentService } from '@/services/document';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -172,6 +173,12 @@ export class EditorActionImpl {
     try {
       const currentContent = (editor.getDocument('markdown') as unknown as string) || '';
       const currentEditorData = editor.getDocument('json');
+
+      if (!isValidEditorData(currentEditorData)) {
+        console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
+        internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
+        return;
+      }
 
       // Save document
       const result = await documentService.updateDocument({

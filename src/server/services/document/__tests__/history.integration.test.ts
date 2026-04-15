@@ -448,6 +448,20 @@ describe('DocumentHistoryService', () => {
       expect(result.saveSource).toBe('system');
     });
 
+    it('should return null for head editorData when current document editorData is invalid', async () => {
+      const doc = await createTestDocument('Head content', {});
+
+      const result = await historyService.getDocumentHistoryItem({
+        documentId: doc.id,
+        historyId: 'head',
+      });
+
+      expect(result.id).toBe('head');
+      expect(result.isCurrent).toBe(true);
+      expect(result.editorData).toBeNull();
+      expect(result.saveSource).toBe('system');
+    });
+
     it('should return a persisted history item', async () => {
       const doc = await createTestDocument('Hello');
       const savedAt = new Date('2026-04-01T10:00:00Z');

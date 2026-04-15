@@ -416,6 +416,37 @@ describe('DocumentStore - Editor Actions', () => {
   });
 
   describe('performSave', () => {
+    it('should reject saving when editorData is an empty object', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = {
+        getDocument: vi.fn((type: string) => {
+          if (type === 'markdown') return '# Test';
+          if (type === 'json') return {};
+          return null;
+        }),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+      vi.mocked(documentService.updateDocument).mockClear();
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(documentService.updateDocument).not.toHaveBeenCalled();
+      expect(result.current.documents['doc-1'].isDirty).toBe(true);
+      expect(result.current.documents['doc-1'].saveStatus).toBe('idle');
+    });
+
     it('should save metadata-only updates when history is not appended', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;

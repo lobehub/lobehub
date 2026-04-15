@@ -6,6 +6,7 @@ import {
   DOCUMENT_HISTORY_LIST_LIMIT,
   DOCUMENT_HISTORY_SOURCE_LIMITS,
 } from '@/const/documentHistory';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
 import type {
   CompareDocumentHistoryItemsParams,
@@ -20,8 +21,10 @@ import type {
   ListDocumentHistoryResult,
 } from './types';
 
-const getDocumentEditorData = (document: DocumentItem | undefined) => {
-  return (document?.editorData ?? {}) as Record<string, any>;
+const getDocumentEditorData = (document: DocumentItem | undefined): Record<string, any> | null => {
+  const editorData = document?.editorData;
+
+  return isValidEditorData(editorData) ? editorData : null;
 };
 
 export class DocumentHistoryService {

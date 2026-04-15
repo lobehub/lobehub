@@ -25,7 +25,7 @@ export interface DocumentHistoryListItem {
 }
 
 export interface DocumentHistoryItemResult {
-  editorData: Record<string, any>;
+  editorData: Record<string, any> | null;
   id: string;
   isCurrent: boolean;
   savedAt: Date;
