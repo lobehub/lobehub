@@ -66,41 +66,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] createTask - params:', params);
 
-      // Resolve parentTaskId: explicit > current task
-      let parentTaskId: string | undefined;
-      let parentLabel: string | undefined;
-
-      if (params.parentIdentifier) {
-        const parent = await taskService.find(params.parentIdentifier);
-        if (!parent.data) {
-          return {
-            content: `Parent task not found: ${params.parentIdentifier}`,
-            error: {
-              message: `Parent task not found: ${params.parentIdentifier}`,
-              type: 'TaskNotFound',
-            },
-            success: false,
-          };
-        }
-        parentTaskId = parent.data.id;
-        parentLabel = parent.data.identifier;
-      } else {
-        const currentId = getCurrentTaskId();
-        if (currentId) {
-          parentTaskId = currentId;
-          parentLabel = 'current task';
-        }
-      }
-
-      const result = await taskService.create({
+      const task = await getTaskStoreState().createTask({
         assigneeAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
-        parentTaskId,
+        parentTaskId: params.parentIdentifier,
         priority: params.priority,
       });
 
-      const task = result.data;
       if (!task) {
         return {
           content: 'Failed to create task',
@@ -109,19 +82,16 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         };
       }
 
-      // Post-create: write review config if provided
       if (params.review) {
         await taskService.updateConfig(task.id, { review: { enabled: true, ...params.review } });
       }
-
-      await refreshTaskUI(undefined, ctx?.agentId);
 
       return {
         content: formatTaskCreated({
           identifier: task.identifier,
           instruction: params.instruction,
           name: task.name,
-          parentLabel,
+          parentLabel: params.parentIdentifier,
           priority: task.priority,
           status: task.status,
         }),

@@ -9,6 +9,8 @@ import type { TaskStore } from '../../store';
 import type { TaskDetailDispatch } from './reducer';
 import { taskDetailReducer } from './reducer';
 
+type CreatedTask = NonNullable<Awaited<ReturnType<typeof taskService.create>>['data']>;
+
 // config / heartbeatInterval / heartbeatTimeout are not exposed here:
 // - model/provider goes through configSlice.updateTaskModelConfig
 // - checkpoint goes through configSlice.updateCheckpoint
@@ -66,15 +68,12 @@ export class TaskDetailSliceActionImpl {
     name?: string;
     parentTaskId?: string;
     priority?: number;
-  }): Promise<string | null> => {
+  }): Promise<CreatedTask | null> => {
     this.#set({ isCreatingTask: true }, false, 'createTask/start');
     try {
       const result = await taskService.create(params);
       await this.#get().refreshTaskList();
-      return result.data?.identifier ?? null;
-    } catch (error) {
-      console.error('[TaskStore] Failed to create task:', error);
-      return null;
+      return result.data ?? null;
     } finally {
       this.#set({ isCreatingTask: false }, false, 'createTask/end');
     }

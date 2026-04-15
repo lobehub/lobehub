@@ -25,7 +25,7 @@ export const TaskManifest: BuiltinToolManifest = {
           },
           parentIdentifier: {
             description:
-              'Identifier of the parent task (e.g. "TASK-1"). If provided, the new task becomes a subtask. Defaults to the current task if omitted.',
+              'Identifier of the parent task (e.g. "TASK-1"). If provided, the new task becomes a subtask.',
             type: 'string',
           },
           priority: {

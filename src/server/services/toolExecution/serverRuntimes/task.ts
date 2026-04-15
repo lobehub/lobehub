@@ -49,11 +49,6 @@ const createTaskRuntime = ({
       parentTaskId = parent.id;
       parentLabel = parent.identifier;
       parentConfig = parent.config as Record<string, any>;
-    } else if (taskId) {
-      parentTaskId = taskId;
-      const current = await taskModel.findById(taskId);
-      parentLabel = current?.identifier || taskId;
-      parentConfig = current?.config as Record<string, any>;
     }
 
     // Build config: explicit review > inherited from parent
@@ -66,6 +61,7 @@ const createTaskRuntime = ({
 
     const task = await taskModel.create({
       ...(config && { config }),
+      assigneeAgentId: agentId,
       instruction: args.instruction,
       name: args.name,
       parentTaskId,

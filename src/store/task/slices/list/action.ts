@@ -38,7 +38,10 @@ export class TaskListSliceActionImpl {
 
   refreshTaskList = async (): Promise<void> => {
     const { listAgentId } = this.#get();
-    await mutate([FETCH_TASK_LIST_KEY, listAgentId]);
+    await Promise.all([
+      mutate([FETCH_TASK_LIST_KEY, listAgentId]),
+      mutate([FETCH_TASK_GROUP_LIST_KEY, listAgentId]),
+    ]);
   };
 
   setListAgentId = (agentId?: string): void => {

@@ -70,7 +70,7 @@ describe('TaskDetailSliceAction', () => {
         instruction: 'Do something',
         name: 'Test',
       });
-      expect(result).toBe('T-1');
+      expect(result?.identifier).toBe('T-1');
     });
 
     it('should set isCreatingTask during creation', async () => {
@@ -83,11 +83,12 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
 
-    it('should return null on error', async () => {
+    it('should throw on error and reset isCreatingTask', async () => {
       vi.mocked(taskService.create).mockRejectedValue(new Error('fail'));
 
-      const result = await useTaskStore.getState().createTask({ instruction: 'Test' });
-      expect(result).toBeNull();
+      await expect(useTaskStore.getState().createTask({ instruction: 'Test' })).rejects.toThrow(
+        'fail',
+      );
       expect(useTaskStore.getState().isCreatingTask).toBe(false);
     });
   });
