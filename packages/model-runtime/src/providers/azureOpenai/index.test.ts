@@ -103,8 +103,9 @@ describe('LobeAzureOpenAI', () => {
           messages: [{ role: 'user', content: "Search for today's OpenAI news." }],
           model: 'gpt-5.4',
           stream: true,
+          top_p: 0.9,
           verbosity: 'high',
-        });
+        } as any);
 
         expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
 
@@ -115,6 +116,7 @@ describe('LobeAzureOpenAI', () => {
         expect(createCall.store).toBe(false);
         expect(createCall.stream).toBe(true);
         expect(createCall.text).toEqual({ verbosity: 'high' });
+        expect(createCall.top_p).toBeUndefined();
         expect(createCall.tools).toEqual(
           expect.arrayContaining([expect.objectContaining({ type: 'web_search' })]),
         );

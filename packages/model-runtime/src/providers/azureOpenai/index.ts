@@ -4,6 +4,7 @@ import type OpenAI from 'openai';
 import { AzureOpenAI } from 'openai';
 
 import { responsesAPIModels, systemToUserModels } from '../../const/models';
+import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
@@ -119,18 +120,30 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
     handlePayload: (payload) => {
       const { enabledSearch, model, tools, verbosity, ...rest } = payload;
       const updatedMessages = transformAzureSystemMessages(payload.messages, model);
+      const azureTools = appendAzureSearchTool(tools, enabledSearch);
       const responseText = verbosity
         ? payload.text
           ? { ...payload.text, verbosity }
           : { verbosity }
         : payload.text;
 
+      if (isAzureReasoningModel(model)) {
+        return pruneReasoningPayload({
+          ...rest,
+          messages: updatedMessages,
+          model,
+          stream: payload.stream ?? true,
+          text: responseText,
+          tools: azureTools as any,
+        } as ChatStreamPayload) as ChatStreamPayload;
+      }
+
       return {
         ...rest,
         messages: updatedMessages,
         model,
         text: responseText,
-        tools: appendAzureSearchTool(tools, enabledSearch),
+        tools: azureTools,
       } as ChatStreamPayload;
     },
   },
