@@ -4,7 +4,7 @@ import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
 import { useMenu } from './useMenu';
 
@@ -13,7 +13,7 @@ const HeaderActions = memo(() => {
 
   return (
     <DropdownMenu items={menuItems}>
-      <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SIZE} />
+      <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
     </DropdownMenu>
   );
 });
