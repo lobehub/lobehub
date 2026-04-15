@@ -1,33 +1,27 @@
-import { ChatInput } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Input } from 'antd';
-import { ArrowUp } from 'lucide-react';
+import { ChatInput, SendButton, useEditor } from '@lobehub/editor/react';
+import { Flexbox, TextArea } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 
-import { styles } from '../shared/style';
-
 const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const { t } = useTranslation('chat');
+  const editor = useEditor();
   const addComment = useTaskStore((s) => s.addComment);
-  const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const hasComment = comment.trim().length > 0;
-
   const handleSubmit = useCallback(async () => {
-    const trimmed = comment.trim();
+    const trimmed = String(editor?.getDocument?.('markdown') ?? '').trim();
     if (!trimmed || submitting) return;
     setSubmitting(true);
     try {
       await addComment(taskId, trimmed);
-      setComment('');
+      editor?.clearContent?.();
     } finally {
       setSubmitting(false);
     }
-  }, [taskId, comment, addComment, submitting]);
+  }, [taskId, editor, addComment, submitting]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -40,25 +34,29 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   );
 
   return (
-    <ChatInput resize={false}>
-      <Input.TextArea
-        autoSize={{ maxRows: 8, minRows: 3 }}
-        className={styles.commentInput}
+    <ChatInput
+      gap={8}
+      maxHeight={100}
+      minHeight={30}
+      resize={false}
+      footer={
+        <Flexbox horizontal align={'center'} justify={'flex-end'} padding={8}>
+          <SendButton
+            loading={submitting}
+            shape={'round'}
+            type={'primary'}
+            onClick={handleSubmit}
+          />
+        </Flexbox>
+      }
+    >
+      <TextArea
+        autoSize={{ maxRows: 4, minRows: 1 }}
         placeholder={t('taskDetail.commentPlaceholder')}
-        value={comment}
-        variant="borderless"
-        onChange={(e) => setComment(e.target.value)}
+        style={{ padding: 0 }}
+        variant={'borderless'}
         onKeyDown={handleKeyDown}
       />
-      <Flexbox horizontal className={styles.commentActions} gap={4}>
-        <ActionIcon
-          disabled={!hasComment || submitting}
-          icon={ArrowUp}
-          loading={submitting}
-          size="small"
-          onClick={handleSubmit}
-        />
-      </Flexbox>
     </ChatInput>
   );
 });
