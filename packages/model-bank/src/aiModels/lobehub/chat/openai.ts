@@ -5,6 +5,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
       vision: true,
     },
     contextWindowTokens: 1_050_000,
@@ -50,6 +51,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
