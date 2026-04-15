@@ -30,3 +30,6 @@ export const DEFAULT_BRIEF_ACTIONS: Record<string, BriefAction[]> = {
     { key: 'feedback', label: '💬 修改意见', type: 'comment' },
   ],
 };
+
+/** Brief type — must match DEFAULT_BRIEF_ACTIONS keys and DB schema comment */
+export type BriefType = 'decision' | 'error' | 'insight' | 'result';
