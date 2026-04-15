@@ -43,8 +43,8 @@ const TaskTriggerTag = memo<TaskTriggerTagProps>(
         <Tooltip title={data?.tooltip}>
           <Flexbox horizontal align="center" gap={10}>
             <Icon color={cssVar.colorTextDescription} icon={ClockIcon} size={16} />
-            <Text type={data ? undefined : 'secondary'}>
-              {data?.text ?? 'Add schedule/trigger'}
+            <Text type={data ? undefined : 'secondary'} weight={data ? 500 : undefined}>
+              {data?.text ?? 'Add schedule'}
             </Text>
           </Flexbox>
         </Tooltip>
