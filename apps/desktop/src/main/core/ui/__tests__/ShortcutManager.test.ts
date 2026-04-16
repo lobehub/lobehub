@@ -1,7 +1,6 @@
+import { DEFAULT_ELECTRON_DESKTOP_SHORTCUTS } from '@lobechat/const/desktopGlobalShortcuts';
 import { globalShortcut } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { DEFAULT_SHORTCUTS_CONFIG } from '@/shortcuts';
 
 import type { App } from '../../App';
 import { ShortcutManager } from '../ShortcutManager';
@@ -26,10 +25,10 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-// Mock DEFAULT_SHORTCUTS_CONFIG
-vi.mock('@/shortcuts', () => ({
-  DEFAULT_SHORTCUTS_CONFIG: {
-    showApp: 'Control+E',
+// Mock desktop global shortcut defaults
+vi.mock('@lobechat/const/desktopGlobalShortcuts', () => ({
+  DEFAULT_ELECTRON_DESKTOP_SHORTCUTS: {
+    showApp: '',
     openSettings: 'CommandOrControl+,',
   },
 }));
@@ -115,7 +114,7 @@ describe('ShortcutManager', () => {
 
       expect(mockStoreManager.get).toHaveBeenCalledWith('shortcuts');
       expect(globalShortcut.unregisterAll).toHaveBeenCalled();
-      expect(globalShortcut.register).toHaveBeenCalledWith('Control+E', expect.any(Function));
+      expect(globalShortcut.register).not.toHaveBeenCalledWith('Control+E', expect.any(Function));
       expect(globalShortcut.register).toHaveBeenCalledWith(
         'CommandOrControl+,',
         expect.any(Function),
@@ -145,7 +144,7 @@ describe('ShortcutManager', () => {
       shortcutManager.initialize();
 
       const config = shortcutManager.getShortcutsConfig();
-      expect(config).toEqual(DEFAULT_SHORTCUTS_CONFIG);
+      expect(config).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
     });
   });
 
@@ -346,8 +345,11 @@ describe('ShortcutManager', () => {
 
       shortcutManager['loadShortcutsConfig']();
 
-      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_SHORTCUTS_CONFIG);
-      expect(mockStoreManager.set).toHaveBeenCalledWith('shortcuts', DEFAULT_SHORTCUTS_CONFIG);
+      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
+      expect(mockStoreManager.set).toHaveBeenCalledWith(
+        'shortcuts',
+        DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
+      );
     });
 
     it('should use defaults when config is empty', () => {
@@ -355,7 +357,7 @@ describe('ShortcutManager', () => {
 
       shortcutManager['loadShortcutsConfig']();
 
-      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_SHORTCUTS_CONFIG);
+      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
     });
 
     it('should filter invalid keys from stored config', () => {
@@ -413,8 +415,11 @@ describe('ShortcutManager', () => {
 
       shortcutManager['loadShortcutsConfig']();
 
-      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_SHORTCUTS_CONFIG);
-      expect(mockStoreManager.set).toHaveBeenCalledWith('shortcuts', DEFAULT_SHORTCUTS_CONFIG);
+      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
+      expect(mockStoreManager.set).toHaveBeenCalledWith(
+        'shortcuts',
+        DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
+      );
     });
   });
 
@@ -458,7 +463,7 @@ describe('ShortcutManager', () => {
       expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+P', expect.any(Function));
     });
 
-    it('should skip shortcuts not in DEFAULT_SHORTCUTS_CONFIG', () => {
+    it('should skip shortcuts not defined in default electron desktop shortcuts', () => {
       shortcutManager['shortcutsConfig'] = {
         showApp: 'Alt+E',
         invalidKey: 'Ctrl+I',

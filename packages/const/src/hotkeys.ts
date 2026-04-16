@@ -1,11 +1,5 @@
-import type { DesktopHotkeyItem, HotkeyItem } from '@lobechat/types';
-import {
-  DesktopHotkeyEnum,
-  HotkeyEnum,
-  HotkeyGroupEnum,
-  HotkeyScopeEnum,
-  KeyEnum,
-} from '@lobechat/types';
+import type { HotkeyItem } from '@lobechat/types';
+import { HotkeyEnum, HotkeyGroupEnum, HotkeyScopeEnum, KeyEnum } from '@lobechat/types';
 
 const combineKeys = (keys: string[]) => keys.join('+');
 
@@ -118,20 +112,5 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     id: HotkeyEnum.SaveDocument,
     keys: combineKeys([KeyEnum.Mod, 's']),
     scopes: [HotkeyScopeEnum.Files],
-  },
-];
-
-type DesktopHotkeyRegistration = DesktopHotkeyItem[];
-
-// Desktop hotkey configuration
-export const DESKTOP_HOTKEYS_REGISTRATION: DesktopHotkeyRegistration = [
-  {
-    id: DesktopHotkeyEnum.ShowApp,
-    keys: combineKeys([KeyEnum.Ctrl, 'e']),
-  },
-  {
-    id: DesktopHotkeyEnum.OpenSettings,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Comma]),
-    nonEditable: true,
   },
 ];
