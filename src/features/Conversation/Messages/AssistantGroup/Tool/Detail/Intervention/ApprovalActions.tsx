@@ -83,7 +83,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                   type="primary"
                   onClick={() => handleReject(rejectReason)}
                 >
-                  {t('tool.intervention.reject')}
+                  {t('tool.intervention.rejectAndContinue')}
                 </Button>
               </Flexbox>
               <Input.TextArea
