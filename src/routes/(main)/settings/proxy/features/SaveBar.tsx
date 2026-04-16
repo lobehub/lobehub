@@ -25,24 +25,27 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block: 6px;
     padding-inline: 16px 6px;
+    border: 1px solid color-mix(in srgb, ${cssVar.colorBorderSecondary} 60%, transparent);
     border-radius: 999px;
 
     font-size: 13px;
-    color: ${cssVar.colorTextLightSolid};
+    color: ${cssVar.colorText};
 
-    background: ${cssVar.colorBgSpotlight};
-    box-shadow:
-      0 8px 28px rgb(0 0 0 / 22%),
-      0 2px 6px rgb(0 0 0 / 14%);
+    background: color-mix(in srgb, ${cssVar.colorBgElevated} 85%, transparent);
+    backdrop-filter: blur(16px) saturate(1.2);
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   dot: css`
+    flex-shrink: 0;
+
     width: 6px;
     height: 6px;
     border-radius: 50%;
+
     background: ${cssVar.colorWarning};
   `,
   message: css`
-    opacity: 0.92;
+    color: ${cssVar.colorTextSecondary};
   `,
   resetButton: css`
     height: 28px;
@@ -50,30 +53,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 12px;
     border-radius: 999px;
 
-    color: rgb(255 255 255 / 85%);
+    color: ${cssVar.colorTextSecondary} !important;
 
     background: transparent;
 
     &:hover {
-      color: #fff !important;
-      background: rgb(255 255 255 / 8%) !important;
+      color: ${cssVar.colorText} !important;
+      background: ${cssVar.colorFillSecondary} !important;
     }
   `,
   saveButton: css`
     height: 28px;
     padding-block: 0;
     padding-inline: 14px;
-    border: none;
     border-radius: 999px;
 
     font-weight: 500;
-    color: ${cssVar.colorBgSpotlight} !important;
-
-    background: #fff !important;
-
-    &:hover {
-      background: rgb(255 255 255 / 92%) !important;
-    }
   `,
 }));
 
