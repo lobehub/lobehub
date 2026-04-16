@@ -436,7 +436,13 @@ describe('Task Router Integration', () => {
 
       const assigned = list.data.find((t) => t.assigneeAgentId === testAgentId)!;
       expect(assigned.participants).toEqual([
-        { avatar: 'avatar.png', id: testAgentId, name: 'Agent One', type: 'agent' },
+        {
+          avatar: 'avatar.png',
+          backgroundColor: null,
+          id: testAgentId,
+          title: 'Agent One',
+          type: 'agent',
+        },
       ]);
 
       const unassigned = list.data.find((t) => !t.assigneeAgentId)!;
