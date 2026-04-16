@@ -175,39 +175,29 @@ export class KnowledgeBaseExecutionRuntime {
         return { content: 'Knowledge base service is not available.', success: false };
       }
 
-      const { id } = args;
+      const { id, limit = 50, offset = 0 } = args;
+      const cappedLimit = Math.min(limit, 100);
+
       const knowledgeBase = await this.knowledgeBaseService.getKnowledgeBaseById(id);
 
       if (!knowledgeBase) {
         return { content: `Knowledge base with ID "${id}" not found.`, success: false };
       }
 
-      const allItems: KnowledgeBaseFileInfo[] = [];
-      const pageSize = 100;
-      let offset = 0;
-      let hasMore = true;
+      const result = await this.knowledgeBaseService.getKnowledgeItems({
+        knowledgeBaseId: id,
+        limit: cappedLimit,
+        offset,
+      });
 
-      while (hasMore) {
-        const result = await this.knowledgeBaseService.getKnowledgeItems({
-          knowledgeBaseId: id,
-          limit: pageSize,
-          offset,
-        });
-
-        for (const item of result.items) {
-          allItems.push({
-            fileType: item.fileType,
-            id: item.id,
-            name: item.name,
-            size: item.size,
-            sourceType: item.sourceType,
-            updatedAt: item.updatedAt,
-          });
-        }
-
-        hasMore = result.hasMore;
-        offset += pageSize;
-      }
+      const items: KnowledgeBaseFileInfo[] = result.items.map((item) => ({
+        fileType: item.fileType,
+        id: item.id,
+        name: item.name,
+        size: item.size,
+        sourceType: item.sourceType,
+        updatedAt: item.updatedAt,
+      }));
 
       const kbInfo: KnowledgeBaseInfo = {
         avatar: knowledgeBase.avatar,
@@ -219,19 +209,24 @@ export class KnowledgeBaseExecutionRuntime {
 
       let content = `**${knowledgeBase.name}** (ID: \`${knowledgeBase.id}\`)`;
       if (knowledgeBase.description) content += `\nDescription: ${knowledgeBase.description}`;
-      content += `\n\nContains ${allItems.length} item(s):`;
+      content += `\n\nShowing ${items.length} item(s) (offset: ${offset}):`;
 
-      if (allItems.length > 0) {
-        const fileLines = allItems.map(
+      if (items.length > 0) {
+        const fileLines = items.map(
           (f) => `- \`${f.id}\` | ${f.sourceType} | ${f.name} | ${f.fileType} | ${f.size} bytes`,
         );
         content += '\n\n' + fileLines.join('\n');
       }
 
+      if (result.hasMore) {
+        content += `\n\n_More items available. Use offset=${offset + cappedLimit} to see the next page._`;
+      }
+
       const state: ViewKnowledgeBaseState = {
-        files: allItems,
+        files: items,
+        hasMore: result.hasMore,
         knowledgeBase: kbInfo,
-        total: allItems.length,
+        total: items.length,
       };
 
       return { content, state, success: true };

@@ -64,6 +64,8 @@ export interface ListKnowledgeBasesState {
 
 export interface ViewKnowledgeBaseArgs {
   id: string;
+  limit?: number;
+  offset?: number;
 }
 
 export interface KnowledgeBaseFileInfo {
@@ -77,6 +79,7 @@ export interface KnowledgeBaseFileInfo {
 
 export interface ViewKnowledgeBaseState {
   files: KnowledgeBaseFileInfo[];
+  hasMore: boolean;
   knowledgeBase: KnowledgeBaseInfo;
   total: number;
 }

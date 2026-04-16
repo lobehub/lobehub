@@ -68,13 +68,26 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'View a specific knowledge base and list all its files and documents. Returns the knowledge base metadata along with a paginated list of all items (files, documents, folders) it contains.',
+        'View a specific knowledge base and list its files and documents with pagination. Returns the knowledge base metadata along with a page of items.',
       name: KnowledgeBaseApiName.viewKnowledgeBase,
       parameters: {
         properties: {
           id: {
             description: 'The ID of the knowledge base to view.',
             type: 'string',
+          },
+          limit: {
+            default: 50,
+            description: 'Number of items to return per page (default: 50, max: 100).',
+            maximum: 100,
+            minimum: 1,
+            type: 'number',
+          },
+          offset: {
+            default: 0,
+            description: 'Offset for pagination (default: 0).',
+            minimum: 0,
+            type: 'number',
           },
         },
         required: ['id'],
