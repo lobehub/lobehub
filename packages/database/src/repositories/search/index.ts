@@ -3,6 +3,7 @@ import { and, eq, ne, sql } from 'drizzle-orm';
 import {
   agents,
   chatGroups,
+  DOCUMENT_FOLDER_TYPE,
   documents,
   files,
   knowledgeBaseFiles,
@@ -554,7 +555,7 @@ export class SearchRepo {
   }
 
   /**
-   * Search folders (documents with file_type='custom/folder') (BM25)
+   * Search folders (documents with file_type=DOCUMENT_FOLDER_TYPE) (BM25)
    */
   private async searchFolders(query: string, limit: number): Promise<FolderSearchResult[]> {
     const bm25Query = sanitizeBm25Query(query);
@@ -575,7 +576,7 @@ export class SearchRepo {
       .where(
         and(
           eq(documents.userId, this.userId),
-          eq(documents.fileType, 'custom/folder'),
+          eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
         ),
       )

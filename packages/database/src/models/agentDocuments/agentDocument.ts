@@ -85,6 +85,38 @@ export class AgentDocumentModel {
     };
   }
 
+  async associate(params: {
+    agentId: string;
+    documentId: string;
+    policyLoad?: PolicyLoad;
+  }): Promise<{ id: string }> {
+    const { agentId, documentId, policyLoad } = params;
+
+    const [result] = await this.db
+      .insert(agentDocuments)
+      .values({
+        accessPublic: 0,
+        accessSelf:
+          AgentAccess.EXECUTE |
+          AgentAccess.LIST |
+          AgentAccess.READ |
+          AgentAccess.WRITE |
+          AgentAccess.DELETE,
+        accessShared: 0,
+        agentId,
+        documentId,
+        policyLoad: policyLoad ?? PolicyLoad.PROGRESSIVE,
+        policyLoadFormat: DocumentLoadFormat.RAW,
+        policyLoadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
+        policyLoadRule: DocumentLoadRule.ALWAYS,
+        userId: this.userId,
+      })
+      .onConflictDoNothing()
+      .returning({ id: agentDocuments.id });
+
+    return { id: result?.id };
+  }
+
   async create(
     agentId: string,
     filename: string,

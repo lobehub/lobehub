@@ -15,6 +15,7 @@ import {
 import { BaseExecutor, SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
 import { type CrawlSuccessResult } from '@lobechat/web-crawler';
 
+import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { searchService } from '@/services/search';
 
@@ -143,6 +144,22 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
                 });
               } catch {
                 // Silently ignore document creation errors to not block the main flow
+              }
+            }),
+          );
+        }
+
+        // Associate saved notebook documents with the agent if agentId is available
+        if (ctx.agentId && savedDocuments.length > 0) {
+          await Promise.all(
+            savedDocuments.map(async (doc) => {
+              try {
+                await agentDocumentService.associateDocument({
+                  agentId: ctx.agentId!,
+                  documentId: doc.id,
+                });
+              } catch {
+                // Silently ignore association errors to not block the main flow
               }
             }),
           );

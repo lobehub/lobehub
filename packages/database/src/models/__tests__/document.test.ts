@@ -55,6 +55,51 @@ const createTestDocument = async (model: DocumentModel, fModel: FileModel, conte
 };
 
 describe('DocumentModel', () => {
+  describe('findOrCreateFolder', () => {
+    it('should create a new folder when none exists', async () => {
+      const folder = await documentModel.findOrCreateFolder('bookmark');
+
+      expect(folder).toBeDefined();
+      expect(folder.fileType).toBe('custom/folder');
+      expect(folder.filename).toBe('bookmark');
+      expect(folder.title).toBe('bookmark');
+      expect(folder.source).toBe('');
+      expect(folder.sourceType).toBe('api');
+      expect(folder.totalCharCount).toBe(0);
+      expect(folder.content).toBe('');
+    });
+
+    it('should return existing folder on second call', async () => {
+      const first = await documentModel.findOrCreateFolder('bookmark');
+      const second = await documentModel.findOrCreateFolder('bookmark');
+
+      expect(second.id).toBe(first.id);
+    });
+
+    it('should isolate folders by user', async () => {
+      const folder1 = await documentModel.findOrCreateFolder('bookmark');
+      const folder2 = await documentModel2.findOrCreateFolder('bookmark');
+
+      expect(folder1.id).not.toBe(folder2.id);
+    });
+
+    it('should support parentId for nested folders', async () => {
+      const parent = await documentModel.findOrCreateFolder('root');
+      const child = await documentModel.findOrCreateFolder('sub', parent.id);
+
+      expect(child.parentId).toBe(parent.id);
+      expect(child.id).not.toBe(parent.id);
+    });
+
+    it('should distinguish folders with same name but different parentId', async () => {
+      const topLevel = await documentModel.findOrCreateFolder('notes');
+      const parent = await documentModel.findOrCreateFolder('root');
+      const nested = await documentModel.findOrCreateFolder('notes', parent.id);
+
+      expect(topLevel.id).not.toBe(nested.id);
+    });
+  });
+
   describe('create', () => {
     it('should create a new document', async () => {
       const { id: fileId } = await fileModel.create({

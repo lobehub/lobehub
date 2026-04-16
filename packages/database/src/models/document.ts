@@ -1,7 +1,7 @@
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
-import { documents } from '../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface QueryDocumentParams {
@@ -19,6 +19,36 @@ export class DocumentModel {
     this.userId = userId;
     this.db = db;
   }
+
+  findOrCreateFolder = async (name: string, parentId?: string): Promise<DocumentItem> => {
+    const conditions = [
+      eq(documents.userId, this.userId),
+      eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+      eq(documents.filename, name),
+    ];
+
+    if (parentId) {
+      conditions.push(eq(documents.parentId, parentId));
+    }
+
+    const existing = await this.db.query.documents.findFirst({
+      where: and(...conditions),
+    });
+
+    if (existing) return existing;
+
+    return this.create({
+      content: '',
+      fileType: DOCUMENT_FOLDER_TYPE,
+      filename: name,
+      parentId,
+      source: '',
+      sourceType: 'api',
+      title: name,
+      totalCharCount: 0,
+      totalLineCount: 0,
+    });
+  };
 
   create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
     const result = (await this.db
