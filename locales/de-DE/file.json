@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Seite erfolgreich dupliziert",
   "pageEditor.editedAt": "Zuletzt bearbeitet am {{time}}",
   "pageEditor.editedBy": "Zuletzt bearbeitet von {{name}}",
-  "pageEditor.editorPlaceholder": "Beginnen Sie mit dem Schreiben Ihrer Seite. Drücken Sie /, um das Befehlsmenü zu öffnen",
+  "pageEditor.editorPlaceholder": "Drücken Sie \"/\" für KI und Befehle",
   "pageEditor.empty.createNewDocument": "Neue Seite erstellen",
   "pageEditor.empty.importNotion": "Aus Notion importieren",
   "pageEditor.empty.title": "Wählen Sie eine Seite aus, um zu beginnen",

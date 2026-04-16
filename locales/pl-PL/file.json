@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Strona została pomyślnie zduplikowana",
   "pageEditor.editedAt": "Ostatnia edycja: {{time}}",
   "pageEditor.editedBy": "Ostatnio edytował: {{name}}",
-  "pageEditor.editorPlaceholder": "Zacznij pisać swoją stronę. Naciśnij /, aby otworzyć menu poleceń",
+  "pageEditor.editorPlaceholder": "Naciśnij \"/\" dla AI i poleceń",
   "pageEditor.empty.createNewDocument": "Utwórz nową stronę",
   "pageEditor.empty.importNotion": "Importuj z Notion",
   "pageEditor.empty.title": "Wybierz stronę, aby rozpocząć",
