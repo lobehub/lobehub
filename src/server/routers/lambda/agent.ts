@@ -54,7 +54,10 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const agent = await ctx.agentModel.create(input.config ?? {});
+      const agent = await ctx.agentModel.create({
+        ...input.config,
+        sessionGroupId: input.groupId,
+      });
 
       return { agentId: agent.id };
     }),
