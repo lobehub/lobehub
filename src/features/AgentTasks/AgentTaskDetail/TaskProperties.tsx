@@ -63,7 +63,7 @@ const TaskProperties = memo(() => {
     (!!inboxAgentId && firstParticipant?.id === inboxAgentId);
   const firstParticipantName =
     firstParticipantMeta?.title?.trim() ||
-    firstParticipant?.name ||
+    firstParticipant?.title ||
     (isInboxParticipant ? t('inbox.title') : t('defaultSession', { ns: 'common' }));
   const restCount = Math.max(participants.length - 1, 0);
   const participantLabel =
