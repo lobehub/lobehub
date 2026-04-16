@@ -358,5 +358,20 @@ describe('POST handler', () => {
       // ProviderBizError → 471
       expect(response.status).toBe(471);
     });
+
+    it('should not retry local JS errors like TypeError', async () => {
+      process.env.LLM_CHAT_MAX_RETRIES = '3';
+
+      const chatMock = vi
+        .fn()
+        .mockRejectedValue(new TypeError('Cannot read properties of undefined'));
+      const mockRuntime: LobeRuntimeAI = { baseURL: 'abc', chat: chatMock };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await POST(makeRequest(), { params: mockParams() });
+
+      expect(chatMock).toHaveBeenCalledTimes(1);
+      expect(response.status).toBe(500);
+    });
   });
 });

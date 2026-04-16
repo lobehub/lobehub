@@ -87,6 +87,11 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
 
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Pre-flight budget check: if the total elapsed time already exceeds
+      // the budget, skip this attempt so we never launch a provider call
+      // that could push us past `maxDuration`.
+      if (attempt > 1 && Date.now() - startedAt > RETRY_BUDGET_MS) break;
+
       try {
         return await modelRuntime.chat(data, {
           user: userId,
@@ -102,6 +107,9 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
 
         // Client disconnected — no point retrying for a gone peer.
         if (req.signal?.aborted) break;
+
+        // Local JS errors (TypeError etc.) are never transient — skip classifier.
+        if (e instanceof TypeError || e instanceof RangeError) break;
 
         const classified = classifyLLMError(e);
         if (classified.kind !== 'retry') break;
