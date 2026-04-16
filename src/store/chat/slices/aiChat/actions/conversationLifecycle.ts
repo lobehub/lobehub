@@ -1,7 +1,7 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { LOADING_FLAT } from '@lobechat/const';
+import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
@@ -344,7 +344,7 @@ export class ConversationLifecycleActionImpl {
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
-    if (heterogeneousProvider?.type === 'claudecode') {
+    if (isDesktop && heterogeneousProvider?.type === 'claudecode') {
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
