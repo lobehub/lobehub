@@ -507,6 +507,20 @@ table chat_groups_agents {
   }
 }
 
+table document_histories {
+  id varchar(255) [pk, not null]
+  document_id varchar(255) [not null]
+  user_id text [not null]
+  editor_data jsonb [not null]
+  save_source text [not null]
+  saved_at "timestamp with time zone" [not null]
+
+  indexes {
+    (document_id, saved_at) [name: 'document_histories_document_id_saved_at_idx']
+    (user_id, saved_at) [name: 'document_histories_user_id_saved_at_idx']
+  }
+}
+
 table documents {
   id varchar(255) [pk, not null]
   title text
@@ -1975,6 +1989,10 @@ ref: chat_groups.user_id - users.id
 ref: unstructured_chunks.file_id - files.id
 
 ref: document_chunks.document_id > documents.id
+
+ref: document_histories.document_id > documents.id
+
+ref: document_histories.user_id - users.id
 
 ref: documents.file_id > files.id
 

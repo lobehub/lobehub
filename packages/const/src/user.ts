@@ -17,6 +17,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     topic: true,
   },
   lab: {
+    enableAgentWorkingPanel: false,
     enableInputMarkdown: true,
   },
   topicDisplayMode: DEFAULT_TOPIC_DISPLAY_MODE,

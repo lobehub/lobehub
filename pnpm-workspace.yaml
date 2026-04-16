@@ -14,6 +14,7 @@ overrides:
   pdfjs-dist: 5.4.530
   react: 19.2.4
   react-dom: 19.2.4
+  '@react-pdf/image': 3.0.4
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch

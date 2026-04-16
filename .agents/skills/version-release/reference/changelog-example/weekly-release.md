@@ -1,46 +1,80 @@
-# Patch Release (Weekly) Changelog Example
+# 🚀 LobeHub v2.1.50 (20260420)
 
-A real-world changelog reference for weekly patch release PR bodies.
+**Release Date:** April 20, 2026\
+**Since v2026.04.13:** 96 commits · 58 merged PRs · 31 resolved issues · 17 contributors
+
+> This weekly release focuses on reducing friction in everyday agent work: faster model routing, smoother gateway behavior, stronger task continuity, and clearer operator diagnostics when something goes wrong.
 
 ---
 
-This release includes **82 commits** , Key updates are below.
+## ✨ Highlights
 
-### New Features and Enhancements
+- **Gateway Session Recovery** — Agent sessions now recover more reliably after short network interruptions, so long-running tasks continue with less manual retry. (#10121, #10133)
+- **Fast Model Routing** — Expanded low-latency routing for priority model tiers, reducing wait time in high-frequency generation workflows. (#10102, #10117)
+- **Agent Task Workspace** — Running tasks now remain isolated from main chat state, which keeps primary conversations cleaner while background work progresses. (#10088)
+- **Provider Coverage Update** — Added support for new model variants across OpenAI-compatible and regional providers, improving fallback options in production. (#10094, #10109)
+- **Desktop Attachment Flow** — File and screenshot attachment behavior is more predictable in desktop sessions, especially for mixed text + media prompts. (#10073)
+- **Security Hardening Pass** — Closed multiple input validation gaps in webhook and file-path handling paths. (#10141, #10152)
 
-- Added **Agent Benchmark** support for more systematic agent performance evaluation.
-- Introduced the **video generation** feature end-to-end, including entry points, sidebar "new" badge support, and skeleton loading for topic switching.
-- Expanded memory capabilities: support for memory effort/tool permission configuration and improved timeout calculation for memory analysis tasks.
-- Added desktop editor support for image upload via file picker.
+---
 
-### Models and Provider Expansion
+## 🏗️ Core Agent & Architecture
 
-- Added a new provider: **Straico**.
-- Added/updated support for:
-  - Claude Sonnet 4.6
-  - Gemini 3.1 Pro Preview
-  - Qwen3.5 series
-  - Grok Imagine (`grok-imagine-image`)
-  - MiniMax 2.5
-- Added related i18n copy and model parameter adaptations.
+### Agent loop and context handling
 
-### Desktop Improvements
+- Improved context compaction thresholds to reduce mid-task exits under tight token budgets. (#10079)
+- Added better diagnostics for tool-call truncation and recovery behavior during streamed responses. (#10106)
+- Refined delegate task activity propagation to improve parent-child task status consistency. (#10098)
 
-- Integrated `electron-liquid-glass` (macOS Tahoe).
-- Improved DMG background assets and desktop release workflow.
+### Provider and model behavior
 
-### Stability, Security, and UX Fixes
+- Unified provider-side timeout handling in fallback chains to reduce false failure classification. (#10097)
+- Updated reasoning-model defaults and response normalization for better cross-provider consistency. (#10109)
 
-- Fixed multiple video generation pipeline issues: precharge refund handling, webhook token verification, pricing parameter usage, asset cleanup, and type safety.
-- Fixed `sanitizeFileName` path traversal risks and added unit tests.
-- Fixed MCP media URL generation with duplicated `APP_URL` prefix.
-- Fixed Qwen3 embedding failures caused by batch-size limits.
-- Fixed multiple UI/interaction issues, including mobile header agent selector/topic count, ChatInput scrolling behavior, and tooltip stacking context.
-- Fixed missing `@napi-rs/canvas` native bindings in Docker standalone builds.
-- Improved GitHub Copilot authentication retry behavior and response error handling in edge cases.
+---
 
-### Credits
+## 📱 Gateway & Platform Integrations
 
-Huge thanks to these contributors (alphabetical):
+- Gateway now drains in-flight events more safely before restart, reducing duplicate notification bursts. (#10125)
+- Discord and Slack adapters received retry/backoff tuning for unstable webhook windows. (#10091, #10119)
+- WeCom callback-mode message state persistence now uses safer atomic updates. (#10114)
 
-@AmAzing129 @Coooolfan @Innei @ONLY-yours @Zhouguanyang @arvinxx @eaten-cake @hezhijie0327 @nekomeowww @rdmclin2 @rivertwilight @sxjeru @tjx666
+---
+
+## 🖥️ CLI & User Experience
+
+- Improved slash command discoverability in CLI and gateway contexts with clearer hint messages. (#10086)
+- `/model` switching feedback now returns clearer success/failure states in cross-platform chats. (#10108)
+- Setup flow now warns earlier about missing provider credentials in first-run scenarios. (#10115)
+
+---
+
+## 🔧 Tooling
+
+- MCP registration flow now validates duplicate tool names before activation, reducing runtime conflicts. (#10093)
+- Browser tooling improved stale-session cleanup to prevent orphaned local resources. (#10112)
+
+---
+
+## 🔒 Security & Reliability
+
+- **Security:** Hardened path sanitization for uploaded assets and webhook callback validation. (#10141, #10152)
+- **Reliability:** Reduced empty-response retry storms by refining retry-classification conditions. (#10130)
+- **Reliability:** Improved timeout defaults for long-running background processes in constrained environments. (#10122)
+
+---
+
+## 👥 Contributors
+
+**58 merged PRs** from **17 contributors** across **96 commits**.
+
+### Community Contributors
+
+- @alice-example - Gateway recovery and retry improvements
+- @bob-example - Provider fallback normalization
+- @charlie-example - Desktop media attachment flow
+- @dora-example - Webhook validation hardening
+
+---
+
+**Full Changelog**: v2026.04.13...v2026.04.20

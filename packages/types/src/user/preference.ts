@@ -39,6 +39,10 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * enable agent working panel entry in chat header menu
+   */
+  enableAgentWorkingPanel: z.boolean().optional(),
+  /**
    * enable server-side agent execution via Gateway WebSocket
    */
   enableGatewayMode: z.boolean().optional(),

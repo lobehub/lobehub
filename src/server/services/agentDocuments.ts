@@ -208,6 +208,10 @@ export class AgentDocumentsService {
     });
   }
 
+  async associateDocument(agentId: string, documentId: string): Promise<{ id: string }> {
+    return this.agentDocumentModel.associate({ agentId, documentId });
+  }
+
   async createDocument(agentId: string, title: string, content: string) {
     return this.createWithUniqueFilename(agentId, title, content);
   }
