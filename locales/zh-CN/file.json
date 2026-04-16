@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "页面复制成功",
   "pageEditor.editedAt": "最后编辑于 {{time}}",
   "pageEditor.editedBy": "最后编辑者 {{name}}",
-  "pageEditor.editorPlaceholder": "输入文稿内容，按 / 打开命令菜单",
+  "pageEditor.editorPlaceholder": "按 \"/\" 使用 AI 和命令",
   "pageEditor.empty.createNewDocument": "创建新文稿",
   "pageEditor.empty.importNotion": "从 Notion 导入",
   "pageEditor.empty.title": "选择一个文稿以开始",

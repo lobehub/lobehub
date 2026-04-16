@@ -7,10 +7,13 @@ export async function register() {
   // Auto-start GatewayManager on server start for non-Vercel environments (Docker, local).
   // Persistent bots need reconnection after restart.
   // On Vercel, the cron job at /api/agent/gateway handles this reliably instead.
+  // In local dev, opt-in via ENABLE_BOT_IN_DEV to avoid clobbering a shared bot binding.
+  const isDev = process.env.NODE_ENV !== 'production';
   if (
     process.env.NEXT_RUNTIME === 'nodejs' &&
     process.env.DATABASE_URL &&
-    !process.env.VERCEL_ENV
+    !process.env.VERCEL_ENV &&
+    (!isDev || process.env.ENABLE_BOT_IN_DEV === '1')
   ) {
     const { GatewayService } = await import('./server/services/gateway');
     const service = new GatewayService();

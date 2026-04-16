@@ -1,6 +1,5 @@
+import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
 import { type AgentState } from '@lobechat/agent-runtime';
-
-import type { ToolExecuteData } from '@/libs/agent-stream/types';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { type StreamChunkData, type StreamEvent } from './StreamEventManager';

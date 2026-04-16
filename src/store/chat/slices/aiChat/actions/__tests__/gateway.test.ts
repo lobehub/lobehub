@@ -1,6 +1,6 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentStreamEvent } from '@/libs/agent-stream';
 import { aiAgentService } from '@/services/aiAgent';
 
 import type { GatewayConnection } from '../gateway';

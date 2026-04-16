@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "ページを正常に複製しました",
   "pageEditor.editedAt": "最終編集：{{time}}",
   "pageEditor.editedBy": "最終編集者：{{name}}",
-  "pageEditor.editorPlaceholder": "ドキュメントの内容を入力し、「/」キーでコマンドメニューを開きます",
+  "pageEditor.editorPlaceholder": "「/」で AI とコマンドを呼び出し",
   "pageEditor.empty.createNewDocument": "新しいドキュメントを作成",
   "pageEditor.empty.importNotion": "Notionからインポート",
   "pageEditor.empty.title": "ドキュメントを選択して開始",

@@ -935,7 +935,7 @@ describe('ConversationControl actions', () => {
   });
 
   describe('rejectToolCalling server-mode branch', () => {
-    it('starts a new Gateway op with resumeApproval.decision=rejected', async () => {
+    it('starts a new Gateway op with resumeApproval.decision=rejected_continue (unified)', async () => {
       const { result } = renderHook(() => useChatStore());
 
       const agentId = 'server-agent';
@@ -979,7 +979,7 @@ describe('ConversationControl actions', () => {
           message: '',
           parentMessageId: 'tool-msg-1',
           resumeApproval: {
-            decision: 'rejected',
+            decision: 'rejected_continue',
             parentMessageId: 'tool-msg-1',
             rejectionReason: 'not appropriate',
             toolCallId: 'call_xyz',

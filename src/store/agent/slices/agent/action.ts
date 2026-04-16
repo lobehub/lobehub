@@ -93,7 +93,6 @@ export class AgentSliceActionImpl {
           agent_id: result.agentId,
           assistant_name: params.config?.title || 'Untitled Agent',
           assistant_tags: params.config?.tags || [],
-          session_id: result.sessionId,
           user_id: userId || 'anonymous',
         },
       });

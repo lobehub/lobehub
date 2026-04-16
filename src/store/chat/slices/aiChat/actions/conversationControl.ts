@@ -609,13 +609,11 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
 
-    // Server-mode: start a **new** Gateway op carrying `decision='rejected'`.
-    // Server persists the rejection on the target tool message and halts the
-    // conversation. The new op's `agent_runtime_end` clears the loading
-    // state on the client; the snapshot-then-retire dance below is a
-    // fallback guard in case the server-side human_approve agent_runtime_end
-    // was missed, while preserving the paused-op marker on failure so a
-    // retry still hits the Gateway branch.
+    // Server-mode: start a **new** Gateway op carrying the rejection.
+    // We use `rejected_continue` uniformly — server-side `rejected` and
+    // `rejected_continue` share the same code path (both surface the
+    // rejection to the LLM as user feedback), so a separate `rejected`
+    // decision adds complexity without behavioural difference.
     if (this.#shouldUseGatewayResume()) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
@@ -632,7 +630,7 @@ export class ConversationControlActionImpl {
           message: '',
           parentMessageId: messageId,
           resumeApproval: {
-            decision: 'rejected',
+            decision: 'rejected_continue',
             parentMessageId: messageId,
             rejectionReason: reason,
             toolCallId,

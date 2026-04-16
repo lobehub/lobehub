@@ -200,6 +200,7 @@
     "@khmyznikov/pwa-install": "0.3.9",
     "@larksuiteoapi/node-sdk": "^1.60.0",
     "@lexical/utils": "^0.42.0",
+    "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/agent-templates": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",

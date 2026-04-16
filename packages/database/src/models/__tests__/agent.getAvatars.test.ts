@@ -73,6 +73,50 @@ describe('AgentModel.getAgentAvatarsByIds', () => {
     expect(result[0].id).toBe('agent-mine');
   });
 
+  it('should fallback to LobeAI defaults for inbox agent without avatar/title', async () => {
+    await serverDB.insert(agents).values({
+      avatar: null,
+      backgroundColor: null,
+      id: 'agent-inbox',
+      slug: 'inbox',
+      title: null,
+      userId,
+    });
+
+    const model = new AgentModel(serverDB, userId);
+    const result = await model.getAgentAvatarsByIds(['agent-inbox']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      avatar: '/avatars/lobe-ai.png',
+      backgroundColor: null,
+      id: 'agent-inbox',
+      title: 'LobeAI',
+    });
+  });
+
+  it('should not override inbox agent avatar/title when they are set', async () => {
+    await serverDB.insert(agents).values({
+      avatar: '🤖',
+      backgroundColor: '#123456',
+      id: 'agent-inbox-custom',
+      slug: 'inbox',
+      title: 'Custom Inbox',
+      userId,
+    });
+
+    const model = new AgentModel(serverDB, userId);
+    const result = await model.getAgentAvatarsByIds(['agent-inbox-custom']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      avatar: '🤖',
+      backgroundColor: '#123456',
+      id: 'agent-inbox-custom',
+      title: 'Custom Inbox',
+    });
+  });
+
   it('should return only selected fields', async () => {
     await serverDB.insert(agents).values({
       avatar: '🤖',

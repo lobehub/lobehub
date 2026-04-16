@@ -10,6 +10,7 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentService } from '@/services/recent';
+import { ALL_RECENTS_DRAWER_SWR_PREFIX } from '@/store/home/slices/recent/action';
 
 import RecentListItem from './Item';
 
@@ -22,8 +23,9 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
   const [searchKeyword, setSearchKeyword] = useState('');
 
-  const { data: recents, isLoading } = useClientDataSWR(open ? ['allRecents', open] : null, () =>
-    recentService.getAll(50),
+  const { data: recents, isLoading } = useClientDataSWR(
+    open ? [ALL_RECENTS_DRAWER_SWR_PREFIX, open] : null,
+    () => recentService.getAll(50),
   );
 
   const filteredRecents = useMemo(() => {

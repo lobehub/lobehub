@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Страницата е дублирана успешно",
   "pageEditor.editedAt": "Последна редакция на {{time}}",
   "pageEditor.editedBy": "Последна редакция от {{name}}",
-  "pageEditor.editorPlaceholder": "Започнете да пишете страницата си. Натиснете / за меню с команди",
+  "pageEditor.editorPlaceholder": "Натиснете \"/\" за ИИ и команди",
   "pageEditor.empty.createNewDocument": "Създай нова страница",
   "pageEditor.empty.importNotion": "Импортиране от Notion",
   "pageEditor.empty.title": "Изберете страница, за да започнете",
