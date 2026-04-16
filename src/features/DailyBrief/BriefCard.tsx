@@ -3,9 +3,12 @@ import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import Time from '@/routes/(main)/home/features/components/Time';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 import BriefCardActions from './BriefCardActions';
 import BriefCardSummary from './BriefCardSummary';
@@ -43,6 +46,13 @@ interface BriefCardProps {
 }
 
 const BriefCard = memo<BriefCardProps>(({ brief }) => {
+  const navigate = useNavigate();
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+
+  const targetAgentId = brief.agents[0]?.id || activeAgentId || inboxAgentId;
+  const canNavigate = Boolean(brief.taskId && targetAgentId);
+
   return (
     <Block
       className={styles.card}
@@ -51,7 +61,16 @@ const BriefCard = memo<BriefCardProps>(({ brief }) => {
       style={{ borderRadius: cssVar.borderRadiusLG }}
       variant={'outlined'}
     >
-      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={canNavigate ? styles.clickableHeader : undefined}
+        gap={16}
+        justify={'space-between'}
+        onClick={
+          canNavigate ? () => navigate(`/agent/${targetAgentId}/tasks/${brief.taskId}`) : undefined
+        }
+      >
         <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
           <BriefIcon type={brief.type} />
           <Text ellipsis fontSize={16} style={{ flex: 1 }} weight={500}>

@@ -35,4 +35,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
+  clickableHeader: css`
+    cursor: pointer;
+  `,
 }));
