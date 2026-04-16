@@ -120,18 +120,25 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         }),
       );
     } else if (messageId && messageId !== this.currentMessageId) {
-      // New message.id = new LLM turn. Emit stream_end for previous step,
-      // then stream_start for the new one so executor creates a new assistant message.
-      this.currentMessageId = messageId;
-      this.stepIndex++;
-      events.push(this.makeEvent('stream_end', {}));
-      events.push(
-        this.makeEvent('stream_start', {
-          model: raw.message?.model,
-          newStep: true,
-          provider: 'acp-agent',
-        }),
-      );
+      if (this.currentMessageId === undefined) {
+        // First assistant message after init — just record the ID, no step boundary.
+        // The init stream_start already primed the executor with the pre-created
+        // assistant message, so we don't need a new one.
+        this.currentMessageId = messageId;
+      } else {
+        // New message.id = new LLM turn. Emit stream_end for previous step,
+        // then stream_start for the new one so executor creates a new assistant message.
+        this.currentMessageId = messageId;
+        this.stepIndex++;
+        events.push(this.makeEvent('stream_end', {}));
+        events.push(
+          this.makeEvent('stream_start', {
+            model: raw.message?.model,
+            newStep: true,
+            provider: 'acp-agent',
+          }),
+        );
+      }
     }
 
     // Per-turn model + usage snapshot — emitted as 'step_complete'-like

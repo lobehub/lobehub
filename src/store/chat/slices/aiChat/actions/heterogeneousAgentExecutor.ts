@@ -1,8 +1,12 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { HeterogeneousAgentEvent, ToolCallPayload } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
-import type { ConversationContext, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  ChatToolPayload,
+  ConversationContext,
+  HeterogeneousProviderConfig,
+} from '@lobechat/types';
 
-import type { AgentStreamEvent } from '@/libs/agent-stream/types';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
@@ -42,7 +46,7 @@ const toStreamEvent = (event: HeterogeneousAgentEvent, operationId: string): Age
   operationId,
   stepIndex: event.stepIndex,
   timestamp: event.timestamp,
-  type: event.type,
+  type: event.type as AgentStreamEvent['type'],
 });
 
 /**
@@ -91,7 +95,7 @@ const subscribeBroadcasts = (
  */
 interface ToolPersistenceState {
   /** Ordered list of ChatToolPayload[] written to assistant.tools */
-  payloads: (ToolCallPayload & { result_msg_id?: string })[];
+  payloads: ChatToolPayload[];
   /** Set of tool_use.id that have been persisted (de-dupe guard) */
   persistedIds: Set<string>;
   /** Map tool_use.id → tool message DB id (for later content update on tool_result) */
@@ -130,7 +134,7 @@ const persistNewToolCalls = async (
   // By writing assistant.tools[] FIRST (with the tool ids but no result_msg_id
   // yet), the match works from the moment tool messages get created in DB.
   // No orphan window.
-  for (const tool of freshTools) state.payloads.push({ ...tool });
+  for (const tool of freshTools) state.payloads.push({ ...tool } as ChatToolPayload);
   try {
     await messageService.updateMessage(
       assistantMessageId,
@@ -154,7 +158,7 @@ const persistNewToolCalls = async (
           apiName: tool.apiName,
           arguments: tool.arguments,
           identifier: tool.identifier,
-          type: tool.type,
+          type: tool.type as ChatToolPayload['type'],
         },
         role: 'tool',
         tool_call_id: tool.id,
@@ -292,6 +296,7 @@ export const executeHeterogeneousAgent = async (
       env: heterogeneousProvider.env,
     });
     agentSessionId = result.sessionId;
+    if (!agentSessionId) throw new Error('Agent session returned no sessionId');
 
     // Subscribe to broadcasts BEFORE sending prompt
     unsubscribe = subscribeBroadcasts(agentSessionId, {
@@ -332,12 +337,24 @@ export const executeHeterogeneousAgent = async (
 
           // ─── stream_start with newStep: new LLM turn, create new assistant message ───
           if (event.type === 'stream_start' && event.data?.newStep) {
+            // ⚠️ Snapshot CONTENT accumulators synchronously — stream_chunk events for
+            // the new step arrive in the same onRawLine batch and would contaminate.
+            // Tool state (toolMsgIdByCallId) is populated ASYNC by persistQueue, so
+            // it must be read inside the queue where previous persists have completed.
+            const prevContent = accumulatedContent;
+            const prevReasoning = accumulatedReasoning;
+            const prevModel = lastModel;
+
+            // Reset content accumulators synchronously so new-step chunks go to fresh state
+            accumulatedContent = '';
+            accumulatedReasoning = '';
+
             persistQueue = persistQueue.then(async () => {
               // Persist previous step's content to its assistant message
               const prevUpdate: Record<string, any> = {};
-              if (accumulatedContent) prevUpdate.content = accumulatedContent;
-              if (accumulatedReasoning) prevUpdate.reasoning = { content: accumulatedReasoning };
-              if (lastModel) prevUpdate.model = lastModel;
+              if (prevContent) prevUpdate.content = prevContent;
+              if (prevReasoning) prevUpdate.reasoning = { content: prevReasoning };
+              if (prevModel) prevUpdate.model = prevModel;
               if (Object.keys(prevUpdate).length > 0) {
                 await messageService
                   .updateMessage(currentAssistantMessageId, prevUpdate, {
@@ -347,12 +364,19 @@ export const executeHeterogeneousAgent = async (
                   .catch(console.error);
               }
 
-              // Create new assistant message for this step
+              // Create new assistant message for this step.
+              // parentId should point to the last tool message from the previous step
+              // (if any), forming the chain: assistant → tool → assistant → tool → ...
+              // If no tool was used, fall back to the previous assistant message.
+              // Read toolMsgIdByCallId HERE (async) because it's populated by prior persists.
+              const lastToolMsgId = [...toolState.toolMsgIdByCallId.values()].pop();
+              const stepParentId = lastToolMsgId || currentAssistantMessageId;
+
               const newMsg = await messageService.createMessage({
                 agentId: context.agentId,
                 content: '',
                 model: lastModel,
-                parentId: currentAssistantMessageId,
+                parentId: stepParentId,
                 role: 'assistant',
                 topicId: context.topicId ?? undefined,
               });
@@ -361,11 +385,8 @@ export const executeHeterogeneousAgent = async (
               // Associate the new message with the operation
               get().associateMessageWithOperation(currentAssistantMessageId, operationId);
 
-              // Reset accumulators for the new step
-              accumulatedContent = '';
-              accumulatedReasoning = '';
-
-              // Reset tool state for the new step
+              // Reset tool state AFTER reading — new-step tool persists are queued
+              // AFTER this handler, so they'll write to the clean state.
               toolState.payloads = [];
               toolState.persistedIds.clear();
               toolState.toolMsgIdByCallId.clear();
