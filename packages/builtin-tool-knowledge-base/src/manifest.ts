@@ -5,10 +5,60 @@ import { KnowledgeBaseApiName, KnowledgeBaseIdentifier } from './types';
 
 export const KnowledgeBaseManifest: BuiltinToolManifest = {
   api: [
-    // ---- P0: Visibility ----
+    // ---- Resource Library Files (highest priority — most user files live here) ----
     {
       description:
-        'List all knowledge bases available to the current user. Returns name, description, and metadata for each knowledge base. Use this to discover what knowledge bases exist before searching or managing them.',
+        "List files from the user's resource library. This is where most user-uploaded files live (images, PDFs, documents, etc.). Files here are NOT in any knowledge base yet. Supports filtering by category and search query. **Use this first when the user asks about their files.**",
+      name: KnowledgeBaseApiName.listFiles,
+      parameters: {
+        properties: {
+          category: {
+            description:
+              'Filter by file category. Options: "images", "documents", "audios", "videos", "websites". Omit to list all categories.',
+            enum: ['images', 'documents', 'audios', 'videos', 'websites'],
+            type: 'string',
+          },
+          limit: {
+            default: 50,
+            description: 'Number of files to return per page (default: 50).',
+            maximum: 100,
+            minimum: 1,
+            type: 'number',
+          },
+          offset: {
+            default: 0,
+            description: 'Offset for pagination (default: 0).',
+            minimum: 0,
+            type: 'number',
+          },
+          q: {
+            description: 'Search query to filter files by name.',
+            type: 'string',
+          },
+        },
+        required: [],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Get detailed metadata of a specific file by ID, including name, type, size, URL, and timestamps. Works for any file in the system regardless of knowledge base association.',
+      name: KnowledgeBaseApiName.getFileDetail,
+      parameters: {
+        properties: {
+          id: {
+            description: 'The file ID to get details for.',
+            type: 'string',
+          },
+        },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    // ---- Knowledge Base Visibility ----
+    {
+      description:
+        'List all knowledge bases available to the current user. Returns name, description, and metadata for each knowledge base. Use this only when the user explicitly asks about knowledge bases.',
       name: KnowledgeBaseApiName.listKnowledgeBases,
       parameters: {
         properties: {},

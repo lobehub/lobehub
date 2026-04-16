@@ -8,8 +8,14 @@ import type {
   CreateKnowledgeBaseArgs,
   CreateKnowledgeBaseState,
   DeleteKnowledgeBaseArgs,
+  FileDetail,
+  FileInfo,
+  GetFileDetailArgs,
+  GetFileDetailState,
   KnowledgeBaseFileInfo,
   KnowledgeBaseInfo,
+  ListFilesArgs,
+  ListFilesState,
   ListKnowledgeBasesState,
   ReadKnowledgeArgs,
   ReadKnowledgeState,
@@ -83,8 +89,20 @@ interface DocumentService {
   }) => Promise<DocumentResult>;
 }
 
+interface FileService {
+  getFileItemById: (id: string) => Promise<FileListItemResult | undefined>;
+  getKnowledgeItems: (params: {
+    category?: string;
+    limit: number;
+    offset: number;
+    q?: string | null;
+    showFilesInKnowledgeBase?: boolean;
+  }) => Promise<{ hasMore: boolean; items: FileListItemResult[] }>;
+}
+
 export class KnowledgeBaseExecutionRuntime {
   private documentService?: DocumentService;
+  private fileService?: FileService;
   private knowledgeBaseService?: KnowledgeBaseService;
   private ragService: RagService;
 
@@ -92,10 +110,12 @@ export class KnowledgeBaseExecutionRuntime {
     ragService: RagService,
     knowledgeBaseService?: KnowledgeBaseService,
     documentService?: DocumentService,
+    fileService?: FileService,
   ) {
     this.ragService = ragService;
     this.knowledgeBaseService = knowledgeBaseService;
     this.documentService = documentService;
+    this.fileService = fileService;
   }
 
   // ============ P0: Visibility ============
@@ -431,6 +451,109 @@ export class KnowledgeBaseExecutionRuntime {
     } catch (e) {
       return {
         content: `Error removing files: ${(e as Error).message}`,
+        error: e,
+        success: false,
+      };
+    }
+  }
+
+  // ============ Resource Library Files ============
+
+  async listFiles(args: ListFilesArgs): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.fileService) {
+        return { content: 'File service is not available.', success: false };
+      }
+
+      const { category, q, limit = 50, offset = 0 } = args;
+
+      const result = await this.fileService.getKnowledgeItems({
+        category,
+        limit,
+        offset,
+        q,
+        showFilesInKnowledgeBase: false,
+      });
+
+      const files: FileInfo[] = result.items.map((item) => ({
+        createdAt: item.updatedAt,
+        fileType: item.fileType,
+        id: item.id,
+        name: item.name,
+        size: item.size,
+        sourceType: item.sourceType,
+        url: '',
+      }));
+
+      if (files.length === 0) {
+        const msg = category
+          ? `No ${category} files found in your resource library.`
+          : 'No files found in your resource library.';
+        return {
+          content: msg,
+          state: { files: [], hasMore: false, total: 0 } satisfies ListFilesState,
+          success: true,
+        };
+      }
+
+      const lines = files.map((f) => `- \`${f.id}\` | ${f.name} | ${f.fileType} | ${f.size} bytes`);
+
+      let content = `Found ${files.length} file(s)`;
+      if (category) content += ` in category "${category}"`;
+      if (result.hasMore) content += ` (more available, use offset=${offset + limit} to paginate)`;
+      content += `:\n\n${lines.join('\n')}`;
+
+      const state: ListFilesState = { files, hasMore: result.hasMore, total: files.length };
+
+      return { content, state, success: true };
+    } catch (e) {
+      return {
+        content: `Error listing files: ${(e as Error).message}`,
+        error: e,
+        success: false,
+      };
+    }
+  }
+
+  async getFileDetail(args: GetFileDetailArgs): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.fileService) {
+        return { content: 'File service is not available.', success: false };
+      }
+
+      const { id } = args;
+      const item = await this.fileService.getFileItemById(id);
+
+      if (!item) {
+        return { content: `File with ID "${id}" not found.`, success: false };
+      }
+
+      const file: FileDetail = {
+        createdAt: item.updatedAt,
+        fileType: item.fileType,
+        id: item.id,
+        metadata: null,
+        name: item.name,
+        size: item.size,
+        sourceType: item.sourceType,
+        updatedAt: item.updatedAt,
+        url: '',
+      };
+
+      const content = [
+        `**${file.name}** (ID: \`${file.id}\`)`,
+        `- Type: ${file.fileType}`,
+        `- Size: ${file.size} bytes`,
+        `- Source: ${file.sourceType}`,
+        `- Updated: ${file.updatedAt}`,
+      ].join('\n');
+
+      const state: GetFileDetailState = { file };
+
+      return { content, state, success: true };
+    } catch (e) {
+      return {
+        content: `Error getting file detail: ${(e as Error).message}`,
         error: e,
         success: false,
       };

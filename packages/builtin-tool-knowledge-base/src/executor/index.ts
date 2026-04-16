@@ -15,8 +15,14 @@ import type {
   CreateKnowledgeBaseState,
   DeleteKnowledgeBaseArgs,
   FileContentDetail,
+  FileDetail,
+  FileInfo,
+  GetFileDetailArgs,
+  GetFileDetailState,
   KnowledgeBaseFileInfo,
   KnowledgeBaseInfo,
+  ListFilesArgs,
+  ListFilesState,
   ListKnowledgeBasesState,
   ReadKnowledgeArgs,
   ReadKnowledgeState,
@@ -353,6 +359,104 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
     } catch (e) {
       return {
         content: `Error removing files: ${(e as Error).message}`,
+        error: { body: e, message: (e as Error).message, type: 'PluginServerError' },
+        success: false,
+      };
+    }
+  };
+
+  // ============ Resource Library Files ============
+
+  listFiles = async (params: ListFilesArgs): Promise<BuiltinToolResult> => {
+    try {
+      const { category, q, limit = 50, offset = 0 } = params;
+
+      const result = await lambdaClient.file.getKnowledgeItems.query({
+        category,
+        limit,
+        offset,
+        q,
+        showFilesInKnowledgeBase: false,
+      });
+
+      const files: FileInfo[] = result.items.map((item) => ({
+        createdAt: item.createdAt,
+        fileType: item.fileType,
+        id: item.id,
+        name: item.name,
+        size: item.size,
+        sourceType: item.sourceType,
+        url: item.url,
+      }));
+
+      if (files.length === 0) {
+        const msg = category
+          ? `No ${category} files found in your resource library.`
+          : 'No files found in your resource library.';
+        return {
+          content: msg,
+          state: { files: [], hasMore: false, total: 0 } satisfies ListFilesState,
+          success: true,
+        };
+      }
+
+      const lines = files.map((f) => `- \`${f.id}\` | ${f.name} | ${f.fileType} | ${f.size} bytes`);
+
+      let content = `Found ${files.length} file(s)`;
+      if (category) content += ` in category "${category}"`;
+      if (result.hasMore) content += ` (more available, use offset=${offset + limit} to paginate)`;
+      content += `:\n\n${lines.join('\n')}`;
+
+      const state: ListFilesState = { files, hasMore: result.hasMore, total: files.length };
+
+      return { content, state, success: true };
+    } catch (e) {
+      return {
+        content: `Error listing files: ${(e as Error).message}`,
+        error: { body: e, message: (e as Error).message, type: 'PluginServerError' },
+        success: false,
+      };
+    }
+  };
+
+  getFileDetail = async (params: GetFileDetailArgs): Promise<BuiltinToolResult> => {
+    try {
+      const { id } = params;
+
+      const item = await lambdaClient.file.getFileItemById.query({ id });
+
+      if (!item) {
+        return { content: `File with ID "${id}" not found.`, success: false };
+      }
+
+      const file: FileDetail = {
+        createdAt: item.createdAt,
+        fileType: item.fileType,
+        id: item.id,
+        metadata: item.metadata,
+        name: item.name,
+        size: item.size,
+        sourceType: item.sourceType,
+        updatedAt: item.updatedAt,
+        url: item.url,
+      };
+
+      const content = [
+        `**${file.name}** (ID: \`${file.id}\`)`,
+        `- Type: ${file.fileType}`,
+        `- Size: ${file.size} bytes`,
+        `- Source: ${file.sourceType}`,
+        `- Created: ${file.createdAt}`,
+        `- Updated: ${file.updatedAt}`,
+        `- URL: ${file.url}`,
+      ].join('\n');
+
+      const state: GetFileDetailState = { file };
+
+      return { content, state, success: true };
+    } catch (e) {
+      return {
+        content: `Error getting file detail: ${(e as Error).message}`,
         error: { body: e, message: (e as Error).message, type: 'PluginServerError' },
         success: false,
       };
