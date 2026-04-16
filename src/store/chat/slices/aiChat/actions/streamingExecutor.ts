@@ -11,6 +11,7 @@ import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { isDesktop } from '@lobechat/const';
 import { generateToolsFromManifest, type ToolsEngine } from '@lobechat/context-engine';
+import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
   type ConversationContext,
   type RuntimeInitialContext,
@@ -28,6 +29,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
+import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
@@ -307,6 +309,37 @@ export class StreamingExecutorActionImpl {
         // Page agent runtime may not be initialized (e.g., editor not set)
         // This is expected in some scenarios, so we just log and continue
         log('[internal_createAgentState] Failed to get page content context: %o', error);
+      }
+    }
+
+    const viewedTask = operation?.context.viewedTask;
+    if (viewedTask) {
+      try {
+        const taskState = getTaskStoreState();
+        let contextPrompt: string | undefined;
+
+        if (viewedTask.type === 'list') {
+          contextPrompt = buildTaskListPrompt({
+            tasks: taskState.tasks,
+            total: taskState.tasksTotal || taskState.tasks.length,
+          });
+        } else {
+          const detail = taskState.taskDetailMap[viewedTask.taskId];
+          if (detail) contextPrompt = buildTaskDetailPrompt({ task: detail });
+        }
+
+        if (contextPrompt) {
+          runtimeInitialContext = {
+            ...runtimeInitialContext,
+            taskManager: { contextPrompt },
+          };
+          log(
+            '[internal_createAgentState] injected taskManager context (route=%s)',
+            viewedTask.type,
+          );
+        }
+      } catch (error) {
+        log('[internal_createAgentState] Failed to build task manager context: %o', error);
       }
     }
 

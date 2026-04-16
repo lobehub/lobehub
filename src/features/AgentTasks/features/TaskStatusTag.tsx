@@ -21,16 +21,47 @@ import { useTaskStore } from '@/store/task';
 interface StatusMeta {
   color: string;
   icon: LucideIcon;
+  label: string;
   labelKey: string;
 }
 
 const STATUS_META: Record<TaskStatus, StatusMeta> = {
-  backlog: { color: cssVar.colorTextQuaternary, icon: CircleDashed, labelKey: 'status.backlog' },
-  canceled: { color: cssVar.colorTextSecondary, icon: CircleSlash, labelKey: 'status.canceled' },
-  completed: { color: cssVar.colorSuccess, icon: CircleCheck, labelKey: 'status.completed' },
-  failed: { color: cssVar.colorError, icon: CircleX, labelKey: 'status.failed' },
-  paused: { color: cssVar.colorWarning, icon: CirclePause, labelKey: 'status.paused' },
-  running: { color: cssVar.colorInfo, icon: CircleDot, labelKey: 'status.running' },
+  backlog: {
+    color: cssVar.colorTextQuaternary,
+    icon: CircleDashed,
+    label: 'Backlog',
+    labelKey: 'status.backlog',
+  },
+  canceled: {
+    color: cssVar.colorTextSecondary,
+    icon: CircleSlash,
+    label: 'Canceled',
+    labelKey: 'status.canceled',
+  },
+  completed: {
+    color: cssVar.colorSuccess,
+    icon: CircleCheck,
+    label: 'Completed',
+    labelKey: 'status.completed',
+  },
+  failed: {
+    color: cssVar.colorError,
+    icon: CircleX,
+    label: 'Failed',
+    labelKey: 'status.failed',
+  },
+  paused: {
+    color: cssVar.colorWarning,
+    icon: CirclePause,
+    label: 'Paused',
+    labelKey: 'status.paused',
+  },
+  running: {
+    color: cssVar.colorInfo,
+    icon: CircleDot,
+    label: 'Running',
+    labelKey: 'status.running',
+  },
 };
 
 const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
@@ -47,10 +78,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
   ({ children, disableDropdown, size = 16, status, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
     const { t } = useTranslation('chat');
-    const cancelTask = useTaskStore((s) => s.cancelTask);
-    const completeTask = useTaskStore((s) => s.completeTask);
-    const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
-    const resumeTask = useTaskStore((s) => s.resumeTask);
+    const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
     const displayStatus = status ?? 'backlog';
     const meta = STATUS_META[displayStatus];
@@ -61,27 +89,12 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
         setLoading(true);
 
         try {
-          switch (nextStatus) {
-            case 'backlog': {
-              await resumeTask(taskIdentifier);
-              break;
-            }
-            case 'canceled': {
-              await cancelTask(taskIdentifier);
-              break;
-            }
-            case 'completed': {
-              await completeTask(taskIdentifier);
-              break;
-            }
-          }
-
-          await refreshTaskList();
+          await updateTaskStatus(taskIdentifier, nextStatus);
         } finally {
           setLoading(false);
         }
       },
-      [cancelTask, completeTask, displayStatus, refreshTaskList, resumeTask, taskIdentifier],
+      [displayStatus, taskIdentifier, updateTaskStatus],
     );
 
     const menuItems = useMemo<MenuProps['items']>(
@@ -91,7 +104,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
           return {
             icon: <Icon color={statusMeta.color} icon={statusMeta.icon} size={16} />,
             key,
-            label: t(`taskDetail.${statusMeta.labelKey}`, { defaultValue: '' }),
+            label: t(`taskDetail.${statusMeta.labelKey}`, { defaultValue: statusMeta.label }),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
               void handleStatusChange(key);
@@ -101,20 +114,20 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
       [handleStatusChange, t],
     );
 
-    const triggerNode = children ? (
-      children
-    ) : loading ? (
-      <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
-    ) : (
-      <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: '' })}>
-        <Icon
-          color={meta.color}
-          icon={meta.icon}
-          size={size}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Tooltip>
-    );
+    const triggerNode =
+      children ||
+      (loading ? (
+        <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
+      ) : (
+        <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: meta.label })}>
+          <Icon
+            color={meta.color}
+            icon={meta.icon}
+            size={size}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </Tooltip>
+      ));
 
     if (disableDropdown) return <>{triggerNode}</>;
 

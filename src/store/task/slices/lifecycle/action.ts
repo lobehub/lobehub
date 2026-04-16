@@ -1,4 +1,4 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailData, TaskStatus } from '@lobechat/types';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -20,32 +20,16 @@ export class TaskLifecycleSliceActionImpl {
     this.#get = get;
   }
 
-  cancelTask = async (id: string): Promise<void> => {
-    await this.#transitionStatus(id, 'canceled');
-  };
-
   cancelTopic = async (topicId: string): Promise<void> => {
     await taskService.cancelTopic(topicId);
     const { activeTaskId, internal_refreshTaskDetail } = this.#get();
     if (activeTaskId) await internal_refreshTaskDetail(activeTaskId);
   };
 
-  completeTask = async (id: string): Promise<void> => {
-    await this.#transitionStatus(id, 'completed');
-  };
-
   deleteTopic = async (topicId: string): Promise<void> => {
     await taskService.deleteTopic(topicId);
     const { activeTaskId, internal_refreshTaskDetail } = this.#get();
     if (activeTaskId) await internal_refreshTaskDetail(activeTaskId);
-  };
-
-  pauseTask = async (id: string): Promise<void> => {
-    await this.#transitionStatus(id, 'paused');
-  };
-
-  resumeTask = async (id: string): Promise<void> => {
-    await this.#transitionStatus(id, 'backlog');
   };
 
   runTask = async (
@@ -68,12 +52,35 @@ export class TaskLifecycleSliceActionImpl {
     }
   };
 
+  updateTaskStatus = async (
+    id: string | undefined,
+    status: TaskStatus,
+    options?: { error?: string },
+  ): Promise<string> => {
+    const { error } = options ?? {};
+    const resolvedId = id ?? this.#get().activeTaskId;
+
+    if (!resolvedId) {
+      throw new Error('No task identifier provided and no current task context.');
+    }
+
+    const extraUpdate: Partial<TaskDetailData> = { status };
+    if (status === 'failed' && error) {
+      extraUpdate.error = error;
+    }
+
+    await this.#transitionStatus(resolvedId, status, extraUpdate, error);
+
+    return resolvedId;
+  };
+
   // ── Private helper ──
 
   #transitionStatus = async (
     id: string,
-    status: Parameters<typeof taskService.updateStatus>[1],
+    status: TaskStatus,
     extraUpdate?: Partial<TaskDetailData>,
+    error?: string,
   ): Promise<void> => {
     this.#get().internal_dispatchTaskDetail({
       id,
@@ -83,7 +90,7 @@ export class TaskLifecycleSliceActionImpl {
     this.#set({ taskSaveStatus: 'saving' }, false, 'transitionStatus/saving');
 
     try {
-      await taskService.updateStatus(id, status);
+      await taskService.updateStatus(id, status, error);
       this.#set({ taskSaveStatus: 'saved' }, false, 'transitionStatus/saved');
       await this.#get().internal_refreshTaskDetail(id);
       await this.#get().refreshTaskList();
@@ -91,6 +98,7 @@ export class TaskLifecycleSliceActionImpl {
       console.error(`[TaskStore] Failed to transition task to ${status}:`, error);
       this.#set({ taskSaveStatus: 'idle' }, false, 'transitionStatus/error');
       await this.#get().internal_refreshTaskDetail(id);
+      throw error;
     }
   };
 }

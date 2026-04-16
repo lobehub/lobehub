@@ -5,7 +5,7 @@ export const TaskApiName = {
   /** Delete a task */
   deleteTask: 'deleteTask',
 
-  /** Edit a task's name, instruction, priority, dependencies, or review config */
+  /** Edit a task's name, description, instruction, priority, or dependencies */
   editTask: 'editTask',
 
   /** List tasks with optional filters */

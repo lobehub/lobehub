@@ -650,7 +650,11 @@ export class ChatTopicActionImpl {
     // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
     const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     await mutate(
-      (key) => Array.isArray(key) && key[0] === SWR_USE_FETCH_TOPIC && key[1] === containerKey,
+      (key) =>
+        Array.isArray(key) &&
+        key[0] === SWR_USE_FETCH_TOPIC &&
+        typeof key[1] === 'string' &&
+        key[1] === containerKey,
     );
   };
 

@@ -41,6 +41,11 @@ interface QueryTopicParams {
    */
   groupId?: string | null;
   /**
+   * Include only topics whose trigger matches one of these values.
+   * Mutually complementary with excludeTriggers.
+   */
+  includeTriggers?: string[];
+  /**
    * Whether this is an inbox agent query.
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)
    */
@@ -73,6 +78,7 @@ export class TopicModel {
     current = 0,
     excludeStatuses,
     excludeTriggers,
+    includeTriggers,
     pageSize = 9999,
     groupId,
     isInbox,

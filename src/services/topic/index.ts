@@ -40,6 +40,7 @@ export class TopicService {
       excludeStatuses: params.excludeStatuses,
       excludeTriggers: params.excludeTriggers,
       groupId: params.groupId,
+      includeTriggers: params.includeTriggers,
       isInbox: params.isInbox,
       pageSize: params.pageSize,
       triggers: params.triggers,

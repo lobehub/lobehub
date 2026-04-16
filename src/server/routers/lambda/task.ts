@@ -1,6 +1,7 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { NotebookIdentifier } from '@lobechat/builtin-tool-notebook';
+import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { buildTaskRunPrompt } from '@lobechat/prompts';
 import type {
   TaskListItem,
@@ -60,7 +61,7 @@ const updateSchema = z.object({
   config: z.record(z.unknown()).optional(),
   context: z.record(z.unknown()).optional(),
   description: z.string().optional(),
-  heartbeatInterval: z.number().min(1).optional(),
+  heartbeatInterval: z.number().min(0).optional(),
   heartbeatTimeout: z.number().min(1).nullable().optional(),
   instruction: z.string().optional(),
   name: z.string().optional(),
@@ -71,8 +72,10 @@ const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
+  parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullable().optional(),
-  status: z.string().optional(),
+  priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+  statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
 });
 
 const groupListSchema = z.object({
@@ -497,7 +500,7 @@ export const taskRouter = router({
       const model = ctx.taskModel;
       const task = await resolveOrThrow(model, input.id);
       await model.delete(task.id);
-      return { message: 'Task deleted', success: true };
+      return { data: task, message: 'Task deleted', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:delete]', error);
@@ -511,25 +514,7 @@ export const taskRouter = router({
 
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
-      const model = ctx.taskModel;
-      let task = await resolveOrThrow(model, input.id);
-
-      // Auto-detect heartbeat timeout for running tasks
-      if (task.status === 'running' && task.heartbeatTimeout && task.lastHeartbeatAt) {
-        const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
-        if (elapsed > task.heartbeatTimeout) {
-          await model.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
-          await ctx.taskTopicModel.timeoutRunning(task.id);
-          task = await resolveOrThrow(model, input.id);
-        }
-      }
-
-      // Clear stale heartbeat timeout error if task is no longer running
-      if (task.status !== 'running' && task.error === 'Heartbeat timeout') {
-        await model.update(task.id, { error: null });
-      }
-
-      const detail = await ctx.taskService.getTaskDetail(task.identifier);
+      const detail = await ctx.taskService.getTaskDetail(input.id);
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       }
@@ -727,7 +712,25 @@ export const taskRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const result = await model.list(input);
+      const { parentIdentifier, ...query } = input;
+      let parentTaskId = query.parentTaskId;
+
+      if (parentIdentifier) {
+        const parent = await model.resolve(parentIdentifier);
+        if (!parent) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `Parent task not found: ${parentIdentifier}`,
+          });
+        }
+
+        parentTaskId = parent.id;
+      }
+
+      const result = await model.list({
+        ...query,
+        parentTaskId,
+      });
 
       const assigneeIds = [
         ...new Set(result.tasks.map((t) => t.assigneeAgentId).filter((id): id is string => !!id)),
@@ -755,6 +758,7 @@ export const taskRouter = router({
 
       return { data, success: true, total: result.total };
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
       console.error('[task:list]', error);
       throw new TRPCError({
         cause: error,
@@ -1256,12 +1260,19 @@ export const taskRouter = router({
       z.object({
         error: z.string().optional(),
         id: z.string(),
-        status: z.enum(['backlog', 'running', 'paused', 'completed', 'failed', 'canceled']),
+        status: z.enum(TASK_STATUSES),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const { id, status, error: errorMsg } = input;
       try {
+        if (errorMsg && status !== 'failed') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Task error can only be provided when status is failed.',
+          });
+        }
+
         const model = ctx.taskModel;
         const resolved = await resolveOrThrow(model, id);
 

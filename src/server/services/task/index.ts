@@ -37,8 +37,25 @@ export class TaskService {
   }
 
   async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    const task = await this.taskModel.resolve(taskIdOrIdentifier);
+    let task = await this.taskModel.resolve(taskIdOrIdentifier);
     if (!task) return null;
+
+    // Auto-detect heartbeat timeout for running tasks before assembling detail.
+    if (task.status === 'running' && task.heartbeatTimeout && task.lastHeartbeatAt) {
+      const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
+      if (elapsed > task.heartbeatTimeout) {
+        await this.taskModel.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
+        await this.taskTopicModel.timeoutRunning(task.id);
+        task = await this.taskModel.resolve(taskIdOrIdentifier);
+        if (!task) return null;
+      }
+    }
+
+    // Clear stale heartbeat timeout error once the task is no longer running.
+    if (task.status !== 'running' && task.error === 'Heartbeat timeout') {
+      await this.taskModel.update(task.id, { error: null });
+      task = { ...task, error: null };
+    }
 
     const [allDescendants, dependencies, topics, briefs, comments, workspace] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),

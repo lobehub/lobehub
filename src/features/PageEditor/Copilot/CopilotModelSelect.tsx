@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const CopilotModelSelector = memo(() => {
+const CopilotModelSelect = memo(() => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
@@ -95,6 +95,6 @@ const CopilotModelSelector = memo(() => {
   );
 });
 
-CopilotModelSelector.displayName = 'CopilotModelSelector';
+CopilotModelSelect.displayName = 'CopilotModelSelect';
 
-export default CopilotModelSelector;
+export default CopilotModelSelect;

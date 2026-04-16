@@ -48,6 +48,7 @@ import {
   SkillContextProvider,
   SystemDateProvider,
   SystemRoleInjector,
+  TaskManagerContextInjector,
   ToolDiscoveryProvider,
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
@@ -336,6 +337,11 @@ export class MessagesEngine {
                 xml: stepContext?.stepPageEditor?.xml || initialContext.pageEditor.xml,
               }
             : undefined),
+      }),
+      // Task Manager page context (inject current tasks list/detail to last user message)
+      new TaskManagerContextInjector({
+        contextPrompt: initialContext?.taskManager?.contextPrompt,
+        enabled: !!initialContext?.taskManager?.contextPrompt,
       }),
       // GTD Todo (at end of last user message)
       new GTDTodoInjector({ enabled: !!isGTDTodoEnabled, todos: gtd?.todos }),

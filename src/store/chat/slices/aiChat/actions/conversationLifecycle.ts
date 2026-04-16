@@ -60,6 +60,15 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * Contains sessionId, topicId, and threadId
    */
   context: ConversationContext;
+  /**
+   * Called as soon as the backend reports a newly created topic id, so callers
+   * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
+   * new topic while the AI response is still streaming.
+   *
+   * Only invoked when `context.isolatedTopic` is true; otherwise the store's
+   * own `switchTopic` handles the transition on the global chat store.
+   */
+  onTopicCreated?: (topicId: string) => void | Promise<void>;
 }
 
 /**
@@ -70,6 +79,8 @@ export interface SendMessageResult {
   assistantMessageId: string;
   /** The created thread ID (if a new thread was created) */
   createdThreadId?: string;
+  /** The created topic ID (if a new topic was created in this call) */
+  createdTopicId?: string;
   /** The created user message ID */
   userMessageId: string;
 }
@@ -111,6 +122,7 @@ export class ConversationLifecycleActionImpl {
     messages: inputMessages,
     parentId: inputParentId,
     pageSelections,
+    onTopicCreated,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
     let editorData = inputEditorData;
     const { internal_execAgentRuntime, mainInputEditor } = this.#get();
@@ -591,6 +603,7 @@ export class ConversationLifecycleActionImpl {
             ? {
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                trigger: context.topicTrigger,
               }
             : undefined,
           agentId: operationContext.agentId,
@@ -611,17 +624,24 @@ export class ConversationLifecycleActionImpl {
 
       // refresh the total data
       if (data?.topics) {
-        const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
-        this.#get().internal_updateTopics(operationContext.agentId, {
-          groupId: operationContext.groupId,
-          items: data.topics.items,
-          pageSize,
-          total: data.topics.total,
-        });
         finalTopicId = data.topicId;
 
-        // Record the created topicId in metadata (not context)
-        this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
+        // Skip writing the returned topic list into the main chat's topicDataMap
+        // when the caller owns an isolated topic scope (e.g. Task Manager panel).
+        // Otherwise the newly created isolated-trigger topic would flash in the
+        // main sidebar until the next SWR revalidation filters it out.
+        if (!context.isolatedTopic) {
+          const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
+          this.#get().internal_updateTopics(operationContext.agentId, {
+            groupId: operationContext.groupId,
+            items: data.topics.items,
+            pageSize,
+            total: data.topics.total,
+          });
+
+          // Record the created topicId in metadata (not context)
+          this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
+        }
       } else if (operationContext.topicId) {
         // Optimistically update topic's updatedAt so sidebar re-groups immediately
         this.#get().internal_dispatchTopic({
@@ -651,11 +671,17 @@ export class ConversationLifecycleActionImpl {
       });
 
       if (data.isCreateNewTopic && data.topicId) {
-        // clearNewKey: true ensures the _new key data is cleared after topic creation
-        await this.#get().switchTopic(data.topicId, {
-          clearNewKey: true,
-          skipRefreshMessage: true,
-        });
+        if (context.isolatedTopic) {
+          // Notify the isolated caller immediately so its UI re-subscribes to
+          // the new topic key and picks up the streaming AI response.
+          await onTopicCreated?.(data.topicId);
+        } else {
+          // clearNewKey: true ensures the _new key data is cleared after topic creation
+          await this.#get().switchTopic(data.topicId, {
+            clearNewKey: true,
+            skipRefreshMessage: true,
+          });
+        }
       }
     } catch (e) {
       console.error(e);
@@ -856,6 +882,7 @@ export class ConversationLifecycleActionImpl {
     return {
       assistantMessageId: data.assistantMessageId,
       createdThreadId: data.createdThreadId,
+      createdTopicId: data.isCreateNewTopic ? data.topicId : undefined,
       userMessageId: data.userMessageId,
     };
   };

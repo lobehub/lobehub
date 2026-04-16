@@ -1,4 +1,4 @@
-import type { CheckpointConfig } from '@lobechat/types';
+import type { CheckpointConfig, TaskStatus } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -13,8 +13,10 @@ class TaskService {
     assigneeAgentId?: string;
     limit?: number;
     offset?: number;
+    parentIdentifier?: string;
     parentTaskId?: string | null;
-    status?: string;
+    priorities?: number[];
+    statuses?: TaskStatus[];
   }) => lambdaClient.task.list.query(params);
 
   groupList = async (params: {
