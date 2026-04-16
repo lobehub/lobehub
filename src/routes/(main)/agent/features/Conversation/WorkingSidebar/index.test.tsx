@@ -120,7 +120,11 @@ beforeEach(() => {
     error: undefined,
     isLoading: false,
   })) as unknown as typeof swr.useClientDataSWR);
-  useGlobalStore.setState(initialState);
+  useGlobalStore.setState({
+    ...initialState,
+    isStatusInit: true,
+    status: { ...initialState.status },
+  });
 });
 
 afterEach(() => {
@@ -128,7 +132,7 @@ afterEach(() => {
 });
 
 describe('Conversation right panel mount', () => {
-  it('mounts the conversation-side right panel path and respects the existing global right-panel state', async () => {
+  it('mounts the conversation-side right panel path and defaults the right panel to collapsed', async () => {
     const { unmount } = render(<Conversation />);
 
     expect(screen.getByText('chat-header')).toBeInTheDocument();
@@ -137,13 +141,13 @@ describe('Conversation right panel mount', () => {
     expect(screen.getByTestId('workspace-resources')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByTestId('right-panel')).toHaveAttribute('data-expand', 'true');
-      expect(useGlobalStore.getState().status.showRightPanel).toBe(true);
+      expect(screen.getByTestId('right-panel')).toHaveAttribute('data-expand', 'false');
+      expect(useGlobalStore.getState().status.showRightPanel).toBe(false);
     });
 
     unmount();
 
-    expect(useGlobalStore.getState().status.showRightPanel).toBe(true);
+    expect(useGlobalStore.getState().status.showRightPanel).toBe(false);
   });
 
   it('renders resources section and empty state', () => {

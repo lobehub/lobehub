@@ -20,6 +20,7 @@ const wrapperStyle: React.CSSProperties = {
 
 const ChatConversation = memo(() => {
   const showHeader = useGlobalStore(systemStatusSelectors.showChatHeader);
+  const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
@@ -31,6 +32,11 @@ const ChatConversation = memo(() => {
   useEffect(() => {
     setSelectedDocumentId(null);
   }, [activeAgentId]);
+
+  useEffect(() => {
+    if (!isStatusInit) return;
+    useGlobalStore.getState().toggleRightPanel(false);
+  }, [isStatusInit]);
 
   return (
     <Suspense fallback={<Loading debugId="Agent > ChatConversation" />}>
