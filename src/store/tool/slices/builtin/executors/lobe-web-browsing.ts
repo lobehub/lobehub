@@ -158,8 +158,8 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
                   agentId: ctx.agentId!,
                   documentId: doc.id,
                 });
-              } catch {
-                // Silently ignore association errors to not block the main flow
+              } catch (error) {
+                console.error('[WebBrowsing] Failed to associate document with agent:', error);
               }
             }),
           );

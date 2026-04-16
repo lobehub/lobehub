@@ -56,8 +56,11 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
 
                 // Associate with agent
                 await agentDocumentsService.associateDocument(agentId, doc.id);
-              } catch {
-                // Silently ignore document creation errors to not block the main flow
+              } catch (error) {
+                console.error(
+                  '[WebBrowsing] Failed to save crawl result to agent document:',
+                  error,
+                );
               }
             }),
           );
