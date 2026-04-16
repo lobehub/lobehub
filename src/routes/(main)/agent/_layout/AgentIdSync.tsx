@@ -16,7 +16,7 @@ const AgentIdSync = () => {
   const prevAgentId = usePrevious(params.aid);
 
   useStoreUpdater('activeAgentId', params.aid);
-  useChatStoreUpdater('activeAgentId', params.aid ?? '');
+  useChatStoreUpdater('activeAgentId', params.aid);
 
   // Reset activeTopicId when switching to a different agent
   // This prevents messages from being saved to the wrong topic bucket
