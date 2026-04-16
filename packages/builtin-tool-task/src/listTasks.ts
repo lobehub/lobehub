@@ -37,6 +37,9 @@ interface NormalizeListTasksOptions {
   currentAgentId?: string;
 }
 
+export const normalizeOptionalFilterValues = <T>(values?: T[]) =>
+  values?.length ? values : undefined;
+
 const hasExplicitFilter = (params: ListTasksParams): boolean =>
   Boolean(
     params.parentIdentifier ||
@@ -57,8 +60,11 @@ export const normalizeListTasksParams = (
 } => {
   const { currentAgentId } = options;
   const isDefaultScope = !hasExplicitFilter(params);
+  const priorities = normalizeOptionalFilterValues(params.priorities);
+  const statuses =
+    normalizeOptionalFilterValues(params.statuses) ??
+    (isDefaultScope ? [...UNFINISHED_TASK_STATUSES] : undefined);
 
-  const statuses = params.statuses ?? (isDefaultScope ? [...UNFINISHED_TASK_STATUSES] : undefined);
   const assigneeAgentId = params.assigneeAgentId ?? (isDefaultScope ? currentAgentId : undefined);
 
   return {
@@ -67,7 +73,7 @@ export const normalizeListTasksParams = (
       isDefaultScope,
       isForCurrentAgent: isDefaultScope && Boolean(currentAgentId),
       parentIdentifier: params.parentIdentifier,
-      priorities: params.priorities,
+      priorities,
       statuses,
     },
     query: {
@@ -76,7 +82,7 @@ export const normalizeListTasksParams = (
       offset: params.offset ?? 0,
       parentIdentifier: params.parentIdentifier,
       parentTaskId: isDefaultScope ? null : undefined,
-      priorities: params.priorities,
+      priorities,
       statuses,
     },
   };

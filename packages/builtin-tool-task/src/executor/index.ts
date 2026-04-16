@@ -36,12 +36,13 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] createTask - params:', params);
+      const parentIdentifier = params.parentIdentifier?.trim() || undefined;
 
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
-        parentTaskId: params.parentIdentifier,
+        parentTaskId: parentIdentifier,
         priority: params.priority,
       });
 
@@ -58,7 +59,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           identifier: task.identifier,
           instruction: params.instruction,
           name: task.name,
-          parentLabel: params.parentIdentifier,
+          parentLabel: parentIdentifier,
           priority: task.priority,
           status: task.status,
         }),

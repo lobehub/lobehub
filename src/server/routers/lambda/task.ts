@@ -74,8 +74,8 @@ const listSchema = z.object({
   offset: z.number().min(0).default(0),
   parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullable().optional(),
-  priorities: z.array(z.number().min(0).max(4)).min(1).max(5).optional(),
-  statuses: z.array(z.enum(TASK_STATUSES)).min(1).max(10).optional(),
+  priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+  statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
 });
 
 const groupListSchema = z.object({
