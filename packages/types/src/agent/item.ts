@@ -5,8 +5,7 @@ import type { FileItem } from '../files';
 import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
-import type { LobeAgentChatConfig } from './chatConfig';
-import { AgentChatConfigSchema } from './chatConfig';
+import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
@@ -92,7 +91,7 @@ export type LobeAgentConfigKeys =
  * Covers all user-configurable fields; system fields (id, userId, timestamps) are excluded.
  */
 export const CreateAgentSchema = z.object({
-  agencyConfig: z.record(z.unknown()).optional(),
+  agencyConfig: z.custom<LobeAgentAgencyConfig>().optional(),
   avatar: z.string().nullable().optional(),
   backgroundColor: z.string().nullable().optional(),
   chatConfig: AgentChatConfigSchema.optional(),
@@ -110,7 +109,7 @@ export const CreateAgentSchema = z.object({
   systemRole: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
   title: z.string().nullable().optional(),
-  tts: z.record(z.unknown()).optional(),
+  tts: z.custom<LobeAgentTTSConfig>().optional(),
   virtual: z.boolean().nullable().optional(),
 });
 
