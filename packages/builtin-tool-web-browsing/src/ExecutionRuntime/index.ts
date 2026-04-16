@@ -11,18 +11,28 @@ import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
 import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
 
+export interface WebBrowsingDocumentService {
+  associateDocument: (documentId: string) => Promise<void>;
+  createDocument: (params: {
+    content: string;
+    description?: string;
+    title: string;
+    url: string;
+  }) => Promise<{ id: string }>;
+}
+
 export interface WebBrowsingRuntimeOptions {
-  onCrawlComplete?: (results: CrawlSuccessResult[]) => Promise<void>;
+  documentService?: WebBrowsingDocumentService;
   searchService: SearchServiceImpl;
 }
 
 export class WebBrowsingExecutionRuntime {
-  private onCrawlComplete?: (results: CrawlSuccessResult[]) => Promise<void>;
+  private documentService?: WebBrowsingDocumentService;
   private searchService: SearchServiceImpl;
 
   constructor(options: WebBrowsingRuntimeOptions) {
     this.searchService = options.searchService;
-    this.onCrawlComplete = options.onCrawlComplete;
+    this.documentService = options.documentService;
   }
 
   async search(
@@ -74,19 +84,29 @@ export class WebBrowsingExecutionRuntime {
 
     const { results } = response;
 
-    // Invoke onCrawlComplete callback with successful results
-    if (this.onCrawlComplete) {
-      const successResults = results
-        .filter((item) => !('errorMessage' in item.data) && item.data.content)
-        .map((item) => item.data as CrawlSuccessResult);
+    // Save crawled pages as documents and associate with agent
+    if (this.documentService) {
+      await Promise.all(
+        results.map(async (item) => {
+          if ('errorMessage' in item.data) return;
 
-      if (successResults.length > 0) {
-        try {
-          await this.onCrawlComplete(successResults);
-        } catch (error) {
-          console.error('[WebBrowsing] onCrawlComplete callback failed:', error);
-        }
-      }
+          const pageData = item.data as CrawlSuccessResult;
+          if (!pageData.content) return;
+
+          try {
+            const doc = await this.documentService!.createDocument({
+              content: pageData.content,
+              description: pageData.description || `Crawled from ${pageData.url}`,
+              title: pageData.title || pageData.url,
+              url: pageData.url,
+            });
+
+            await this.documentService!.associateDocument(doc.id);
+          } catch (error) {
+            console.error('[WebBrowsing] Failed to save crawl result to agent document:', error);
+          }
+        }),
+      );
     }
 
     const content = results.map((item) =>

@@ -4,22 +4,51 @@
  * Handles web search and page crawling tool calls.
  */
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
+import {
+  type WebBrowsingDocumentService,
+  WebBrowsingExecutionRuntime,
+} from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 import {
   type BuiltinToolContext,
   type BuiltinToolResult,
   type CrawlMultiPagesQuery,
-  type CrawlPluginState,
   type SearchQuery,
 } from '@lobechat/types';
 import { BaseExecutor, SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
-import { type CrawlSuccessResult } from '@lobechat/web-crawler';
 
 import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { searchService } from '@/services/search';
 
-const runtime = new WebBrowsingExecutionRuntime({ searchService });
+const baseRuntime = new WebBrowsingExecutionRuntime({ searchService });
+
+const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentService | undefined => {
+  if (!ctx.topicId && !ctx.agentId) return undefined;
+
+  return {
+    associateDocument: async (documentId) => {
+      if (!ctx.agentId) return;
+
+      await agentDocumentService.associateDocument({
+        agentId: ctx.agentId,
+        documentId,
+      });
+    },
+    createDocument: async ({ content, description, title, url }) => {
+      if (!ctx.topicId) throw new Error('topicId is required');
+
+      return notebookService.createDocument({
+        content,
+        description: description || `Crawled from ${url}`,
+        source: url,
+        sourceType: 'web',
+        title,
+        topicId: ctx.topicId,
+        type: 'article',
+      });
+    },
+  };
+};
 
 class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
   readonly identifier = WebBrowsingManifest.identifier;
@@ -35,7 +64,7 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await runtime.search(params, { signal: ctx.signal });
+      const result = await baseRuntime.search(params, { signal: ctx.signal });
 
       if (result.success) {
         return {
@@ -108,78 +137,18 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
         return { stop: true, success: false };
       }
 
+      // Create a runtime with document service bound to this call's context
+      const documentService = createDocumentService(ctx);
+      const runtime = documentService
+        ? new WebBrowsingExecutionRuntime({ documentService, searchService })
+        : baseRuntime;
+
       const result = await runtime.crawlMultiPages(params);
 
       if (result.success) {
-        // Save crawled pages as documents if topicId is available
-        const savedDocuments: Array<{ id: string; title: string; url: string }> = [];
-
-        if (ctx.topicId) {
-          const crawlState = result.state as CrawlPluginState;
-
-          // Create documents for each successfully crawled page
-          await Promise.all(
-            crawlState.results.map(async (crawlResult) => {
-              // Skip if there's an error
-              if ('errorMessage' in crawlResult.data) return;
-
-              const pageData = crawlResult.data as CrawlSuccessResult;
-              if (!pageData.content) return;
-
-              try {
-                const document = await notebookService.createDocument({
-                  content: pageData.content,
-                  description: pageData.description || `Crawled from ${pageData.url}`,
-                  source: pageData.url,
-                  sourceType: 'web',
-                  title: pageData.title || pageData.url,
-                  topicId: ctx.topicId!,
-                  type: 'article',
-                });
-
-                savedDocuments.push({
-                  id: document.id,
-                  title: document.title || pageData.url,
-                  url: pageData.url,
-                });
-              } catch {
-                // Silently ignore document creation errors to not block the main flow
-              }
-            }),
-          );
-        }
-
-        // Associate saved notebook documents with the agent if agentId is available
-        if (ctx.agentId && savedDocuments.length > 0) {
-          await Promise.all(
-            savedDocuments.map(async (doc) => {
-              try {
-                await agentDocumentService.associateDocument({
-                  agentId: ctx.agentId!,
-                  documentId: doc.id,
-                });
-              } catch (error) {
-                console.error('[WebBrowsing] Failed to associate document with agent:', error);
-              }
-            }),
-          );
-        }
-
-        // Append saved documents info to content
-        let content = result.content;
-        if (savedDocuments.length > 0) {
-          const savedDocsInfo = savedDocuments
-            .map((doc) => `- "${doc.title}" (ID: ${doc.id})`)
-            .join('\n');
-          content += `\n\n<saved_documents>\nThe crawled content has been saved as documents for future reference:\n${savedDocsInfo}\n</saved_documents>`;
-        }
-
         return {
-          content,
-          state: {
-            ...result.state,
-            savedDocuments,
-          },
+          content: result.content,
+          state: result.state,
           success: true,
         };
       }
