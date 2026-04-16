@@ -261,8 +261,9 @@ export const executeHeterogeneousAgent = async (
   };
   /** Serializes async persist operations so ordering is stable. */
   let persistQueue: Promise<void> = Promise.resolve();
-  /** Content accumulators — Gateway server persists these during streaming;
-   * ACP has no server so we persist at onComplete. */
+  /** Tracks the current assistant message being written to (switches on new steps) */
+  let currentAssistantMessageId = assistantMessageId;
+  /** Content accumulators — reset on each new step */
   let accumulatedContent = '';
   let accumulatedReasoning = '';
   /** Extracted model + usage from each assistant event (used for final write) */
@@ -329,6 +330,56 @@ export const executeHeterogeneousAgent = async (
             continue;
           }
 
+          // ─── stream_start with newStep: new LLM turn, create new assistant message ───
+          if (event.type === 'stream_start' && event.data?.newStep) {
+            persistQueue = persistQueue.then(async () => {
+              // Persist previous step's content to its assistant message
+              const prevUpdate: Record<string, any> = {};
+              if (accumulatedContent) prevUpdate.content = accumulatedContent;
+              if (accumulatedReasoning) prevUpdate.reasoning = { content: accumulatedReasoning };
+              if (lastModel) prevUpdate.model = lastModel;
+              if (Object.keys(prevUpdate).length > 0) {
+                await messageService
+                  .updateMessage(currentAssistantMessageId, prevUpdate, {
+                    agentId: context.agentId,
+                    topicId: context.topicId,
+                  })
+                  .catch(console.error);
+              }
+
+              // Create new assistant message for this step
+              const newMsg = await messageService.createMessage({
+                agentId: context.agentId,
+                content: '',
+                model: lastModel,
+                parentId: currentAssistantMessageId,
+                role: 'assistant',
+                topicId: context.topicId ?? undefined,
+              });
+              currentAssistantMessageId = newMsg.id;
+
+              // Associate the new message with the operation
+              get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+
+              // Reset accumulators for the new step
+              accumulatedContent = '';
+              accumulatedReasoning = '';
+
+              // Reset tool state for the new step
+              toolState.payloads = [];
+              toolState.persistedIds.clear();
+              toolState.toolMsgIdByCallId.clear();
+            });
+
+            // Update the stream_start event to carry the new message ID
+            // so the gateway handler can switch to it
+            persistQueue = persistQueue.then(() => {
+              event.data.assistantMessage = { id: currentAssistantMessageId };
+              eventHandler(toStreamEvent(event, operationId));
+            });
+            continue;
+          }
+
           // ─── Defer terminal events so content writes complete first ───
           // Gateway handler's agent_runtime_end/error triggers fetchAndReplaceMessages,
           // which would read stale DB state (before we persist final content + usage).
@@ -350,7 +401,7 @@ export const executeHeterogeneousAgent = async (
               const tools = chunk.toolsCalling as ToolCallPayload[];
               if (tools?.length) {
                 persistQueue = persistQueue.then(() =>
-                  persistNewToolCalls(tools, toolState, assistantMessageId, context),
+                  persistNewToolCalls(tools, toolState, currentAssistantMessageId, context),
                 );
               }
             }
@@ -402,7 +453,7 @@ export const executeHeterogeneousAgent = async (
 
         if (Object.keys(updateValue).length > 0) {
           await messageService
-            .updateMessage(assistantMessageId, updateValue, {
+            .updateMessage(currentAssistantMessageId, updateValue, {
               agentId: context.agentId,
               topicId: context.topicId,
             })
@@ -429,7 +480,7 @@ export const executeHeterogeneousAgent = async (
         if (accumulatedContent) {
           await messageService
             .updateMessage(
-              assistantMessageId,
+              currentAssistantMessageId,
               { content: accumulatedContent },
               {
                 agentId: context.agentId,

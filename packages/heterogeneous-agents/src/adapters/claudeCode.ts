@@ -55,6 +55,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private pendingToolCalls = new Set<string>();
   private started = false;
   private stepIndex = 0;
+  /** Track current message.id to detect step boundaries */
+  private currentMessageId: string | undefined;
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -106,12 +108,27 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     if (!Array.isArray(content)) return [];
 
     const events: HeterogeneousAgentEvent[] = [];
+    const messageId = raw.message?.id;
 
     if (!this.started) {
       this.started = true;
+      this.currentMessageId = messageId;
       events.push(
         this.makeEvent('stream_start', {
           model: raw.message?.model,
+          provider: 'acp-agent',
+        }),
+      );
+    } else if (messageId && messageId !== this.currentMessageId) {
+      // New message.id = new LLM turn. Emit stream_end for previous step,
+      // then stream_start for the new one so executor creates a new assistant message.
+      this.currentMessageId = messageId;
+      this.stepIndex++;
+      events.push(this.makeEvent('stream_end', {}));
+      events.push(
+        this.makeEvent('stream_start', {
+          model: raw.message?.model,
+          newStep: true,
           provider: 'acp-agent',
         }),
       );
@@ -128,15 +145,6 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         }),
       );
     }
-
-    // NOTE: Claude Code stream-json may produce multiple events sharing the same
-    // message.id (e.g. thinking + tool_use as separate events in one turn) AND
-    // may produce multiple msg_ids across multi-step flows. We deliberately do
-    // NOT split DB assistant messages per msg_id — instead we accumulate
-    // everything on the single assistant message created at sendMessage time,
-    // and let LobeHub's UI render one AssistantGroup with aggregated tools.
-    // This matches how Gateway handles the common case and keeps parentId
-    // chains intact (which breaks if we create DB messages out of order).
 
     // Each content array here is usually ONE block (thinking OR tool_use OR text)
     // but we handle multiple defensively.
