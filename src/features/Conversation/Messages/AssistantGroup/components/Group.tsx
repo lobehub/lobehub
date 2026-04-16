@@ -175,12 +175,6 @@ const Group = memo<GroupChildrenProps>(
 
     const workflowChromeComplete = !isGenerating || postToolTailPromoted;
 
-    /** First non-placeholder in the answer column (pre-tool + post-tool when finalized). */
-    const firstSubstantiveAnswerIndex = useMemo(
-      () => answerBlocks.findIndex((b) => !isEmptyBlock(b)),
-      [answerBlocks],
-    );
-
     if (isCollapsed) {
       return (
         content && (
@@ -203,7 +197,7 @@ const Group = memo<GroupChildrenProps>(
               workflowChromeComplete={workflowChromeComplete}
             />
           )}
-          {answerBlocks.map((item, index) => {
+          {answerBlocks.map((item) => {
             if (!isGenerating && isEmptyBlock(item)) return null;
 
             return (
@@ -214,9 +208,6 @@ const Group = memo<GroupChildrenProps>(
                 disableEditing={disableEditing}
                 key={id + '.' + item.id}
                 messageIndex={messageIndex}
-                isFirstBlock={
-                  firstSubstantiveAnswerIndex >= 0 && index === firstSubstantiveAnswerIndex
-                }
               />
             );
           })}

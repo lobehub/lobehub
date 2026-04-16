@@ -16,20 +16,9 @@ import MessageContent from './MessageContent';
 interface ContentBlockProps extends AssistantContentBlock {
   assistantId: string;
   disableEditing?: boolean;
-  isFirstBlock?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({
-    id,
-    tools,
-    content,
-    imageList,
-    reasoning,
-    error,
-    assistantId,
-    disableEditing,
-    isFirstBlock,
-  }) => {
+  ({ id, tools, content, imageList, reasoning, error, assistantId, disableEditing }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -84,12 +73,7 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {showMessageContent && (
           <SafeBoundary variant="alert">
-            <MessageContent
-              content={content}
-              hasTools={hasTools}
-              id={id}
-              isFirstBlock={isFirstBlock}
-            />
+            <MessageContent content={content} hasTools={hasTools} id={id} />
           </SafeBoundary>
         )}
 
