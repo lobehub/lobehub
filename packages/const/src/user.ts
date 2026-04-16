@@ -1,5 +1,4 @@
 import type { UserPreference } from '@lobechat/types';
-import { TopicDisplayMode } from '@lobechat/types';
 
 /**
  * Current onboarding flow version.
@@ -7,6 +6,10 @@ import { TopicDisplayMode } from '@lobechat/types';
  * which will trigger existing users to go through onboarding again.
  */
 export const CURRENT_ONBOARDING_VERSION = 1;
+
+const DEFAULT_TOPIC_DISPLAY_MODE = 'byUpdatedTime' as NonNullable<
+  UserPreference['topicDisplayMode']
+>;
 
 export const DEFAULT_PREFERENCE: UserPreference = {
   guide: {
@@ -16,6 +19,6 @@ export const DEFAULT_PREFERENCE: UserPreference = {
   lab: {
     enableInputMarkdown: true,
   },
-  topicDisplayMode: TopicDisplayMode.ByUpdatedTime,
+  topicDisplayMode: DEFAULT_TOPIC_DISPLAY_MODE,
   useCmdEnterToSend: false,
 };
