@@ -1,19 +1,6 @@
 import { type ChatInputEditor } from '@/features/ChatInput';
 import type { GatewayConnection } from '@/store/chat/slices/aiChat/actions/gateway';
 
-/**
- * Page-level runtime overrides for plugin/tool behavior.
- * Transient state, not persisted — cleared on reload or when pages unmount.
- */
-export interface RuntimePluginOverrides {
-  /**
-   * Force these tool ids to be activated for every step on the current page,
-   * bypassing enableChecker rules via `isExplicitActivation`.
-   * Merged into stepContext.activatedToolIds in streamingExecutor.
-   */
-  forceActivated?: string[];
-}
-
 export interface ChatAIChatState {
   /**
    * Active Agent Gateway WebSocket connections, keyed by operationId
@@ -30,10 +17,11 @@ export interface ChatAIChatState {
    */
   pendingClientToolExecutions: Record<string, boolean>;
   /**
-   * Page-level runtime plugin overrides. Set by page layouts (e.g. tasks page
-   * forcing `lobe-task` to be activated), cleared on unmount.
+   * Tool ids enabled by the current runtime scenario/page (for example the
+   * tasks page enabling `lobe-task` while its panel is mounted).
+   * Transient state, not persisted — cleared on reload or when pages unmount.
    */
-  runtimePluginOverrides?: RuntimePluginOverrides;
+  scenarioEnabledToolIds?: string[];
   searchWorkflowLoadingIds: string[];
   threadInputEditor: ChatInputEditor | null;
   /**
@@ -48,7 +36,7 @@ export const initialAiChatState: ChatAIChatState = {
   inputMessage: '',
   mainInputEditor: null,
   pendingClientToolExecutions: {},
-  runtimePluginOverrides: undefined,
+  scenarioEnabledToolIds: undefined,
   searchWorkflowLoadingIds: [],
   threadInputEditor: null,
   toolCallingStreamIds: {},

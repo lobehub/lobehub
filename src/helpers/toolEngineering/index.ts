@@ -126,11 +126,11 @@ export const createAgentToolsEngine = (
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
   const userPlugins = agentSelectors.currentAgentPlugins(agentState);
-  // Page-level force-activated tool ids (e.g. tasks page forces `lobe-task`).
-  // Set by page layouts via `useChatStore.setState({ runtimePluginOverrides })`,
+  // Page-level scenario-enabled tool ids (e.g. tasks page enables `lobe-task`).
+  // Set by page layouts via `useChatStore.setState({ scenarioEnabledToolIds })`,
   // cleared on unmount. Only effective when the id is also in `defaultToolIds`
   // or `pluginIds` — rules only apply to tools that reach the candidate pool.
-  const forceActivatedToolIds = getChatStoreState().runtimePluginOverrides?.forceActivated ?? [];
+  const scenarioEnabledToolIds = getChatStoreState().scenarioEnabledToolIds ?? [];
 
   return createToolsEngine({
     defaultToolIds,
@@ -158,8 +158,8 @@ export const createAgentToolsEngine = (
         ...Object.fromEntries(userPlugins.map((id) => [id, true])),
         // Always-on builtin tools
         ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
-        // Page-level force-activated tools (e.g. tasks page forces `lobe-task`)
-        ...Object.fromEntries(forceActivatedToolIds.map((id) => [id, true])),
+        // Page-level scenario-enabled tools (e.g. tasks page enables `lobe-task`)
+        ...Object.fromEntries(scenarioEnabledToolIds.map((id) => [id, true])),
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]:
           agentChatConfigSelectors.isCloudSandboxEnabled(agentState),

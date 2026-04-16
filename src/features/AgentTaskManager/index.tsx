@@ -12,8 +12,8 @@ import Conversation from './Conversation';
  * still read from `useChatStore.dbMessagesMap` via a distinct `messageMapKey`
  * derived from the isolated topic id.
  *
- * The parent `_layout` sets `runtimePluginOverrides.forceActivated` on the
- * chat store so `lobe-task` is auto-activated for every LLM step here.
+ * The parent `_layout` sets `scenarioEnabledToolIds` on the chat store so
+ * `lobe-task` is available for every LLM step here.
  */
 const AgentTaskManager = memo(() => {
   return (

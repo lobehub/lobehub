@@ -15,18 +15,16 @@ import { useChatStore } from '@/store/chat';
  *   chat panel on the right. Right panel reuses the same agentId + activeTopicId
  *   as the `/agent/:aid` page via `useAgentContext()` inside ConversationArea.
  *
- * - Force-activates `lobe-task` for every LLM step while the user is on any tasks
- *   sub-page. Uses `runtimePluginOverrides.forceActivated` which streamingExecutor
- *   merges into `stepContext.activatedToolIds`, so createAgentExecutors bypasses
- *   enableChecker rules via `isExplicitActivation`.
+ * - Enables `lobe-task` for every LLM step while the user is on any tasks
+ *   sub-page via the page-level `scenarioEnabledToolIds` chat state.
  */
 const TasksLayout = memo(() => {
   useEffect(() => {
     useChatStore.setState({
-      runtimePluginOverrides: { forceActivated: [TaskIdentifier] },
+      scenarioEnabledToolIds: [TaskIdentifier],
     });
     return () => {
-      useChatStore.setState({ runtimePluginOverrides: undefined });
+      useChatStore.setState({ scenarioEnabledToolIds: undefined });
     };
   }, []);
 
