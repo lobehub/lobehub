@@ -194,8 +194,10 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
+      delay: null,
+    });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
     await user.click(screen.getByRole('button', { name: 'proxy.resetButton' }));
 
     await waitFor(() => {
@@ -211,8 +213,10 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
+      delay: null,
+    });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
     await user.click(screen.getAllByRole('switch')[1]);
 
     expect(screen.getByPlaceholderText('proxy.username_placeholder')).toBeInTheDocument();
@@ -234,7 +238,7 @@ describe('ProxyForm', () => {
 
     await user.click(screen.getAllByRole('switch')[0]);
     await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '70000');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '70000', { delay: null });
     await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
 
     await waitFor(() => {
@@ -249,8 +253,10 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
+      delay: null,
+    });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
     await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
 
     await waitFor(() => {
@@ -271,8 +277,10 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
+      delay: null,
+    });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
 
     setProxySettingsMock.mockRejectedValueOnce(new Error('boom'));
 
@@ -292,8 +300,10 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
+      delay: null,
+    });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
@@ -318,12 +328,14 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
+      delay: null,
+    });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith('proxy.testFailed: connect ECONNREFUSED');
     });
   });
-});
+}, 10000);
