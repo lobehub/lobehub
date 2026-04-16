@@ -13,7 +13,7 @@ export async function register() {
     process.env.NEXT_RUNTIME === 'nodejs' &&
     process.env.DATABASE_URL &&
     !process.env.VERCEL_ENV &&
-    (!isDev || process.env.ENABLE_BOT_IN_DEV)
+    (!isDev || process.env.ENABLE_BOT_IN_DEV === '1')
   ) {
     const { GatewayService } = await import('./server/services/gateway');
     const service = new GatewayService();
