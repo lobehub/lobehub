@@ -472,21 +472,21 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      // Find the final write that has metadata
+      // Find the final write that has usage metadata
       const finalWrite = mockUpdateMessage.mock.calls.find(
-        ([, val]: any) => val.metadata?.totalTokens,
+        ([, val]: any) => val.metadata?.usage?.totalTokens,
       );
       expect(finalWrite).toBeDefined();
-      const meta = finalWrite![1].metadata;
+      const usage = finalWrite![1].metadata.usage;
       // 100 + 300 input + 200 cache_read + 50 cache_create = 650 input total
-      expect(meta.totalInputTokens).toBe(650);
+      expect(usage.totalInputTokens).toBe(650);
       // 50 + 80 = 130 output
-      expect(meta.totalOutputTokens).toBe(130);
-      expect(meta.totalTokens).toBe(780);
+      expect(usage.totalOutputTokens).toBe(130);
+      expect(usage.totalTokens).toBe(780);
       // Breakdown for pricing UI (must match anthropic usage converter shape)
-      expect(meta.inputCacheMissTokens).toBe(400);
-      expect(meta.inputCachedTokens).toBe(200);
-      expect(meta.inputWriteCacheTokens).toBe(50);
+      expect(usage.inputCacheMissTokens).toBe(400);
+      expect(usage.inputCachedTokens).toBe(200);
+      expect(usage.inputWriteCacheTokens).toBe(50);
     });
   });
 

@@ -523,14 +523,17 @@ export const executeHeterogeneousAgent = async (
 
         if (totalInputTokens + totalOutputTokens > 0) {
           updateValue.metadata = {
-            // Mirror anthropic usage converter so UI/pricing cards read the same shape
-            // regardless of whether the turn came from Gateway or CC CLI.
-            inputCacheMissTokens: inputCacheMiss,
-            inputCachedTokens: inputCached || undefined,
-            inputWriteCacheTokens: inputWriteCache || undefined,
-            totalInputTokens,
-            totalOutputTokens,
-            totalTokens: totalInputTokens + totalOutputTokens,
+            // Use nested `usage` — the flat fields on MessageMetadata are deprecated.
+            // Shape mirrors the anthropic usage converter so CC CLI and Gateway turns
+            // render identically in pricing/usage UI.
+            usage: {
+              inputCacheMissTokens: inputCacheMiss,
+              inputCachedTokens: inputCached || undefined,
+              inputWriteCacheTokens: inputWriteCache || undefined,
+              totalInputTokens,
+              totalOutputTokens,
+              totalTokens: totalInputTokens + totalOutputTokens,
+            },
           };
         }
 
