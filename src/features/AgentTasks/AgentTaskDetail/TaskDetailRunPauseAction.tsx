@@ -12,13 +12,13 @@ const TaskDetailRunPauseAction = memo(() => {
   const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
   const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
   const runTask = useTaskStore((s) => s.runTask);
-  const pauseTask = useTaskStore((s) => s.pauseTask);
+  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
   const handleRunOrPause = useCallback(() => {
     if (!taskId) return;
     if (canRun) runTask(taskId);
-    else if (canPause) pauseTask(taskId);
-  }, [taskId, canRun, canPause, runTask, pauseTask]);
+    else if (canPause) updateTaskStatus(taskId, 'paused');
+  }, [taskId, canRun, canPause, runTask, updateTaskStatus]);
 
   if (!canRun && !canPause) return null;
 

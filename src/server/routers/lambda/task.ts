@@ -1258,12 +1258,19 @@ export const taskRouter = router({
       z.object({
         error: z.string().optional(),
         id: z.string(),
-        status: z.enum(['backlog', 'running', 'paused', 'completed', 'failed', 'canceled']),
+        status: z.enum(TASK_STATUSES),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       const { id, status, error: errorMsg } = input;
       try {
+        if (errorMsg && status !== 'failed') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Task error can only be provided when status is failed.',
+          });
+        }
+
         const model = ctx.taskModel;
         const resolved = await resolveOrThrow(model, id);
 

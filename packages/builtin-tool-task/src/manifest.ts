@@ -140,18 +140,23 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Update a task's status. Use to mark tasks as completed, canceled, or change lifecycle state. Defaults to the current task if no identifier provided.",
+        "Update a task's status. Use to mark tasks as completed, canceled, paused, resumed, or failed. If identifier is omitted, this only works when there is a current task context.",
       name: TaskApiName.updateTaskStatus,
       parameters: {
         properties: {
+          error: {
+            description: 'Failure reason to store on the task. Only valid when status is "failed".',
+            type: 'string',
+          },
           identifier: {
             description:
-              'The task identifier (e.g. "TASK-1"). Defaults to the current task if omitted.',
+              'The task identifier (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
             type: 'string',
           },
           status: {
-            description: 'New status for the task.',
-            enum: ['backlog', 'running', 'paused', 'completed', 'failed', 'canceled'],
+            description:
+              'New status for the task. Use error only when setting the status to failed.',
+            enum: [...TASK_STATUSES],
             type: 'string',
           },
         },

@@ -47,10 +47,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
   ({ children, disableDropdown, size = 16, status, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
     const { t } = useTranslation('chat');
-    const cancelTask = useTaskStore((s) => s.cancelTask);
-    const completeTask = useTaskStore((s) => s.completeTask);
-    const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
-    const resumeTask = useTaskStore((s) => s.resumeTask);
+    const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
     const displayStatus = status ?? 'backlog';
     const meta = STATUS_META[displayStatus];
@@ -61,27 +58,12 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
         setLoading(true);
 
         try {
-          switch (nextStatus) {
-            case 'backlog': {
-              await resumeTask(taskIdentifier);
-              break;
-            }
-            case 'canceled': {
-              await cancelTask(taskIdentifier);
-              break;
-            }
-            case 'completed': {
-              await completeTask(taskIdentifier);
-              break;
-            }
-          }
-
-          await refreshTaskList();
+          await updateTaskStatus(taskIdentifier, nextStatus);
         } finally {
           setLoading(false);
         }
       },
-      [cancelTask, completeTask, displayStatus, refreshTaskList, resumeTask, taskIdentifier],
+      [displayStatus, taskIdentifier, updateTaskStatus],
     );
 
     const menuItems = useMemo<MenuProps['items']>(

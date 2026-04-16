@@ -12,6 +12,7 @@ import {
 import type { TaskStatus } from '@lobechat/types';
 
 import { TaskModel } from '@/database/models/task';
+import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -19,11 +20,13 @@ import { type ServerRuntimeRegistration } from './types';
 const createTaskRuntime = ({
   agentId,
   taskId,
+  taskCaller,
   taskModel,
   taskService,
 }: {
   agentId?: string;
   taskId?: string;
+  taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskModel: TaskModel;
   taskService: TaskService;
 }) => ({
@@ -187,7 +190,7 @@ const createTaskRuntime = ({
     };
   },
 
-  updateTaskStatus: async (args: { identifier?: string; status: string }) => {
+  updateTaskStatus: async (args: { error?: string; identifier?: string; status: TaskStatus }) => {
     const id = args.identifier || taskId;
     if (!id) {
       return {
@@ -196,16 +199,28 @@ const createTaskRuntime = ({
       };
     }
 
-    const task = await taskModel.resolve(id);
-    if (!task) return { content: `Task not found: ${id}`, success: false };
+    try {
+      const result = await taskCaller.updateStatus({
+        error: args.error,
+        id,
+        status: args.status,
+      });
 
-    const updated = await taskModel.updateStatus(task.id, args.status);
-    if (!updated) return { content: `Failed to update task ${task.identifier}`, success: false };
+      return {
+        content:
+          args.status === 'failed' && args.error
+            ? `Task ${result.data.identifier} status updated to failed. Error: ${args.error}`
+            : `Task ${result.data.identifier} status updated to ${args.status}.`,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update task status';
 
-    return {
-      content: `Task ${task.identifier} status updated to ${args.status}.`,
-      success: true,
-    };
+      return {
+        content: `Failed to update task status: ${message}`,
+        success: false,
+      };
+    }
   },
 
   viewTask: async (args: { identifier?: string }) => {
@@ -235,9 +250,11 @@ export const taskRuntime: ServerRuntimeRegistration = {
 
     const taskModel = new TaskModel(context.serverDB, context.userId);
     const taskService = new TaskService(context.serverDB, context.userId);
+    const taskCaller = taskRouter.createCaller({ userId: context.userId });
 
     return createTaskRuntime({
       agentId: context.agentId,
+      taskCaller,
       taskId: context.taskId,
       taskModel,
       taskService,

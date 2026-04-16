@@ -12,17 +12,12 @@ import type { BuiltinToolContext, BuiltinToolResult, TaskStatus } from '@lobecha
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
-import { mutate } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { getTaskStoreState } from '@/store/task';
 
 import { normalizeListTasksParams } from '../listTasks';
 import { TaskIdentifier } from '../manifest';
 import { TaskApiName } from '../types';
-
-const FETCH_TASK_DETAIL_KEY = 'fetchTaskDetail';
-const FETCH_TASK_LIST_KEY = 'fetchTaskList';
-const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
 
 const log = debug('lobe-task:executor');
 
@@ -36,14 +31,6 @@ const getCurrentTaskId = (): string | undefined => {
   } catch {
     return undefined;
   }
-};
-
-const refreshTaskUI = async (taskId?: string, agentId?: string) => {
-  const promises: Promise<any>[] = [];
-  if (taskId) promises.push(mutate([FETCH_TASK_DETAIL_KEY, taskId]));
-  promises.push(mutate([FETCH_TASK_LIST_KEY, agentId]));
-  promises.push(mutate([FETCH_TASK_GROUP_LIST_KEY, agentId]));
-  await Promise.all(promises);
 };
 
 class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
@@ -262,30 +249,21 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   };
 
   updateTaskStatus = async (
-    params: { identifier?: string; status: string },
-    ctx?: BuiltinToolContext,
+    params: { error?: string; identifier?: string; status: TaskStatus },
+    _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] updateTaskStatus - params:', params);
 
-      const id = params.identifier || getCurrentTaskId();
-      if (!id) {
-        return {
-          content: 'No task identifier provided and no current task context.',
-          error: { message: 'No task identifier', type: 'NoTaskContext' },
-          success: false,
-        };
-      }
-
-      await taskService.updateStatus(
-        id,
-        params.status as 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running',
-      );
-
-      await refreshTaskUI(id, ctx?.agentId);
+      const id = await getTaskStoreState().updateTaskStatus(params.identifier, params.status, {
+        error: params.error,
+      });
 
       return {
-        content: `Task ${id} status updated to ${params.status}.`,
+        content:
+          params.status === 'failed' && params.error
+            ? `Task ${id} status updated to failed. Error: ${params.error}`
+            : `Task ${id} status updated to ${params.status}.`,
         state: { status: params.status, success: true },
         success: true,
       };
