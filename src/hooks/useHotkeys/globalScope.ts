@@ -1,9 +1,12 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { HotkeyEnum } from '@lobechat/types';
+import { useLocation } from 'react-router-dom';
 
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';
 import { useGlobalStore } from '@/store/global';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { useHotkeyById } from './useHotkeyById';
 
@@ -41,11 +44,23 @@ export const useToggleLeftPanelHotkey = () => {
 export const useToggleRightPanelHotkey = () => {
   const isZenMode = useGlobalStore((s) => s.status.zenMode);
   const toggleConfig = useGlobalStore((s) => s.toggleRightPanel);
+  const { pathname } = useLocation();
+  const enableAgentWorkingPanel = useUserStore(labPreferSelectors.enableAgentWorkingPanel);
 
-  return useHotkeyById(HotkeyEnum.ToggleRightPanel, () => toggleConfig(), {
-    enableOnContentEditable: true,
-    enabled: !isZenMode,
-  });
+  return useHotkeyById(
+    HotkeyEnum.ToggleRightPanel,
+    () => {
+      // TODO: Remove this labs-only guard once Working Panel is no longer an experimental feature.
+      // Keep in sync with the related TODO in `src/routes/(main)/agent/features/Conversation/index.tsx`.
+      const isChatRoute = pathname.startsWith('/agent') || pathname.startsWith('/chat');
+      if (isChatRoute && !enableAgentWorkingPanel) return;
+      toggleConfig();
+    },
+    {
+      enableOnContentEditable: true,
+      enabled: !isZenMode,
+    },
+  );
 };
 
 // CMDK

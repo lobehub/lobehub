@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as swr from '@/libs/swr';
 import { useGlobalStore } from '@/store/global';
 import { initialState } from '@/store/global/initialState';
+import { useUserStore } from '@/store/user';
+import { initialState as initialUserState } from '@/store/user/initialState';
 
 import Conversation from '../index';
 import AgentWorkingSidebar from './index';
@@ -125,6 +127,13 @@ beforeEach(() => {
     isStatusInit: true,
     status: { ...initialState.status },
   });
+  useUserStore.setState({
+    ...initialUserState,
+    preference: {
+      ...initialUserState.preference,
+      lab: { ...initialUserState.preference.lab, enableAgentWorkingPanel: false },
+    },
+  });
 });
 
 afterEach(() => {
@@ -132,7 +141,23 @@ afterEach(() => {
 });
 
 describe('Conversation right panel mount', () => {
-  it('mounts the conversation-side right panel path and defaults the right panel to collapsed', async () => {
+  it('does not mount the conversation-side right panel path when working panel lab feature is disabled', () => {
+    render(<Conversation />);
+
+    expect(screen.getByText('chat-header')).toBeInTheDocument();
+    expect(screen.getByText('conversation-area')).toBeInTheDocument();
+    expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-resources')).not.toBeInTheDocument();
+  });
+
+  it('mounts the conversation-side right panel path and defaults the right panel to collapsed when working panel lab feature is enabled', async () => {
+    useUserStore.setState({
+      preference: {
+        ...useUserStore.getState().preference,
+        lab: { ...useUserStore.getState().preference.lab, enableAgentWorkingPanel: true },
+      },
+    });
+
     const { unmount } = render(<Conversation />);
 
     expect(screen.getByText('chat-header')).toBeInTheDocument();

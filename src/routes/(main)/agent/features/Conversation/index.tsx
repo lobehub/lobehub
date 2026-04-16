@@ -7,6 +7,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import ConversationArea from './ConversationArea';
 import ChatHeader from './Header';
@@ -21,6 +23,7 @@ const wrapperStyle: React.CSSProperties = {
 const ChatConversation = memo(() => {
   const showHeader = useGlobalStore(systemStatusSelectors.showChatHeader);
   const isStatusInit = useGlobalStore(systemStatusSelectors.isStatusInit);
+  const enableAgentWorkingPanel = useUserStore(labPreferSelectors.enableAgentWorkingPanel);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
@@ -53,10 +56,14 @@ const ChatConversation = memo(() => {
               <ConversationArea />
             </TooltipGroup>
           </Flexbox>
-          <AgentWorkingSidebar
-            selectedDocumentId={selectedDocumentId}
-            onSelectDocument={setSelectedDocumentId}
-          />
+          {/* TODO: Remove this labs-only mount gate once Working Panel is no longer experimental.
+              See the matching TODO in `src/hooks/useHotkeys/globalScope.ts`. */}
+          {enableAgentWorkingPanel && (
+            <AgentWorkingSidebar
+              selectedDocumentId={selectedDocumentId}
+              onSelectDocument={setSelectedDocumentId}
+            />
+          )}
         </Flexbox>
       </DragUploadZone>
     </Suspense>
