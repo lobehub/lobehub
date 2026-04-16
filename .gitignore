@@ -146,5 +146,4 @@ apps/desktop/resources/cli-package.json
 
 # Superpowers plugin brainstorm/spec outputs (local only; do not commit)
 .superpowers/
-docs/superpowers/cc-stream.json
-.heterogeneous-tracing/
+.heerogeneous-tracing

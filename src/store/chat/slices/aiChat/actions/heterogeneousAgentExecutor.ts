@@ -21,6 +21,8 @@ export interface HeterogeneousAgentExecutorParams {
   imageList?: Array<{ id: string; url: string }>;
   message: string;
   operationId: string;
+  /** CC session ID from previous execution in this topic (for --resume) */
+  resumeSessionId?: string;
   workingDirectory?: string;
 }
 
@@ -242,6 +244,7 @@ export const executeHeterogeneousAgent = async (
     imageList,
     message,
     operationId,
+    resumeSessionId,
     workingDirectory,
   } = params;
 
@@ -297,13 +300,14 @@ export const executeHeterogeneousAgent = async (
   let pendingStepTransition = false;
 
   try {
-    // Start session
+    // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: heterogeneousProvider.args,
       command: heterogeneousProvider.command || 'claude',
       cwd: workingDirectory,
       env: heterogeneousProvider.env,
+      resumeSessionId,
     });
     agentSessionId = result.sessionId;
     if (!agentSessionId) throw new Error('Agent session returned no sessionId');
@@ -582,13 +586,12 @@ export const executeHeterogeneousAgent = async (
     // Send the prompt — blocks until process exits
     await heterogeneousAgentService.sendPrompt(agentSessionId, message, imageList);
 
-    // Store agent session ID for multi-turn resume
-    const sessionInfo = await heterogeneousAgentService
-      .getSessionInfo(agentSessionId)
-      .catch(() => null);
-    if (sessionInfo?.agentSessionId && context.topicId) {
-      // TODO: persist to topic.metadata for cross-restart resume
-      // For now, agent session ID is only in memory (HeterogeneousAgentCtr stores it)
+    // Persist CC session ID to topic metadata for multi-turn resume.
+    // The adapter extracts session_id from the CC init event.
+    if (adapter.sessionId && context.topicId) {
+      get().updateTopicMetadata(context.topicId, {
+        ccSessionId: adapter.sessionId,
+      });
     }
   } catch (error) {
     if (!completed) {
@@ -608,8 +611,7 @@ export const executeHeterogeneousAgent = async (
     }
   } finally {
     unsubscribe?.();
-    if (agentSessionId) {
-      heterogeneousAgentService.stopSession(agentSessionId).catch(() => {});
-    }
+    // Don't stopSession here — keep it alive for multi-turn resume.
+    // Session cleanup happens on topic deletion or Electron quit.
   }
 };

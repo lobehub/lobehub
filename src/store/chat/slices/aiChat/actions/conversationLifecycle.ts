@@ -443,6 +443,12 @@ export class ConversationLifecycleActionImpl {
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
         const persistedImageList = userMsg?.imageList;
 
+        // Read CC session ID from topic metadata for multi-turn resume
+        const topic = heteroContext.topicId
+          ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
+          : undefined;
+        const resumeSessionId = topic?.metadata?.ccSessionId;
+
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,
           context: heteroContext,
@@ -450,6 +456,7 @@ export class ConversationLifecycleActionImpl {
           imageList: persistedImageList?.length ? persistedImageList : undefined,
           message,
           operationId: heteroOpId,
+          resumeSessionId,
           workingDirectory,
         });
       } catch (e) {

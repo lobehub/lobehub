@@ -218,6 +218,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const agentType = params.agentType || 'claude-code';
 
     this.sessions.set(sessionId, {
+      // If resuming, pre-set the agent session ID so sendPrompt adds --resume
+      agentSessionId: params.resumeSessionId,
       agentType,
       args: params.args || [],
       command: params.command,
