@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { shinyTextStyles } from '@/styles';
-import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import {
@@ -30,18 +29,19 @@ import {
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
 import WorkflowExpandedList from './WorkflowExpandedList';
+import type { RenderableAssistantContentBlock } from './types';
 
 interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
   assistantMessageId: string;
-  blocks: AssistantContentBlock[];
+  blocks: RenderableAssistantContentBlock[];
   /** Default expansion state while the workflow is still streaming. Pending intervention always expands. */
   defaultStreamingExpanded?: boolean;
   disableEditing?: boolean;
   workflowChromeComplete?: boolean;
 }
 
-const collectTools = (blocks: AssistantContentBlock[]): ChatToolPayloadWithResult[] => {
+const collectTools = (blocks: RenderableAssistantContentBlock[]): ChatToolPayloadWithResult[] => {
   return blocks.flatMap((b) => b.tools ?? []);
 };
 

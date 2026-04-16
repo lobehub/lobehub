@@ -37,9 +37,8 @@ export const areWorkflowToolsComplete = (tools: ChatToolPayloadWithResult[]): bo
   return collapsible.every((t) => t.result != null && t.result.content !== LOADING_FLAT);
 };
 
-/** Heuristic: prose-only block after last tool looks like a long deliverable (not a one-line step). */
-export const scorePostToolBlockAsFinalAnswer = (block: AssistantContentBlock): number => {
-  if (block.tools && block.tools.length > 0) return 0;
+/** Heuristic: visible content already looks like a deliverable, not a one-line status step. */
+export const scoreBlockContentAsAnswerLike = (block: AssistantContentBlock): number => {
   const raw = (block.content ?? '').trim();
   if (!raw || raw === LOADING_FLAT) return 0;
 
@@ -64,6 +63,13 @@ export const scorePostToolBlockAsFinalAnswer = (block: AssistantContentBlock): n
   if (punctCount >= POST_TOOL_ANSWER_PUNCT_MIN_COUNT) score += POST_TOOL_ANSWER_PUNCT_SCORE;
 
   return score;
+};
+
+/** Heuristic: prose-only block after last tool looks like a long deliverable (not a one-line step). */
+export const scorePostToolBlockAsFinalAnswer = (block: AssistantContentBlock): number => {
+  if (block.tools && block.tools.length > 0) return 0;
+
+  return scoreBlockContentAsAnswerLike(block);
 };
 
 /**

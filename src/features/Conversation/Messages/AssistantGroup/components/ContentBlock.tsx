@@ -4,7 +4,6 @@ import { memo, useCallback } from 'react';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 import { useErrorContent } from '@/features/Conversation/Error';
-import { type AssistantContentBlock } from '@/types/index';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -12,8 +11,9 @@ import ImageFileListViewer from '../../components/ImageFileListViewer';
 import Reasoning from '../../components/Reasoning';
 import { Tools } from '../Tools';
 import MessageContent from './MessageContent';
+import type { RenderableAssistantContentBlock } from './types';
 
-interface ContentBlockProps extends AssistantContentBlock {
+interface ContentBlockProps extends RenderableAssistantContentBlock {
   assistantId: string;
   disableEditing?: boolean;
   isFirstBlock?: boolean;
@@ -26,6 +26,7 @@ const ContentBlock = memo<ContentBlockProps>(
     imageList,
     reasoning,
     error,
+    domId,
     assistantId,
     disableEditing,
     isFirstBlock,
@@ -75,7 +76,7 @@ const ContentBlock = memo<ContentBlockProps>(
     }
 
     return (
-      <Flexbox gap={8} id={id}>
+      <Flexbox gap={8} id={domId ?? id}>
         {showReasoning && (
           <SafeBoundary>
             <Reasoning {...reasoning} id={id} />
