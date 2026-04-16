@@ -1,5 +1,5 @@
-import { ChatInput, SendButton, useEditor } from '@lobehub/editor/react';
-import { Button, Flexbox, TextArea } from '@lobehub/ui';
+import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
+import { Button, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -52,13 +52,19 @@ const CommentInput = memo<CommentInputProps>(({ onSubmit, onCancel }) => {
         </Flexbox>
       }
     >
-      <TextArea
+      <Editor
+        content={''}
+        editor={editor}
+        enablePasteMarkdown={false}
+        markdownOption={false}
         placeholder={t('brief.commentPlaceholder')}
-        style={{ padding: 0 }}
-        variant={'borderless'}
-        autoSize={{
-          minRows: 1,
-          maxRows: 4,
+        type={'text'}
+        variant={'chat'}
+        onPressEnter={({ event }) => {
+          if (event.metaKey || event.ctrlKey) {
+            handleSubmit();
+            return true;
+          }
         }}
       />
     </ChatInput>
