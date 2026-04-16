@@ -1,7 +1,7 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, HandIcon, X } from 'lucide-react';
+import { Check, ChevronDown, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -131,7 +131,9 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     const durationText = totalWorkflowMs > 0 ? formatReasoningDuration(totalWorkflowMs) : undefined;
     const streamingDefaultExpanded = defaultStreamingExpanded || pendingInterventionPresent;
 
-    const [expanded, setExpanded] = useState(() => !allComplete && streamingDefaultExpanded);
+    const [expandLevel, setExpandLevel] = useState<'collapsed' | 'semi' | 'full'>(() =>
+      !allComplete && streamingDefaultExpanded ? 'semi' : 'collapsed',
+    );
     const userOpenedRef = useRef(false);
     const prevCompleteRef = useRef(allComplete);
 
@@ -141,22 +143,22 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
       if (!allComplete && wasComplete) {
         userOpenedRef.current = false;
-        setExpanded(streamingDefaultExpanded);
+        setExpandLevel(streamingDefaultExpanded ? 'semi' : 'collapsed');
         return;
       }
 
       if (allComplete && !wasComplete && !userOpenedRef.current && allTools.length > 0) {
-        setExpanded(false);
+        setExpandLevel('collapsed');
       }
     }, [allComplete, allTools.length, streamingDefaultExpanded]);
 
     const streaming = !allComplete;
     const forceExpanded = streaming && pendingInterventionPresent;
-    const isExpanded = forceExpanded || expanded;
+    const isExpanded = forceExpanded || expandLevel !== 'collapsed';
 
     useEffect(() => {
       if (streaming && pendingInterventionPresent) {
-        setExpanded(true);
+        setExpandLevel('semi');
       }
     }, [pendingInterventionPresent, streaming]);
 
@@ -250,10 +252,14 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       const nowExpanded = keys.includes('workflow');
       if (forceExpanded && !nowExpanded) return;
 
-      setExpanded(nowExpanded);
-      if (nowExpanded) userOpenedRef.current = true;
+      if (nowExpanded) {
+        setExpandLevel('semi');
+        userOpenedRef.current = true;
+      } else {
+        setExpandLevel('collapsed');
+      }
     };
-    const constrained = streaming && isExpanded;
+    const constrained = expandLevel === 'semi';
 
     const { ref: scrollRef, handleScroll: handleAutoScroll } = useAutoScroll<HTMLDivElement>({
       deps: [allTools.length],
@@ -273,8 +279,31 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       <Icon color={cssVar.colorSuccess} icon={Check} />
     );
 
+    const expandToggleLabel =
+      expandLevel === 'collapsed'
+        ? t('workflow.expand', { defaultValue: 'Expand' })
+        : expandLevel === 'semi'
+          ? t('workflow.expandFull', { defaultValue: 'Expand fully' })
+          : t('workflow.collapse', { defaultValue: 'Collapse' });
+
+    const expandToggleIcon =
+      expandLevel === 'collapsed' ? ChevronDown : expandLevel === 'semi' ? Maximize2 : Minimize2;
+
+    const handleToggleExpand = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (expandLevel === 'collapsed') {
+        setExpandLevel('semi');
+        userOpenedRef.current = true;
+      } else if (expandLevel === 'semi') {
+        setExpandLevel('full');
+        userOpenedRef.current = true;
+      } else {
+        setExpandLevel('collapsed');
+      }
+    };
+
     const title = (
-      <Flexbox horizontal align="center" gap={6}>
+      <Flexbox horizontal align="center" gap={6} width="100%">
         <Block
           horizontal
           align="center"
@@ -331,7 +360,13 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             )}
           </Flexbox>
         ) : (
-          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Flexbox
+            horizontal
+            align="center"
+            flex={1}
+            gap={6}
+            style={{ minWidth: 0, overflow: 'hidden' }}
+          >
             <Text
               type="secondary"
               style={{
@@ -350,6 +385,15 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             )}
           </Flexbox>
         )}
+        <div
+          aria-label={expandToggleLabel}
+          role="button"
+          style={{ cursor: 'pointer', flex: 'none', marginInlineStart: 8, padding: 2 }}
+          title={expandToggleLabel}
+          onClick={handleToggleExpand}
+        >
+          <Icon color={cssVar.colorTextSecondary} icon={expandToggleIcon} size={14} />
+        </div>
       </Flexbox>
     );
 
