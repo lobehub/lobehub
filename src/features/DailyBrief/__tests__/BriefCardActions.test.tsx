@@ -72,7 +72,7 @@ describe('BriefCardActions', () => {
 
     // CommentInput replaces action buttons
     expect(screen.queryByText('Approve')).not.toBeInTheDocument();
-    expect(screen.getByText('Submit feedback')).toBeInTheDocument();
+    expect(screen.getByTitle('Submit feedback')).toBeInTheDocument();
     expect(screen.getByText('Cancel')).toBeInTheDocument();
   });
 
