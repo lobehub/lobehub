@@ -1,5 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import {
+  type PatchDocumentArgs,
   WebOnboardingApiName,
   WebOnboardingIdentifier,
 } from '@lobechat/builtin-tool-web-onboarding';
@@ -79,6 +80,33 @@ class WebOnboardingExecutor extends BaseExecutor<typeof WebOnboardingApiName> {
       state: { id: result.id, type: params.type },
       success: true,
     };
+  };
+
+  patchDocument = async (
+    params: PatchDocumentArgs,
+    _ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    try {
+      const result = await userService.patchOnboardingDocument(params.type, params.hunks);
+
+      if (!result.id) {
+        return { content: `Failed to patch ${params.type} document.`, success: false };
+      }
+
+      return {
+        content: `Patched ${params.type} document (${result.id}). Applied ${result.applied} hunk(s).`,
+        state: { applied: result.applied, id: result.id, type: params.type },
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: message,
+        error: { message, type: 'MarkdownPatchError' },
+        state: { type: params.type },
+        success: false,
+      };
+    }
   };
 }
 

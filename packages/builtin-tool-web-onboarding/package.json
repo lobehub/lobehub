@@ -9,6 +9,7 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/markdown-patch": "workspace:*",
     "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {

@@ -253,6 +253,7 @@
     "@lobechat/fetch-sse": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/markdown-patch": "workspace:*",
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/observability-otel": "workspace:*",

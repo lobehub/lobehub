@@ -1,2 +1,7 @@
 export { WebOnboardingManifest } from './manifest';
-export { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
+export {
+  type PatchDocumentArgs,
+  WebOnboardingApiName,
+  type WebOnboardingDocumentType,
+  WebOnboardingIdentifier,
+} from './types';

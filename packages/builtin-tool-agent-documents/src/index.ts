@@ -12,6 +12,8 @@ export {
   type EditDocumentState,
   type ListDocumentsArgs,
   type ListDocumentsState,
+  type PatchDocumentArgs,
+  type PatchDocumentState,
   type ReadDocumentArgs,
   type ReadDocumentByFilenameArgs,
   type ReadDocumentByFilenameState,
