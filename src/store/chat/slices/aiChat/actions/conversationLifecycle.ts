@@ -346,11 +346,11 @@ export class ConversationLifecycleActionImpl {
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
     if (heterogeneousProvider?.type === 'claudecode') {
       // Persist messages to DB first (same as client mode)
-      let acpData: SendMessageServerResponse | undefined;
+      let heteroData: SendMessageServerResponse | undefined;
       try {
         const { model, provider } =
           agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-        acpData = await aiChatService.sendMessageInServer(
+        heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
             groupId: operationContext.groupId ?? undefined,
@@ -374,40 +374,40 @@ export class ConversationLifecycleActionImpl {
           abortController,
         );
       } catch (e) {
-        console.error('[ACP] Failed to persist messages:', e);
+        console.error('[HeterogeneousAgent] Failed to persist messages:', e);
         this.#get().failOperation(operationId, {
           message: e instanceof Error ? e.message : 'Unknown error',
-          type: 'ACPError',
+          type: 'HeterogeneousAgentError',
         });
         return;
       }
 
-      if (!acpData) return;
+      if (!heteroData) return;
 
       // Update context with server-created topicId
-      const acpContext = {
+      const heteroContext = {
         ...operationContext,
-        topicId: acpData.topicId ?? operationContext.topicId,
+        topicId: heteroData.topicId ?? operationContext.topicId,
       };
 
       // Replace optimistic messages with persisted ones
-      this.#get().replaceMessages(acpData.messages, {
+      this.#get().replaceMessages(heteroData.messages, {
         action: 'sendMessage/serverResponse',
-        context: acpContext,
+        context: heteroContext,
       });
 
       // Handle new topic creation
-      if (acpData.isCreateNewTopic && acpData.topicId) {
-        if (acpData.topics) {
+      if (heteroData.isCreateNewTopic && heteroData.topicId) {
+        if (heteroData.topics) {
           const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
           this.#get().internal_updateTopics(operationContext.agentId, {
             groupId: operationContext.groupId,
-            items: acpData.topics.items,
+            items: heteroData.topics.items,
             pageSize,
-            total: acpData.topics.total,
+            total: heteroData.topics.total,
           });
         }
-        await this.#get().switchTopic(acpData.topicId, {
+        await this.#get().switchTopic(heteroData.topicId, {
           clearNewKey: true,
           skipRefreshMessage: true,
         });
@@ -422,43 +422,43 @@ export class ConversationLifecycleActionImpl {
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
 
-      if (acpData.topicId) this.#get().internal_updateTopicLoading(acpData.topicId, true);
+      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, true);
 
-      // Start ACP execution
-      const { operationId: acpOpId } = this.#get().startOperation({
-        context: acpContext,
-        label: 'ACP Agent Execution',
+      // Start heterogeneous agent execution
+      const { operationId: heteroOpId } = this.#get().startOperation({
+        context: heteroContext,
+        label: 'Heterogeneous Agent Execution',
         parentOperationId: operationId,
-        type: 'execAgentRuntime',
+        type: 'execHeterogeneousAgent',
       });
 
-      this.#get().associateMessageWithOperation(acpData.assistantMessageId, acpOpId);
+      this.#get().associateMessageWithOperation(heteroData.assistantMessageId, heteroOpId);
 
       try {
-        const { executeACPAgent } = await import('./acpExecutor');
+        const { executeHeterogeneousAgent } = await import('./heterogeneousAgentExecutor');
         const workingDirectory =
           agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
-        await executeACPAgent(() => this.#get(), {
-          assistantMessageId: acpData.assistantMessageId,
-          context: acpContext,
+        await executeHeterogeneousAgent(() => this.#get(), {
+          assistantMessageId: heteroData.assistantMessageId,
+          context: heteroContext,
           heterogeneousProvider,
           message,
-          operationId: acpOpId,
+          operationId: heteroOpId,
           workingDirectory,
         });
       } catch (e) {
-        console.error('[ACP] Agent execution failed:', e);
-        this.#get().failOperation(acpOpId, {
+        console.error('[HeterogeneousAgent] Execution failed:', e);
+        this.#get().failOperation(heteroOpId, {
           message: e instanceof Error ? e.message : 'Unknown error',
-          type: 'ACPError',
+          type: 'HeterogeneousAgentError',
         });
       }
 
-      if (acpData.topicId) this.#get().internal_updateTopicLoading(acpData.topicId, false);
+      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, false);
 
       return {
-        assistantMessageId: acpData.assistantMessageId,
-        userMessageId: acpData.userMessageId,
+        assistantMessageId: heteroData.assistantMessageId,
+        userMessageId: heteroData.userMessageId,
       };
     }
 

@@ -9,7 +9,7 @@ import type { ChatStore } from '@/store/chat/store';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
-export interface ACPExecutorParams {
+export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
   context: ConversationContext;
   heterogeneousProvider: HeterogeneousProviderConfig;
@@ -138,7 +138,7 @@ const persistNewToolCalls = async (
       { agentId: context.agentId, topicId: context.topicId },
     );
   } catch (err) {
-    console.error('[ACP] Failed to pre-register assistant tools:', err);
+    console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
   }
 
   // ─── PHASE 2: Create the tool messages in DB ───
@@ -165,7 +165,7 @@ const persistNewToolCalls = async (
       const entry = state.payloads.find((p) => p.id === tool.id);
       if (entry) entry.result_msg_id = result.id;
     } catch (err) {
-      console.error('[ACP] Failed to create tool message:', err);
+      console.error('[HeterogeneousAgent] Failed to create tool message:', err);
     }
   }
 
@@ -178,7 +178,7 @@ const persistNewToolCalls = async (
       { agentId: context.agentId, topicId: context.topicId },
     );
   } catch (err) {
-    console.error('[ACP] Failed to finalize assistant tools:', err);
+    console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
   }
 };
 
@@ -194,7 +194,7 @@ const persistToolResult = async (
 ) => {
   const toolMsgId = state.toolMsgIdByCallId.get(toolCallId);
   if (!toolMsgId) {
-    console.warn('[ACP] tool_result for unknown toolCallId:', toolCallId);
+    console.warn('[HeterogeneousAgent] tool_result for unknown toolCallId:', toolCallId);
     return;
   }
 
@@ -211,7 +211,7 @@ const persistToolResult = async (
       },
     );
   } catch (err) {
-    console.error('[ACP] Failed to update tool message content:', err);
+    console.error('[HeterogeneousAgent] Failed to update tool message content:', err);
   }
 };
 
@@ -225,9 +225,9 @@ const persistToolResult = async (
  * 4. Feed AgentStreamEvents into createGatewayEventHandler (unified handler)
  * 5. Tool messages created via messageService before emitting tool events
  */
-export const executeACPAgent = async (
+export const executeHeterogeneousAgent = async (
   get: () => ChatStore,
-  params: ACPExecutorParams,
+  params: HeterogeneousAgentExecutorParams,
 ): Promise<void> => {
   const {
     heterogeneousProvider,
