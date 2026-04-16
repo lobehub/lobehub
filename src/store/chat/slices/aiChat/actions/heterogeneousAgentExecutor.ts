@@ -288,6 +288,13 @@ export const executeHeterogeneousAgent = async (
    * writes with stale DB state. onComplete forwards after persistence.
    */
   let deferredTerminalEvent: HeterogeneousAgentEvent | null = null;
+  /**
+   * True while a step transition is in flight (stream_start queued but not yet
+   * forwarded to handler). Events that would normally be forwarded sync must
+   * be deferred through persistQueue so the handler receives stream_start first.
+   * Without this, tools_calling gets dispatched to the OLD assistant → orphan.
+   */
+  let pendingStepTransition = false;
 
   try {
     // Start session
@@ -365,6 +372,12 @@ export const executeHeterogeneousAgent = async (
             accumulatedContent = '';
             accumulatedReasoning = '';
 
+            // Mark that we're in a step transition. Events from the same onRawLine
+            // batch (stream_chunk, tool_start, etc.) must be deferred through
+            // persistQueue so the handler receives stream_start FIRST — otherwise
+            // it dispatches tools to the OLD assistant (orphan tool bug).
+            pendingStepTransition = true;
+
             persistQueue = persistQueue.then(async () => {
               // Persist previous step's content to its assistant message
               const prevUpdate: Record<string, any> = {};
@@ -413,6 +426,8 @@ export const executeHeterogeneousAgent = async (
             persistQueue = persistQueue.then(() => {
               event.data.assistantMessage = { id: currentAssistantMessageId };
               eventHandler(toStreamEvent(event, operationId));
+              // Step transition complete — handler has the new assistant ID now
+              pendingStepTransition = false;
             });
             continue;
           }
@@ -444,8 +459,17 @@ export const executeHeterogeneousAgent = async (
             }
           }
 
-          // Forward all other events to the unified Gateway handler
-          eventHandler(toStreamEvent(event, operationId));
+          // Forward to the unified Gateway handler.
+          // If a step transition is pending, defer through persistQueue so the
+          // handler receives stream_start (with new assistant ID) FIRST.
+          if (pendingStepTransition) {
+            const snapshot = toStreamEvent(event, operationId);
+            persistQueue = persistQueue.then(() => {
+              eventHandler(snapshot);
+            });
+          } else {
+            eventHandler(toStreamEvent(event, operationId));
+          }
         }
       },
 

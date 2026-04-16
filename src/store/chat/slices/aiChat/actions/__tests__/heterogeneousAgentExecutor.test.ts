@@ -688,6 +688,231 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
+  // Real trace regression: multi-tool per turn (LOBE-7240 scenario)
+  // ────────────────────────────────────────────────────
+
+  describe('multi-tool per turn (real trace regression)', () => {
+    /**
+     * Reproduces the exact CC event pattern from the LOBE-7240 orphan trace.
+     * Key pattern: a single turn (same message.id) has text + multiple tool_uses.
+     * After step transition, the new turn also has multiple tool_uses with
+     * out-of-order tool_results.
+     */
+    it('should register ALL tools on correct assistant when turn has text + multiple tool_uses', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({
+            assistantId: id,
+            toolIds: val.tools.map((t: any) => t.id),
+          });
+        }
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Turn 1 (msg_01): thinking + tool (Skill)
+        ccThinking('msg_01', 'Let me check the issue'),
+        ccToolUse('msg_01', 'toolu_skill', 'Skill', { skill: 'linear' }),
+        ccToolResult('toolu_skill', 'Launching skill: linear'),
+
+        // Turn 2 (msg_02): tool (ToolSearch) — step boundary
+        ccToolUse('msg_02', 'toolu_search', 'ToolSearch', { query: 'select:get_issue' }),
+        ccToolResult('toolu_search', 'tool loaded'),
+
+        // Turn 3 (msg_03): tool (get_issue) — step boundary
+        ccToolUse('msg_03', 'toolu_getissue', 'mcp__linear__get_issue', { id: 'LOBE-7240' }),
+        ccToolResult('toolu_getissue', '{"title":"i18n"}'),
+
+        // Turn 4 (msg_04): thinking + text + Grep + Grep — step boundary
+        // This is the critical pattern: same message.id has text AND multiple tools
+        ccThinking('msg_04', 'Let me understand the issue'),
+        ccText('msg_04', '明白了，需要补充翻译'),
+        ccToolUse('msg_04', 'toolu_grep1', 'Grep', { pattern: 'newClaudeCodeAgent' }),
+        ccToolResult('toolu_grep1', 'found in chat.ts'),
+        ccToolUse('msg_04', 'toolu_grep2', 'Grep', { pattern: 'agentProvider' }),
+        ccToolResult('toolu_grep2', 'found in setting.ts'),
+
+        // Turn 5 (msg_05): Grep + Glob + Glob — step boundary
+        // Multiple tools, results may arrive out of order
+        ccToolUse('msg_05', 'toolu_grep3', 'Grep', { pattern: 'agentProvider', path: 'locales' }),
+        ccToolResult('toolu_grep3', 'locales content'),
+        ccToolUse('msg_05', 'toolu_glob1', 'Glob', { pattern: 'zh-CN/chat.json' }),
+        ccToolUse('msg_05', 'toolu_glob2', 'Glob', { pattern: 'en-US/chat.json' }),
+        // Results arrive out of order: glob2 before glob1
+        ccToolResult('toolu_glob2', 'locales/en-US/chat.json'),
+        ccToolResult('toolu_glob1', 'locales/zh-CN/chat.json'),
+
+        // Turn 6 (msg_06): text summary — step boundary
+        ccText('msg_06', 'All translations updated.'),
+        ccResult(),
+      ]);
+
+      // ── Verify Turn 1: Skill tool on ast-initial ──
+      const skillUpdates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_skill'));
+      expect(skillUpdates.length).toBeGreaterThanOrEqual(1);
+      expect(skillUpdates.every((u) => u.assistantId === 'ast-initial')).toBe(true);
+
+      // ── Verify Turn 4: BOTH Grep tools on same assistant (ast-new-3) ──
+      const grep1Updates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_grep1'));
+      const grep2Updates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_grep2'));
+      expect(grep1Updates.length).toBeGreaterThanOrEqual(1);
+      expect(grep2Updates.length).toBeGreaterThanOrEqual(1);
+
+      // Both Grep tools must be registered on the SAME assistant
+      const turn4AssistantId = grep1Updates[0].assistantId;
+      expect(grep2Updates.some((u) => u.assistantId === turn4AssistantId)).toBe(true);
+
+      // The final tools[] update for Turn 4's assistant should contain BOTH greps
+      const turn4FinalUpdate = toolsUpdates.findLast((u) => u.assistantId === turn4AssistantId);
+      expect(turn4FinalUpdate!.toolIds).toContain('toolu_grep1');
+      expect(turn4FinalUpdate!.toolIds).toContain('toolu_grep2');
+
+      // ── Verify Turn 5: all 3 tools (Grep + 2 Globs) on same assistant ──
+      const grep3Updates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_grep3'));
+      const glob1Updates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_glob1'));
+      const glob2Updates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_glob2'));
+      expect(grep3Updates.length).toBeGreaterThanOrEqual(1);
+      expect(glob1Updates.length).toBeGreaterThanOrEqual(1);
+      expect(glob2Updates.length).toBeGreaterThanOrEqual(1);
+
+      // All three must be on the SAME assistant (Turn 5's assistant)
+      const turn5AssistantId = grep3Updates[0].assistantId;
+      expect(turn5AssistantId).not.toBe(turn4AssistantId); // Different from Turn 4
+      expect(glob1Updates.some((u) => u.assistantId === turn5AssistantId)).toBe(true);
+      expect(glob2Updates.some((u) => u.assistantId === turn5AssistantId)).toBe(true);
+
+      // Final tools[] for Turn 5's assistant should contain all 3
+      const turn5FinalUpdate = toolsUpdates.findLast((u) => u.assistantId === turn5AssistantId);
+      expect(turn5FinalUpdate!.toolIds).toContain('toolu_grep3');
+      expect(turn5FinalUpdate!.toolIds).toContain('toolu_glob1');
+      expect(turn5FinalUpdate!.toolIds).toContain('toolu_glob2');
+
+      // ── Verify tool messages have correct parentId ──
+      // Turn 4 tools should be children of Turn 4's assistant
+      const grep1Create = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_grep1',
+      );
+      const grep2Create = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_grep2',
+      );
+      expect(grep1Create![0].parentId).toBe(turn4AssistantId);
+      expect(grep2Create![0].parentId).toBe(turn4AssistantId);
+
+      // Turn 5 tools should be children of Turn 5's assistant
+      const grep3Create = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_grep3',
+      );
+      const glob1Create = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_glob1',
+      );
+      const glob2Create = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_glob2',
+      );
+      expect(grep3Create![0].parentId).toBe(turn5AssistantId);
+      expect(glob1Create![0].parentId).toBe(turn5AssistantId);
+      expect(glob2Create![0].parentId).toBe(turn5AssistantId);
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // Data-driven regression from real trace (regression.json)
+  // ────────────────────────────────────────────────────
+
+  describe('data-driven regression (133 events)', () => {
+    it('should have no orphan tools when replaying real CC trace', async () => {
+      // Load real trace data
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const tracePath = path.join(process.cwd(), 'regression.json');
+
+      let traceData: any[];
+      try {
+        traceData = JSON.parse(fs.readFileSync(tracePath, 'utf8'));
+      } catch {
+        // Skip if file doesn't exist (CI)
+        console.log('regression.json not found, skipping data-driven test');
+        return;
+      }
+
+      // Track all createMessage and updateMessage calls
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-${idCounter.assistant}` };
+      });
+
+      // Collect tools[] writes per assistant
+      const toolsRegistry = new Map<string, Set<string>>();
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools && Array.isArray(val.tools)) {
+          if (!toolsRegistry.has(id)) toolsRegistry.set(id, new Set());
+          const set = toolsRegistry.get(id)!;
+          for (const t of val.tools) {
+            if (t.id) set.add(t.id);
+          }
+        }
+      });
+
+      // Collect tool messages: { tool_call_id → parentId (assistant) }
+      const toolMessages = new Map<string, string>();
+      const origCreate = mockCreateMessage.getMockImplementation()!;
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        const result = await origCreate(params);
+        if (params.role === 'tool' && params.tool_call_id) {
+          toolMessages.set(params.tool_call_id, params.parentId);
+        }
+        return result;
+      });
+
+      // Extract raw lines from trace
+      const rawLines = traceData.map((entry: any) => entry.rawLine);
+
+      await runWithEvents(rawLines);
+
+      // ── Check for orphans ──
+      // An orphan is a tool message whose tool_call_id doesn't appear in ANY
+      // assistant's tools[] registry
+      const allRegisteredToolIds = new Set<string>();
+      for (const toolIds of toolsRegistry.values()) {
+        for (const id of toolIds) allRegisteredToolIds.add(id);
+      }
+
+      const orphans: string[] = [];
+      for (const [toolCallId, parentId] of toolMessages) {
+        if (!allRegisteredToolIds.has(toolCallId)) {
+          orphans.push(`tool_call_id=${toolCallId} parentId=${parentId}`);
+        }
+      }
+
+      if (orphans.length > 0) {
+        console.error('Orphan tools found:', orphans);
+      }
+      expect(orphans).toEqual([]);
+
+      // ── Sanity checks ──
+      // Should have created many tool messages (trace has ~60 tool calls)
+      expect(toolMessages.size).toBeGreaterThan(20);
+      // Should have many assistants
+      expect(idCounter.assistant).toBeGreaterThan(10);
+    });
+  });
+
+  // ────────────────────────────────────────────────────
   // Full multi-step E2E
   // ────────────────────────────────────────────────────
 
