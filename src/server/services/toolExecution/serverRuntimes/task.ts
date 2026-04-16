@@ -169,25 +169,25 @@ const createTaskRuntime = ({
     priorities?: number[];
     statuses?: TaskStatus[];
   }) => {
-    let parentTaskId: string | undefined;
-    if (args.parentIdentifier) {
-      const parent = await taskModel.resolve(args.parentIdentifier);
-      if (!parent)
-        return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
-      parentTaskId = parent.id;
-    }
-
     const normalized = normalizeListTasksParams(args, {
       currentAgentId: agentId,
-      parentTaskId,
     });
 
-    const result = await taskModel.list(normalized.query);
+    try {
+      const result = await taskCaller.list(normalized.query);
 
-    return {
-      content: formatTaskList(result.tasks, normalized.displayFilters),
-      success: true,
-    };
+      return {
+        content: formatTaskList(result.data, normalized.displayFilters),
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to list tasks';
+
+      return {
+        content: `Failed to list tasks: ${message}`,
+        success: false,
+      };
+    }
   },
 
   updateTaskStatus: async (args: { error?: string; identifier?: string; status: TaskStatus }) => {

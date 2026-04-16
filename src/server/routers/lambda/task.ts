@@ -72,6 +72,7 @@ const listSchema = z.object({
   assigneeAgentId: z.string().optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
+  parentIdentifier: z.string().optional(),
   parentTaskId: z.string().nullable().optional(),
   priorities: z.array(z.number().min(0).max(4)).min(1).max(5).optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).min(1).max(10).optional(),
@@ -729,7 +730,25 @@ export const taskRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const result = await model.list(input);
+      const { parentIdentifier, ...query } = input;
+      let parentTaskId = query.parentTaskId;
+
+      if (parentIdentifier) {
+        const parent = await model.resolve(parentIdentifier);
+        if (!parent) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `Parent task not found: ${parentIdentifier}`,
+          });
+        }
+
+        parentTaskId = parent.id;
+      }
+
+      const result = await model.list({
+        ...query,
+        parentTaskId,
+      });
 
       const assigneeIds = [
         ...new Set(result.tasks.map((t) => t.assigneeAgentId).filter((id): id is string => !!id)),
@@ -757,6 +776,7 @@ export const taskRouter = router({
 
       return { data, success: true, total: result.total };
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
       console.error('[task:list]', error);
       throw new TRPCError({
         cause: error,

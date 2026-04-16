@@ -18,6 +18,7 @@ export interface TaskListQuery {
   assigneeAgentId?: string;
   limit: number;
   offset: number;
+  parentIdentifier?: string;
   parentTaskId?: string | null;
   priorities?: number[];
   statuses?: TaskStatus[];
@@ -34,7 +35,6 @@ export interface TaskListDisplayFilters {
 
 interface NormalizeListTasksOptions {
   currentAgentId?: string;
-  parentTaskId?: string;
 }
 
 const hasExplicitFilter = (params: ListTasksParams): boolean =>
@@ -55,12 +55,11 @@ export const normalizeListTasksParams = (
   displayFilters: TaskListDisplayFilters;
   query: TaskListQuery;
 } => {
-  const { currentAgentId, parentTaskId } = options;
+  const { currentAgentId } = options;
   const isDefaultScope = !hasExplicitFilter(params);
 
   const statuses = params.statuses ?? (isDefaultScope ? [...UNFINISHED_TASK_STATUSES] : undefined);
   const assigneeAgentId = params.assigneeAgentId ?? (isDefaultScope ? currentAgentId : undefined);
-  const resolvedParentTaskId = parentTaskId ?? (isDefaultScope ? null : undefined);
 
   return {
     displayFilters: {
@@ -75,7 +74,8 @@ export const normalizeListTasksParams = (
       assigneeAgentId,
       limit: Math.min(params.limit ?? DEFAULT_LIST_TASK_LIMIT, MAX_LIST_TASK_LIMIT),
       offset: params.offset ?? 0,
-      parentTaskId: resolvedParentTaskId,
+      parentIdentifier: params.parentIdentifier,
+      parentTaskId: isDefaultScope ? null : undefined,
       priorities: params.priorities,
       statuses,
     },

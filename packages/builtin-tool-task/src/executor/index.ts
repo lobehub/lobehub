@@ -207,25 +207,8 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] listTasks - params:', params);
 
-      let parentTaskId: string | undefined;
-      if (params.parentIdentifier) {
-        const parent = await taskService.find(params.parentIdentifier);
-        if (!parent.data) {
-          return {
-            content: `Parent task not found: ${params.parentIdentifier}`,
-            error: {
-              message: `Parent task not found: ${params.parentIdentifier}`,
-              type: 'TaskNotFound',
-            },
-            success: false,
-          };
-        }
-        parentTaskId = parent.data.id;
-      }
-
       const normalized = normalizeListTasksParams(params, {
         currentAgentId: ctx?.agentId,
-        parentTaskId,
       });
 
       const result = await getTaskStoreState().fetchTaskList(normalized.query);
