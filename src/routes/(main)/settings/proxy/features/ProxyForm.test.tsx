@@ -143,7 +143,7 @@ describe('ProxyForm', () => {
   });
 
   it('keeps enable toggle as an unsaved state when proxy config is incomplete', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
@@ -157,7 +157,7 @@ describe('ProxyForm', () => {
   });
 
   it('blocks saving when enabled proxy settings are incomplete', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
@@ -172,7 +172,7 @@ describe('ProxyForm', () => {
   });
 
   it('does not convert form validation failures into a generic test toast', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
@@ -189,15 +189,13 @@ describe('ProxyForm', () => {
   });
 
   it('resets unsaved proxy changes back to persisted settings', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
-      delay: null,
-    });
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.resetButton' }));
 
     await waitFor(() => {
@@ -208,15 +206,13 @@ describe('ProxyForm', () => {
   });
 
   it('renders auth fields and blocks saving when proxy credentials are missing', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
-      delay: null,
-    });
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
     await user.click(screen.getAllByRole('switch')[1]);
 
     expect(screen.getByPlaceholderText('proxy.username_placeholder')).toBeInTheDocument();
@@ -232,13 +228,13 @@ describe('ProxyForm', () => {
   });
 
   it('blocks saving when the proxy port is outside the valid range', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
     await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '70000', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '70000');
     await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
 
     await waitFor(() => {
@@ -248,15 +244,13 @@ describe('ProxyForm', () => {
   });
 
   it('saves a valid proxy configuration from the save bar', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
-      delay: null,
-    });
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
 
     await waitFor(() => {
@@ -272,15 +266,13 @@ describe('ProxyForm', () => {
   });
 
   it('reverts the enable switch and shows an error when auto-saving fails', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
-      delay: null,
-    });
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
 
     setProxySettingsMock.mockRejectedValueOnce(new Error('boom'));
 
@@ -293,17 +285,15 @@ describe('ProxyForm', () => {
   });
 
   it('tests a valid proxy configuration successfully', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     testProxyConfigMock.mockResolvedValue({ responseTime: 42, success: true });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
-      delay: null,
-    });
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
@@ -321,17 +311,15 @@ describe('ProxyForm', () => {
   });
 
   it('surfaces proxy connectivity failures from the test action', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     testProxyConfigMock.mockResolvedValue({ message: 'connect ECONNREFUSED', success: false });
 
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1', {
-      delay: null,
-    });
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890', { delay: null });
+    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
+    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
