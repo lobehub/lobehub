@@ -14,13 +14,13 @@ vi.mock('electron', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockGetShortcutsConfig = vi.fn().mockReturnValue({
   toggleMainWindow: 'CommandOrControl+Shift+L',
   openSettings: 'CommandOrControl+,',
 });
 const mockUpdateShortcutConfig = vi.fn().mockImplementation((id, accelerator) => {
-  // 简单模拟更新成功
+  // Simply mock a successful update
   return true;
 });
 
@@ -64,7 +64,7 @@ describe('ShortcutController', () => {
     });
 
     it('should return the result from shortcutManager.updateShortcutConfig', () => {
-      // 模拟更新失败的情况
+      // Mock an update failure scenario
       mockUpdateShortcutConfig.mockReturnValueOnce(false);
 
       const result = shortcutController.updateShortcutConfig({

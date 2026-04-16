@@ -9,7 +9,7 @@ const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
 }));
 
-// 模拟 logger
+// Mock logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-// 模拟 undici - 使用 vi.fn() 直接在 Mock 中创建
+// Mock undici - create mocks directly using vi.fn()
 vi.mock('undici', () => ({
   fetch: vi.fn(),
   getGlobalDispatcher: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('undici', () => ({
   ProxyAgent: vi.fn(),
 }));
 
-// 模拟 defaultProxySettings
+// Mock defaultProxySettings
 vi.mock('@/const/store', () => ({
   defaultProxySettings: {
     enableProxy: false,
@@ -40,7 +40,7 @@ vi.mock('@/const/store', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockStoreManager = {
   get: vi.fn(),
   set: vi.fn(),
@@ -53,19 +53,19 @@ const mockApp = {
 describe('NetworkProxyCtr', () => {
   let networkProxyCtr: NetworkProxyCtr;
 
-  // 动态导入 undici 的 Mock
+  // Dynamically import undici Mock
   let mockUndici: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     ipcMainHandleMock.mockClear();
 
-    // 动态导入 undici Mock
+    // Dynamically import undici Mock
     mockUndici = await import('undici');
 
     networkProxyCtr = new NetworkProxyCtr(mockApp);
 
-    // 设置 undici mocks 的默认返回值
+    // Set default return values for undici mocks
     vi.mocked(mockUndici.Agent).mockReturnValue({});
     vi.mocked(mockUndici.ProxyAgent).mockReturnValue({});
     vi.mocked(mockUndici.getGlobalDispatcher).mockReturnValue({
@@ -73,7 +73,7 @@ describe('NetworkProxyCtr', () => {
     });
     vi.mocked(mockUndici.setGlobalDispatcher).mockReturnValue(undefined);
 
-    // 设置 fetch mock 的默认返回值
+    // Set default return value for fetch mock
     vi.mocked(mockUndici.fetch).mockResolvedValue({
       ok: true,
       status: 200,
@@ -92,7 +92,7 @@ describe('NetworkProxyCtr', () => {
     };
 
     it('should validate enabled proxy config with all required fields', () => {
-      // 通过测试公共方法来间接测试验证逻辑
+      // Indirectly test validation logic by testing public methods
       expect(() => networkProxyCtr.setProxySettings(validConfig)).not.toThrow();
     });
 
@@ -350,7 +350,7 @@ describe('NetworkProxyCtr', () => {
       const invalidConfig: NetworkProxySettings = {
         enableProxy: true,
         proxyType: 'http',
-        proxyServer: '', // 无效的服务器
+        proxyServer: '', // invalid server
         proxyPort: '8080',
         proxyRequireAuth: false,
         proxyBypass: 'localhost,127.0.0.1,::1',
@@ -368,7 +368,7 @@ describe('NetworkProxyCtr', () => {
         throw new Error('Store error');
       });
 
-      // 不应该抛出错误
+      // Should not throw an error
       await expect(networkProxyCtr.beforeAppReady()).resolves.not.toThrow();
 
       mockStoreManager.get.mockReset();
@@ -386,7 +386,7 @@ describe('NetworkProxyCtr', () => {
         proxyBypass: 'localhost,127.0.0.1,::1',
       };
 
-      // 通过测试代理设置来间接测试 URL 构建
+      // Indirectly test URL building by testing proxy settings
       expect(() => networkProxyCtr.setProxySettings(config)).not.toThrow();
     });
 
@@ -402,7 +402,7 @@ describe('NetworkProxyCtr', () => {
         proxyBypass: 'localhost,127.0.0.1,::1',
       };
 
-      // 通过测试代理设置来间接测试 URL 构建
+      // Indirectly test URL building by testing proxy settings
       expect(() => networkProxyCtr.setProxySettings(config)).not.toThrow();
     });
 
@@ -418,7 +418,7 @@ describe('NetworkProxyCtr', () => {
         proxyBypass: 'localhost,127.0.0.1,::1',
       };
 
-      // 通过测试代理设置来间接测试 URL 构建
+      // Indirectly test URL building by testing proxy settings
       expect(() => networkProxyCtr.setProxySettings(config)).not.toThrow();
     });
   });
