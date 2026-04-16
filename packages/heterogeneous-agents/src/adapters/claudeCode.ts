@@ -98,7 +98,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     return [
       this.makeEvent('stream_start', {
         model: raw.model,
-        provider: 'acp-agent',
+        provider: 'claude-code',
       }),
     ];
   }
@@ -116,7 +116,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       events.push(
         this.makeEvent('stream_start', {
           model: raw.message?.model,
-          provider: 'acp-agent',
+          provider: 'claude-code',
         }),
       );
     } else if (messageId && messageId !== this.currentMessageId) {
@@ -135,7 +135,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           this.makeEvent('stream_start', {
             model: raw.message?.model,
             newStep: true,
-            provider: 'acp-agent',
+            provider: 'claude-code',
           }),
         );
       }
@@ -174,7 +174,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
             apiName: block.name,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
-            identifier: 'acp-agent',
+            identifier: 'claude-code',
             type: 'default',
           };
           newToolCalls.push(toolPayload);

@@ -254,7 +254,7 @@ export default {
   'operation.contextCompression': 'Context too long, compressing history...',
   'operation.execAgentRuntime': 'Preparing response',
   'operation.execClientTask': 'Executing task',
-  'operation.execHeterogeneousAgent': 'Running agent',
+  'operation.execHeterogeneousAgent': 'External agent running',
   'operation.execServerAgentRuntime':
     'Task is running in the server. You are safe to leave this page',
   'operation.sendMessage': 'Sending message',

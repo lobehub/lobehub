@@ -85,7 +85,7 @@ describe('ClaudeCodeAdapter', () => {
           apiName: 'Read',
           arguments: JSON.stringify({ path: '/a' }),
           id: 't1',
-          identifier: 'acp-agent',
+          identifier: 'claude-code',
           type: 'default',
         },
       ]);
