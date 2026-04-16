@@ -73,7 +73,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
             ),
             key,
             extra: value.level,
-            label: t(`taskDetail.${value.labelKey}`),
+            label: t(`taskDetail.${value.labelKey}`, { defaultValue: '' }),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
               void handlePriorityChange(level);
@@ -90,7 +90,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     ) : loading ? (
       <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
     ) : (
-      <Tooltip title={t(`taskDetail.${meta.labelKey}`)}>
+      <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: '' })}>
         <IconRender
           color={isUrgent ? cssVar.orange : cssVar.colorTextDescription}
           size={size}

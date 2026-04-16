@@ -1,13 +1,11 @@
 import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import type { TFunction } from 'i18next';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const formatInterval = (
-  seconds: number,
-  t: (key: string, options?: { count?: number }) => string,
-) => {
+const formatInterval = (seconds: number, t: TFunction<'chat'>) => {
   if (seconds < 60) return t('taskSchedule.unit.second', { count: seconds });
   if (seconds % 3600 === 0) return t('taskSchedule.unit.hour', { count: seconds / 3600 });
   if (seconds % 60 === 0) return t('taskSchedule.unit.minute', { count: seconds / 60 });

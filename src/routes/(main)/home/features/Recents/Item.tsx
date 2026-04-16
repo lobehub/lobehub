@@ -14,7 +14,7 @@ import { useTaskStore } from '@/store/task';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
-const TYPE_ICON_MAP = {
+const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTextIcon>> = {
   document: FileTextIcon,
   topic: HashIcon,
 };

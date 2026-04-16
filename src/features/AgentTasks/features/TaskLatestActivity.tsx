@@ -2,13 +2,11 @@ import type { TaskDetailActivity } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { TreeDownRightIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
+import type { TFunction } from 'i18next';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const getActivityText = (
-  activity: TaskDetailActivity | undefined,
-  t: (key: string, options?: Record<string, string | number>) => string,
-) => {
+const getActivityText = (activity: TaskDetailActivity | undefined, t: TFunction<'chat'>) => {
   if (!activity) return undefined;
 
   if (activity.type === 'comment') return activity.content || undefined;

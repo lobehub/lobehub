@@ -4,10 +4,10 @@ import { Divider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
+import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import { BotMessageSquare, ChevronDown, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
 import { memo, useMemo } from 'react';
-import type { UseTranslationResponse } from 'react-i18next';
 import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
@@ -21,10 +21,7 @@ const typeIconMap: Record<TaskActivityType, LucideIcon> = {
   topic: MessagesSquare,
 };
 
-const getActivityDisplayText = (
-  act: TaskDetailActivity,
-  t: UseTranslationResponse<'chat'>['t'],
-): string => {
+const getActivityDisplayText = (act: TaskDetailActivity, t: TFunction<'chat'>): string => {
   if (act.type === 'comment') {
     return act.content || t('taskDetail.activities.fallback.comment');
   }

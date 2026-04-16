@@ -59,7 +59,7 @@ export class BriefListActionImpl {
       isLogin === true ? [FETCH_BRIEFS_KEY, isLogin] : null,
       async () => {
         const result = await briefService.listUnresolved();
-        return result.data;
+        return result.data as BriefItem[];
       },
       {
         onData: (data) => {

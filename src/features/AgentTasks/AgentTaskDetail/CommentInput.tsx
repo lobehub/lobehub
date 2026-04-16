@@ -17,7 +17,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
     setSubmitting(true);
     try {
       await addComment(taskId, trimmed);
-      editor?.clearContent?.();
+      editor?.cleanDocument?.();
     } finally {
       setSubmitting(false);
     }

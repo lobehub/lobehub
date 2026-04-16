@@ -1,5 +1,4 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
-import { SendButton } from '@lobehub/editor/react';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen } from 'lucide-react';
@@ -55,8 +54,8 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     const getActionLabel = useCallback(
       (action: BriefAction) => {
         const i18nKey = `brief.action.${action.key}`;
-        const translated = t(i18nKey);
-        return translated === i18nKey ? action.label : translated;
+        const translated = t(i18nKey, { defaultValue: '' });
+        return !translated || translated === i18nKey ? action.label : translated;
       },
       [t],
     );
@@ -150,17 +149,15 @@ const BriefCardActions = memo<BriefCardActionsProps>(
             );
           })}
           {primaryActions && (
-            // @ts-ignore
-            <SendButton
+            <Button
               className={styles.actionBtnPrimary}
               disabled={loadingKey === primaryActions.key}
-              iconPlacement={'end'}
               shape={'round'}
               variant={'filled'}
               onClick={() => handleResolve(primaryActions.key)}
             >
               {getActionLabel(primaryActions)}
-            </SendButton>
+            </Button>
           )}
         </Flexbox>
       </Flexbox>
