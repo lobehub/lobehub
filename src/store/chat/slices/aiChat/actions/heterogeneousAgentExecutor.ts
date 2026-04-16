@@ -3,7 +3,7 @@ import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type { ConversationContext, HeterogeneousProviderConfig } from '@lobechat/types';
 
 import type { AgentStreamEvent } from '@/libs/agent-stream/types';
-import { acpService } from '@/services/electron/acp';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
 
@@ -71,14 +71,14 @@ const subscribeBroadcasts = (
     if (data.sessionId === sessionId) callbacks.onError(data.error);
   };
 
-  ipc.on('acpRawLine' as any, onLine);
-  ipc.on('acpSessionComplete' as any, onComplete);
-  ipc.on('acpSessionError' as any, onError);
+  ipc.on('heteroAgentRawLine' as any, onLine);
+  ipc.on('heteroAgentSessionComplete' as any, onComplete);
+  ipc.on('heteroAgentSessionError' as any, onError);
 
   return () => {
-    ipc.removeListener('acpRawLine' as any, onLine);
-    ipc.removeListener('acpSessionComplete' as any, onComplete);
-    ipc.removeListener('acpSessionError' as any, onError);
+    ipc.removeListener('heteroAgentRawLine' as any, onLine);
+    ipc.removeListener('heteroAgentSessionComplete' as any, onComplete);
+    ipc.removeListener('heteroAgentSessionError' as any, onError);
   };
 };
 
@@ -220,7 +220,7 @@ const persistToolResult = async (
  *
  * Flow:
  * 1. Subscribe to IPC broadcasts
- * 2. Spawn agent process via acpService
+ * 2. Spawn agent process via heterogeneousAgentService
  * 3. Raw stdout lines → Adapter → HeterogeneousAgentEvent → AgentStreamEvent
  * 4. Feed AgentStreamEvents into createGatewayEventHandler (unified handler)
  * 5. Tool messages created via messageService before emitting tool events
@@ -249,7 +249,7 @@ export const executeHeterogeneousAgent = async (
     operationId,
   });
 
-  let acpSessionId: string | undefined;
+  let agentSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
   let completed = false;
 
@@ -283,17 +283,17 @@ export const executeHeterogeneousAgent = async (
 
   try {
     // Start session
-    const result = await acpService.startSession({
+    const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: heterogeneousProvider.args,
       command: heterogeneousProvider.command || 'claude',
       cwd: workingDirectory,
       env: heterogeneousProvider.env,
     });
-    acpSessionId = result.sessionId;
+    agentSessionId = result.sessionId;
 
     // Subscribe to broadcasts BEFORE sending prompt
-    unsubscribe = subscribeBroadcasts(acpSessionId, {
+    unsubscribe = subscribeBroadcasts(agentSessionId, {
       onRawLine: (line) => {
         const events = adapter.adapt(line);
 
@@ -454,13 +454,15 @@ export const executeHeterogeneousAgent = async (
     });
 
     // Send the prompt — blocks until process exits
-    await acpService.sendPrompt(acpSessionId, message);
+    await heterogeneousAgentService.sendPrompt(agentSessionId, message);
 
     // Store agent session ID for multi-turn resume
-    const sessionInfo = await acpService.getSessionInfo(acpSessionId).catch(() => null);
+    const sessionInfo = await heterogeneousAgentService
+      .getSessionInfo(agentSessionId)
+      .catch(() => null);
     if (sessionInfo?.agentSessionId && context.topicId) {
       // TODO: persist to topic.metadata for cross-restart resume
-      // For now, agent session ID is only in memory (AcpCtr stores it)
+      // For now, agent session ID is only in memory (HeterogeneousAgentCtr stores it)
     }
   } catch (error) {
     if (!completed) {
@@ -480,8 +482,8 @@ export const executeHeterogeneousAgent = async (
     }
   } finally {
     unsubscribe?.();
-    if (acpSessionId) {
-      acpService.stopSession(acpSessionId).catch(() => {});
+    if (agentSessionId) {
+      heterogeneousAgentService.stopSession(agentSessionId).catch(() => {});
     }
   }
 };

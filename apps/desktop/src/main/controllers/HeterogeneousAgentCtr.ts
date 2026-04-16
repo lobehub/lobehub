@@ -9,7 +9,7 @@ import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
 
-const logger = createLogger('controllers:AcpCtr');
+const logger = createLogger('controllers:HeterogeneousAgentCtr');
 
 // ─── CLI presets per agent type ───
 // Mirrors @lobechat/heterogeneous-agents/registry but runs in main process
@@ -101,10 +101,10 @@ interface AgentSession {
  * Codex, Kimi CLI, etc. Only handles process lifecycle and raw stdout line
  * broadcasting. All event parsing and DB persistence happens on the Renderer side.
  *
- * Lifecycle: startSession → sendPrompt → (acpRawLine broadcasts) → stopSession
+ * Lifecycle: startSession → sendPrompt → (heteroAgentRawLine broadcasts) → stopSession
  */
-export default class AcpCtr extends ControllerModule {
-  static override readonly groupName = 'acp';
+export default class HeterogeneousAgentCtr extends ControllerModule {
+  static override readonly groupName = 'heterogeneousAgent';
 
   private sessions = new Map<string, AgentSession>();
 
@@ -145,7 +145,7 @@ export default class AcpCtr extends ControllerModule {
    * Send a prompt to an agent session.
    *
    * Spawns the CLI process with preset flags. Broadcasts each stdout line
-   * as an `acpRawLine` event — Renderer side parses and adapts.
+   * as an `heteroAgentRawLine` event — Renderer side parses and adapts.
    */
   @IpcMethod()
   async sendPrompt(params: SendPromptParams): Promise<void> {
@@ -201,7 +201,7 @@ export default class AcpCtr extends ControllerModule {
             }
 
             // Broadcast raw parsed JSON — Renderer handles all adaptation
-            this.broadcast('acpRawLine', {
+            this.broadcast('heteroAgentRawLine', {
               line: parsed,
               sessionId: session.sessionId,
             });
@@ -220,7 +220,7 @@ export default class AcpCtr extends ControllerModule {
 
       proc.on('error', (err) => {
         logger.error('Agent process error:', err);
-        this.broadcast('acpSessionError', {
+        this.broadcast('heteroAgentSessionError', {
           error: err.message,
           sessionId: session.sessionId,
         });
@@ -232,12 +232,15 @@ export default class AcpCtr extends ControllerModule {
         session.process = undefined;
 
         if (code === 0) {
-          this.broadcast('acpSessionComplete', { sessionId: session.sessionId });
+          this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
           resolve();
         } else {
           const stderrOutput = stderrChunks.join('').trim();
           const errorMsg = stderrOutput || `Agent exited with code ${code}`;
-          this.broadcast('acpSessionError', { error: errorMsg, sessionId: session.sessionId });
+          this.broadcast('heteroAgentSessionError', {
+            error: errorMsg,
+            sessionId: session.sessionId,
+          });
           reject(new Error(errorMsg));
         }
       });

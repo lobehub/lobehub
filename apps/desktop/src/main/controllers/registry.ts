@@ -1,11 +1,11 @@
 import type { CreateServicesResult, IpcServiceConstructor, MergeIpcService } from '@/utils/ipc';
 
-import AcpCtr from './AcpCtr';
 import AuthCtr from './AuthCtr';
 import BrowserWindowsCtr from './BrowserWindowsCtr';
 import CliCtr from './CliCtr';
 import DevtoolsCtr from './DevtoolsCtr';
 import GatewayConnectionCtr from './GatewayConnectionCtr';
+import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import McpInstallCtr from './McpInstallCtr';
@@ -23,7 +23,7 @@ import UpdaterCtr from './UpdaterCtr';
 import UploadFileCtr from './UploadFileCtr';
 
 export const controllerIpcConstructors = [
-  AcpCtr,
+  HeterogeneousAgentCtr,
   AuthCtr,
   BrowserWindowsCtr,
   CliCtr,
