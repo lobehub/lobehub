@@ -441,8 +441,8 @@ export class ConversationLifecycleActionImpl {
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,
           context: heteroContext,
-          fileIds: fileIdList,
           heterogeneousProvider,
+          imageList: tempImages.length > 0 ? tempImages : undefined,
           message,
           operationId: heteroOpId,
           workingDirectory,

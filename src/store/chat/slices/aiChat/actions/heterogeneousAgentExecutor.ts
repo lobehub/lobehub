@@ -16,9 +16,9 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
   context: ConversationContext;
-  /** File IDs attached to the user message (images, etc.) */
-  fileIds?: string[];
   heterogeneousProvider: HeterogeneousProviderConfig;
+  /** Image attachments from user message — passed to Main for vision support */
+  imageList?: Array<{ id: string; url: string }>;
   message: string;
   operationId: string;
   workingDirectory?: string;
@@ -239,7 +239,7 @@ export const executeHeterogeneousAgent = async (
     heterogeneousProvider,
     assistantMessageId,
     context,
-    fileIds,
+    imageList,
     message,
     operationId,
     workingDirectory,
@@ -542,7 +542,7 @@ export const executeHeterogeneousAgent = async (
     });
 
     // Send the prompt — blocks until process exits
-    await heterogeneousAgentService.sendPrompt(agentSessionId, message, fileIds);
+    await heterogeneousAgentService.sendPrompt(agentSessionId, message, imageList);
 
     // Store agent session ID for multi-turn resume
     const sessionInfo = await heterogeneousAgentService

@@ -65,9 +65,14 @@ interface StartSessionResult {
   sessionId: string;
 }
 
+interface ImageAttachment {
+  id: string;
+  url: string;
+}
+
 interface SendPromptParams {
-  /** Image/file IDs to include in the prompt (fetched from cloud via GET {domain}/f/{id}) */
-  fileIds?: string[];
+  /** Image attachments to include in the prompt (downloaded from url, cached by id) */
+  imageList?: ImageAttachment[];
   prompt: string;
   sessionId: string;
 }
@@ -132,45 +137,41 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Download a file by ID from the cloud server, with local disk cache.
-   * Returns { buffer, mimeType }.
+   * Download an image by URL, with local disk cache keyed by id.
    */
-  private async resolveFile(fileId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    // Check cache first
+  private async resolveImage(
+    image: ImageAttachment,
+  ): Promise<{ buffer: Buffer; mimeType: string }> {
     const cacheDir = this.fileCacheDir;
-    const metaPath = join(cacheDir, `${fileId}.meta`);
-    const dataPath = join(cacheDir, fileId);
+    const metaPath = join(cacheDir, `${image.id}.meta`);
+    const dataPath = join(cacheDir, image.id);
 
+    // Check cache first
     try {
       const metaRaw = await readFile(metaPath, 'utf8');
       const meta = JSON.parse(metaRaw);
       const buffer = await readFile(dataPath);
-      logger.debug('File cache hit:', fileId);
-      return { buffer, mimeType: meta.mimeType || 'application/octet-stream' };
+      logger.debug('Image cache hit:', image.id);
+      return { buffer, mimeType: meta.mimeType || 'image/png' };
     } catch {
-      // Cache miss — download from cloud
+      // Cache miss — download
     }
 
-    // Get cloud server URL
-    const serverUrl = await this.app.remoteServerConfigCtr.getRemoteServerUrl();
-    if (!serverUrl) throw new Error('Remote server URL not configured');
+    logger.info('Downloading image:', image.id);
 
-    const url = `${serverUrl}/f/${fileId}`;
-    logger.info('Downloading file:', url);
-
-    const res = await fetch(url);
+    const res = await fetch(image.url);
     if (!res.ok)
-      throw new Error(`Failed to download file ${fileId}: ${res.status} ${res.statusText}`);
+      throw new Error(`Failed to download image ${image.id}: ${res.status} ${res.statusText}`);
 
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const mimeType = res.headers.get('content-type') || 'application/octet-stream';
+    const mimeType = res.headers.get('content-type') || 'image/png';
 
     // Write to cache
     await mkdir(cacheDir, { recursive: true });
     await writeFile(dataPath, buffer);
-    await writeFile(metaPath, JSON.stringify({ fileId, mimeType }));
-    logger.debug('File cached:', fileId, `${buffer.length} bytes`);
+    await writeFile(metaPath, JSON.stringify({ id: image.id, mimeType }));
+    logger.debug('Image cached:', image.id, `${buffer.length} bytes`);
 
     return { buffer, mimeType };
   }
@@ -178,26 +179,25 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   /**
    * Build a stream-json user message with text + image content blocks.
    */
-  private async buildStreamJsonInput(prompt: string, fileIds: string[]): Promise<string> {
+  private async buildStreamJsonInput(
+    prompt: string,
+    imageList: ImageAttachment[],
+  ): Promise<string> {
     const content: any[] = [{ text: prompt, type: 'text' }];
 
-    for (const fileId of fileIds) {
+    for (const image of imageList) {
       try {
-        const { buffer, mimeType } = await this.resolveFile(fileId);
-
-        // Only include image types as inline image blocks
-        if (mimeType.startsWith('image/')) {
-          content.push({
-            source: {
-              data: buffer.toString('base64'),
-              media_type: mimeType,
-              type: 'base64',
-            },
-            type: 'image',
-          });
-        }
+        const { buffer, mimeType } = await this.resolveImage(image);
+        content.push({
+          source: {
+            data: buffer.toString('base64'),
+            media_type: mimeType,
+            type: 'base64',
+          },
+          type: 'image',
+        });
       } catch (err) {
-        logger.error(`Failed to resolve file ${fileId}:`, err);
+        logger.error(`Failed to resolve image ${image.id}:`, err);
       }
     }
 
@@ -244,13 +244,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const preset = CLI_PRESETS[session.agentType];
     if (!preset) throw new Error(`Unknown agent type: ${session.agentType}`);
 
-    const hasFiles = params.fileIds && params.fileIds.length > 0;
+    const hasImages = params.imageList && params.imageList.length > 0;
 
-    // If files are attached, prepare the stream-json input BEFORE spawning
+    // If images are attached, prepare the stream-json input BEFORE spawning
     // so any download errors are caught early.
     let stdinPayload: string | undefined;
-    if (hasFiles) {
-      stdinPayload = await this.buildStreamJsonInput(params.prompt, params.fileIds!);
+    if (hasImages) {
+      stdinPayload = await this.buildStreamJsonInput(params.prompt, params.imageList!);
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -263,7 +263,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         ...session.args,
       ];
 
-      if (hasFiles) {
+      if (hasImages) {
         // With files: use stdin stream-json mode
         cliArgs.push('--input-format', 'stream-json');
       } else {
@@ -278,11 +278,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       const proc = spawn(session.command, cliArgs, {
         cwd: session.cwd,
         env: { ...process.env, ...session.env },
-        stdio: [hasFiles ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+        stdio: [hasImages ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       });
 
       // If using stdin mode, write the stream-json message and close stdin
-      if (hasFiles && stdinPayload && proc.stdin) {
+      if (hasImages && stdinPayload && proc.stdin) {
         const stdin = proc.stdin as Writable;
         stdin.write(stdinPayload + '\n', () => {
           stdin.end();
