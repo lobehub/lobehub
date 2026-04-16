@@ -37,30 +37,30 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     const hints: string[] = [];
     const phase = ctx.phaseGuidance;
 
-    // Detect empty documents and nudge tool calls
+    // Detect empty documents and nudge tool calls (empty docs use updateDocument; non-empty prefer patchDocument)
     if (!ctx.soulContent) {
       hints.push(
-        'SOUL.md is empty — call updateDocument(type="soul") to write the agent identity once the user gives you a name and emoji.',
+        'SOUL.md is empty — call updateDocument(type="soul") to write the initial agent identity once the user gives you a name and emoji.',
       );
     }
     if (!ctx.personaContent) {
       hints.push(
-        'User Persona is empty — call updateDocument(type="persona") to persist what you learn about the user.',
+        'User Persona is empty — call updateDocument(type="persona") to seed the initial persona once you have learned something about the user.',
       );
     }
 
     // Phase-specific persistence reminders
     if (phase.includes('Agent Identity')) {
       hints.push(
-        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then call updateDocument(type="soul") to write SOUL.md.',
+        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then persist SOUL.md. If SOUL.md is already non-empty, prefer patchDocument(type="soul", hunks=[{search, replace}]) to amend only the changed lines; otherwise use updateDocument(type="soul").',
       );
     } else if (phase.includes('User Identity')) {
       hints.push(
-        'When you learn the user\'s name: call saveUserQuestion with fullName, then call updateDocument(type="persona") to start the persona document.',
+        'When you learn the user\'s name: call saveUserQuestion with fullName, then persist the persona document. If User Persona is already non-empty, prefer patchDocument(type="persona", hunks=[{search, replace}]) to amend only the changed lines; otherwise use updateDocument(type="persona") to seed it.',
       );
     } else if (phase.includes('Discovery')) {
       hints.push(
-        'Continue exploring. After sufficient discovery (5-6 exchanges), call saveUserQuestion with interests and responseLanguage. Update the persona document with updateDocument(type="persona") as you learn more.',
+        'Continue exploring. After sufficient discovery (5-6 exchanges), call saveUserQuestion with interests and responseLanguage. Then amend User Persona with patchDocument(type="persona", hunks=[{search, replace}]) — prefer small patches over full rewrites unless the document is still empty.',
       );
       hints.push(
         'EARLY EXIT: If the user signals they want to finish (e.g., "好了", "谢谢", "行", "Done", asking for summary, or any completion signal), STOP exploring immediately. Save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call finishOnboarding. Do NOT continue asking questions after a completion signal.',
@@ -72,7 +72,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     }
 
     hints.push(
-      'You MUST call the persistence tools (saveUserQuestion, updateDocument) to save information as you collect it. Simply acknowledging in conversation is NOT enough — data must be persisted via tool calls.',
+      'PERSISTENCE RULE: Call the persistence tools (saveUserQuestion, updateDocument, patchDocument) to save information as you collect it — simply acknowledging in conversation is NOT enough. For document writes, prefer patchDocument when the document already has content (smaller, safer edits); use updateDocument only for the first write or a full rewrite.',
     );
     hints.push(
       'REMINDER: If the user says "好了", "谢谢", "行", "Done", "Thanks", or gives any completion signal at ANY phase, you MUST wrap up immediately and call finishOnboarding. This overrides all other phase rules.',
