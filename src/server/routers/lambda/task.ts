@@ -61,7 +61,7 @@ const updateSchema = z.object({
   config: z.record(z.unknown()).optional(),
   context: z.record(z.unknown()).optional(),
   description: z.string().optional(),
-  heartbeatInterval: z.number().min(1).optional(),
+  heartbeatInterval: z.number().min(0).optional(),
   heartbeatTimeout: z.number().min(1).nullable().optional(),
   instruction: z.string().optional(),
   name: z.string().optional(),

@@ -49,10 +49,13 @@ describe('TaskService', () => {
     getReviewConfig: vi.fn(),
     getTreePinnedDocuments: vi.fn(),
     resolve: vi.fn(),
+    update: vi.fn(),
+    updateStatus: vi.fn(),
   };
 
   const mockTaskTopicModel = {
     findWithHandoff: vi.fn(),
+    timeoutRunning: vi.fn(),
   };
 
   const mockBriefModel = {

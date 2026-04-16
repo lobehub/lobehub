@@ -170,7 +170,12 @@ export class TaskDetailSliceActionImpl {
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
       // Revert by refreshing from server
       await this.internal_refreshTaskDetail(id);
-      message.error(t('taskDetail.updateFailed', { ns: 'chat' }));
+      message.error(
+        t('taskDetail.updateFailed', {
+          defaultValue: 'Failed to update task',
+          ns: 'chat',
+        }),
+      );
       throw error;
     }
   };
