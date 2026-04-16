@@ -54,8 +54,7 @@ export interface CreateAgentParams {
 }
 
 export interface CreateAgentResult {
-  agentId?: string;
-  sessionId: string;
+  agentId: string;
 }
 
 export interface CreateAgentOnlyParams {
