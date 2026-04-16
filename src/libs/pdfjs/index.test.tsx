@@ -105,6 +105,7 @@ describe('src/libs/pdfjs', () => {
       const mockBlob = new Blob(['worker code'], { type: 'application/javascript' });
 
       globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
         blob: () => Promise.resolve(mockBlob),
       });
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue(mockBlobUrl);
@@ -124,6 +125,25 @@ describe('src/libs/pdfjs', () => {
       });
 
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
+
+      await loadFreshModule();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockGlobalWorkerOptions.workerSrc).toBe(
+        'https://unpkg.com/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs',
+      );
+    });
+
+    it('should fallback to CDN when fetch returns non-OK response in app: protocol', async () => {
+      Object.defineProperty(window.location, 'protocol', {
+        configurable: true,
+        value: 'app:',
+      });
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+      });
 
       await loadFreshModule();
       await new Promise((r) => setTimeout(r, 0));
@@ -166,7 +186,7 @@ describe('src/libs/pdfjs', () => {
       const mockBlob = new Blob(['worker'], { type: 'application/javascript' });
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:fake');
       await act(async () => {
-        resolveFetch!({ blob: () => Promise.resolve(mockBlob) });
+        resolveFetch!({ ok: true, blob: () => Promise.resolve(mockBlob) });
       });
 
       expect(screen.queryByTestId('pdf-document')).toBeInTheDocument();
@@ -201,7 +221,7 @@ describe('src/libs/pdfjs', () => {
       const mockBlob = new Blob(['worker'], { type: 'application/javascript' });
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:fake');
       await act(async () => {
-        resolveFetch!({ blob: () => Promise.resolve(mockBlob) });
+        resolveFetch!({ ok: true, blob: () => Promise.resolve(mockBlob) });
       });
     });
 

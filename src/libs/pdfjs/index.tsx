@@ -10,6 +10,7 @@ import { Document as PdfDocument, type Page as PdfPage, pdfjs } from 'react-pdf'
 // Workaround: fetch the worker script via the protocol (which supportFetchAPI enables),
 // then create a blob URL that Chromium's Worker constructor accepts.
 let workerReady: Promise<void> | null = null;
+let workerResolved = false;
 
 const ensureWorkerSrc = (): Promise<void> => {
   if (workerReady) return workerReady;
@@ -20,6 +21,7 @@ const ensureWorkerSrc = (): Promise<void> => {
     if (window.location.protocol === 'app:') {
       try {
         const res = await fetch(pdfjsWorkerUrl);
+        if (!res.ok) throw new Error(`Worker fetch failed: ${res.status}`);
         const blob = await res.blob();
         pdfjs.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
       } catch {
@@ -29,6 +31,7 @@ const ensureWorkerSrc = (): Promise<void> => {
     } else {
       pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
     }
+    workerResolved = true;
   })();
 
   return workerReady;
@@ -41,7 +44,7 @@ export type DocumentProps = ComponentProps<typeof PdfDocument>;
 export type PageProps = ComponentProps<typeof PdfPage>;
 
 export const Document = (props: DocumentProps) => {
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(workerResolved);
 
   useEffect(() => {
     ensureWorkerSrc().then(() => setReady(true));
