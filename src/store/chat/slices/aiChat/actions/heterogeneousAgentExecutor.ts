@@ -515,18 +515,22 @@ export const executeHeterogeneousAgent = async (
         if (accumulatedContent) updateValue.content = accumulatedContent;
         if (accumulatedReasoning) updateValue.reasoning = { content: accumulatedReasoning };
         if (lastModel) updateValue.model = lastModel;
-        if (accumulatedUsage.input_tokens + accumulatedUsage.output_tokens > 0) {
+        const inputCacheMiss = accumulatedUsage.input_tokens;
+        const inputCached = accumulatedUsage.cache_read_input_tokens;
+        const inputWriteCache = accumulatedUsage.cache_creation_input_tokens;
+        const totalInputTokens = inputCacheMiss + inputCached + inputWriteCache;
+        const totalOutputTokens = accumulatedUsage.output_tokens;
+
+        if (totalInputTokens + totalOutputTokens > 0) {
           updateValue.metadata = {
-            totalInputTokens:
-              accumulatedUsage.input_tokens +
-              accumulatedUsage.cache_creation_input_tokens +
-              accumulatedUsage.cache_read_input_tokens,
-            totalOutputTokens: accumulatedUsage.output_tokens,
-            totalTokens:
-              accumulatedUsage.input_tokens +
-              accumulatedUsage.output_tokens +
-              accumulatedUsage.cache_creation_input_tokens +
-              accumulatedUsage.cache_read_input_tokens,
+            // Mirror anthropic usage converter so UI/pricing cards read the same shape
+            // regardless of whether the turn came from Gateway or CC CLI.
+            inputCacheMissTokens: inputCacheMiss,
+            inputCachedTokens: inputCached || undefined,
+            inputWriteCacheTokens: inputWriteCache || undefined,
+            totalInputTokens,
+            totalOutputTokens,
+            totalTokens: totalInputTokens + totalOutputTokens,
           };
         }
 

@@ -457,7 +457,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       await runWithEvents([
         ccInit(),
         ccAssistant('msg_01', [{ text: 'a', type: 'text' }], {
-          usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 200 },
+          usage: {
+            cache_creation_input_tokens: 50,
+            cache_read_input_tokens: 200,
+            input_tokens: 100,
+            output_tokens: 50,
+          },
         }),
         ccToolUse('msg_01', 'toolu_1', 'Bash', {}),
         ccToolResult('toolu_1', 'ok'),
@@ -473,11 +478,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(finalWrite).toBeDefined();
       const meta = finalWrite![1].metadata;
-      // 100 + 300 input + 200 cache_read = 600 input total
-      expect(meta.totalInputTokens).toBe(600);
+      // 100 + 300 input + 200 cache_read + 50 cache_create = 650 input total
+      expect(meta.totalInputTokens).toBe(650);
       // 50 + 80 = 130 output
       expect(meta.totalOutputTokens).toBe(130);
-      expect(meta.totalTokens).toBe(730);
+      expect(meta.totalTokens).toBe(780);
+      // Breakdown for pricing UI (must match anthropic usage converter shape)
+      expect(meta.inputCacheMissTokens).toBe(400);
+      expect(meta.inputCachedTokens).toBe(200);
+      expect(meta.inputWriteCacheTokens).toBe(50);
     });
   });
 
