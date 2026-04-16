@@ -75,19 +75,27 @@ export class AgentModel {
 
   /**
    * Get minimal agent info (avatar, title, backgroundColor) by IDs.
+   * For inbox agent (slug='inbox'), falls back to LobeAI defaults when avatar/title are missing.
    */
   getAgentAvatarsByIds = async (ids: string[]) => {
     if (ids.length === 0) return [];
 
-    return this.db
+    const rows = await this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
       .where(and(eq(agents.userId, this.userId), inArray(agents.id, ids)));
+
+    return rows.map(({ slug, ...row }) => ({
+      ...row,
+      avatar: row.avatar || (slug === INBOX_SESSION_ID ? '/avatars/lobe-ai.png' : null),
+      title: row.title || (slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+    }));
   };
 
   /**
