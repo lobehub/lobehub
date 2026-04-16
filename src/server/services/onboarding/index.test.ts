@@ -244,7 +244,27 @@ describe('OnboardingService', () => {
 
     expect(result.topicId).toBe('topic-1');
     expect(result.agentOnboarding.activeTopicId).toBe('topic-1');
+    expect(result.feedbackSubmitted).toBe(false);
     expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports feedbackSubmitted when topic.metadata.onboardingFeedback is present', async () => {
+    persistedUserState.agentOnboarding = {
+      activeTopicId: 'topic-1',
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+    mockTopicModel.findById.mockResolvedValue({
+      agentId: 'web-onboarding-agent',
+      id: 'topic-1',
+      metadata: {
+        onboardingFeedback: { rating: 'good', submittedAt: '2026-04-16T00:00:00.000Z' },
+      },
+    });
+
+    const service = new OnboardingService(mockDb, userId);
+    const result = await service.getOrCreateState();
+
+    expect(result.feedbackSubmitted).toBe(true);
   });
 
   it('transfers the onboarding topic to the inbox agent when finishing', async () => {

@@ -34,6 +34,7 @@ export class UserService {
     agentId: string;
     agentOnboarding: UserAgentOnboarding;
     context: UserAgentOnboardingContext;
+    feedbackSubmitted: boolean;
     topicId: string;
   }> => {
     return lambdaClient.user.getOrCreateOnboardingState.query();

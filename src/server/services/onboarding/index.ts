@@ -325,10 +325,13 @@ export class OnboardingService {
 
     await this.ensureWelcomeMessage(topicId, builtinAgent.id);
 
+    const topic = await this.topicModel.findById(topicId);
+
     return {
       agentId: builtinAgent.id,
       agentOnboarding: nextState,
       context: await this.getState(),
+      feedbackSubmitted: !!topic?.metadata?.onboardingFeedback,
       topicId,
     };
   };

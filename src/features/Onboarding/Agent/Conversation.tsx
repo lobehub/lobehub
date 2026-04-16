@@ -20,15 +20,18 @@ import Welcome from './Welcome';
 const assistantLikeRoles = new Set(['assistant', 'assistantGroup', 'supervisor']);
 
 interface AgentOnboardingConversationProps {
+  feedbackSubmitted?: boolean;
   finishTargetUrl?: string;
   onboardingFinished?: boolean;
   readOnly?: boolean;
+  showFeedback?: boolean;
+  topicId?: string;
 }
 
 const chatInputLeftActions: ActionKeys[] = isDev ? ['model'] : [];
 
 const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
-  ({ finishTargetUrl, onboardingFinished, readOnly }) => {
+  ({ feedbackSubmitted, finishTargetUrl, onboardingFinished, readOnly, showFeedback, topicId }) => {
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
     const isGreetingState = useMemo(() => {
@@ -68,7 +71,15 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
       return <Welcome content={message.content} />;
     }, [displayMessages, shouldShowGreetingWelcome]);
 
-    if (onboardingFinished) return <CompletionPanel finishTargetUrl={finishTargetUrl} />;
+    if (onboardingFinished)
+      return (
+        <CompletionPanel
+          feedbackSubmitted={feedbackSubmitted}
+          finishTargetUrl={finishTargetUrl}
+          showFeedback={showFeedback}
+          topicId={topicId}
+        />
+      );
 
     const listWelcome = greetingWelcome;
 

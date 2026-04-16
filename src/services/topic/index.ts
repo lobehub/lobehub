@@ -83,6 +83,11 @@ export class TopicService {
     metadata: {
       boundDeviceId?: string;
       model?: string;
+      onboardingFeedback?: {
+        comment?: string;
+        rating: 'good' | 'bad';
+        submittedAt: string;
+      };
       provider?: string;
       runningOperation?: { assistantMessageId: string; operationId: string } | null;
       workingDirectory?: string;

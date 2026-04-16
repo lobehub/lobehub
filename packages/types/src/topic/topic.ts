@@ -40,6 +40,12 @@ export interface ChatTopicBotContext {
   platformThreadId: string;
 }
 
+export interface OnboardingFeedbackEntry {
+  comment?: string;
+  rating: 'good' | 'bad';
+  submittedAt: string;
+}
+
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
@@ -48,6 +54,11 @@ export interface ChatTopicMetadata {
    */
   cronJobId?: string;
   model?: string;
+  /**
+   * Free-form feedback collected after agent onboarding completion.
+   * Comment text is stored only here (not analytics) and is length-capped server-side.
+   */
+  onboardingFeedback?: OnboardingFeedbackEntry;
   provider?: string;
   /**
    * Currently running Gateway operation on this topic.
