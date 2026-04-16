@@ -44,6 +44,12 @@ export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   /**
+   * CC session ID for multi-turn resume (desktop only).
+   * Persisted after each CC execution so the next message in the same topic
+   * can use `--resume <sessionId>` to continue the conversation.
+   */
+  ccSessionId?: string;
+  /**
    * Cron job ID that triggered this topic creation (if created by scheduled task)
    */
   cronJobId?: string;
