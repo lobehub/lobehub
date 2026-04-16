@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./currency": "./src/currency.ts",
-    "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts"
+    "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
+    "./hotkeys": "./src/hotkeys.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {

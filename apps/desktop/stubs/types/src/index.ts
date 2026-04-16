@@ -1,9 +1,8 @@
 /**
  * Desktop isolated workspace stub.
  *
- * This package only exists to satisfy workspace dependency resolution under
- * `apps/desktop/pnpm-workspace.yaml`. Desktop build imports constants via
- * `@lobechat/const/desktopGlobalShortcuts`, which does not depend on runtime
- * exports from `@lobechat/types`.
+ * `@lobechat/types` is only consumed via `import type` in desktop code; those
+ * specifiers are erased at build time, so this package needs no runtime
+ * exports.
  */
 export {};

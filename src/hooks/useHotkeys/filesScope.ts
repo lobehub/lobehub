@@ -1,4 +1,4 @@
-import { HotkeyEnum, HotkeyScopeEnum } from '@lobechat/types';
+import { HotkeyEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { useEffect } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
