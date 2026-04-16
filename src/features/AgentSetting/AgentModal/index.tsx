@@ -1,15 +1,17 @@
 'use client';
 
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Select, SliderWithInput } from '@lobehub/ui';
+import { Button, Flexbox, Form, Select, SliderWithInput } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import ModelSelect from '@/features/ModelSelect';
 
 import { selectors, useStore } from '../store';
 
@@ -93,6 +95,60 @@ const SelectWithCheckbox = memo<SelectWithCheckboxProps>(
     );
   },
 );
+
+interface FailoverModelsFieldProps {
+  onChange: (value: { model: string; provider: string }[]) => void;
+  value?: { model: string; provider: string }[];
+}
+
+const FailoverModelsField = memo<FailoverModelsFieldProps>(({ value = [], onChange }) => {
+  const { t } = useTranslation('setting');
+
+  const updateItem = (index: number, nextValue: { model: string; provider: string }) => {
+    const next = [...value];
+    next[index] = nextValue;
+    onChange(next);
+  };
+
+  const removeItem = (index: number) => {
+    onChange(value.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  return (
+    <Flexbox gap={8}>
+      {value.map((item, index) => (
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          key={`${item.provider}/${item.model}/${index}`}
+        >
+          <ModelSelect
+            popupWidth={400}
+            value={item}
+            onChange={(nextValue) => updateItem(index, nextValue)}
+          />
+          <Button
+            color={'danger'}
+            icon={Trash2Icon}
+            size={'small'}
+            variant={'outlined'}
+            onClick={() => removeItem(index)}
+          />
+        </Flexbox>
+      ))}
+      <Button
+        block
+        color={'default'}
+        icon={PlusIcon}
+        variant={'filled'}
+        onClick={() => onChange([...value, { model: '', provider: '' }])}
+      >
+        {t('settingModel.failover.add')}
+      </Button>
+    </Flexbox>
+  );
+});
 
 const PARAM_NAME_MAP: Record<ParamKey, (string | number)[]> = {
   frequency_penalty: ['params', 'frequency_penalty'],
@@ -327,6 +383,19 @@ const AgentModal = memo(() => {
         minWidth: undefined,
         name: ['params', 'reasoning_effort'],
         tag: 'reasoning_effort',
+      },
+      {
+        children: <FailoverModelsField />,
+        desc: t('settingModel.failover.desc'),
+        label: (
+          <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
+            {t('settingModel.failover.title')}
+            <InfoTooltip title={t('settingModel.failover.desc')} />
+          </Flexbox>
+        ),
+        minWidth: undefined,
+        name: ['chatConfig', 'failoverModels'],
+        tag: 'failoverModels',
       },
     ],
     title: t('settingModel.title'),

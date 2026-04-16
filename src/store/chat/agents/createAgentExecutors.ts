@@ -23,6 +23,7 @@ import { isDesktop } from '@lobechat/const';
 import type { ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
+  type AgentFailoverCapability,
   type ChatMessageError,
   type ChatToolPayload,
   type ConversationContext,
@@ -39,10 +40,12 @@ import pMap from 'p-map';
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
 import { chatService } from '@/services/chat';
+import { selectAgentModelCandidates } from '@/services/chat/failover';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
+import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { type ChatStore } from '@/store/chat/store';
 import { getCompressionCandidateMessageIds } from '@/store/chat/utils/compression';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -316,98 +319,9 @@ export const createAgentExecutors = (context: {
 
       let finalUsage: ModelUsage | undefined;
       let finalToolCalls: MessageToolCall[] | undefined;
-
-      // Create streaming handler with callbacks
-      const handler = new StreamingHandler(
-        {
-          messageId: assistantMessageId,
-          operationId: context.operationId,
-          agentId,
-          groupId,
-          topicId,
-        },
-        {
-          onContentUpdate: (content, reasoning, contentMetadata) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: {
-                  content,
-                  reasoning,
-                  ...(contentMetadata && {
-                    metadata: {
-                      isMultimodal: contentMetadata.isMultimodal,
-                      tempDisplayContent: contentMetadata.tempDisplayContent,
-                    },
-                  }),
-                },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onReasoningUpdate: (reasoning) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { reasoning },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onToolCallsUpdate: (tools) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { tools },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onGroundingUpdate: (grounding) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { search: grounding },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onImagesUpdate: (images) => {
-            internal_dispatchMessage(
-              {
-                id: assistantMessageId,
-                type: 'updateMessage',
-                value: { imageList: images },
-              },
-              { operationId: context.operationId },
-            );
-          },
-          onReasoningStart: () => {
-            const { operationId: reasoningOpId } = context.get().startOperation({
-              type: 'reasoning',
-              context: { ...fetchContext, messageId: assistantMessageId },
-              parentOperationId: context.operationId,
-            });
-            context.get().associateMessageWithOperation(assistantMessageId, reasoningOpId);
-            return reasoningOpId;
-          },
-          onReasoningComplete: (opId) => context.get().completeOperation(opId),
-          uploadBase64Image: (data) =>
-            getFileStoreState()
-              .uploadBase64FileWithProgress(data)
-              .then((file) => ({
-                id: file?.id,
-                url: file?.url,
-                alt: file?.filename || file?.id,
-              })),
-          transformToolCalls: context.get().internal_transformToolCalls,
-          toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
-        },
-      );
+      let finalHandler: StreamingHandler | undefined;
+      let usedModel = llmPayload.model;
+      let usedProvider = llmPayload.provider;
 
       const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
 
@@ -456,96 +370,308 @@ export const createAgentExecutors = (context: {
         }
       }
 
-      await chatService.createAssistantMessageStream({
-        abortController,
-        params: {
-          agentId: agentId || undefined,
-          groupId,
-          messages,
+      const supportsCapability = (
+        model: string,
+        provider: string,
+        capability: AgentFailoverCapability,
+      ) => {
+        const aiInfraStoreState = getAiInfraStoreState();
+
+        switch (capability) {
+          case 'functionCall': {
+            return aiModelSelectors.isModelSupportToolUse(model, provider)(aiInfraStoreState);
+          }
+          case 'video': {
+            return !!aiModelSelectors.isModelSupportVideo(model, provider)(aiInfraStoreState);
+          }
+          case 'vision': {
+            return aiModelSelectors.isModelSupportVision(model, provider)(aiInfraStoreState);
+          }
+          default: {
+            return false;
+          }
+        }
+      };
+
+      const { candidates: modelCandidates } = selectAgentModelCandidates({
+        failoverModels: resolvedAgentConfig.agentConfig.chatConfig?.failoverModels,
+        messages: messages as any,
+        primary: {
           model: llmPayload.model,
           provider: llmPayload.provider,
-          resolvedAgentConfig,
-          topicId: topicId ?? undefined,
-          ...agentConfigData.params,
         },
-        initialContext: runtimeContext?.initialContext,
-        stepContext: runtimeContext?.stepContext,
-        trace: {
-          traceId,
-          topicId: topicId ?? undefined,
-          traceName: TraceNameMap.Conversation,
-        },
-        onErrorHandle: async (error) => {
-          const enrichedError = {
-            ...error,
-            body: {
-              ...error.body,
-              traceId: traceId ?? error.body?.traceId,
-            },
-          };
-          const localizedError = localizeError(enrichedError);
+        supportsCapability,
+        tools: resolvedAgentConfig.tools,
+      });
 
-          await context.get().optimisticUpdateMessageError(assistantMessageId, localizedError, {
-            operationId: context.operationId,
-          });
-        },
-        onFinish: async (
-          content,
-          { traceId, observationId, toolCalls, reasoning, grounding, usage, speed, type },
-        ) => {
-          if (traceId) {
-            messageService.updateMessage(
-              assistantMessageId,
-              { traceId, observationId: observationId ?? undefined },
-              { agentId, groupId, topicId },
-            );
-          }
-
-          const result = await handler.handleFinish({
-            traceId,
-            observationId,
-            toolCalls,
-            reasoning,
-            grounding,
-            usage,
-            speed,
-            type,
-          });
-
-          finalUsage = result.usage;
-          finalToolCalls = result.toolCalls;
-
-          await optimisticUpdateMessageContent(
-            assistantMessageId,
-            result.content,
+      for (const [candidateIndex, candidate] of modelCandidates.entries()) {
+        if (
+          candidateIndex > 0 ||
+          candidate.model !== llmPayload.model ||
+          candidate.provider !== llmPayload.provider
+        ) {
+          internal_dispatchMessage(
             {
-              tools: result.tools,
-              reasoning: result.metadata.reasoning,
-              search: result.metadata.search,
-              imageList: result.metadata.imageList,
-              metadata: {
-                ...result.metadata.usage,
-                ...result.metadata.performance,
-                performance: result.metadata.performance,
-                usage: result.metadata.usage,
-                finishType: result.metadata.finishType,
-                ...(result.metadata.isMultimodal && { isMultimodal: true }),
+              id: assistantMessageId,
+              type: 'updateMessage',
+              value: {
+                content: LOADING_FLAT,
+                error: null,
+                imageList: [],
+                metadata: undefined,
+                model: candidate.model,
+                provider: candidate.provider,
+                reasoning: undefined,
+                search: undefined,
+                tools: undefined,
               },
             },
             { operationId: context.operationId },
           );
-        },
-        onMessageHandle: async (chunk) => {
-          handler.handleChunk(chunk as StreamChunk);
-        },
-      });
+        }
 
-      const isFunctionCall = handler.getIsFunctionCall();
-      const content = handler.getOutput();
-      const tools = handler.getTools();
+        if (candidateIndex > 0) {
+          log(
+            '%s retrying with failover model %s/%s (%d/%d)',
+            stagePrefix,
+            candidate.provider,
+            candidate.model,
+            candidateIndex + 1,
+            modelCandidates.length,
+          );
+        }
+
+        let attemptError: any;
+        let attemptThrown: unknown;
+        let attemptFinishResult: Awaited<ReturnType<StreamingHandler['handleFinish']>> | undefined;
+
+        const handler = new StreamingHandler(
+          {
+            messageId: assistantMessageId,
+            operationId: context.operationId,
+            agentId,
+            groupId,
+            topicId,
+          },
+          {
+            onContentUpdate: (content, reasoning, contentMetadata) => {
+              internal_dispatchMessage(
+                {
+                  id: assistantMessageId,
+                  type: 'updateMessage',
+                  value: {
+                    content,
+                    reasoning,
+                    ...(contentMetadata && {
+                      metadata: {
+                        isMultimodal: contentMetadata.isMultimodal,
+                        tempDisplayContent: contentMetadata.tempDisplayContent,
+                      },
+                    }),
+                  },
+                },
+                { operationId: context.operationId },
+              );
+            },
+            onReasoningUpdate: (reasoning) => {
+              internal_dispatchMessage(
+                {
+                  id: assistantMessageId,
+                  type: 'updateMessage',
+                  value: { reasoning },
+                },
+                { operationId: context.operationId },
+              );
+            },
+            onToolCallsUpdate: (tools) => {
+              internal_dispatchMessage(
+                {
+                  id: assistantMessageId,
+                  type: 'updateMessage',
+                  value: { tools },
+                },
+                { operationId: context.operationId },
+              );
+            },
+            onGroundingUpdate: (grounding) => {
+              internal_dispatchMessage(
+                {
+                  id: assistantMessageId,
+                  type: 'updateMessage',
+                  value: { search: grounding },
+                },
+                { operationId: context.operationId },
+              );
+            },
+            onImagesUpdate: (images) => {
+              internal_dispatchMessage(
+                {
+                  id: assistantMessageId,
+                  type: 'updateMessage',
+                  value: { imageList: images },
+                },
+                { operationId: context.operationId },
+              );
+            },
+            onReasoningStart: () => {
+              const { operationId: reasoningOpId } = context.get().startOperation({
+                type: 'reasoning',
+                context: { ...fetchContext, messageId: assistantMessageId },
+                parentOperationId: context.operationId,
+              });
+              context.get().associateMessageWithOperation(assistantMessageId, reasoningOpId);
+              return reasoningOpId;
+            },
+            onReasoningComplete: (opId) => context.get().completeOperation(opId),
+            uploadBase64Image: (data) =>
+              getFileStoreState()
+                .uploadBase64FileWithProgress(data)
+                .then((file) => ({
+                  id: file?.id,
+                  url: file?.url,
+                  alt: file?.filename || file?.id,
+                })),
+            transformToolCalls: context.get().internal_transformToolCalls,
+            toggleToolCallingStreaming: internal_toggleToolCallingStreaming,
+          },
+        );
+
+        try {
+          await chatService.createAssistantMessageStream({
+            abortController,
+            params: {
+              agentId: agentId || undefined,
+              groupId,
+              messages,
+              model: candidate.model,
+              provider: candidate.provider,
+              resolvedAgentConfig: {
+                ...resolvedAgentConfig,
+                agentConfig: {
+                  ...resolvedAgentConfig.agentConfig,
+                  model: candidate.model,
+                  provider: candidate.provider,
+                },
+              },
+              topicId: topicId ?? undefined,
+              ...agentConfigData.params,
+            },
+            initialContext: runtimeContext?.initialContext,
+            stepContext: runtimeContext?.stepContext,
+            trace: {
+              traceId,
+              topicId: topicId ?? undefined,
+              traceName: TraceNameMap.Conversation,
+            },
+            onErrorHandle: async (error) => {
+              const enrichedError = {
+                ...error,
+                body: {
+                  ...error.body,
+                  traceId: traceId ?? error.body?.traceId,
+                },
+              };
+
+              attemptError = localizeError(enrichedError);
+            },
+            onFinish: async (
+              _content,
+              { traceId, observationId, toolCalls, reasoning, grounding, usage, speed, type },
+            ) => {
+              if (traceId) {
+                messageService.updateMessage(
+                  assistantMessageId,
+                  { traceId, observationId: observationId ?? undefined },
+                  { agentId, groupId, topicId },
+                );
+              }
+
+              attemptFinishResult = await handler.handleFinish({
+                traceId,
+                observationId,
+                toolCalls,
+                reasoning,
+                grounding,
+                usage,
+                speed,
+                type,
+              });
+            },
+            onMessageHandle: async (chunk) => {
+              handler.handleChunk(chunk as StreamChunk);
+            },
+          });
+        } catch (error) {
+          attemptThrown = error;
+          if (!attemptError) {
+            attemptError = localizeError({
+              body: error,
+              message: error instanceof Error ? error.message : 'Unknown error',
+              type: 'AgentRuntimeError' as any,
+            });
+          }
+        }
+
+        const finishType = handler.getFinishType();
+        const shouldFallback =
+          (attemptError || attemptThrown || finishType === 'error') &&
+          candidateIndex < modelCandidates.length - 1;
+
+        if (shouldFallback) continue;
+
+        if (attemptError) {
+          await context.get().optimisticUpdateMessageError(assistantMessageId, attemptError, {
+            operationId: context.operationId,
+          });
+        }
+
+        if (attemptFinishResult) {
+          finalUsage = attemptFinishResult.usage;
+          finalToolCalls = attemptFinishResult.toolCalls;
+
+          await optimisticUpdateMessageContent(
+            assistantMessageId,
+            attemptFinishResult.content,
+            {
+              imageList: attemptFinishResult.metadata.imageList,
+              metadata: {
+                ...attemptFinishResult.metadata.usage,
+                ...attemptFinishResult.metadata.performance,
+                performance: attemptFinishResult.metadata.performance,
+                usage: attemptFinishResult.metadata.usage,
+                finishType: attemptFinishResult.metadata.finishType,
+                ...(attemptFinishResult.metadata.isMultimodal && { isMultimodal: true }),
+              },
+              model: candidate.model,
+              provider: candidate.provider,
+              reasoning: attemptFinishResult.metadata.reasoning,
+              search: attemptFinishResult.metadata.search,
+              tools: attemptFinishResult.tools,
+            },
+            { operationId: context.operationId },
+          );
+        }
+
+        if (attemptThrown && finishType !== 'error') {
+          throw attemptThrown;
+        }
+
+        finalHandler = handler;
+        usedModel = candidate.model;
+        usedProvider = candidate.provider;
+        break;
+      }
+
+      if (!finalHandler) {
+        throw new Error('No model candidate completed successfully');
+      }
+
+      const isFunctionCall = finalHandler.getIsFunctionCall();
+      const content = finalHandler.getOutput();
+      const tools = finalHandler.getTools();
       const currentStepUsage = finalUsage;
       const tool_calls = finalToolCalls;
-      const finishType = handler.getFinishType();
+      const finishType = finalHandler.getFinishType();
 
       log(`[${sessionLogId}] finish model-runtime calling`);
 
@@ -594,9 +720,9 @@ export const createAgentExecutors = (context: {
         // Use UsageCounter to accumulate LLM usage and cost
         const { usage, cost } = UsageCounter.accumulateLLM({
           cost: state.cost,
-          model: llmPayload.model,
+          model: usedModel,
           modelUsage: currentStepUsage,
-          provider: llmPayload.provider,
+          provider: usedProvider,
           usage: state.usage,
         });
 

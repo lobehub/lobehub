@@ -9,6 +9,8 @@ export interface WorkingModel {
   provider: string;
 }
 
+export type AgentFailoverCapability = 'functionCall' | 'video' | 'vision';
+
 export interface AgentMemoryChatConfig {
   memory?: {
     effort?: UserMemoryEffort;
@@ -31,11 +33,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
   disableContextCaching?: boolean;
 
   effort?: 'low' | 'medium' | 'high' | 'max';
-
   /**
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
   enableAdaptiveThinking?: boolean;
+
   enableAutoCreateTopic?: boolean;
   /**
    * Whether to auto-scroll during AI streaming output
@@ -69,6 +71,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Whether to enable streaming output
    */
   enableStreaming?: boolean;
+  failoverModels?: WorkingModel[];
   gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -172,6 +175,14 @@ export const AgentChatConfigSchema = z
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+    failoverModels: z
+      .array(
+        z.object({
+          model: z.string(),
+          provider: z.string(),
+        }),
+      )
+      .optional(),
     enableAdaptiveThinking: z.boolean().optional(),
     enableAutoCreateTopic: z.boolean().optional(),
     enableAutoScrollOnStreaming: z.boolean().optional(),
