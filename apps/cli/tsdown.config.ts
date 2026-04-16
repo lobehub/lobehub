@@ -9,7 +9,7 @@ export default defineConfig({
   entry: ['src/index.ts'],
   fixedExtension: false,
   format: ['esm'],
-  minify: true,
+  minify: !!process.env.MINIFY,
   outputOptions: {
     codeSplitting: false,
   },

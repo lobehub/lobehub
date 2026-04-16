@@ -42,8 +42,9 @@ export interface TaskTopicHandoff {
 
 export interface TaskParticipant {
   avatar: string | null;
+  backgroundColor: string | null;
   id: string;
-  name: string;
+  title: string;
   type: 'user' | 'agent';
 }
 

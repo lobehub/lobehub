@@ -393,16 +393,16 @@ The pattern is the same for every platform:
 
 Pick the file for your target platform — each contains activation, navigation, send-message, and verification snippets specific to that app:
 
-| Platform      | Reference                                        | Quick switcher |
-| ------------- | ------------------------------------------------ | -------------- |
-| Discord       | [reference/discord.md](./reference/discord.md)   | `Cmd+K`        |
-| Slack         | [reference/slack.md](./reference/slack.md)       | `Cmd+K`        |
-| Telegram      | [reference/telegram.md](./reference/telegram.md) | `Cmd+F`        |
-| WeChat / 微信 | [reference/wechat.md](./reference/wechat.md)     | `Cmd+F`        |
-| Lark / 飞书   | [reference/lark.md](./reference/lark.md)         | `Cmd+K`        |
-| QQ            | [reference/qq.md](./reference/qq.md)             | `Cmd+F`        |
+| Platform      | Reference                                          | Quick switcher |
+| ------------- | -------------------------------------------------- | -------------- |
+| Discord       | [references/discord.md](./references/discord.md)   | `Cmd+K`        |
+| Slack         | [references/slack.md](./references/slack.md)       | `Cmd+K`        |
+| Telegram      | [references/telegram.md](./references/telegram.md) | `Cmd+F`        |
+| WeChat / 微信 | [references/wechat.md](./references/wechat.md)     | `Cmd+F`        |
+| Lark / 飞书   | [references/lark.md](./references/lark.md)         | `Cmd+K`        |
+| QQ            | [references/qq.md](./references/qq.md)             | `Cmd+F`        |
 
-For **shared osascript patterns** (activate, type, paste, screenshot, read accessibility, common workflow template, gotchas), see [reference/osascript-common.md](./reference/osascript-common.md). Read this first if you're new to osascript automation.
+For **shared osascript patterns** (activate, type, paste, screenshot, read accessibility, common workflow template, gotchas), see [references/osascript-common.md](./references/osascript-common.md). Read this first if you're new to osascript automation.
 
 ---
 
@@ -513,4 +513,4 @@ Outputs to `.records/` directory (gitignored): `<name>.mp4` (video) + `<name>/` 
 
 ### osascript
 
-See [reference/osascript-common.md](./reference/osascript-common.md#gotchas) for the full osascript gotchas list (accessibility permissions, `keystroke` non-ASCII issues, locale-specific app names, rate limiting, etc.).
+See [references/osascript-common.md](./references/osascript-common.md#gotchas) for the full osascript gotchas list (accessibility permissions, `keystroke` non-ASCII issues, locale-specific app names, rate limiting, etc.).
