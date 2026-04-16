@@ -4,10 +4,7 @@
  * Handles web search and page crawling tool calls.
  */
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import {
-  type WebBrowsingDocumentService,
-  WebBrowsingExecutionRuntime,
-} from '@lobechat/builtin-tool-web-browsing/executionRuntime';
+import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 import {
   type BuiltinToolContext,
   type BuiltinToolResult,
@@ -20,22 +17,18 @@ import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { searchService } from '@/services/search';
 
-const baseRuntime = new WebBrowsingExecutionRuntime({ searchService });
-
-const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentService | undefined => {
-  if (!ctx.topicId && !ctx.agentId) return undefined;
-
-  return {
-    associateDocument: async (documentId) => {
-      if (!ctx.agentId) return;
+const runtime = new WebBrowsingExecutionRuntime({
+  documentService: {
+    associateDocument: async (documentId, context) => {
+      if (!context.agentId) return;
 
       await agentDocumentService.associateDocument({
-        agentId: ctx.agentId,
+        agentId: context.agentId,
         documentId,
       });
     },
-    createDocument: async ({ content, description, title, url }) => {
-      if (!ctx.topicId) throw new Error('topicId is required');
+    createDocument: async ({ content, description, title, url }, context) => {
+      if (!context.topicId) throw new Error('topicId is required');
 
       return notebookService.createDocument({
         content,
@@ -43,12 +36,13 @@ const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentServ
         source: url,
         sourceType: 'web',
         title,
-        topicId: ctx.topicId,
+        topicId: context.topicId,
         type: 'article',
       });
     },
-  };
-};
+  },
+  searchService,
+});
 
 class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
   readonly identifier = WebBrowsingManifest.identifier;
@@ -64,7 +58,7 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
         return { stop: true, success: false };
       }
 
-      const result = await baseRuntime.search(params, { signal: ctx.signal });
+      const result = await runtime.search(params, { signal: ctx.signal });
 
       if (result.success) {
         return {
@@ -137,13 +131,10 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
         return { stop: true, success: false };
       }
 
-      // Create a runtime with document service bound to this call's context
-      const documentService = createDocumentService(ctx);
-      const runtime = documentService
-        ? new WebBrowsingExecutionRuntime({ documentService, searchService })
-        : baseRuntime;
-
-      const result = await runtime.crawlMultiPages(params);
+      const result = await runtime.crawlMultiPages(params, {
+        agentId: ctx.agentId,
+        topicId: ctx.topicId ?? undefined,
+      });
 
       if (result.success) {
         return {

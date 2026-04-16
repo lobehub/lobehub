@@ -11,14 +11,22 @@ import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
 import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
 
+export interface WebBrowsingDocumentContext {
+  agentId?: string;
+  topicId?: string;
+}
+
 export interface WebBrowsingDocumentService {
-  associateDocument: (documentId: string) => Promise<void>;
-  createDocument: (params: {
-    content: string;
-    description?: string;
-    title: string;
-    url: string;
-  }) => Promise<{ id: string }>;
+  associateDocument: (documentId: string, context: WebBrowsingDocumentContext) => Promise<void>;
+  createDocument: (
+    params: {
+      content: string;
+      description?: string;
+      title: string;
+      url: string;
+    },
+    context: WebBrowsingDocumentContext,
+  ) => Promise<{ id: string }>;
 }
 
 export interface WebBrowsingRuntimeOptions {
@@ -73,11 +81,17 @@ export class WebBrowsingExecutionRuntime {
     }
   }
 
-  async crawlSinglePage(args: CrawlSinglePageQuery): Promise<BuiltinServerRuntimeOutput> {
-    return this.crawlMultiPages({ urls: [args.url] });
+  async crawlSinglePage(
+    args: CrawlSinglePageQuery,
+    context?: WebBrowsingDocumentContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    return this.crawlMultiPages({ urls: [args.url] }, context);
   }
 
-  async crawlMultiPages(args: CrawlMultiPagesQuery): Promise<BuiltinServerRuntimeOutput> {
+  async crawlMultiPages(
+    args: CrawlMultiPagesQuery,
+    context?: WebBrowsingDocumentContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
     const response = await this.searchService.crawlPages({
       urls: args.urls,
     });
@@ -85,7 +99,7 @@ export class WebBrowsingExecutionRuntime {
     const { results } = response;
 
     // Save crawled pages as documents and associate with agent
-    if (this.documentService) {
+    if (this.documentService && context) {
       await Promise.all(
         results.map(async (item) => {
           if ('errorMessage' in item.data) return;
@@ -94,14 +108,17 @@ export class WebBrowsingExecutionRuntime {
           if (!pageData.content) return;
 
           try {
-            const doc = await this.documentService!.createDocument({
-              content: pageData.content,
-              description: pageData.description || `Crawled from ${pageData.url}`,
-              title: pageData.title || pageData.url,
-              url: pageData.url,
-            });
+            const doc = await this.documentService!.createDocument(
+              {
+                content: pageData.content,
+                description: pageData.description || `Crawled from ${pageData.url}`,
+                title: pageData.title || pageData.url,
+                url: pageData.url,
+              },
+              context,
+            );
 
-            await this.documentService!.associateDocument(doc.id);
+            await this.documentService!.associateDocument(doc.id, context);
           } catch (error) {
             console.error('[WebBrowsing] Failed to save crawl result to agent document:', error);
           }
