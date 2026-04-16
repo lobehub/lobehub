@@ -51,6 +51,10 @@ export const UserLabSchema = z.object({
    */
   enableGroupChat: z.boolean().optional(),
   /**
+   * enable heterogeneous agent execution (Claude Code, Codex CLI, etc.)
+   */
+  enableHeterogeneousAgent: z.boolean().optional(),
+  /**
    * enable markdown rendering in chat input editor
    */
   enableInputMarkdown: z.boolean().optional(),

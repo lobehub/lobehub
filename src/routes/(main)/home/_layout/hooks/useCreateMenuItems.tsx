@@ -19,6 +19,8 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 interface CreateAgentOptions {
   groupId?: string;
@@ -36,6 +38,7 @@ export const useCreateMenuItems = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const groupTemplates = useGroupTemplates();
+  const enableHeterogeneousAgent = useUserStore(labPreferSelectors.enableHeterogeneousAgent);
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
   const [addGroup, refreshAgentList, switchToGroup] = useHomeStore((s) => [
@@ -247,7 +250,7 @@ export const useCreateMenuItems = () => {
    */
   const createClaudeCodeMenuItem = useCallback(
     (options?: CreateAgentOptions): ItemType | null => {
-      if (!isDesktop) return null;
+      if (!isDesktop || !enableHeterogeneousAgent) return null;
       return {
         icon: <Icon icon={TerminalSquareIcon} />,
         key: 'newClaudeCodeAgent',
@@ -258,7 +261,7 @@ export const useCreateMenuItems = () => {
         },
       };
     },
-    [t, createClaudeCodeAgent],
+    [t, createClaudeCodeAgent, enableHeterogeneousAgent],
   );
 
   /**
