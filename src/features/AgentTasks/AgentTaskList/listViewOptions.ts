@@ -232,7 +232,7 @@ export const getTaskGroupMeta = (
       return {
         groupBy: 'priority',
         key: `priority:${priority}`,
-        label: t(labelKeyMap[priority] ?? labelKeyMap[0], { ns: 'chat' }),
+        label: t(labelKeyMap[priority] ?? labelKeyMap[0], { defaultValue: '', ns: 'chat' }),
         priority,
       };
     }
@@ -249,7 +249,7 @@ export const getTaskGroupMeta = (
       return {
         groupBy: 'status',
         key: `status:${groupedStatus}`,
-        label: t(labelKeyMap[groupedStatus], { ns: 'chat' }),
+        label: t(labelKeyMap[groupedStatus], { defaultValue: '', ns: 'chat' }),
         status: groupedStatus,
       };
     }

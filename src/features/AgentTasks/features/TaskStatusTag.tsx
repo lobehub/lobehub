@@ -91,7 +91,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
           return {
             icon: <Icon color={statusMeta.color} icon={statusMeta.icon} size={16} />,
             key,
-            label: t(`taskDetail.${statusMeta.labelKey}`),
+            label: t(`taskDetail.${statusMeta.labelKey}`, { defaultValue: '' }),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
               void handleStatusChange(key);
@@ -106,7 +106,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     ) : loading ? (
       <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
     ) : (
-      <Tooltip title={t(`taskDetail.${meta.labelKey}`)}>
+      <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: '' })}>
         <Icon
           color={meta.color}
           icon={meta.icon}
