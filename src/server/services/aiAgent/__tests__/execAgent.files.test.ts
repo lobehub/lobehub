@@ -3,14 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockMessageCreate, mockCreateOperation, mockIngestAttachment, mockParseFile } = vi.hoisted(
-  () => ({
-    mockCreateOperation: vi.fn(),
-    mockIngestAttachment: vi.fn(),
-    mockMessageCreate: vi.fn(),
-    mockParseFile: vi.fn(),
-  }),
-);
+const {
+  mockMessageCreate,
+  mockCreateOperation,
+  mockIngestAttachment,
+  mockParseFile,
+  mockFindByIds,
+} = vi.hoisted(() => ({
+  mockCreateOperation: vi.fn(),
+  mockFindByIds: vi.fn(),
+  mockIngestAttachment: vi.fn(),
+  mockMessageCreate: vi.fn(),
+  mockParseFile: vi.fn(),
+}));
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -60,6 +65,12 @@ vi.mock('@/server/services/agent', () => ({
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(() => ({
     query: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn().mockImplementation(() => ({
+    findByIds: mockFindByIds,
   })),
 }));
 
@@ -405,6 +416,215 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
       // files array is empty since upload failed, so should be undefined-ish
       expect(userMessageCall![0].files).toEqual([]);
+    });
+  });
+
+  // ─── Already-uploaded attachments (SPA Gateway mode) ───
+  describe('when fileIds are provided (already-uploaded attachments)', () => {
+    it('resolves image fileIds into imageList with full URLs and attaches them to the user message', async () => {
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-img-1',
+          fileType: 'image/png',
+          name: 'photo.png',
+          size: 2048,
+          url: 'files/test-user-id/xxx/photo.png',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-img-1'],
+        prompt: 'What is in this image?',
+      });
+
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toEqual(['file-img-1']);
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      const lastMessage = createOpArgs.initialMessages.at(-1);
+
+      expect(lastMessage.imageList).toEqual([
+        {
+          alt: 'photo.png',
+          id: 'file-img-1',
+          url: 'https://s3.example.com/files/test-user-id/xxx/photo.png',
+        },
+      ]);
+      expect(lastMessage.videoList).toBeUndefined();
+      expect(lastMessage.fileList).toBeUndefined();
+      // parseFile is for documents only; image resolution must skip it
+      expect(mockParseFile).not.toHaveBeenCalled();
+    });
+
+    it('parses document fileIds and populates fileList content', async () => {
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-pdf-1',
+          fileType: 'application/pdf',
+          name: 'doc.pdf',
+          size: 4096,
+          url: 'files/test-user-id/xxx/doc.pdf',
+        },
+      ]);
+      mockParseFile.mockResolvedValue({ content: 'parsed pdf body text' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-pdf-1'],
+        prompt: 'Summarize this document',
+      });
+
+      expect(mockParseFile).toHaveBeenCalledWith('file-pdf-1');
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      const lastMessage = createOpArgs.initialMessages.at(-1);
+
+      expect(lastMessage.imageList).toBeUndefined();
+      expect(lastMessage.fileList).toEqual([
+        {
+          content: 'parsed pdf body text',
+          fileType: 'application/pdf',
+          id: 'file-pdf-1',
+          name: 'doc.pdf',
+          size: 4096,
+          url: 'https://s3.example.com/files/test-user-id/xxx/doc.pdf',
+        },
+      ]);
+    });
+
+    it('routes video fileIds into videoList (not imageList / fileList)', async () => {
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-vid-1',
+          fileType: 'video/mp4',
+          name: 'clip.mp4',
+          size: 67_890,
+          url: 'files/test-user-id/xxx/clip.mp4',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-vid-1'],
+        prompt: 'Describe this clip',
+      });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      const lastMessage = createOpArgs.initialMessages.at(-1);
+
+      expect(lastMessage.imageList).toBeUndefined();
+      expect(lastMessage.fileList).toBeUndefined();
+      expect(lastMessage.videoList).toEqual([
+        {
+          alt: 'clip.mp4',
+          id: 'file-vid-1',
+          url: 'https://s3.example.com/files/test-user-id/xxx/clip.mp4',
+        },
+      ]);
+      expect(mockParseFile).not.toHaveBeenCalled();
+    });
+
+    it('preserves the caller-provided ordering of fileIds across classifications', async () => {
+      // DB often returns rows in different order than queried; we must follow caller order.
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-img-1',
+          fileType: 'image/png',
+          name: 'a.png',
+          size: 1,
+          url: 'a.png',
+        },
+        {
+          id: 'file-pdf-1',
+          fileType: 'application/pdf',
+          name: 'b.pdf',
+          size: 2,
+          url: 'b.pdf',
+        },
+      ]);
+      mockParseFile.mockResolvedValue({ content: 'b-content' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-pdf-1', 'file-img-1'],
+        prompt: 'Mix of files',
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      // Caller order preserved on the stored message relation.
+      expect(userMessageCall![0].files).toEqual(['file-pdf-1', 'file-img-1']);
+    });
+
+    it('skips missing file records with a warning instead of failing', async () => {
+      // Only one of the two requested IDs exists.
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-img-1',
+          fileType: 'image/png',
+          name: 'ok.png',
+          size: 1,
+          url: 'ok.png',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-img-1', 'file-missing'],
+        prompt: 'Look at the good one',
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toEqual(['file-img-1']);
+
+      // Agent still runs end-to-end.
+      expect(mockCreateOperation).toHaveBeenCalled();
+    });
+
+    it('deduplicates repeated fileIds before inserting the messages_files link', async () => {
+      // messages_files has a composite PK on (file_id, message_id). Duplicate
+      // fileIds would cause a constraint violation and abort the whole send.
+      mockFindByIds.mockResolvedValue([
+        {
+          id: 'file-img-1',
+          fileType: 'image/png',
+          name: 'photo.png',
+          size: 1,
+          url: 'photo.png',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-img-1', 'file-img-1', 'file-img-1'],
+        prompt: 'Triple duplicate',
+      });
+
+      // FileModel.findByIds sees deduped input (cheaper query)
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+
+      // Only one link row will be inserted
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toEqual(['file-img-1']);
+
+      // And imageList only contains the image once (no duplicate rendering)
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      const lastMessage = createOpArgs.initialMessages.at(-1);
+      expect(lastMessage.imageList).toHaveLength(1);
+    });
+
+    it('no-ops cleanly when fileIds is an empty array', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: [],
+        prompt: 'Hello',
+      });
+
+      expect(mockFindByIds).not.toHaveBeenCalled();
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toBeUndefined();
     });
   });
 });

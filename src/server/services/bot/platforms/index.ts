@@ -15,6 +15,7 @@ export type {
   BotPlatformRuntimeContext,
   BotProviderConfig,
   ConnectionMode,
+  ExtractFilesResult,
   FieldSchema,
   PlatformClient,
   PlatformDefinition,

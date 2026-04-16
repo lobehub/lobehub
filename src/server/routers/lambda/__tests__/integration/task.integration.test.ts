@@ -356,6 +356,94 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('updateStatus cascade cancels running topics', () => {
+    it('should cancel running topics when task transitions out of running', async () => {
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Test cascade',
+      });
+
+      // Start running — creates a running topic
+      await caller.run({ id: task.data.id });
+
+      // Transition task from running → paused via updateStatus
+      const result = await caller.updateStatus({
+        id: task.data.id,
+        status: 'paused',
+      });
+      expect(result.data.status).toBe('paused');
+
+      // The running topic should have been interrupted
+      expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op_test' });
+
+      // Running again should succeed (no CONFLICT) because the topic was canceled
+      mockExecAgent.mockResolvedValueOnce({
+        operationId: 'op_test_2',
+        success: true,
+        topicId: testTopicId,
+      });
+
+      // Need to set back to a runnable status first
+      await caller.updateStatus({ id: task.data.id, status: 'backlog' });
+      await expect(caller.run({ id: task.data.id })).resolves.toBeDefined();
+    });
+
+    it('should not interrupt topics when task is not currently running', async () => {
+      const task = await caller.create({
+        instruction: 'Test no cascade',
+      });
+
+      // Task is in backlog, transition to paused — no topics to cancel
+      await caller.updateStatus({ id: task.data.id, status: 'paused' });
+      expect(mockInterruptTask).not.toHaveBeenCalled();
+    });
+
+    it('should skip cancellation when interrupt fails', async () => {
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Test interrupt failure',
+      });
+
+      await caller.run({ id: task.data.id });
+
+      // Make interruptTask fail
+      mockInterruptTask.mockRejectedValueOnce(new Error('network error'));
+
+      // Transition task from running → paused
+      await caller.updateStatus({ id: task.data.id, status: 'paused' });
+
+      // The topic should still be running because interrupt failed
+      // so re-running should hit CONFLICT
+      await caller.updateStatus({ id: task.data.id, status: 'backlog' });
+      await expect(caller.run({ id: task.data.id })).rejects.toThrow(/already has a running topic/);
+    });
+  });
+
+  describe('list participants', () => {
+    it('should populate participants from assignee agent', async () => {
+      const { agents } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(agents)
+        .set({ avatar: 'avatar.png', title: 'Agent One' })
+        .where(eq(agents.id, testAgentId));
+
+      await caller.create({ assigneeAgentId: testAgentId, instruction: 'Task A' });
+      await caller.create({ instruction: 'Task without assignee' });
+
+      const list = await caller.list({});
+      expect(list.data).toHaveLength(2);
+
+      const assigned = list.data.find((t) => t.assigneeAgentId === testAgentId)!;
+      expect(assigned.participants).toEqual([
+        { avatar: 'avatar.png', id: testAgentId, name: 'Agent One', type: 'agent' },
+      ]);
+
+      const unassigned = list.data.find((t) => !t.assigneeAgentId)!;
+      expect(unassigned.participants).toEqual([]);
+    });
+  });
+
   describe('heartbeat timeout detection', () => {
     it('should auto-detect timeout on detail and pause task', async () => {
       const task = await caller.create({

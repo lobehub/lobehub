@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Página duplicada correctamente",
   "pageEditor.editedAt": "Última edición el {{time}}",
   "pageEditor.editedBy": "Última edición por {{name}}",
-  "pageEditor.editorPlaceholder": "Comienza a escribir tu página. Pulsa / para abrir el menú de comandos",
+  "pageEditor.editorPlaceholder": "Presiona \"/\" para IA y comandos",
   "pageEditor.empty.createNewDocument": "Crear nueva página",
   "pageEditor.empty.importNotion": "Importar desde Notion",
   "pageEditor.empty.title": "Selecciona una página para comenzar",

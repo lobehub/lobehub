@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockToggleVisible = vi.fn();
 const mockLoadUrl = vi.fn();
 const mockShow = vi.fn();

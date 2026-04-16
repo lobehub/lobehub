@@ -60,6 +60,7 @@
   "response.520": "Przepraszamy, wystąpił nieoczekiwany błąd serwera. Pracujemy nad jego rozwiązaniem. Spróbuj ponownie później.",
   "response.522": "Przepraszamy, połączenie z serwerem wygasło. Może to być spowodowane niestabilnym połączeniem lub chwilową niedostępnością serwera. Spróbuj ponownie później.",
   "response.524": "Przepraszamy, serwer przekroczył czas oczekiwania na odpowiedź. Spróbuj ponownie później.",
+  "response.AccountDeactivated": "Twoje konto zostało dezaktywowane lub zawieszone. Może to wynikać z zasad, kwestii bezpieczeństwa lub weryfikacji konta. Skontaktuj się z pomocą techniczną dostawcy, aby uzyskać wsparcie.",
   "response.AgentRuntimeError": "Błąd wykonania modelu językowego Lobe. Spróbuj ponownie lub przeanalizuj poniższe informacje.",
   "response.ComfyUIBizError": "Wystąpił błąd podczas żądania usługi ComfyUI. Spróbuj ponownie lub sprawdź szczegóły poniżej.",
   "response.ComfyUIEmptyResult": "ComfyUI nie wygenerował obrazu. Sprawdź konfigurację modelu lub spróbuj ponownie.",

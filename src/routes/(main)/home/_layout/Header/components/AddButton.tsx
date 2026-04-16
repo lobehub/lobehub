@@ -17,7 +17,7 @@ const AddButton = memo(() => {
     createAgentMenuItem,
     createGroupChatMenuItem,
     createPageMenuItem,
-    createAgent,
+    openCreateModal,
     isMutatingAgent,
     isCreatingGroup,
   } = useCreateMenuItems();
@@ -26,9 +26,9 @@ const AddButton = memo(() => {
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      createAgent();
+      openCreateModal?.('agent');
     },
-    [createAgent],
+    [openCreateModal],
   );
 
   const dropdownItems = useMemo(() => {

@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Pagina succesvol gekopieerd",
   "pageEditor.editedAt": "Laatst bewerkt op {{time}}",
   "pageEditor.editedBy": "Laatst bewerkt door {{name}}",
-  "pageEditor.editorPlaceholder": "Begin met schrijven. Druk op / om het commandomenu te openen",
+  "pageEditor.editorPlaceholder": "Druk op \"/\" voor AI en opdrachten",
   "pageEditor.empty.createNewDocument": "Nieuwe pagina aanmaken",
   "pageEditor.empty.importNotion": "Importeren vanuit Notion",
   "pageEditor.empty.title": "Selecteer een pagina om te beginnen",

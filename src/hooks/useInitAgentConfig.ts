@@ -18,7 +18,8 @@ export const useInitAgentConfig = (agentId?: string) => {
 
   const params = useParams<{ aid?: string }>();
 
-  const id = agentId || activeAgentId || params.aid || '';
+  // Prioritize URL params over store's activeAgentId to avoid stale ID from previous navigation
+  const id = agentId || params.aid || activeAgentId || '';
 
   const data = useFetchAgentConfig(isLogin, id);
 

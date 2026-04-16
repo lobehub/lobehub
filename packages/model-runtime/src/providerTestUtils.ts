@@ -162,6 +162,7 @@ export const testProvider = ({
                   status: 400,
                 },
                 errorType: bizErrorType,
+                message: expect.any(String),
                 provider,
               });
             }
@@ -204,6 +205,7 @@ export const testProvider = ({
                   cause: { message: 'api is undefined' },
                 },
                 errorType: bizErrorType,
+                message: expect.any(String),
                 provider,
               });
             }
@@ -241,6 +243,7 @@ export const testProvider = ({
                   cause: { message: 'api is undefined' },
                 },
                 errorType: bizErrorType,
+                message: expect.any(String),
                 provider,
               });
             }
@@ -300,6 +303,7 @@ export const testProvider = ({
                   name: genericError.name,
                 },
                 errorType: 'AgentRuntimeError',
+                message: expect.any(String),
                 provider,
               });
             }

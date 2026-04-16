@@ -271,7 +271,6 @@ class QQGatewayClient implements PlatformClient {
         sendQQMessage(api, threadType, targetId, content),
       // QQ Bot API doesn't support reactions or typing
       removeReaction: () => Promise.resolve(),
-      triggerTyping: () => Promise.resolve(),
     };
   }
 
@@ -369,7 +368,6 @@ class QQWebhookClient implements PlatformClient {
       createMessage: (content) => sendQQMessage(api, threadType, targetId, content),
       editMessage: (_messageId, content) => sendQQMessage(api, threadType, targetId, content),
       removeReaction: () => Promise.resolve(),
-      triggerTyping: () => Promise.resolve(),
     };
   }
 

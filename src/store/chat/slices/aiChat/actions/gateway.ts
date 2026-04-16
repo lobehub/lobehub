@@ -1,12 +1,13 @@
+import {
+  AgentStreamClient,
+  type AgentStreamClientOptions,
+  type AgentStreamEvent,
+  type ConnectionStatus,
+} from '@lobechat/agent-gateway-client';
 import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
-import type {
-  AgentStreamClientOptions,
-  AgentStreamEvent,
-  ConnectionStatus,
-} from '@/libs/agent-stream';
-import { AgentStreamClient } from '@/libs/agent-stream/client';
-import { aiAgentService } from '@/services/aiAgent';
+import { isDesktop } from '@/const/version';
+import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import type { ChatStore } from '@/store/chat/store';
@@ -20,7 +21,10 @@ type Setter = StoreSetter<ChatStore>;
 // ─── Types ───
 
 export interface GatewayConnection {
-  client: Pick<AgentStreamClient, 'connect' | 'disconnect' | 'on' | 'sendInterrupt'>;
+  client: Pick<
+    AgentStreamClient,
+    'connect' | 'disconnect' | 'on' | 'sendInterrupt' | 'sendToolResult'
+  >;
   status: ConnectionStatus;
 }
 
@@ -106,20 +110,39 @@ export class GatewayActionImpl {
       );
     });
 
-    // Forward agent events to caller
-    if (onEvent) {
-      client.on('agent_event', onEvent);
-    }
+    // Track whether a terminal agent event was received (agent_runtime_end or error),
+    // so we can fire onSessionComplete from the subsequent disconnect.
+    // session_complete is handled separately as an explicit server signal.
+    let receivedTerminalEvent = false;
+    let sessionCompleted = false;
+    const fireSessionComplete = () => {
+      if (sessionCompleted) return;
+      sessionCompleted = true;
+      onSessionComplete?.();
+    };
+
+    // Forward agent events to caller, and track terminal events
+    client.on('agent_event', (event) => {
+      if (event.type === 'agent_runtime_end' || event.type === 'error') {
+        receivedTerminalEvent = true;
+      }
+      onEvent?.(event);
+    });
 
     // Handle session completion
     client.on('session_complete', () => {
       this.internal_cleanupGatewayConnection(operationId);
-      onSessionComplete?.();
+      fireSessionComplete();
     });
 
-    // Handle disconnection (terminal events auto-disconnect the client)
+    // Handle disconnection — only fire session complete if a terminal agent event
+    // was received (agent_runtime_end / error). Auth failures, explicit disconnect(),
+    // and other non-terminal disconnects should NOT trigger onSessionComplete.
     client.on('disconnected', () => {
       this.internal_cleanupGatewayConnection(operationId);
+      if (receivedTerminalEvent) {
+        fireSessionComplete();
+      }
     });
 
     // Handle auth failures
@@ -187,13 +210,22 @@ export class GatewayActionImpl {
    */
   executeGatewayAgent = async (params: {
     context: ConversationContext;
+    /** File IDs of already-uploaded attachments to attach to the new user message */
+    fileIds?: string[];
     message: string;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId?: string;
+    /**
+     * Resume a paused op waiting on `human_approve_required`. Forwarded to
+     * `aiAgentService.execAgentTask` so the new server-side op knows to apply
+     * the user's decision to the target tool message instead of starting from
+     * a fresh user prompt.
+     */
+    resumeApproval?: ResumeApprovalParam;
   }): Promise<ExecAgentResult> => {
-    const { context, message, onComplete, parentMessageId } = params;
+    const { context, fileIds, message, onComplete, parentMessageId, resumeApproval } = params;
 
     const agentGatewayUrl =
       window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
@@ -208,8 +240,14 @@ export class GatewayActionImpl {
         threadId: context.threadId,
         topicId: context.topicId,
       },
+      // Tell the server this caller is a desktop Electron client so it can
+      // enable `executor: 'client'` tools (local-system, stdio MCP) and
+      // dispatch them back over the Agent Gateway WS.
+      clientRuntime: isDesktop ? 'desktop' : 'web',
+      fileIds,
       parentMessageId,
       prompt: message,
+      resumeApproval,
     });
 
     // If server created a new topic, fetch messages first then switch topic
@@ -236,18 +274,36 @@ export class GatewayActionImpl {
       this.#get().internal_updateTopicLoading(result.topicId, true);
     }
 
-    // Create a dedicated operation for gateway execution with correct context
+    // Create a dedicated operation for gateway execution with correct context.
+    // Stash the server operation id in metadata so human-intervention flows
+    // (approve/reject/reject_continue) can look it up and call the server
+    // without needing an out-of-band lookup.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context: execContext,
+      metadata: { serverOperationId: result.operationId },
       type: 'execServerAgentRuntime',
     });
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
 
+    // When the local operation is cancelled (e.g. user clicks stop), forward
+    // the interrupt directly to the server via the existing tRPC endpoint.
+    // Closure captures `result.operationId` (the server-side id) so we don't
+    // depend on any metadata lookup. Fire-and-forget — errors are logged but
+    // never block the local cancel flow.
+    this.#get().onOperationCancel(gatewayOpId, async () => {
+      await aiAgentService
+        .interruptTask({ operationId: result.operationId })
+        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
+    });
+
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId: result.assistantMessageId,
       context: execContext,
+      // Server-side operation id — needed for tool_result dispatch back over
+      // the same WS that gatewayConnections is keyed on.
+      gatewayOperationId: result.operationId,
       operationId: gatewayOpId,
     });
 
@@ -303,17 +359,30 @@ export class GatewayActionImpl {
       topicId,
     };
 
-    // Create a local operation for UI loading state
+    // Create a local operation for UI loading state, stashing the server op id
+    // so intervention flows can find it after reconnect as well.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context,
+      metadata: { serverOperationId: operationId },
       type: 'execServerAgentRuntime',
     });
 
     this.#get().associateMessageWithOperation(assistantMessageId, gatewayOpId);
 
+    // Forward local-op cancellation to the server-side agent loop via tRPC.
+    // See note in executeGatewayAgent for details.
+    this.#get().onOperationCancel(gatewayOpId, async () => {
+      await aiAgentService
+        .interruptTask({ operationId })
+        .catch((err) => console.error('[Gateway] interruptTask failed:', err));
+    });
+
     const eventHandler = createGatewayEventHandler(this.#get, {
       assistantMessageId,
       context,
+      // Server-side operation id — needed for tool_result dispatch back over
+      // the same WS that gatewayConnections is keyed on.
+      gatewayOperationId: operationId,
       operationId: gatewayOpId,
     });
 

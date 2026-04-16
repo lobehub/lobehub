@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "صفحه با موفقیت تکثیر شد",
   "pageEditor.editedAt": "آخرین ویرایش در {{time}}",
   "pageEditor.editedBy": "آخرین ویرایش توسط {{name}}",
-  "pageEditor.editorPlaceholder": "نوشتن صفحه را آغاز کنید. برای باز کردن منوی دستورات / را فشار دهید",
+  "pageEditor.editorPlaceholder": "برای هوش مصنوعی و دستورات \"/\" را فشار دهید",
   "pageEditor.empty.createNewDocument": "ایجاد صفحه جدید",
   "pageEditor.empty.importNotion": "وارد کردن از Notion",
   "pageEditor.empty.title": "برای شروع یک صفحه انتخاب کنید",

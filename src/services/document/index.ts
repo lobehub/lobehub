@@ -172,6 +172,23 @@ export class DocumentService {
     return serializeHistoryComparison(result);
   }
 
+  async getPageDocuments(pageSize: number = 20): Promise<DocumentItem[]> {
+    const result = await this.queryDocuments({
+      current: 0,
+      fileTypes: ['custom/document', 'application/pdf'],
+      pageSize,
+      sourceTypes: ['editor', 'file', 'api'],
+    });
+
+    return result.items
+      .filter(
+        (doc) =>
+          ['editor', 'file', 'api'].includes(doc.sourceType) &&
+          ['custom/document', 'application/pdf'].includes(doc.fileType),
+      )
+      .map((doc) => ({ ...doc, filename: doc.filename ?? doc.title ?? 'Untitled' }));
+  }
+
   async getDocumentById(id: string, uniqueKey?: string): Promise<DocumentItem | undefined> {
     if (uniqueKey) {
       // Use fixed key so switching documents cancels the previous request

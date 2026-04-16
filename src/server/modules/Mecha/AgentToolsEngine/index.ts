@@ -20,6 +20,7 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { alwaysOnToolIds, builtinTools, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
+import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -94,6 +95,7 @@ export const createServerAgentToolsEngine = (
   const {
     additionalManifests,
     agentConfig,
+    clientRuntime,
     deviceContext,
     globalMemoryEnabled = false,
     hasAgentDocuments = false,
@@ -102,24 +104,49 @@ export const createServerAgentToolsEngine = (
     model,
     provider,
   } = params;
+
+  // ─── Tool-dispatch capability flags ───
+  //
+  // Two orthogonal signals control whether client-side tools can run.
+  //
+  //  1. `hasClientExecutor` — the caller itself is an Electron desktop
+  //     client and can receive `tool_execute` events over the Agent
+  //     Gateway WebSocket (Phase 6.4).
+  //  2. `hasDeviceProxy` — the server has a device-proxy configured that
+  //     can tunnel commands to a *separately registered* desktop device
+  //     (legacy Remote Device flow).
+  //
+  // Either, both, or neither can be true independently.
+  const hasClientExecutor = clientRuntime === 'desktop';
+  const hasDeviceProxy = !!deviceContext?.gatewayConfigured;
+
+  // ─── Platform / runtime mode ───
+  //
+  // `platform` is a property of the caller, not of the server. Prefer the
+  // explicit `clientRuntime` signal; fall back to treating a server with
+  // a configured device-proxy as desktop for callers that don't yet send
+  // `clientRuntime` (backwards compat).
+  const platform: RuntimePlatform = clientRuntime ?? (hasDeviceProxy ? 'desktop' : 'web');
+
+  // User-configured runtime mode for the current platform, with a
+  // platform-appropriate default when unset.
+  const runtimeMode: RuntimeEnvMode =
+    agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[platform] ??
+    (platform === 'desktop' ? 'local' : 'none');
+
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
 
-  // Determine runtime mode based on platform
-  const isDesktopClient = !!deviceContext?.gatewayConfigured;
-  const platform = isDesktopClient ? 'desktop' : 'web';
-  const runtimeMode =
-    agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[platform] ??
-    (isDesktopClient ? 'local' : 'none');
-
   log(
-    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, runtimeMode=%s, additionalManifests=%d, deviceGateway=%s',
+    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasClientExecutor=%s hasDeviceProxy=%s',
     model,
     provider,
     searchMode,
+    platform,
     runtimeMode,
     additionalManifests?.length ?? 0,
-    !!deviceContext?.gatewayConfigured,
+    hasClientExecutor,
+    hasDeviceProxy,
   );
 
   return createServerToolsEngine(context, {
@@ -128,6 +155,8 @@ export const createServerAgentToolsEngine = (
     // Add default tools based on configuration
     defaultToolIds,
     enableChecker: createEnableChecker({
+      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron)
+      allowExplicitActivation: true,
       rules: {
         // User-selected plugins
         ...Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true])),
@@ -136,16 +165,26 @@ export const createServerAgentToolsEngine = (
         // System-level rules (may override user selection for specific tools)
         [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
         [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
+        // Local-system: user must have opted into local runtime on this
+        // platform (`runtimeMode === 'local'`), AND one execution channel
+        // must exist:
+        //  - `hasClientExecutor` — Phase 6.4 dispatch over the Agent Gateway
+        //    WS that this request is already riding on; no extra server-side
+        //    prerequisite needed;
+        //  - legacy device-proxy with an online & auto-activated device.
         [LocalSystemManifest.identifier]:
           runtimeMode === 'local' &&
-          !!deviceContext?.gatewayConfigured &&
-          !!deviceContext?.deviceOnline &&
-          !!deviceContext?.autoActivated,
+          (hasClientExecutor ||
+            (hasDeviceProxy && !!deviceContext?.deviceOnline && !!deviceContext?.autoActivated)),
         [MemoryManifest.identifier]: globalMemoryEnabled,
         // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
         ...(isBotConversation && { [MessageManifest.identifier]: true }),
+        // Remote-device proxy: shown only when the server has a proxy but
+        // no specific device is auto-activated yet (user must pick). When
+        // the caller itself can execute `executor: 'client'` tools, the
+        // proxy is redundant — local-system goes directly to the caller.
         [RemoteDeviceManifest.identifier]:
-          !!deviceContext?.gatewayConfigured && !deviceContext?.autoActivated,
+          hasDeviceProxy && !deviceContext?.autoActivated && !hasClientExecutor,
         [AgentDocumentsManifest.identifier]: hasAgentDocuments,
         [WebBrowsingManifest.identifier]: isSearchEnabled,
       },

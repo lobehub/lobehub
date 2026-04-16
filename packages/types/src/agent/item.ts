@@ -1,10 +1,11 @@
 import type { LLMParams } from 'model-bank';
+import { z } from 'zod';
 
 import type { FileItem } from '../files';
 import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
-import type { LobeAgentChatConfig } from './chatConfig';
+import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
@@ -84,6 +85,35 @@ export interface LobeAgentConfig {
 export type LobeAgentConfigKeys =
   | keyof LobeAgentConfig
   | ['params', keyof LobeAgentConfig['params']];
+
+/**
+ * Zod schema for creating a new agent.
+ * Covers all user-configurable fields; system fields (id, userId, timestamps) are excluded.
+ */
+export const CreateAgentSchema = z.object({
+  agencyConfig: z.custom<LobeAgentAgencyConfig>().optional(),
+  avatar: z.string().nullable().optional(),
+  backgroundColor: z.string().nullable().optional(),
+  chatConfig: AgentChatConfigSchema.optional(),
+  description: z.string().nullable().optional(),
+  editorData: z.unknown().optional(),
+  fewShots: z.unknown().optional(),
+  marketIdentifier: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+  openingMessage: z.string().nullable().optional(),
+  openingQuestions: z.array(z.string()).optional(),
+  params: z.record(z.unknown()).optional(),
+  plugins: z.array(z.string()).optional(),
+  provider: z.string().nullable().optional(),
+  sessionGroupId: z.string().nullable().optional(),
+  systemRole: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+  title: z.string().nullable().optional(),
+  tts: z.custom<LobeAgentTTSConfig>().optional(),
+  virtual: z.boolean().nullable().optional(),
+});
+
+export type CreateAgentConfig = z.infer<typeof CreateAgentSchema>;
 
 // Agent database item type (independent from schema)
 export interface AgentItem {

@@ -20,12 +20,12 @@ vi.mock('next/server', () => ({
 }));
 
 /**
- * Topic Router 集成测试
+ * Topic Router Integration Tests
  *
- * 测试目标：
- * 1. 验证完整的 tRPC 调用链路（Router → Model → Database）
- * 2. 确保 agentId → sessionId 解析正常工作
- * 3. 验证数据库约束和关联关系
+ * Test objectives:
+ * 1. Verify the complete tRPC call chain (Router → Model → Database)
+ * 2. Ensure agentId → sessionId resolution works correctly
+ * 3. Verify database constraints and associations
  */
 describe('Topic Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
@@ -38,7 +38,7 @@ describe('Topic Router Integration Tests', () => {
     testDB = serverDB;
     userId = await createTestUser(serverDB);
 
-    // 创建测试 agent
+    // Create test agent
     const { agents } = await import('@/database/schemas');
     const [agent] = await serverDB
       .insert(agents)
@@ -46,11 +46,11 @@ describe('Topic Router Integration Tests', () => {
       .returning();
     testAgentId = agent.id;
 
-    // 创建测试 session
+    // Create test session
     const [session] = await serverDB.insert(sessions).values({ userId, type: 'agent' }).returning();
     testSessionId = session.id;
 
-    // 创建 agent 到 session 的映射关系
+    // Create agent-to-session mapping
     const { agentsToSessions } = await import('@/database/schemas');
     await serverDB.insert(agentsToSessions).values({
       agentId: testAgentId,
@@ -91,14 +91,14 @@ describe('Topic Router Integration Tests', () => {
 
       expect(createdTopic).toBeDefined();
       expect(createdTopic.title).toBe('Topic with agentId');
-      // 验证 agentId 被正确解析为 sessionId
+      // Verify agentId is correctly resolved to sessionId
       expect(createdTopic.sessionId).toBe(testSessionId);
     });
 
     it('should prefer agentId over sessionId when both provided', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建另一个 session
+      // Create another session
       const [anotherSession] = await serverDB
         .insert(sessions)
         .values({
@@ -110,12 +110,12 @@ describe('Topic Router Integration Tests', () => {
       const topicId = await caller.createTopic({
         title: 'Topic with both ids',
         agentId: testAgentId,
-        sessionId: anotherSession.id, // 这个会被 agentId 覆盖
+        sessionId: anotherSession.id, // This will be overridden by agentId
       });
 
       const [createdTopic] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
 
-      // 应该使用 agentId 解析出的 sessionId
+      // Should use the sessionId resolved from agentId
       expect(createdTopic.sessionId).toBe(testSessionId);
     });
 
@@ -159,7 +159,7 @@ describe('Topic Router Integration Tests', () => {
     it('should batch create topics with mixed agentId and sessionId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建另一个 session
+      // Create another session
       const [anotherSession] = await serverDB
         .insert(sessions)
         .values({
@@ -176,7 +176,7 @@ describe('Topic Router Integration Tests', () => {
       expect(result.success).toBe(true);
       expect(result.added).toBe(2);
 
-      // 验证每个 topic 关联到正确的 session
+      // Verify each topic is linked to the correct session
       const allTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
 
       const topicWithAgent = allTopics.find((t) => t.title === 'Topic with agentId');
@@ -191,7 +191,7 @@ describe('Topic Router Integration Tests', () => {
     it('should get topics by agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建测试 topic
+      // Create test topic
       await caller.createTopic({
         title: 'Topic 1',
         sessionId: testSessionId,
@@ -202,12 +202,12 @@ describe('Topic Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      // 使用 agentId 查询
+      // Query using agentId
       const result = await caller.getTopics({
         agentId: testAgentId,
       });
 
-      // result 包含 items 和 total
+      // result contains items and total
       expect(result.items).toHaveLength(2);
       expect(result.items.map((t) => t.title)).toContain('Topic 1');
       expect(result.items.map((t) => t.title)).toContain('Topic 2');
@@ -217,13 +217,13 @@ describe('Topic Router Integration Tests', () => {
     it('should resolve sessionId to agentId when only sessionId provided', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建测试 topic
+      // Create test topic
       await caller.createTopic({
         title: 'Topic for reverse lookup',
         sessionId: testSessionId,
       });
 
-      // 使用 sessionId 查询（需要反向查找 agentId）
+      // Query using sessionId (requires reverse lookup of agentId)
       const result = await caller.getTopics({
         sessionId: testSessionId,
       });
@@ -238,7 +238,7 @@ describe('Topic Router Integration Tests', () => {
     it('should batch delete topics using agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建测试 topics
+      // Create test topics
       await caller.createTopic({
         title: 'Topic to delete 1',
         sessionId: testSessionId,
@@ -249,7 +249,7 @@ describe('Topic Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      // 使用 agentId 批量删除
+      // Batch delete using agentId
       await caller.batchDeleteBySessionId({
         agentId: testAgentId,
       });
@@ -265,13 +265,13 @@ describe('Topic Router Integration Tests', () => {
     it('should batch delete topics using sessionId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建测试 topics
+      // Create test topics
       await caller.createTopic({
         title: 'Topic to delete',
         sessionId: testSessionId,
       });
 
-      // 使用 sessionId 批量删除
+      // Batch delete using sessionId
       await caller.batchDeleteBySessionId({
         id: testSessionId,
       });
@@ -364,7 +364,7 @@ describe('Topic Router Integration Tests', () => {
     it('should search topics using agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建测试 topics
+      // Create test topics
       await caller.createTopic({
         title: 'TypeScript Discussion',
         sessionId: testSessionId,
@@ -375,7 +375,7 @@ describe('Topic Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      // 使用 agentId 搜索
+      // Search using agentId
       const result = await caller.searchTopics({
         keywords: 'TypeScript',
         agentId: testAgentId,
@@ -390,13 +390,13 @@ describe('Topic Router Integration Tests', () => {
     it('should update topic with agentId in value', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建测试 topic
+      // Create test topic
       const topicId = await caller.createTopic({
         title: 'Original Title',
         sessionId: testSessionId,
       });
 
-      // 创建另一个 agent 和 session
+      // Create another agent and session
       const { agents, agentsToSessions } = await import('@/database/schemas');
       const [newAgent] = await serverDB
         .insert(agents)
@@ -420,7 +420,7 @@ describe('Topic Router Integration Tests', () => {
         userId,
       });
 
-      // 更新 topic，使用 agentId 指定新的关联
+      // Update topic, specifying new association using agentId
       await caller.updateTopic({
         id: topicId,
         value: {
@@ -732,13 +732,13 @@ describe('Topic Router Integration Tests', () => {
     it('should clone topic', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 创建原始 topic
+      // Create original topic
       const originalId = await caller.createTopic({
         title: 'Original Topic',
         sessionId: testSessionId,
       });
 
-      // 克隆 topic
+      // Clone topic
       const clonedId = await caller.cloneTopic({
         id: originalId,
         newTitle: 'Cloned Topic',
@@ -769,7 +769,7 @@ describe('Topic Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      // 删除前两个
+      // Delete the first two
       await caller.batchDelete({ ids: [id1, id2] });
 
       const remainingTopics = await serverDB
@@ -835,11 +835,11 @@ describe('Topic Router Integration Tests', () => {
     it('should check if user has topics', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // 初始应该没有 topics
+      // Initially there should be no topics
       const hasNoTopics = await caller.hasTopics();
-      expect(hasNoTopics).toBe(true); // 注意：hasTopics 返回 count === 0
+      expect(hasNoTopics).toBe(true); // Note: hasTopics returns count === 0
 
-      // 创建 topic 后
+      // After creating a topic
       await caller.createTopic({
         title: 'First Topic',
         sessionId: testSessionId,

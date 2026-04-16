@@ -240,6 +240,13 @@ export interface AgentInstructionCallLlm extends AgentInstructionBase {
 export interface AgentInstructionCallTool extends AgentInstructionBase {
   payload: {
     parentMessageId: string;
+    /**
+     * When true, the runtime is resuming execution for a previously pending
+     * tool call (e.g. after human approval). The executor must NOT insert a
+     * new tool message; instead it updates the existing one referenced by
+     * `parentMessageId` with the tool result.
+     */
+    skipCreateToolMessage?: boolean;
     toolCalling: ChatToolPayload;
   };
   type: 'call_tool';

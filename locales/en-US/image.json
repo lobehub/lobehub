@@ -12,7 +12,7 @@
   "config.model.label": "Model",
   "config.prompt.placeholder": "Describe what you want to generate",
   "config.prompt.placeholderWithRef": "Describe how you want to adjust the image",
-  "config.promptExtend.label": "Extended Prompt",
+  "config.promptExtend.label": "Prompt Extend",
   "config.quality.label": "Image Quality",
   "config.quality.options.hd": "High Definition",
   "config.quality.options.standard": "Standard",

@@ -17,7 +17,7 @@ export function registerTopicCommand(program: Command) {
     .description('List topics')
     .option('--agent-id <id>', 'Filter by agent ID')
     .option('-L, --limit <n>', 'Page size', '30')
-    .option('--page <n>', 'Page number', '1')
+    .option('-P, --page <n>', 'Page number', '1')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (options: {
@@ -31,7 +31,8 @@ export function registerTopicCommand(program: Command) {
         const input: Record<string, any> = {};
         if (options.agentId) input.agentId = options.agentId;
         if (options.limit) input.pageSize = Number.parseInt(options.limit, 10);
-        if (options.page) input.current = Number.parseInt(options.page, 10);
+        const page = options.page ? Number.parseInt(options.page, 10) : undefined;
+        if (page !== undefined && page > 1) input.current = page - 1;
 
         const result = await client.topic.getTopics.query(input as any);
         const items = Array.isArray(result) ? result : ((result as any).items ?? []);

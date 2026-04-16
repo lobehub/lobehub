@@ -46,7 +46,7 @@ import {
   userMemoriesPreferences,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { sanitizeBm25Query } from '../../utils/bm25';
+import { SAFE_BM25_QUERY_OPTIONS, sanitizeBm25Query } from '../../utils/bm25';
 import { selectNonVectorColumns } from '../../utils/columns';
 import { TopicModel } from '../topic';
 import type { UserMemoryHybridSearchAggregatedResult } from './query';
@@ -900,7 +900,9 @@ export class UserMemoryModel {
 
     const normalizedQuery = typeof q === 'string' ? q.trim() : '';
     const resolvedLayer = layer ?? LayersEnum.Context;
-    const bm25Query = normalizedQuery ? sanitizeBm25Query(normalizedQuery) : '';
+    const bm25Query = normalizedQuery
+      ? sanitizeBm25Query(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
+      : '';
 
     const conditions: Array<SQL | undefined> = [
       eq(userMemories.userId, this.userId),

@@ -4,6 +4,7 @@ import type {
   OperationToolSet,
   ResolvedToolSet,
   StepToolDelta,
+  ToolExecutor,
   ToolSource,
   UniformTool,
 } from './types';
@@ -32,6 +33,7 @@ export class ToolResolver {
     // Start from operation-level snapshot (shallow copies, with safe defaults)
     const tools: UniformTool[] = [...(operationToolSet.tools ?? [])];
     const sourceMap: Record<string, ToolSource> = { ...operationToolSet.sourceMap };
+    const executorMap: Record<string, ToolExecutor> = { ...operationToolSet.executorMap };
     const enabledToolIds: string[] = [...(operationToolSet.enabledToolIds ?? [])];
 
     // Only include manifests for enabled tools to prevent injecting
@@ -57,6 +59,7 @@ export class ToolResolver {
     if (stepDelta.deactivatedToolIds?.includes('*')) {
       return {
         enabledToolIds: [],
+        executorMap,
         manifestMap, // keep manifests for ToolNameResolver
         sourceMap,
         tools: [],
@@ -75,6 +78,7 @@ export class ToolResolver {
 
     return {
       enabledToolIds: [...new Set(enabledToolIds)],
+      executorMap,
       manifestMap,
       sourceMap,
       tools: dedupedTools,
@@ -97,7 +101,10 @@ export class ToolResolver {
       tools.push(...newTools);
       enabledToolIds.push(activation.id);
 
-      if (activation.source) {
+      // Only set source if not already present — the operation-level sourceMap
+      // may already have the correct routing source (e.g., 'lobehubSkill', 'klavis')
+      // and the activation source ('discovery') should not overwrite it.
+      if (activation.source && !sourceMap[activation.id]) {
         sourceMap[activation.id] = this.mapSource(activation.source);
       }
     }

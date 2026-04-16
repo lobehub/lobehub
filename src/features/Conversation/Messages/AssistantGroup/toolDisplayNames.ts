@@ -1,4 +1,5 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
 import { type AssistantContentBlock } from '@/types/index';
@@ -95,7 +96,11 @@ const toTitleCase = (apiName: string): string => {
 };
 
 export const getToolDisplayName = (apiName: string): string => {
-  return TOOL_API_DISPLAY_NAMES[apiName] || toTitleCase(apiName);
+  const defaultValue = toTitleCase(apiName);
+  const key = TOOL_API_DISPLAY_NAMES[apiName];
+  if (!key) return defaultValue;
+
+  return t(key, { defaultValue, ns: 'chat' });
 };
 
 export const getToolSummaryText = (tools: ChatToolPayloadWithResult[]): string => {
@@ -235,6 +240,27 @@ const stripLightMarkdownForHeadline = (md: string): string => {
   return s;
 };
 
+const extractMarkdownHeadingTitle = (md: string): string => {
+  const withoutCode = md.replaceAll(/```[\s\S]*?```/g, ' ');
+  const lines = withoutCode.split('\n');
+  let lastTitle = '';
+
+  for (const line of lines) {
+    const match = line.match(
+      new RegExp(`^\\s{0,3}#{1,${WORKFLOW_MARKDOWN_HEADING_MAX_LEVEL}}\\s+(.+?)\\s*$`),
+    );
+    if (!match) continue;
+
+    const raw = match[1]?.replace(/\s+#+\s*$/, '') ?? '';
+    const title = stripLightMarkdownForHeadline(raw).replaceAll(/\s+/g, ' ').trim();
+    if (!title) continue;
+
+    lastTitle = truncateDisplayAtWord(title, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
+  }
+
+  return lastTitle;
+};
+
 /**
  * Deterministic one-line snippet from streamed assistant prose (A path).
  * Prefers a full sentence when punctuation exists; otherwise trims to max width.
@@ -256,34 +282,75 @@ export const shapeProseForWorkflowHeadline = (source: string): string => {
   return truncateDisplayAtWord(s, WORKFLOW_PROSE_HEADLINE_MAX_CHARS);
 };
 
-/** Raw assistant `content` from the latest block that qualifies (scan from end). */
-export const extractLatestProseHeadlineSource = (blocks: AssistantContentBlock[]): string => {
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    const c = blocks[i]?.content?.trim() ?? '';
-    if (!c || c === LOADING_FLAT) continue;
-    if (c.length < WORKFLOW_PROSE_SOURCE_MIN_CHARS) continue;
-    return c;
-  }
-  return '';
+const getBlockContent = (block: AssistantContentBlock): string => {
+  const content = block.content?.trim() ?? '';
+  if (!content || content === LOADING_FLAT) return '';
+  return content;
 };
 
-export interface WorkflowStreamingHeadlineParts {
-  explicitStep: string;
-  fallbackTool: string;
-  proseSource: string;
-}
+const getBlockReasoningContent = (block: AssistantContentBlock): string => {
+  const reasoning = block.reasoning?.content?.trim() ?? '';
+  if (!reasoning || reasoning === LOADING_FLAT) return '';
+  return reasoning;
+};
 
-/** Split B / raw A source / C for streaming headline composition (A commits in UI with idle/sentence rules). */
-export const getWorkflowStreamingHeadlineParts = (
+const isThinkingOnlyBlock = (block: AssistantContentBlock): boolean => {
+  if (block.tools?.length) return false;
+  if ((block.imageList?.length ?? 0) > 0) return false;
+  return !!getBlockReasoningContent(block) && !getBlockContent(block) && !block.error;
+};
+
+export type WorkflowStreamingHeadlineState =
+  | { kind: 'idle' }
+  | { kind: 'prose'; proseSource: string }
+  | { kind: 'thinking'; reasoningTitle: string }
+  | { explicitStep: string; fallbackTool: string; kind: 'tool' };
+
+const getHeadlineStateFromBlock = (
+  block: AssistantContentBlock,
+): WorkflowStreamingHeadlineState | null => {
+  if (block.tools?.length) {
+    const lastTool = block.tools.at(-1);
+    const explicitStep = lastTool ? getExplicitStepHeadlineLine(lastTool) : '';
+    const fallbackTool = lastTool ? getToolFallbackHeadlineLine(lastTool) : '';
+    if (!explicitStep && !fallbackTool) return null;
+
+    return {
+      explicitStep,
+      fallbackTool,
+      kind: 'tool',
+    };
+  }
+
+  if (isThinkingOnlyBlock(block)) {
+    const reasoningTitle = extractMarkdownHeadingTitle(getBlockReasoningContent(block));
+    if (!reasoningTitle) return null;
+
+    return {
+      kind: 'thinking',
+      reasoningTitle,
+    };
+  }
+
+  const proseSource = getBlockContent(block);
+  if (proseSource.length < WORKFLOW_PROSE_SOURCE_MIN_CHARS) return null;
+
+  return { kind: 'prose', proseSource };
+};
+
+/** Walk backward and return the first block that can produce a meaningful headline state. */
+export const getWorkflowStreamingHeadlineState = (
   blocks: AssistantContentBlock[],
-  tools: ChatToolPayloadWithResult[],
-): WorkflowStreamingHeadlineParts => {
-  const last = tools.at(-1);
-  return {
-    explicitStep: last ? getExplicitStepHeadlineLine(last) : '',
-    fallbackTool: last ? getToolFallbackHeadlineLine(last) : '',
-    proseSource: extractLatestProseHeadlineSource(blocks),
-  };
+): WorkflowStreamingHeadlineState => {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i];
+    if (!block) continue;
+
+    const state = getHeadlineStateFromBlock(block);
+    if (state) return state;
+  }
+
+  return { kind: 'idle' };
 };
 
 export const formatReasoningDuration = (ms: number): string => {
@@ -309,7 +376,8 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
   for (const [apiName, { count, errorCount }] of groups) {
     let part = getToolDisplayName(apiName);
     if (count > 1) part += ` (${count})`;
-    if (errorCount > 0) part += ' (failed)';
+    if (errorCount > 0)
+      part += ` ${t('workflow.failedSuffix', { defaultValue: '(failed)', ns: 'chat' })}`;
     toolParts.push(part);
   }
 
@@ -317,7 +385,11 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
 
   const totalReasoningMs = blocks.reduce((sum, b) => sum + (b.reasoning?.duration ?? 0), 0);
   if (totalReasoningMs > 0) {
-    result += ` · Thought for ${formatReasoningDuration(totalReasoningMs)}`;
+    result += ` · ${t('workflow.thoughtForDuration', {
+      defaultValue: 'Thought for {{duration}}',
+      duration: formatReasoningDuration(totalReasoningMs),
+      ns: 'chat',
+    })}`;
   }
 
   return result;

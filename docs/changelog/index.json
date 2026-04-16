@@ -3,6 +3,14 @@
   "cloud": [],
   "community": [
     {
+      "image": "/blog/assets300abe7e259d293da6c5ed4f642a1be6.webp",
+      "id": "2026-04-13-gateway-sidebar",
+      "date": "2026-04-13",
+      "versionRange": [
+        "2.1.46"
+      ]
+    },
+    {
       "image": "/blog/assets7ea204859aeb5aa9be5810a20ba1669a.webp",
       "id": "2026-04-06-auto-completion",
       "date": "2026-04-06",

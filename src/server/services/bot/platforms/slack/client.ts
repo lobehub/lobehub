@@ -55,7 +55,6 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
         : slack.postMessage(channelId, content).then(() => {}),
     editMessage: (messageId, content) => slack.updateMessage(channelId, messageId, content),
     removeReaction: (messageId, emoji) => slack.removeReaction(channelId, messageId, emoji),
-    triggerTyping: () => Promise.resolve(),
   };
 }
 
@@ -215,10 +214,6 @@ class SlackWebhookClient implements PlatformClient {
 
   parseMessageId(compositeId: string): string {
     return compositeId;
-  }
-
-  sanitizeUserInput(text: string): string {
-    return text.replaceAll(/<@[A-Z\d]+>\s*/g, '').trim();
   }
 }
 
@@ -409,10 +404,6 @@ class SlackSocketModeClient implements PlatformClient {
   parseMessageId(compositeId: string): string {
     return compositeId;
   }
-
-  sanitizeUserInput(text: string): string {
-    return text.replaceAll(/<@[A-Z\d]+>\s*/g, '').trim();
-  }
 }
 
 // ---------- Factory ----------
@@ -429,13 +420,27 @@ export class SlackClientFactory extends ClientFactory {
     return new SlackWebhookClient(config, context);
   }
 
-  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+  async validateCredentials(
+    credentials: Record<string, string>,
+    settings?: Record<string, unknown>,
+  ): Promise<ValidationResult> {
     if (!credentials.botToken) {
       return { errors: [{ field: 'botToken', message: 'Bot Token is required' }], valid: false };
     }
     if (!credentials.signingSecret) {
       return {
         errors: [{ field: 'signingSecret', message: 'Signing Secret is required' }],
+        valid: false,
+      };
+    }
+    if (settings?.connectionMode === 'websocket' && !credentials.appToken) {
+      return {
+        errors: [
+          {
+            field: 'appToken',
+            message: 'App-Level Token is required for WebSocket (Socket Mode)',
+          },
+        ],
         valid: false,
       };
     }

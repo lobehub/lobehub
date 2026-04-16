@@ -6,7 +6,7 @@ Guidelines for using Claude Code in this LobeHub repository.
 
 - Next.js 16 + React 19 + TypeScript
 - SPA inside Next.js with `react-router-dom`
-- `@lobehub/ui`, antd for components; antd-style for CSS-in-JS
+- `@lobehub/ui`, antd for components; antd-style for CSS-in-JS — **prefer `createStaticStyles` with `cssVar.*`** (zero-runtime); only fall back to `createStyles` + `token` when styles genuinely need runtime computation. See `.cursor/docs/createStaticStyles_migration_guide.md`.
 - react-i18next for i18n; zustand for state management
 - SWR for data fetching; TRPC for type-safe backend
 - Drizzle ORM with PostgreSQL; Vitest for testing

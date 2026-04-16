@@ -60,6 +60,7 @@
   "response.520": "Entschuldigung, ein unerwarteter Fehler ist aufgetreten. Wir arbeiten an einer Lösung.",
   "response.522": "Entschuldigung, die Verbindung zum Server ist abgelaufen. Bitte versuchen Sie es später erneut.",
   "response.524": "Entschuldigung, der Server hat zu lange auf eine Antwort gewartet.",
+  "response.AccountDeactivated": "Ihr Konto wurde deaktiviert oder gesperrt. Dies kann aus Gründen der Richtlinien, der Sicherheit oder im Rahmen einer Kontoüberprüfung erfolgt sein. Bitte kontaktieren Sie den Support des Anbieters, um Unterstützung zu erhalten.",
   "response.AgentRuntimeError": "Laufzeitfehler im Lobe-Sprachmodell. Bitte überprüfen oder erneut versuchen.",
   "response.ComfyUIBizError": "Fehler bei der Anfrage an den ComfyUI-Dienst. Bitte überprüfen Sie die Details.",
   "response.ComfyUIEmptyResult": "ComfyUI hat kein Bild generiert. Bitte überprüfen Sie die Konfiguration.",

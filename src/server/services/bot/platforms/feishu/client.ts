@@ -64,7 +64,6 @@ function createMessenger(
     createMessage: (content) => api.sendMessage(chatId, content).then(() => {}),
     editMessage: (messageId, content) => api.editMessage(messageId, content).then(() => {}),
     removeReaction: () => Promise.resolve(),
-    triggerTyping: () => Promise.resolve(),
   };
 }
 

@@ -1,15 +1,20 @@
 'use client';
 
 import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Blocks } from 'lucide-react';
+import { Blocks, X } from 'lucide-react';
 import React, { createElement, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createSkillStoreModal } from '@/features/SkillStore';
+import { useGlobalStore } from '@/store/global';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
+
+// Bump this id when the banner content changes so dismissing the old
+// variant does not hide the new one.
+export const SKILL_INSTALL_BANNER_ID = 'skill-install-v1';
 
 const ICON_SIZE = 16;
 const AVATAR_SIZE = 24;
@@ -45,7 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin-block-end: -6px;
     padding-block: 42px 10px;
-    padding-inline: 16px;
+    padding-inline: 16px 12px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: 20px;
 
@@ -80,6 +85,8 @@ const SkillInstallBanner = memo(() => {
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+
   // Prefetch skill connections data so SkillStore opens faster
   const [useFetchLobehubSkillConnections, useFetchUserKlavisServers] = useToolStore((s) => [
     s.useFetchLobehubSkillConnections,
@@ -112,29 +119,49 @@ const SkillInstallBanner = memo(() => {
     createSkillStoreModal();
   }, []);
 
+  const handleDismiss = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const current = useGlobalStore.getState().status.dismissedBannerIds || [];
+      if (current.includes(SKILL_INSTALL_BANNER_ID)) return;
+      updateSystemStatus({
+        dismissedBannerIds: [...current, SKILL_INSTALL_BANNER_ID],
+      });
+    },
+    [updateSystemStatus],
+  );
+
   return (
     <div className={styles.banner} data-testid="skill-install-banner" onClick={handleOpenStore}>
       <Flexbox horizontal align="center" gap={4}>
         <Icon className={styles.icon} icon={Blocks} size={18} />
         <span className={styles.text}>{t('skillInstallBanner.title')}</span>
       </Flexbox>
-      {skillIcons.length > 0 && (
-        <div className={styles.iconGroup}>
-          {skillIcons.map(({ icon, key }, index) => (
-            <div
-              className={styles.avatar}
-              key={key}
-              style={{ marginLeft: index === 0 ? 0 : -6, zIndex: index }}
-            >
-              {typeof icon === 'string' ? (
-                <img alt={key} height={ICON_SIZE} src={icon} width={ICON_SIZE} />
-              ) : (
-                createElement(icon, { size: ICON_SIZE })
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <Flexbox horizontal align="center" gap={8}>
+        {skillIcons.length > 0 && (
+          <div className={styles.iconGroup}>
+            {skillIcons.map(({ icon, key }, index) => (
+              <div
+                className={styles.avatar}
+                key={key}
+                style={{ marginLeft: index === 0 ? 0 : -6, zIndex: index }}
+              >
+                {typeof icon === 'string' ? (
+                  <img alt={key} height={ICON_SIZE} src={icon} width={ICON_SIZE} />
+                ) : (
+                  createElement(icon, { size: ICON_SIZE })
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <ActionIcon
+          icon={X}
+          size="small"
+          title={t('skillInstallBanner.dismiss')}
+          onClick={handleDismiss}
+        />
+      </Flexbox>
     </div>
   );
 });

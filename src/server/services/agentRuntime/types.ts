@@ -1,5 +1,10 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
-import type { LobeToolManifest, OperationSkillSet, ToolSource } from '@lobechat/context-engine';
+import type {
+  LobeToolManifest,
+  OperationSkillSet,
+  ToolExecutor,
+  ToolSource,
+} from '@lobechat/context-engine';
 import { type UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -10,6 +15,7 @@ import { type AgentHook } from './hooks/types';
 
 export interface OperationToolSet {
   enabledToolIds?: string[];
+  executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
   sourceMap?: Record<string, ToolSource>;
   tools?: any[];
@@ -114,8 +120,16 @@ export interface AgentExecutionParams {
   externalRetryCount?: number;
   humanInput?: any;
   operationId: string;
+  /**
+   * Whether a rejection should resume execution by treating the rejected tool
+   * content as user input (maps to client `rejectAndContinueToolCalling`).
+   * When false or unset, a rejection halts the operation.
+   */
+  rejectAndContinue?: boolean;
   rejectionReason?: string;
   stepIndex: number;
+  /** ID of the pending tool message targeted by the intervention. */
+  toolMessageId?: string;
 }
 
 export interface AgentExecutionResult {

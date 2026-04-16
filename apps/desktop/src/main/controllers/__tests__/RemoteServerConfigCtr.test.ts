@@ -5,8 +5,13 @@ import type { App } from '@/core/App';
 
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, mockFetch } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  mockFetch: vi.fn(),
+}));
+
+vi.mock('@/utils/net-fetch', () => ({
+  netFetch: mockFetch,
 }));
 
 // Mock logger
@@ -420,13 +425,6 @@ describe('RemoteServerConfigCtr', () => {
   });
 
   describe('refreshAccessToken', () => {
-    let mockFetch: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      mockFetch = vi.fn();
-      global.fetch = mockFetch;
-    });
-
     it('should return error when remote server is not active', async () => {
       mockStoreManager.get.mockImplementation((key) => {
         if (key === 'dataSyncConfig') {

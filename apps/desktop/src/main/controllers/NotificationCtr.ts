@@ -3,7 +3,7 @@ import type {
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
 import { app, Notification } from 'electron';
-import { macOS, windows } from 'electron-is';
+import { linux, macOS, windows } from 'electron-is';
 
 import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
@@ -131,7 +131,12 @@ export default class NotificationCtr extends ControllerModule {
         silent: params.silent || false,
         timeoutType: 'default',
         title: params.title,
-        urgency: 'normal',
+        // On Linux/GNOME Shell, urgency 'normal' causes notifications to appear as banners.
+        // Clicking the dismiss (X) button on such banners can freeze the system for 30-45 seconds
+        // due to heavy gnome-shell processing. Using 'low' urgency routes notifications to the
+        // message tray instead, preventing the banner's X button from being shown.
+        // The urgency option is ignored on macOS and Windows.
+        urgency: linux() ? 'low' : 'normal',
       });
 
       // Add more event listeners for debugging

@@ -89,7 +89,7 @@ export default {
   'pageEditor.duplicateSuccess': 'Page duplicated successfully',
   'pageEditor.editedAt': 'Last edited on {{time}}',
   'pageEditor.editedBy': 'Last edited by {{name}}',
-  'pageEditor.editorPlaceholder': 'Start writing your page. Press / to open the command menu',
+  'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',
   'pageEditor.empty.title': 'Select a page to get started',

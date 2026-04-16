@@ -5,6 +5,7 @@ import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
@@ -45,6 +46,8 @@ export interface BotCallbackBody {
   shouldContinue?: boolean;
   stepType?: 'call_llm' | 'call_tool';
   thinking?: boolean;
+  /** Thread name from the platform (e.g. Discord thread title) */
+  threadName?: string;
   toolCalls?: number;
   toolsCalling?: any;
   toolsResult?: any;
@@ -74,7 +77,7 @@ export class BotCallbackService {
     const { type, applicationId, platformThreadId, progressMessageId } = body;
     const platform = platformThreadId.split(':')[0];
 
-    const { client, messenger, charLimit, settings } = await this.createMessenger(
+    const { client, connectionId, messenger, charLimit, settings } = await this.createMessenger(
       platform,
       applicationId,
       platformThreadId,
@@ -87,7 +90,16 @@ export class BotCallbackService {
       if (canEdit && progressMessageId && settings.displayToolCalls !== false) {
         await this.handleStep(body, messenger, progressMessageId, client);
       }
+      // Only renew typing when more steps are expected. The final step
+      // (shouldContinue=false) may arrive after the completion callback
+      // via async delivery (QStash), which would restart typing after stop.
+      if (body.shouldContinue) {
+        this.renewGatewayTyping(connectionId, platformThreadId);
+      }
     } else if (type === 'completion') {
+      // Stop typing on the gateway
+      this.stopGatewayTyping(connectionId, platformThreadId);
+
       await this.handleCompletion(
         body,
         messenger,
@@ -111,6 +123,7 @@ export class BotCallbackService {
     platformThreadId: string,
   ): Promise<{
     charLimit?: number;
+    connectionId: string;
     client: PlatformClient;
     messenger: PlatformMessenger;
     settings: Record<string, unknown>;
@@ -154,7 +167,7 @@ export class BotCallbackService {
     });
     const messenger = client.getMessenger(platformThreadId);
 
-    return { charLimit, client, messenger, settings };
+    return { charLimit, connectionId: row.id, messenger, client, settings };
   }
 
   private async handleStep(
@@ -199,7 +212,7 @@ export class BotCallbackService {
     try {
       await messenger.editMessage(progressMessageId, progressText);
       if (!isLlmFinalResponse) {
-        await messenger.triggerTyping();
+        await messenger.triggerTyping?.();
       }
     } catch (error) {
       log('handleStep: failed to edit progress message: %O', error);
@@ -297,8 +310,30 @@ export class BotCallbackService {
     }
   }
 
+  /**
+   * Renew typing on the message-gateway. Each POST resets the 30s auto-stop timeout.
+   * Fire-and-forget — typing is best-effort.
+   */
+  private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
+    const client = getMessageGatewayClient();
+    if (!client.isEnabled) return;
+
+    client.startTyping(connectionId, platformThreadId).catch((err) => {
+      log('renewGatewayTyping failed: %O', err);
+    });
+  }
+
+  private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
+    const client = getMessageGatewayClient();
+    if (!client.isEnabled) return;
+
+    client.stopTyping(connectionId, platformThreadId).catch((err) => {
+      log('stopGatewayTyping failed: %O', err);
+    });
+  }
+
   private summarizeTopicTitle(body: BotCallbackBody, messenger: PlatformMessenger): void {
-    const { reason, topicId, userId, userPrompt, lastAssistantContent } = body;
+    const { reason, topicId, userId, userPrompt, lastAssistantContent, threadName } = body;
     if (
       reason === 'error' ||
       reason === 'interrupted' ||
@@ -307,6 +342,21 @@ export class BotCallbackService {
       !userPrompt ||
       !lastAssistantContent
     ) {
+      return;
+    }
+
+    // Thread already has a user-set name — use it as topic title, skip LLM generation
+    if (threadName) {
+      const topicModel = new TopicModel(this.db, userId);
+      topicModel
+        .findById(topicId)
+        .then(async (topic) => {
+          if (topic?.title) return;
+          await topicModel.update(topicId, { title: threadName });
+        })
+        .catch((error) => {
+          log('summarizeTopicTitle: failed to set thread name as topic title: %O', error);
+        });
       return;
     }
 

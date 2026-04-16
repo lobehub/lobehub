@@ -60,6 +60,7 @@
   "response.520": "Nous sommes désolés, le serveur a rencontré un problème inattendu. Veuillez réessayer plus tard.",
   "response.522": "Nous sommes désolés, la connexion au serveur a expiré. Cela peut être dû à un réseau instable ou à une indisponibilité temporaire. Veuillez réessayer plus tard.",
   "response.524": "Nous sommes désolés, le serveur a expiré en attendant une réponse. Veuillez réessayer plus tard.",
+  "response.AccountDeactivated": "Votre compte a été désactivé ou suspendu. Cela peut être dû à des raisons liées aux politiques, à la sécurité ou à un examen du compte. Veuillez contacter le service d’assistance du fournisseur pour obtenir de l’aide.",
   "response.AgentRuntimeError": "Erreur d'exécution du modèle de langage Lobe. Veuillez diagnostiquer ou réessayer avec les informations ci-dessous.",
   "response.ComfyUIBizError": "Une erreur s'est produite lors de la requête au service ComfyUI. Veuillez diagnostiquer ou réessayer.",
   "response.ComfyUIEmptyResult": "Aucune image générée par ComfyUI. Veuillez vérifier la configuration du modèle ou réessayer.",

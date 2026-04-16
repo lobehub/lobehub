@@ -2,6 +2,7 @@
  * This file contains the root router of Lobe Chat tRPC-backend for Mobile App
  * Only includes routers that are actually used by the mobile client
  */
+import { mobileSubscriptionRouter } from '@/business/server/mobile-routers/mobileSubscription';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from '../lambda/agent';
@@ -36,6 +37,7 @@ export const mobileRouter = router({
   message: messageRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
+  subscription: mobileSubscriptionRouter,
   topic: topicRouter,
   upload: uploadRouter,
   user: userRouter,

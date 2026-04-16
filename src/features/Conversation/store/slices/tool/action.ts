@@ -3,7 +3,6 @@ import { type StateCreator } from 'zustand';
 import { useChatStore } from '@/store/chat';
 
 import { type Store as ConversationStore } from '../../action';
-import { dataSelectors } from '../data/selectors';
 
 /**
  * Tool Interaction Actions
@@ -72,22 +71,36 @@ export const toolSlice: StateCreator<
   },
 
   rejectAndContinueToolCall: async (toolMessageId: string, reason?: string) => {
-    const { context, waitForPendingArgsUpdate } = get();
+    const { context, hooks, waitForPendingArgsUpdate } = get();
 
     // Wait for any pending args update to complete before rejection
     await waitForPendingArgsUpdate(toolMessageId);
 
-    // First reject the tool call
-    await get().rejectToolCall(toolMessageId, reason);
+    // ===== Hook: onToolRejected =====
+    // Fire the hook here directly rather than going through `rejectToolCall`.
+    // `rejectToolCall` now delegates to `chatStore.rejectToolCalling`, so
+    // chaining it would (in Gateway mode) kick off a halting
+    // `decision='rejected'` resume op before our own
+    // `decision='rejected_continue'` call below, racing two resume ops on
+    // the same tool_call_id. In client mode it would also duplicate the
+    // reject bookkeeping since `chatStore.rejectAndContinueToolCalling`
+    // already calls `chatStore.rejectToolCalling` internally.
+    if (hooks.onToolRejected) {
+      const shouldProceed = await hooks.onToolRejected(toolMessageId, reason);
+      if (shouldProceed === false) return;
+    }
 
-    // Then delegate to ChatStore to continue the conversation with context
+    // Delegate to ChatStore for rejection + continuation. In Gateway mode
+    // this fires a single `decision='rejected_continue'` resume op; in
+    // client mode it persists the rejection via an internal
+    // `chatStore.rejectToolCalling` call before resuming the local runtime.
     const chatStore = useChatStore.getState();
     await chatStore.rejectAndContinueToolCalling(toolMessageId, reason, context);
   },
 
   rejectToolCall: async (toolMessageId: string, reason?: string) => {
     const state = get();
-    const { hooks, updateMessagePlugin, updateMessageContent, waitForPendingArgsUpdate } = state;
+    const { context, hooks, waitForPendingArgsUpdate } = state;
 
     // Wait for any pending args update to complete before rejection
     await waitForPendingArgsUpdate(toolMessageId);
@@ -98,23 +111,14 @@ export const toolSlice: StateCreator<
       if (shouldProceed === false) return;
     }
 
-    const toolMessage = dataSelectors.getDbMessageById(toolMessageId)(state);
-    if (!toolMessage) return;
-
-    // Update intervention status to rejected
-    await updateMessagePlugin(toolMessageId, {
-      intervention: {
-        rejectedReason: reason,
-        status: 'rejected',
-      },
-    });
-
-    // Update tool message content with rejection reason
-    const toolContent = !!reason
-      ? `User reject this tool calling with reason: ${reason}`
-      : 'User reject this tool calling without reason';
-
-    await updateMessageContent(toolMessageId, toolContent);
+    // Delegate to global ChatStore with context for correct conversation scope.
+    // In Gateway mode this also starts a new op carrying resumeApproval={decision:'rejected'}
+    // so the server releases the paused confirmation; without this the server op stays
+    // awaiting confirmation and the client loading state never clears.
+    // `chatStore.rejectToolCalling` does its own tool-message existence guard, so the
+    // lookup that used to live here is redundant.
+    const chatStore = useChatStore.getState();
+    await chatStore.rejectToolCalling(toolMessageId, reason, context);
   },
 
   skipToolInteraction: async (toolMessageId: string, reason?: string) => {

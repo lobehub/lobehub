@@ -1,11 +1,12 @@
-import type { ConversationContext } from '@lobechat/types';
-
 import type {
   AgentStreamEvent,
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
-} from '@/libs/agent-stream';
+  ToolExecuteData,
+} from '@lobechat/agent-gateway-client';
+import type { ConversationContext } from '@lobechat/types';
+
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
 
@@ -37,10 +38,17 @@ export const createGatewayEventHandler = (
   params: {
     assistantMessageId: string;
     context: ConversationContext;
+    /**
+     * Server-side operation id — used to look up the `AgentStreamClient` in
+     * `gatewayConnections` so we can `sendToolResult` back over the same WS.
+     * Defaults to `operationId` when the caller does not distinguish the two.
+     */
+    gatewayOperationId?: string;
     operationId: string;
   },
 ) => {
   const { context, operationId } = params;
+  const gatewayOperationId = params.gatewayOperationId ?? operationId;
 
   // Dispatch context — ensures internal_dispatchMessage resolves the correct messageMapKey
   const dispatchContext = { operationId };
@@ -128,6 +136,15 @@ export const createGatewayEventHandler = (
               currentAssistantMessageId,
               data.toolsCalling.map(() => true),
             );
+
+            // If the server attached a `toolMessageIds` map, it has persisted
+            // pending tool messages (human approval path). Fetch the latest
+            // messages so ApprovalActions can read them by id instead of
+            // waiting for `agent_runtime_end` (which won't fire while paused
+            // in `waiting_for_human`).
+            if ((data as any).toolMessageIds) {
+              fetchAndReplaceMessages(get, context).catch(console.error);
+            }
           }
         });
         break;
@@ -146,6 +163,21 @@ export const createGatewayEventHandler = (
       case 'tool_start': {
         // Server creates tool messages in DB.
         // Loading is already active from stream_start (not cleared by stream_end).
+        break;
+      }
+
+      case 'tool_execute': {
+        // Fire-and-forget: the client-side tool may take a long time, and we
+        // must keep processing other events (stream_chunk, tool_end, etc.) on
+        // the same WebSocket. `internal_executeClientTool` guarantees it never
+        // throws and always sends exactly one `tool_result` back.
+        //
+        // Use `gatewayOperationId` (server-side id, the key under
+        // `gatewayConnections`) so the action can look up the WS to reply on
+        // — NOT the local `operationId` used for `dispatchContext`.
+        const data = event.data as ToolExecuteData | undefined;
+        if (!data) break;
+        void get().internal_executeClientTool(data, { operationId: gatewayOperationId });
         break;
       }
 
@@ -178,8 +210,19 @@ export const createGatewayEventHandler = (
       }
 
       case 'error': {
-        enqueue(() => {
+        enqueue(async () => {
           const errorMsg = event.data?.message || event.data?.error || 'Unknown error';
+
+          get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+          get().completeOperation(operationId);
+
+          // Fetch from DB first — the server may have persisted a richer error
+          // detail into the message already.
+          await fetchAndReplaceMessages(get, context).catch(console.error);
+
+          // Then overlay the inline error. This ensures the UI always shows the
+          // error even if the server hasn't persisted it into the message yet
+          // (the DB fetch would have returned a message with no error field).
           get().internal_dispatchMessage(
             {
               id: currentAssistantMessageId,

@@ -114,6 +114,8 @@ export default {
   'unknownError.retry': 'Retry',
   'unknownError.title': 'Oops, the request took a nap',
 
+  'response.AccountDeactivated':
+    'Your account has been deactivated or suspended. This may be due to policy, security, or account review reasons. Please contact the provider support for assistance.',
   'response.ExceededContextWindow':
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
   'response.ExceededContextWindowCloud':

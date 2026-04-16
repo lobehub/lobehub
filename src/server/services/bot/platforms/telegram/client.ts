@@ -13,6 +13,7 @@ import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
+  type ExtractFilesResult,
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
@@ -24,6 +25,13 @@ import { extractBotId, setTelegramWebhook } from './helpers';
 import { markdownToTelegramHTML } from './markdownToHTML';
 
 const log = debug('bot-platform:telegram:bot');
+
+/**
+ * Telegram Bot API getFile limit.
+ * Files larger than this cannot be downloaded via the Bot API.
+ * @see https://core.telegram.org/bots/api#getfile
+ */
+const TELEGRAM_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 function extractChatId(platformThreadId: string): string {
   return platformThreadId.split(':')[1];
@@ -206,7 +214,7 @@ class TelegramWebhookClient implements PlatformClient {
    * Per-attachment errors are swallowed and logged so a single failed
    * download doesn't drop the rest of the message's attachments.
    */
-  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+  async extractFiles(message: Message): Promise<ExtractFilesResult | undefined> {
     const attachments = (message as any).attachments as
       | Array<{
           mimeType?: string;
@@ -222,6 +230,7 @@ class TelegramWebhookClient implements PlatformClient {
 
     const telegram = new TelegramApi(this.config.credentials.botToken);
     const results: AttachmentSource[] = [];
+    const warnings: string[] = [];
 
     for (const att of attachments) {
       const fileId = TelegramWebhookClient.resolveTelegramFileId(raw, att.type);
@@ -229,6 +238,23 @@ class TelegramWebhookClient implements PlatformClient {
         log('extractFiles: no file_id for type=%s in raw payload (skipping)', att.type);
         continue;
       }
+
+      // Check file size before attempting download (Telegram Bot API limit)
+      if (att.size && att.size > TELEGRAM_MAX_FILE_SIZE) {
+        const fileName = att.name ?? defaultNameForType(att.type);
+        const sizeMB = (att.size / (1024 * 1024)).toFixed(1);
+        log(
+          'extractFiles: file too large for Telegram Bot API (%s MB > 20 MB), type=%s, fileId=%s',
+          sizeMB,
+          att.type,
+          fileId,
+        );
+        warnings.push(
+          `File "${fileName}" (${sizeMB} MB) exceeds Telegram's 20 MB download limit and could not be processed.`,
+        );
+        continue;
+      }
+
       try {
         const buffer = await telegram.downloadFile(fileId);
         results.push({
@@ -248,7 +274,12 @@ class TelegramWebhookClient implements PlatformClient {
       }
     }
 
-    return results.length > 0 ? results : undefined;
+    if (results.length === 0 && warnings.length === 0) return undefined;
+
+    return {
+      files: results.length > 0 ? results : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
   }
 
   static resolveTelegramFileId(

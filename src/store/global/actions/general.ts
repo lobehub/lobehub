@@ -14,6 +14,7 @@ import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { DEFAULT_HIDDEN_SECTIONS, DEFAULT_SIDEBAR_ITEMS } from '../selectors/systemStatus';
 import { type GlobalStore } from '../store';
 
 const n = setNamespace('g');
@@ -128,6 +129,13 @@ export class GlobalGeneralActionImpl {
         [column]: width,
       },
     });
+  };
+
+  resetSidebarCustomization = (): void => {
+    this.#get().updateSystemStatus(
+      { hiddenSidebarSections: DEFAULT_HIDDEN_SECTIONS, sidebarItems: DEFAULT_SIDEBAR_ITEMS },
+      n('resetSidebarCustomization'),
+    );
   };
 
   updateSystemStatus = (status: Partial<SystemStatus>, action?: any): void => {

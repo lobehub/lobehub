@@ -225,7 +225,7 @@ describe('AgentEvalBenchmarkModel', () => {
     it('should order by createdAt descending', async () => {
       const results = await benchmarkModel.query(true);
 
-      // 最新的应该在前面
+      // The newest should come first
       // Order may vary in PGlite due to timing
       expect(results.length).toBeGreaterThanOrEqual(3);
     });

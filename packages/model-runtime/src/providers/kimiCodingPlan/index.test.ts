@@ -625,6 +625,7 @@ describe('LobeKimiCodingPlanAI', () => {
             endpoint: 'https://api.***.com/coding',
             error: apiError.error.error,
             errorType: bizErrorType,
+            message: 'API is temporarily overloaded',
             provider,
           });
         }

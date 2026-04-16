@@ -34,6 +34,17 @@ const getMotionDirectionByHistory = (
   return history.includes(nextKey) ? -1 : 1;
 };
 
+interface ExitingFrozenContentProps {
+  children: ReactNode;
+}
+
+const ExitingFrozenContent = memo<ExitingFrozenContentProps>(({ children }) => {
+  const isPresent = useIsPresent();
+  return <Freeze frozen={!isPresent}>{children}</Freeze>;
+});
+
+ExitingFrozenContent.displayName = 'ExitingFrozenContent';
+
 const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     position: relative;
@@ -57,8 +68,6 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 0;
   `,
   layer: css`
-    will-change: opacity, transform;
-
     position: absolute;
     inset: 0;
 
@@ -121,21 +130,9 @@ interface NavPanelDraggableProps {
   };
 }
 
-interface ExitingFrozenContentProps {
-  children: ReactNode;
-}
-
 const classNames = {
   content: draggableStyles.content,
 };
-
-const ExitingFrozenContent = memo<ExitingFrozenContentProps>(({ children }) => {
-  const isPresent = useIsPresent();
-
-  return <Freeze frozen={!isPresent}>{children}</Freeze>;
-});
-
-ExitingFrozenContent.displayName = 'ExitingFrozenContent';
 
 export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }) => {
   const [expand, togglePanel] = useGlobalStore((s) => [

@@ -1,6 +1,7 @@
 import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ExtractFilesResult } from '../types';
 import { TelegramApi } from './api';
 import { TelegramClientFactory } from './client';
 
@@ -44,10 +45,6 @@ describe('TelegramWebhookClient.extractFiles', () => {
   });
 
   it('extracts a Telegram photo using file_id from raw.photo[] (largest variant)', async () => {
-    // Reproduces the original Telegram-photo bug: the chat-adapter emits a
-    // photo attachment with no buffer/fetchData/url that survives Redis, only
-    // a `type: 'image'` discriminant. We must dig the file_id out of raw.photo
-    // and download it ourselves, picking the largest variant.
     const buffer = Buffer.from('largest-photo-bytes');
     downloadFileSpy.mockResolvedValue(buffer);
 
@@ -69,7 +66,7 @@ describe('TelegramWebhookClient.extractFiles', () => {
 
     expect(downloadFileSpy).toHaveBeenCalledTimes(1);
     expect(downloadFileSpy).toHaveBeenCalledWith('large');
-    expect(result).toEqual([
+    expect((result as ExtractFilesResult)?.files).toEqual([
       {
         buffer,
         mimeType: 'image/jpeg',
@@ -99,7 +96,9 @@ describe('TelegramWebhookClient.extractFiles', () => {
     );
 
     expect(downloadFileSpy).toHaveBeenCalledWith('tg-video-1');
-    expect(result).toEqual([{ buffer, mimeType: 'video/mp4', name: 'star.mp4', size: 932_036 }]);
+    expect((result as ExtractFilesResult)?.files).toEqual([
+      { buffer, mimeType: 'video/mp4', name: 'star.mp4', size: 932_036 },
+    ]);
   });
 
   it('extracts a Telegram document using file_id from raw.document', async () => {
@@ -129,7 +128,7 @@ describe('TelegramWebhookClient.extractFiles', () => {
     );
 
     expect(downloadFileSpy).toHaveBeenCalledWith('tg-doc-1');
-    expect(result).toEqual([
+    expect((result as ExtractFilesResult)?.files).toEqual([
       { buffer, mimeType: 'application/pdf', name: 'report.pdf', size: 4096 },
     ]);
   });
@@ -149,7 +148,7 @@ describe('TelegramWebhookClient.extractFiles', () => {
     );
 
     expect(downloadFileSpy).toHaveBeenCalledWith('tg-voice-1');
-    expect(result?.[0]?.mimeType).toBe('audio/ogg');
+    expect((result as ExtractFilesResult)?.files?.[0]?.mimeType).toBe('audio/ogg');
   });
 
   it('extracts a Telegram audio file (raw.audio) under the audio type', async () => {
@@ -179,7 +178,7 @@ describe('TelegramWebhookClient.extractFiles', () => {
     );
 
     expect(downloadFileSpy).toHaveBeenCalledWith('tg-audio-1');
-    expect(result?.[0]?.name).toBe('Erik Lund - Summertime.mp3');
+    expect((result as ExtractFilesResult)?.files?.[0]?.name).toBe('Erik Lund - Summertime.mp3');
   });
 
   it('returns undefined when no attachments are present', async () => {
@@ -190,8 +189,6 @@ describe('TelegramWebhookClient.extractFiles', () => {
   });
 
   it('returns undefined when attachment type has no matching media field in raw', async () => {
-    // Defensive case: attachment claims type 'image' but raw.photo is missing.
-    // We should NOT throw and NOT call downloadFile.
     const client = createClient();
     const result = await client.extractFiles!(
       makeMessage({
@@ -204,10 +201,6 @@ describe('TelegramWebhookClient.extractFiles', () => {
   });
 
   it('falls back to image/jpeg + image.jpg when att.mimeType and att.name are missing', async () => {
-    // Telegram's Bot API does not return mime_type or file_name for `photo`
-    // payloads — they are always JPEG by spec. This is the original bug:
-    // without inference, downstream classifies as application/octet-stream
-    // and routes to fileList instead of imageList.
     const buffer = Buffer.from('photo-bytes');
     downloadFileSpy.mockResolvedValue(buffer);
 
@@ -219,7 +212,7 @@ describe('TelegramWebhookClient.extractFiles', () => {
       }),
     );
 
-    expect(result).toEqual([
+    expect((result as ExtractFilesResult)?.files).toEqual([
       {
         buffer,
         mimeType: 'image/jpeg',
@@ -230,8 +223,6 @@ describe('TelegramWebhookClient.extractFiles', () => {
   });
 
   it('uses the explicit mimeType / name from the attachment when present', async () => {
-    // Quicktime video shouldn't be coerced to video/mp4 — Telegram fills
-    // in mime_type for non-photo media, and we should respect it.
     const buffer = Buffer.from('quicktime-bytes');
     downloadFileSpy.mockResolvedValue(buffer);
 
@@ -243,23 +234,17 @@ describe('TelegramWebhookClient.extractFiles', () => {
       }),
     );
 
-    expect(result?.[0]?.mimeType).toBe('video/quicktime');
-    expect(result?.[0]?.name).toBe('clip.mov');
+    expect((result as ExtractFilesResult)?.files?.[0]?.mimeType).toBe('video/quicktime');
+    expect((result as ExtractFilesResult)?.files?.[0]?.name).toBe('clip.mov');
   });
 
   it('skips a single failing attachment without dropping the others', async () => {
-    // First message has photo only, second has document only — they're
-    // separate Messages, but the test exercises the per-attachment try/catch
-    // by giving one Message two attachments where the first errors.
     const goodBuffer = Buffer.from('good');
     downloadFileSpy
       .mockRejectedValueOnce(new Error('telegram getFile 404'))
       .mockResolvedValueOnce(goodBuffer);
 
     const client = createClient();
-    // Construct a synthetic two-attachment message — in practice Telegram
-    // only sends one media field per update, but the resolver iterates the
-    // attachment list, and we want to verify it's resilient.
     const result = await client.extractFiles!(
       makeMessage({
         attachments: [{ type: 'image' }, { type: 'file' }],
@@ -271,7 +256,7 @@ describe('TelegramWebhookClient.extractFiles', () => {
     );
 
     expect(downloadFileSpy).toHaveBeenCalledTimes(2);
-    expect(result).toEqual([
+    expect((result as ExtractFilesResult)?.files).toEqual([
       {
         buffer: goodBuffer,
         mimeType: 'application/octet-stream',
@@ -279,6 +264,77 @@ describe('TelegramWebhookClient.extractFiles', () => {
         size: goodBuffer.length,
       },
     ]);
+  });
+
+  it('skips oversized file (>20 MB) and returns warning instead of downloading', async () => {
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        attachments: [
+          {
+            mimeType: 'application/pdf',
+            name: 'huge-report.pdf',
+            size: 25_000_000, // 25 MB — exceeds 20 MB limit
+            type: 'file',
+          },
+        ],
+        raw: {
+          chat: { id: 7019597964 },
+          document: {
+            file_id: 'tg-doc-big',
+            file_name: 'huge-report.pdf',
+            file_size: 25_000_000,
+            mime_type: 'application/pdf',
+          },
+        },
+      }),
+    );
+
+    expect(downloadFileSpy).not.toHaveBeenCalled();
+    expect((result as ExtractFilesResult)?.files).toBeUndefined();
+    expect((result as ExtractFilesResult)?.warnings).toHaveLength(1);
+    expect((result as ExtractFilesResult).warnings![0]).toContain('20 MB');
+    expect((result as ExtractFilesResult).warnings![0]).toContain('huge-report.pdf');
+  });
+
+  it('skips oversized file but still downloads smaller attachments in the same message', async () => {
+    const goodBuffer = Buffer.from('small-pdf');
+    downloadFileSpy.mockResolvedValueOnce(goodBuffer);
+
+    const client = createClient();
+    const result = await client.extractFiles!(
+      makeMessage({
+        attachments: [
+          { mimeType: 'video/mp4', name: 'big-video.mp4', size: 50_000_000, type: 'video' },
+          { mimeType: 'application/pdf', name: 'small.pdf', size: 4096, type: 'file' },
+        ],
+        raw: {
+          chat: { id: 7019597964 },
+          document: {
+            file_id: 'tg-doc-small',
+            file_name: 'small.pdf',
+            file_size: 4096,
+            mime_type: 'application/pdf',
+          },
+          video: {
+            file_id: 'tg-video-big',
+            file_name: 'big-video.mp4',
+            file_size: 50_000_000,
+            mime_type: 'video/mp4',
+          },
+        },
+      }),
+    );
+
+    // Only the small file should be downloaded
+    expect(downloadFileSpy).toHaveBeenCalledTimes(1);
+    expect(downloadFileSpy).toHaveBeenCalledWith('tg-doc-small');
+    expect((result as ExtractFilesResult)?.files).toEqual([
+      { buffer: goodBuffer, mimeType: 'application/pdf', name: 'small.pdf', size: 4096 },
+    ]);
+    // Warning returned for the oversized video
+    expect((result as ExtractFilesResult)?.warnings).toHaveLength(1);
+    expect((result as ExtractFilesResult).warnings![0]).toContain('big-video.mp4');
   });
 
   it('returns undefined and does not throw when downloadFile rejects entirely', async () => {

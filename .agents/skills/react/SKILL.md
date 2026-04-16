@@ -6,6 +6,9 @@ description: React component development guide. Use when working with React comp
 # React Component Writing Guide
 
 - Use antd-style for complex styles; for simple cases, use inline `style` attribute
+  - **Prefer `createStaticStyles` with `cssVar.*`** (zero-runtime) — module-level, no hook call required
+  - Only fall back to `createStyles` + `token` when styles genuinely need runtime computation (dynamic props, JS color fns like `readableColor`/`chroma`)
+  - See `.cursor/docs/createStaticStyles_migration_guide.md` for full pattern
 - Use `Flexbox` and `Center` from `@lobehub/ui` for layouts (see `references/layout-kit.md`)
 - Component priority: `src/components` > `@lobehub/ui/base-ui` > `@lobehub/ui` > custom implementation
   - Always prefer `@lobehub/ui/base-ui` primitives (Select, Modal, DropdownMenu, Popover, Switch, ScrollArea…) over antd equivalents
