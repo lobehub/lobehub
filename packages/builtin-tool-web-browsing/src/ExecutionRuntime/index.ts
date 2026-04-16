@@ -7,14 +7,22 @@ import type {
   SearchQuery,
   SearchServiceImpl,
 } from '@lobechat/types';
+import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
 import { CRAWL_CONTENT_LIMITED_COUNT, SEARCH_ITEM_LIMITED_COUNT } from '../const';
 
+export interface WebBrowsingRuntimeOptions {
+  onCrawlComplete?: (results: CrawlSuccessResult[]) => Promise<void>;
+  searchService: SearchServiceImpl;
+}
+
 export class WebBrowsingExecutionRuntime {
+  private onCrawlComplete?: (results: CrawlSuccessResult[]) => Promise<void>;
   private searchService: SearchServiceImpl;
 
-  constructor(options: { searchService: SearchServiceImpl }) {
+  constructor(options: WebBrowsingRuntimeOptions) {
     this.searchService = options.searchService;
+    this.onCrawlComplete = options.onCrawlComplete;
   }
 
   async search(
@@ -65,6 +73,21 @@ export class WebBrowsingExecutionRuntime {
     });
 
     const { results } = response;
+
+    // Invoke onCrawlComplete callback with successful results
+    if (this.onCrawlComplete) {
+      const successResults = results
+        .filter((item) => !('errorMessage' in item.data) && item.data.content)
+        .map((item) => item.data as CrawlSuccessResult);
+
+      if (successResults.length > 0) {
+        try {
+          await this.onCrawlComplete(successResults);
+        } catch (error) {
+          console.error('[WebBrowsing] onCrawlComplete callback failed:', error);
+        }
+      }
+    }
 
     const content = results.map((item) =>
       'errorMessage' in item
