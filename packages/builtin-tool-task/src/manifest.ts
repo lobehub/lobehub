@@ -81,13 +81,13 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'View details of a specific task. If no identifier is provided, returns the current task.',
+        'View details of a specific task. If identifier is omitted, this only works when there is a current task context.',
       name: TaskApiName.viewTask,
       parameters: {
         properties: {
           identifier: {
             description:
-              'The task identifier to view (e.g. "TASK-1"). Defaults to the current task if omitted.',
+              'The task identifier to view (e.g. "TASK-1"). If omitted, the current task is used only when a current task context exists.',
             type: 'string',
           },
         },

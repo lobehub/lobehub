@@ -12,7 +12,6 @@ import type { BuiltinToolContext, BuiltinToolResult, TaskStatus } from '@lobecha
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
-import { taskService } from '@/services/task';
 import { getTaskStoreState } from '@/store/task';
 
 import { normalizeListTasksParams } from '../listTasks';
@@ -20,18 +19,6 @@ import { TaskIdentifier } from '../manifest';
 import { TaskApiName } from '../types';
 
 const log = debug('lobe-task:executor');
-
-/**
- * Resolve the current task identifier from store state.
- * Used as fallback when LLM omits the identifier parameter.
- */
-const getCurrentTaskId = (): string | undefined => {
-  try {
-    return getTaskStoreState().activeTaskId;
-  } catch {
-    return undefined;
-  }
-};
 
 class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   readonly identifier = TaskIdentifier;
@@ -268,25 +255,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     try {
       log('[TaskExecutor] viewTask - params:', params);
 
-      const id = params.identifier || getCurrentTaskId();
-      if (!id) {
-        return {
-          content: 'No task identifier provided and no current task context.',
-          error: { message: 'No task identifier', type: 'NoTaskContext' },
-          success: false,
-        };
-      }
-
-      const result = await taskService.getDetail(id);
-      const detail = result.data;
-
-      if (!detail) {
-        return {
-          content: `Task not found: ${id}`,
-          error: { message: `Task not found: ${id}`, type: 'TaskNotFound' },
-          success: false,
-        };
-      }
+      const detail = await getTaskStoreState().fetchTaskDetail(params.identifier);
 
       return {
         content: formatTaskDetail(detail),

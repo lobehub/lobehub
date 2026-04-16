@@ -514,25 +514,7 @@ export const taskRouter = router({
 
   detail: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
-      const model = ctx.taskModel;
-      let task = await resolveOrThrow(model, input.id);
-
-      // Auto-detect heartbeat timeout for running tasks
-      if (task.status === 'running' && task.heartbeatTimeout && task.lastHeartbeatAt) {
-        const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
-        if (elapsed > task.heartbeatTimeout) {
-          await model.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
-          await ctx.taskTopicModel.timeoutRunning(task.id);
-          task = await resolveOrThrow(model, input.id);
-        }
-      }
-
-      // Clear stale heartbeat timeout error if task is no longer running
-      if (task.status !== 'running' && task.error === 'Heartbeat timeout') {
-        await model.update(task.id, { error: null });
-      }
-
-      const detail = await ctx.taskService.getTaskDetail(task.identifier);
+      const detail = await ctx.taskService.getTaskDetail(input.id);
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
       }

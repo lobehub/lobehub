@@ -64,6 +64,29 @@ export class TaskDetailSliceActionImpl {
     await this.internal_refreshTaskDetail(taskId);
   };
 
+  fetchTaskDetail = async (taskId?: string): Promise<TaskDetailData> => {
+    const resolvedId = taskId ?? this.#get().activeTaskId;
+
+    if (!resolvedId) {
+      throw new Error('No task identifier provided and no current task context.');
+    }
+
+    const result = await taskService.getDetail(resolvedId);
+    const detail = result.data;
+
+    if (!detail) {
+      throw new Error(`Task not found: ${resolvedId}`);
+    }
+
+    this.internal_dispatchTaskDetail({
+      id: detail.identifier,
+      type: 'setTaskDetail',
+      value: detail,
+    });
+
+    return detail;
+  };
+
   createTask = async (params: {
     assigneeAgentId?: string;
     description?: string;
@@ -156,19 +179,7 @@ export class TaskDetailSliceActionImpl {
     return useClientDataSWR(
       taskId ? [FETCH_TASK_DETAIL_KEY, taskId] : null,
       async ([, id]: [string, string]) => {
-        const result = await taskService.getDetail(id);
-        return result.data;
-      },
-      {
-        onSuccess: (data: TaskDetailData) => {
-          if (data && taskId) {
-            this.internal_dispatchTaskDetail({
-              id: taskId,
-              type: 'setTaskDetail',
-              value: data,
-            });
-          }
-        },
+        return this.fetchTaskDetail(id);
       },
     );
   };
