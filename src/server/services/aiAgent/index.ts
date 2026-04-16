@@ -755,9 +755,16 @@ export class AiAgentService {
       // leave executor unset so tools route via RemoteDevice proxy.
       const shouldDispatchToClient = clientRuntime === 'desktop' || !gatewayConfigured;
       if (shouldDispatchToClient) {
-        if (manifestMap.has(LocalSystemManifest.identifier)) {
-          toolExecutorMap[LocalSystemManifest.identifier] = 'client';
+        // Tools that declare `executors` including `'client'` in their
+        // manifest are dispatched to the client when a desktop caller is
+        // connected. `toolManifestMap` is a superset of `manifestMap`
+        // (includes both enabled plugins and discoverable builtins).
+        for (const id of Object.keys(toolManifestMap)) {
+          if (toolManifestMap[id]?.executors?.includes('client')) {
+            toolExecutorMap[id] = 'client';
+          }
         }
+        // Stdio MCP plugins: subprocess lives on the user's machine
         for (const plugin of installedPlugins) {
           if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
             toolExecutorMap[plugin.identifier] = 'client';
