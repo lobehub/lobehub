@@ -108,6 +108,7 @@
   "pageEditor.history.restoreConfirm.title": "Restore from history",
   "pageEditor.history.restoreError": "Failed to restore from history",
   "pageEditor.history.saveSource.autosave": "Auto Save",
+  "pageEditor.history.saveSource.llm_call": "AI Edit",
   "pageEditor.history.saveSource.manual": "Manual Save",
   "pageEditor.history.saveSource.restore": "Restore",
   "pageEditor.history.saveSource.system": "System",
