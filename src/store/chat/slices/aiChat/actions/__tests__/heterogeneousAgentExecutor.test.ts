@@ -565,6 +565,132 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // Full multi-step E2E
   // ────────────────────────────────────────────────────
 
+  // ────────────────────────────────────────────────────
+  // Orphan tool regression (img.png scenario)
+  // ────────────────────────────────────────────────────
+
+  describe('orphan tool regression', () => {
+    /**
+     * Reproduces the orphan tool scenario from img.png:
+     *
+     * Turn 1 (msg_01): text + Bash(git log)   → assistant1.tools should include git_log
+     * tool_result for git log
+     * Turn 2 (msg_02): Bash(git diff)          → assistant2.tools should include git_diff
+     * tool_result for git diff
+     * Turn 3 (msg_03): text summary
+     *
+     * The orphan happens when assistant2.tools[] does NOT contain
+     * the git_diff entry, making the tool message appear orphaned in the UI.
+     */
+    it('should register tools on the correct assistant in multi-turn tool execution', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      // Track ALL updateMessage calls to inspect tools[] writes
+      const toolsUpdates: Array<{ assistantId: string; tools: any[] }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({ assistantId: id, tools: val.tools });
+        }
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Turn 1: text + Bash (git log) — same message.id
+        ccAssistant('msg_01', [
+          { text: '没有未提交的修改，看看已提交但未推送的变更：', type: 'text' },
+        ]),
+        ccToolUse('msg_01', 'toolu_gitlog', 'Bash', { command: 'git log canary..HEAD --oneline' }),
+        ccToolResult('toolu_gitlog', 'abc123 feat: something\ndef456 fix: another'),
+        // Turn 2: Bash (git diff) — NEW message.id → step boundary
+        ccToolUse('msg_02', 'toolu_gitdiff', 'Bash', { command: 'git diff --stat' }),
+        ccToolResult('toolu_gitdiff', ' file1.ts | 10 +\n file2.ts | 5 -'),
+        // Turn 3: text summary — NEW message.id → step boundary
+        ccText('msg_03', '当前分支有2个未推送的提交，修改了2个文件。'),
+        ccResult(),
+      ]);
+
+      // ── Verify: Turn 1 tool registered on ast-initial ──
+      const gitlogToolUpdates = toolsUpdates.filter(
+        (u) => u.assistantId === 'ast-initial' && u.tools.some((t: any) => t.id === 'toolu_gitlog'),
+      );
+      expect(gitlogToolUpdates.length).toBeGreaterThanOrEqual(1);
+
+      // ── Verify: Turn 2 tool registered on ast-new-1 (step 2 assistant) ──
+      // This is the critical assertion — if this fails, the tool becomes orphaned
+      const gitdiffToolUpdates = toolsUpdates.filter(
+        (u) => u.assistantId === 'ast-new-1' && u.tools.some((t: any) => t.id === 'toolu_gitdiff'),
+      );
+      expect(gitdiffToolUpdates.length).toBeGreaterThanOrEqual(1);
+
+      // ── Verify: tool messages have correct parentId ──
+      const gitlogToolCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_gitlog',
+      );
+      expect(gitlogToolCreate![0].parentId).toBe('ast-initial');
+
+      const gitdiffToolCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_gitdiff',
+      );
+      expect(gitdiffToolCreate![0].parentId).toBe('ast-new-1');
+    });
+
+    it('should register tools on correct assistant when turn has ONLY tool_use (no text)', async () => {
+      // Edge case: turn 2 has only a tool_use, no text. The step transition creates
+      // a new assistant, then the tool_use must be registered on it (not the old one).
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({
+            assistantId: id,
+            toolIds: val.tools.map((t: any) => t.id),
+          });
+        }
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Turn 1: just text, no tools
+        ccText('msg_01', 'Let me check...'),
+        // Turn 2: only tool_use (no text in this turn)
+        ccToolUse('msg_02', 'toolu_bash', 'Bash', { command: 'ls -la' }),
+        ccToolResult('toolu_bash', 'total 100\ndrwx...'),
+        // Turn 3: final text
+        ccText('msg_03', 'Done.'),
+        ccResult(),
+      ]);
+
+      // The tool should be registered on ast-new-1 (step 2 assistant), not ast-initial
+      const bashToolUpdates = toolsUpdates.filter((u) => u.toolIds.includes('toolu_bash'));
+      expect(bashToolUpdates.length).toBeGreaterThanOrEqual(1);
+      // All of them should be on ast-new-1
+      for (const u of bashToolUpdates) {
+        expect(u.assistantId).toBe('ast-new-1');
+      }
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // Full multi-step E2E
+  // ────────────────────────────────────────────────────
+
   describe('full multi-step E2E', () => {
     it('should produce correct DB write sequence for Read → Write → text flow', async () => {
       const idCounter = { tool: 0, assistant: 0 };

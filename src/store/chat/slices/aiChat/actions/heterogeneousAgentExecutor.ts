@@ -298,10 +298,23 @@ export const executeHeterogeneousAgent = async (
     agentSessionId = result.sessionId;
     if (!agentSessionId) throw new Error('Agent session returned no sessionId');
 
+    // ─── Debug tracing (dev only) ───
+    const trace: Array<{ adaptedEvents: any[]; rawLine: any; timestamp: number }> = [];
+    if (typeof window !== 'undefined') {
+      (window as any).__HETERO_AGENT_TRACE = trace;
+    }
+
     // Subscribe to broadcasts BEFORE sending prompt
     unsubscribe = subscribeBroadcasts(agentSessionId, {
       onRawLine: (line) => {
         const events = adapter.adapt(line);
+
+        // Record for debugging
+        trace.push({
+          adaptedEvents: events.map((e) => ({ data: e.data, type: e.type })),
+          rawLine: line,
+          timestamp: Date.now(),
+        });
 
         for (const event of events) {
           // ─── tool_result: update tool message content in DB (ACP-only) ───
