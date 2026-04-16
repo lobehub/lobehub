@@ -1,7 +1,19 @@
-import type { DesktopHotkeyConfig, DesktopHotkeyId, DesktopHotkeyItem } from '@lobechat/types';
-import { DesktopHotkeyEnum, KeyEnum } from '@lobechat/types';
-
 const combineKeys = (keys: string[]) => keys.join('+');
+
+export const DesktopHotkeyEnum = {
+  OpenSettings: 'openSettings',
+  ShowApp: 'showApp',
+} as const;
+
+export type DesktopHotkeyId = (typeof DesktopHotkeyEnum)[keyof typeof DesktopHotkeyEnum];
+
+export interface DesktopHotkeyItem {
+  id: DesktopHotkeyId;
+  keys: string;
+  nonEditable?: boolean;
+}
+
+export type DesktopHotkeyConfig = Record<DesktopHotkeyId, string>;
 
 interface DesktopGlobalShortcutDefault {
   /** Electron `globalShortcut` accelerator; empty string means unregistered. */
@@ -26,7 +38,7 @@ export const DESKTOP_GLOBAL_SHORTCUT_DEFAULTS = [
     electronAccelerator: 'CommandOrControl+,',
     id: DesktopHotkeyEnum.OpenSettings,
     nonEditable: true,
-    uiKeys: combineKeys([KeyEnum.Mod, KeyEnum.Comma]),
+    uiKeys: combineKeys(['mod', 'comma']),
   },
 ] as const satisfies readonly DesktopGlobalShortcutDefault[];
 
