@@ -1,16 +1,10 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import pc from 'picocolors';
 import urlJoin from 'url-join';
 
 import { log } from './logger';
 
-export interface AgentStreamEvent {
-  data: any;
-  id?: string;
-  operationId: string;
-  stepIndex: number;
-  timestamp: number;
-  type: string;
-}
+export type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 interface StreamOptions {
   json?: boolean;

@@ -1,7 +1,6 @@
+import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
 import debug from 'debug';
 import urlJoin from 'url-join';
-
-import type { ToolExecuteData } from '@/libs/agent-stream/types';
 
 import {
   getDefaultReasonDetail,

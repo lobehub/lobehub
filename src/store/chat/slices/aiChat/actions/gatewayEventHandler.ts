@@ -1,12 +1,12 @@
-import type { ConversationContext } from '@lobechat/types';
-
 import type {
   AgentStreamEvent,
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
   ToolExecuteData,
-} from '@/libs/agent-stream';
+} from '@lobechat/agent-gateway-client';
+import type { ConversationContext } from '@lobechat/types';
+
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
 

@@ -1,12 +1,12 @@
+import {
+  AgentStreamClient,
+  type AgentStreamClientOptions,
+  type AgentStreamEvent,
+  type ConnectionStatus,
+} from '@lobechat/agent-gateway-client';
 import type { ConversationContext, ExecAgentResult } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
-import type {
-  AgentStreamClientOptions,
-  AgentStreamEvent,
-  ConnectionStatus,
-} from '@/libs/agent-stream';
-import { AgentStreamClient } from '@/libs/agent-stream/client';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
