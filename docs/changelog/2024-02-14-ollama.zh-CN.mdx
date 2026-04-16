@@ -1,6 +1,7 @@
 ---
-title: LobeHub 支持 Ollama 调用本地大语言模型（LLM）
-description: LobeHub vLobeHub v0.127.0 支持 Ollama 调用本地大语言模型。
+title: 本地模型与云端 AI 并行使用
+description: >-
+  LobeHub v0.127.0 新增 Ollama 支持，让你可以用与云端模型相同的界面运行本地大语言模型。
 tags:
   - Ollama AI
   - LobeHub
@@ -8,20 +9,35 @@ tags:
   - AI 对话
 ---
 
-# 支持 Ollama 调用本地大语言模型 🦙
+# 本地模型与云端 AI 并行使用
 
-随着 LobeHub v0.127.0 的发布，我们迎来了一个激动人心的特性 —— Ollama AI 支持！🤯 在 [Ollama AI](https://ollama.ai/) 强大的基础设施和 [社区的共同努力](https://github.com/lobehub/lobe-chat/pull/1265) 下，现在您可以在 LobeHub 中与本地 LLM (Large Language Model) 进行交流了！🤩
+云端模型固然强大，但有时你需要数据留在本地。可能是敏感项目，可能是想免去 API 费用做实验，也可能只是希望完全掌控整个技术栈。LobeHub v0.127.0 现已支持 Ollama，无论模型运行在云端还是本地机器，你都能获得一致的对话体验。
 
-我们非常高兴能在这个特别的时刻，向所有 LobeHub 用户介绍这项革命性的特性。Ollama AI 的集成不仅标志着我们技术上的一个巨大飞跃，更是向用户承诺，我们将不断追求更高效、更智能的沟通方式。
+无需学习新界面，无需割裂工作流程。将 LobeHub 指向你的 Ollama 实例，即可开始对话。
 
-## 💡 如何启动与本地 LLM 的对话？
+## 一行命令连接本地模型
 
-如果您在私有化部署方面遇到困难，强烈推荐尝试 LobeHub Cloud 服务。我们提供全方位的模型支持，让您轻松开启 AI 对话之旅。
-
-赶快来体验全新升级的 LobeHub v1.6，感受 GPT-4 带来的强大对话能力！
+启动过程非常简单。如果你已运行 Ollama，只需一条 Docker 命令即可连接：
 
 ```bash
 docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434/v1 lobehub/lobe-chat
 ```
 
-是的，就是这么简单！🤩 您不需要进行繁杂的配置，也不必担心复杂的安装过程。我们已经为您准备好了一切，只需一行命令，即可开启与本地 AI 的深度对话。
+仅此而已。LobeHub 会自动检测本地模型，并在你切换 GPT-4、Claude 等模型的同一处列出它们。根据每次对话的需求，自由混用云端和本地模型。
+
+## 本地模型的适用场景
+
+- **隐私优先工作**：敏感对话全程留在本地
+- **成本控制**：实验性使用无需按 token 付费
+- **离线使用**：无网络连接时仍可继续工作
+- **模型测试**：生产部署前评估开源模型效果
+
+## 体验优化与修复
+
+- 新增 Ollama 端点自动模型发现功能
+- 修复本地模型兼容性的流式响应处理问题
+- 优化 Ollama 服务不可达时的错误提示
+
+## 致谢
+
+衷心感谢实现 Ollama 集成的[社区贡献者](https://github.com/lobehub/lobe-chat/pull/1265)，以及 Ollama 团队打造的易用本地 AI 基础设施。

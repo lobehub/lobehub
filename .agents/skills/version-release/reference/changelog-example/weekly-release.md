@@ -4,42 +4,47 @@ A real-world changelog reference for weekly patch release PR bodies.
 
 ---
 
-This release includes **82 commits** , Key updates are below.
+This weekly release includes **82 commits**. The throughline is simple: less friction when moving from idea to execution. Across agent workflows, model coverage, and desktop polish, this release removes several small blockers that used to interrupt momentum.
 
-### New Features and Enhancements
+The result is not one headline feature, but a noticeably smoother week-to-week experience. Teams can evaluate agents with clearer structure, ship richer media flows, and spend less time debugging provider and platform edge cases.
 
-- Added **Agent Benchmark** support for more systematic agent performance evaluation.
-- Introduced the **video generation** feature end-to-end, including entry points, sidebar "new" badge support, and skeleton loading for topic switching.
-- Expanded memory capabilities: support for memory effort/tool permission configuration and improved timeout calculation for memory analysis tasks.
-- Added desktop editor support for image upload via file picker.
+## Agent workflows and media generation
 
-### Models and Provider Expansion
+Previously, some agent evaluation and media generation flows still felt fragmented: setup was manual, discoverability was uneven, and switching between topics could interrupt context. This release adds **Agent Benchmark** support and lands the **video generation** path end-to-end, from entry point to generation feedback.
 
-- Added a new provider: **Straico**.
-- Added/updated support for:
-  - Claude Sonnet 4.6
-  - Gemini 3.1 Pro Preview
-  - Qwen3.5 series
-  - Grok Imagine (`grok-imagine-image`)
-  - MiniMax 2.5
-- Added related i18n copy and model parameter adaptations.
+In practice, this means users can discover and run these workflows with fewer detours. Sidebar "new" indicators improve visibility, skeleton loading makes topic switches feel less abrupt, and memory-related controls now behave more predictably under real workload pressure.
 
-### Desktop Improvements
+We also expanded memory controls with effort and tool-permission configuration, and improved timeout calculation for memory analysis tasks so longer runs fail less often in production-like usage.
 
-- Integrated `electron-liquid-glass` (macOS Tahoe).
-- Improved DMG background assets and desktop release workflow.
+## Models and provider coverage
 
-### Stability, Security, and UX Fixes
+Provider diversity matters most when teams can adopt new models without rewriting glue code every sprint. This release adds **Straico** and updates support for Claude Sonnet 4.6, Gemini 3.1 Pro Preview, Qwen3.5, Grok Imagine (`grok-imagine-image`), and MiniMax 2.5.
 
-- Fixed multiple video generation pipeline issues: precharge refund handling, webhook token verification, pricing parameter usage, asset cleanup, and type safety.
-- Fixed `sanitizeFileName` path traversal risks and added unit tests.
-- Fixed MCP media URL generation with duplicated `APP_URL` prefix.
+Use these updates to:
+
+- route requests to newly available providers
+- test newer model families without custom patching
+- keep model parameters and related i18n copy aligned across providers
+
+This keeps model exploration practical: faster evaluation loops, fewer adaptation surprises, and cleaner cross-provider behavior.
+
+## Desktop and platform polish
+
+Desktop receives a set of quality-of-life upgrades that reduce "death by a thousand cuts" moments. We integrated `electron-liquid-glass` for macOS Tahoe and improved DMG background assets and packaging flow for more consistent release output.
+
+The desktop editor now supports image upload from the file picker, which shortens everyday authoring steps and removes one more reason to switch tools mid-task.
+
+## Improvements and fixes
+
+- Fixed multiple video pipeline issues across precharge refund handling, webhook token verification, pricing parameter usage, asset cleanup, and type safety.
+- Fixed path traversal risk in `sanitizeFileName` and added corresponding unit tests.
+- Fixed MCP media URL generation when `APP_URL` was duplicated in output paths.
 - Fixed Qwen3 embedding failures caused by batch-size limits.
-- Fixed multiple UI/interaction issues, including mobile header agent selector/topic count, ChatInput scrolling behavior, and tooltip stacking context.
+- Fixed several UI interaction issues, including mobile header agent selector/topic count, ChatInput scrolling behavior, and tooltip stacking context.
 - Fixed missing `@napi-rs/canvas` native bindings in Docker standalone builds.
 - Improved GitHub Copilot authentication retry behavior and response error handling in edge cases.
 
-### Credits
+## Credits
 
 Huge thanks to these contributors (alphabetical):
 
