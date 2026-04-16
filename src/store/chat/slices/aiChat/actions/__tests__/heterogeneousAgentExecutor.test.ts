@@ -432,9 +432,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id === 'ast-initial' && val.content === 'Hello world!',
       );
       expect(finalWrite).toBeDefined();
-      // lastModel is set from step_complete(turn_metadata), which uses the assistant event's model.
-      // The second event has no explicit model override, so it defaults to 'claude-sonnet-4-6'.
-      expect(finalWrite![1].model).toBe('claude-sonnet-4-6');
+      // lastModel is set from step_complete(turn_metadata). With usage dedup,
+      // only the FIRST event per message.id emits turn_metadata, so model stays
+      // as 'claude-opus-4-6' from the first event.
+      expect(finalWrite![1].model).toBe('claude-opus-4-6');
     });
 
     it('should write accumulated reasoning', async () => {

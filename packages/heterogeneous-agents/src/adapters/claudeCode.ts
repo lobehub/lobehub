@@ -57,6 +57,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   /** Track current message.id to detect step boundaries */
   private currentMessageId: string | undefined;
+  /** Track which message.id has already emitted usage (dedup) */
+  private usageEmittedForMessageId: string | undefined;
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -143,7 +145,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     // Per-turn model + usage snapshot — emitted as 'step_complete'-like
     // metadata event so executor can track latest model and accumulated usage.
-    if (raw.message?.model || raw.message?.usage) {
+    // DEDUP: same message.id carries identical usage on every content block
+    // (thinking, text, tool_use). Only emit once per message.id.
+    if ((raw.message?.model || raw.message?.usage) && messageId !== this.usageEmittedForMessageId) {
+      this.usageEmittedForMessageId = messageId;
       events.push(
         this.makeEvent('step_complete', {
           model: raw.message?.model,
@@ -250,6 +255,18 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
+    // Emit authoritative usage from result event (overrides per-turn accumulation)
+    const events: HeterogeneousAgentEvent[] = [];
+    if (raw.usage) {
+      events.push(
+        this.makeEvent('step_complete', {
+          costUsd: raw.total_cost_usd,
+          phase: 'result_usage',
+          usage: raw.usage,
+        }),
+      );
+    }
+
     const finalEvent: HeterogeneousAgentEvent = raw.is_error
       ? this.makeEvent('error', {
           error: raw.result || 'Agent execution failed',
@@ -257,7 +274,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         })
       : this.makeEvent('agent_runtime_end', {});
 
-    return [this.makeEvent('stream_end', {}), finalEvent];
+    return [...events, this.makeEvent('stream_end', {}), finalEvent];
   }
 
   // ─── Event factories ───

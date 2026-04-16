@@ -342,11 +342,25 @@ export const executeHeterogeneousAgent = async (
             continue;
           }
 
+          // ─── step_complete with result_usage: authoritative total from CC result event ───
+          if (event.type === 'step_complete' && event.data?.phase === 'result_usage') {
+            if (event.data.usage) {
+              // Override (not accumulate) — result event has the correct totals
+              accumulatedUsage.input_tokens = event.data.usage.input_tokens || 0;
+              accumulatedUsage.output_tokens = event.data.usage.output_tokens || 0;
+              accumulatedUsage.cache_creation_input_tokens =
+                event.data.usage.cache_creation_input_tokens || 0;
+              accumulatedUsage.cache_read_input_tokens =
+                event.data.usage.cache_read_input_tokens || 0;
+            }
+            continue;
+          }
+
           // ─── step_complete with turn_metadata: capture model + usage ───
           if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
             if (event.data.model) lastModel = event.data.model;
             if (event.data.usage) {
-              // Accumulate token usage across all turns
+              // Accumulate token usage across turns (deduped by adapter per message.id)
               accumulatedUsage.input_tokens += event.data.usage.input_tokens || 0;
               accumulatedUsage.output_tokens += event.data.usage.output_tokens || 0;
               accumulatedUsage.cache_creation_input_tokens +=
