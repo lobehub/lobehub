@@ -142,6 +142,7 @@ const Tool = memo<GroupToolProps>(
             identifier={identifier}
             intervention={intervention}
             isArgumentsStreaming={isArgumentsStreaming}
+            isToolCalling={isToolCalling}
             result={result}
           />
         }

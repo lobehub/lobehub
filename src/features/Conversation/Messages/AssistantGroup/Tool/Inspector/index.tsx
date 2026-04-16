@@ -22,11 +22,15 @@ interface InspectorProps {
    * Whether the tool arguments are currently streaming
    */
   isArgumentsStreaming?: boolean;
+  /**
+   * Whether the tool is currently executing (from operation state)
+   */
+  isToolCalling?: boolean;
   result?: { content: string | null; error?: any; state?: any };
 }
 
 const Inspectors = memo<InspectorProps>(
-  ({ identifier, apiName, arguments: argsStr, result, intervention, isArgumentsStreaming }) => {
+  ({ identifier, apiName, arguments: argsStr, result, intervention, isArgumentsStreaming, isToolCalling }) => {
     const hasError = !!result?.error;
     const hasSuccessResult = !!result?.content && result.content !== LOADING_FLAT;
     const hasResult = hasSuccessResult || hasError;
@@ -69,6 +73,7 @@ const Inspectors = memo<InspectorProps>(
         <Flexbox allowShrink horizontal align={'center'} gap={6}>
           <StatusIndicator
             intervention={intervention}
+            isToolExecuting={isToolCalling}
             result={result}
             successVariant={statusSuccessVariant}
           />
@@ -96,6 +101,7 @@ const Inspectors = memo<InspectorProps>(
       <Flexbox horizontal align={'center'} gap={6}>
         <StatusIndicator
           intervention={intervention}
+          isToolExecuting={isToolCalling}
           result={result}
           successVariant={statusSuccessVariant}
         />
