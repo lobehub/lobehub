@@ -68,7 +68,7 @@ describe('TaskLifecycleSliceAction', () => {
 
       await useTaskStore.getState().updateTaskStatus('T-1', 'paused');
 
-      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'paused');
+      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'paused', undefined);
     });
 
     it('should optimistically set status', async () => {
@@ -85,7 +85,7 @@ describe('TaskLifecycleSliceAction', () => {
 
       await useTaskStore.getState().updateTaskStatus('T-1', 'canceled');
 
-      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'canceled');
+      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'canceled', undefined);
     });
 
     it('should call updateStatus with backlog', async () => {
@@ -93,7 +93,7 @@ describe('TaskLifecycleSliceAction', () => {
 
       await useTaskStore.getState().updateTaskStatus('T-1', 'backlog');
 
-      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'backlog');
+      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'backlog', undefined);
     });
 
     it('should call updateStatus with completed', async () => {
@@ -101,7 +101,7 @@ describe('TaskLifecycleSliceAction', () => {
 
       await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
 
-      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'completed');
+      expect(taskService.updateStatus).toHaveBeenCalledWith('T-1', 'completed', undefined);
     });
   });
 
