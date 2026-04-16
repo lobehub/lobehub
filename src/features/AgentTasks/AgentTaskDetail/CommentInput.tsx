@@ -1,5 +1,5 @@
-import { ChatInput, SendButton, useEditor } from '@lobehub/editor/react';
-import { Flexbox, TextArea } from '@lobehub/ui';
+import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,16 +23,6 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
     }
   }, [taskId, editor, addComment, submitting]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        handleSubmit();
-      }
-    },
-    [handleSubmit],
-  );
-
   return (
     <ChatInput
       gap={8}
@@ -50,12 +40,20 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
         </Flexbox>
       }
     >
-      <TextArea
-        autoSize={{ maxRows: 4, minRows: 1 }}
+      <Editor
+        content={''}
+        editor={editor}
+        enablePasteMarkdown={false}
+        markdownOption={false}
         placeholder={t('taskDetail.commentPlaceholder')}
-        style={{ padding: 0 }}
-        variant={'borderless'}
-        onKeyDown={handleKeyDown}
+        type={'text'}
+        variant={'chat'}
+        onPressEnter={({ event }) => {
+          if (event.metaKey || event.ctrlKey) {
+            handleSubmit();
+            return true;
+          }
+        }}
       />
     </ChatInput>
   );
