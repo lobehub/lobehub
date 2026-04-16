@@ -29,7 +29,7 @@ const CLI_PRESETS: Record<string, CLIPreset> = {
       'stream-json',
       '--verbose',
       '--permission-mode',
-      'acceptEdits',
+      'bypassPermissions',
     ],
     promptMode: 'positional',
     resumeArgs: (sid) => ['--resume', sid],
