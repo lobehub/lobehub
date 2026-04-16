@@ -5,6 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
@@ -22,6 +23,20 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
+  const ancestors = useTaskStore(
+    useShallow((s) => {
+      if (!taskId) return [];
+      const chain: string[] = [];
+      const visited = new Set<string>([taskId]);
+      let cursor = s.taskDetailMap[taskId]?.parent?.identifier;
+      while (cursor && !visited.has(cursor)) {
+        visited.add(cursor);
+        chain.push(cursor);
+        cursor = s.taskDetailMap[cursor]?.parent?.identifier;
+      }
+      return chain.reverse();
+    }),
+  );
 
   const isInboxAgent = agentId === INBOX_SESSION_ID || (!!inboxAgentId && agentId === inboxAgentId);
   const agentName =
@@ -53,6 +68,16 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
             </Link>
           ),
         },
+        ...ancestors.map((identifier) => ({
+          key: identifier,
+          title: (
+            <Link to={`/agent/${agentId}/tasks/${identifier}`}>
+              <Text color={'inherit'} weight={500}>
+                {identifier}
+              </Text>
+            </Link>
+          ),
+        })),
         ...(taskId
           ? [
               {
