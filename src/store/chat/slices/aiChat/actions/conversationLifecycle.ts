@@ -438,11 +438,16 @@ export class ConversationLifecycleActionImpl {
         const { executeHeterogeneousAgent } = await import('./heterogeneousAgentExecutor');
         const workingDirectory =
           agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+        // Extract imageList from the persisted user message (chatUploadFileList
+        // may already be cleared by this point, so we read from DB instead)
+        const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
+        const persistedImageList = userMsg?.imageList;
+
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,
           context: heteroContext,
           heterogeneousProvider,
-          imageList: tempImages.length > 0 ? tempImages : undefined,
+          imageList: persistedImageList?.length ? persistedImageList : undefined,
           message,
           operationId: heteroOpId,
           workingDirectory,
