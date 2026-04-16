@@ -4,7 +4,10 @@
  * Handles web search and page crawling tool calls.
  */
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
+import {
+  type WebBrowsingDocumentService,
+  WebBrowsingExecutionRuntime,
+} from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 import {
   type BuiltinToolContext,
   type BuiltinToolResult,
@@ -17,31 +20,25 @@ import { agentDocumentService } from '@/services/agentDocument';
 import { notebookService } from '@/services/notebook';
 import { searchService } from '@/services/search';
 
-const runtime = new WebBrowsingExecutionRuntime({
-  documentService: {
-    associateDocument: async (documentId, context) => {
-      if (!context.agentId) return;
+const searchRuntime = new WebBrowsingExecutionRuntime({ searchService });
 
-      await agentDocumentService.associateDocument({
-        agentId: context.agentId,
-        documentId,
-      });
-    },
-    createDocument: async ({ content, description, title, url }, context) => {
-      if (!context.topicId) throw new Error('topicId is required');
-
-      return notebookService.createDocument({
-        content,
-        description: description || `Crawled from ${url}`,
-        source: url,
-        sourceType: 'web',
-        title,
-        topicId: context.topicId,
-        type: 'article',
-      });
-    },
+const createDocumentService = (ctx: BuiltinToolContext): WebBrowsingDocumentService => ({
+  associateDocument: async (documentId) => {
+    if (!ctx.agentId) return;
+    await agentDocumentService.associateDocument({ agentId: ctx.agentId, documentId });
   },
-  searchService,
+  createDocument: async ({ content, description, title, url }) => {
+    if (!ctx.topicId) throw new Error('topicId is required to save document');
+    return notebookService.createDocument({
+      content,
+      description: description || `Crawled from ${url}`,
+      source: url,
+      sourceType: 'web',
+      title,
+      topicId: ctx.topicId,
+      type: 'article',
+    });
+  },
 });
 
 class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
@@ -53,22 +50,16 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
    */
   search = async (params: SearchQuery, ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
     try {
-      // Check if aborted
       if (ctx.signal?.aborted) {
         return { stop: true, success: false };
       }
 
-      const result = await runtime.search(params, { signal: ctx.signal });
+      const result = await searchRuntime.search(params, { signal: ctx.signal });
 
       if (result.success) {
-        return {
-          content: result.content,
-          state: result.state,
-          success: true,
-        };
+        return { content: result.content, state: result.state, success: true };
       }
 
-      // Handle specific error cases
       const error = result.error as Error;
       if (error?.message === SEARCH_SEARXNG_NOT_CONFIG) {
         return {
@@ -91,18 +82,11 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
       };
     } catch (e) {
       const err = e as Error;
-
-      // Handle abort error
       if (err.name === 'AbortError' || err.message.includes('The user aborted a request.')) {
         return { stop: true, success: false };
       }
-
       return {
-        error: {
-          body: e,
-          message: err.message,
-          type: 'PluginServerError',
-        },
+        error: { body: e, message: err.message, type: 'PluginServerError' },
         success: false,
       };
     }
@@ -126,22 +110,21 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
-      // Check if aborted
       if (ctx.signal?.aborted) {
         return { stop: true, success: false };
       }
 
-      const result = await runtime.crawlMultiPages(params, {
+      const runtime = new WebBrowsingExecutionRuntime({
         agentId: ctx.agentId,
+        documentService: ctx.topicId ? createDocumentService(ctx) : undefined,
+        searchService,
         topicId: ctx.topicId ?? undefined,
       });
 
+      const result = await runtime.crawlMultiPages(params);
+
       if (result.success) {
-        return {
-          content: result.content,
-          state: result.state,
-          success: true,
-        };
+        return { content: result.content, state: result.state, success: true };
       }
 
       return {
@@ -155,18 +138,11 @@ class WebBrowsingExecutor extends BaseExecutor<typeof WebBrowsingApiName> {
       };
     } catch (e) {
       const err = e as Error;
-
-      // Handle abort error
       if (err.name === 'AbortError' || err.message.includes('The user aborted a request.')) {
         return { stop: true, success: false };
       }
-
       return {
-        error: {
-          body: e,
-          message: err.message,
-          type: 'PluginServerError',
-        },
+        error: { body: e, message: err.message, type: 'PluginServerError' },
         success: false,
       };
     }

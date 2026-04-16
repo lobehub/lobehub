@@ -92,6 +92,13 @@ export class AgentDocumentModel {
   }): Promise<{ id: string }> {
     const { agentId, documentId, policyLoad } = params;
 
+    // Verify the document belongs to the current user
+    const doc = await this.db.query.documents.findFirst({
+      where: and(eq(documents.id, documentId), eq(documents.userId, this.userId)),
+    });
+
+    if (!doc) return { id: '' };
+
     const [result] = await this.db
       .insert(agentDocuments)
       .values({

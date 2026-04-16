@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import { DOCUMENT_FOLDER_TYPE, documents } from '../schemas';
@@ -21,18 +21,13 @@ export class DocumentModel {
   }
 
   findOrCreateFolder = async (name: string, parentId?: string): Promise<DocumentItem> => {
-    const conditions = [
-      eq(documents.userId, this.userId),
-      eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
-      eq(documents.filename, name),
-    ];
-
-    if (parentId) {
-      conditions.push(eq(documents.parentId, parentId));
-    }
-
     const existing = await this.db.query.documents.findFirst({
-      where: and(...conditions),
+      where: and(
+        eq(documents.userId, this.userId),
+        eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        eq(documents.filename, name),
+        parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
+      ),
     });
 
     if (existing) return existing;
