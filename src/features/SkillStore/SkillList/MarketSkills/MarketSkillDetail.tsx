@@ -11,14 +11,13 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PublishedTime from '@/components/PublishedTime';
+import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
+import FileTree from '@/features/FileTree';
 import { marketApiService } from '@/services/marketApi';
 import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { type DiscoverSkillDetail as DiscoverSkillDetailType } from '@/types/discover';
-
-import ContentViewer from '../../../AgentSkillDetail/ContentViewer';
-import FileTree from '../../../AgentSkillDetail/FileTree';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`

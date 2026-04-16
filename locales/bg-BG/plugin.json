@@ -564,6 +564,7 @@
   "skillDetail.tabs.tools": "Възможности",
   "skillDetail.tools": "Инструменти",
   "skillDetail.trustWarning": "Използвайте само конектори от разработчици, на които имате доверие. LobeHub не контролира кои инструменти са предоставени от разработчиците и не може да гарантира, че ще работят според очакванията или че няма да бъдат променени.",
+  "skillInstallBanner.dismiss": "Отхвърли",
   "skillInstallBanner.title": "Добавете умения към Lobe AI",
   "store.actions.cancel": "Отказ",
   "store.actions.configure": "Конфигурирай",

@@ -39,155 +39,161 @@ const actionBarHolder = (
   />
 );
 interface GroupMessageProps {
+  defaultWorkflowExpanded?: boolean;
   disableEditing?: boolean;
   id: string;
   index: number;
   isLatestItem?: boolean;
 }
 
-const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => {
-  // Get message and actionsConfig from ConversationStore
-  const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
+const GroupMessage = memo<GroupMessageProps>(
+  ({ defaultWorkflowExpanded, id, index, disableEditing }) => {
+    // Get message and actionsConfig from ConversationStore
+    const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
 
-  const { agentId, usage, createdAt, children, performance, model, provider, branch, metadata } =
-    item;
-  const avatar = useAgentMeta(agentId);
+    const { agentId, usage, createdAt, children, performance, model, provider, branch, metadata } =
+      item;
+    const avatar = useAgentMeta(agentId);
 
-  // Collect fileList from all children blocks
-  const aggregatedFileList = useMemo(() => {
-    if (!children || children.length === 0) return [];
-    return children.flatMap((child: AssistantContentBlock) => child.fileList || []);
-  }, [children]);
+    // Collect fileList from all children blocks
+    const aggregatedFileList = useMemo(() => {
+      if (!children || children.length === 0) return [];
+      return children.flatMap((child: AssistantContentBlock) => child.fileList || []);
+    }, [children]);
 
-  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
-  const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
-  const openChatSettings = useOpenChatSettings();
+    const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+    const [toggleSystemRole] = useGlobalStore((s) => [s.toggleSystemRole]);
+    const openChatSettings = useOpenChatSettings();
 
-  // Get the latest message block from the group that doesn't contain tools
-  const lastAssistantMsg = useConversationStore(
-    dataSelectors.getGroupLatestMessageWithoutTools(id),
-  );
+    // Get the latest message block from the group that doesn't contain tools
+    const lastAssistantMsg = useConversationStore(
+      dataSelectors.getGroupLatestMessageWithoutTools(id),
+    );
 
-  const contentId = lastAssistantMsg?.id;
+    const contentId = lastAssistantMsg?.id;
 
-  // Get editing and interrupted state from ConversationStore
-  const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
-  // Check interrupted on both the group root and the active block, because
-  // continuation runs attach their operations to lastBlockId (contentId),
-  // not the group root.
-  const groupInterrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
-  const blockInterrupted = useConversationStore(
-    messageStateSelectors.isMessageInterrupted(contentId || ''),
-  );
-  const interrupted = groupInterrupted || blockInterrupted;
+    // Get editing and interrupted state from ConversationStore
+    const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
+    // Check interrupted on both the group root and the active block, because
+    // continuation runs attach their operations to lastBlockId (contentId),
+    // not the group root.
+    const groupInterrupted = useConversationStore(messageStateSelectors.isMessageInterrupted(id));
+    const blockInterrupted = useConversationStore(
+      messageStateSelectors.isMessageInterrupted(contentId || ''),
+    );
+    const interrupted = groupInterrupted || blockInterrupted;
 
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const addReaction = useConversationStore((s) => s.addReaction);
-  const removeReaction = useConversationStore((s) => s.removeReaction);
-  const userId = useUserStore(userProfileSelectors.userId)!;
-  const reactions: EmojiReaction[] = metadata?.reactions || [];
+    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+    const addReaction = useConversationStore((s) => s.addReaction);
+    const removeReaction = useConversationStore((s) => s.removeReaction);
+    const userId = useUserStore(userProfileSelectors.userId)!;
+    const reactions: EmojiReaction[] = metadata?.reactions || [];
 
-  const handleReactionClick = useCallback(
-    (emoji: string) => {
-      const existing = reactions.find((r) => r.emoji === emoji);
-      if (existing && existing.users.includes(userId)) {
-        removeReaction(id, emoji);
+    const handleReactionClick = useCallback(
+      (emoji: string) => {
+        const existing = reactions.find((r) => r.emoji === emoji);
+        if (existing && existing.users.includes(userId)) {
+          removeReaction(id, emoji);
+        } else {
+          addReaction(id, emoji);
+        }
+      },
+      [id, reactions, addReaction, removeReaction],
+    );
+
+    const isReactionActive = useCallback(
+      (emoji: string) => {
+        const reaction = reactions.find((r) => r.emoji === emoji);
+        return !!reaction && reaction.users.includes(userId);
+      },
+      [reactions],
+    );
+
+    const setMessageItemActionElementPortialContext =
+      useSetMessageItemActionElementPortialContext();
+    const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
+
+    const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
+      (e) => {
+        if (disableEditing) return;
+        setMessageItemActionElementPortialContext(e.currentTarget);
+        setMessageItemActionTypeContext({ id, index, type: 'assistantGroup' });
+      },
+      [
+        disableEditing,
+        id,
+        index,
+        setMessageItemActionElementPortialContext,
+        setMessageItemActionTypeContext,
+      ],
+    );
+
+    const onAvatarClick = useCallback(() => {
+      if (!isInbox) {
+        toggleSystemRole(true);
       } else {
-        addReaction(id, emoji);
+        openChatSettings();
       }
-    },
-    [id, reactions, addReaction, removeReaction],
-  );
+    }, [isInbox]);
 
-  const isReactionActive = useCallback(
-    (emoji: string) => {
-      const reaction = reactions.find((r) => r.emoji === emoji);
-      return !!reaction && reaction.users.includes(userId);
-    },
-    [reactions],
-  );
-
-  const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
-  const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
-
-  const onMouseEnter: MouseEventHandler<HTMLDivElement> = useCallback(
-    (e) => {
-      if (disableEditing) return;
-      setMessageItemActionElementPortialContext(e.currentTarget);
-      setMessageItemActionTypeContext({ id, index, type: 'assistantGroup' });
-    },
-    [
-      disableEditing,
-      id,
-      index,
-      setMessageItemActionElementPortialContext,
-      setMessageItemActionTypeContext,
-    ],
-  );
-
-  const onAvatarClick = useCallback(() => {
-    if (!isInbox) {
-      toggleSystemRole(true);
-    } else {
-      openChatSettings();
-    }
-  }, [isInbox]);
-
-  return (
-    <ChatItem
-      showTitle
-      avatar={avatar}
-      placement={'left'}
-      time={createdAt}
-      actions={
-        !disableEditing && (
-          <>
-            {isDevMode && branch && (
-              <MessageBranch
-                activeBranchIndex={branch.activeBranchIndex}
-                count={branch.count}
-                messageId={id}
-              />
-            )}
-            {actionBarHolder}
-          </>
-        )
-      }
-      onAvatarClick={onAvatarClick}
-      onMouseEnter={onMouseEnter}
-    >
-      {children && children.length > 0 && (
-        <Group
-          blocks={children}
-          content={lastAssistantMsg?.content}
-          contentId={contentId}
-          disableEditing={disableEditing}
-          id={id}
-          messageIndex={index}
-        />
-      )}
-      {aggregatedFileList.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <FileListViewer items={aggregatedFileList} />
-        </div>
-      )}
-      {interrupted && <InterruptedHint />}
-      {isDevMode && model && (
-        <Usage model={model} performance={performance} provider={provider!} usage={usage} />
-      )}
-      {reactions.length > 0 && (
-        <ReactionDisplay
-          isActive={isReactionActive}
-          messageId={id}
-          reactions={reactions}
-          onReactionClick={handleReactionClick}
-        />
-      )}
-      <Suspense fallback={null}>
-        {editing && contentId && <EditState content={lastAssistantMsg?.content} id={contentId} />}
-      </Suspense>
-    </ChatItem>
-  );
-}, isEqual);
+    return (
+      <ChatItem
+        showTitle
+        avatar={avatar}
+        placement={'left'}
+        time={createdAt}
+        actions={
+          !disableEditing && (
+            <>
+              {isDevMode && branch && (
+                <MessageBranch
+                  activeBranchIndex={branch.activeBranchIndex}
+                  count={branch.count}
+                  messageId={id}
+                />
+              )}
+              {actionBarHolder}
+            </>
+          )
+        }
+        onAvatarClick={onAvatarClick}
+        onMouseEnter={onMouseEnter}
+      >
+        {children && children.length > 0 && (
+          <Group
+            blocks={children}
+            content={lastAssistantMsg?.content}
+            contentId={contentId}
+            defaultWorkflowExpanded={defaultWorkflowExpanded}
+            disableEditing={disableEditing}
+            id={id}
+            messageIndex={index}
+          />
+        )}
+        {aggregatedFileList.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <FileListViewer items={aggregatedFileList} />
+          </div>
+        )}
+        {interrupted && <InterruptedHint />}
+        {isDevMode && model && (
+          <Usage model={model} performance={performance} provider={provider!} usage={usage} />
+        )}
+        {reactions.length > 0 && (
+          <ReactionDisplay
+            isActive={isReactionActive}
+            messageId={id}
+            reactions={reactions}
+            onReactionClick={handleReactionClick}
+          />
+        )}
+        <Suspense fallback={null}>
+          {editing && contentId && <EditState content={lastAssistantMsg?.content} id={contentId} />}
+        </Suspense>
+      </ChatItem>
+    );
+  },
+  isEqual,
+);
 
 export default GroupMessage;

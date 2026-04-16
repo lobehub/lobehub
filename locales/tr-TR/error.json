@@ -60,6 +60,7 @@
   "response.520": "Üzgünüz, sunucu beklenmeyen bir sorunla karşılaştı ve isteğinizi tamamlayamadı. Lütfen daha sonra tekrar deneyin; sorunu çözmek için çalışıyoruz.",
   "response.522": "Üzgünüz, sunucu bağlantısı zaman aşımına uğradı ve isteğinize zamanında yanıt veremedi. Bu, ağ kararsızlığı veya sunucunun geçici olarak erişilemez olmasından kaynaklanabilir. Lütfen daha sonra tekrar deneyin.",
   "response.524": "Üzgünüz, sunucu yanıt beklerken zaman aşımına uğradı. Bu, yavaş bir yanıt nedeniyle olabilir. Lütfen daha sonra tekrar deneyin.",
+  "response.AccountDeactivated": "Hesabınız devre dışı bırakıldı veya askıya alındı. Bu durum politika, güvenlik veya hesap incelemesi nedenlerinden kaynaklanıyor olabilir. Lütfen yardım için sağlayıcının destek ekibiyle iletişime geçin.",
   "response.AgentRuntimeError": "Lobe dil modeli çalışma zamanı yürütme hatası. Lütfen aşağıdaki bilgilere göre sorun giderin veya tekrar deneyin.",
   "response.ComfyUIBizError": "ComfyUI hizmeti istek hatası oluştu. Lütfen aşağıdaki bilgilere göre sorun giderin veya tekrar deneyin.",
   "response.ComfyUIEmptyResult": "ComfyUI tarafından herhangi bir görsel oluşturulamadı. Lütfen model yapılandırmasını kontrol edin veya tekrar deneyin.",

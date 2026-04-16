@@ -60,6 +60,7 @@
   "response.520": "Pedimos desculpas, o servidor encontrou um problema inesperado. Tente novamente mais tarde; estamos trabalhando para resolver.",
   "response.522": "Pedimos desculpas, a conexão com o servidor expirou. Isso pode ser causado por instabilidade na rede. Tente novamente mais tarde.",
   "response.524": "Pedimos desculpas, o servidor demorou para responder. Tente novamente mais tarde.",
+  "response.AccountDeactivated": "Sua conta foi desativada ou suspensa. Isso pode ter ocorrido devido a políticas, questões de segurança ou revisão da conta. Entre em contato com o suporte do provedor para obter assistência.",
   "response.AgentRuntimeError": "Erro de execução do modelo de linguagem Lobe. Solucione ou tente novamente com base nas informações abaixo.",
   "response.ComfyUIBizError": "Ocorreu um erro ao solicitar o serviço ComfyUI. Solucione com base nas informações abaixo ou tente novamente.",
   "response.ComfyUIEmptyResult": "Nenhuma imagem foi gerada pelo ComfyUI. Verifique a configuração do modelo ou tente novamente.",

@@ -76,7 +76,7 @@ describe('generationBatchRouter', () => {
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
-      filesToDelete: [], // 没有缩略图
+      filesToDelete: [], // no thumbnails
     });
     const mockDeleteFiles = vi.fn();
 
@@ -99,7 +99,7 @@ describe('generationBatchRouter', () => {
 
     expect(result).toEqual(mockDeletedBatch);
     expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
-    expect(mockDeleteFiles).not.toHaveBeenCalled(); // 没有文件要删除
+    expect(mockDeleteFiles).not.toHaveBeenCalled(); // no files to delete
   });
 
   it('should delete generation batch with thumbnails', async () => {
@@ -231,12 +231,12 @@ describe('generationBatchRouter', () => {
 
     expect(result).toBeUndefined();
     expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
-    expect(mockDeleteFiles).not.toHaveBeenCalled(); // 没有文件要删除
+    expect(mockDeleteFiles).not.toHaveBeenCalled(); // no files to delete
   });
 
   it('should handle large number of thumbnails deletion', async () => {
     const mockBatchId = 'batch-with-many-thumbnails';
-    // 模拟包含大量缩略图的批次
+    // Simulate a batch with many thumbnails
     const mockThumbnailUrls = Array.from({ length: 50 }, (_, i) => `thumb${i + 1}.jpg`);
     const mockDeletedBatch: GenerationBatchItem = {
       id: mockBatchId,

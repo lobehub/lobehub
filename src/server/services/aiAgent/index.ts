@@ -28,6 +28,7 @@ import type {
   ExecGroupAgentResult,
   ExecSubAgentTaskParams,
   ExecSubAgentTaskResult,
+  MessagePluginItem,
   UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
@@ -136,6 +137,21 @@ interface InternalExecAgentParams extends ExecAgentParams {
   queueRetryDelay?: string;
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
+  /**
+   * When present, this execAgent call acts as the "continue" step for a
+   * previous op that hit `human_approve_required`. The service writes the
+   * decision to the target tool message and either runs the approved tool
+   * (`approved`), halts with `reason='human_rejected'` (`rejected`), or
+   * surfaces the rejection as user feedback so the LLM can respond
+   * (`rejected_continue`). `parentMessageId` must point at the pending tool
+   * message.
+   */
+  resumeApproval?: {
+    decision: 'approved' | 'rejected' | 'rejected_continue';
+    parentMessageId: string;
+    rejectionReason?: string;
+    toolCallId: string;
+  };
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
@@ -249,6 +265,7 @@ export class AiAgentService {
       queueRetryDelay,
       parentMessageId,
       resume,
+      resumeApproval,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -350,7 +367,14 @@ export class AiAgentService {
 
     let resumeParentMessage;
 
-    if (resume) {
+    // `resumeApproval` implies the same "load parent message + skip user
+    // message creation" semantics as `resume`. Callers that go through the
+    // tRPC router get `resume: true` via the router, but the service-level
+    // API allows resumeApproval alone — fold both into a single effective
+    // flag so downstream resume branches don't need to know about approval.
+    const effectiveResume = resume || !!resumeApproval;
+
+    if (effectiveResume) {
       if (!parentMessageId) {
         throw new Error('parentMessageId is required when resume is true');
       }
@@ -383,6 +407,74 @@ export class AiAgentService {
       if (resumeParentMessage.sessionId && resumeParentMessage.sessionId !== appContext.sessionId) {
         throw new Error('appContext.sessionId does not match parent message');
       }
+    }
+
+    // 2.6. Human-approval resume: write the user's decision to the target tool
+    // message in the DB so the history fetched below (step 11) + the runtime
+    // state both reflect the decision before the first step runs. Validates
+    // the parent is actually a pending tool message tied to the tool call we
+    // were asked about — guards against stale / double-clicks.
+    //
+    // Note: `messages` and `message_plugins` live in separate tables. The
+    // `messageModel.findById` query returns the `messages` row only — the
+    // tool_call_id / apiName / identifier / arguments / type fields live on
+    // the plugin row and must be fetched separately.
+    let resumeApprovalPlugin: MessagePluginItem | undefined;
+
+    if (resumeApproval) {
+      if (!resumeParentMessage) {
+        throw new Error('resumeApproval requires parentMessageId to point at a tool message');
+      }
+      if (resumeParentMessage.role !== 'tool') {
+        throw new Error(
+          `resumeApproval.parentMessageId must point at a role='tool' message, got role='${resumeParentMessage.role}'`,
+        );
+      }
+
+      resumeApprovalPlugin = await this.messageModel.findMessagePlugin(
+        resumeApproval.parentMessageId,
+      );
+      if (!resumeApprovalPlugin) {
+        throw new Error(
+          `resumeApproval: no plugin row for tool message ${resumeApproval.parentMessageId}`,
+        );
+      }
+      if (
+        resumeApprovalPlugin.toolCallId &&
+        resumeApprovalPlugin.toolCallId !== resumeApproval.toolCallId
+      ) {
+        throw new Error(
+          `resumeApproval.toolCallId mismatch for message ${resumeApproval.parentMessageId}: ` +
+            `stored=${resumeApprovalPlugin.toolCallId}, requested=${resumeApproval.toolCallId}`,
+        );
+      }
+
+      const { decision, rejectionReason } = resumeApproval;
+      if (decision === 'approved') {
+        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+          intervention: { status: 'approved' },
+        });
+      } else {
+        // rejected / rejected_continue both write the same rejection content
+        // + intervention state. The difference surfaces later in how the new
+        // op's initial state/context are configured (halt vs. continue LLM).
+        const rejectionContent = rejectionReason
+          ? `User reject this tool calling with reason: ${rejectionReason}`
+          : 'User reject this tool calling without reason';
+        await this.messageModel.updateToolMessage(resumeApproval.parentMessageId, {
+          content: rejectionContent,
+        });
+        await this.messageModel.updateMessagePlugin(resumeApproval.parentMessageId, {
+          intervention: { rejectedReason: rejectionReason, status: 'rejected' },
+        });
+      }
+
+      log(
+        'execAgent: resumeApproval decision=%s applied to tool message %s (toolCallId=%s)',
+        decision,
+        resumeApproval.parentMessageId,
+        resumeApproval.toolCallId,
+      );
     }
 
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
@@ -781,6 +873,12 @@ export class AiAgentService {
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        ...(resolvedAgentId && {
+          currentAgent: {
+            id: resolvedAgentId,
+            title: agentConfig.title ?? undefined,
+          },
+        }),
       };
     }
 
@@ -1140,7 +1238,7 @@ export class AiAgentService {
 
     // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
-    const userMessageRecord = resume
+    const userMessageRecord = effectiveResume
       ? undefined
       : await this.messageModel.create({
           agentId: resolvedAgentId,
@@ -1189,7 +1287,7 @@ export class AiAgentService {
     };
 
     // Combine history messages with user message
-    const allMessages = resume ? historyMessages : [...historyMessages, userMessage];
+    const allMessages = effectiveResume ? historyMessages : [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -1200,12 +1298,12 @@ export class AiAgentService {
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
     // 16. Create initial context
-    const initialContext: AgentRuntimeContext = {
+    let initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
         assistantMessageId: assistantMessageRecord.id,
         isFirstMessage: true,
-        message: resume ? [{ content: '' }] : [{ content: prompt }],
+        message: effectiveResume ? [{ content: '' }] : [{ content: prompt }],
         // Pass user message ID as parentMessageId for reference
         parentMessageId: parentMessageId ?? userMessageRecord?.id ?? '',
         // Include tools for initial LLM call
@@ -1219,6 +1317,60 @@ export class AiAgentService {
         stepCount: 0,
       },
     };
+
+    // 16b. Human-approval resume — override initialContext based on the
+    // user's decision. The DB write above has already persisted the
+    // intervention status, so `allMessages` reflects the decision for the
+    // LLM / runner on the first step.
+    //
+    // `rejected` and `rejected_continue` share the same server-side path:
+    // both surface the rejection to the LLM as user feedback via
+    // `phase: 'user_input'`. The client-side split (halt vs. continue) is
+    // only about the UX of the button and the optimistic writes — once the
+    // decision is persisted, there's nothing meaningful to do differently
+    // server-side, and letting the LLM produce a brief acknowledgement keeps
+    // the conversation cleanly terminated either way.
+    if (resumeApproval && resumeApprovalPlugin) {
+      if (resumeApproval.decision === 'approved') {
+        // Ask the runtime to execute the approved tool directly. Matches the
+        // `phase: 'human_approved_tool'` contract used by the in-place
+        // handleHumanIntervention flow — the runner generates a `call_tool`
+        // instruction keyed on this payload. All tool metadata comes from
+        // the plugin row fetched above; missing any of identifier/apiName
+        // breaks the server-side tool executor dispatch.
+        initialContext = {
+          payload: {
+            approvedToolCall: {
+              apiName: resumeApprovalPlugin.apiName,
+              arguments: resumeApprovalPlugin.arguments,
+              id: resumeApproval.toolCallId,
+              identifier: resumeApprovalPlugin.identifier,
+              type: resumeApprovalPlugin.type ?? 'default',
+            },
+            assistantMessageId: assistantMessageRecord.id,
+            parentMessageId: resumeApproval.parentMessageId,
+            skipCreateToolMessage: true,
+          } as any,
+          phase: 'human_approved_tool' as const,
+          session: {
+            messageCount: allMessages.length,
+            sessionId: operationId,
+            status: 'idle' as const,
+            stepCount: 0,
+          },
+        };
+      } else {
+        initialContext = {
+          ...initialContext,
+          payload: {
+            ...(initialContext.payload as any),
+            isFirstMessage: false,
+            message: [{ content: '' }],
+            parentMessageId: resumeApproval.parentMessageId,
+          },
+        };
+      }
+    }
 
     // 17. Log final operation parameters summary
     log(

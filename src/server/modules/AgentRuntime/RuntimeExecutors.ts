@@ -964,8 +964,16 @@ export const createRuntimeExecutors = (
           // ===== 2. Then accumulate to AgentState =====
           const newState = structuredClone(state);
 
+          // Carry the persisted DB id so downstream executors (notably
+          // `request_human_approve`) can look up the parent assistant from
+          // `state.messages` without an extra DB round-trip. Without the id
+          // the lookup at `request_human_approve` (which filters on `m.id`)
+          // falls through to a DB query; when human-approve fires on the
+          // fresh LLM turn, both code paths miss and the op errors with
+          // "No assistant message found as parent for pending tool messages".
           newState.messages.push({
             content,
+            id: assistantMessageItem.id,
             reasoning: finalReasoning,
             role: 'assistant',
             tool_calls: tool_calls.length > 0 ? tool_calls : undefined,

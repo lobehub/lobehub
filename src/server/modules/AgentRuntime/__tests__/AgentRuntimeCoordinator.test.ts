@@ -154,6 +154,23 @@ describe('AgentRuntimeCoordinator', () => {
       );
     });
 
+    it('should publish end event when status changes to waiting_for_human so the client releases its loading state', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'waiting_for_human', stepCount: 4 };
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState(operationId, newState as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        newState.stepCount,
+        newState,
+        'waiting_for_human',
+      );
+    });
+
     it('should not publish end event when status was already done', async () => {
       const operationId = 'test-operation-id';
       const previousState = { status: 'done', stepCount: 5 };
@@ -242,6 +259,26 @@ describe('AgentRuntimeCoordinator', () => {
         stepResult.stepIndex,
         stepResult.newState,
         'error',
+      );
+    });
+
+    it('should publish end event when status becomes waiting_for_human (paused awaiting approval)', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { status: 'waiting_for_human', stepCount: 4 },
+        stepIndex: 4,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        4,
+        stepResult.newState,
+        'waiting_for_human',
       );
     });
 

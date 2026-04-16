@@ -373,6 +373,7 @@ export function registerAgentCommand(program: Command) {
             gatewayUrl: agentGatewayUrl,
             json: options.json,
             operationId,
+            serverUrl,
             token,
             tokenType,
             verbose: options.verbose,

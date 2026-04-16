@@ -1,6 +1,6 @@
-import { toolSystemPrompt } from '@lobechat/builtin-agent-onboarding';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
+import { toolSystemPrompt } from './toolSystemRole';
 import { WebOnboardingApiName, WebOnboardingIdentifier } from './types';
 
 export const WebOnboardingManifest: BuiltinToolManifest = {

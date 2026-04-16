@@ -1,9 +1,18 @@
+import type * as BusinessConst from '@lobechat/business-const';
 import { render, screen } from '@testing-library/react';
-import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import OnBoardingContainer from './index';
+
+vi.mock('@lobechat/business-const', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof BusinessConst;
+
+  return {
+    ...actual,
+    AGENT_ONBOARDING_ENABLED: true,
+  };
+});
 
 vi.mock('@/features/User/UserPanel/LangButton', () => ({
   default: () => <div>Lang Button</div>,
@@ -18,27 +27,11 @@ vi.mock('@/hooks/useIsDark', () => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  Trans: ({
-    components,
-    values,
-  }: {
-    components: Record<string, ReactNode>;
-    values?: { mode?: string; skip?: string };
-  }) => {
+  Trans: ({ values }: { values?: { mode?: string; skip?: string } }) => {
     const modeText = values?.mode ?? '';
     const skipText = values?.skip ?? '';
 
-    return (
-      <>
-        {'Not feeling it today? You can switch to '}
-        {components.modeLink}
-        {' or '}
-        {components.skipLink}
-        {'.'}
-        <span style={{ display: 'none' }}>{modeText}</span>
-        <span style={{ display: 'none' }}>{skipText}</span>
-      </>
-    );
+    return `Not feeling it today? You can switch to ${modeText} or ${skipText}.`;
   },
   useTranslation: () => ({
     t: (key: string) => key,
@@ -71,6 +64,8 @@ describe('OnBoardingContainer', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('agent.layout.skip')).toBeInTheDocument();
+    expect(
+      screen.getByText((content) => content.includes('agent.layout.skip')),
+    ).toBeInTheDocument();
   });
 });

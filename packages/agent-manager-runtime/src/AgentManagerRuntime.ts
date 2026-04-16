@@ -116,6 +116,9 @@ export class AgentManagerRuntime {
     params: UpdateAgentConfigParams,
   ): Promise<BuiltinToolResult> {
     try {
+      // Ensure agent is loaded in store before reading its config
+      await this.ensureAgentLoaded(agentId);
+
       const state = getAgentStoreState();
       const agentStore = getAgentStoreState();
       const resultState: UpdateAgentConfigState = { success: true };
@@ -124,13 +127,33 @@ export class AgentManagerRuntime {
       // Get current config for merging
       const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
 
+      // Guard against LLM double-encoding: if config/meta is a JSON string, parse it.
+      // Use `as any` to bypass TS narrowing — at runtime LLMs can send strings for
+      // typed object params.
+      let rawConfig: any = params.config;
+      if (typeof rawConfig === 'string') {
+        try {
+          rawConfig = JSON.parse(rawConfig);
+        } catch {
+          rawConfig = undefined;
+        }
+      }
+      let rawMeta: any = params.meta;
+      if (typeof rawMeta === 'string') {
+        try {
+          rawMeta = JSON.parse(rawMeta);
+        } catch {
+          rawMeta = undefined;
+        }
+      }
+
       // Build the final config update, merging togglePlugin into config.plugins
-      let finalConfig = params.config ? { ...params.config } : {};
+      let finalConfig = rawConfig ? { ...rawConfig } : {};
 
       // Handle togglePlugin - merge into config.plugins
       if (params.togglePlugin) {
         const { pluginId, enabled } = params.togglePlugin;
-        const currentPlugins = previousConfig.plugins || [];
+        const currentPlugins = previousConfig?.plugins || [];
         const isCurrentlyEnabled = currentPlugins.includes(pluginId);
         const shouldEnable = enabled !== undefined ? enabled : !isCurrentlyEnabled;
 
@@ -150,6 +173,12 @@ export class AgentManagerRuntime {
           pluginId,
         };
         contentParts.push(`plugin ${pluginId} ${shouldEnable ? 'enabled' : 'disabled'}`);
+      }
+
+      // When systemRole is updated, clear editorData so the UI
+      // doesn't show stale rich-text content that contradicts the new prompt
+      if ('systemRole' in finalConfig && !('editorData' in finalConfig)) {
+        finalConfig = { ...finalConfig, editorData: null };
       }
 
       // Handle config update
@@ -183,19 +212,19 @@ export class AgentManagerRuntime {
       }
 
       // Handle meta update
-      if (params.meta && Object.keys(params.meta).length > 0) {
+      if (rawMeta && Object.keys(rawMeta).length > 0) {
         const previousMeta = agentSelectors.getAgentMetaById(agentId)(state);
-        const metaUpdatedFields = Object.keys(params.meta);
+        const metaUpdatedFields = Object.keys(rawMeta);
         const metaPreviousValues: Record<string, unknown> = {};
 
         for (const field of metaUpdatedFields) {
           metaPreviousValues[field] = (previousMeta as unknown as Record<string, unknown>)[field];
         }
 
-        await agentStore.optimisticUpdateAgentMeta(agentId, params.meta);
+        await agentStore.optimisticUpdateAgentMeta(agentId, rawMeta);
 
         resultState.meta = {
-          newValues: params.meta,
+          newValues: rawMeta,
           previousValues: metaPreviousValues as Record<string, unknown>,
           updatedFields: metaUpdatedFields,
         };
@@ -239,6 +268,100 @@ export class AgentManagerRuntime {
       };
     } catch (error) {
       return this.handleError(error, 'Failed to delete agent');
+    }
+  }
+
+  /**
+   * Get detailed agent configuration by ID
+   */
+  async getAgentDetail(agentId: string): Promise<BuiltinToolResult> {
+    try {
+      const config = await this.agentService.getAgentConfigById(agentId);
+
+      if (!config) {
+        return {
+          content: `Agent "${agentId}" not found.`,
+          success: false,
+        };
+      }
+
+      // The merged config may contain extra fields from the DB agent row
+      // (e.g., description, tags) that aren't on LobeAgentConfig type
+      const raw = config as Record<string, any>;
+
+      const detail = {
+        config: {
+          model: config.model,
+          openingMessage: config.openingMessage,
+          openingQuestions: config.openingQuestions,
+          plugins: config.plugins,
+          provider: config.provider,
+          systemRole: config.systemRole,
+        },
+        meta: {
+          avatar: config.avatar,
+          backgroundColor: config.backgroundColor,
+          description: raw.description as string | undefined,
+          tags: raw.tags as string[] | undefined,
+          title: config.title,
+        },
+      };
+
+      const parts: string[] = [];
+      if (detail.meta.title) parts.push(`**${detail.meta.title}**`);
+      if (detail.meta.description) parts.push(detail.meta.description);
+      if (detail.config.model)
+        parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
+      if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+      if (detail.config.systemRole) {
+        const truncated =
+          detail.config.systemRole.length > 200
+            ? detail.config.systemRole.slice(0, 200) + '...'
+            : detail.config.systemRole;
+        parts.push(`System Prompt: ${truncated}`);
+      }
+
+      return {
+        content:
+          parts.length > 0 ? parts.join('\n') : `Agent "${agentId}" found (no details available).`,
+        state: {
+          agentId,
+          config: detail.config,
+          meta: detail.meta,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      return this.handleError(error, 'Failed to get agent detail');
+    }
+  }
+
+  /**
+   * Duplicate an existing agent
+   */
+  async duplicateAgent(agentId: string, newTitle?: string): Promise<BuiltinToolResult> {
+    try {
+      const result = await this.agentService.duplicateAgent(agentId, newTitle);
+
+      if (!result) {
+        return {
+          content: `Failed to duplicate agent "${agentId}". Agent may not exist.`,
+          success: false,
+        };
+      }
+
+      return {
+        content: `Successfully duplicated agent. New agent ID: ${result.agentId}${newTitle ? ` with title "${newTitle}"` : ''}`,
+        state: {
+          newAgentId: result.agentId,
+          sourceAgentId: agentId,
+          success: true,
+        },
+        success: true,
+      };
+    } catch (error) {
+      return this.handleError(error, 'Failed to duplicate agent');
     }
   }
 
@@ -380,14 +503,16 @@ export class AgentManagerRuntime {
    */
   async updatePrompt(agentId: string, params: UpdatePromptParams): Promise<BuiltinToolResult> {
     try {
+      await this.ensureAgentLoaded(agentId);
       const state = getAgentStoreState();
       const previousConfig = agentSelectors.getAgentConfigById(agentId)(state);
-      const previousPrompt = previousConfig.systemRole;
+      const previousPrompt = previousConfig?.systemRole;
 
       if (params.streaming) {
         await this.streamUpdatePrompt(agentId, params.prompt);
       } else {
         await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+          editorData: null,
           systemRole: params.prompt,
         });
       }
@@ -427,7 +552,6 @@ export class AgentManagerRuntime {
       getAgentStoreState().appendStreamingSystemRole(chunk);
 
       if (i + chunkSize < prompt.length) {
-        // eslint-disable-next-line no-promise-executor-return
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -545,15 +669,7 @@ export class AgentManagerRuntime {
         const builtinTool = builtinTools.find((t) => t.identifier === identifier);
 
         if (builtinTool) {
-          const agentState = getAgentStoreState();
-          const currentPlugins =
-            agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
-
-          if (!currentPlugins.includes(identifier)) {
-            await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
-              plugins: [...currentPlugins, identifier],
-            });
-          }
+          await this.enablePluginForAgent(agentId, identifier);
 
           return {
             content: `Successfully enabled builtin tool: ${builtinTool.meta?.title || identifier}`,
@@ -593,6 +709,22 @@ export class AgentManagerRuntime {
   }
 
   // ==================== Private Helper Methods ====================
+
+  /**
+   * Ensure the agent config is loaded into the Zustand store.
+   * When operating on agents that aren't currently open/active,
+   * their config won't be in the agentMap. This fetches and dispatches it.
+   */
+  private async ensureAgentLoaded(agentId: string): Promise<void> {
+    const state = getAgentStoreState();
+    const existing = state.agentMap[agentId];
+    if (existing) return;
+
+    const config = await this.agentService.getAgentConfigById(agentId);
+    if (config) {
+      getAgentStoreState().internal_dispatchAgentMap(agentId, config);
+    }
+  }
 
   private async handleKlavisInstall(
     agentId: string,
@@ -856,8 +988,9 @@ export class AgentManagerRuntime {
   }
 
   private async enablePluginForAgent(agentId: string, pluginId: string): Promise<void> {
+    await this.ensureAgentLoaded(agentId);
     const agentState = getAgentStoreState();
-    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
+    const currentPlugins = agentSelectors.getAgentConfigById(agentId)(agentState)?.plugins || [];
 
     if (!currentPlugins.includes(pluginId)) {
       await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {

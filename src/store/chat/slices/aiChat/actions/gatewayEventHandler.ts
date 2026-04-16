@@ -136,6 +136,15 @@ export const createGatewayEventHandler = (
               currentAssistantMessageId,
               data.toolsCalling.map(() => true),
             );
+
+            // If the server attached a `toolMessageIds` map, it has persisted
+            // pending tool messages (human approval path). Fetch the latest
+            // messages so ApprovalActions can read them by id instead of
+            // waiting for `agent_runtime_end` (which won't fire while paused
+            // in `waiting_for_human`).
+            if ((data as any).toolMessageIds) {
+              fetchAndReplaceMessages(get, context).catch(console.error);
+            }
           }
         });
         break;

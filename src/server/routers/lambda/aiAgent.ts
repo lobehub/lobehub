@@ -114,6 +114,24 @@ const ExecAgentSchema = z
     parentMessageId: z.string().optional(),
     /** The user input/prompt */
     prompt: z.string(),
+    /**
+     * Resume a previous op paused on `human_approve_required`. When set, the
+     * new op writes the decision to the target tool message and either runs
+     * the approved tool (`approved`), halts with reason=`human_rejected`
+     * (`rejected`), or surfaces the rejection as user feedback so the LLM
+     * can continue (`rejected_continue`).
+     */
+    resumeApproval: z
+      .object({
+        decision: z.enum(['approved', 'rejected', 'rejected_continue']),
+        /** ID of the pending `role='tool'` message this decision targets. */
+        parentMessageId: z.string(),
+        /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+        rejectionReason: z.string().optional(),
+        /** tool_call_id of the pending tool call being approved/rejected. */
+        toolCallId: z.string(),
+      })
+      .optional(),
     /** The agent slug to run (either agentId or slug is required) */
     slug: z.string().optional(),
     /**
@@ -554,6 +572,7 @@ export const aiAgentRouter = router({
       existingMessageIds = [],
       fileIds,
       parentMessageId,
+      resumeApproval,
       userInterventionConfig,
     } = input;
 
@@ -570,8 +589,10 @@ export const aiAgentRouter = router({
         fileIds,
         parentMessageId,
         prompt,
-        // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
+        // When parentMessageId is provided, this is a regeneration/continue or a
+        // human-approval resume — either way, skip user message creation.
         resume: !!parentMessageId,
+        resumeApproval,
         slug,
         userInterventionConfig,
       });

@@ -440,6 +440,12 @@ export const contextEngineering = async ({
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        ...(agentId && {
+          currentAgent: {
+            id: agentId,
+            title: agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? undefined,
+          },
+        }),
       };
       log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
     } catch (error) {

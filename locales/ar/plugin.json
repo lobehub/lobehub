@@ -564,6 +564,7 @@
   "skillDetail.tabs.tools": "القدرات",
   "skillDetail.tools": "الأدوات",
   "skillDetail.trustWarning": "استخدم الموصلات فقط من المطورين الذين تثق بهم. لا تتحكم LobeHub في الأدوات التي يتيحها المطورون ولا يمكنها التحقق من أنها ستعمل كما هو متوقع أو أنها لن تتغير.",
+  "skillInstallBanner.dismiss": "إغلاق",
   "skillInstallBanner.title": "أضف المهارات إلى Lobe AI",
   "store.actions.cancel": "إلغاء",
   "store.actions.configure": "تهيئة",

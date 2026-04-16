@@ -361,11 +361,58 @@ describe('RuntimeExecutors', () => {
 
       expect(result.newState.messages.at(-1)).toEqual(
         expect.objectContaining({
+          id: 'msg-123',
           reasoning: { content: 'Need to inspect the search results first.' },
           role: 'assistant',
           tool_calls: [expect.objectContaining({ id: 'call_1' })],
         }),
       );
+    });
+
+    it('should push assistant message with persisted DB id so request_human_approve can find parent', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_sensitive',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        await options?.callback?.onCompletion?.({
+          usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.create.mockResolvedValueOnce({ id: 'persisted-assistant-id' });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const lastAssistant = result.newState.messages.at(-1);
+      expect(lastAssistant).toMatchObject({
+        id: 'persisted-assistant-id',
+        role: 'assistant',
+      });
+      // The id must match the same message that nextContext exposes as
+      // parentMessageId, so request_human_approve sees a single source of truth.
+      expect((result.nextContext?.payload as any).parentMessageId).toBe('persisted-assistant-id');
     });
 
     it('should execute compress_context and return compression_result', async () => {

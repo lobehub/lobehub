@@ -2,7 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { type DropdownItem } from '@lobehub/ui';
-import { FilePenIcon, Maximize2 } from 'lucide-react';
+import { FilePenIcon, Maximize2, PanelRightOpen } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,12 +14,13 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
   const { t } = useTranslation('chat');
   const { t: tPortal } = useTranslation('portal');
 
-  const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
+  const [wideScreen, toggleRightPanel, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
+    s.toggleRightPanel,
     s.toggleWideScreen,
   ]);
 
-  const [showNotebook, toggleNotebook] = useChatStore((s) => [s.showNotebook, s.toggleNotebook]);
+  const toggleNotebook = useChatStore((s) => s.toggleNotebook);
 
   const menuItems = useMemo<DropdownItem[]>(
     () => [
@@ -30,6 +31,12 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
         onClick: () => toggleNotebook(),
       },
       {
+        icon: <Icon icon={PanelRightOpen} />,
+        key: 'agent-workspace',
+        label: t('workingPanel.title'),
+        onClick: () => toggleRightPanel(),
+      },
+      {
         checked: wideScreen,
         icon: <Icon icon={Maximize2} />,
         key: 'full-width',
@@ -38,7 +45,7 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
         type: 'switch',
       },
     ],
-    [t, tPortal, wideScreen, toggleWideScreen, showNotebook, toggleNotebook],
+    [t, tPortal, wideScreen, toggleRightPanel, toggleWideScreen, toggleNotebook],
   );
 
   return { menuItems };
