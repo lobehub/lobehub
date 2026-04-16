@@ -3,7 +3,7 @@ import { documentHistories, documents } from '@lobechat/database/schemas';
 import { and, desc, eq, gte, inArray, lt, or } from 'drizzle-orm';
 
 import {
-  DOCUMENT_HISTORY_LIST_LIMIT,
+  DOCUMENT_HISTORY_QUERY_LIST_LIMIT,
   DOCUMENT_HISTORY_SOURCE_LIMITS,
 } from '@/const/documentHistory';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
@@ -128,7 +128,7 @@ export class DocumentHistoryService {
     params: ListDocumentHistoryParams,
     options?: DocumentHistoryAccessOptions,
   ): Promise<ListDocumentHistoryResult> => {
-    const limit = Math.min(params.limit ?? DOCUMENT_HISTORY_LIST_LIMIT, 100);
+    const limit = Math.min(params.limit ?? DOCUMENT_HISTORY_QUERY_LIST_LIMIT, 100);
     const headDocument = await this.findHeadDocument(params.documentId);
 
     if (!headDocument) {

@@ -66,16 +66,20 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     storeUpdater('editor', editor);
 
     // Get document store actions
-    const [onEditorInit, handleContentChangeStore, useFetchDocument, performSave, flushSave] =
+    const [onEditorInit, handleContentChangeStore, useFetchDocument, performSave] =
       useDocumentStore((s) => [
         s.onEditorInit,
         s.handleContentChange,
         s.useFetchDocument,
         s.performSave,
-        s.flushSave,
       ]);
 
-    useSaveDocumentHotkey(flushSave);
+    const handleManualSave = useCallback(async () => {
+      handleContentChangeStore();
+      await performSave(documentId, undefined, { saveSource: 'manual' });
+    }, [documentId, handleContentChangeStore, performSave]);
+
+    useSaveDocumentHotkey(handleManualSave);
 
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
     const { error } = useFetchDocument(documentId, { autoSave, editor, sourceType });
