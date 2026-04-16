@@ -27,6 +27,7 @@ interface GroupChildrenProps {
   blocks: AssistantContentBlock[];
   content?: string;
   contentId?: string;
+  defaultWorkflowExpanded?: boolean;
   disableEditing?: boolean;
   id: string;
   messageIndex: number;
@@ -160,7 +161,7 @@ const partitionBlocks = (
 };
 
 const Group = memo<GroupChildrenProps>(
-  ({ blocks, contentId, disableEditing, messageIndex, id, content }) => {
+  ({ blocks, contentId, defaultWorkflowExpanded, disableEditing, messageIndex, id, content }) => {
     const [isCollapsed, isGenerating] = useConversationStore((s) => [
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isMessageGenerating(id)(s),
@@ -197,6 +198,7 @@ const Group = memo<GroupChildrenProps>(
             <WorkflowCollapse
               assistantMessageId={id}
               blocks={workingBlocks}
+              defaultStreamingExpanded={defaultWorkflowExpanded}
               disableEditing={disableEditing}
               workflowChromeComplete={workflowChromeComplete}
             />

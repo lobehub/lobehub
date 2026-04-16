@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Đã sao chép trang thành công",
   "pageEditor.editedAt": "Chỉnh sửa lần cuối vào {{time}}",
   "pageEditor.editedBy": "Chỉnh sửa lần cuối bởi {{name}}",
-  "pageEditor.editorPlaceholder": "Bắt đầu viết trang của bạn. Nhấn / để mở menu lệnh",
+  "pageEditor.editorPlaceholder": "Nhấn \"/\" cho AI và lệnh",
   "pageEditor.empty.createNewDocument": "Tạo Trang Mới",
   "pageEditor.empty.importNotion": "Nhập từ Notion",
   "pageEditor.empty.title": "Chọn một trang để bắt đầu",

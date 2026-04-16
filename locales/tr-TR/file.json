@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "Sayfa başarıyla kopyalandı",
   "pageEditor.editedAt": "Son düzenleme: {{time}}",
   "pageEditor.editedBy": "Son düzenleyen: {{name}}",
-  "pageEditor.editorPlaceholder": "Sayfanızı yazmaya başlayın. Komut menüsünü açmak için / tuşuna basın",
+  "pageEditor.editorPlaceholder": "AI ve komutlar için \"/\" tuşuna basın",
   "pageEditor.empty.createNewDocument": "Yeni Sayfa Oluştur",
   "pageEditor.empty.importNotion": "Notion'dan İçe Aktar",
   "pageEditor.empty.title": "Başlamak için bir sayfa seçin",

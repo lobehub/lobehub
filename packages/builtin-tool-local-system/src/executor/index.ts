@@ -219,9 +219,9 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   globLocalFiles = async (params: GlobFilesParams): Promise<BuiltinToolResult> => {
     try {
-      const resolvedParams = resolveArgsWithScope(params, 'pattern');
       const result = await this.runtime.globFiles({
-        pattern: resolvedParams.pattern,
+        directory: params.scope,
+        pattern: params.pattern,
       });
       return this.toResult(result);
     } catch (error) {

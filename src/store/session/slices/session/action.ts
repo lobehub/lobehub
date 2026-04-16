@@ -59,6 +59,7 @@ export class SessionActionImpl {
     this.#set({ allAgentsDrawerOpen: false }, false, n('closeAllAgentsDrawer'));
   };
 
+  /** @deprecated Use agentStore.createAgent instead */
   createSession = async (
     agent?: PartialDeep<LobeAgentSession>,
     isSwitchSession: boolean = true,

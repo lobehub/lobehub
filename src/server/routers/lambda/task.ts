@@ -743,8 +743,9 @@ export const taskRouter = router({
           if (agent) {
             participants.push({
               avatar: agent.avatar,
+              backgroundColor: agent.backgroundColor,
               id: agent.id,
-              name: agent.title ?? '',
+              title: agent.title ?? '',
               type: 'agent',
             });
           }

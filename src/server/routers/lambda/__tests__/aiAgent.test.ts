@@ -76,12 +76,12 @@ vi.mock('model-bank', async (importOriginal) => {
 });
 
 /**
- * AI Agent Router 集成测试
+ * AI Agent Router Integration Tests
  *
- * 测试目标：
- * 1. 验证 execAgent 的业务逻辑
- * 2. 确保 topic 创建逻辑正确
- * 3. 验证与数据库的交互
+ * Test objectives:
+ * 1. Verify the business logic of execAgent
+ * 2. Ensure topic creation logic is correct
+ * 3. Verify interactions with the database
  */
 describe('AI Agent Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
@@ -94,7 +94,7 @@ describe('AI Agent Router Integration Tests', () => {
     testDB = serverDB;
     userId = await createTestUser(serverDB);
 
-    // 创建测试 agent
+    // Create test agent
     const [agent] = await serverDB
       .insert(agents)
       .values({
@@ -107,11 +107,11 @@ describe('AI Agent Router Integration Tests', () => {
       .returning();
     testAgentId = agent.id;
 
-    // 创建测试 session
+    // Create test session
     const [session] = await serverDB.insert(sessions).values({ userId, type: 'agent' }).returning();
     testSessionId = session.id;
 
-    // 创建 agent 到 session 的映射关系
+    // Create agent-to-session mapping
     await serverDB.insert(agentsToSessions).values({
       agentId: testAgentId,
       sessionId: testSessionId,

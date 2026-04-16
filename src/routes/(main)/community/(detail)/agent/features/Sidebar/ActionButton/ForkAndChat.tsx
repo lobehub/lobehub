@@ -118,7 +118,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
       message.success(t('fork.success'));
 
       // Step 6: Navigate to chat
-      navigate(SESSION_CHAT_URL(result!.agentId || result!.sessionId, mobile));
+      navigate(SESSION_CHAT_URL(result!.agentId, mobile));
     } catch (error: any) {
       console.error('Fork failed:', error);
       message.error(t('fork.failed'));

@@ -1,3 +1,4 @@
+import type { LobeChatDatabase } from '@lobechat/database';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +7,7 @@ import { AiAgentService } from '../index';
 const {
   mockCreateOperation,
   mockFindById,
+  mockFindMessagePlugin,
   mockMessageCreate,
   mockMessageQuery,
   mockUpdateMessagePlugin,
@@ -13,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockFindById: vi.fn(),
+  mockFindMessagePlugin: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockUpdateMessagePlugin: vi.fn(),
@@ -29,6 +32,7 @@ vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
     create: mockMessageCreate,
     findById: mockFindById,
+    findMessagePlugin: mockFindMessagePlugin,
     query: mockMessageQuery,
     update: vi.fn().mockResolvedValue({}),
     updateMessagePlugin: mockUpdateMessagePlugin,
@@ -135,19 +139,22 @@ vi.mock('model-bank', async (importOriginal) => {
 describe('AiAgentService.execAgent - resumeApproval', () => {
   let service: AiAgentService;
 
+  // `messages` row — `findById` returns this. Note plugin metadata (apiName,
+  // identifier, etc.) lives in a separate `message_plugins` table.
   const pendingToolMessage = {
     id: 'tool-msg-1',
-    plugin: {
-      apiName: 'runCommand',
-      arguments: '{"command":"echo"}',
-      identifier: 'lobe-local-system',
-      type: 'builtin',
-    },
     role: 'tool',
     sessionId: 'session-1',
     threadId: 'thread-1',
-    tool_call_id: 'call_xyz',
     topicId: 'topic-1',
+  };
+  // `message_plugins` row — fetched via `db.query.messagePlugins.findFirst`.
+  const pendingToolPlugin = {
+    apiName: 'runCommand',
+    arguments: '{"command":"echo"}',
+    identifier: 'lobe-local-system',
+    toolCallId: 'call_xyz',
+    type: 'builtin',
   };
 
   beforeEach(() => {
@@ -159,11 +166,15 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       success: true,
     });
     mockFindById.mockResolvedValue(pendingToolMessage);
+    mockFindMessagePlugin.mockResolvedValue(pendingToolPlugin);
     mockMessageQuery.mockResolvedValue([{ content: 'hi', id: 'history-1', role: 'user' }]);
     mockMessageCreate.mockResolvedValue({ id: 'assistant-msg-new' });
     mockUpdateMessagePlugin.mockResolvedValue(undefined);
     mockUpdateToolMessage.mockResolvedValue(undefined);
-    service = new AiAgentService({} as any, 'user-1');
+    // `MessageModel` is fully mocked above, so the service never touches the
+    // raw `db` arg — cast an empty stub through `unknown` to satisfy the
+    // `LobeChatDatabase` parameter type without dragging the real schema.
+    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
   });
 
   const baseParams = {
@@ -284,7 +295,10 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     });
 
     it('throws when the stored tool_call_id does not match the resume request', async () => {
-      mockFindById.mockResolvedValue({ ...pendingToolMessage, tool_call_id: 'call_other' });
+      // toolCallId lives on the plugin row — mutate the plugin mock, not the
+      // message. This is exactly the class of bug that the separate-table
+      // fetch guards against.
+      mockFindMessagePlugin.mockResolvedValue({ ...pendingToolPlugin, toolCallId: 'call_other' });
 
       await expect(
         service.execAgent({
@@ -296,6 +310,21 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
           },
         }),
       ).rejects.toThrow(/toolCallId mismatch/);
+    });
+
+    it('throws when no plugin row exists for the target message', async () => {
+      mockFindMessagePlugin.mockResolvedValue(undefined);
+
+      await expect(
+        service.execAgent({
+          ...baseParams,
+          resumeApproval: {
+            decision: 'approved',
+            parentMessageId: 'tool-msg-1',
+            toolCallId: 'call_xyz',
+          },
+        }),
+      ).rejects.toThrow(/no plugin row/);
     });
   });
 });

@@ -6,6 +6,7 @@ import { createStore } from '../../index';
 
 // Mock dependencies
 const mockApproveToolCalling = vi.fn();
+const mockRejectToolCalling = vi.fn();
 const mockRejectAndContinueToolCalling = vi.fn();
 
 vi.mock('@/store/chat', () => ({
@@ -14,6 +15,7 @@ vi.mock('@/store/chat', () => ({
       messagesMap: {},
       operations: {},
       approveToolCalling: mockApproveToolCalling,
+      rejectToolCalling: mockRejectToolCalling,
       rejectAndContinueToolCalling: mockRejectAndContinueToolCalling,
       cancelOperations: vi.fn(),
       cancelOperation: vi.fn(),
@@ -193,7 +195,40 @@ describe('Tool Actions', () => {
       });
 
       expect(onToolRejected).toHaveBeenCalledWith('tool-call-1', 'Reason');
-      // Should not proceed when hook returns false
+      expect(mockRejectToolCalling).not.toHaveBeenCalled();
+    });
+
+    it('should delegate to ChatStore.rejectToolCalling with context', async () => {
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().rejectToolCall('tool-call-1', 'Reason');
+      });
+
+      expect(mockRejectToolCalling).toHaveBeenCalledWith('tool-call-1', 'Reason', context);
+    });
+
+    it('should pass agent_builder scope context correctly', async () => {
+      const context: ConversationContext = {
+        agentId: 'builder-agent',
+        topicId: 'builder-topic',
+        threadId: 'builder-thread',
+        scope: 'agent_builder',
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().rejectToolCall('tool-call-1', 'Reason');
+      });
+
+      expect(mockRejectToolCalling).toHaveBeenCalledWith('tool-call-1', 'Reason', context);
     });
   });
 
@@ -260,6 +295,69 @@ describe('Tool Actions', () => {
         undefined,
         context,
       );
+    });
+
+    it('should NOT also call ChatStore.rejectToolCalling (avoid double-dispatch with rejected_continue)', async () => {
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().rejectAndContinueToolCall('tool-call-1', 'Reason');
+      });
+
+      // Only the continue variant should fire. If `rejectToolCalling` also
+      // fires, Gateway mode would kick off a halting `decision='rejected'`
+      // resume op before the `decision='rejected_continue'` one and race
+      // two resume ops on the same tool_call_id.
+      expect(mockRejectAndContinueToolCalling).toHaveBeenCalledTimes(1);
+      expect(mockRejectToolCalling).not.toHaveBeenCalled();
+    });
+
+    it('should still fire the onToolRejected hook', async () => {
+      const onToolRejected = vi.fn().mockResolvedValue(true);
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+      const hooks: ConversationHooks = { onToolRejected };
+
+      const store = createStore({ context, hooks });
+
+      await act(async () => {
+        await store.getState().rejectAndContinueToolCall('tool-call-1', 'Reason');
+      });
+
+      expect(onToolRejected).toHaveBeenCalledWith('tool-call-1', 'Reason');
+      expect(mockRejectAndContinueToolCalling).toHaveBeenCalledWith(
+        'tool-call-1',
+        'Reason',
+        context,
+      );
+    });
+
+    it('should respect onToolRejected hook returning false and skip the continue call', async () => {
+      const onToolRejected = vi.fn().mockResolvedValue(false);
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: null,
+        threadId: null,
+      };
+      const hooks: ConversationHooks = { onToolRejected };
+
+      const store = createStore({ context, hooks });
+
+      await act(async () => {
+        await store.getState().rejectAndContinueToolCall('tool-call-1', 'Reason');
+      });
+
+      expect(onToolRejected).toHaveBeenCalledWith('tool-call-1', 'Reason');
+      expect(mockRejectAndContinueToolCalling).not.toHaveBeenCalled();
     });
   });
 

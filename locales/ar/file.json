@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "تم تكرار الصفحة بنجاح",
   "pageEditor.editedAt": "آخر تعديل في {{time}}",
   "pageEditor.editedBy": "آخر تعديل بواسطة {{name}}",
-  "pageEditor.editorPlaceholder": "ابدأ بكتابة صفحتك. اضغط / لفتح قائمة الأوامر",
+  "pageEditor.editorPlaceholder": "اضغط \"/\" للوصول إلى الذكاء الاصطناعي والأوامر",
   "pageEditor.empty.createNewDocument": "إنشاء صفحة جديدة",
   "pageEditor.empty.importNotion": "الاستيراد من Notion",
   "pageEditor.empty.title": "اختر صفحة للبدء",

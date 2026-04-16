@@ -1,8 +1,8 @@
+import { type ToolExecuteData, type ToolResultMessage } from '@lobechat/agent-gateway-client';
 import { type BuiltinToolContext } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
-import { type ToolExecuteData, type ToolResultMessage } from '@/libs/agent-stream';
 import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';

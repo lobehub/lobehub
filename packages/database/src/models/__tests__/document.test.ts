@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documents, files, users } from '../../schemas';
+import { documentHistories, documents, files, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 import { FileModel } from '../file';
@@ -24,6 +24,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await serverDB.delete(users);
   await serverDB.delete(files);
+  await serverDB.delete(documentHistories);
   await serverDB.delete(documents);
 });
 

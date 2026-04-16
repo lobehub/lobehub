@@ -80,7 +80,7 @@
   "pageEditor.duplicateSuccess": "페이지가 성공적으로 복제되었습니다",
   "pageEditor.editedAt": "마지막 편집: {{time}}",
   "pageEditor.editedBy": "마지막 편집자: {{name}}",
-  "pageEditor.editorPlaceholder": "문서 내용을 입력하세요. / 키를 눌러 명령 메뉴를 엽니다",
+  "pageEditor.editorPlaceholder": "/를 눌러 AI 및 명령어 사용",
   "pageEditor.empty.createNewDocument": "새 문서 만들기",
   "pageEditor.empty.importNotion": "Notion에서 가져오기",
   "pageEditor.empty.title": "문서를 선택하여 시작하세요",

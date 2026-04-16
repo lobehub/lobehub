@@ -254,7 +254,7 @@ export default {
   'operation.execAgentRuntime': 'Preparing response',
   'operation.execClientTask': 'Executing task',
   'operation.execServerAgentRuntime':
-    'Running… You can switch tasks or close the page — the task will keep going.',
+    'Task is running in the server. You are safe to leave this page',
   'operation.sendMessage': 'Sending message',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',
@@ -580,6 +580,7 @@ export default {
   'workflow.toolDisplayName.updateTodos': 'Updated todos',
   'workflow.toolDisplayName.upsertDocumentByFilename': 'Updated a document',
   'workflow.toolDisplayName.writeLocalFile': 'Wrote a file',
+  'workflow.awaitingConfirmation': 'Awaiting your confirmation',
   'workflow.working': 'Working...',
   'workingPanel.agentDocuments': 'Agent Documents',
   'workingPanel.progress': 'Progress',

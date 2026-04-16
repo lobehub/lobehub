@@ -1,7 +1,7 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, X } from 'lucide-react';
+import { Check, HandIcon, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,12 +35,18 @@ interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
   assistantMessageId: string;
   blocks: AssistantContentBlock[];
+  /** Default expansion state while the workflow is still streaming. Pending intervention always expands. */
+  defaultStreamingExpanded?: boolean;
   disableEditing?: boolean;
   workflowChromeComplete?: boolean;
 }
 
 const collectTools = (blocks: AssistantContentBlock[]): ChatToolPayloadWithResult[] => {
   return blocks.flatMap((b) => b.tools ?? []);
+};
+
+const hasPendingIntervention = (tools: ChatToolPayloadWithResult[]) => {
+  return tools.some((tool) => tool.intervention?.status === 'pending');
 };
 
 const useDebouncedHeadline = (raw: string, allComplete: boolean, immediate = false) => {
@@ -98,10 +104,17 @@ const useCommittedProseHeadline = (proseSource: string, streaming: boolean) => {
 };
 
 const WorkflowCollapse = memo<WorkflowCollapseProps>(
-  ({ assistantMessageId, blocks, disableEditing, workflowChromeComplete = false }) => {
+  ({
+    assistantMessageId,
+    blocks,
+    defaultStreamingExpanded = true,
+    disableEditing,
+    workflowChromeComplete = false,
+  }) => {
     const { t } = useTranslation('chat');
     const allTools = useMemo(() => collectTools(blocks), [blocks]);
     const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
+    const pendingInterventionPresent = useMemo(() => hasPendingIntervention(allTools), [allTools]);
     const isGenerating = useConversationStore(
       messageStateSelectors.isMessageGenerating(assistantMessageId),
     );
@@ -116,8 +129,9 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       [blocks],
     );
     const durationText = totalWorkflowMs > 0 ? formatReasoningDuration(totalWorkflowMs) : undefined;
+    const streamingDefaultExpanded = defaultStreamingExpanded || pendingInterventionPresent;
 
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(() => !allComplete && streamingDefaultExpanded);
     const userOpenedRef = useRef(false);
     const prevCompleteRef = useRef(allComplete);
 
@@ -127,15 +141,24 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
       if (!allComplete && wasComplete) {
         userOpenedRef.current = false;
+        setExpanded(streamingDefaultExpanded);
+        return;
       }
 
       if (allComplete && !wasComplete && !userOpenedRef.current && allTools.length > 0) {
         setExpanded(false);
       }
-    }, [allComplete, allTools.length]);
+    }, [allComplete, allTools.length, streamingDefaultExpanded]);
 
     const streaming = !allComplete;
-    const isExpanded = expanded;
+    const forceExpanded = streaming && pendingInterventionPresent;
+    const isExpanded = forceExpanded || expanded;
+
+    useEffect(() => {
+      if (streaming && pendingInterventionPresent) {
+        setExpanded(true);
+      }
+    }, [pendingInterventionPresent, streaming]);
 
     const headlineState = useMemo(() => getWorkflowStreamingHeadlineState(blocks), [blocks]);
     const committedProse = useCommittedProseHeadline(
@@ -143,9 +166,13 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       streaming,
     );
 
-    const showExpandedWorkingLabel = streaming && isExpanded;
+    const showExpandedWorkingLabel = streaming && isExpanded && !pendingInterventionPresent;
+    const pendingInterventionLabel = t('workflow.awaitingConfirmation', {
+      defaultValue: 'Awaiting your confirmation',
+    });
     const workingLabel = t('workflow.working', { defaultValue: 'Working...' });
     const streamingHeadlineRaw = useMemo(() => {
+      if (pendingInterventionPresent) return pendingInterventionLabel;
       if (showExpandedWorkingLabel) return workingLabel;
       switch (headlineState.kind) {
         case 'thinking': {
@@ -161,41 +188,72 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           return '';
         }
       }
-    }, [committedProse, headlineState, showExpandedWorkingLabel, workingLabel]);
+    }, [
+      committedProse,
+      headlineState,
+      pendingInterventionLabel,
+      pendingInterventionPresent,
+      showExpandedWorkingLabel,
+      workingLabel,
+    ]);
     const streamingHeadline = useDebouncedHeadline(
       streamingHeadlineRaw,
       allComplete,
-      showExpandedWorkingLabel,
+      showExpandedWorkingLabel || pendingInterventionPresent,
     );
 
     const [workingElapsedSeconds, setWorkingElapsedSeconds] = useState(0);
+    const accumulatedWorkingMsRef = useRef(0);
+    const activeWorkingStartedAtRef = useRef<number | null>(null);
 
     useEffect(() => {
       if (!streaming) {
+        accumulatedWorkingMsRef.current = 0;
+        activeWorkingStartedAtRef.current = null;
         setWorkingElapsedSeconds(0);
         return;
       }
 
-      const start = Date.now();
+      if (pendingInterventionPresent) {
+        if (activeWorkingStartedAtRef.current !== null) {
+          accumulatedWorkingMsRef.current += Date.now() - activeWorkingStartedAtRef.current;
+          activeWorkingStartedAtRef.current = null;
+        }
+        setWorkingElapsedSeconds(Math.floor(accumulatedWorkingMsRef.current / TIME_MS_PER_SECOND));
+        return;
+      }
+
+      if (activeWorkingStartedAtRef.current === null) {
+        activeWorkingStartedAtRef.current = Date.now();
+      }
+
       const tick = () => {
-        setWorkingElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+        const activeMs =
+          activeWorkingStartedAtRef.current === null
+            ? 0
+            : Date.now() - activeWorkingStartedAtRef.current;
+        const totalMs = accumulatedWorkingMsRef.current + activeMs;
+        setWorkingElapsedSeconds(Math.floor(totalMs / TIME_MS_PER_SECOND));
       };
 
       tick();
       const interval = setInterval(tick, 1000);
 
       return () => clearInterval(interval);
-    }, [streaming]);
+    }, [pendingInterventionPresent, streaming]);
 
     const showWorkingElapsed =
+      !pendingInterventionPresent &&
       workingElapsedSeconds >= WORKFLOW_WORKING_ELAPSED_SHOW_AFTER_MS / TIME_MS_PER_SECOND;
 
     const handleExpandedChange = (keys: Key[]) => {
       const nowExpanded = keys.includes('workflow');
+      if (forceExpanded && !nowExpanded) return;
+
       setExpanded(nowExpanded);
       if (nowExpanded) userOpenedRef.current = true;
     };
-    const constrained = streaming && expanded;
+    const constrained = streaming && isExpanded;
 
     const { ref: scrollRef, handleScroll: handleAutoScroll } = useAutoScroll<HTMLDivElement>({
       deps: [allTools.length],
@@ -204,7 +262,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     });
 
     const statusIcon = streaming ? (
-      <NeuralNetworkLoading size={16} />
+      pendingInterventionPresent ? (
+        <Icon color={cssVar.colorInfo} icon={HandIcon} />
+      ) : (
+        <NeuralNetworkLoading size={16} />
+      )
     ) : errorPresent ? (
       <Icon color={cssVar.colorError} icon={X} />
     ) : (
@@ -248,14 +310,16 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
                   }}
                 >
                   <span
-                    className={shinyTextStyles.shinyText}
+                    className={pendingInterventionPresent ? undefined : shinyTextStyles.shinyText}
                     style={{
+                      color: pendingInterventionPresent ? cssVar.colorInfo : undefined,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {streamingHeadline || workingLabel}
+                    {streamingHeadline ||
+                      (pendingInterventionPresent ? pendingInterventionLabel : workingLabel)}
                   </span>
                 </motion.div>
               </AnimatePresence>
