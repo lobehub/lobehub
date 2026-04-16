@@ -15,8 +15,8 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.systemTools')} />
-      <AppEnvironmentSection />
       <ToolDetectorSection />
+      <AppEnvironmentSection />
       {isDevMode ? <CliTestSection /> : null}
     </>
   );
