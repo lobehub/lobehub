@@ -260,7 +260,7 @@ export class AiAgentService {
       maxSteps,
       initialStepCount,
       signal,
-      userInterventionConfig,
+      userInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
       parentMessageId,
