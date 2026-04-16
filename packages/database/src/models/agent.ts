@@ -1,5 +1,5 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -93,7 +93,7 @@ export class AgentModel {
 
     return rows.map(({ slug, ...row }) => ({
       ...row,
-      avatar: row.avatar || (slug === INBOX_SESSION_ID ? '/avatars/lobe-ai.png' : null),
+      avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
       title: row.title || (slug === INBOX_SESSION_ID ? 'LobeAI' : null),
     }));
   };
