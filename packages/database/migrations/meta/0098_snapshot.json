@@ -3903,17 +3903,11 @@
         }
       },
       "indexes": {
-        "document_histories_document_id_saved_at_idx": {
-          "name": "document_histories_document_id_saved_at_idx",
+        "document_histories_document_id_idx": {
+          "name": "document_histories_document_id_idx",
           "columns": [
             {
               "expression": "document_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "saved_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3924,15 +3918,24 @@
           "method": "btree",
           "with": {}
         },
-        "document_histories_user_id_saved_at_idx": {
-          "name": "document_histories_user_id_saved_at_idx",
+        "document_histories_user_id_idx": {
+          "name": "document_histories_user_id_idx",
           "columns": [
             {
               "expression": "user_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "document_histories_saved_at_idx": {
+          "name": "document_histories_saved_at_idx",
+          "columns": [
             {
               "expression": "saved_at",
               "isExpression": false,

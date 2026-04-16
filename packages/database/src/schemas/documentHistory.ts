@@ -26,8 +26,9 @@ export const documentHistories = pgTable(
     savedAt: timestamptz('saved_at').notNull(),
   },
   (table) => [
-    index('document_histories_document_id_saved_at_idx').on(table.documentId, table.savedAt),
-    index('document_histories_user_id_saved_at_idx').on(table.userId, table.savedAt),
+    index('document_histories_document_id_idx').on(table.documentId),
+    index('document_histories_user_id_idx').on(table.userId),
+    index('document_histories_saved_at_idx').on(table.savedAt),
   ],
 );
 
