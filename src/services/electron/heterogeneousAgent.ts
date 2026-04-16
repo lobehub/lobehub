@@ -19,8 +19,8 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.startSession(params);
   }
 
-  async sendPrompt(sessionId: string, prompt: string) {
-    return this.ipc.heterogeneousAgent.sendPrompt({ prompt, sessionId });
+  async sendPrompt(sessionId: string, prompt: string, fileIds?: string[]) {
+    return this.ipc.heterogeneousAgent.sendPrompt({ fileIds, prompt, sessionId });
   }
 
   async cancelSession(sessionId: string) {

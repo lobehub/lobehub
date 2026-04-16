@@ -1,7 +1,9 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import type { Readable } from 'node:stream';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { Readable, Writable } from 'node:stream';
 
 import { app as electronApp, BrowserWindow } from 'electron';
 
@@ -10,6 +12,9 @@ import { createLogger } from '@/utils/logger';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
+
+/** Directory under appStoragePath for caching downloaded files */
+const FILE_CACHE_DIR = 'heteroAgent/files';
 
 // ─── CLI presets per agent type ───
 // Mirrors @lobechat/heterogeneous-agents/registry but runs in main process
@@ -61,6 +66,8 @@ interface StartSessionResult {
 }
 
 interface SendPromptParams {
+  /** Image/file IDs to include in the prompt (fetched from cloud via GET {domain}/f/{id}) */
+  fileIds?: string[];
   prompt: string;
   sessionId: string;
 }
@@ -118,6 +125,88 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
   }
 
+  // ─── File cache ───
+
+  private get fileCacheDir(): string {
+    return join(this.app.appStoragePath, FILE_CACHE_DIR);
+  }
+
+  /**
+   * Download a file by ID from the cloud server, with local disk cache.
+   * Returns { buffer, mimeType }.
+   */
+  private async resolveFile(fileId: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    // Check cache first
+    const cacheDir = this.fileCacheDir;
+    const metaPath = join(cacheDir, `${fileId}.meta`);
+    const dataPath = join(cacheDir, fileId);
+
+    try {
+      const metaRaw = await readFile(metaPath, 'utf8');
+      const meta = JSON.parse(metaRaw);
+      const buffer = await readFile(dataPath);
+      logger.debug('File cache hit:', fileId);
+      return { buffer, mimeType: meta.mimeType || 'application/octet-stream' };
+    } catch {
+      // Cache miss — download from cloud
+    }
+
+    // Get cloud server URL
+    const serverUrl = await this.app.remoteServerConfigCtr.getRemoteServerUrl();
+    if (!serverUrl) throw new Error('Remote server URL not configured');
+
+    const url = `${serverUrl}/f/${fileId}`;
+    logger.info('Downloading file:', url);
+
+    const res = await fetch(url);
+    if (!res.ok)
+      throw new Error(`Failed to download file ${fileId}: ${res.status} ${res.statusText}`);
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const mimeType = res.headers.get('content-type') || 'application/octet-stream';
+
+    // Write to cache
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(dataPath, buffer);
+    await writeFile(metaPath, JSON.stringify({ fileId, mimeType }));
+    logger.debug('File cached:', fileId, `${buffer.length} bytes`);
+
+    return { buffer, mimeType };
+  }
+
+  /**
+   * Build a stream-json user message with text + image content blocks.
+   */
+  private async buildStreamJsonInput(prompt: string, fileIds: string[]): Promise<string> {
+    const content: any[] = [{ text: prompt, type: 'text' }];
+
+    for (const fileId of fileIds) {
+      try {
+        const { buffer, mimeType } = await this.resolveFile(fileId);
+
+        // Only include image types as inline image blocks
+        if (mimeType.startsWith('image/')) {
+          content.push({
+            source: {
+              data: buffer.toString('base64'),
+              media_type: mimeType,
+              type: 'base64',
+            },
+            type: 'image',
+          });
+        }
+      } catch (err) {
+        logger.error(`Failed to resolve file ${fileId}:`, err);
+      }
+    }
+
+    return JSON.stringify({
+      message: { content, role: 'user' },
+      type: 'user',
+    });
+  }
+
   // ─── IPC methods ───
 
   /**
@@ -155,8 +244,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const preset = CLI_PRESETS[session.agentType];
     if (!preset) throw new Error(`Unknown agent type: ${session.agentType}`);
 
+    const hasFiles = params.fileIds && params.fileIds.length > 0;
+
+    // If files are attached, prepare the stream-json input BEFORE spawning
+    // so any download errors are caught early.
+    let stdinPayload: string | undefined;
+    if (hasFiles) {
+      stdinPayload = await this.buildStreamJsonInput(params.prompt, params.fileIds!);
+    }
+
     return new Promise<void>((resolve, reject) => {
-      // Build CLI args: base preset + resume + user args + prompt
+      // Build CLI args: base preset + resume + user args
       const cliArgs = [
         ...preset.baseArgs,
         ...(session.agentSessionId && preset.resumeArgs
@@ -165,9 +263,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         ...session.args,
       ];
 
-      // Add prompt based on mode
-      if (preset.promptMode === 'positional') {
-        cliArgs.push(params.prompt);
+      if (hasFiles) {
+        // With files: use stdin stream-json mode
+        cliArgs.push('--input-format', 'stream-json');
+      } else {
+        // Without files: use positional prompt (simple mode)
+        if (preset.promptMode === 'positional') {
+          cliArgs.push(params.prompt);
+        }
       }
 
       logger.info('Spawning agent:', session.command, cliArgs.join(' '));
@@ -175,8 +278,16 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       const proc = spawn(session.command, cliArgs, {
         cwd: session.cwd,
         env: { ...process.env, ...session.env },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: [hasFiles ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       });
+
+      // If using stdin mode, write the stream-json message and close stdin
+      if (hasFiles && stdinPayload && proc.stdin) {
+        const stdin = proc.stdin as Writable;
+        stdin.write(stdinPayload + '\n', () => {
+          stdin.end();
+        });
+      }
 
       session.process = proc;
       let buffer = '';

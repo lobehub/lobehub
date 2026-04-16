@@ -441,6 +441,7 @@ export class ConversationLifecycleActionImpl {
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,
           context: heteroContext,
+          fileIds: fileIdList,
           heterogeneousProvider,
           message,
           operationId: heteroOpId,
