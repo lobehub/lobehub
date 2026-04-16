@@ -203,7 +203,7 @@ const hasRunningOperationByContext =
 
 /**
  * Check if agent runtime is running in a specific context
- * Checks both client-side (execAgentRuntime) and server-side (execServerAgentRuntime) operations
+ * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
  */
 const isAgentRuntimeRunningByContext =
   (context: {
@@ -303,7 +303,7 @@ const isAgentRunning =
 
 /**
  * Check if agent runtime is running (including both main window and thread)
- * Checks both client-side (execAgentRuntime) and server-side (execServerAgentRuntime) operations
+ * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
  * Excludes operations that are aborting (cleaning up after cancellation)
  */
 const isAgentRuntimeRunning = (s: ChatStoreState): boolean => {
@@ -385,7 +385,7 @@ const isMessageProcessing =
 
 /**
  * Check if a specific message is being generated (AI generation only)
- * Checks both client-side (execAgentRuntime) and server-side (execServerAgentRuntime) operations
+ * Checks all AI runtime operation types (see AI_RUNTIME_OPERATION_TYPES)
  */
 const isMessageGenerating =
   (messageId: string) =>

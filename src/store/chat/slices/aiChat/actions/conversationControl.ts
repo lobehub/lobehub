@@ -4,6 +4,7 @@ import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import { type ConversationContext } from '@lobechat/types';
 
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 
@@ -95,14 +96,11 @@ export class ConversationControlActionImpl {
     const { activeAgentId, activeTopicId, cancelOperations } = this.#get();
 
     // Cancel running agent-runtime operations in the current context —
-    // both client-side (execAgentRuntime) and Gateway-mode
-    // (execServerAgentRuntime). For the Gateway-mode branch, a cancel
-    // handler registered in `executeGatewayAgent` / `reconnectToGatewayOperation`
-    // picks up the cancellation and forwards an `interrupt` frame over the
-    // Agent Gateway WebSocket so the server-side loop aborts.
+    // client-side (execAgentRuntime), heterogeneous agent (execHeterogeneousAgent),
+    // and Gateway-mode (execServerAgentRuntime).
     cancelOperations(
       {
-        type: ['execAgentRuntime', 'execServerAgentRuntime'],
+        type: AI_RUNTIME_OPERATION_TYPES,
         status: 'running',
         agentId: activeAgentId,
         topicId: activeTopicId,

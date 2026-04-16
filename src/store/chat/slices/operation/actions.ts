@@ -10,6 +10,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import {
   type AfterCompletionCallback,
+  AI_RUNTIME_OPERATION_TYPES,
   type Operation,
   type OperationCancelContext,
   type OperationContext,
@@ -391,11 +392,9 @@ export class OperationActionsImpl {
 
     // 2. Set isAborting flag immediately for agent-runtime operations.
     // This ensures UI (loading button) responds instantly to user cancellation.
-    // Applies to both client-side (execAgentRuntime) and Gateway-mode
-    // (execServerAgentRuntime) runs — the latter needs the flag so the UI
-    // transitions out of loading right away, without waiting for the
-    // round-trip WS `session_complete` after the server acknowledges interrupt.
-    if (operation.type === 'execAgentRuntime' || operation.type === 'execServerAgentRuntime') {
+    // Applies to all AI runtime operation types so the UI transitions out of
+    // loading right away without waiting for the process to fully terminate.
+    if (AI_RUNTIME_OPERATION_TYPES.includes(operation.type)) {
       this.#get().updateOperationMetadata(operationId, { isAborting: true });
     }
 
