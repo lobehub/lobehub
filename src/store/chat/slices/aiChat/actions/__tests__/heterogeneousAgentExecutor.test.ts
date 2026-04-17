@@ -100,7 +100,7 @@ function createMockStore() {
 
 const defaultContext = {
   agentId: 'agent-1',
-  scope: 'session' as const,
+  scope: 'main' as const,
   topicId: 'topic-1',
 };
 
@@ -274,7 +274,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
 
       // Phase 3: the last tools[] write should have result_msg_id backfilled
-      const lastToolUpdate = toolUpdateCalls.at(-1);
+      const lastToolUpdate = toolUpdateCalls.at(-1)!;
       expect(lastToolUpdate[1].tools[0].result_msg_id).toBe('tool-msg-1');
     });
 
