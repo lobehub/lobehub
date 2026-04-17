@@ -228,8 +228,24 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     // Regular agent - use provided plugins if available, fallback to agent's plugins
     const finalPlugins = plugins && plugins.length > 0 ? plugins : basePlugins;
 
+    // Inject response language preference into system role for regular agents
+    const userLocale = userGeneralSettingsSelectors.currentResponseLanguage(
+      useUserStore.getState(),
+    );
+    const localeInstruction = userLocale
+      ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
+      : '';
+    const systemRoleWithLocale = localeInstruction
+      ? agentConfig.systemRole
+        ? `${agentConfig.systemRole}\n\n${localeInstruction}`
+        : localeInstruction
+      : agentConfig.systemRole;
+
     // Apply params adjustments based on chatConfig
-    let finalAgentConfig = applyParamsFromChatConfig(agentConfig, chatConfig);
+    let finalAgentConfig = applyParamsFromChatConfig(
+      { ...agentConfig, systemRole: systemRoleWithLocale },
+      chatConfig,
+    );
     let finalChatConfig = chatConfig;
 
     // === Page Editor Auto-Injection ===

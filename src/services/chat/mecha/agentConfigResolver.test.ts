@@ -9,6 +9,7 @@ import * as agentStore from '@/store/agent';
 import * as agentSelectors from '@/store/agent/selectors';
 import * as agentGroupStore from '@/store/agentGroup';
 import * as agentGroupSelectors from '@/store/agentGroup/selectors';
+import * as userSelectors from '@/store/user/selectors';
 
 import { resolveAgentConfig } from './agentConfigResolver';
 
@@ -1172,6 +1173,56 @@ describe('resolveAgentConfig', () => {
       expect(result.agentConfig).toEqual(mockAgentConfig);
       expect(result.chatConfig).toEqual(mockChatConfig);
       expect(result.isBuiltinAgent).toBe(false);
+    });
+  });
+
+  describe('response language injection for regular agents', () => {
+    beforeEach(() => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
+    });
+
+    it('should append response language to systemRole when userLocale is set', () => {
+      vi.spyOn(
+        userSelectors.userGeneralSettingsSelectors,
+        'currentResponseLanguage',
+      ).mockReturnValue('zh-CN');
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.systemRole).toBe(
+        'You are a helpful assistant\n\nPreferred reply language: zh-CN. Use this language unless the user explicitly asks to switch.',
+      );
+    });
+
+    it('should use locale instruction as systemRole when agent has no systemRole', () => {
+      vi.spyOn(
+        userSelectors.userGeneralSettingsSelectors,
+        'currentResponseLanguage',
+      ).mockReturnValue('ja-JP');
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            systemRole: '',
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.systemRole).toBe(
+        'Preferred reply language: ja-JP. Use this language unless the user explicitly asks to switch.',
+      );
+    });
+
+    it('should not modify systemRole when userLocale is empty', () => {
+      vi.spyOn(
+        userSelectors.userGeneralSettingsSelectors,
+        'currentResponseLanguage',
+      ).mockReturnValue('');
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
     });
   });
 });
