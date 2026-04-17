@@ -1,10 +1,10 @@
 import { useMount, usePrevious, useUnmount } from 'ahooks';
 import { useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { createStoreUpdater } from 'zustand-utils';
 
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { createStoreUpdater } from '@/store/utils/createStoreUpdater';
 
 const AgentIdSync = () => {
   const useStoreUpdater = createStoreUpdater(useAgentStore);
@@ -16,10 +16,7 @@ const AgentIdSync = () => {
   const prevAgentId = usePrevious(params.aid);
 
   useStoreUpdater('activeAgentId', params.aid);
-  // Chat store's `activeAgentId` is typed `string` (initial ''), so coerce
-  // the optional URL param to match. `createStoreUpdater` skips on undefined,
-  // so the real behavior is unchanged.
-  useChatStoreUpdater('activeAgentId', params.aid ?? '');
+  useChatStoreUpdater('activeAgentId', params.aid);
 
   // Reset activeTopicId when switching to a different agent
   // This prevents messages from being saved to the wrong topic bucket
