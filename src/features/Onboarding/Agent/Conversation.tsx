@@ -29,6 +29,7 @@ interface AgentOnboardingConversationProps {
 }
 
 const chatInputLeftActions: ActionKeys[] = isDev ? ['model'] : [];
+const chatInputRightActions: ActionKeys[] = [];
 
 const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
   ({ feedbackSubmitted, finishTargetUrl, onboardingFinished, readOnly, showFeedback, topicId }) => {
@@ -108,6 +109,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
           <ChatInput
             allowExpand={false}
             leftActions={chatInputLeftActions}
+            rightActions={chatInputRightActions}
             showRuntimeConfig={false}
           />
         )}
