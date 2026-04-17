@@ -12,23 +12,22 @@ tags:
 
 # Agent Gateway & Customizable Sidebar
 
-Server-side agent execution over WebSocket, a fully customizable sidebar, and a new agent workspace for managing documents and tasks.
+This release focuses on making everyday Agent work more stable and easier to manage.
 
-## Key Updates
+Agents can now run on the server through Gateway mode and stream results over WebSocket. When you switch topics or hit a short disconnect, sessions reconnect and resume more smoothly, so long-running execution is less likely to break.
 
-- Gateway mode: agents now execute server-side and stream results back over WebSocket, with auto-reconnect when switching topics and seamless resume after disconnects
-- Customizable sidebar: choose which items appear in the sidebar and reorder them through a new customize modal, plus a recents section with search, rename, and quick actions
-- Agent workspace: a right-side panel for managing agent documents — browse, rename, delete files, and view document history all in one place
-- Task manager: a dedicated task manager view with its own topic state, so running tasks no longer interfere with your main conversations
-- Prompt rewrite & translate: rewrite or translate your prompt directly in the chat input before sending
-- Desktop CLI: the LobeHub CLI is now embedded in the desktop app and can be installed to your PATH from settings
-- Screen capture: capture your screen with an overlay picker and attach it directly to a conversation
-- New models: GLM-5.1 from Zhipu, Seedance 2.0 video generation, and a new StreamLake provider
+Navigation is now easier to shape around your own habits. You can choose which items appear in the sidebar, reorder them in a dedicated customization modal, and use a stronger Recents experience with search, rename, and quick actions.
 
-## Experience Improvements
+Document and task workflows are now more centralized. A dedicated right-side workspace gives you one place to browse, rename, delete, and review history for Agent documents. Running tasks move into an isolated task manager view with independent topic state, so your main conversations stay focused.
 
-- Desktop app now uses Electron's native fetch for remote requests, improving connection reliability
-- Loading states during optimistic updates prevent flickering when the assistant is thinking
-- Agent details pages load correctly on refresh instead of showing a perpetual spinner
-- Improved error classification for insufficient balance and deactivated accounts shows clearer messages
-- Fixed a context engine crash when non-string content was passed to document injection
+This update also improves several high-frequency input and tooling actions. You can rewrite or translate prompts directly in chat input before sending, capture screen content with an overlay picker and attach it in one step, and use LobeHub CLI from desktop with one-click install to your system `PATH`.
+
+On model coverage, this release adds Zhipu GLM-5.1, Seedance 2.0 video generation, and the StreamLake provider.
+
+## Improvements and fixes
+
+- Desktop now uses Electron native `fetch` for more reliable remote requests.
+- Optimistic loading states reduce streaming flicker while the assistant is thinking.
+- Agent detail pages now load correctly after refresh instead of staying in a spinner state.
+- Error classification now gives clearer messages for insufficient balance and deactivated accounts.
+- Fixed a context engine crash path caused by non-string content in document injection.

@@ -11,7 +11,7 @@
   "author": "LobeHub",
   "main": "./dist/main/index.js",
   "scripts": {
-    "build:cli": "cd ../cli && bun run build",
+    "build:cli": "cd ../cli && cross-env MINIFY=1 bun run build",
     "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 electron-vite build",
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",

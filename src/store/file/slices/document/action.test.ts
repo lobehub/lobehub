@@ -127,7 +127,10 @@ describe('DocumentAction', () => {
     const existingDocument = createDocumentFixture();
     const existingResource = createResourceFixture();
 
-    vi.mocked(documentService.updateDocument).mockResolvedValue(undefined);
+    vi.mocked(documentService.updateDocument).mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+    });
 
     act(() => {
       useStore.setState(
@@ -175,10 +178,12 @@ describe('DocumentAction', () => {
     const existingDocument = createDocumentFixture();
     const existingResource = createResourceFixture();
 
-    let resolveUpdate: (() => void) | undefined;
+    let resolveUpdate:
+      | ((value: { historyAppended: boolean; id: string; savedAt?: string }) => void)
+      | undefined;
     vi.mocked(documentService.updateDocument).mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
+        new Promise((resolve) => {
           resolveUpdate = resolve;
         }),
     );
@@ -215,7 +220,7 @@ describe('DocumentAction', () => {
       title: 'Optimistic title',
     });
 
-    resolveUpdate?.();
+    resolveUpdate?.({ historyAppended: false, id: 'doc-1' });
 
     await act(async () => {
       await pendingUpdate;

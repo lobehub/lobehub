@@ -112,7 +112,7 @@ const config = {
 
     // Build and copy CLI bundle for embedding
     console.info('📦 Building CLI for embedding...');
-    execSync('npm run build', { stdio: 'inherit', cwd: path.resolve(__dirname, '../cli') });
+    execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
     const cliSrc = path.resolve(__dirname, '../cli/dist/index.js');
     const cliDest = path.resolve(__dirname, 'resources/bin/lobe-cli.js');
     await fs.copyFile(cliSrc, cliDest);

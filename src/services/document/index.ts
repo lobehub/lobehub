@@ -1,8 +1,93 @@
 import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import type {
+  CompareHistoryItemsInput,
+  CompareHistoryItemsOutput,
+  GetHistoryItemInput,
+  GetHistoryItemOutput,
+  ListHistoryInput,
+  ListHistoryOutput,
+  SaveDocumentHistoryInput,
+  SaveDocumentHistoryOutput,
+  UpdateDocumentInput,
+  UpdateDocumentOutput,
+} from '@/server/routers/lambda/_schema/documentHistory';
 
 import { abortableRequest } from '../utils/abortableRequest';
+
+const serializeSavedAt = (savedAt: Date | string) =>
+  savedAt instanceof Date ? savedAt.toISOString() : savedAt;
+
+type SerializedSavedAt<T extends { savedAt: Date | string }> = Omit<T, 'savedAt'> & {
+  savedAt: string;
+};
+
+const serializeHistoryTimestamp = <T extends { savedAt: Date | string }>(
+  result: T,
+): SerializedSavedAt<T> => ({
+  ...result,
+  savedAt: serializeSavedAt(result.savedAt),
+});
+
+const serializeHistoryList = <
+  T extends {
+    items: Array<{
+      id: string;
+      isCurrent: boolean;
+      saveSource: ListHistoryOutput['items'][number]['saveSource'];
+      savedAt: Date | string;
+    }>;
+    nextBeforeSavedAt?: Date | string;
+  },
+>(
+  result: T,
+): ListHistoryOutput => ({
+  ...result,
+  items: result.items.map((item) => ({
+    ...item,
+    savedAt: serializeSavedAt(item.savedAt),
+  })),
+  nextBeforeSavedAt: result.nextBeforeSavedAt
+    ? serializeSavedAt(result.nextBeforeSavedAt)
+    : undefined,
+});
+
+const serializeHistoryItem = <
+  T extends {
+    editorData: GetHistoryItemOutput['editorData'];
+    id: string;
+    isCurrent: boolean;
+    saveSource: GetHistoryItemOutput['saveSource'];
+    savedAt: Date | string;
+  },
+>(
+  result: T,
+): GetHistoryItemOutput => serializeHistoryTimestamp(result);
+
+const serializeHistoryComparison = <
+  T extends {
+    from: {
+      editorData: CompareHistoryItemsOutput['from']['editorData'];
+      id: string;
+      isCurrent: boolean;
+      saveSource: CompareHistoryItemsOutput['from']['saveSource'];
+      savedAt: Date | string;
+    };
+    to: {
+      editorData: CompareHistoryItemsOutput['to']['editorData'];
+      id: string;
+      isCurrent: boolean;
+      saveSource: CompareHistoryItemsOutput['to']['saveSource'];
+      savedAt: Date | string;
+    };
+  },
+>(
+  result: T,
+): CompareHistoryItemsOutput => ({
+  from: serializeHistoryTimestamp(result.from),
+  to: serializeHistoryTimestamp(result.to),
+});
 
 export interface CreateDocumentParams {
   content?: string;
@@ -15,14 +100,25 @@ export interface CreateDocumentParams {
   title: string;
 }
 
-export interface UpdateDocumentParams {
-  content?: string;
-  editorData?: string;
-  fileType?: string;
-  id: string;
-  metadata?: Record<string, any>;
-  parentId?: string | null;
-  title?: string;
+export interface ListDocumentHistoryParams extends ListHistoryInput {}
+
+export interface GetDocumentHistoryItemParams extends GetHistoryItemInput {}
+
+export interface CompareDocumentHistoryItemsParams extends CompareHistoryItemsInput {}
+
+export interface UpdateDocumentParams extends UpdateDocumentInput {}
+
+export interface DocumentHistoryClientSurface {
+  compareDocumentHistoryItems: (
+    params: CompareDocumentHistoryItemsParams,
+  ) => Promise<CompareHistoryItemsOutput>;
+  getDocumentHistoryItem: (
+    params: GetDocumentHistoryItemParams,
+    uniqueKey?: string,
+  ) => Promise<GetHistoryItemOutput>;
+  listDocumentHistory: (params: ListDocumentHistoryParams) => Promise<ListHistoryOutput>;
+  saveDocumentHistory: (params: SaveDocumentHistoryInput) => Promise<SaveDocumentHistoryOutput>;
+  updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
 
 export class DocumentService {
@@ -43,9 +139,39 @@ export class DocumentService {
     return lambdaClient.document.queryDocuments.query(params);
   }
 
-  /**
-   * Query page documents with standard filters for the page sidebar.
-   */
+  async listDocumentHistory(params: ListDocumentHistoryParams): Promise<ListHistoryOutput> {
+    const result = await lambdaClient.document.listDocumentHistory.query(params);
+
+    return serializeHistoryList(result);
+  }
+
+  async getDocumentHistoryItem(
+    params: GetDocumentHistoryItemParams,
+    uniqueKey?: string,
+  ): Promise<GetHistoryItemOutput> {
+    if (uniqueKey) {
+      return abortableRequest.execute(uniqueKey, async (signal) => {
+        const result = await lambdaClient.document.getDocumentHistoryItem.query(params, {
+          signal,
+        });
+
+        return serializeHistoryItem(result);
+      });
+    }
+
+    const result = await lambdaClient.document.getDocumentHistoryItem.query(params);
+
+    return serializeHistoryItem(result);
+  }
+
+  async compareDocumentHistoryItems(
+    params: CompareDocumentHistoryItemsParams,
+  ): Promise<CompareHistoryItemsOutput> {
+    const result = await lambdaClient.document.compareDocumentHistoryItems.query(params);
+
+    return serializeHistoryComparison(result);
+  }
+
   async getPageDocuments(pageSize: number = 20): Promise<DocumentItem[]> {
     const result = await this.queryDocuments({
       current: 0,
@@ -83,9 +209,27 @@ export class DocumentService {
     await lambdaClient.document.deleteDocuments.mutate({ ids });
   }
 
-  async updateDocument(params: UpdateDocumentParams): Promise<void> {
-    await lambdaClient.document.updateDocument.mutate(params);
+  async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
+    const result = await lambdaClient.document.updateDocument.mutate(params);
+
+    return {
+      ...result,
+      savedAt: result.savedAt
+        ? result.savedAt instanceof Date
+          ? result.savedAt.toISOString()
+          : result.savedAt
+        : undefined,
+    };
+  }
+
+  async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {
+    const result = await lambdaClient.document.saveDocumentHistory.mutate(params);
+
+    return {
+      savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
+    };
   }
 }
 
-export const documentService = new DocumentService();
+export const documentService = new DocumentService() as DocumentService &
+  DocumentHistoryClientSurface;

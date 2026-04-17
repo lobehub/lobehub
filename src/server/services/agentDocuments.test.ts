@@ -19,6 +19,7 @@ describe('AgentDocumentsService', () => {
   const userId = 'user-1';
 
   const mockModel = {
+    associate: vi.fn(),
     create: vi.fn(),
     findByAgent: vi.fn(),
     findByFilename: vi.fn(),
@@ -134,6 +135,18 @@ describe('AgentDocumentsService', () => {
 
       expect(mockModel.hasByAgent).toHaveBeenCalledWith('agent-1');
       expect(result).toBe(true);
+    });
+  });
+
+  describe('associateDocument', () => {
+    it('should delegate to agentDocumentModel.associate', async () => {
+      mockModel.associate.mockResolvedValue({ id: 'ad-1' });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.associateDocument('agent-1', 'doc-1');
+
+      expect(mockModel.associate).toHaveBeenCalledWith({ agentId: 'agent-1', documentId: 'doc-1' });
+      expect(result).toEqual({ id: 'ad-1' });
     });
   });
 });

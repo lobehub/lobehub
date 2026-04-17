@@ -3,6 +3,8 @@ import { DEFAULT_PREFERENCE } from '@lobechat/const';
 import { type UserState } from '@/store/user/initialState';
 
 export const labPreferSelectors = {
+  enableAgentWorkingPanel: (s: UserState): boolean =>
+    s.preference.lab?.enableAgentWorkingPanel ?? false,
   enableGatewayMode: (s: UserState): boolean => s.preference.lab?.enableGatewayMode ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab!.enableInputMarkdown!,

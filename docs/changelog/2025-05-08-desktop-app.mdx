@@ -1,37 +1,60 @@
 ---
-title: Brand-New Design Style and Desktop App Release ✨
-description: >-
-  LobeHub officially launches the desktop app, delivering a more modern and
-  smoother experience.
+title: "Lobe UI v2 Design System and Desktop App Launch"
+description: LobeHub launches a refreshed visual design with Lobe UI v2 and officially releases the desktop app for Windows and macOS.
 tags:
   - Desktop App
   - LobeHub
-  - Chain of Thought
+  - Lobe UI v2
 ---
 
-# Brand-New Design Style and Desktop App Release ✨
+# Lobe UI v2 Design System and Desktop App Launch
 
-In April, LobeHub shipped a major visual upgrade with the brand-new Lobe UI v2 design system, and officially released the desktop app—bringing a more modern and fluid experience.
+April brings two major changes you can see and touch: a complete visual refresh powered by the new Lobe UI v2 design system, and the official release of the LobeHub desktop app. Together they make daily usage feel more modern, more fluid, and better suited to desktop workflows.
 
-## 🌟 Major Updates
+## A refreshed visual foundation
 
-- 🎨 New design system: upgraded to Lobe UI v2 for a more modern interface and interaction experience
-- 💻 Official desktop release: native features like Windows/macOS system tray and window controls for a more convenient desktop workflow
-- 🔌 MCP protocol enhancements: supports Streamable HTTP MCP servers, improves stdio MCP server installation, and adds environment variable parameter support
-- 🔍 Search expansion: adds Search1API as a search provider, and improves SearXNG category and time-range selection
-- 🔑 SSO expansion: adds Keycloak single sign-on support and improves the OIDC OAuth workflow
+The interface now runs on Lobe UI v2. Every component has been reconsidered for clarity and consistency. Buttons, typography, spacing, and color palettes align across the entire application.
 
-## 📊 Model Library Updates
+In practice, this means less visual noise and more predictable interactions. The sidebar is cleaner. Model tags are arranged more neatly. System roles can be collapsed to save space. Mobile layouts have been refined for better thumb reachability.
+
+## Desktop app with native integration
+
+LobeHub is now available as a native desktop application for Windows and macOS. It includes system tray integration, native window controls, and keyboard shortcuts that feel at home on your operating system.
+
+The desktop app matters most when you:
+
+- Want LobeHub available without keeping a browser tab open
+- Prefer native window management and alt-tabbing
+- Need system-level shortcuts for common actions
+- Work across multiple workspaces and want the app docked consistently
+
+## MCP, search, and SSO improvements
+
+MCP protocol support has been enhanced with Streamable HTTP server support. Stdio MCP server installation is smoother, and environment variable parameters are now supported for more flexible server configurations.
+
+Search adds Search1API as a new provider, and SearXNG now supports category and time-range selection for more targeted results.
+
+SSO integration expands with Keycloak support, and the OIDC OAuth workflow has been refined for fewer friction points during authentication.
+
+## Model library updates
+
+Coverage has expanded to keep provider evaluation and migration straightforward:
 
 - OpenAI: GPT-4.1 series, o3/o4-mini
-- Google: Gemini 2.5 Pro Experimental, reasoning token usage statistics
+- Google: Gemini 2.5 Pro Experimental with reasoning token tracking
 - xAI: Grok 3 series
-- Latest models from Anthropic, Mistral, Qwen, Ollama, and more
+- Anthropic, Mistral, Qwen, Ollama: latest model refreshes
 
-## 💫 Experience Improvements
+## Improvements and fixes
 
-- UI improvements: support for collapsing system roles, better mobile styles, neatly arranged model tags, and allow copy/edit on error
-- Performance stats: token generation throughput, Aliyun Bailian token tracking, and Google Gemini reasoning token statistics
-- Hotkey enhancements: new shortcuts for clearing chat messages and deleting messages, plus support for custom hotkey settings
-- Tool calling improvements: update tool-call arguments and re-trigger; local file plugins now support writing files
-- Web crawling: adds crawler rules for Xiaohongshu
+- Performance stats: token generation throughput display, Aliyun Bailian token tracking, Google Gemini reasoning token statistics
+- Hotkey enhancements: shortcuts for clearing chat and deleting messages, plus full custom hotkey configuration
+- Tool calling: update tool-call arguments and re-trigger; local file plugins now support writing files
+- Error handling: copy and edit options available when errors occur
+- Web crawling: added crawler rules for Xiaohongshu
+
+## Credits
+
+Huge thanks to these contributors:
+
+@arvinxx @hezhijie0327 @Innei @nekomeowww @lobehub-team

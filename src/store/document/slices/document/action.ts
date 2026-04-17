@@ -29,6 +29,7 @@ export interface InitDocumentParams {
   documentId: string;
   editor: IEditor;
   editorData?: unknown;
+
   sourceType: DocumentSourceType;
   topicId?: string;
 }
@@ -71,7 +72,7 @@ export class DocumentActionImpl {
       const debouncedFn = debounce(
         async () => {
           try {
-            await this.#get().performSave(documentId);
+            await this.#get().performSave(documentId, undefined, { saveSource: 'autosave' });
           } catch (error) {
             console.error('[DocumentStore] Failed to auto-save:', error);
           }
@@ -130,7 +131,7 @@ export class DocumentActionImpl {
    * Content is loaded into editor via onEditorInit when Editor component is ready.
    */
   initDocumentWithEditor = (params: InitDocumentParams): void => {
-    const { documentId, sourceType, content, editorData, topicId, autoSave, editor } = params;
+    const { autoSave, content, documentId, editor, editorData, sourceType, topicId } = params;
 
     const { internal_dispatchDocument } = this.#get();
 
@@ -142,6 +143,7 @@ export class DocumentActionImpl {
         autoSave,
         content: content ?? undefined,
         editorData,
+
         lastSavedContent: content ?? undefined,
         lastSavedEditorData: editorData,
         sourceType,
@@ -209,6 +211,7 @@ export class DocumentActionImpl {
             documentId,
             editor,
             editorData: document.editorData,
+
             sourceType,
           });
         },

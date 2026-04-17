@@ -1,6 +1,7 @@
 export * from './bot';
 export * from './currency';
 export * from './desktop';
+export * from './desktopGlobalShortcuts';
 export * from './discover';
 export * from './editor';
 export * from './file';

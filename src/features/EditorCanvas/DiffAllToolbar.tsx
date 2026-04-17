@@ -115,7 +115,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
 
   const handleSave = async () => {
     markDirty(documentId);
-    await performSave();
+    await performSave(undefined, undefined, { saveSource: 'manual' });
   };
 
   return (

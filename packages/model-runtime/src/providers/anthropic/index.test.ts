@@ -795,6 +795,35 @@ describe('LobeAnthropicAI', () => {
         });
       });
 
+      it('should correctly build payload for Claude Opus 4.7 with xhigh effort', async () => {
+        const payload: ChatStreamPayload = {
+          max_tokens: 16000,
+          messages: [{ content: 'Solve this problem', role: 'user' }],
+          model: 'claude-opus-4-7',
+          effort: 'xhigh',
+          thinking: { type: 'adaptive', budget_tokens: 0 },
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result).toEqual({
+          max_tokens: 16000,
+          messages: [
+            {
+              content: [
+                { cache_control: { type: 'ephemeral' }, text: 'Solve this problem', type: 'text' },
+              ],
+              role: 'user',
+            },
+          ],
+          model: 'claude-opus-4-7',
+          output_config: { effort: 'xhigh' },
+          system: undefined,
+          thinking: { type: 'adaptive' },
+          tools: undefined,
+        });
+      });
+
       it('should respect max_tokens in thinking mode when provided', async () => {
         const payload: ChatStreamPayload = {
           max_tokens: 1000,

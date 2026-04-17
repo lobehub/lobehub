@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
+import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { chainInputCompletion } from '@lobechat/prompts';
-import { HotkeyEnum, KeyEnum } from '@lobechat/types';
 import { isCommandPressed, merge } from '@lobechat/utils';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';

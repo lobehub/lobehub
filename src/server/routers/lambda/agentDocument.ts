@@ -231,6 +231,20 @@ export const agentDocumentRouter = router({
     }),
 
   /**
+   * Tool-oriented: associate an existing document with an agent
+   */
+  associateDocument: agentDocumentProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        documentId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.associateDocument(input.agentId, input.documentId);
+    }),
+
+  /**
    * Tool-oriented: create document
    */
   createDocument: agentDocumentProcedure

@@ -2,6 +2,51 @@
 
 # Changelog
 
+## [Version 2.1.50](https://github.com/lobehub/lobe-chat/compare/v2.1.49...v2.1.50)
+
+<sup>Released on **2026-04-16**</sup>
+
+#### 👷 Build System
+
+- **database**: add document history schema.
+- **database**: add document history schema.
+
+#### 🐛 Bug Fixes
+
+- **deps**: pin @react-pdf/image to 3.0.4 to avoid privatized @react-pdf/svg.
+- **database**: enforce document history ownership and pagination.
+
+#### ✨ Features
+
+- **database**: add document history table and update related models.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Build System
+
+- **database**: add document history schema, closes [#13789](https://github.com/lobehub/lobe-chat/issues/13789) ([c1174d3](https://github.com/lobehub/lobe-chat/commit/c1174d3))
+- **database**: add document history schema ([e3eef04](https://github.com/lobehub/lobe-chat/commit/e3eef04))
+
+#### What's fixed
+
+- **deps**: pin @react-pdf/image to 3.0.4 to avoid privatized @react-pdf/svg ([d526b40](https://github.com/lobehub/lobe-chat/commit/d526b40))
+- **database**: enforce document history ownership and pagination ([b9c4b87](https://github.com/lobehub/lobe-chat/commit/b9c4b87))
+
+#### What's improved
+
+- **database**: add document history table and update related models ([64fc6d4](https://github.com/lobehub/lobe-chat/commit/64fc6d4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.1.45](https://github.com/lobehub/lobe-chat/compare/v2.1.44...v2.1.45)
 
 <sup>Released on **2026-03-26**</sup>

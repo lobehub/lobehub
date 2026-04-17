@@ -70,6 +70,13 @@ class AgentDocumentService {
     return result;
   };
 
+  associateDocument = async (params: { agentId: string; documentId: string }) => {
+    const result = await lambdaClient.agentDocument.associateDocument.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
+
+    return result;
+  };
+
   createDocument = async (params: { agentId: string; content: string; title: string }) => {
     const result = await lambdaClient.agentDocument.createDocument.mutate(params);
     await revalidateAgentDocuments(params.agentId);
