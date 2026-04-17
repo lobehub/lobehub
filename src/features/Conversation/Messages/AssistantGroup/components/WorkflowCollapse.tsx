@@ -28,8 +28,8 @@ import {
   hasToolError,
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
-import WorkflowExpandedList from './WorkflowExpandedList';
 import type { RenderableAssistantContentBlock } from './types';
+import WorkflowExpandedList from './WorkflowExpandedList';
 
 interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
