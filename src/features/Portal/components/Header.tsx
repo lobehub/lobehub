@@ -2,7 +2,7 @@
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { ArrowLeft, PanelRightCloseIcon } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -31,7 +31,7 @@ const Header = memo<{ title: ReactNode }>(({ title }) => {
       }
       right={
         <ActionIcon
-          icon={PanelRightCloseIcon}
+          icon={X}
           size={DESKTOP_HEADER_ICON_SIZE}
           onClick={() => {
             clearPortalStack();

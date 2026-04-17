@@ -9,6 +9,7 @@ import NavHeader from '@/features/NavHeader';
 import HeaderActions from './HeaderActions';
 import ShareButton from './ShareButton';
 import Tags from './Tags';
+import WorkingPanelToggle from './WorkingPanelToggle';
 
 const Header = memo(() => {
   return (
@@ -21,6 +22,7 @@ const Header = memo(() => {
       right={
         <Flexbox horizontal align={'center'} style={{ backgroundColor: cssVar.colorBgContainer }}>
           <ShareButton />
+          <WorkingPanelToggle />
           <HeaderActions />
         </Flexbox>
       }

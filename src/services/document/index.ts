@@ -139,6 +139,10 @@ export class DocumentService {
     return lambdaClient.document.queryDocuments.query(params);
   }
 
+  async getDocumentById(id: string): Promise<DocumentItem | undefined> {
+    return lambdaClient.document.getDocumentById.query({ id });
+  }
+
   async listDocumentHistory(params: ListDocumentHistoryParams): Promise<ListHistoryOutput> {
     const result = await lambdaClient.document.listDocumentHistory.query(params);
 

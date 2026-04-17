@@ -4,6 +4,8 @@ import {
 } from '@lobechat/builtin-tool-activator/client';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentBuilderRenders } from '@lobechat/builtin-tool-agent-builder/client';
+import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
+import { AgentDocumentsRenders } from '@lobechat/builtin-tool-agent-documents/client';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
 import { AgentManagementRenders } from '@lobechat/builtin-tool-agent-management/client';
 import { ClaudeCodeIdentifier, ClaudeCodeRenders } from '@lobechat/builtin-tool-claude-code/client';
@@ -39,6 +41,7 @@ import { type BuiltinRender } from '@lobechat/types';
  */
 const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
+  [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
   [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
   [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
   [CloudSandboxManifest.identifier]: CloudSandboxRenders as Record<string, BuiltinRender>,
