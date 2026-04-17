@@ -4,6 +4,7 @@ import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
+import { motion } from 'motion/react';
 import { type ComponentRef, memo, useRef, useState } from 'react';
 
 import type { GlobalBillboard } from '@/types/serverConfig';
@@ -11,6 +12,10 @@ import type { GlobalBillboard } from '@/types/serverConfig';
 type BillboardItem = GlobalBillboard['items'][number];
 
 interface BillboardCarouselProps {
+  cardAttr?: string;
+  closing?: boolean;
+  exitTarget?: { x: number; y: number };
+  onAnimationFinish?: () => void;
   onClose: () => void;
   set: GlobalBillboard;
 }
@@ -26,8 +31,11 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 1000;
     inset-block-end: 56px;
     inset-inline-start: 8px;
+    transform-origin: bottom left;
 
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 
     width: 300px;
     max-width: calc(100vw - 32px);
@@ -117,53 +125,68 @@ const ItemContent = memo<{ item: BillboardItem }>(({ item }) => (
 
 ItemContent.displayName = 'BillboardItemContent';
 
-const BillboardCarousel = memo<BillboardCarouselProps>(({ set, onClose }) => {
-  const [paused, setPaused] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const carouselRef = useRef<ComponentRef<typeof AntCarousel>>(null);
+const BillboardCarousel = memo<BillboardCarouselProps>(
+  ({ set, onClose, closing, exitTarget, onAnimationFinish, cardAttr }) => {
+    const [paused, setPaused] = useState(false);
+    const [current, setCurrent] = useState(0);
+    const carouselRef = useRef<ComponentRef<typeof AntCarousel>>(null);
 
-  if (set.items.length === 0) return null;
+    if (set.items.length === 0) return null;
 
-  const single = set.items.length === 1;
+    const single = set.items.length === 1;
 
-  return (
-    <Flexbox
-      className={styles.card}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
-      <ActionIcon className={styles.closeButton} icon={X} size={14} onClick={onClose} />
-      {single ? (
-        <ItemContent item={set.items[0]} />
-      ) : (
-        <>
-          <AntCarousel
-            autoplay={!paused}
-            autoplaySpeed={6000}
-            beforeChange={(_: number, next: number) => setCurrent(next)}
-            dots={false}
-            ref={carouselRef}
-          >
-            {set.items.map((item) => (
-              <div key={item.id}>
-                <ItemContent item={item} />
-              </div>
-            ))}
-          </AntCarousel>
-          <Flexbox horizontal className={styles.dots} gap={6} justify="center">
-            {set.items.map((item, idx) => (
-              <div
-                className={`${styles.dot} ${current === idx ? styles.dotActive : ''}`}
-                key={item.id}
-                onClick={() => carouselRef.current?.goTo(idx)}
-              />
-            ))}
-          </Flexbox>
-        </>
-      )}
-    </Flexbox>
-  );
-});
+    const cardDataProps = cardAttr ? { [cardAttr]: '' } : {};
+
+    return (
+      <motion.div
+        {...cardDataProps}
+        className={styles.card}
+        initial={{ opacity: 0, scale: 0.92, y: 16 }}
+        transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
+        animate={
+          closing
+            ? { opacity: 0, scale: 0.15, x: exitTarget?.x ?? 0, y: exitTarget?.y ?? 40 }
+            : { opacity: 1, scale: 1, x: 0, y: 0 }
+        }
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onAnimationComplete={() => {
+          if (closing) onAnimationFinish?.();
+        }}
+      >
+        <ActionIcon className={styles.closeButton} icon={X} size={14} onClick={onClose} />
+        {single ? (
+          <ItemContent item={set.items[0]} />
+        ) : (
+          <>
+            <AntCarousel
+              autoplay={!paused}
+              autoplaySpeed={6000}
+              beforeChange={(_: number, next: number) => setCurrent(next)}
+              dots={false}
+              ref={carouselRef}
+            >
+              {set.items.map((item) => (
+                <div key={item.id}>
+                  <ItemContent item={item} />
+                </div>
+              ))}
+            </AntCarousel>
+            <Flexbox horizontal className={styles.dots} gap={6} justify="center">
+              {set.items.map((item, idx) => (
+                <div
+                  className={`${styles.dot} ${current === idx ? styles.dotActive : ''}`}
+                  key={item.id}
+                  onClick={() => carouselRef.current?.goTo(idx)}
+                />
+              ))}
+            </Flexbox>
+          </>
+        )}
+      </motion.div>
+    );
+  },
+);
 
 BillboardCarousel.displayName = 'BillboardCarousel';
 

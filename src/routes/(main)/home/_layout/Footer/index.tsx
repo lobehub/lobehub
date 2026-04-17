@@ -362,7 +362,12 @@ const Footer = memo(() => {
         <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
           <Flexbox horizontal align={'center'} flex={1} gap={2}>
             <DropdownMenu items={helpMenuItems} placement="topLeft">
-              <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
+              <ActionIcon
+                aria-label={t('userPanel.help')}
+                data-billboard-anchor=""
+                icon={CircleHelp}
+                size={16}
+              />
             </DropdownMenu>
             {!footer.hideGitHub && (
               <a aria-label={'GitHub'} href={GITHUB} rel="noopener noreferrer" target={'_blank'}>
