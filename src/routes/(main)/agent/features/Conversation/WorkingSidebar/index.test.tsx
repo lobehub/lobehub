@@ -41,8 +41,20 @@ vi.mock('@lobehub/ui', () => ({
   Checkbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
-  DraggablePanel: ({ children, expand }: { children?: ReactNode; expand?: boolean }) => (
-    <div data-expand={String(expand)} data-testid="right-panel">
+  DraggablePanel: ({
+    children,
+    expand,
+    stableLayout,
+  }: {
+    children?: ReactNode;
+    expand?: boolean;
+    stableLayout?: boolean;
+  }) => (
+    <div
+      data-expand={String(expand)}
+      data-stable-layout={String(Boolean(stableLayout))}
+      data-testid="right-panel"
+    >
       {children}
     </div>
   ),
@@ -163,6 +175,7 @@ describe('Conversation right panel mount', () => {
     expect(screen.getByText('chat-header')).toBeInTheDocument();
     expect(screen.getByText('conversation-area')).toBeInTheDocument();
     expect(screen.getByTestId('right-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('right-panel')).toHaveAttribute('data-stable-layout', 'true');
     expect(screen.getByTestId('workspace-resources')).toBeInTheDocument();
 
     await waitFor(() => {

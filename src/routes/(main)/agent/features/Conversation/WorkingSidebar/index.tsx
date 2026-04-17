@@ -21,7 +21,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(
     const isDocumentMode = Boolean(selectedDocumentId);
 
     return (
-      <RightPanel defaultWidth={360} maxWidth={720} minWidth={300}>
+      <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
         {isDocumentMode ? (
           <AgentDocumentEditorPanel
             selectedDocumentId={selectedDocumentId}
