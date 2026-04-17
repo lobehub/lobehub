@@ -1,5 +1,6 @@
 'use client';
 
+import { shouldOmitSamplingParams } from '@lobechat/model-runtime';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form, Select, SliderWithInput } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
@@ -225,7 +226,14 @@ const AgentModal = memo(() => {
     [form],
   );
 
-  const paramItems: FormItemProps[] = (Object.keys(PARAM_CONFIG) as ParamKey[]).map((key) => {
+  // Hide temperature / top_p when the selected model rejects them outright
+  // (e.g. Claude Opus 4.7 — see @lobechat/model-runtime shouldOmitSamplingParams).
+  const omitSampling = !!config.model && shouldOmitSamplingParams(config.model);
+  const visibleParamKeys = (Object.keys(PARAM_CONFIG) as ParamKey[]).filter(
+    (key) => !(omitSampling && (key === 'temperature' || key === 'top_p')),
+  );
+
+  const paramItems: FormItemProps[] = visibleParamKeys.map((key) => {
     const meta = PARAM_CONFIG[key];
     const enabled = enabledMap[key];
 
