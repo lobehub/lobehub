@@ -4,7 +4,7 @@ import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
-import { memo, useState } from 'react';
+import { type ComponentRef, memo, useRef, useState } from 'react';
 
 import type { GlobalBillboard } from '@/types/serverConfig';
 
@@ -37,14 +37,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
     box-shadow: 0 4px 24px rgb(0 0 0 / 12%);
-
-    .ant-carousel .slick-dots li button {
-      background: ${cssVar.colorTextTertiary};
-    }
-
-    .ant-carousel .slick-dots li.slick-active button {
-      background: ${cssVar.colorText};
-    }
   `,
   closeButton: css`
     position: absolute;
@@ -55,6 +47,25 @@ const styles = createStaticStyles(({ css }) => ({
   description: css`
     font-size: 14px;
     color: ${cssVar.colorTextSecondary};
+  `,
+  dot: css`
+    cursor: pointer;
+
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorFillSecondary};
+
+    transition: all 0.2s;
+  `,
+  dotActive: css`
+    width: 18px;
+    border-radius: 3px;
+    background: ${cssVar.colorPrimary};
+  `,
+  dots: css`
+    padding-block-end: 10px;
   `,
   image: css`
     display: block;
@@ -67,7 +78,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   itemBody: css`
     padding: 12px;
-    padding-block-end: 24px; /* room for dots */
   `,
   title: css`
     font-size: 16px;
@@ -97,6 +107,8 @@ ItemContent.displayName = 'BillboardItemContent';
 
 const BillboardCarousel = memo<BillboardCarouselProps>(({ set, onClose }) => {
   const [paused, setPaused] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const carouselRef = useRef<ComponentRef<typeof AntCarousel>>(null);
 
   if (set.items.length === 0) return null;
 
@@ -112,13 +124,30 @@ const BillboardCarousel = memo<BillboardCarouselProps>(({ set, onClose }) => {
       {single ? (
         <ItemContent item={set.items[0]} />
       ) : (
-        <AntCarousel dots autoplay={!paused} autoplaySpeed={6000}>
-          {set.items.map((item) => (
-            <div key={item.id}>
-              <ItemContent item={item} />
-            </div>
-          ))}
-        </AntCarousel>
+        <>
+          <AntCarousel
+            autoplay={!paused}
+            autoplaySpeed={6000}
+            beforeChange={(_: number, next: number) => setCurrent(next)}
+            dots={false}
+            ref={carouselRef}
+          >
+            {set.items.map((item) => (
+              <div key={item.id}>
+                <ItemContent item={item} />
+              </div>
+            ))}
+          </AntCarousel>
+          <Flexbox horizontal className={styles.dots} gap={6} justify="center">
+            {set.items.map((item, idx) => (
+              <div
+                className={`${styles.dot} ${current === idx ? styles.dotActive : ''}`}
+                key={item.id}
+                onClick={() => carouselRef.current?.goTo(idx)}
+              />
+            ))}
+          </Flexbox>
+        </>
       )}
     </Flexbox>
   );
