@@ -197,11 +197,14 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create a Claude Code agent with ACP provider pre-configured
+   * Create a Claude Code agent with ACP provider pre-configured.
+   *
+   * Bypasses `mutateAgent` so we skip its default /profile redirect —
+   * CC agents land straight on the chat page since their config is fixed.
    */
   const createClaudeCodeAgent = useCallback(
     async (options?: CreateAgentOptions) => {
-      await mutateAgent({
+      const result = await storeCreateAgent({
         config: {
           agencyConfig: {
             heterogeneousProvider: {
@@ -209,15 +212,19 @@ export const useCreateMenuItems = () => {
               type: 'claudecode' as const,
             },
           },
+          avatar:
+            'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claude.webp',
           systemRole:
             'You are Claude Code, an AI coding agent. Help users with code-related tasks.',
           title: 'Claude Code',
         },
         groupId: options?.groupId,
       });
+      await refreshAgentList();
+      navigate(`/agent/${result.agentId}`);
       options?.onSuccess?.();
     },
-    [mutateAgent],
+    [storeCreateAgent, refreshAgentList, navigate],
   );
 
   const agentModal = useOptionalAgentModal();
