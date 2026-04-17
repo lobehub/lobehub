@@ -38,11 +38,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         left={<Breadcrumb agentId={agentId} />}
-        right={
-          <>
-            <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
-          </>
-        }
+        right={<TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />}
         styles={{
           left: {
             paddingLeft: 4,
@@ -50,7 +46,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           },
         }}
       />
-      <WideScreenContainer>
+      <WideScreenContainer wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
         <TaskList options={viewOptions} />
       </WideScreenContainer>
     </Flexbox>
