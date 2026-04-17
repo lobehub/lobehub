@@ -236,7 +236,7 @@ export default {
   'stats.updatedAt': 'Updated at',
   'stats.welcome': '{{username}}, this is your <span>{{days}}</span> day with {{appName}}',
   'stats.words': 'Total Words',
-  'tab.apikey': 'API Key Management',
+  'tab.apikey': 'API Key',
   'tab.profile': 'My Account',
   'tab.security': 'Security',
   'tab.stats': 'Statistics',

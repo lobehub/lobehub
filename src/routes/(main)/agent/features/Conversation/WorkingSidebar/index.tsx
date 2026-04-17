@@ -3,11 +3,11 @@ import { PanelRightCloseIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import NavHeader from '@/features/NavHeader';
 import RightPanel from '@/features/RightPanel';
 import { useGlobalStore } from '@/store/global';
 
 import AgentDocumentEditorPanel from './AgentDocumentEditorPanel';
+import ProgressSection from './ProgressSection';
 import ResourcesSection from './ResourcesSection';
 
 interface AgentWorkingSidebarProps {
@@ -28,25 +28,16 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(
             onClose={() => onSelectDocument(null)}
           />
         ) : (
-          <Flexbox height={'100%'} width={'100%'}>
-            <NavHeader
-              showTogglePanelButton={false}
-              right={
-                <ActionIcon
-                  icon={PanelRightCloseIcon}
-                  size={DESKTOP_HEADER_ICON_SIZE}
-                  onClick={() => toggleRightPanel(false)}
-                />
-              }
-              style={{
-                paddingBlock: 8,
-                paddingInline: 8,
-                position: 'absolute',
-              }}
+          <Flexbox height={'100%'} style={{ position: 'relative' }} width={'100%'}>
+            <ActionIcon
+              icon={PanelRightCloseIcon}
+              size={DESKTOP_HEADER_ICON_SIZE}
+              style={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
+              onClick={() => toggleRightPanel(false)}
             />
             <Flexbox gap={8} height={'100%'} style={{ overflowY: 'auto' }} width={'100%'}>
               {/* <AgentSummary /> */}
-              {/*<ProgressSection />*/}
+              <ProgressSection />
               <ResourcesSection
                 selectedDocumentId={selectedDocumentId}
                 onSelectDocument={onSelectDocument}

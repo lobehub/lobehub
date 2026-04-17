@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyGroupEnum } from '@lobechat/const/hotkeys';
 import { type FormGroupItemType } from '@lobehub/ui';
 import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -13,7 +14,6 @@ import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type HotkeyItem } from '@/types/hotkey';
-import { HotkeyGroupEnum } from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);

@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { selectors, useStore } from '../store';
 
@@ -225,7 +226,16 @@ const AgentModal = memo(() => {
     [form],
   );
 
-  const paramItems: FormItemProps[] = (Object.keys(PARAM_CONFIG) as ParamKey[]).map((key) => {
+  // Hide params the selected model rejects outright (e.g. Claude Opus 4.7 drops
+  // temperature / top_p). Declared via `settings.disabledParams` on the model card.
+  const disabledParams = useAiInfraStore(
+    aiModelSelectors.modelDisabledParams(config.model, config.provider ?? ''),
+  );
+  const visibleParamKeys = (Object.keys(PARAM_CONFIG) as ParamKey[]).filter(
+    (key) => !disabledParams?.includes(key),
+  );
+
+  const paramItems: FormItemProps[] = visibleParamKeys.map((key) => {
     const meta = PARAM_CONFIG[key];
     const enabled = enabledMap[key];
 

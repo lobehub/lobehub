@@ -5,6 +5,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/const": "workspace:*",
     "@lobechat/python-interpreter": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobehub/market-sdk": "0.32.2",

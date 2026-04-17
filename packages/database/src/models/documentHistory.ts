@@ -1,10 +1,11 @@
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 
 import type { DocumentHistoryItem, NewDocumentHistory } from '../schemas';
 import { documentHistories, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface QueryDocumentHistoryParams {
+  beforeId?: string;
   beforeSavedAt?: Date;
   documentId: string;
   limit?: number;
@@ -86,6 +87,7 @@ export class DocumentHistoryModel {
   };
 
   list = async ({
+    beforeId,
     beforeSavedAt,
     documentId,
     limit = 50,
@@ -96,7 +98,17 @@ export class DocumentHistoryModel {
     ];
 
     if (beforeSavedAt !== undefined) {
-      conditions.push(lt(documentHistories.savedAt, beforeSavedAt));
+      if (beforeId !== undefined) {
+        const cursorCondition = or(
+          lt(documentHistories.savedAt, beforeSavedAt),
+          and(eq(documentHistories.savedAt, beforeSavedAt), lt(documentHistories.id, beforeId)),
+        );
+        if (cursorCondition) {
+          conditions.push(cursorCondition);
+        }
+      } else {
+        conditions.push(lt(documentHistories.savedAt, beforeSavedAt));
+      }
     }
 
     return this.db

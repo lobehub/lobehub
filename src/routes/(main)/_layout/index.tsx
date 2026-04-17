@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
@@ -24,7 +25,6 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { DndContextWrapper } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { HotkeyScopeEnum } from '@/types/hotkey';
 
 import DesktopHome from '../home';
 import DesktopHomeLayout from '../home/_layout';

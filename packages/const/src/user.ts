@@ -1,5 +1,4 @@
 import type { UserPreference } from '@lobechat/types';
-import { TopicDisplayMode } from '@lobechat/types';
 
 /**
  * Current onboarding flow version.
@@ -8,14 +7,19 @@ import { TopicDisplayMode } from '@lobechat/types';
  */
 export const CURRENT_ONBOARDING_VERSION = 1;
 
+const DEFAULT_TOPIC_DISPLAY_MODE = 'byUpdatedTime' as NonNullable<
+  UserPreference['topicDisplayMode']
+>;
+
 export const DEFAULT_PREFERENCE: UserPreference = {
   guide: {
     moveSettingsToAvatar: true,
     topic: true,
   },
   lab: {
+    enableAgentWorkingPanel: false,
     enableInputMarkdown: true,
   },
-  topicDisplayMode: TopicDisplayMode.ByUpdatedTime,
+  topicDisplayMode: DEFAULT_TOPIC_DISPLAY_MODE,
   useCmdEnterToSend: false,
 };

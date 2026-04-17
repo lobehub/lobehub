@@ -12,12 +12,12 @@ import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
   areWorkflowToolsComplete,
   getPostToolAnswerSplitIndex,
-  scoreBlockContentAsAnswerLike,
+  scorePostToolBlockAsFinalAnswer,
 } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
-import WorkflowCollapse from './WorkflowCollapse';
 import type { RenderableAssistantContentBlock } from './types';
+import WorkflowCollapse from './WorkflowCollapse';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -52,9 +52,9 @@ interface WorkflowSegment {
 type GroupRenderSegment = AnswerSegment | WorkflowSegment;
 
 interface PartitionedBlocks {
-  segments: GroupRenderSegment[];
   /** True while generating if long post-tool answer was moved outside the fold (tool phase UI may show “done”). */
   postToolTailPromoted: boolean;
+  segments: GroupRenderSegment[];
 }
 
 const ANSWER_DOM_ID_SUFFIX = '__answer';
@@ -134,7 +134,10 @@ const appendWorkflowBlock = (
 const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
   if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
 
-  return scoreBlockContentAsAnswerLike(block) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD;
+  return (
+    scorePostToolBlockAsFinalAnswer({ ...block, tools: undefined }) >=
+    POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD
+  );
 };
 
 const appendWorkflowRangeBlock = (segments: GroupRenderSegment[], block: AssistantContentBlock) => {
@@ -165,7 +168,6 @@ const appendPostToolBlocks = (
   postBlocks: AssistantContentBlock[],
 ) => {
   let index = 0;
-
   while (index < postBlocks.length) {
     const block = postBlocks[index]!;
     if (!isTrailingReasoningCandidate(block)) break;
@@ -286,12 +288,6 @@ const Group = memo<GroupChildrenProps>(
 
     const workflowChromeComplete = !isGenerating || postToolTailPromoted;
 
-    const firstSubstantiveAnswerSegmentIndex = useMemo(
-      () =>
-        segments.findIndex((segment) => segment.kind === 'answer' && !isEmptyBlock(segment.block)),
-      [segments],
-    );
-
     if (isCollapsed) {
       return (
         content && (
@@ -332,7 +328,6 @@ const Group = memo<GroupChildrenProps>(
                 disableEditing={disableEditing}
                 key={item.renderKey ?? `${id}.${item.id}.${index}`}
                 messageIndex={messageIndex}
-                isFirstBlock={index === firstSubstantiveAnswerSegmentIndex}
               />
             );
           })}

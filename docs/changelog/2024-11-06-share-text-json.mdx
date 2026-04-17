@@ -1,28 +1,35 @@
 ---
-title: LobeHub Supports Sharing Conversations in Text Format (Markdown/JSON)
+title: Export Conversations as Markdown or OpenAI JSON
 description: >-
-  LobeHub v1.28.0 introduces support for exporting conversations in Markdown and
-  OpenAI format JSON, making it easy to convert conversation content into note
-  materials, development debugging data, and training corpora, significantly
-  enhancing the reusability of conversation content.
+  LobeHub v1.28.0 adds Markdown and OpenAI-format JSON exports, making it
+  easier to turn conversations into documentation, debugging payloads, or
+  training datasets.
 tags:
   - Text Format Export
   - Markdown Export
   - OpenAI JSON
 ---
 
-# Upgraded Conversation Sharing: Support for Text Format Export
+# Export Conversations as Markdown or OpenAI JSON
 
-In the latest version v1.28.0, we have launched the text format export feature for conversation content, now supporting exports in both Markdown and OpenAI format JSON.
+Version 1.28.0 makes conversation exports more useful. You can now download chats as **Markdown** for documentation or **OpenAI-format JSON** for debugging and training. No more copy-pasting or reformatting by hand.
 
-The Markdown export feature meets users' needs for directly using conversation content in note-taking and document writing. You can easily save valuable conversation content and manage it across various note-taking applications for reuse.
+## Better documentation workflows
+
+The Markdown export turns conversations into clean, readable documents. Writers can capture useful exchanges and move them directly into notes, wikis, or reports without manual cleanup.
 
 ![Exporting Conversations as Markdown Text](/blog/assets/29b13dc042e3b839ad8865354afe2fac.webp)
 
-Additionally, we support exporting conversations in JSON format that complies with OpenAI messages specifications. This format can be used directly for API debugging and serves as high-quality training data for models.
+## API-ready JSON for developers
+
+The JSON export follows the OpenAI messages format. This means you can drop exported conversations directly into API debugging tools or use them as structured training data for fine-tuning.
+
+Tool calling data is preserved in its original structure, which helps when analyzing or improving how agents use external tools.
 
 ![Exporting Conversations as JSON in OpenAI API Specification](/blog/assets/5bbb4b421d6df63780b3c7a05f5a102d.webp)
 
-It is particularly noteworthy that we retain the original data of Tools Calling within the conversation, which is crucial for enhancing the model's tool invocation capabilities.
+## Improvements and fixes
 
-This update greatly expands the sharing and application scenarios for conversation content, and we hope these new features will enhance your user experience.
+- Added Markdown export option for conversation sharing
+- Added OpenAI-format JSON export with full message structure
+- Tool calling data preserved in original format during export

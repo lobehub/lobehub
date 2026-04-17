@@ -93,6 +93,12 @@ const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreS
   return model?.settings?.extendParams;
 };
 
+const modelDisabledParams = (id: string, provider: string) => (s: AIProviderStoreState) => {
+  const model = getEnabledModelById(id, provider)(s);
+
+  return model?.settings?.disabledParams;
+};
+
 const isModelHasExtendParams = (id: string, provider: string) => (s: AIProviderStoreState) => {
   const controls = modelExtendParams(id, provider)(s);
 
@@ -155,6 +161,7 @@ export const aiModelSelectors = {
   isModelSupportVision,
   modelBuiltinSearchImpl,
   modelContextWindowTokens,
+  modelDisabledParams,
   modelExtendParams,
   totalAiProviderModelList,
 };

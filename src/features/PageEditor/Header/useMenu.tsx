@@ -4,7 +4,7 @@ import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';
-import { CopyPlus, Download, Link2, Maximize2, Trash2 } from 'lucide-react';
+import { Clock3Icon, CopyPlus, Download, Link2, Maximize2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,8 +33,10 @@ export const useMenu = (): { menuItems: any[] } => {
   );
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
+  const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
 
-  const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
+  const [toggleRightPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
+    s.toggleRightPanel,
     systemStatusSelectors.wideScreen(s),
     s.toggleWideScreen,
   ]);
@@ -120,6 +122,15 @@ export const useMenu = (): { menuItems: any[] } => {
         },
       },
       {
+        icon: <Icon icon={Clock3Icon} />,
+        key: 'version-history',
+        label: t('pageEditor.history.title'),
+        onClick: () => {
+          setRightPanelMode('history');
+          toggleRightPanel(true);
+        },
+      },
+      {
         danger: true,
         icon: <Icon icon={Trash2} />,
         key: 'delete',
@@ -175,8 +186,10 @@ export const useMenu = (): { menuItems: any[] } => {
     t,
     message,
     modal,
+    setRightPanelMode,
     wideScreen,
     toggleWideScreen,
+    toggleRightPanel,
     showViewModeSwitch,
     handleDuplicate,
     handleExportMarkdown,

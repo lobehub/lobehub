@@ -1,6 +1,4 @@
-import type { DesktopHotkeyConfig } from '@lobechat/types';
-
-import { DESKTOP_HOTKEYS_REGISTRATION } from './hotkeys';
+import { DESKTOP_HOTKEYS_REGISTRATION, type DesktopHotkeyConfig } from './desktopGlobalShortcuts';
 
 export const DESKTOP_USER_ID = 'DEFAULT_DESKTOP_USER';
 

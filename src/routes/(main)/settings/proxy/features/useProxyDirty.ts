@@ -3,6 +3,7 @@ import { Form as AntdForm, type FormInstance } from 'antd';
 import { useMemo } from 'react';
 
 const WATCH_FIELDS: readonly (keyof NetworkProxySettings)[] = [
+  'enableProxy',
   'proxyType',
   'proxyServer',
   'proxyPort',

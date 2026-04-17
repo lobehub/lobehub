@@ -1,4 +1,7 @@
 export default {
+  'features.agentWorkingPanel.desc':
+    "A place to view an agent's progress and accessible resources.",
+  'features.agentWorkingPanel.title': 'Working Panel',
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
