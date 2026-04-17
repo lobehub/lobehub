@@ -36,6 +36,9 @@ vi.mock('motion/react', () => ({
     div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
       <div {...props}>{children}</div>
     ),
+    span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+      <span {...props}>{children}</span>
+    ),
   },
 }));
 
@@ -196,8 +199,8 @@ describe('WorkflowCollapse', () => {
       screen.getByRole('button', { name: 'Collapse' }).click();
     });
 
-    expect(getExpandedKeys()).toBe('[]');
-    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument();
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
   });
 
   it('expands to semi when accordion header is clicked from collapsed', () => {
@@ -210,7 +213,8 @@ describe('WorkflowCollapse', () => {
     );
 
     expect(getExpandedKeys()).toBe('[]');
-    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Expand fully' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Collapse' })).not.toBeInTheDocument();
   });
 
   it('collapses to collapsed when accordion header is clicked from full', () => {
