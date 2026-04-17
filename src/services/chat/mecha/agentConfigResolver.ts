@@ -261,13 +261,13 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {});
       const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
 
-      // 3. Merge system roles: custom agent's role + page-agent role
+      // 3. Merge system roles: custom agent's role (with locale) + page-agent role
       // Only append page-agent role if it exists
       const mergedSystemRole = pageAgentSystemRole
-        ? agentConfig.systemRole
-          ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
+        ? systemRoleWithLocale
+          ? `${systemRoleWithLocale}\n\n${pageAgentSystemRole}`
           : pageAgentSystemRole
-        : agentConfig.systemRole || '';
+        : systemRoleWithLocale || '';
 
       finalAgentConfig = {
         ...finalAgentConfig,

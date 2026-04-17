@@ -1214,11 +1214,11 @@ describe('resolveAgentConfig', () => {
       );
     });
 
-    it('should not modify systemRole when userLocale is empty', () => {
+    it('should not modify systemRole when userLocale is falsy', () => {
       vi.spyOn(
         userSelectors.userGeneralSettingsSelectors,
         'currentResponseLanguage',
-      ).mockReturnValue('');
+      ).mockReturnValue(undefined as any);
 
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
