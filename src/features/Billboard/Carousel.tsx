@@ -45,8 +45,14 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-end: 8px;
   `,
   description: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+
     font-size: 14px;
     color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
   `,
   dot: css`
     cursor: pointer;
@@ -80,9 +86,15 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 12px;
   `,
   title: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+
     font-size: 16px;
     font-weight: 600;
     color: ${cssVar.colorText};
+    text-overflow: ellipsis;
   `,
 }));
 
