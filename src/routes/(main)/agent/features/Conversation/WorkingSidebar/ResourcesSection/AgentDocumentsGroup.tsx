@@ -107,7 +107,7 @@ const DocumentItem = memo<DocumentItemProps>(({ agentId, document, isActive, mut
   const openDocument = useChatStore((s) => s.openDocument);
   const closeDocument = useChatStore((s) => s.closeDocument);
 
-  const title = document.filename || document.title || '';
+  const title = document.title || document.filename || '';
   const description = document.description ?? undefined;
   const isWeb = document.sourceType === 'web';
   const IconComponent: LucideIcon = isWeb ? GlobeIcon : FileTextIcon;

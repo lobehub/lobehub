@@ -138,6 +138,7 @@ export class AgentDocumentModel {
       policy?: AgentDocumentPolicy;
       policyLoad?: PolicyLoad;
       templateId?: string;
+      title?: string;
       updatedAt?: Date;
     },
   ): Promise<AgentDocument> {
@@ -149,10 +150,11 @@ export class AgentDocumentModel {
       policy,
       policyLoad,
       templateId,
+      title: providedTitle,
       updatedAt,
     } = params ?? {};
 
-    const title = filename.replace(/\.[^.]+$/, '');
+    const title = providedTitle?.trim() || filename.replace(/\.[^.]+$/, '');
     const stats = this.getDocumentStats(content);
     const normalizedPolicy = normalizePolicy(loadPosition, loadRules, policy);
 
@@ -290,7 +292,7 @@ export class AgentDocumentModel {
     const title = newTitle.trim();
     if (!title) return existing;
 
-    const filename = buildDocumentFilename(title, existing.filename);
+    const filename = buildDocumentFilename(title);
     const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
 
     await this.db
@@ -311,10 +313,11 @@ export class AgentDocumentModel {
 
     const title = newTitle?.trim();
     const filename = title
-      ? buildDocumentFilename(title, existing.filename)
+      ? buildDocumentFilename(title)
       : `copy-${Date.now()}-${existing.filename}`;
 
     return this.create(existing.agentId, filename, existing.content, {
+      title,
       loadPosition:
         (existing.policy?.context?.position as DocumentLoadPosition | undefined) ||
         DocumentLoadPosition.BEFORE_FIRST_USER,

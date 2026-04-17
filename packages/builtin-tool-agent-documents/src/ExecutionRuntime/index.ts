@@ -17,7 +17,18 @@ import type {
 
 interface AgentDocumentRecord {
   content?: string;
+  /**
+   * The underlying `documents` table id. Used for portal rendering
+   * (opening the document in the shared EditorCanvas), which must resolve
+   * the row in `documents` — distinct from `id` which is the
+   * `agentDocuments` association row id.
+   */
+  documentId?: string;
   filename?: string;
+  /**
+   * The `agentDocuments` association row id. This is what the LLM receives
+   * and uses for subsequent operations (read/edit/remove/...).
+   */
   id: string;
   title?: string;
 }
@@ -174,7 +185,7 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: `Created document "${created.title || args.title}" (${created.id}).`,
-      state: { documentId: created.id },
+      state: { documentId: created.documentId },
       success: true,
     };
   }

@@ -14,7 +14,7 @@ import {
   type AgentDocumentWithRules,
   type ToolUpdateLoadRule,
 } from '@/database/models/agentDocuments';
-import { buildDocumentFilename } from '@/database/models/agentDocuments';
+import { buildDocumentFilename, extractMarkdownH1Title } from '@/database/models/agentDocuments';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
 
@@ -56,9 +56,6 @@ export class AgentDocumentsService {
     },
   ) {
     const baseFilename = buildDocumentFilename(title);
-    const extensionMatch = baseFilename.match(/(\.[^./\\]+)$/);
-    const extension = extensionMatch?.[1] || '.txt';
-    const baseName = baseFilename.slice(0, -extension.length);
 
     let filename = baseFilename;
     let suffix = 2;
@@ -70,11 +67,11 @@ export class AgentDocumentsService {
         );
       }
 
-      filename = `${baseName}-${suffix}${extension}`;
+      filename = `${baseFilename}-${suffix}`;
       suffix += 1;
     }
 
-    return this.agentDocumentModel.create(agentId, filename, content, params);
+    return this.agentDocumentModel.create(agentId, filename, content, { ...params, title });
   }
 
   /**
@@ -213,7 +210,9 @@ export class AgentDocumentsService {
   }
 
   async createDocument(agentId: string, title: string, content: string) {
-    return this.createWithUniqueFilename(agentId, title, content);
+    const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
+    const finalTitle = extractedTitle || title;
+    return this.createWithUniqueFilename(agentId, finalTitle, strippedContent);
   }
 
   async deleteDocument(documentId: string) {
