@@ -8,6 +8,7 @@ import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import TaskScheduleConfig from '../AgentTaskDetail/TaskScheduleConfig';
+import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
@@ -87,7 +88,13 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
               scheduleTimezone={task.scheduleTimezone}
             />
           </TaskScheduleConfig>
-          <AssigneeAvatar agentId={task.assigneeAgentId} />
+          <AssigneeAgentSelector
+            currentAgentId={task.assigneeAgentId}
+            disabled={status === 'running'}
+            taskIdentifier={task.identifier}
+          >
+            <AssigneeAvatar agentId={task.assigneeAgentId} />
+          </AssigneeAgentSelector>
           {time && (
             <Text
               align={'right'}

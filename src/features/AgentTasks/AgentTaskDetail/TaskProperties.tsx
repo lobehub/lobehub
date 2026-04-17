@@ -3,16 +3,15 @@ import { Block, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
-import { isInboxAgentId } from '../shared/isInboxAgent';
+import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import TaskScheduleConfig from './TaskScheduleConfig';
 
 interface StatusMeta {
@@ -48,15 +47,7 @@ const TaskProperties = memo(() => {
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const assigneeMeta = useAgentStore((s) =>
-    assigneeAgentId ? agentSelectors.getAgentMetaById(assigneeAgentId)(s) : undefined,
-  );
-
-  const isInboxAssignee = !!assigneeAgentId && isInboxAgentId(assigneeAgentId, inboxAgentId);
-  const assigneeLabel =
-    assigneeMeta?.title?.trim() ||
-    (isInboxAssignee ? t('inbox.title') : t('defaultSession', { ns: 'common' }));
+  const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
   if (!taskId) return null;
 
@@ -110,17 +101,24 @@ const TaskProperties = memo(() => {
       </TaskScheduleConfig>
 
       {assigneeAgentId && (
-        <Block
-          horizontal
-          align="center"
-          gap={8}
-          paddingBlock={4}
-          paddingInline={'6px 8px'}
-          variant={'borderless'}
+        <AssigneeAgentSelector
+          currentAgentId={assigneeAgentId}
+          disabled={status === 'running'}
+          taskIdentifier={taskId!}
         >
-          <AssigneeAvatar agentId={assigneeAgentId} size={20} />
-          <Text weight={500}>{assigneeLabel}</Text>
-        </Block>
+          <Block
+            clickable
+            horizontal
+            align="center"
+            gap={8}
+            paddingBlock={4}
+            paddingInline={'6px 8px'}
+            variant={'borderless'}
+          >
+            <AssigneeAvatar agentId={assigneeAgentId} size={20} />
+            <Text weight={500}>{assigneeMeta?.title}</Text>
+          </Block>
+        </AssigneeAgentSelector>
       )}
     </Block>
   );

@@ -5,8 +5,6 @@ import { ClipboardCheckIcon, UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
@@ -18,7 +16,7 @@ import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
 import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
 import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
 import TaskStatusIcon from '../features/TaskStatusIcon';
-import { isInboxAgentId } from '../shared/isInboxAgent';
+import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
 import { compareTaskItems, getTaskGroupMeta, sortGroupEntries } from './listViewOptions';
 
@@ -59,14 +57,8 @@ const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: Tas
 };
 
 const AssigneeLabel = memo<{ agentId: string }>(({ agentId }) => {
-  const { t } = useTranslation(['chat', 'common']);
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const meta = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s));
-  const isInbox = isInboxAgentId(agentId, inboxAgentId);
-  const title =
-    meta?.title?.trim() ||
-    (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' }));
-  return <>{title}</>;
+  const displayMeta = useAgentDisplayMeta(agentId);
+  return <>{displayMeta?.title}</>;
 });
 
 const renderGroupPrefix = (group: TaskGroupMeta) => {

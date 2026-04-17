@@ -429,6 +429,7 @@
   "taskDetail.priority.normal": "Normal",
   "taskDetail.priority.urgent": "Urgent",
   "taskDetail.properties": "Properties",
+  "taskDetail.reassignDisabled": "Cannot reassign agent while task is running",
   "taskDetail.runTask": "Run task",
   "taskDetail.saveModelConfig": "Save",
   "taskDetail.status.backlog": "Backlog",

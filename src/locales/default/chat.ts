@@ -503,6 +503,7 @@ export default {
   'taskDetail.status.paused': 'Paused',
   'taskDetail.status.running': 'In progress',
   'taskDetail.subtasks': 'Subtasks',
+  'taskDetail.reassignDisabled': 'Cannot reassign agent while task is running',
   'taskDetail.titlePlaceholder': 'Enter task title...',
   'taskList.activeTasks': 'Active Tasks',
   'taskList.all': 'All tasks',

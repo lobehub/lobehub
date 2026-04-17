@@ -159,13 +159,20 @@ export class TaskDetailSliceActionImpl {
   };
 
   updateTask = async (id: string, data: TaskUpdatePayload): Promise<void> => {
-    // Optimistic update — all fields in TaskUpdatePayload directly map to TaskDetailData
-    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: data });
+    const { assigneeAgentId, ...rest } = data;
+    const optimistic: Partial<TaskDetailData> = {
+      ...rest,
+      ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
+    };
+    this.internal_dispatchTaskDetail({ id, type: 'updateTaskDetail', value: optimistic });
     this.#set({ taskSaveStatus: 'saving' }, false, 'updateTask/saving');
 
     try {
       await taskService.update(id, data);
       this.#set({ taskSaveStatus: 'saved' }, false, 'updateTask/saved');
+      if (assigneeAgentId !== undefined) {
+        await this.#get().refreshTaskList();
+      }
     } catch (error) {
       this.#set({ taskSaveStatus: 'idle' }, false, 'updateTask/error');
       // Revert by refreshing from server
