@@ -134,12 +134,12 @@ export interface ModelPerformance {
   ttft?: number;
 }
 
-export interface MessageMetadata extends ModelPerformance {
+export interface MessageMetadata {
   // ───────────────────────────────────────────────────────────────
-  // Token usage fields — DEPRECATED flat shape.
-  // New code must write to `metadata.usage` (nested ModelUsage) instead.
-  // Keeping these on the interface so legacy reads still type-check during
-  // migration; writers should stop populating them.
+  // Token usage + performance fields — DEPRECATED flat shape.
+  // New code must write to `metadata.usage` / `metadata.performance` (nested)
+  // instead. Kept here so legacy reads still type-check during migration;
+  // writers should stop populating them.
   // ───────────────────────────────────────────────────────────────
   /** @deprecated use `metadata.usage` instead */
   acceptedPredictionTokens?: number;
@@ -153,6 +153,8 @@ export interface MessageMetadata extends ModelPerformance {
   compare?: boolean;
   /** @deprecated use `metadata.usage` instead */
   cost?: number;
+  /** @deprecated use `metadata.performance` instead */
+  duration?: number;
   finishType?: string;
   /** @deprecated use `metadata.usage` instead */
   inputAudioTokens?: number;
@@ -191,6 +193,8 @@ export interface MessageMetadata extends ModelPerformance {
    * Used by conversation-flow to transform role to 'supervisor' for UI rendering
    */
   isSupervisor?: boolean;
+  /** @deprecated use `metadata.performance` instead */
+  latency?: number;
   /** @deprecated use `metadata.usage` instead */
   outputAudioTokens?: number;
   /** @deprecated use `metadata.usage` instead */
@@ -241,5 +245,9 @@ export interface MessageMetadata extends ModelPerformance {
   totalOutputTokens?: number;
   /** @deprecated use `metadata.usage` instead */
   totalTokens?: number;
+  /** @deprecated use `metadata.performance` instead */
+  tps?: number;
+  /** @deprecated use `metadata.performance` instead */
+  ttft?: number;
   usage?: ModelUsage;
 }
