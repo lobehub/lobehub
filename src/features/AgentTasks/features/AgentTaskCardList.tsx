@@ -21,7 +21,7 @@ const AgentTaskCardList = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
   const navigate = useNavigate();
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList(agentId);
+  useFetchTaskList({ agentId });
 
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);

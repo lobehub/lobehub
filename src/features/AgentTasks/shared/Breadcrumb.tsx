@@ -13,7 +13,11 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 interface BreadcrumbProps {
-  agentId: string;
+  /**
+   * When omitted, the breadcrumb renders a single "All tasks" crumb for the
+   * cross-agent `/tasks` route.
+   */
+  agentId?: string;
   taskId?: string;
 }
 
@@ -21,7 +25,9 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+  const agentMeta = useAgentStore((s) =>
+    agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
+  );
   const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
   const ancestors = useTaskStore(
     useShallow((s) => {
@@ -37,6 +43,23 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
       return chain.reverse();
     }),
   );
+
+  if (!agentId) {
+    return (
+      <AntBreadcrumb
+        separator={<Icon icon={ChevronRight} />}
+        items={[
+          {
+            title: (
+              <Text color={'inherit'} weight={500}>
+                {t('taskList.all')}
+              </Text>
+            ),
+          },
+        ]}
+      />
+    );
+  }
 
   const isInboxAgent = agentId === INBOX_SESSION_ID || (!!inboxAgentId && agentId === inboxAgentId);
   const agentName =

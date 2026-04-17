@@ -72,6 +72,8 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
+import AllTasksPage from '@/routes/(main)/tasks';
+import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -424,6 +426,19 @@ export const desktopRoutes: RouteObject[] = [
         element: <EvalLayout />,
         errorElement: <ErrorBoundary />,
         path: 'eval',
+      },
+
+      // Tasks routes (cross-agent)
+      {
+        children: [
+          {
+            element: <AllTasksPage />,
+            index: true,
+          },
+        ],
+        element: <AllTasksLayout />,
+        errorElement: <ErrorBoundary resetPath="/" />,
+        path: 'tasks',
       },
 
       // Pages routes

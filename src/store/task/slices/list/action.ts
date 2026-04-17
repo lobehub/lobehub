@@ -8,6 +8,13 @@ import type { TaskGroupItem, TaskListItem, TaskViewMode } from './initialState';
 const FETCH_TASK_LIST_KEY = 'fetchTaskList';
 const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
 
+/**
+ * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
+ * (e.g. the `/tasks` page). Keeps the SWR cache key distinct from per-agent lists so
+ * the two don't collide and `refreshTaskList()` can invalidate the correct entry.
+ */
+export const ALL_AGENTS_LIST_KEY = '__all__';
+
 // Default kanban groups: 4 columns
 const DEFAULT_KANBAN_GROUPS = [
   { key: 'backlog', statuses: ['backlog'] },
@@ -82,16 +89,23 @@ export class TaskListSliceActionImpl {
     );
   };
 
-  useFetchTaskList = (agentId?: string, enabled: boolean = true) => {
-    // Sync listAgentId so refreshTaskList() uses the correct SWR key
-    if (agentId && this.#get().listAgentId !== agentId) {
-      this.#set({ listAgentId: agentId }, false, 'useFetchTaskList/syncAgentId');
+  useFetchTaskList = (
+    options: {
+      agentId?: string;
+      allAgents?: boolean;
+      enabled?: boolean;
+    } = {},
+  ) => {
+    const { agentId, allAgents = false, enabled = true } = options;
+    const effectiveKey = allAgents ? ALL_AGENTS_LIST_KEY : agentId;
+    if (effectiveKey && this.#get().listAgentId !== effectiveKey) {
+      this.#set({ listAgentId: effectiveKey }, false, 'useFetchTaskList/syncAgentId');
     }
 
     return useClientDataSWR(
-      enabled && agentId ? [FETCH_TASK_LIST_KEY, agentId] : null,
+      enabled && effectiveKey ? [FETCH_TASK_LIST_KEY, effectiveKey] : null,
       async ([, id]: [string, string]) => {
-        return this.fetchTaskList({ assigneeAgentId: id });
+        return this.fetchTaskList(allAgents ? {} : { assigneeAgentId: id });
       },
       {
         fallbackData: { data: [], success: true, total: 0 },

@@ -8,7 +8,7 @@ import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import TaskScheduleConfig from '../AgentTaskDetail/TaskScheduleConfig';
-import AgentAvatars from './AgentAvatars';
+import AssigneeAvatar from './AssigneeAvatar';
 import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
@@ -40,7 +40,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
-  const agentId = useAgentStore((s) => s.activeAgentId);
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(task.identifier);
 
@@ -50,9 +50,14 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
   const time = formatTime(task.updatedAt || task.createdAt);
   const status = toTaskStatus(task.status);
 
+  // Prefer the task's own assignee so navigation works from the cross-agent `/tasks` page
+  // where `activeAgentId` is not scoped to any particular agent. Falls back to the
+  // currently active agent for unassigned tasks viewed from a per-agent page.
+  const targetAgentId = task.assigneeAgentId || activeAgentId;
+
   const handleClick = useCallback(() => {
-    if (agentId) navigate(`/agent/${agentId}/tasks/${task.identifier}`);
-  }, [agentId, navigate, task.identifier]);
+    if (targetAgentId) navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
+  }, [targetAgentId, navigate, task.identifier]);
 
   return (
     <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
@@ -67,7 +72,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
             currentIdentifier={task.identifier}
             subtasks={taskDetail?.subtasks}
             onSubtaskClick={(identifier) => {
-              if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
+              if (targetAgentId) navigate(`/agent/${targetAgentId}/tasks/${identifier}`);
             }}
           />
         </Flexbox>
@@ -82,7 +87,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
               scheduleTimezone={task.scheduleTimezone}
             />
           </TaskScheduleConfig>
-          <AgentAvatars agents={task.participants} />
+          <AssigneeAvatar agentId={task.assigneeAgentId} />
           {time && (
             <Text
               align={'right'}

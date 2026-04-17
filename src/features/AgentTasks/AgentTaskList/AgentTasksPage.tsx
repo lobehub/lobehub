@@ -14,12 +14,15 @@ import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
 interface AgentTasksPageProps {
-  agentId: string;
+  /**
+   * When omitted, the page shows tasks across all agents (used by the `/tasks` route).
+   */
+  agentId?: string;
 }
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList(agentId);
+  useFetchTaskList({ agentId, allAgents: !agentId });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = normalizeTaskListViewOptions(rawViewOptions);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);

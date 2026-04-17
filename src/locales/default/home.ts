@@ -15,6 +15,7 @@ export default {
   'brief.feedbackSent': 'Feedback shared',
   'brief.resolved': 'Marked as resolved',
   'brief.title': 'Daily brief',
+  'brief.viewAllTasks': 'View all tasks',
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",

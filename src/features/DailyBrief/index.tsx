@@ -1,7 +1,8 @@
-import { Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { Newspaper } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
@@ -13,6 +14,7 @@ import BriefCard from './BriefCard';
 
 const DailyBrief = memo(() => {
   const { t } = useTranslation('home');
+  const navigate = useNavigate();
   const isLogin = useUserStore(authSelectors.isLogin);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
   useFetchBriefs(isLogin);
@@ -23,7 +25,16 @@ const DailyBrief = memo(() => {
   if (!isInit || briefs.length === 0) return null;
 
   return (
-    <GroupBlock icon={Newspaper} title={t('brief.title')}>
+    <GroupBlock
+      actionAlwaysVisible
+      icon={Newspaper}
+      title={t('brief.title')}
+      action={
+        <Button size={'small'} type={'text'} onClick={() => navigate('/tasks')}>
+          {t('brief.viewAllTasks')}
+        </Button>
+      }
+    >
       <Flexbox gap={12}>
         {briefs.map((brief) => (
           <BriefCard brief={brief} key={brief.id} />

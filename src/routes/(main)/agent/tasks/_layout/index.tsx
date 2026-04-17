@@ -2,11 +2,11 @@
 
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import AgentTaskManager from '@/features/AgentTaskManager';
-import { useChatStore } from '@/store/chat';
+import { useScenarioEnabledTools } from '@/hooks/useScenarioEnabledTools';
 
 /**
  * Tasks pages layout.
@@ -19,14 +19,7 @@ import { useChatStore } from '@/store/chat';
  *   sub-page via the page-level `scenarioEnabledToolIds` chat state.
  */
 const TasksLayout = memo(() => {
-  useEffect(() => {
-    useChatStore.setState({
-      scenarioEnabledToolIds: [TaskIdentifier],
-    });
-    return () => {
-      useChatStore.setState({ scenarioEnabledToolIds: undefined });
-    };
-  }, []);
+  useScenarioEnabledTools(TaskIdentifier);
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
