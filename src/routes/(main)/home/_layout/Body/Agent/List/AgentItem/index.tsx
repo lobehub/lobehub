@@ -51,7 +51,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
         {displayTitle}
       </span>
       <Tag size="small" style={{ flexShrink: 0 }}>
-        {t('group.profile.external')}
+        {t('agentSidebar.externalTag')}
       </Tag>
     </Flexbox>
   ) : (
