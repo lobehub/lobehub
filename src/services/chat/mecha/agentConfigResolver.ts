@@ -228,8 +228,24 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     // Regular agent - use provided plugins if available, fallback to agent's plugins
     const finalPlugins = plugins && plugins.length > 0 ? plugins : basePlugins;
 
+    // Inject response language preference into system role for regular agents
+    const userLocale = userGeneralSettingsSelectors.currentResponseLanguage(
+      useUserStore.getState(),
+    );
+    const localeInstruction = userLocale
+      ? `Preferred reply language: ${userLocale}. Use this language unless the user explicitly asks to switch.`
+      : '';
+    const systemRoleWithLocale = localeInstruction
+      ? agentConfig.systemRole
+        ? `${agentConfig.systemRole}\n\n${localeInstruction}`
+        : localeInstruction
+      : agentConfig.systemRole;
+
     // Apply params adjustments based on chatConfig
-    let finalAgentConfig = applyParamsFromChatConfig(agentConfig, chatConfig);
+    let finalAgentConfig = applyParamsFromChatConfig(
+      { ...agentConfig, systemRole: systemRoleWithLocale },
+      chatConfig,
+    );
     let finalChatConfig = chatConfig;
 
     // === Page Editor Auto-Injection ===
@@ -245,13 +261,13 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {});
       const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
 
-      // 3. Merge system roles: custom agent's role + page-agent role
+      // 3. Merge system roles: custom agent's role (with locale) + page-agent role
       // Only append page-agent role if it exists
       const mergedSystemRole = pageAgentSystemRole
-        ? agentConfig.systemRole
-          ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
+        ? systemRoleWithLocale
+          ? `${systemRoleWithLocale}\n\n${pageAgentSystemRole}`
           : pageAgentSystemRole
-        : agentConfig.systemRole || '';
+        : systemRoleWithLocale || '';
 
       finalAgentConfig = {
         ...finalAgentConfig,
