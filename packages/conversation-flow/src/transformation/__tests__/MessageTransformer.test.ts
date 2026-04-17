@@ -122,6 +122,38 @@ describe('MessageTransformer', () => {
         duration: 1000,
       });
     });
+
+    it('should prefer nested usage/performance over flat fields', () => {
+      const metadata = {
+        performance: { duration: 2000, tps: 40 },
+        usage: { totalInputTokens: 500, totalOutputTokens: 100 },
+        // Flat fields (legacy, should be ignored when nested shape present)
+        duration: 9999,
+        totalInputTokens: 9999,
+      };
+
+      const result = transformer.splitMetadata(metadata);
+
+      expect(result.usage).toEqual({ totalInputTokens: 500, totalOutputTokens: 100 });
+      expect(result.performance).toEqual({ duration: 2000, tps: 40 });
+    });
+
+    it('should handle nested-only metadata (new canonical shape)', () => {
+      const metadata = {
+        usage: {
+          inputCachedTokens: 200,
+          inputWriteCacheTokens: 50,
+          totalInputTokens: 650,
+          totalOutputTokens: 130,
+          totalTokens: 780,
+        },
+      };
+
+      const result = transformer.splitMetadata(metadata);
+
+      expect(result.usage).toEqual(metadata.usage);
+      expect(result.performance).toBeUndefined();
+    });
   });
 
   describe('aggregateMetadata', () => {

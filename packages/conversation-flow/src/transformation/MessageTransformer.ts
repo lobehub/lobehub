@@ -31,7 +31,10 @@ export class MessageTransformer {
   }
 
   /**
-   * Split metadata into usage and performance objects
+   * Split metadata into usage and performance objects.
+   *
+   * New shape: `metadata.usage` / `metadata.performance` (nested) is preferred.
+   * Legacy shape: flat fields on `metadata` (deprecated) are scraped as fallback.
    */
   splitMetadata(metadata?: any): {
     performance?: ModelPerformance;
@@ -39,6 +42,23 @@ export class MessageTransformer {
   } {
     if (!metadata) return {};
 
+    // Prefer nested shape — writers must use this going forward.
+    const nestedUsage: ModelUsage | undefined =
+      metadata.usage && typeof metadata.usage === 'object' ? metadata.usage : undefined;
+    const nestedPerformance: ModelPerformance | undefined =
+      metadata.performance && typeof metadata.performance === 'object'
+        ? metadata.performance
+        : undefined;
+
+    if (nestedUsage || nestedPerformance) {
+      return {
+        performance: nestedPerformance,
+        usage: nestedUsage,
+      };
+    }
+
+    // Legacy fallback: metadata had flat token/perf fields directly.
+    // Kept so pre-migration messages still render until they're re-persisted.
     const usage: ModelUsage = {};
     const performance: ModelPerformance = {};
 
