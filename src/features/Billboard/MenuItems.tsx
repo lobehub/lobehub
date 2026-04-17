@@ -3,13 +3,13 @@ import { Icon } from '@lobehub/ui';
 import { Megaphone } from 'lucide-react';
 import { useMemo } from 'react';
 
-import { useBillboard } from '@/hooks/useBillboards';
 import { useGlobalStore } from '@/store/global';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import { billboardDismissKey } from './index';
 
 export const useBillboardMenuItems = (): MenuProps['items'] => {
-  const { data: billboard } = useBillboard();
+  const billboard = useServerConfigStore((s) => s.billboard);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   return useMemo(() => {

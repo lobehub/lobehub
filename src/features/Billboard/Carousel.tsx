@@ -1,15 +1,18 @@
 'use client';
 
-import type { BillboardItem, BillboardSet } from '@lobechat/edge-config';
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo, useState } from 'react';
 
+import type { GlobalBillboard } from '@/types/serverConfig';
+
+type BillboardItem = GlobalBillboard['items'][number];
+
 interface BillboardCarouselProps {
   onClose: () => void;
-  set: BillboardSet;
+  set: GlobalBillboard;
 }
 
 const styles = createStaticStyles(({ css }) => ({

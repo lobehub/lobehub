@@ -76,7 +76,24 @@ export interface GlobalServerConfig {
   };
 }
 
+export interface GlobalBillboard {
+  endAt: string;
+  id: number;
+  items: {
+    cover?: string | null;
+    description: string;
+    id: number;
+    linkLabel?: string | null;
+    linkUrl?: string | null;
+    title: string;
+  }[];
+  slug: string;
+  startAt: string;
+  title: string;
+}
+
 export interface GlobalRuntimeConfig {
+  billboard?: GlobalBillboard | null;
   serverConfig: GlobalServerConfig;
   serverFeatureFlags: IFeatureFlagsState;
 }

@@ -2,17 +2,27 @@
 
 import { memo, useCallback } from 'react';
 
-import { useBillboard } from '@/hooks/useBillboards';
 import { useGlobalStore } from '@/store/global';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import BillboardCarousel from './Carousel';
 
 export const billboardDismissKey = (slug: string) => `billboard:${slug}`;
 
 const Billboard = memo(() => {
-  const { data: billboard } = useBillboard();
+  const billboard = useServerConfigStore((s) => s.billboard);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const dismissedSlugs = useGlobalStore((s) => s.status.readNotificationSlugs ?? []);
+
+  // 时间窗口检查：startAt <= now <= endAt
+  const inWindow = billboard
+    ? (() => {
+        const now = Date.now();
+        const start = Date.parse(billboard.startAt);
+        const end = Date.parse(billboard.endAt);
+        return Number.isFinite(start) && Number.isFinite(end) && start <= now && now <= end;
+      })()
+    : false;
 
   const isDismissed = billboard
     ? dismissedSlugs.includes(billboardDismissKey(billboard.slug))
@@ -27,7 +37,7 @@ const Billboard = memo(() => {
     }
   }, [billboard, updateSystemStatus]);
 
-  if (!billboard || isDismissed || billboard.items.length === 0) return null;
+  if (!billboard || !inWindow || isDismissed || billboard.items.length === 0) return null;
 
   return <BillboardCarousel set={billboard} onClose={handleClose} />;
 });
