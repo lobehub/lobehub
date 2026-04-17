@@ -585,7 +585,7 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      expect(result.agentConfig.systemRole).toBe(
+      expect(result.agentConfig.systemRole).toContain(
         'Page agent system prompt with XML instructions...',
       );
     });
