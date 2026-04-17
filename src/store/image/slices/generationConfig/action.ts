@@ -254,6 +254,25 @@ export class GenerationConfigActionImpl {
       newParams.aspectRatio = aspectRatio;
     }
 
+    // Preserve resolution if it exists in current parameters (models like nanoBanana2 use resolution enum)
+    // Only preserve if the new schema's resolution enum contains the current value
+    if (
+      'resolution' in parameters &&
+      parameters.resolution !== undefined &&
+      parametersSchema?.resolution?.enum &&
+      parametersSchema.resolution.enum.includes(parameters.resolution)
+    ) {
+      newParams.resolution = parameters.resolution;
+    } else if (
+      'resolution' in parameters &&
+      parameters.resolution !== undefined &&
+      ( !parametersSchema?.resolution?.enum ||
+        !parametersSchema.resolution.enum.includes(parameters.resolution))
+    ) {
+      // Resolution value is not valid for new schema - strip it
+      delete newParams.resolution;
+    }
+
     this.#set(
       { activeAspectRatio: aspectRatio, parameters: newParams },
       false,
