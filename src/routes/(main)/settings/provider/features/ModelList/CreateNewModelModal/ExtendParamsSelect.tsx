@@ -16,6 +16,7 @@ import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/Cont
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
 import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
+import Opus47EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Opus47EffortSlider';
 import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningEffortSlider';
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
 import ReasoningTokenSlider32k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider32k';
@@ -62,6 +63,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.effort.hint',
     key: 'effort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint',
+    key: 'opus47Effort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
@@ -155,6 +160,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_2ReasoningEffort: 'reasoningEffort',
   grok4_20ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
+  opus47Effort: 'effort',
   reasoningBudgetToken32k: 'reasoningBudgetToken',
   reasoningBudgetToken80k: 'reasoningBudgetToken',
   thinkingLevel2: 'thinkingLevel',
@@ -201,6 +207,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
+  opus47Effort: { labelSuffix: ' (Opus 4.7)', previewWidth: 280, tag: 'output_config.effort' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
@@ -329,6 +336,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,
       imageResolution2: <ImageResolution2Slider value="1K" />,
+      opus47Effort: <Opus47EffortSlider value="high" />,
       reasoningBudgetToken: <ReasoningTokenSlider defaultValue={1 * 1024} />,
       reasoningBudgetToken32k: <ReasoningTokenSlider32k defaultValue={1 * 1024} />,
       reasoningBudgetToken80k: <ReasoningTokenSlider80k defaultValue={1 * 1024} />,
