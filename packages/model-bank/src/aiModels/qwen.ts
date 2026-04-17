@@ -11,6 +11,32 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description: 'Open-source Qwen3.6 text model supporting both thinking and non-thinking modes.',
+    displayName: 'Qwen3.6-35B-A3B',
+    id: 'qwen3.6-35b-a3b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -379,6 +405,52 @@ const qwenChatModels: AIChatModelCard[] = [
     releasedAt: '2025-07-17',
     settings: {
       searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 202_745,
+    description:
+      'The GLM series is a hybrid reasoning model from Zhipu AI built for agents, with thinking and non-thinking modes. GLM-5.1 is the latest flagship variant for long-horizon agentic engineering and complex development workflows.',
+    displayName: 'GLM-5.1',
+    id: 'glm-5.1',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 6,
+              '[0.032, infinity]': 8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 24,
+              '[0.032, infinity]': 28,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-14',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -1553,51 +1625,30 @@ const qwenChatModels: AIChatModelCard[] = [
       currency: 'CNY',
       units: [
         {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 1.2 * 0.1,
-              '[0.256, infinity]': 4.8 * 0.1,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 1.2 * 1.25,
-              '[0.256, infinity]': 4.8 * 1.25,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 1.2,
-              '[0.256, infinity]': 4.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
           name: 'textInput',
-          strategy: 'lookup',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.2, upTo: 0.256 },
+            { rate: 4.8, upTo: 'infinity' },
+          ],
           unit: 'millionTokens',
         },
         {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 7.2,
-              '[0.256, infinity]': 28.8,
-            },
-            pricingParams: ['textInputRange'],
-          },
           name: 'textOutput',
-          strategy: 'lookup',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 7.2, upTo: 0.256 },
+            { rate: 28.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.2 * 0.2, upTo: 0.256 },
+            { rate: 4.8 * 0.2, upTo: 'infinity' },
+          ],
           unit: 'millionTokens',
         },
       ],

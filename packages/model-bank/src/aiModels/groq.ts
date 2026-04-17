@@ -63,26 +63,6 @@ const groqChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'The kimi-k2-0905-preview model supports a 256k context window, with stronger agentic coding, more polished and practical frontend code, and better context understanding.',
-    displayName: 'Kimi K2 0905',
-    enabled: true,
-    id: 'moonshotai/kimi-k2-instruct-0905',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-05',
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 131_072,
     displayName: 'Llama 4 Scout (17Bx16E)',
     enabled: true,
