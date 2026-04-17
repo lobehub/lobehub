@@ -1,6 +1,6 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { HashIcon, MessageSquareDashed, Star } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -207,7 +207,11 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         loading={isLoading}
         title={title}
         icon={
-          <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+          fav ? (
+            <Icon icon={Star} size={'small'} style={{ color: cssVar.colorWarning }} />
+          ) : (
+            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+          )
         }
         slots={{
           iconPostfix: unreadNode,
