@@ -43,6 +43,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
     provider,
     performance,
     usage,
+    metadata,
   } = item;
   const avatar = useAgentMeta(agentId);
 
@@ -84,10 +85,10 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
           extra={extra}
           id={id}
           model={model!}
-          performance={performance}
+          performance={performance ?? metadata?.performance}
           provider={provider!}
           tools={tools}
-          usage={usage}
+          usage={usage ?? metadata?.usage}
         />
       }
       onMouseEnter={onMouseEnter}
