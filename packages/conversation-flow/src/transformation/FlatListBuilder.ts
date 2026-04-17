@@ -796,10 +796,6 @@ export class FlatListBuilder {
       const otherMetadata: Record<string, any> = {};
       if (assistant.metadata) {
         const usagePerformanceFields = new Set([
-          // Nested canonical shape (new)
-          'performance',
-          'usage',
-          // Flat legacy shape (deprecated) — kept for backward compat
           'acceptedPredictionTokens',
           'cost',
           'duration',
@@ -943,10 +939,6 @@ export class FlatListBuilder {
     const otherMetadata: Record<string, any> = {};
     if (message.metadata) {
       const usagePerformanceFields = new Set([
-        // Nested canonical shape (new)
-        'performance',
-        'usage',
-        // Flat legacy shape (deprecated) — kept for backward compat
         'acceptedPredictionTokens',
         'cost',
         'duration',
