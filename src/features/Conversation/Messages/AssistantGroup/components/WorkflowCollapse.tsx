@@ -1,7 +1,7 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, ChevronDown, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
+import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,6 +30,12 @@ import {
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
 import WorkflowExpandedList from './WorkflowExpandedList';
+
+const WORKFLOW_EXPAND_TOGGLE_ICON_SIZE = 12;
+const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
+  duration: 0.18,
+  ease: [0.4, 0, 0.2, 1],
+} as const;
 
 interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
@@ -279,26 +285,21 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       <Icon color={cssVar.colorSuccess} icon={Check} />
     );
 
+    const showExpandToggle = expandLevel !== 'collapsed';
     const expandToggleLabel =
-      expandLevel === 'collapsed'
-        ? t('workflow.expand', { defaultValue: 'Expand' })
-        : expandLevel === 'semi'
-          ? t('workflow.expandFull', { defaultValue: 'Expand fully' })
-          : t('workflow.collapse', { defaultValue: 'Collapse' });
+      expandLevel === 'semi'
+        ? t('workflow.expandFull', { defaultValue: 'Expand fully' })
+        : t('workflow.collapse', { defaultValue: 'Collapse' });
 
-    const expandToggleIcon =
-      expandLevel === 'collapsed' ? ChevronDown : expandLevel === 'semi' ? Maximize2 : Minimize2;
+    const expandToggleIcon = expandLevel === 'semi' ? Maximize2 : Minimize2;
 
     const handleToggleExpand = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (expandLevel === 'collapsed') {
-        setExpandLevel('semi');
-        userOpenedRef.current = true;
-      } else if (expandLevel === 'semi') {
+      if (expandLevel === 'semi') {
         setExpandLevel('full');
         userOpenedRef.current = true;
       } else {
-        setExpandLevel('collapsed');
+        setExpandLevel('semi');
       }
     };
 
@@ -385,15 +386,43 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             )}
           </Flexbox>
         )}
-        <div
-          aria-label={expandToggleLabel}
-          role="button"
-          style={{ cursor: 'pointer', flex: 'none', marginInlineStart: 8, padding: 2 }}
-          title={expandToggleLabel}
-          onClick={handleToggleExpand}
-        >
-          <Icon color={cssVar.colorTextSecondary} icon={expandToggleIcon} size={14} />
-        </div>
+        <AnimatePresence initial={false}>
+          {showExpandToggle && (
+            <motion.div
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              aria-label={expandToggleLabel}
+              exit={{ opacity: 0, scale: 0.9, x: 4 }}
+              initial={{ opacity: 0, scale: 0.9, x: 4 }}
+              role="button"
+              title={expandToggleLabel}
+              transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
+              style={{
+                cursor: 'pointer',
+                flex: 'none',
+                marginInlineStart: 8,
+                padding: 2,
+              }}
+              onClick={handleToggleExpand}
+            >
+              <AnimatePresence initial={false} mode="wait">
+                <motion.span
+                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                  exit={{ opacity: 0, rotate: 60, scale: 0.85 }}
+                  initial={{ opacity: 0, rotate: -60, scale: 0.85 }}
+                  key={expandLevel}
+                  style={{ display: 'flex' }}
+                  transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
+                >
+                  <Icon
+                    color={cssVar.colorTextSecondary}
+                    icon={expandToggleIcon}
+                    size={WORKFLOW_EXPAND_TOGGLE_ICON_SIZE}
+                  />
+                </motion.span>
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Flexbox>
     );
 
