@@ -53,9 +53,7 @@ export const useBranchingActionFactory = (): MessageActionFactory => {
 export const useActionsBarConfig = (): ActionsBarConfig => {
   const branchingFactory = useBranchingActionFactory();
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const hasACPProvider = useAgentStore(
-    (s) => !!agentSelectors.currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider,
-  );
+  const hasACPProvider = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
 
   return useMemo(
     () => ({
