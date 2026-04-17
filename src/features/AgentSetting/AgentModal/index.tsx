@@ -1,6 +1,5 @@
 'use client';
 
-import { shouldOmitSamplingParams } from '@lobechat/model-runtime';
 import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
 import { Flexbox, Form, Select, SliderWithInput } from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
@@ -11,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import InfoTooltip from '@/components/InfoTooltip';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { selectors, useStore } from '../store';
 
@@ -226,11 +226,13 @@ const AgentModal = memo(() => {
     [form],
   );
 
-  // Hide temperature / top_p when the selected model rejects them outright
-  // (e.g. Claude Opus 4.7 — see @lobechat/model-runtime shouldOmitSamplingParams).
-  const omitSampling = !!config.model && shouldOmitSamplingParams(config.model);
+  // Hide params the selected model rejects outright (e.g. Claude Opus 4.7 drops
+  // temperature / top_p). Declared via `settings.disabledParams` on the model card.
+  const disabledParams = useAiInfraStore(
+    aiModelSelectors.modelDisabledParams(config.model, config.provider ?? ''),
+  );
   const visibleParamKeys = (Object.keys(PARAM_CONFIG) as ParamKey[]).filter(
-    (key) => !(omitSampling && (key === 'temperature' || key === 'top_p')),
+    (key) => !disabledParams?.includes(key),
   );
 
   const paramItems: FormItemProps[] = visibleParamKeys.map((key) => {
