@@ -102,10 +102,15 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
+  // Canonical nested shape — flat fields above are deprecated. Must be listed
+  // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
+  // (e.g. messageService.updateMessage, used by the heterogeneous-agent executor).
+  performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
+  usage: ModelUsageSchema.optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
