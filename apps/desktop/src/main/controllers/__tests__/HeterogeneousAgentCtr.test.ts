@@ -37,14 +37,15 @@ describe('HeterogeneousAgentCtr', () => {
     it('stores traversal-looking ids inside the cache root via a stable hash key', async () => {
       const ctr = new HeterogeneousAgentCtr({ appStoragePath } as any);
       const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
-      const escapePath = path.join(cacheDir, '../../../outside-storage');
+      const escapedTargetName = `${path.basename(appStoragePath)}-outside-storage`;
+      const escapePath = path.join(cacheDir, `../../../${escapedTargetName}`);
 
       try {
         await unlink(escapePath);
       } catch {}
 
       await (ctr as any).resolveImage({
-        id: '../../../outside-storage',
+        id: `../../../${escapedTargetName}`,
         url: 'data:text/plain;base64,T1VUU0lERQ==',
       });
 
@@ -53,6 +54,10 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cacheEntries).toHaveLength(2);
       expect(cacheEntries.every((entry) => /^[a-f0-9]{64}(\.meta)?$/.test(entry))).toBe(true);
       await expect(access(escapePath)).rejects.toThrow();
+
+      try {
+        await unlink(escapePath);
+      } catch {}
     });
 
     it('does not trust pre-seeded out-of-root traversal cache files as cache hits', async () => {
