@@ -138,7 +138,7 @@ beforeEach(() => {
     ...initialUserState,
     preference: {
       ...initialUserState.preference,
-      lab: { ...initialUserState.preference.lab, enableAgentWorkingPanel: true },
+      lab: { ...initialUserState.preference.lab },
     },
   });
 });
