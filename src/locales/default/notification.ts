@@ -1,6 +1,4 @@
 export default {
-  'billboard.collapse': 'Show Less',
-  'billboard.expand': 'Show More',
   'billboard.learnMore': 'Learn more',
   'billboard.menuLabel': 'Announcements',
   'inbox.archiveAll': 'Archive all',

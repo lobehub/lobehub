@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Tooltip } from '@lobehub/ui';
 import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
@@ -65,32 +65,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
   `,
-  descriptionExpanded: css`
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-word;
-  `,
-  expandToggle: css`
-    cursor: pointer;
-
-    align-self: flex-start;
-
-    margin-block-start: 2px;
-    padding: 0;
-    border: none;
-
-    font-size: 13px;
-    color: ${cssVar.colorLink};
-
-    background: transparent;
-
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorLinkHover};
-      text-decoration: underline;
-    }
-  `,
   dot: css`
     cursor: pointer;
 
@@ -108,7 +82,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorPrimary};
   `,
   dots: css`
-    padding-block: 8px 10px;
+    padding-block-end: 10px;
   `,
   image: css`
     display: block;
@@ -135,66 +109,74 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ItemContent = memo<{ item: BillboardItem; onExpandChange?: () => void }>(
-  ({ item, onExpandChange }) => {
-    const { t, i18n } = useTranslation('notification');
-    const resolved = useMemo(
-      () => resolveBillboardItem(item, i18n.language),
-      [item, i18n.language],
-    );
+const ItemContent = memo<{ item: BillboardItem }>(({ item }) => {
+  const { t, i18n } = useTranslation('notification');
+  const resolved = useMemo(() => resolveBillboardItem(item, i18n.language), [item, i18n.language]);
 
-    const descRef = useRef<HTMLDivElement>(null);
-    const [expanded, setExpanded] = useState(false);
-    const [overflow, setOverflow] = useState(false);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const descRef = useRef<HTMLDivElement>(null);
+  const [titleOverflow, setTitleOverflow] = useState(false);
+  const [descOverflow, setDescOverflow] = useState(false);
 
-    useLayoutEffect(() => {
-      const el = descRef.current;
-      if (!el || !resolved.description || expanded) return;
-      setOverflow(el.scrollHeight > el.clientHeight + 1);
-    }, [resolved.description, expanded]);
+  useLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    setTitleOverflow(el.scrollHeight > el.clientHeight + 1);
+  }, [resolved.title]);
 
-    const handleToggle = () => {
-      setExpanded((v) => !v);
-      onExpandChange?.();
-    };
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    setDescOverflow(el.scrollHeight > el.clientHeight + 1);
+  }, [resolved.description]);
 
-    return (
-      <Flexbox gap={0}>
-        {item.cover && <img alt="" className={styles.image} src={item.cover} />}
-        <Flexbox className={styles.itemBody} gap={4}>
-          <div className={styles.title}>{resolved.title}</div>
-          {resolved.description && (
-            <>
-              <div
-                className={expanded ? styles.descriptionExpanded : styles.description}
-                ref={descRef}
-              >
-                {resolved.description}
-              </div>
-              {(overflow || expanded) && (
-                <button className={styles.expandToggle} type="button" onClick={handleToggle}>
-                  {expanded ? t('billboard.collapse') : t('billboard.expand')}
-                </button>
-              )}
-            </>
-          )}
-          {item.linkUrl && (
-            <a
-              className={styles.action}
-              href={item.linkUrl}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <Button block size="small" type="primary">
-                {resolved.linkLabel ?? t('billboard.learnMore')}
-              </Button>
-            </a>
-          )}
-        </Flexbox>
+  const titleNode = (
+    <div className={styles.title} ref={titleRef}>
+      {resolved.title}
+    </div>
+  );
+
+  const descNode = resolved.description && (
+    <div className={styles.description} ref={descRef}>
+      {resolved.description}
+    </div>
+  );
+
+  return (
+    <Flexbox gap={0}>
+      {item.cover && <img alt="" className={styles.image} src={item.cover} />}
+      <Flexbox className={styles.itemBody} gap={4}>
+        {titleOverflow ? (
+          <Tooltip placement="top" title={resolved.title}>
+            {titleNode}
+          </Tooltip>
+        ) : (
+          titleNode
+        )}
+        {descNode &&
+          (descOverflow ? (
+            <Tooltip placement="top" title={resolved.description}>
+              {descNode}
+            </Tooltip>
+          ) : (
+            descNode
+          ))}
+        {item.linkUrl && (
+          <a
+            className={styles.action}
+            href={item.linkUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <Button block size="small" type="primary">
+              {resolved.linkLabel ?? t('billboard.learnMore')}
+            </Button>
+          </a>
+        )}
       </Flexbox>
-    );
-  },
-);
+    </Flexbox>
+  );
+});
 
 ItemContent.displayName = 'BillboardItemContent';
 
@@ -242,14 +224,7 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
             >
               {set.items.map((item) => (
                 <div key={item.id}>
-                  <ItemContent
-                    item={item}
-                    onExpandChange={() => {
-                      requestAnimationFrame(() => {
-                        carouselRef.current?.innerSlider?.onWindowResized?.();
-                      });
-                    }}
-                  />
+                  <ItemContent item={item} />
                 </div>
               ))}
             </AntCarousel>
