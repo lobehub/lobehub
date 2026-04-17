@@ -85,11 +85,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const FILTER_OPTIONS: { labelKey: string; value: ResourceFilter }[] = [
+const FILTER_OPTIONS = [
   { labelKey: 'workingPanel.resources.filter.all', value: 'all' },
   { labelKey: 'workingPanel.resources.filter.documents', value: 'documents' },
   { labelKey: 'workingPanel.resources.filter.web', value: 'web' },
-];
+] as const satisfies readonly { labelKey: string; value: ResourceFilter }[];
 
 type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.getDocuments>>[number];
 
@@ -207,10 +207,12 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' 
   const treeGroups = useMemo(() => {
     const docs = data.filter((doc) => doc.sourceType !== 'web');
     const webs = data.filter((doc) => doc.sourceType === 'web');
-    return [
-      { items: docs, labelKey: 'workingPanel.resources.filter.documents' },
-      { items: webs, labelKey: 'workingPanel.resources.filter.web' },
-    ].filter((group) => group.items.length > 0);
+    return (
+      [
+        { items: docs, labelKey: 'workingPanel.resources.filter.documents' },
+        { items: webs, labelKey: 'workingPanel.resources.filter.web' },
+      ] as const
+    ).filter((group) => group.items.length > 0);
   }, [data]);
 
   if (!agentId) return null;

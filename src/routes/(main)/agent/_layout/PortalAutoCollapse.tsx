@@ -20,7 +20,7 @@ const PortalAutoCollapse = memo(() => {
     if (showPortal) {
       // Remember the left-panel state only on the transition false→true
       if (savedShowLeftPanelRef.current === null) {
-        savedShowLeftPanelRef.current = status.showLeftPanel;
+        savedShowLeftPanelRef.current = !!status.showLeftPanel;
         if (status.showLeftPanel) toggleLeftPanel(false);
       }
     } else if (savedShowLeftPanelRef.current !== null) {
