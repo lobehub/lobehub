@@ -141,7 +141,9 @@ export class TaskService {
 
     const [authorMap, enrichedBriefs] = await Promise.all([
       this.resolveAuthors(agentIds, userIds),
-      this.briefService.enrichBriefsWithAgents(briefs),
+      this.briefService
+        .enrichBriefsWithAgents(briefs)
+        .catch(() => briefs.map((b) => ({ ...b, agents: [] }))),
     ]);
 
     const activities: TaskDetailActivity[] = [

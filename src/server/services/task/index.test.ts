@@ -1012,6 +1012,65 @@ describe('TaskService', () => {
       });
     });
 
+    it('should still return task detail when brief agent enrichment fails', async () => {
+      const task = {
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Task 1',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      const briefs = [
+        {
+          agentId: 'agent-1',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          id: 'brief-1',
+          priority: 'normal',
+          resolvedAction: null,
+          resolvedComment: null,
+          summary: 'Brief',
+          taskId: 'task_001',
+          title: 'Brief A',
+          type: 'insight',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockBriefModel.findByTaskId.mockResolvedValue(briefs);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+      mockTaskModel.getTreeAgentIdsForTaskIds.mockRejectedValue(new Error('DB error'));
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      expect(result).not.toBeNull();
+      expect(result?.activities).toHaveLength(1);
+      expect(result?.activities?.[0]).toMatchObject({
+        agents: [],
+        id: 'brief-1',
+        type: 'brief',
+      });
+    });
+
     it('should use topic handoff title with fallback to Untitled', async () => {
       const task = {
         assigneeAgentId: null,
