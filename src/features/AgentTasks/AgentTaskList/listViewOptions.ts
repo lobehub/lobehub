@@ -1,4 +1,3 @@
-import { INBOX_SESSION_ID } from '@lobechat/const';
 import { t } from 'i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -16,12 +15,7 @@ export interface TaskListViewOptions {
 }
 
 export interface TaskGroupMeta {
-  assignee?: {
-    avatar: string | null;
-    backgroundColor: string | null;
-    id: string;
-    title: string;
-  };
+  assigneeId?: string;
   groupBy: TaskGroupBy;
   key: string;
   label: string;
@@ -105,9 +99,9 @@ const getPriorityValue = (task: TaskListItem) => task.priority ?? 0;
 const getTaskStatusGroup = (task: TaskListItem): NonNullable<TaskGroupMeta['status']> =>
   TASK_STATUS_TO_GROUP_MAP[task.status] ?? 'backlog';
 
-const getTaskAssigneeMeta = (task: TaskListItem, inboxAgentId?: string): TaskGroupMeta => {
-  const participant = task.participants.find((item) => item.type === 'agent');
-  if (!participant) {
+const getTaskAssigneeMeta = (task: TaskListItem): TaskGroupMeta => {
+  const agentId = task.assigneeAgentId;
+  if (!agentId) {
     return {
       groupBy: 'assignee',
       key: 'assignee:unassigned',
@@ -115,27 +109,15 @@ const getTaskAssigneeMeta = (task: TaskListItem, inboxAgentId?: string): TaskGro
     };
   }
 
-  const isInboxAgent =
-    participant.id === INBOX_SESSION_ID || (!!inboxAgentId && participant.id === inboxAgentId);
-  const displayTitle =
-    participant.title?.trim() ||
-    (isInboxAgent ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' }));
-
   return {
-    assignee: {
-      avatar: participant.avatar,
-      backgroundColor: participant.backgroundColor,
-      id: participant.id,
-      title: displayTitle,
-    },
+    assigneeId: agentId,
     groupBy: 'assignee',
-    key: `assignee:${participant.id}`,
-    label: displayTitle,
+    key: `assignee:${agentId}`,
+    label: agentId,
   };
 };
 
-const getTaskAssigneeSortValue = (task: TaskListItem, inboxAgentId?: string) =>
-  getTaskAssigneeMeta(task, inboxAgentId).label;
+const getTaskAssigneeSortValue = (task: TaskListItem) => task.assigneeAgentId ?? '';
 
 const toTime = (value: Date | string | null | undefined): number => {
   if (!value) return 0;
@@ -150,14 +132,10 @@ const compareStrings = (a: string, b: string, direction: TaskOrderDirection) => 
   return direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
 };
 
-const getComparableValue = (
-  task: TaskListItem,
-  orderBy: TaskOrderBy,
-  inboxAgentId?: string,
-): number | string => {
+const getComparableValue = (task: TaskListItem, orderBy: TaskOrderBy): number | string => {
   switch (orderBy) {
     case 'assignee': {
-      return getTaskAssigneeSortValue(task, inboxAgentId);
+      return getTaskAssigneeSortValue(task);
     }
     case 'createdAt': {
       return toTime(task.createdAt);
@@ -181,7 +159,6 @@ export const compareTaskItems = (
   a: TaskListItem,
   b: TaskListItem,
   options: TaskListViewOptions,
-  inboxAgentId?: string,
 ): number => {
   const { orderBy, orderCompletedByRecency, orderDirection } = options;
   const effectiveOrderDirection =
@@ -200,8 +177,8 @@ export const compareTaskItems = (
     if (byCompletedAt !== 0) return byCompletedAt;
   }
 
-  const valueA = getComparableValue(a, orderBy, inboxAgentId);
-  const valueB = getComparableValue(b, orderBy, inboxAgentId);
+  const valueA = getComparableValue(a, orderBy);
+  const valueB = getComparableValue(b, orderBy);
   const compared =
     typeof valueA === 'number' && typeof valueB === 'number'
       ? compareNumbers(valueA, valueB, effectiveOrderDirection)
@@ -211,14 +188,10 @@ export const compareTaskItems = (
   return compareStrings(a.identifier, b.identifier, 'asc');
 };
 
-export const getTaskGroupMeta = (
-  task: TaskListItem,
-  groupBy: TaskGroupBy,
-  inboxAgentId?: string,
-): TaskGroupMeta => {
+export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): TaskGroupMeta => {
   switch (groupBy) {
     case 'assignee': {
-      return getTaskAssigneeMeta(task, inboxAgentId);
+      return getTaskAssigneeMeta(task);
     }
     case 'priority': {
       const priority = getPriorityValue(task);

@@ -1,18 +1,18 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
 import { Block, Text } from '@lobehub/ui';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { INBOX_SESSION_ID } from '@/const/session';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors, taskListSelectors } from '@/store/task/selectors';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
-import AgentAvatars from '../features/AgentAvatars';
+import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
+import { isInboxAgentId } from '../shared/isInboxAgent';
 import TaskScheduleConfig from './TaskScheduleConfig';
 
 interface StatusMeta {
@@ -47,27 +47,16 @@ const TaskProperties = memo(() => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
-  const taskList = useTaskStore(taskListSelectors.taskList);
-
-  const participants = useMemo(
-    () => taskList.find((task) => task.identifier === taskId)?.participants ?? [],
-    [taskId, taskList],
-  );
-  const firstParticipant = participants[0];
+  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const firstParticipantMeta = useAgentStore(
-    agentSelectors.getAgentMetaById(firstParticipant?.id || ''),
+  const assigneeMeta = useAgentStore((s) =>
+    assigneeAgentId ? agentSelectors.getAgentMetaById(assigneeAgentId)(s) : undefined,
   );
-  const isInboxParticipant =
-    firstParticipant?.id === INBOX_SESSION_ID ||
-    (!!inboxAgentId && firstParticipant?.id === inboxAgentId);
-  const firstParticipantName =
-    firstParticipantMeta?.title?.trim() ||
-    firstParticipant?.title ||
-    (isInboxParticipant ? t('inbox.title') : t('defaultSession', { ns: 'common' }));
-  const restCount = Math.max(participants.length - 1, 0);
-  const participantLabel =
-    participants.length <= 1 ? firstParticipantName : `${firstParticipantName} (+${restCount})`;
+
+  const isInboxAssignee = !!assigneeAgentId && isInboxAgentId(assigneeAgentId, inboxAgentId);
+  const assigneeLabel =
+    assigneeMeta?.title?.trim() ||
+    (isInboxAssignee ? t('inbox.title') : t('defaultSession', { ns: 'common' }));
 
   if (!taskId) return null;
 
@@ -120,7 +109,7 @@ const TaskProperties = memo(() => {
         </Block>
       </TaskScheduleConfig>
 
-      {participants.length > 0 && (
+      {assigneeAgentId && (
         <Block
           horizontal
           align="center"
@@ -129,8 +118,8 @@ const TaskProperties = memo(() => {
           paddingInline={'6px 8px'}
           variant={'borderless'}
         >
-          <AgentAvatars agents={participants} size={20} />
-          <Text weight={500}>{participantLabel}</Text>
+          <AssigneeAvatar agentId={assigneeAgentId} size={20} />
+          <Text weight={500}>{assigneeLabel}</Text>
         </Block>
       )}
     </Block>

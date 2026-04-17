@@ -1,4 +1,4 @@
-import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_AVATAR } from '@lobechat/const';
 import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight } from 'lucide-react';
@@ -11,6 +11,8 @@ import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
+
+import { isInboxAgentId } from './isInboxAgent';
 
 interface BreadcrumbProps {
   /**
@@ -61,7 +63,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
     );
   }
 
-  const isInboxAgent = agentId === INBOX_SESSION_ID || (!!inboxAgentId && agentId === inboxAgentId);
+  const isInboxAgent = isInboxAgentId(agentId, inboxAgentId);
   const agentName =
     agentMeta?.title?.trim() || (isInboxAgent ? t('inbox.title') : tCommon('defaultSession'));
   const agentAvatar = agentMeta?.avatar || (isInboxAgent ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);

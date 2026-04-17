@@ -1,34 +1,24 @@
-import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
-import {
-  Accordion,
-  AccordionItem,
-  Avatar,
-  Block,
-  Center,
-  Empty,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { ClipboardCheckIcon, UserRound } from 'lucide-react';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 
 import AgentTaskItem from '../features/AgentTaskItem';
+import AssigneeAvatar from '../features/AssigneeAvatar';
 import PriorityHighIcon from '../features/icons/PriorityHighIcon';
 import PriorityLowIcon from '../features/icons/PriorityLowIcon';
 import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
 import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
 import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
 import TaskStatusIcon from '../features/TaskStatusIcon';
+import { isInboxAgentId } from '../shared/isInboxAgent';
 import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
 import { compareTaskItems, getTaskGroupMeta, sortGroupEntries } from './listViewOptions';
 
@@ -68,20 +58,21 @@ const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: Tas
   return TASK_GROUP_BY_VALUES.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
 };
 
+const AssigneeLabel = memo<{ agentId: string }>(({ agentId }) => {
+  const { t } = useTranslation(['chat', 'common']);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const meta = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s));
+  const isInbox = isInboxAgentId(agentId, inboxAgentId);
+  const title =
+    meta?.title?.trim() ||
+    (isInbox ? t('inbox.title', { ns: 'chat' }) : t('defaultSession', { ns: 'common' }));
+  return <>{title}</>;
+});
+
 const renderGroupPrefix = (group: TaskGroupMeta) => {
   if (group.groupBy === 'assignee') {
-    if (group.assignee) {
-      const isInbox = group.assignee.id === INBOX_SESSION_ID;
-      const fallbackAvatar = isInbox ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
-
-      return (
-        <Avatar
-          avatar={group.assignee.avatar || fallbackAvatar}
-          background={group.assignee?.backgroundColor || cssVar.colorBgContainer}
-          size={18}
-          variant={'outlined'}
-        />
-      );
+    if (group.assigneeId) {
+      return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
     }
     return <Icon icon={UserRound} size={14} />;
   }
@@ -112,7 +103,7 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
     <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
       {renderGroupPrefix(group)}
       <Text ellipsis weight={500}>
-        {group.label}
+        {group.assigneeId ? <AssigneeLabel agentId={group.assigneeId} /> : group.label}
       </Text>
     </Flexbox>
     <Text fontSize={12} type={'secondary'}>
@@ -128,14 +119,13 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
 
 const TaskList = memo<TaskListProps>(({ options }) => {
   const { t } = useTranslation('chat');
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const tasks = useTaskStore(taskListSelectors.taskList);
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
   const groupedTaskEntries = useMemo(() => {
-    const sortedTasks = [...tasks].sort((a, b) => compareTaskItems(a, b, options, inboxAgentId));
+    const sortedTasks = [...tasks].sort((a, b) => compareTaskItems(a, b, options));
     const primaryGroupOrderDirection =
       options.orderBy === groupBy ? options.orderDirection : undefined;
     const subGroupOrderDirection =
@@ -143,7 +133,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
 
     const primaryGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
     for (const task of sortedTasks) {
-      const primaryGroup = getTaskGroupMeta(task, groupBy, inboxAgentId);
+      const primaryGroup = getTaskGroupMeta(task, groupBy);
       if (!primaryGroup?.key) continue;
       const bucket = primaryGroupMap.get(primaryGroup.key);
 
@@ -171,7 +161,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
 
       const subGroupMap = new Map<string, { items: typeof tasks; meta: TaskGroupMeta }>();
       for (const task of groupedTasks) {
-        const subGroup = getTaskGroupMeta(task, effectiveSubGroupBy, inboxAgentId);
+        const subGroup = getTaskGroupMeta(task, effectiveSubGroupBy);
         if (!subGroup?.key) continue;
         const bucket = subGroupMap.get(subGroup.key);
 
@@ -192,7 +182,7 @@ const TaskList = memo<TaskListProps>(({ options }) => {
         ),
       };
     });
-  }, [effectiveSubGroupBy, groupBy, inboxAgentId, options, tasks]);
+  }, [effectiveSubGroupBy, groupBy, options, tasks]);
 
   if (!isInit) return null;
 

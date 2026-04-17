@@ -1,6 +1,6 @@
-export { default as AgentAvatars } from './AgentAvatars';
 export { default as AgentTaskCardList } from './AgentTaskCardList';
 export { default as AgentTaskItem } from './AgentTaskItem';
+export { default as AssigneeAvatar } from './AssigneeAvatar';
 export { default as PriorityHighIcon } from './icons/PriorityHighIcon';
 export { default as PriorityLowIcon } from './icons/PriorityLowIcon';
 export { default as PriorityMediumIcon } from './icons/PriorityMediumIcon';
