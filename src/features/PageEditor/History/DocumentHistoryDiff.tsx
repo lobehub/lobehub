@@ -92,7 +92,7 @@ const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(({ documentId, histor
     <Flexbox className={styles.container} flex={1} gap={0}>
       {isLoading && !data ? (
         <Flexbox align={'center'} className={styles.empty} justify={'center'}>
-          <CircleLoading />;
+          <CircleLoading />
         </Flexbox>
       ) : error || !data || !normalizedValues.oldValue || !normalizedValues.newValue ? (
         <Flexbox align={'center'} className={styles.empty} justify={'center'}>

@@ -19,10 +19,9 @@ interface ContentBlockProps {
   content: string;
   hasTools?: boolean;
   id: string;
-  isFirstBlock?: boolean;
 }
 
-const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id, isFirstBlock }) => {
+const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
   const message = normalizeThinkTags(processWithArtifact(content));
   const markdownProps = useMarkdown(id);
 
@@ -37,11 +36,7 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id, isFirst
 
   return (
     content && (
-      <MarkdownMessage
-        {...markdownProps}
-        animated={isFirstBlock ? false : markdownProps.animated}
-        className={cx(isToolSingleLine && styles.pWithTool)}
-      >
+      <MarkdownMessage {...markdownProps} className={cx(isToolSingleLine && styles.pWithTool)}>
         {message}
       </MarkdownMessage>
     )
