@@ -15,6 +15,18 @@
  *   {type: 'result', is_error, result, ...}
  *   {type: 'rate_limit_event', ...}  (ignored)
  *
+ * With `--include-partial-messages` (enabled by default in this adapter), CC
+ * also emits token-level deltas wrapped as:
+ *
+ *   {type: 'stream_event', event: {type: 'message_start', message: {id, model, ...}}}
+ *   {type: 'stream_event', event: {type: 'content_block_delta', index, delta: {type: 'text_delta', text}}}
+ *   {type: 'stream_event', event: {type: 'content_block_delta', index, delta: {type: 'thinking_delta', thinking}}}
+ *
+ * Deltas arrive BEFORE the matching `assistant` event that carries the full
+ * content block. We stream the deltas out as incremental chunks and suppress
+ * the duplicate emission from `handleAssistant` for any message.id that has
+ * already been streamed.
+ *
  * Key characteristics:
  * - Each content block (thinking / tool_use / text) streams in its OWN assistant event
  * - Multiple events can share the same `message.id` — these are ONE LLM turn
@@ -39,6 +51,7 @@ export const claudeCodePreset: AgentCLIPreset = {
     '--output-format',
     'stream-json',
     '--verbose',
+    '--include-partial-messages',
     '--permission-mode',
     'acceptEdits',
   ],
@@ -59,6 +72,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private currentMessageId: string | undefined;
   /** Track which message.id has already emitted usage (dedup) */
   private usageEmittedForMessageId: string | undefined;
+  /** message.id of the stream_event delta flow currently in flight */
+  private currentStreamEventMessageId: string | undefined;
+  /** message.ids whose text has already been streamed as deltas — skip the full-block emission */
+  private messagesWithStreamedText = new Set<string>();
+  /** message.ids whose thinking has already been streamed as deltas — skip the full-block emission */
+  private messagesWithStreamedThinking = new Set<string>();
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -72,6 +91,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
       case 'user': {
         return this.handleUser(raw);
+      }
+      case 'stream_event': {
+        return this.handleStreamEvent(raw);
       }
       case 'result': {
         return this.handleResult(raw);
@@ -112,36 +134,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const events: HeterogeneousAgentEvent[] = [];
     const messageId = raw.message?.id;
 
-    if (!this.started) {
-      this.started = true;
-      this.currentMessageId = messageId;
-      events.push(
-        this.makeEvent('stream_start', {
-          model: raw.message?.model,
-          provider: 'claude-code',
-        }),
-      );
-    } else if (messageId && messageId !== this.currentMessageId) {
-      if (this.currentMessageId === undefined) {
-        // First assistant message after init — just record the ID, no step boundary.
-        // The init stream_start already primed the executor with the pre-created
-        // assistant message, so we don't need a new one.
-        this.currentMessageId = messageId;
-      } else {
-        // New message.id = new LLM turn. Emit stream_end for previous step,
-        // then stream_start for the new one so executor creates a new assistant message.
-        this.currentMessageId = messageId;
-        this.stepIndex++;
-        events.push(this.makeEvent('stream_end', {}));
-        events.push(
-          this.makeEvent('stream_start', {
-            model: raw.message?.model,
-            newStep: true,
-            provider: 'claude-code',
-          }),
-        );
-      }
-    }
+    events.push(...this.openMainMessage(messageId, raw.message?.model));
 
     // Per-turn model + usage snapshot — emitted as 'step_complete'-like
     // metadata event so executor can track latest model and accumulated usage.
@@ -189,10 +182,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
     }
 
-    if (textParts.length > 0) {
+    // Skip full-block emission when deltas have already been streamed for
+    // this message.id (partial-messages mode). Otherwise the UI would see
+    // the text/thinking twice — once as deltas, once as a giant trailing chunk.
+    const textAlreadyStreamed = !!messageId && this.messagesWithStreamedText.has(messageId);
+    const thinkingAlreadyStreamed = !!messageId && this.messagesWithStreamedThinking.has(messageId);
+    if (textParts.length > 0 && !textAlreadyStreamed) {
       events.push(this.makeChunkEvent({ chunkType: 'text', content: textParts.join('') }));
     }
-    if (reasoningParts.length > 0) {
+    if (reasoningParts.length > 0 && !thinkingAlreadyStreamed) {
       events.push(
         this.makeChunkEvent({ chunkType: 'reasoning', reasoning: reasoningParts.join('') }),
       );
@@ -275,6 +273,87 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       : this.makeEvent('agent_runtime_end', {});
 
     return [...events, this.makeEvent('stream_end', {}), finalEvent];
+  }
+
+  /**
+   * Handle stream_event wrapper emitted under `--include-partial-messages`.
+   * Surfaces text_delta / thinking_delta as incremental stream_chunk events
+   * and keeps message-boundary state (stepIndex / currentMessageId) in sync
+   * so subsequent assistant events don't re-open an already-known message.
+   *
+   * Tool-input (input_json_delta) deltas are ignored; tool_use is emitted as
+   * a complete block via the `assistant` event to avoid half-parsed JSON in
+   * the UI.
+   */
+  private handleStreamEvent(raw: any): HeterogeneousAgentEvent[] {
+    const event = raw?.event;
+    if (!event) return [];
+
+    switch (event.type) {
+      case 'message_start': {
+        const msgId: string | undefined = event.message?.id;
+        this.currentStreamEventMessageId = msgId;
+        return this.openMainMessage(msgId, event.message?.model);
+      }
+      case 'content_block_delta': {
+        const delta = event.delta;
+        if (!delta) return [];
+        const msgId = this.currentStreamEventMessageId;
+        if (delta.type === 'text_delta' && delta.text) {
+          if (msgId) this.messagesWithStreamedText.add(msgId);
+          return [this.makeChunkEvent({ chunkType: 'text', content: delta.text })];
+        }
+        if (delta.type === 'thinking_delta' && delta.thinking) {
+          if (msgId) this.messagesWithStreamedThinking.add(msgId);
+          return [this.makeChunkEvent({ chunkType: 'reasoning', reasoning: delta.thinking })];
+        }
+        return [];
+      }
+      default: {
+        return [];
+      }
+    }
+  }
+
+  /**
+   * Idempotent message-boundary opener called by both `handleAssistant` and
+   * `handleStreamEvent(message_start)`. Ensures `stepIndex` advances and
+   * `stream_end` / `stream_start(newStep)` fire on the FIRST signal of a new
+   * message.id — whether that signal is a delta event or the complete
+   * assistant event.
+   *
+   * - If `started === false`: auto-start (emit stream_start, record id).
+   * - If `messageId === currentMessageId`: no-op.
+   * - If this is the first message after a system-init stream_start: just
+   *   record the id (init already primed the executor).
+   * - Otherwise: advance stepIndex and emit stream_end + stream_start(newStep).
+   */
+  private openMainMessage(
+    messageId: string | undefined,
+    model: string | undefined,
+  ): HeterogeneousAgentEvent[] {
+    if (!messageId) return [];
+
+    if (!this.started) {
+      this.started = true;
+      this.currentMessageId = messageId;
+      return [this.makeEvent('stream_start', { model, provider: 'claude-code' })];
+    }
+
+    if (messageId === this.currentMessageId) return [];
+
+    if (this.currentMessageId === undefined) {
+      // First assistant/delta after system init — record without step boundary.
+      this.currentMessageId = messageId;
+      return [];
+    }
+
+    this.currentMessageId = messageId;
+    this.stepIndex++;
+    return [
+      this.makeEvent('stream_end', {}),
+      this.makeEvent('stream_start', { model, newStep: true, provider: 'claude-code' }),
+    ];
   }
 
   // ─── Event factories ───

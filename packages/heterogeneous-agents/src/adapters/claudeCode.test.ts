@@ -431,4 +431,224 @@ describe('ClaudeCodeAdapter', () => {
       expect(toolStarts).toHaveLength(2);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // Partial-messages streaming (--include-partial-messages)
+  // stream_event wrapper carries Anthropic SSE deltas:
+  //   {type: 'message_start', message: {id, model}}
+  //   {type: 'content_block_delta', delta: {type: 'text_delta', text}}
+  //   {type: 'content_block_delta', delta: {type: 'thinking_delta', thinking}}
+  // ──────────────────────────────────────────────────────────────
+
+  describe('stream_event (partial messages)', () => {
+    const init = { subtype: 'init' as const, type: 'system' as const };
+    const delta = (type: string, field: string, value: string) => ({
+      event: { delta: { [field]: value, type }, index: 0, type: 'content_block_delta' },
+      type: 'stream_event',
+    });
+    const messageStart = (id: string, model?: string) => ({
+      event: { message: { id, model }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    it('emits stream_chunk text on text_delta', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const events = adapter.adapt(delta('text_delta', 'text', 'Hel'));
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('stream_chunk');
+      expect(events[0].data.chunkType).toBe('text');
+      expect(events[0].data.content).toBe('Hel');
+    });
+
+    it('emits stream_chunk reasoning on thinking_delta', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const events = adapter.adapt(delta('thinking_delta', 'thinking', 'pondering'));
+      expect(events).toHaveLength(1);
+      expect(events[0].data.chunkType).toBe('reasoning');
+      expect(events[0].data.reasoning).toBe('pondering');
+    });
+
+    it('streams multiple deltas as separate chunks (gateway handler concatenates)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const e1 = adapter.adapt(delta('text_delta', 'text', 'Hel'));
+      const e2 = adapter.adapt(delta('text_delta', 'text', 'lo '));
+      const e3 = adapter.adapt(delta('text_delta', 'text', 'world'));
+
+      expect(e1[0].data.content).toBe('Hel');
+      expect(e2[0].data.content).toBe('lo ');
+      expect(e3[0].data.content).toBe('world');
+    });
+
+    it('suppresses handleAssistant text emission when deltas already streamed', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'Hello world'));
+
+      // The trailing assistant event carries the full completed block.
+      // It must NOT re-emit a giant "Hello world" chunk or the UI duplicates text.
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'Hello world', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunks).toHaveLength(0);
+    });
+
+    it('suppresses handleAssistant thinking emission when thinking_delta already streamed', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('thinking_delta', 'thinking', 'reasoning...'));
+
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ thinking: 'reasoning...', type: 'thinking' }] },
+        type: 'assistant',
+      });
+
+      const reasoningChunks = events.filter(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'reasoning',
+      );
+      expect(reasoningChunks).toHaveLength(0);
+    });
+
+    it('still emits tool_use from assistant event even when text was streamed via deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', "I'll read that file."));
+
+      // Same message.id continues with a tool_use block — tool_use never streams
+      // as delta (input_json_delta would be partial JSON), so handleAssistant
+      // remains the source of truth for tool invocations.
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const toolsChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolsChunk).toBeDefined();
+      expect(toolsChunk!.data.toolsCalling[0].id).toBe('t1');
+    });
+
+    it('still emits full text block if a later message.id has no deltas', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'streamed'));
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'streamed', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second LLM turn arrives without any stream_event deltas — must fall
+      // back to the full-block emission so no content is dropped.
+      const events = adapter.adapt({
+        message: { id: 'msg_2', content: [{ text: 'no-delta reply', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      const textChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+      );
+      expect(textChunk).toBeDefined();
+      expect(textChunk!.data.content).toBe('no-delta reply');
+    });
+
+    it('fires newStep on message_start when message.id changes', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      // First turn
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'first'));
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'first', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Second turn — step boundary must fire at message_start, BEFORE the
+      // deltas, or those deltas would be emitted with the stale stepIndex.
+      const events = adapter.adapt(messageStart('msg_2', 'claude-sonnet-4-6'));
+
+      const types = events.map((e) => e.type);
+      expect(types).toContain('stream_end');
+      const start = events.find((e) => e.type === 'stream_start');
+      expect(start).toBeDefined();
+      expect(start!.data.newStep).toBe(true);
+    });
+
+    it('emits deltas with the new stepIndex after message_start advances it', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+      adapter.adapt(delta('text_delta', 'text', 'first'));
+      adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'first', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      adapter.adapt(messageStart('msg_2'));
+      const chunk = adapter.adapt(delta('text_delta', 'text', 'second'));
+
+      // After step boundary, stepIndex should be 1.
+      expect(chunk[0].stepIndex).toBe(1);
+    });
+
+    it('ignores input_json_delta and other non-text/thinking delta types', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const inputJson = adapter.adapt(delta('input_json_delta', 'partial_json', '{"path":'));
+      expect(inputJson).toEqual([]);
+    });
+
+    it('ignores unknown stream_event event.type (content_block_start, message_stop, …)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(messageStart('msg_1'));
+
+      const blockStart = adapter.adapt({
+        event: { content_block: { text: '', type: 'text' }, index: 0, type: 'content_block_start' },
+        type: 'stream_event',
+      });
+      expect(blockStart).toEqual([]);
+
+      const msgStop = adapter.adapt({ event: { type: 'message_stop' }, type: 'stream_event' });
+      expect(msgStop).toEqual([]);
+    });
+
+    it('handles stream_event with no prior system init (auto-starts)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const events = adapter.adapt(messageStart('msg_1', 'claude-sonnet-4-6'));
+
+      const start = events.find((e) => e.type === 'stream_start');
+      expect(start).toBeDefined();
+      expect(start!.data.model).toBe('claude-sonnet-4-6');
+    });
+
+    it('returns [] for malformed stream_event (missing event field)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      expect(adapter.adapt({ type: 'stream_event' })).toEqual([]);
+      expect(adapter.adapt({ event: null, type: 'stream_event' })).toEqual([]);
+    });
+  });
 });

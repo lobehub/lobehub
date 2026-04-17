@@ -33,6 +33,7 @@ const CLI_PRESETS: Record<string, CLIPreset> = {
       '--output-format',
       'stream-json',
       '--verbose',
+      '--include-partial-messages',
       '--permission-mode',
       'bypassPermissions',
     ],
