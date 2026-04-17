@@ -60,23 +60,23 @@ const StatusIndicator = memo<StatusIndicatorProps>(
       icon = <NeuralNetworkLoading size={16} />;
     }
 
-  return (
-    <Block
-      horizontal
-      align={'center'}
-      flex={'none'}
-      gap={4}
-      height={24}
-      justify={'center'}
-      variant={'outlined'}
-      width={24}
-      style={{
-        fontSize: 12,
-      }}
-    >
-      {icon}
-    </Block>
-  );
+    return (
+      <Block
+        horizontal
+        align={'center'}
+        flex={'none'}
+        gap={4}
+        height={24}
+        justify={'center'}
+        variant={'outlined'}
+        width={24}
+        style={{
+          fontSize: 12,
+        }}
+      >
+        {icon}
+      </Block>
+    );
   },
 );
 
