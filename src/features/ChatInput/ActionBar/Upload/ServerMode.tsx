@@ -42,6 +42,9 @@ const FileUpload = memo(() => {
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const isHeterogeneous = useAgentStore((s) =>
+    agentByIdSelectors.isAgentHeterogeneousById(agentId)(s),
+  );
 
   const canUploadImage = useModelSupportVision(model, provider);
 
@@ -90,73 +93,84 @@ const FileUpload = memo(() => {
         </Tooltip>
       ),
     },
-    {
-      closeOnClick: false,
-      icon: FileUp,
-      key: 'upload-file',
-      label: (
-        <Upload
-          multiple
-          showUploadList={false}
-          beforeUpload={async (file) => {
-            if (!canUploadImage && (file.type.startsWith('image') || file.type.startsWith('video')))
-              return false;
+    // Heterogeneous agents (e.g. Claude Code) currently only support image upload.
+    ...(isHeterogeneous
+      ? []
+      : [
+          {
+            closeOnClick: false,
+            icon: FileUp,
+            key: 'upload-file',
+            label: (
+              <Upload
+                multiple
+                showUploadList={false}
+                beforeUpload={async (file) => {
+                  if (
+                    !canUploadImage &&
+                    (file.type.startsWith('image') || file.type.startsWith('video'))
+                  )
+                    return false;
 
-            // Validate video file size
-            const validation = validateVideoFileSize(file);
-            if (!validation.isValid) {
-              message.error(
-                t('upload.validation.videoSizeExceeded', {
-                  actualSize: validation.actualSize,
-                }),
-              );
-              return false;
-            }
+                  // Validate video file size
+                  const validation = validateVideoFileSize(file);
+                  if (!validation.isValid) {
+                    message.error(
+                      t('upload.validation.videoSizeExceeded', {
+                        actualSize: validation.actualSize,
+                      }),
+                    );
+                    return false;
+                  }
 
-            setDropdownOpen(false);
-            await upload([file]);
+                  setDropdownOpen(false);
+                  await upload([file]);
 
-            return false;
-          }}
-        >
-          <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>
-        </Upload>
-      ),
-    },
-    {
-      closeOnClick: false,
-      icon: FolderUp,
-      key: 'upload-folder',
-      label: (
-        <Upload
-          directory
-          multiple={true}
-          showUploadList={false}
-          beforeUpload={async (file) => {
-            if (!canUploadImage && (file.type.startsWith('image') || file.type.startsWith('video')))
-              return false;
+                  return false;
+                }}
+              >
+                <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>
+              </Upload>
+            ),
+          },
+          {
+            closeOnClick: false,
+            icon: FolderUp,
+            key: 'upload-folder',
+            label: (
+              <Upload
+                directory
+                multiple={true}
+                showUploadList={false}
+                beforeUpload={async (file) => {
+                  if (
+                    !canUploadImage &&
+                    (file.type.startsWith('image') || file.type.startsWith('video'))
+                  )
+                    return false;
 
-            // Validate video file size
-            const validation = validateVideoFileSize(file);
-            if (!validation.isValid) {
-              message.error(
-                t('upload.validation.videoSizeExceeded', {
-                  actualSize: validation.actualSize,
-                }),
-              );
-              return false;
-            }
+                  // Validate video file size
+                  const validation = validateVideoFileSize(file);
+                  if (!validation.isValid) {
+                    message.error(
+                      t('upload.validation.videoSizeExceeded', {
+                        actualSize: validation.actualSize,
+                      }),
+                    );
+                    return false;
+                  }
 
-            setDropdownOpen(false);
-            await upload([file]);
+                  setDropdownOpen(false);
+                  await upload([file]);
 
-            return false;
-          }}
-        >
-          <div className={cx(hotArea)}>{t('upload.action.folderUpload')}</div>
-        </Upload>
-      ),
-    },
+                  return false;
+                }}
+              >
+                <div className={cx(hotArea)}>{t('upload.action.folderUpload')}</div>
+              </Upload>
+            ),
+          },
+        ]),
   ];
 
   const knowledgeItems: ItemType[] = [];

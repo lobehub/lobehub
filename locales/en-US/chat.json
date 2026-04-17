@@ -225,7 +225,7 @@
   "minimap.senderAssistant": "Agent",
   "minimap.senderUser": "You",
   "newAgent": "Create Agent",
-  "newClaudeCodeAgent": "Claude Code Agent",
+  "newClaudeCodeAgent": "Add Claude Code",
   "newGroupChat": "Create Group",
   "newPage": "Create Page",
   "noAgentsYet": "This group has no members yet. Click the + button to invite agents.",

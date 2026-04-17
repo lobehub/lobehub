@@ -9,6 +9,8 @@ import {
 
 import { ClaudeCodeApiName } from '../types';
 import { ReadInspector } from './ReadInspector';
+import { SkillInspector } from './SkillInspector';
+import { TodoWriteInspector } from './TodoWriteInspector';
 import { WriteInspector } from './WriteInspector';
 
 // CC's own tool names (Bash / Edit / Glob / Grep / Read / Write) are already
@@ -28,5 +30,7 @@ export const ClaudeCodeInspectors = {
     translationKey: ClaudeCodeApiName.Grep,
   }),
   [ClaudeCodeApiName.Read]: ReadInspector,
+  [ClaudeCodeApiName.Skill]: SkillInspector,
+  [ClaudeCodeApiName.TodoWrite]: TodoWriteInspector,
   [ClaudeCodeApiName.Write]: WriteInspector,
 };

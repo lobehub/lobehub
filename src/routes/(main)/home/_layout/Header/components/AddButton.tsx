@@ -33,10 +33,13 @@ const AddButton = memo(() => {
   );
 
   const dropdownItems = useMemo(() => {
-    const items = [createAgentMenuItem(), createGroupChatMenuItem(), createPageMenuItem()];
     const ccItem = createClaudeCodeMenuItem();
-    if (ccItem) items.splice(1, 0, ccItem); // Insert after "Create Agent"
-    return items;
+    return [
+      createAgentMenuItem(),
+      createGroupChatMenuItem(),
+      createPageMenuItem(),
+      ...(ccItem ? [{ type: 'divider' as const }, ccItem] : []),
+    ];
   }, [createAgentMenuItem, createClaudeCodeMenuItem, createGroupChatMenuItem, createPageMenuItem]);
 
   return (

@@ -1,9 +1,10 @@
 import { isDesktop } from '@lobechat/const';
+import { ClaudeCode } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
-import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus, TerminalSquareIcon } from 'lucide-react';
+import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -259,7 +260,7 @@ export const useCreateMenuItems = () => {
     (options?: CreateAgentOptions): ItemType | null => {
       if (!isDesktop || !enableHeterogeneousAgent) return null;
       return {
-        icon: <Icon icon={TerminalSquareIcon} />,
+        icon: <ClaudeCode size={'1em'} />,
         key: 'newClaudeCodeAgent',
         label: t('newClaudeCodeAgent'),
         onClick: async (info) => {

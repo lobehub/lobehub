@@ -78,6 +78,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private messagesWithStreamedText = new Set<string>();
   /** message.ids whose thinking has already been streamed as deltas — skip the full-block emission */
   private messagesWithStreamedThinking = new Set<string>();
+  /**
+   * Cumulative tool_use blocks per message.id. CC streams each tool_use in
+   * its OWN assistant event, and the handler's in-memory assistant.tools
+   * update uses a REPLACING array merge — so chunks must carry every tool
+   * seen on this turn, not just the latest, or prior tools render as orphans
+   * until the next `fetchAndReplaceMessages`.
+   */
+  private toolCallsByMessageId = new Map<string, ToolCallPayload[]>();
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -196,10 +204,17 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       );
     }
     if (newToolCalls.length > 0) {
-      events.push(this.makeChunkEvent({ chunkType: 'tools_calling', toolsCalling: newToolCalls }));
-      // Also emit tool_start for each — the handler's tool_start is a no-op
-      // but it's semantically correct for the lifecycle.
-      for (const t of newToolCalls) {
+      const msgKey = messageId ?? '';
+      const existing = this.toolCallsByMessageId.get(msgKey) ?? [];
+      const existingIds = new Set(existing.map((t) => t.id));
+      const freshTools = newToolCalls.filter((t) => !existingIds.has(t.id));
+      const cumulative = [...existing, ...freshTools];
+      this.toolCallsByMessageId.set(msgKey, cumulative);
+
+      events.push(this.makeChunkEvent({ chunkType: 'tools_calling', toolsCalling: cumulative }));
+      // tool_start fires only for newly-seen ids so an echoed tool_use does
+      // not re-open a closed lifecycle.
+      for (const t of freshTools) {
         events.push(this.makeEvent('tool_start', { toolCalling: t }));
       }
     }

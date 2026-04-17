@@ -112,6 +112,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     workflowChromeComplete = false,
   }) => {
     const { t } = useTranslation('chat');
+    const toolCallsUnit = t('task.metrics.toolCallsShort');
     const allTools = useMemo(() => collectTools(blocks), [blocks]);
     const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
     const pendingInterventionPresent = useMemo(() => hasPendingIntervention(allTools), [allTools]);
@@ -171,9 +172,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       defaultValue: 'Awaiting your confirmation',
     });
     const workingLabel = t('workflow.working', { defaultValue: 'Working...' });
+    const expandedWorkingLabel =
+      allTools.length > 0 ? `${allTools.length} ${toolCallsUnit}` : workingLabel;
     const streamingHeadlineRaw = useMemo(() => {
       if (pendingInterventionPresent) return pendingInterventionLabel;
-      if (showExpandedWorkingLabel) return workingLabel;
+      if (showExpandedWorkingLabel) return expandedWorkingLabel;
       switch (headlineState.kind) {
         case 'thinking': {
           return headlineState.reasoningTitle;
@@ -190,11 +193,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
     }, [
       committedProse,
+      expandedWorkingLabel,
       headlineState,
       pendingInterventionLabel,
       pendingInterventionPresent,
       showExpandedWorkingLabel,
-      workingLabel,
     ]);
     const streamingHeadline = useDebouncedHeadline(
       streamingHeadlineRaw,
@@ -326,7 +329,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             </div>
             {showWorkingElapsed && (
               <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
-                ({workingElapsedSeconds}s)
+                ({formatReasoningDuration(workingElapsedSeconds * TIME_MS_PER_SECOND)})
               </span>
             )}
           </Flexbox>

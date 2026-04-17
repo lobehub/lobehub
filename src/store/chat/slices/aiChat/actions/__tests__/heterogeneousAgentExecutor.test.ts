@@ -923,6 +923,89 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
+  // LOBE-7258 reproduction: Skill → ToolSearch → MCP tool
+  //
+  // Mirrors the exact trace from the user-reported screenshot where
+  // ToolSearch loads deferred MCP schemas before the MCP tool is called.
+  // Verifies tool_result content is persisted for ALL three tools so the
+  // UI stops showing "loading" after each tool completes.
+  // ────────────────────────────────────────────────────
+
+  describe('LOBE-7258 Skill → ToolSearch → MCP repro', () => {
+    it('persists tool_result content for Skill, ToolSearch, and the deferred MCP tool', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      const schemaPayload =
+        '<functions><function>{"description":"Get a Linear issue","name":"mcp__linear-server__get_issue","parameters":{}}</function></functions>';
+
+      await runWithEvents([
+        ccInit(),
+        // Turn 1: Skill invocation
+        ccToolUse('msg_01', 'toolu_skill', 'Skill', { skill: 'linear' }),
+        ccToolResult('toolu_skill', 'Launching skill: linear'),
+        // Turn 2: ToolSearch with select: prefix (deferred schema fetch)
+        ccToolUse('msg_02', 'toolu_search', 'ToolSearch', {
+          query: 'select:mcp__linear-server__get_issue,mcp__linear-server__save_issue',
+          max_results: 3,
+        }),
+        ccToolResult('toolu_search', schemaPayload),
+        // Turn 3: the deferred MCP tool now callable
+        ccToolUse('msg_03', 'toolu_get_issue', 'mcp__linear-server__get_issue', {
+          id: 'LOBE-7258',
+        }),
+        ccToolResult('toolu_get_issue', '{"title":"resume error on topic switch"}'),
+        ccText('msg_04', 'done'),
+        ccResult(),
+      ]);
+
+      // All three tool messages should have their content persisted.
+      const skillResult = mockUpdateToolMessage.mock.calls.find(([id]: any) => id === 'tool-1');
+      const searchResult = mockUpdateToolMessage.mock.calls.find(([id]: any) => id === 'tool-2');
+      const getIssueResult = mockUpdateToolMessage.mock.calls.find(([id]: any) => id === 'tool-3');
+
+      expect(skillResult).toBeDefined();
+      expect(skillResult![1]).toMatchObject({ content: 'Launching skill: linear' });
+
+      expect(searchResult).toBeDefined();
+      expect(searchResult![1]).toMatchObject({ content: schemaPayload });
+      expect(searchResult![1].pluginError).toBeUndefined();
+
+      expect(getIssueResult).toBeDefined();
+      expect(getIssueResult![1]).toMatchObject({
+        content: '{"title":"resume error on topic switch"}',
+      });
+
+      // tools[] registry on each step should contain the right tool id so the
+      // UI can match tool messages to their assistant (no orphan warnings).
+      const skillRegister = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) =>
+          id === 'ast-initial' && val.tools?.some((t: any) => t.id === 'toolu_skill'),
+      );
+      expect(skillRegister).toBeDefined();
+
+      const searchRegister = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) =>
+          id === 'ast-new-1' && val.tools?.some((t: any) => t.id === 'toolu_search'),
+      );
+      expect(searchRegister).toBeDefined();
+
+      const getIssueRegister = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) =>
+          id === 'ast-new-2' && val.tools?.some((t: any) => t.id === 'toolu_get_issue'),
+      );
+      expect(getIssueRegister).toBeDefined();
+    });
+  });
+
+  // ────────────────────────────────────────────────────
   // Full multi-step E2E
   // ────────────────────────────────────────────────────
 

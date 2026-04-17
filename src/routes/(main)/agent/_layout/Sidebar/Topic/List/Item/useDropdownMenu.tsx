@@ -3,6 +3,7 @@ import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import {
   ExternalLink,
+  Link2,
   LucideCopy,
   PanelTop,
   PencilLine,
@@ -35,7 +36,7 @@ export const useTopicItemDropdownMenu = ({
   toggleEditing,
 }: TopicItemDropdownMenuProps) => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const navigate = useNavigate();
 
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
@@ -85,6 +86,9 @@ export const useTopicItemDropdownMenu = ({
           toggleEditing(true);
         },
       },
+      {
+        type: 'divider' as const,
+      },
       ...(isDesktop
         ? [
             {
@@ -109,8 +113,22 @@ export const useTopicItemDropdownMenu = ({
                 if (activeAgentId) openTopicInNewWindow(activeAgentId, id);
               },
             },
+            {
+              type: 'divider' as const,
+            },
           ]
         : []),
+      {
+        icon: <Icon icon={Link2} />,
+        key: 'copyLink',
+        label: t('actions.copyLink'),
+        onClick: () => {
+          if (!activeAgentId) return;
+          const url = `${window.location.origin}/agent/${activeAgentId}?topic=${id}`;
+          navigator.clipboard.writeText(url);
+          message.success(t('actions.copyLinkSuccess'));
+        },
+      },
       {
         icon: <Icon icon={LucideCopy} />,
         key: 'duplicate',
@@ -118,6 +136,9 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           duplicateTopic(id);
         },
+      },
+      {
+        type: 'divider' as const,
       },
       {
         icon: <Icon icon={Share2} />,
@@ -159,6 +180,7 @@ export const useTopicItemDropdownMenu = ({
     toggleEditing,
     t,
     modal,
+    message,
     handleOpenShareModal,
   ]);
   return { dropdownMenu };

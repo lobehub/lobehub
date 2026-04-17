@@ -137,6 +137,15 @@ const getAgencyConfigById =
     agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
 
 /**
+ * Whether the agent is driven by an external heterogeneous runtime
+ * (e.g. Claude Code) — by agentId.
+ */
+const isAgentHeterogeneousById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!getAgencyConfigById(agentId)(s)?.heterogeneousProvider;
+
+/**
  * Get full agent data by agentId
  * Returns the complete agent object including metadata fields like updatedAt
  */
@@ -159,4 +168,5 @@ export const agentByIdSelectors = {
   getAgentTTSById,
   getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
+  isAgentHeterogeneousById,
 };

@@ -433,6 +433,132 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   // ──────────────────────────────────────────────────────────────
+  // Cumulative tools_calling (orphan tool regression)
+  //
+  // CC streams each tool_use content block in its OWN assistant event, even
+  // when multiple tools belong to the same LLM turn (same message.id). The
+  // in-memory handler dispatch updates assistant.tools via a REPLACING array
+  // merge — so if the adapter emitted only the newest tool on each chunk,
+  // earlier tools would vanish from the in-memory assistant.tools[] between
+  // tool_result refreshes and render as orphans. Adapter must emit the full
+  // cumulative list per message.id so the replacing merge preserves history.
+  // ──────────────────────────────────────────────────────────────
+
+  describe('cumulative tools_calling per message.id', () => {
+    it('includes prior tools in tools_calling when a new tool_use arrives on same message.id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // First tool_use block of msg_1
+      const e1 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const chunk1 = e1.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk1!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
+
+      // Second tool_use block on the SAME message.id — must carry both t1 + t2
+      const e2 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't2', input: { cmd: 'ls' }, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const chunk2 = e2.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk2!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1', 't2']);
+    });
+
+    it('emits tool_start only for newly-seen tools, not for the cumulative prior ones', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const e2 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const starts = e2.filter((e) => e.type === 'tool_start');
+      expect(starts).toHaveLength(1);
+      expect(starts[0].data.toolCalling.id).toBe('t2');
+    });
+
+    it('starts a fresh accumulator when message.id advances (new LLM turn)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      // Different message.id — the new assistant's tools[] must NOT contain t1
+      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t2']);
+    });
+
+    it('dedupes when CC echoes a tool_use block with the same id', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      // Same tool_use id re-sent — cumulative list must not duplicate it,
+      // and tool_start must not fire again.
+      const e2 = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = e2.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
+      expect(e2.filter((e) => e.type === 'tool_start')).toHaveLength(0);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────
   // Partial-messages streaming (--include-partial-messages)
   // stream_event wrapper carries Anthropic SSE deltas:
   //   {type: 'message_start', message: {id, model}}

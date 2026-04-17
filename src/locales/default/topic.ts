@@ -5,6 +5,8 @@ export default {
   'actions.confirmRemoveTopic': 'You are about to delete this topic. This action cannot be undone.',
   'actions.confirmRemoveUnstarred':
     'You are about to delete unstarred topics. This action cannot be undone.',
+  'actions.copyLink': 'Copy Link',
+  'actions.copyLinkSuccess': 'Link copied',
   'actions.duplicate': 'Duplicate',
   'actions.favorite': 'Favorite',
   'actions.unfavorite': 'Unfavorite',

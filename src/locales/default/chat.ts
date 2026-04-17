@@ -250,7 +250,7 @@ export default {
   'createModal.placeholder': 'Describe what your agent should do...',
   'createModal.title': 'What should your agent do?',
   'newAgent': 'Create Agent',
-  'newClaudeCodeAgent': 'Claude Code Agent',
+  'newClaudeCodeAgent': 'Add Claude Code',
   'newGroupChat': 'Create Group',
   'newPage': 'Create Page',
   'noAgentsYet': 'This group has no members yet. Click the + button to invite agents.',

@@ -1,6 +1,6 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -175,9 +175,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     return (
       <NavItem
         active={active && !isInAgentSubRoute}
-        loading={isLoading}
         icon={
-          <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          isLoading ? (
+            <Icon spin color={cssVar.colorWarning} icon={Loader2Icon} size={'small'} />
+          ) : (
+            <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          )
         }
         title={
           <Flexbox horizontal align={'center'} flex={1} gap={6}>
@@ -206,9 +209,13 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={href}
-        loading={isLoading}
         title={title}
         icon={(() => {
+          if (isLoading) {
+            return (
+              <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
+            );
+          }
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
             if (ProviderIcon) {
