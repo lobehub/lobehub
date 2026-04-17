@@ -41,6 +41,7 @@ vi.mock('./WorkflowCollapse', () => ({
     blocks: Array<{ content: string; domId?: string; tools?: unknown[] }>;
   }) => (
     <div
+      data-testid="workflow-segment"
       data-blocks={JSON.stringify(
         blocks.map(({ content, domId, tools }) => ({
           content,
@@ -48,7 +49,6 @@ vi.mock('./WorkflowCollapse', () => ({
           toolCount: tools?.length ?? 0,
         })),
       )}
-      data-testid="workflow-segment"
     />
   ),
 }));
@@ -68,6 +68,7 @@ vi.mock('./GroupItem', () => ({
     tools?: unknown[];
   }) => (
     <div
+      data-testid="answer-segment"
       data-block={JSON.stringify({
         content,
         domId,
@@ -75,7 +76,6 @@ vi.mock('./GroupItem', () => ({
         isFirstBlock: !!isFirstBlock,
         toolCount: tools?.length ?? 0,
       })}
-      data-testid="answer-segment"
     />
   ),
 }));
@@ -102,6 +102,8 @@ describe('Group', () => {
 
     const { container } = render(
       <Group
+        id="assistant-1"
+        messageIndex={0}
         blocks={[
           blk({
             content: longContent,
@@ -109,8 +111,6 @@ describe('Group', () => {
             tools: [{ apiName: 'search', id: 'tool-1' } as any],
           }),
         ]}
-        id="assistant-1"
-        messageIndex={0}
       />,
     );
 
@@ -124,7 +124,7 @@ describe('Group', () => {
       content: longContent,
       domId: 'block-1__answer',
       id: 'block-1',
-      isFirstBlock: true,
+      isFirstBlock: false,
       toolCount: 0,
     });
     expect(parseWorkflowSegment()).toEqual([
@@ -139,6 +139,8 @@ describe('Group', () => {
   it('keeps short mixed status text inside workflow', () => {
     render(
       <Group
+        id="assistant-1"
+        messageIndex={0}
         blocks={[
           blk({
             content: '现在我来搜索资料。',
@@ -146,8 +148,6 @@ describe('Group', () => {
             tools: [{ apiName: 'search', id: 'tool-1' } as any],
           }),
         ]}
-        id="assistant-1"
-        messageIndex={0}
       />,
     );
 
