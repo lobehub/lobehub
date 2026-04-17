@@ -20,6 +20,7 @@
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-brief": "workspace:*",
+    "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",
     "@lobechat/builtin-tool-cron": "workspace:*",
