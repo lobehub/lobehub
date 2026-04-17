@@ -46,6 +46,18 @@ export interface OnboardingFeedbackEntry {
   submittedAt: string;
 }
 
+export interface OnboardingSessionSnapshot {
+  agentIdentityCompletedAt?: string;
+  discoveryCompletedAt?: string;
+  finalAgentNames?: string[];
+  finishedAt?: string;
+  lastActiveAt: string;
+  phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
+  startedAt: string;
+  userIdentityCompletedAt?: string;
+  version: number;
+}
+
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
@@ -65,6 +77,7 @@ export interface ChatTopicMetadata {
    * Comment text is stored only here (not analytics) and is length-capped server-side.
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
+  onboardingSession?: OnboardingSessionSnapshot;
   provider?: string;
   /**
    * Currently running Gateway operation on this topic.

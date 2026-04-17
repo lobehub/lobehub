@@ -566,6 +566,19 @@ export const topicRouter = router({
               submittedAt: z.string(),
             })
             .optional(),
+          onboardingSession: z
+            .object({
+              agentIdentityCompletedAt: z.string().optional(),
+              discoveryCompletedAt: z.string().optional(),
+              finalAgentNames: z.array(z.string()).optional(),
+              finishedAt: z.string().optional(),
+              lastActiveAt: z.string(),
+              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']),
+              startedAt: z.string(),
+              userIdentityCompletedAt: z.string().optional(),
+              version: z.number(),
+            })
+            .optional(),
           provider: z.string().optional(),
           runningOperation: z
             .object({
