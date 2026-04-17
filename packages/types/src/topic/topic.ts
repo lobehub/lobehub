@@ -50,6 +50,13 @@ export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   /**
+   * Working directory that was active when `ccSessionId` was created.
+   * CC CLI stores sessions per-cwd under `~/.claude/projects/<encoded-cwd>/`,
+   * so a sessionId is only resumable while the process runs in the same cwd.
+   * Compare against the current agent cwd before passing `--resume`.
+   */
+  ccSessionCwd?: string;
+  /**
    * CC session ID for multi-turn resume (desktop only).
    * Persisted after each CC execution so the next message in the same topic
    * can use `--resume <sessionId>` to continue the conversation.

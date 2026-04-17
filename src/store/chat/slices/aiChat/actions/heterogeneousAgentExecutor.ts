@@ -615,10 +615,12 @@ export const executeHeterogeneousAgent = async (
     // Send the prompt — blocks until process exits
     await heterogeneousAgentService.sendPrompt(agentSessionId, message, imageList);
 
-    // Persist CC session ID to topic metadata for multi-turn resume.
-    // The adapter extracts session_id from the CC init event.
+    // Persist CC session ID + the cwd it was created under, for multi-turn
+    // resume. CC stores sessions per-cwd (`~/.claude/projects/<encoded-cwd>/`),
+    // so the next turn must verify the cwd hasn't changed before `--resume`.
     if (adapter.sessionId && context.topicId) {
       get().updateTopicMetadata(context.topicId, {
+        ccSessionCwd: workingDirectory ?? '',
         ccSessionId: adapter.sessionId,
       });
     }
