@@ -122,7 +122,13 @@ export class ElectronRemoteServerActionImpl {
       },
       {
         onSuccess: (data) => {
-          if (!isEqual(data, this.#get().dataSyncConfig)) {
+          const { dataSyncConfig, isInitRemoteServerConfig } = this.#get();
+          // Only refresh on genuine config changes AFTER the first hydration.
+          // On initial load the stores are already fresh, and `refreshUserData`
+          // runs `stores.reset()` which wipes chat state (notably `activeAgentId`)
+          // that `AgentIdSync` just set from the URL — leaving the topic list
+          // unable to resolve its agent scope on reload.
+          if (isInitRemoteServerConfig && !isEqual(data, dataSyncConfig)) {
             void this.#get()
               .refreshUserData()
               .catch((error) => {
