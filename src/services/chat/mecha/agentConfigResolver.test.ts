@@ -106,7 +106,10 @@ describe('resolveAgentConfig', () => {
     it('should return agent config and chat config correctly', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
-      expect(result.agentConfig).toEqual(mockAgentConfig);
+      // systemRole should have locale appended (currentResponseLanguage falls back to browser locale)
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.model).toBe(mockAgentConfig.model);
+      expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
     });
 
@@ -1170,7 +1173,9 @@ describe('resolveAgentConfig', () => {
 
       // Only plugins should be empty, other config should be preserved
       expect(result.plugins).toEqual([]);
-      expect(result.agentConfig).toEqual(mockAgentConfig);
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.model).toBe(mockAgentConfig.model);
+      expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
       expect(result.isBuiltinAgent).toBe(false);
     });
