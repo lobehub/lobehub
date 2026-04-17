@@ -299,6 +299,12 @@ export const executeHeterogeneousAgent = async (
    */
   let pendingStepTransition = false;
 
+  // Subscribe to the operation's abort signal so we can drop late events and
+  // stop writing to DB the moment the user clicks Stop. If the op is gone
+  // (cleaned up already) or missing in a test stub, treat as not-aborted.
+  const abortSignal = get().operations?.[operationId]?.abortController?.signal;
+  const isAborted = () => !!abortSignal?.aborted;
+
   try {
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({
@@ -312,6 +318,14 @@ export const executeHeterogeneousAgent = async (
     agentSessionId = result.sessionId;
     if (!agentSessionId) throw new Error('Agent session returned no sessionId');
 
+    // Register cancel hook on the operation — when the user hits Stop, the op
+    // framework calls this; we SIGINT the CC process via the main-process IPC
+    // so the CLI exits instead of running to completion off-screen.
+    const sidForCancel = agentSessionId;
+    get().onOperationCancel?.(operationId, () => {
+      heterogeneousAgentService.cancelSession(sidForCancel).catch(() => {});
+    });
+
     // ─── Debug tracing (dev only) ───
     const trace: Array<{ adaptedEvents: any[]; rawLine: any; timestamp: number }> = [];
     if (typeof window !== 'undefined') {
@@ -321,6 +335,9 @@ export const executeHeterogeneousAgent = async (
     // Subscribe to broadcasts BEFORE sending prompt
     unsubscribe = subscribeBroadcasts(agentSessionId, {
       onRawLine: (line) => {
+        // Once the user cancels, drop any trailing events the CLI emits before
+        // exit so they don't leak into DB writes.
+        if (isAborted()) return;
         const events = adapter.adapt(line);
 
         // Record for debugging
@@ -576,6 +593,11 @@ export const executeHeterogeneousAgent = async (
             .catch(console.error);
         }
 
+        // If the error came from a user-initiated cancel (SIGINT → non-zero
+        // exit), don't surface it as a runtime error toast — the operation is
+        // already marked cancelled and the partial content is persisted above.
+        if (isAborted()) return;
+
         eventHandler(
           toStreamEvent(
             {
@@ -603,6 +625,9 @@ export const executeHeterogeneousAgent = async (
   } catch (error) {
     if (!completed) {
       completed = true;
+      // `sendPrompt` rejects when the CLI exits non-zero, which is how SIGINT
+      // lands here too. If the user cancelled, don't surface an error.
+      if (isAborted()) return;
       const errorMsg = error instanceof Error ? error.message : 'Agent execution failed';
       eventHandler(
         toStreamEvent(
