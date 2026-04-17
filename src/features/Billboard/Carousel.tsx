@@ -5,11 +5,14 @@ import { Carousel as AntCarousel } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { type ComponentRef, memo, useRef, useState } from 'react';
+import { type ComponentRef, memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import type { GlobalBillboard } from '@/types/serverConfig';
+import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
-type BillboardItem = GlobalBillboard['items'][number];
+import { resolveBillboardItem } from './locale';
+
+type BillboardItem = GlobalBillboardItem;
 
 interface BillboardCarouselProps {
   cardAttr?: string;
@@ -62,6 +65,31 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
   `,
+  descriptionExpanded: css`
+    font-size: 14px;
+    color: ${cssVar.colorTextSecondary};
+    word-break: break-word;
+  `,
+  expandToggle: css`
+    cursor: pointer;
+
+    align-self: flex-start;
+
+    margin-block-start: 2px;
+    padding: 0;
+    border: none;
+
+    font-size: 13px;
+    color: ${cssVar.colorPrimary};
+
+    background: transparent;
+
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorPrimaryHover};
+    }
+  `,
   dot: css`
     cursor: pointer;
 
@@ -106,22 +134,60 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ItemContent = memo<{ item: BillboardItem }>(({ item }) => (
-  <Flexbox gap={0}>
-    {item.cover && <img alt="" className={styles.image} src={item.cover} />}
-    <Flexbox className={styles.itemBody} gap={4}>
-      <div className={styles.title}>{item.title}</div>
-      {item.description && <div className={styles.description}>{item.description}</div>}
-      {item.linkUrl && (
-        <a className={styles.action} href={item.linkUrl} rel="noopener noreferrer" target="_blank">
-          <Button block size="small" type="primary">
-            {item.linkLabel ?? 'Learn more'}
-          </Button>
-        </a>
-      )}
+const ItemContent = memo<{ item: BillboardItem }>(({ item }) => {
+  const { t, i18n } = useTranslation('notification');
+  const resolved = useMemo(() => resolveBillboardItem(item, i18n.language), [item, i18n.language]);
+
+  const descRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (!el || !resolved.description || expanded) return;
+    setOverflow(el.scrollHeight > el.clientHeight + 1);
+  }, [resolved.description, expanded]);
+
+  return (
+    <Flexbox gap={0}>
+      {item.cover && <img alt="" className={styles.image} src={item.cover} />}
+      <Flexbox className={styles.itemBody} gap={4}>
+        <div className={styles.title}>{resolved.title}</div>
+        {resolved.description && (
+          <>
+            <div
+              className={expanded ? styles.descriptionExpanded : styles.description}
+              ref={descRef}
+            >
+              {resolved.description}
+            </div>
+            {(overflow || expanded) && (
+              <button
+                className={styles.expandToggle}
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? t('billboard.collapse') : t('billboard.expand')}
+              </button>
+            )}
+          </>
+        )}
+        {item.linkUrl && (
+          <a
+            className={styles.action}
+            href={item.linkUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <Button block size="small" type="primary">
+              {resolved.linkLabel ?? t('billboard.learnMore')}
+            </Button>
+          </a>
+        )}
+      </Flexbox>
     </Flexbox>
-  </Flexbox>
-));
+  );
+});
 
 ItemContent.displayName = 'BillboardItemContent';
 
@@ -160,6 +226,7 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
         ) : (
           <>
             <AntCarousel
+              adaptiveHeight
               autoplay={!paused}
               autoplaySpeed={6000}
               beforeChange={(_: number, next: number) => setCurrent(next)}

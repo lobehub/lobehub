@@ -76,17 +76,29 @@ export interface GlobalServerConfig {
   };
 }
 
+export interface GlobalBillboardItemLocaleFields {
+  description?: string;
+  linkLabel?: string;
+  title?: string;
+}
+
+export interface GlobalBillboardItem {
+  cover?: string | null;
+  description: string;
+  /**
+   * 按 locale 覆盖的文案。缺失 locale 或 locale 内某字段缺失时回退到默认字段。
+   */
+  i18n?: Record<string, GlobalBillboardItemLocaleFields>;
+  id: number;
+  linkLabel?: string | null;
+  linkUrl?: string | null;
+  title: string;
+}
+
 export interface GlobalBillboard {
   endAt: string;
   id: number;
-  items: {
-    cover?: string | null;
-    description: string;
-    id: number;
-    linkLabel?: string | null;
-    linkUrl?: string | null;
-    title: string;
-  }[];
+  items: GlobalBillboardItem[];
   slug: string;
   startAt: string;
   title: string;

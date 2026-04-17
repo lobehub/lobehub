@@ -1,11 +1,26 @@
 import type { BusinessEdgeConfigData } from '@lobechat/business-config/server';
 
 /**
+ * Billboard 单条 item 的可本地化字段。
+ * cover / linkUrl / 顺序 / 时间窗口不翻译。
+ */
+export interface BillboardItemLocaleFields {
+  description?: string;
+  linkLabel?: string;
+  title?: string;
+}
+
+/**
  * Billboard 轮播项（Home sidebar 左下角运营卡片的单条内容）
  */
 export interface BillboardItem {
   cover?: string | null;
   description: string;
+  /**
+   * 每个 locale 的覆盖文案。缺失时回退到默认字段（title / description / linkLabel）。
+   * key 采用 LobeHub locale code（如 `zh-CN`、`en-US`、`ja-JP`）。
+   */
+  i18n?: Record<string, BillboardItemLocaleFields>;
   id: number;
   linkLabel?: string | null;
   linkUrl?: string | null;
