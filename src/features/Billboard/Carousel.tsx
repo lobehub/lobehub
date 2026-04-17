@@ -80,14 +80,15 @@ const styles = createStaticStyles(({ css }) => ({
     border: none;
 
     font-size: 13px;
-    color: ${cssVar.colorPrimary};
+    color: ${cssVar.colorLink};
 
     background: transparent;
 
     transition: color 0.2s;
 
     &:hover {
-      color: ${cssVar.colorPrimaryHover};
+      color: ${cssVar.colorLinkHover};
+      text-decoration: underline;
     }
   `,
   dot: css`
@@ -107,7 +108,7 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorPrimary};
   `,
   dots: css`
-    padding-block-end: 10px;
+    padding-block: 8px 10px;
   `,
   image: css`
     display: block;
@@ -134,60 +135,66 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ItemContent = memo<{ item: BillboardItem }>(({ item }) => {
-  const { t, i18n } = useTranslation('notification');
-  const resolved = useMemo(() => resolveBillboardItem(item, i18n.language), [item, i18n.language]);
+const ItemContent = memo<{ item: BillboardItem; onExpandChange?: () => void }>(
+  ({ item, onExpandChange }) => {
+    const { t, i18n } = useTranslation('notification');
+    const resolved = useMemo(
+      () => resolveBillboardItem(item, i18n.language),
+      [item, i18n.language],
+    );
 
-  const descRef = useRef<HTMLDivElement>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [overflow, setOverflow] = useState(false);
+    const descRef = useRef<HTMLDivElement>(null);
+    const [expanded, setExpanded] = useState(false);
+    const [overflow, setOverflow] = useState(false);
 
-  useLayoutEffect(() => {
-    const el = descRef.current;
-    if (!el || !resolved.description || expanded) return;
-    setOverflow(el.scrollHeight > el.clientHeight + 1);
-  }, [resolved.description, expanded]);
+    useLayoutEffect(() => {
+      const el = descRef.current;
+      if (!el || !resolved.description || expanded) return;
+      setOverflow(el.scrollHeight > el.clientHeight + 1);
+    }, [resolved.description, expanded]);
 
-  return (
-    <Flexbox gap={0}>
-      {item.cover && <img alt="" className={styles.image} src={item.cover} />}
-      <Flexbox className={styles.itemBody} gap={4}>
-        <div className={styles.title}>{resolved.title}</div>
-        {resolved.description && (
-          <>
-            <div
-              className={expanded ? styles.descriptionExpanded : styles.description}
-              ref={descRef}
-            >
-              {resolved.description}
-            </div>
-            {(overflow || expanded) && (
-              <button
-                className={styles.expandToggle}
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
+    const handleToggle = () => {
+      setExpanded((v) => !v);
+      onExpandChange?.();
+    };
+
+    return (
+      <Flexbox gap={0}>
+        {item.cover && <img alt="" className={styles.image} src={item.cover} />}
+        <Flexbox className={styles.itemBody} gap={4}>
+          <div className={styles.title}>{resolved.title}</div>
+          {resolved.description && (
+            <>
+              <div
+                className={expanded ? styles.descriptionExpanded : styles.description}
+                ref={descRef}
               >
-                {expanded ? t('billboard.collapse') : t('billboard.expand')}
-              </button>
-            )}
-          </>
-        )}
-        {item.linkUrl && (
-          <a
-            className={styles.action}
-            href={item.linkUrl}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <Button block size="small" type="primary">
-              {resolved.linkLabel ?? t('billboard.learnMore')}
-            </Button>
-          </a>
-        )}
+                {resolved.description}
+              </div>
+              {(overflow || expanded) && (
+                <button className={styles.expandToggle} type="button" onClick={handleToggle}>
+                  {expanded ? t('billboard.collapse') : t('billboard.expand')}
+                </button>
+              )}
+            </>
+          )}
+          {item.linkUrl && (
+            <a
+              className={styles.action}
+              href={item.linkUrl}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <Button block size="small" type="primary">
+                {resolved.linkLabel ?? t('billboard.learnMore')}
+              </Button>
+            </a>
+          )}
+        </Flexbox>
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 ItemContent.displayName = 'BillboardItemContent';
 
@@ -235,7 +242,14 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
             >
               {set.items.map((item) => (
                 <div key={item.id}>
-                  <ItemContent item={item} />
+                  <ItemContent
+                    item={item}
+                    onExpandChange={() => {
+                      requestAnimationFrame(() => {
+                        carouselRef.current?.innerSlider?.onWindowResized?.();
+                      });
+                    }}
+                  />
                 </div>
               ))}
             </AntCarousel>
