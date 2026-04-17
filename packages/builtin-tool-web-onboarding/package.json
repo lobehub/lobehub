@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
     "./executionRuntime": "./src/ExecutionRuntime/index.ts",
     "./utils": "./src/ExecutionRuntime/utils.ts"
   },
@@ -14,5 +15,10 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5",
+    "react": "*",
+    "react-i18next": "*"
   }
 }
