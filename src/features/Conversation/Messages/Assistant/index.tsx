@@ -126,10 +126,10 @@ const AssistantMessage = memo<AssistantMessageProps>(({ id, index, disableEditin
             extra={extra}
             id={id}
             model={model!}
-            performance={performance ?? metadata?.performance}
+            performance={performance! || metadata}
             provider={provider!}
             tools={tools}
-            usage={usage ?? metadata?.usage}
+            usage={usage! || metadata}
           />
         </>
       }
