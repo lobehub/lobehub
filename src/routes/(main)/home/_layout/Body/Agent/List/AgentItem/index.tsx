@@ -1,6 +1,6 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Icon } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
@@ -28,7 +28,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
-  const { id, avatar, backgroundColor, title, pinned } = item;
+  const { id, avatar, backgroundColor, title, pinned, heterogeneousType } = item;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -42,6 +42,21 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');
+
+  // Heterogeneous agents (Claude Code, etc.) get an "External" tag so they
+  // stand out in the sidebar — mirrors the group-member pattern.
+  const titleNode = heterogeneousType ? (
+    <Flexbox horizontal align="center" gap={4}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayTitle}
+      </span>
+      <Tag size="small" style={{ flexShrink: 0 }}>
+        {t('group.profile.external')}
+      </Tag>
+    </Flexbox>
+  ) : (
+    displayTitle
+  );
 
   // Get URL for this agent
   const agentUrl = SESSION_CHAT_URL(id, false);
@@ -122,7 +137,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
         key={id}
         loading={isLoading}
         style={style}
-        title={displayTitle}
+        title={titleNode}
         onDoubleClick={handleDoubleClick}
         onDragEnd={handleDragEnd}
         onDragStart={handleDragStart}
