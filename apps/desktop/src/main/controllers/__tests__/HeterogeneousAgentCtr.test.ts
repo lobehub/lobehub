@@ -71,7 +71,7 @@ describe('HeterogeneousAgentCtr', () => {
       });
 
       expect(Buffer.from(result.buffer).toString('utf8')).toBe('IGNORED');
-      expect(result.mimeType).toBe('image/png');
+      expect(result.mimeType).toBe('text/plain');
       await expect(readFile(outOfRootDataPath, 'utf8')).resolves.toBe('SECRET');
     });
   });
