@@ -565,8 +565,9 @@ describe('resolveAgentConfig', () => {
 
       expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.agentConfig.systemRole).toContain('Page agent system prompt');
+      // Locale instruction is injected between custom role and page-agent role
       expect(result.agentConfig.systemRole).toMatch(
-        /You are a helpful assistant\n\nPage agent system prompt/,
+        /You are a helpful assistant[\s\S]*Page agent system prompt/,
       );
     });
 
@@ -680,9 +681,9 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      // Should still inject PageAgentIdentifier but with empty systemRole
+      // Should still inject PageAgentIdentifier but with no page-agent systemRole
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -698,7 +699,7 @@ describe('resolveAgentConfig', () => {
       });
 
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
