@@ -385,9 +385,15 @@ describe('shouldOmitSamplingParams', () => {
     expect(shouldOmitSamplingParams('us.anthropic.claude-opus-4-7-v1')).toBe(true);
   });
 
-  it('should return true for Claude Opus 4.7 on OpenRouter', () => {
-    expect(shouldOmitSamplingParams('anthropic/claude-opus-4-7')).toBe(true);
-    expect(shouldOmitSamplingParams('anthropic/claude-4-7-opus')).toBe(true);
+  it('should return true for Claude Opus 4.7 on OpenRouter (dot notation)', () => {
+    expect(shouldOmitSamplingParams('anthropic/claude-opus-4.7')).toBe(true);
+    expect(shouldOmitSamplingParams('anthropic/claude-4.7-opus')).toBe(true);
+  });
+
+  it('should return false for hypothetical dash-form OpenRouter id', () => {
+    // OpenRouter uses dot notation; dash form is not a real id and must not match
+    // to avoid accidentally stripping params from unrelated future model ids.
+    expect(shouldOmitSamplingParams('anthropic/claude-opus-4-7')).toBe(false);
   });
 
   it('should return false for Claude Opus 4.6 and earlier', () => {

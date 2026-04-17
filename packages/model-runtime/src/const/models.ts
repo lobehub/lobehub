@@ -124,9 +124,9 @@ export const hasTemperatureTopPConflict = (model: string): boolean => {
 export const omitSamplingParamsModelPatterns: RegExp[] = [
   // Claude Opus 4.7 - Anthropic API (also LobeHub provider pass-through)
   /^claude-opus-4-7/,
-  // OpenRouter formats
-  /^anthropic\/claude-opus-4-7/,
-  /^anthropic\/claude-4-7-opus/,
+  // OpenRouter formats use dot notation (e.g. anthropic/claude-opus-4.7)
+  /^anthropic\/claude-opus-4\.7/,
+  /^anthropic\/claude-4\.7-opus/,
   // AWS Bedrock formats (e.g. anthropic.claude-opus-4-7, us.anthropic.claude-opus-4-7-v1)
   /anthropic\.claude-opus-4-7/,
 ];
