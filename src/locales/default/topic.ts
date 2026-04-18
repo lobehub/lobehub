@@ -41,6 +41,10 @@ export default {
   'importInvalidFormat': 'Invalid file format. Please ensure it is a valid JSON file.',
   'importLoading': 'Importing conversation...',
   'importSuccess': 'Successfully imported {{count}} messages',
+  'inPopup.description':
+    'This topic is currently open in a separate window. Continue the conversation there to keep messages in sync.',
+  'inPopup.focus': 'Focus popup window',
+  'inPopup.title': 'Open in popup window',
   'loadMore': 'Load More',
   'newTopic': 'New Topic',
   'renameModal.description': 'Keep it short and easy to recognize.',

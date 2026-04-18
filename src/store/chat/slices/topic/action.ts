@@ -10,7 +10,6 @@ import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
-import { postTopicsMutation } from '@/libs/crossWindowBus';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
@@ -629,9 +628,6 @@ export class ChatTopicActionImpl {
     await mutate(
       (key) => Array.isArray(key) && key[0] === SWR_USE_FETCH_TOPIC && key[1] === containerKey,
     );
-
-    // Notify sibling windows that the topic list for this container changed.
-    postTopicsMutation({ agentId: activeAgentId, groupId: activeGroupId });
   };
 
   internal_updateTopicLoading = (id: string, loading: boolean): void => {
