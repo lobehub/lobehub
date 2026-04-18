@@ -38,5 +38,7 @@ export const ClaudeCodeRenders = {
  * `getBuiltinRenderDisplayControl` as a fallback.
  */
 export const ClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
+  [ClaudeCodeApiName.Edit]: 'expand',
   [ClaudeCodeApiName.TodoWrite]: 'expand',
+  [ClaudeCodeApiName.Write]: 'expand',
 };

@@ -20,6 +20,7 @@ import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { openShareModal } from '@/features/ShareModal';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
@@ -39,6 +40,7 @@ export const useTopicItemDropdownMenu = ({ fav, id, title }: TopicItemDropdownMe
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
+  const appOrigin = useAppOrigin();
 
   const [autoRenameTopicTitle, duplicateTopic, removeTopic, favoriteTopic, updateTopicTitle] =
     useChatStore((s) => [
@@ -130,7 +132,7 @@ export const useTopicItemDropdownMenu = ({ fav, id, title }: TopicItemDropdownMe
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeAgentId) return;
-          const url = `${window.location.origin}/agent/${activeAgentId}?topic=${id}`;
+          const url = `${appOrigin}/agent/${activeAgentId}?topic=${id}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },
@@ -177,6 +179,7 @@ export const useTopicItemDropdownMenu = ({ fav, id, title }: TopicItemDropdownMe
     fav,
     title,
     activeAgentId,
+    appOrigin,
     autoRenameTopicTitle,
     duplicateTopic,
     favoriteTopic,

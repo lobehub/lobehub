@@ -10,8 +10,20 @@ import { useTranslation } from 'react-i18next';
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  baseline: css`
-    align-items: baseline;
+  chip: css`
+    overflow: hidden;
+    display: inline-flex;
+    flex-shrink: 1;
+    gap: 6px;
+    align-items: center;
+
+    min-width: 0;
+    margin-inline-start: 6px;
+    padding-block: 2px;
+    padding-inline: 10px;
+    border-radius: 999px;
+
+    background: ${cssVar.colorFillTertiary};
   `,
   command: css`
     overflow: hidden;
@@ -22,15 +34,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
     color: ${cssVar.colorText};
     text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   statusIcon: css`
-    align-self: center;
     margin-inline-start: 4px;
   `,
   terminalIcon: css`
     flex-shrink: 0;
-    align-self: center;
-    margin-inline: 6px 4px;
     color: ${cssVar.colorTextDescription};
   `,
 }));
@@ -59,16 +69,18 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
     if (isArgumentsStreaming) {
       if (!description)
         return (
-          <div className={cx(inspectorTextStyles.root, styles.baseline, shinyTextStyles.shinyText)}>
+          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
             <span>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
-        <div className={cx(inspectorTextStyles.root, styles.baseline, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t(translationKey as any)}:</span>
-          <SquareChevronRight className={styles.terminalIcon} size={14} />
-          <span className={styles.command}>{description}</span>
+          <span className={styles.chip}>
+            <SquareChevronRight className={styles.terminalIcon} size={14} />
+            <span className={styles.command}>{description}</span>
+          </span>
         </div>
       );
     }
@@ -76,19 +88,13 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
     const isSuccess = pluginState?.success || pluginState?.exitCode === 0;
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          styles.baseline,
-          isLoading && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
         <span>{t(translationKey as any)}:</span>
         {description && (
-          <>
+          <span className={styles.chip}>
             <SquareChevronRight className={styles.terminalIcon} size={14} />
             <span className={styles.command}>{description}</span>
-          </>
+          </span>
         )}
         {isLoading ? null : pluginState?.success !== undefined ? (
           isSuccess ? (

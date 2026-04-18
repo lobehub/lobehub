@@ -10,7 +10,7 @@ import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ClaudeCodeApiName, type ToolSearchArgs } from '../types';
+import { ClaudeCodeApiName, type ToolSearchArgs } from '../../types';
 
 const SELECT_PREFIX = 'select:';
 

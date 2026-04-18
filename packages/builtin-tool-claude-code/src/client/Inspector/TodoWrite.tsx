@@ -10,7 +10,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ClaudeCodeTodoItem, type TodoWriteArgs } from '../types';
+import { type ClaudeCodeTodoItem, type TodoWriteArgs } from '../../types';
 
 const RING_SIZE = 14;
 const RING_STROKE = 2;

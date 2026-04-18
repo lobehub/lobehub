@@ -10,7 +10,7 @@ import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ClaudeCodeApiName, type SkillArgs } from '../types';
+import { ClaudeCodeApiName, type SkillArgs } from '../../types';
 
 export const SkillInspector = memo<BuiltinInspectorProps<SkillArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {

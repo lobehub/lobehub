@@ -27,6 +27,7 @@ vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
     IconComponent ? <IconComponent /> : <div />,
+  ShikiLobeTheme: {},
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 

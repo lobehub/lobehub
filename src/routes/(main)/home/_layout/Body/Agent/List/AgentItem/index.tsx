@@ -46,6 +46,26 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorError};
   `,
+  runningBadge: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid ${cssVar.colorBgContainer};
+    border-radius: 999px;
+
+    color: ${cssVar.colorWarning};
+
+    background: ${cssVar.colorBgContainer};
+  `,
   wrapper: css`
     position: relative;
     display: inline-flex;
@@ -132,7 +152,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     [pinned],
   );
 
-  // Memoize avatar icon (show loader when updating, unread badge at bottom-right)
+  // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
       return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
@@ -145,6 +165,17 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
       />
     );
 
+    if (isLoading) {
+      return (
+        <span className={styles.wrapper}>
+          {avatarNode}
+          <span className={styles.runningBadge}>
+            <Icon spin icon={Loader2} size={9} />
+          </span>
+        </span>
+      );
+    }
+
     if (unreadCount > 0) {
       return (
         <span className={styles.wrapper}>
@@ -155,7 +186,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     }
 
     return avatarNode;
-  }, [isUpdating, avatar, backgroundColor, unreadCount]);
+  }, [isUpdating, isLoading, avatar, backgroundColor, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,
@@ -178,7 +209,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
         extra={pinIcon}
         icon={avatarIcon}
         key={id}
-        loading={isLoading}
         style={style}
         title={titleNode}
         onDoubleClick={handleDoubleClick}

@@ -191,6 +191,7 @@
   "analytics.telemetry.desc": "通过匿名使用数据帮助我们改进 {{appName}}",
   "analytics.telemetry.title": "发送匿名使用数据",
   "analytics.title": "数据统计",
+  "ccStatus.account.label": "账号",
   "ccStatus.detecting": "正在检测 Claude Code CLI…",
   "ccStatus.redetect": "重新检测",
   "ccStatus.title": "Claude Code CLI",

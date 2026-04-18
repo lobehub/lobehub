@@ -48,6 +48,8 @@ import type {
 export const claudeCodePreset: AgentCLIPreset = {
   baseArgs: [
     '-p',
+    '--input-format',
+    'stream-json',
     '--output-format',
     'stream-json',
     '--verbose',
@@ -55,7 +57,7 @@ export const claudeCodePreset: AgentCLIPreset = {
     '--permission-mode',
     'acceptEdits',
   ],
-  promptMode: 'positional',
+  promptMode: 'stdin',
   resumeArgs: (sessionId) => ['--resume', sessionId],
 };
 

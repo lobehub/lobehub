@@ -1,4 +1,4 @@
-import type { DesktopHotkeyId } from '@lobechat/const/desktopGlobalShortcuts';
+import type { DesktopHotkeyId } from '@lobechat/types';
 
 import type { App } from '@/core/App';
 import { IoCContainer } from '@/core/infrastructure/IoCContainer';

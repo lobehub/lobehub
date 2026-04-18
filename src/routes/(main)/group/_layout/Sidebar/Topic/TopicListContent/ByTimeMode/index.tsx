@@ -20,7 +20,8 @@ import GroupItem from './GroupItem';
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
-  const topicDisplayMode = useUserStore(preferenceSelectors.topicDisplayMode);
+  const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
+  const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopics(s),
@@ -30,8 +31,8 @@ const ByTimeMode = memo(() => {
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
   const groupSelector = useMemo(
-    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicDisplayMode),
-    [topicPageSize, topicDisplayMode],
+    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicSortBy, topicGroupMode),
+    [topicPageSize, topicSortBy, topicGroupMode],
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
@@ -40,10 +41,10 @@ const ByTimeMode = memo(() => {
     s.updateSystemStatus,
   ]);
 
-  // Reset expanded keys when display mode changes so all groups start expanded
+  // Reset expanded keys when grouping changes so all groups start expanded
   useEffect(() => {
     updateSystemStatus({ expandTopicGroupKeys: undefined });
-  }, [topicDisplayMode, updateSystemStatus]);
+  }, [topicSortBy, topicGroupMode, updateSystemStatus]);
 
   const expandedKeys = useMemo(() => {
     return topicGroupKeys || groupTopics.map((group) => group.id);
