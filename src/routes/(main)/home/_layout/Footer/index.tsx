@@ -68,7 +68,6 @@ const Footer = memo(() => {
   const { footer } = useNavLayout();
   const billboardMenuItems = useBillboardMenuItems();
   const location = useLocation();
-  const isSettingsPage = location.pathname.startsWith('/settings');
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const isMobile = useServerConfigStore((s) => !!s.isMobile);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
