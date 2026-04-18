@@ -15,6 +15,24 @@ import {
 import { getExternalDependencies } from './native-deps.config.mjs';
 
 /**
+ * Force `base: '/'` in renderer config. The `electron-vite` preset
+ * unconditionally rewrites base to `'./'` in production (with `enforce: 'pre'`),
+ * which produces relative asset URLs like `../../assets/...`. Those break in
+ * the popup window because its SPA URL (`/popup/agent/:aid/:tid`) is deep
+ * enough that relative resolution lands at `/popup/assets/...` instead of the
+ * actual `/assets/...`. Our `app://` protocol handler resolves absolute
+ * `/assets/...` correctly regardless of URL depth.
+ */
+function forceAbsoluteBasePlugin(): PluginOption {
+  return {
+    name: 'electron-desktop-force-base',
+    config(config) {
+      config.base = '/';
+    },
+  };
+}
+
+/**
  * Rewrite SPA routes to their corresponding HTML entry so the electron-vite
  * dev server serves the right HTML when root is the monorepo root.
  *
@@ -146,6 +164,7 @@ export default defineConfig({
     },
     optimizeDeps: sharedOptimizeDeps,
     plugins: [
+      forceAbsoluteBasePlugin(),
       electronDesktopHtmlPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],

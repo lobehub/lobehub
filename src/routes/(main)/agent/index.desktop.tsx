@@ -38,7 +38,6 @@ const ChatPage = memo(() => {
 
   return (
     <>
-      <ChatHydration />
       <PageTitle />
       <Flexbox
         horizontal
