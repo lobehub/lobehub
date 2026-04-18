@@ -41,7 +41,42 @@ import type {
   StreamChunkData,
   ToolCallPayload,
   ToolResultData,
+  UsageData,
 } from '../types';
+
+/**
+ * Convert a raw Anthropic-shape usage object (per-turn or grand-total from
+ * Claude Code's `result` event) into the provider-agnostic `UsageData` shape.
+ * Returns undefined when no tokens were consumed, so callers can skip empty
+ * events without a null-check cascade.
+ */
+const toUsageData = (
+  raw:
+    | {
+        cache_creation_input_tokens?: number;
+        cache_read_input_tokens?: number;
+        input_tokens?: number;
+        output_tokens?: number;
+      }
+    | null
+    | undefined,
+): UsageData | undefined => {
+  if (!raw) return undefined;
+  const inputCacheMissTokens = raw.input_tokens || 0;
+  const inputCachedTokens = raw.cache_read_input_tokens || 0;
+  const inputWriteCacheTokens = raw.cache_creation_input_tokens || 0;
+  const totalInputTokens = inputCacheMissTokens + inputCachedTokens + inputWriteCacheTokens;
+  const totalOutputTokens = raw.output_tokens || 0;
+  if (totalInputTokens + totalOutputTokens === 0) return undefined;
+  return {
+    inputCacheMissTokens,
+    inputCachedTokens: inputCachedTokens || undefined,
+    inputWriteCacheTokens: inputWriteCacheTokens || undefined,
+    totalInputTokens,
+    totalOutputTokens,
+    totalTokens: totalInputTokens + totalOutputTokens,
+  };
+};
 
 // ─── CLI Preset ───
 
@@ -147,16 +182,16 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     events.push(...this.openMainMessage(messageId, raw.message?.model));
 
     // Per-turn model + usage snapshot — emitted as 'step_complete'-like
-    // metadata event so executor can track latest model and accumulated usage.
-    // DEDUP: same message.id carries identical usage on every content block
-    // (thinking, text, tool_use). Only emit once per message.id.
+    // metadata event so the executor can persist usage to each step's
+    // assistant message. DEDUP: same message.id carries identical usage on
+    // every content block (thinking, text, tool_use); emit once per message.id.
     if ((raw.message?.model || raw.message?.usage) && messageId !== this.usageEmittedForMessageId) {
       this.usageEmittedForMessageId = messageId;
       events.push(
         this.makeEvent('step_complete', {
           model: raw.message?.model,
           phase: 'turn_metadata',
-          usage: raw.message?.usage,
+          usage: toUsageData(raw.message?.usage),
         }),
       );
     }
@@ -270,14 +305,18 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
-    // Emit authoritative usage from result event (overrides per-turn accumulation)
+    // Emit authoritative grand-total usage from CC's result event. The
+    // executor currently ignores this phase (it persists per-turn via
+    // turn_metadata), but we still emit it so other consumers — cost
+    // displays, logs — can read the normalized total.
     const events: HeterogeneousAgentEvent[] = [];
-    if (raw.usage) {
+    const usage = toUsageData(raw.usage);
+    if (usage) {
       events.push(
         this.makeEvent('step_complete', {
           costUsd: raw.total_cost_usd,
           phase: 'result_usage',
-          usage: raw.usage,
+          usage,
         }),
       );
     }

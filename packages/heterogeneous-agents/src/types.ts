@@ -77,6 +77,41 @@ export interface ToolCallPayload {
   type: string;
 }
 
+/**
+ * Normalized token usage for a single LLM call. Field names mirror LobeHub's
+ * `MessageMetadata.usage` so the executor can write this shape straight to
+ * `metadata.usage` with no further conversion.
+ *
+ * Each adapter is responsible for mapping its provider-native usage object
+ * (Anthropic `input_tokens` + cache split, OpenAI `prompt_tokens`, etc.) into
+ * this shape. Provider-specific shape knowledge does not leak past the adapter.
+ */
+export interface UsageData {
+  /** Input tokens served from the prompt cache (cache reads). */
+  inputCachedTokens?: number;
+  /** Input tokens that missed the prompt cache (fresh prompt bytes). */
+  inputCacheMissTokens: number;
+  /** Input tokens written into the prompt cache (cache creation). */
+  inputWriteCacheTokens?: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+}
+
+/**
+ * Data shape for `step_complete` events. `phase` disambiguates the subtype:
+ *   - `turn_metadata`: per-turn snapshot of model + usage (emitted once per LLM call)
+ *   - `result_usage`: authoritative grand total at the end of a session
+ */
+export interface StepCompleteData {
+  /** Total session cost in USD (only on `result_usage`, if the CLI reports it). */
+  costUsd?: number;
+  /** Model id for this turn (only meaningful on `turn_metadata`). */
+  model?: string;
+  phase: 'turn_metadata' | 'result_usage';
+  usage?: UsageData;
+}
+
 // ─── Adapter Interface ───
 
 /**

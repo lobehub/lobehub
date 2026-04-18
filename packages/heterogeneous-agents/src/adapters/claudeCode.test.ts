@@ -269,7 +269,7 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   describe('usage and model extraction', () => {
-    it('emits step_complete with turn_metadata when message has model and usage', () => {
+    it('emits step_complete with turn_metadata carrying normalized UsageData', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
@@ -288,11 +288,18 @@ describe('ClaudeCodeAdapter', () => {
       );
       expect(meta).toBeDefined();
       expect(meta!.data.model).toBe('claude-sonnet-4-6');
-      expect(meta!.data.usage.input_tokens).toBe(100);
-      expect(meta!.data.usage.output_tokens).toBe(50);
+      // Adapter normalizes Anthropic shape → UsageData with no cache tokens.
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: undefined,
+        inputWriteCacheTokens: undefined,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalTokens: 150,
+      });
     });
 
-    it('emits step_complete with cache token usage', () => {
+    it('normalizes cache creation and cache read into UsageData', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
@@ -314,8 +321,16 @@ describe('ClaudeCodeAdapter', () => {
       const meta = events.find(
         (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
       );
-      expect(meta!.data.usage.cache_creation_input_tokens).toBe(200);
-      expect(meta!.data.usage.cache_read_input_tokens).toBe(300);
+      // cache_creation → inputWriteCacheTokens, cache_read → inputCachedTokens,
+      // totalInputTokens = miss + cached + write = 100 + 300 + 200.
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: 300,
+        inputWriteCacheTokens: 200,
+        totalInputTokens: 600,
+        totalOutputTokens: 50,
+        totalTokens: 650,
+      });
     });
   });
 

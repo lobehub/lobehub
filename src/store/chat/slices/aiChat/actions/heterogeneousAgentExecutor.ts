@@ -17,41 +17,6 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /**
- * Convert a raw Anthropic-shaped usage object (per-turn delta from Claude Code)
- * into the MessageMetadata.usage shape used by the pricing/usage UI. Returns
- * undefined if no tokens were consumed, so callers can skip the write.
- */
-const buildUsageMetadata = (
-  rawUsage:
-    | {
-        cache_creation_input_tokens?: number;
-        cache_read_input_tokens?: number;
-        input_tokens?: number;
-        output_tokens?: number;
-      }
-    | null
-    | undefined,
-): { usage: Record<string, number | undefined> } | undefined => {
-  if (!rawUsage) return undefined;
-  const inputCacheMiss = rawUsage.input_tokens || 0;
-  const inputCached = rawUsage.cache_read_input_tokens || 0;
-  const inputWriteCache = rawUsage.cache_creation_input_tokens || 0;
-  const totalInputTokens = inputCacheMiss + inputCached + inputWriteCache;
-  const totalOutputTokens = rawUsage.output_tokens || 0;
-  if (totalInputTokens + totalOutputTokens === 0) return undefined;
-  return {
-    usage: {
-      inputCacheMissTokens: inputCacheMiss,
-      inputCachedTokens: inputCached || undefined,
-      inputWriteCacheTokens: inputWriteCache || undefined,
-      totalInputTokens,
-      totalOutputTokens,
-      totalTokens: totalInputTokens + totalOutputTokens,
-    },
-  };
-};
-
-/**
  * Fire desktop notification + dock badge when a CC/Codex/ACP run finishes.
  * Notification only shows when the window is hidden (enforced in main); the
  * badge is always set so a minimized/backgrounded app still signals completion.
@@ -415,25 +380,25 @@ export const executeHeterogeneousAgent = async (
 
           // ─── step_complete with turn_metadata: persist per-step usage ───
           // `turn_metadata.usage` is the per-turn delta (deduped by adapter per
-          // message.id), not a running total, so we write it straight through to
-          // the current step's assistant message. Queue the write so it lands
-          // after any in-flight stream_start(newStep) that may still be swapping
+          // message.id) and already normalized to the MessageMetadata.usage
+          // shape — write it straight through to the current step's assistant
+          // message. Queue the write so it lands after any in-flight
+          // stream_start(newStep) that may still be swapping
           // `currentAssistantMessageId` to the new step's message.
           //
-          // `result_usage` (grand total across all turns) is intentionally ignored —
-          // applying it would overwrite the last step with the sum of all prior
-          // steps. Sum of turn_metadata equals result_usage for a healthy run.
+          // `result_usage` (grand total across all turns) is intentionally
+          // ignored — applying it would overwrite the last step with the sum
+          // of all prior steps. Sum of turn_metadata equals result_usage for
+          // a healthy run.
           if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
             if (event.data.model) lastModel = event.data.model;
             const turnUsage = event.data.usage;
             if (turnUsage) {
               persistQueue = persistQueue.then(async () => {
-                const metadata = buildUsageMetadata(turnUsage);
-                if (!metadata) return;
                 await messageService
                   .updateMessage(
                     currentAssistantMessageId,
-                    { metadata },
+                    { metadata: { usage: turnUsage } },
                     { agentId: context.agentId, topicId: context.topicId },
                   )
                   .catch(console.error);
