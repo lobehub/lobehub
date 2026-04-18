@@ -453,7 +453,17 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(finalWrite![1].reasoning.content).toBe('Let me think about this.');
     });
 
-    it('should accumulate usage across turns into metadata', async () => {
+    it('should persist per-step usage to each step assistant message, not accumulated', async () => {
+      // Deterministic ids for new-step assistant messages so we can assert per-message usage.
+      let astStepCounter = 0;
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'assistant') {
+          astStepCounter++;
+          return { id: `ast-step-${astStepCounter}` };
+        }
+        return { id: `tool-${Date.now()}` };
+      });
+
       await runWithEvents([
         ccInit(),
         ccAssistant('msg_01', [{ text: 'a', type: 'text' }], {
@@ -472,21 +482,34 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      // Find the final write that has usage metadata
-      const finalWrite = mockUpdateMessage.mock.calls.find(
+      const usageWrites = mockUpdateMessage.mock.calls.filter(
         ([, val]: any) => val.metadata?.usage?.totalTokens,
       );
-      expect(finalWrite).toBeDefined();
-      const usage = finalWrite![1].metadata.usage;
-      // 100 + 300 input + 200 cache_read + 50 cache_create = 650 input total
-      expect(usage.totalInputTokens).toBe(650);
-      // 50 + 80 = 130 output
-      expect(usage.totalOutputTokens).toBe(130);
-      expect(usage.totalTokens).toBe(780);
-      // Breakdown for pricing UI (must match anthropic usage converter shape)
-      expect(usage.inputCacheMissTokens).toBe(400);
-      expect(usage.inputCachedTokens).toBe(200);
-      expect(usage.inputWriteCacheTokens).toBe(50);
+      // Expect one usage write per step (msg_01 → ast-initial, msg_02 → ast-step-1)
+      expect(usageWrites.length).toBe(2);
+
+      const step1 = usageWrites.find(([id]: any) => id === 'ast-initial');
+      expect(step1).toBeDefined();
+      const u1 = step1![1].metadata.usage;
+      // msg_01 alone: 100 input (miss) + 200 cached + 50 cache_create = 350; 50 output
+      expect(u1.totalInputTokens).toBe(350);
+      expect(u1.totalOutputTokens).toBe(50);
+      expect(u1.totalTokens).toBe(400);
+      expect(u1.inputCacheMissTokens).toBe(100);
+      expect(u1.inputCachedTokens).toBe(200);
+      expect(u1.inputWriteCacheTokens).toBe(50);
+
+      const step2 = usageWrites.find(([id]: any) => id === 'ast-step-1');
+      expect(step2).toBeDefined();
+      const u2 = step2![1].metadata.usage;
+      // msg_02 alone: 300 input (miss, no cache); 80 output
+      expect(u2.totalInputTokens).toBe(300);
+      expect(u2.totalOutputTokens).toBe(80);
+      expect(u2.totalTokens).toBe(380);
+      expect(u2.inputCacheMissTokens).toBe(300);
+      // No cache tokens for this turn — these fields should be absent (undefined)
+      expect(u2.inputCachedTokens).toBeUndefined();
+      expect(u2.inputWriteCacheTokens).toBeUndefined();
     });
   });
 
