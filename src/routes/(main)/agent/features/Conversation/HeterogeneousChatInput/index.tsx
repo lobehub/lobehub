@@ -9,17 +9,17 @@ import { useChatStore } from '@/store/chat';
 import WorkingDirectoryBar from './WorkingDirectoryBar';
 
 // Heterogeneous agents (e.g. Claude Code) bring their own toolchain, memory,
-// and model, so LobeHub-side pickers don't apply. Only file upload is kept
-// (images feed into the agent via stream-json stdin).
-const leftActions: ActionKeys[] = ['fileUpload'];
+// and model, so LobeHub-side pickers don't apply. Typo is kept so the user
+// can still toggle the rich-text formatting bar.
+const leftActions: ActionKeys[] = ['typo'];
 const rightActions: ActionKeys[] = [];
 
 /**
  * HeterogeneousChatInput
  *
  * Simplified ChatInput for heterogeneous agents (Claude Code, etc.).
- * Keeps only: text input, image/file upload, send button, and a
- * working-directory picker — no model/tools/memory/KB/MCP/runtime-mode.
+ * Keeps only: text input, typo toggle, send button, and a working-directory
+ * picker — no model/tools/memory/KB/MCP/runtime-mode/upload.
  */
 const HeterogeneousChatInput = memo(() => {
   return (

@@ -77,8 +77,8 @@ export const formatWebOnboardingStateMessage = (state: OnboardingStateContext) =
 
 export const EMPTY_DOCUMENT_MESSAGES: Record<'persona' | 'soul', string> = {
   persona:
-    'User persona document is empty. Use updateDocument to create an initial persona based on what you have learned about the user.',
-  soul: 'SOUL.md is empty. Use updateDocument to write the agent identity once you have settled on a name, creature type, vibe, and emoji.',
+    'User persona document is empty. Use writeDocument to create an initial persona based on what you have learned about the user.',
+  soul: 'SOUL.md is empty. Use writeDocument to write the agent identity once you have settled on a name, creature type, vibe, and emoji.',
 };
 
 export const createDocumentReadResult = (

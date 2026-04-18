@@ -12,17 +12,22 @@ import {
   MessageItem,
   useConversationStore,
 } from '@/features/Conversation';
+import type { OnboardingPhase } from '@/types/user';
 import { isDev } from '@/utils/env';
 
 import CompletionPanel from './CompletionPanel';
 import Welcome from './Welcome';
+import WrapUpHint from './WrapUpHint';
 
 const assistantLikeRoles = new Set(['assistant', 'assistantGroup', 'supervisor']);
 
 interface AgentOnboardingConversationProps {
+  discoveryUserMessageCount?: number;
   feedbackSubmitted?: boolean;
   finishTargetUrl?: string;
+  onAfterWrapUp?: () => Promise<unknown> | void;
   onboardingFinished?: boolean;
+  phase?: OnboardingPhase;
   readOnly?: boolean;
   showFeedback?: boolean;
   topicId?: string;
@@ -32,7 +37,17 @@ const chatInputLeftActions: ActionKeys[] = isDev ? ['model'] : [];
 const chatInputRightActions: ActionKeys[] = [];
 
 const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
-  ({ feedbackSubmitted, finishTargetUrl, onboardingFinished, readOnly, showFeedback, topicId }) => {
+  ({
+    discoveryUserMessageCount,
+    feedbackSubmitted,
+    finishTargetUrl,
+    onAfterWrapUp,
+    onboardingFinished,
+    phase,
+    readOnly,
+    showFeedback,
+    topicId,
+  }) => {
     const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
     const isGreetingState = useMemo(() => {
@@ -106,12 +121,19 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
           />
         </Flexbox>
         {!readOnly && !onboardingFinished && (
-          <ChatInput
-            allowExpand={false}
-            leftActions={chatInputLeftActions}
-            rightActions={chatInputRightActions}
-            showRuntimeConfig={false}
-          />
+          <>
+            <WrapUpHint
+              discoveryUserMessageCount={discoveryUserMessageCount}
+              phase={phase}
+              onAfterFinish={onAfterWrapUp}
+            />
+            <ChatInput
+              allowExpand={false}
+              leftActions={chatInputLeftActions}
+              rightActions={chatInputRightActions}
+              showRuntimeConfig={false}
+            />
+          </>
         )}
       </Flexbox>
     );

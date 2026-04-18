@@ -27,6 +27,14 @@ export class DesktopNotificationService {
   async isMainWindowHidden(): Promise<boolean> {
     return ensureElectronIpc().notification.isMainWindowHidden();
   }
+
+  /**
+   * Set the app-level badge count (dock red dot on macOS, Unity counter on Linux,
+   * overlay icon on Windows). Pass 0 to clear.
+   */
+  async setBadgeCount(count: number): Promise<void> {
+    return ensureElectronIpc().notification.setBadgeCount(count);
+  }
 }
 
 export const desktopNotificationService = new DesktopNotificationService();

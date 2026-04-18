@@ -36,6 +36,9 @@ vi.mock('motion/react', () => ({
     div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
       <div {...props}>{children}</div>
     ),
+    span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+      <span {...props}>{children}</span>
+    ),
   },
 }));
 
@@ -177,5 +180,57 @@ describe('WorkflowCollapse', () => {
     });
 
     expect(screen.getByText('(4s)')).toBeInTheDocument();
+  });
+
+  it('cycles expand levels via the toggle button', () => {
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />);
+
+    const toggleButton = screen.getByRole('button', { name: 'Expand fully' });
+    expect(getExpandedKeys()).toBe('["workflow"]');
+
+    act(() => {
+      toggleButton.click();
+    });
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
+
+    act(() => {
+      screen.getByRole('button', { name: 'Collapse' }).click();
+    });
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Expand fully' })).toBeInTheDocument();
+  });
+
+  it('expands to semi when accordion header is clicked from collapsed', () => {
+    render(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks()}
+        defaultStreamingExpanded={false}
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('[]');
+    expect(screen.queryByRole('button', { name: 'Expand fully' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Collapse' })).not.toBeInTheDocument();
+  });
+
+  it('collapses to collapsed when accordion header is clicked from full', () => {
+    const { rerender } = render(
+      <WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
+    );
+
+    act(() => {
+      screen.getByRole('button', { name: 'Expand fully' }).click();
+    });
+
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
+
+    mockIsGenerating = false;
+    rerender(<WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />);
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
   });
 });

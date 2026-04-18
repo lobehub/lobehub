@@ -65,6 +65,8 @@ export interface ChatTopicMetadata {
    * CC session ID for multi-turn resume (desktop only).
    * Persisted after each CC execution so the next message in the same topic
    * can use `--resume <sessionId>` to continue the conversation.
+   * CC CLI stores sessions per-cwd under `~/.claude/projects/<encoded-cwd>/`,
+   * so resume requires the current cwd to equal `workingDirectory`.
    */
   ccSessionId?: string;
   /**
@@ -93,8 +95,10 @@ export interface ChatTopicMetadata {
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Local System working directory (desktop only)
-   * Priority is higher than Agent-level settings
+   * Topic-level working directory (desktop only).
+   * Priority is higher than Agent-level settings. Also serves as the
+   * binding cwd for a CC session — written on first CC execution and
+   * checked on subsequent turns to decide whether `--resume` is safe.
    */
   workingDirectory?: string;
 }

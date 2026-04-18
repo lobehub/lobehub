@@ -1,7 +1,7 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { ExternalLink, LucideCopy, PanelTop, PencilLine, Trash, Wand2 } from 'lucide-react';
+import { ExternalLink, Link2, LucideCopy, PanelTop, PencilLine, Trash, Wand2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +24,7 @@ export const useTopicItemDropdownMenu = ({
   toggleEditing,
 }: TopicItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const navigate = useNavigate();
 
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
@@ -58,6 +58,9 @@ export const useTopicItemDropdownMenu = ({
           toggleEditing(true);
         },
       },
+      {
+        type: 'divider' as const,
+      },
       ...(isDesktop
         ? [
             {
@@ -82,10 +85,21 @@ export const useTopicItemDropdownMenu = ({
                 if (activeAgentId) openTopicInNewWindow(activeAgentId, id);
               },
             },
+            {
+              type: 'divider' as const,
+            },
           ]
         : []),
       {
-        type: 'divider' as const,
+        icon: <Icon icon={Link2} />,
+        key: 'copyLink',
+        label: t('actions.copyLink'),
+        onClick: () => {
+          if (!activeGroupId) return;
+          const url = `${window.location.origin}/group/${activeGroupId}?topic=${id}`;
+          navigator.clipboard.writeText(url);
+          message.success(t('actions.copyLinkSuccess'));
+        },
       },
       {
         icon: <Icon icon={LucideCopy} />,
@@ -128,5 +142,6 @@ export const useTopicItemDropdownMenu = ({
     toggleEditing,
     t,
     modal,
+    message,
   ]);
 };

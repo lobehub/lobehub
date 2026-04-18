@@ -16,6 +16,10 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
+    markUnreadCompleted: vi.fn(),
+    operations: {
+      'op-1': { context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } },
+    } as Record<string, any>,
     replaceMessages: vi.fn(),
   };
 }

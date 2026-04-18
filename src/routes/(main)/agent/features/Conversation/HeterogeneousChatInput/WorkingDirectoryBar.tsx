@@ -8,7 +8,8 @@ import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
-import { getRecentDirs } from '@/features/ChatInput/RuntimeConfig/recentDirs';
+import GitStatus from '@/features/ChatInput/RuntimeConfig/GitStatus';
+import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import WorkingDirectoryContent from '@/features/ChatInput/RuntimeConfig/WorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -17,6 +18,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
+    gap: 4px;
     padding-block: 0;
     padding-inline: 4px;
   `,
@@ -27,18 +29,17 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 6px;
     align-items: center;
 
-    height: 28px;
-    padding-inline: 8px;
-    border-radius: 6px;
+    padding-block: 2px;
+    padding-inline: 4px;
+    border-radius: 4px;
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
 
-    transition: all 0.2s;
+    transition: background 0.2s;
 
     &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
@@ -55,14 +56,14 @@ const WorkingDirectoryBar = memo(() => {
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
 
+  const repoType = useRepoType(effectiveWorkingDirectory);
+
   const dirIconNode = useMemo((): ReactNode => {
     if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
-    const dirs = getRecentDirs();
-    const match = dirs.find((d) => d.path === effectiveWorkingDirectory);
-    if (match?.repoType === 'github') return <Github size={14} />;
-    if (match?.repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
+    if (repoType === 'github') return <Github size={14} />;
+    if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
     return <Icon icon={FolderIcon} size={14} />;
-  }, [effectiveWorkingDirectory]);
+  }, [effectiveWorkingDirectory, repoType]);
 
   if (!agentId || isLoading) {
     return (
@@ -104,6 +105,9 @@ const WorkingDirectoryBar = memo(() => {
           )}
         </div>
       </Popover>
+      {effectiveWorkingDirectory && repoType && (
+        <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
+      )}
     </Flexbox>
   );
 });

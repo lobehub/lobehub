@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Readable, Writable } from 'node:stream';
@@ -33,6 +33,7 @@ const CLI_PRESETS: Record<string, CLIPreset> = {
       '--output-format',
       'stream-json',
       '--verbose',
+      '--include-partial-messages',
       '--permission-mode',
       'bypassPermissions',
     ],
@@ -137,14 +138,27 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
+   * Derive a filesystem-safe cache key for attachments.
+   *
+   * Never use the raw image id as a path segment — upstream callers can persist
+   * arbitrary ids and path.join would treat traversal sequences as real
+   * directories. A stable hash preserves cache hits without trusting the id as a
+   * filename.
+   */
+  private getImageCacheKey(imageId: string): string {
+    return createHash('sha256').update(imageId).digest('hex');
+  }
+
+  /**
    * Download an image by URL, with local disk cache keyed by id.
    */
   private async resolveImage(
     image: ImageAttachment,
   ): Promise<{ buffer: Buffer; mimeType: string }> {
     const cacheDir = this.fileCacheDir;
-    const metaPath = join(cacheDir, `${image.id}.meta`);
-    const dataPath = join(cacheDir, image.id);
+    const cacheKey = this.getImageCacheKey(image.id);
+    const metaPath = join(cacheDir, `${cacheKey}.meta`);
+    const dataPath = join(cacheDir, cacheKey);
 
     // Check cache first
     try {

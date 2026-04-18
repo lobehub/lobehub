@@ -1,31 +1,18 @@
 'use client';
 
+import { ToolResultCard } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { Highlighter, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { FileText } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  header: css`
-    padding-inline: 4px;
-    color: ${cssVar.colorTextSecondary};
-  `,
   path: css`
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     word-break: break-all;
-  `,
-  previewBox: css`
-    overflow: hidden;
-    border-radius: 8px;
-    background: ${cssVar.colorBgContainer};
   `,
 }));
 
@@ -57,31 +44,31 @@ const Read = memo<BuiltinRenderProps<ReadArgs>>(({ args, content }) => {
   const source = useMemo(() => stripLineNumbers(content || ''), [content]);
 
   return (
-    <Flexbox className={styles.container} gap={8}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        <Icon icon={FileText} size={'small'} />
-        <Text strong>{fileName || 'Read'}</Text>
-        {filePath && filePath !== fileName && (
-          <Text ellipsis className={styles.path}>
-            {filePath}
-          </Text>
-        )}
-      </Flexbox>
-
+    <ToolResultCard
+      icon={FileText}
+      header={
+        <>
+          <Text strong>{fileName || 'Read'}</Text>
+          {filePath && filePath !== fileName && (
+            <Text ellipsis className={styles.path}>
+              {filePath}
+            </Text>
+          )}
+        </>
+      }
+    >
       {source && (
-        <Flexbox className={styles.previewBox}>
-          <Highlighter
-            wrap
-            language={ext || 'text'}
-            showLanguage={false}
-            style={{ maxHeight: 240, overflow: 'auto' }}
-            variant={'borderless'}
-          >
-            {source}
-          </Highlighter>
-        </Flexbox>
+        <Highlighter
+          wrap
+          language={ext || 'text'}
+          showLanguage={false}
+          style={{ maxHeight: 240, overflow: 'auto' }}
+          variant={'borderless'}
+        >
+          {source}
+        </Highlighter>
       )}
-    </Flexbox>
+    </ToolResultCard>
   );
 });
 

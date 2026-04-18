@@ -1,10 +1,13 @@
 import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
+import type { RenderDisplayControl } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
 import Edit from './Edit';
 import Glob from './Glob';
 import Grep from './Grep';
 import Read from './Read';
+import Skill from './Skill';
+import TodoWrite from './TodoWrite';
 import Write from './Write';
 
 /**
@@ -21,5 +24,19 @@ export const ClaudeCodeRenders = {
   [ClaudeCodeApiName.Glob]: Glob,
   [ClaudeCodeApiName.Grep]: Grep,
   [ClaudeCodeApiName.Read]: Read,
+  [ClaudeCodeApiName.Skill]: Skill,
+  [ClaudeCodeApiName.TodoWrite]: TodoWrite,
   [ClaudeCodeApiName.Write]: Write,
+};
+
+/**
+ * Per-APIName default display control for CC tool renders.
+ *
+ * CC doesn't ship a LobeChat manifest (its tools come from Anthropic tool_use
+ * blocks at runtime), so the store's manifest-based `getRenderDisplayControl`
+ * can't reach these. The builtin-tools aggregator exposes this map via
+ * `getBuiltinRenderDisplayControl` as a fallback.
+ */
+export const ClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
+  [ClaudeCodeApiName.TodoWrite]: 'expand',
 };
