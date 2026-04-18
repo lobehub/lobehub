@@ -6,8 +6,8 @@ import { resolveCcResume } from '../ccResume';
 describe('resolveCcResume', () => {
   it('resumes when saved cwd matches current cwd', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionCwd: '/Users/me/projA',
       ccSessionId: 'session-123',
+      workingDirectory: '/Users/me/projA',
     };
 
     expect(resolveCcResume(metadata, '/Users/me/projA')).toEqual({
@@ -18,8 +18,8 @@ describe('resolveCcResume', () => {
 
   it('skips resume when saved cwd differs from current cwd', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionCwd: '/Users/me/projA',
       ccSessionId: 'session-123',
+      workingDirectory: '/Users/me/projA',
     };
 
     expect(resolveCcResume(metadata, '/Users/me/projB')).toEqual({
@@ -30,8 +30,8 @@ describe('resolveCcResume', () => {
 
   it('treats undefined current cwd as empty string (matches saved empty cwd)', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionCwd: '',
       ccSessionId: 'session-123',
+      workingDirectory: '',
     };
 
     expect(resolveCcResume(metadata, undefined)).toEqual({
@@ -42,8 +42,8 @@ describe('resolveCcResume', () => {
 
   it('flags mismatch when saved cwd is non-empty but current cwd is undefined', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionCwd: '/Users/me/projA',
       ccSessionId: 'session-123',
+      workingDirectory: '/Users/me/projA',
     };
 
     expect(resolveCcResume(metadata, undefined)).toEqual({
@@ -53,7 +53,7 @@ describe('resolveCcResume', () => {
   });
 
   it('resets legacy sessions that have no saved cwd', () => {
-    // Legacy topics created before ccSessionCwd was persisted are unverifiable.
+    // Legacy topics created before workingDirectory was persisted are unverifiable.
     // Passing the stale id through was the original bug — reset instead, and
     // let the next turn rebuild the session with a recorded cwd.
     const metadata: ChatTopicMetadata = {
@@ -84,7 +84,7 @@ describe('resolveCcResume', () => {
     // cwd field lingering without a sessionId shouldn't trigger the toast;
     // there's nothing to skip resuming.
     const metadata: ChatTopicMetadata = {
-      ccSessionCwd: '/Users/me/projA',
+      workingDirectory: '/Users/me/projA',
     };
 
     expect(resolveCcResume(metadata, '/Users/me/projB')).toEqual({

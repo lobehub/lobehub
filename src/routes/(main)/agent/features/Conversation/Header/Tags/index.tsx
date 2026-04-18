@@ -6,6 +6,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
+import FolderTag from './FolderTag';
 import MemberCountTag from './MemberCountTag';
 
 const TitleTags = memo(() => {
@@ -20,22 +21,23 @@ const TitleTags = memo(() => {
     );
   }
 
-  if (!topicTitle) return null;
-
   return (
-    <Flexbox horizontal align={'center'} gap={4}>
-      <span
-        style={{
-          fontSize: 14,
-          marginLeft: 8,
-          opacity: 0.6,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {topicTitle}
-      </span>
+    <Flexbox horizontal align={'center'} gap={8}>
+      {topicTitle && (
+        <span
+          style={{
+            fontSize: 14,
+            marginLeft: 8,
+            opacity: 0.6,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {topicTitle}
+        </span>
+      )}
+      <FolderTag />
     </Flexbox>
   );
 });

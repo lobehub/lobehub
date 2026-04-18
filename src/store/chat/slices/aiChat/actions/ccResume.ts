@@ -13,17 +13,18 @@ export interface CcResumeDecision {
  * `~/.claude/projects/<encoded-cwd>/`, so resuming from a different cwd
  * blows up with "No conversation found with session ID".
  *
- * Strict rule: only resume when the stored cwd is present AND equals the
- * current cwd. Legacy topics (sessionId present, cwd missing) are reset —
- * we have no way to verify them, and silently passing a stale id is exactly
- * what caused the original failure.
+ * Strict rule: only resume when the topic's bound `workingDirectory` is
+ * present AND equals the current cwd. Legacy topics (sessionId present,
+ * workingDirectory missing) are reset — we have no way to verify them,
+ * and silently passing a stale id is exactly what caused the original
+ * failure.
  */
 export const resolveCcResume = (
   metadata: ChatTopicMetadata | undefined,
   currentWorkingDirectory: string | undefined,
 ): CcResumeDecision => {
   const savedSessionId = metadata?.ccSessionId;
-  const savedCwd = metadata?.ccSessionCwd;
+  const savedCwd = metadata?.workingDirectory;
   const cwd = currentWorkingDirectory ?? '';
 
   const canResume = !!savedSessionId && savedCwd !== undefined && savedCwd === cwd;
