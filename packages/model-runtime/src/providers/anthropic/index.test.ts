@@ -790,7 +790,7 @@ describe('LobeAnthropicAI', () => {
           model: 'claude-opus-4-6',
           output_config: { effort: 'high' },
           system: undefined,
-          thinking: { type: 'adaptive' },
+          thinking: { display: 'summarized', type: 'adaptive' },
           tools: undefined,
         });
       });
@@ -819,7 +819,7 @@ describe('LobeAnthropicAI', () => {
           model: 'claude-opus-4-7',
           output_config: { effort: 'xhigh' },
           system: undefined,
-          thinking: { type: 'adaptive' },
+          thinking: { display: 'summarized', type: 'adaptive' },
           tools: undefined,
         });
       });
