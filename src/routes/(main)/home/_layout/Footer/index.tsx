@@ -20,7 +20,7 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import ChangelogModal from '@/components/ChangelogModal';
 import HighlightNotification from '@/components/HighlightNotification';
@@ -67,7 +67,6 @@ const Footer = memo(() => {
   const { analytics } = useAnalytics();
   const { footer } = useNavLayout();
   const billboardMenuItems = useBillboardMenuItems();
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const location = useLocation();
   const isSettingsPage = location.pathname.startsWith('/settings');
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
