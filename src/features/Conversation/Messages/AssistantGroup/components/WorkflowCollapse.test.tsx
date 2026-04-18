@@ -58,6 +58,8 @@ vi.mock('react-i18next', () => ({
       (
         ({
           'workflow.awaitingConfirmation': 'Awaiting your confirmation',
+          'workflow.collapse': 'Collapse',
+          'workflow.expandFull': 'Expand fully',
           'workflow.working': 'Working...',
         }) as Record<string, string>
       )[key] ||

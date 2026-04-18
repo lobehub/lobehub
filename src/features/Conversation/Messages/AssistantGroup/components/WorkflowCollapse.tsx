@@ -313,9 +313,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     const showExpandToggle = expandLevel !== 'collapsed';
     const expandToggleLabel =
-      expandLevel === 'semi'
-        ? t('workflow.expandFull', { defaultValue: 'Expand fully' })
-        : t('workflow.collapse', { defaultValue: 'Collapse' });
+      expandLevel === 'semi' ? t('workflow.expandFull') : t('workflow.collapse');
 
     const expandToggleIcon = expandLevel === 'semi' ? Maximize2 : Minimize2;
 
