@@ -206,6 +206,12 @@ export default {
   'analytics.telemetry.desc': 'Help us improve {{appName}} with anonymous usage data',
   'analytics.telemetry.title': 'Send Anonymous Usage Data',
   'analytics.title': 'Analytics',
+
+  // Claude Code CLI status (shown on agent profile page in CC integration mode)
+  'ccStatus.detecting': 'Detecting Claude Code CLI...',
+  'ccStatus.redetect': 'Re-detect',
+  'ccStatus.title': 'Claude Code CLI',
+  'ccStatus.unavailable': 'Claude Code CLI not found. Please install or configure it.',
   'checking': 'Checking...',
 
   // Credentials Management
