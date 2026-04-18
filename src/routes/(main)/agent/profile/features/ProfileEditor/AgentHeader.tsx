@@ -99,6 +99,7 @@ const AgentHeader = memo(() => {
     >
       {/* Avatar Section */}
       <EmojiPicker
+        allowModelAvatar
         allowUpload
         allowDelete={!!meta.avatar}
         loading={uploading}

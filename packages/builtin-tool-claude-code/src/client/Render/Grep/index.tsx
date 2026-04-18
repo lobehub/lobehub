@@ -21,6 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   previewBox: css`
     overflow: hidden;
+    padding: 8px;
     border-radius: 8px;
     background: ${cssVar.colorBgContainer};
   `,

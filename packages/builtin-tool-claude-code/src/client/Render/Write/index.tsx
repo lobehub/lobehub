@@ -24,6 +24,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   previewBox: css`
     overflow: hidden;
+    padding: 8px;
     border-radius: 8px;
     background: ${cssVar.colorBgContainer};
   `,
@@ -46,7 +47,7 @@ const Write = memo<BuiltinRenderProps<WriteArgs>>(({ args }) => {
 
     if (ext === 'md' || ext === 'mdx') {
       return (
-        <Markdown style={{ maxHeight: 240, overflow: 'auto', padding: '0 8px' }} variant={'chat'}>
+        <Markdown style={{ maxHeight: 240, overflow: 'auto' }} variant={'chat'}>
           {args.content}
         </Markdown>
       );
