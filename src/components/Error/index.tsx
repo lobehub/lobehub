@@ -19,10 +19,9 @@ export type ErrorType = Error & { digest?: string };
 
 interface ErrorCaptureProps {
   error: ErrorType;
-  reset: () => void;
 }
 
-const ErrorCapture = ({ error, reset }: ErrorCaptureProps) => {
+const ErrorCapture = ({ error }: ErrorCaptureProps) => {
   const { t } = useTranslation('error');
   const hasStack = !!error?.stack;
   const defaultExpandedKeys: Key[] = typeof __CI__ !== 'undefined' && __CI__ ? ['stack'] : [];
@@ -50,7 +49,7 @@ const ErrorCapture = ({ error, reset }: ErrorCaptureProps) => {
       </h2>
       <p style={{ marginBottom: '2em' }}>{t('error.desc')}</p>
       <Flexbox horizontal gap={12} style={{ marginBottom: '2em' }}>
-        <Button onClick={() => reset()}>{t('error.retry')}</Button>
+        <Button onClick={() => window.location.reload()}>{t('error.retry')}</Button>
         <Button type={'primary'} onClick={() => (window.location.href = '/')}>
           {t('error.backHome')}
         </Button>
