@@ -2,9 +2,10 @@
 
 import { type DropdownItem, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { Copy, Hash, Maximize2, PencilLine, Star, Trash, Wand2 } from 'lucide-react';
+import { Copy, ExternalLink, Hash, Maximize2, PencilLine, Star, Trash, Wand2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
@@ -16,12 +17,15 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 export const useMenu = (): { menuItems: DropdownItem[] } => {
   const { t } = useTranslation(['chat', 'topic', 'common']);
   const { modal, message } = App.useApp();
+  const { pathname } = useLocation();
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
     s.toggleWideScreen,
   ]);
+  const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
 
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
   const activeTopic = useChatStore(topicSelectors.currentActiveTopic);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const [autoRenameTopicTitle, favoriteTopic, removeTopic, updateTopicTitle] = useChatStore((s) => [
@@ -87,6 +91,17 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
         });
       }
 
+      if (isDesktop && activeAgentId && !pathname.startsWith('/popup')) {
+        items.push({
+          icon: <Icon icon={ExternalLink} />,
+          key: 'openInPopupWindow',
+          label: t('inPopup.title', { ns: 'topic' }),
+          onClick: () => {
+            openTopicInNewWindow(activeAgentId, topicId);
+          },
+        });
+      }
+
       items.push(
         {
           icon: <Icon icon={Hash} />,
@@ -137,10 +152,13 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
     topicId,
     topicTitle,
     isFavorite,
+    activeAgentId,
+    pathname,
     workingDirectory,
     wideScreen,
     autoRenameTopicTitle,
     favoriteTopic,
+    openTopicInNewWindow,
     removeTopic,
     updateTopicTitle,
     toggleWideScreen,
