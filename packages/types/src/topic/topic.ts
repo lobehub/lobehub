@@ -57,17 +57,17 @@ export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   /**
-   * CC session ID for multi-turn resume (desktop only).
-   * Persisted after each CC execution so the next message in the same topic
-   * can use `--resume <sessionId>` to continue the conversation.
-   * CC CLI stores sessions per-cwd under `~/.claude/projects/<encoded-cwd>/`,
-   * so resume requires the current cwd to equal `workingDirectory`.
-   */
-  ccSessionId?: string;
-  /**
    * Cron job ID that triggered this topic creation (if created by scheduled task)
    */
   cronJobId?: string;
+  /**
+   * Persistent session id for a heterogeneous agent (desktop only).
+   * Saved after each turn so the next message in the same topic can resume
+   * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).
+   * CC CLI stores sessions per-cwd under `~/.claude/projects/<encoded-cwd>/`,
+   * so resume requires the current cwd to equal `workingDirectory`.
+   */
+  heteroSessionId?: string;
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.

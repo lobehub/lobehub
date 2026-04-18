@@ -26,7 +26,7 @@ import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
-import { resolveCcResume } from '@/store/chat/slices/aiChat/actions/ccResume';
+import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
@@ -444,14 +444,17 @@ export class ConversationLifecycleActionImpl {
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
         const persistedImageList = userMsg?.imageList;
 
-        // Read CC session ID from topic metadata for multi-turn resume.
-        // `resolveCcResume` drops the sessionId when the saved cwd doesn't
-        // match the current one, so CC doesn't emit
+        // Read heterogeneous-agent session id from topic metadata for multi-turn
+        // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
+        // doesn't match the current one, so CC doesn't emit
         // "No conversation found with session ID".
         const topic = heteroContext.topicId
           ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
           : undefined;
-        const { cwdChanged, resumeSessionId } = resolveCcResume(topic?.metadata, workingDirectory);
+        const { cwdChanged, resumeSessionId } = resolveHeteroResume(
+          topic?.metadata,
+          workingDirectory,
+        );
         if (cwdChanged) {
           antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
         }

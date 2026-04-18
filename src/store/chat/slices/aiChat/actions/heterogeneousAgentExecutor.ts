@@ -645,14 +645,15 @@ export const executeHeterogeneousAgent = async (
     // Send the prompt — blocks until process exits
     await heterogeneousAgentService.sendPrompt(agentSessionId, message, imageList);
 
-    // Persist CC session ID + the cwd it was created under, for multi-turn
-    // resume. CC stores sessions per-cwd (`~/.claude/projects/<encoded-cwd>/`),
-    // so the next turn must verify the cwd hasn't changed before `--resume`.
-    // Reuses `workingDirectory` as the topic-level binding — pinning the
-    // topic to this cwd once CC has executed here.
+    // Persist heterogeneous-agent session id + the cwd it was created under,
+    // for multi-turn resume. CC stores sessions per-cwd
+    // (`~/.claude/projects/<encoded-cwd>/`), so the next turn must verify the
+    // cwd hasn't changed before `--resume`. Reuses `workingDirectory` as the
+    // topic-level binding — pinning the topic to this cwd once the agent has
+    // executed here.
     if (adapter.sessionId && context.topicId) {
       get().updateTopicMetadata(context.topicId, {
-        ccSessionId: adapter.sessionId,
+        heteroSessionId: adapter.sessionId,
         workingDirectory: workingDirectory ?? '',
       });
     }

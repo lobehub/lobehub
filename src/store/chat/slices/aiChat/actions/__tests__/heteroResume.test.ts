@@ -1,16 +1,16 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveCcResume } from '../ccResume';
+import { resolveHeteroResume } from '../heteroResume';
 
-describe('resolveCcResume', () => {
+describe('resolveHeteroResume', () => {
   it('resumes when saved cwd matches current cwd', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionId: 'session-123',
+      heteroSessionId: 'session-123',
       workingDirectory: '/Users/me/projA',
     };
 
-    expect(resolveCcResume(metadata, '/Users/me/projA')).toEqual({
+    expect(resolveHeteroResume(metadata, '/Users/me/projA')).toEqual({
       cwdChanged: false,
       resumeSessionId: 'session-123',
     });
@@ -18,11 +18,11 @@ describe('resolveCcResume', () => {
 
   it('skips resume when saved cwd differs from current cwd', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionId: 'session-123',
+      heteroSessionId: 'session-123',
       workingDirectory: '/Users/me/projA',
     };
 
-    expect(resolveCcResume(metadata, '/Users/me/projB')).toEqual({
+    expect(resolveHeteroResume(metadata, '/Users/me/projB')).toEqual({
       cwdChanged: true,
       resumeSessionId: undefined,
     });
@@ -30,11 +30,11 @@ describe('resolveCcResume', () => {
 
   it('treats undefined current cwd as empty string (matches saved empty cwd)', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionId: 'session-123',
+      heteroSessionId: 'session-123',
       workingDirectory: '',
     };
 
-    expect(resolveCcResume(metadata, undefined)).toEqual({
+    expect(resolveHeteroResume(metadata, undefined)).toEqual({
       cwdChanged: false,
       resumeSessionId: 'session-123',
     });
@@ -42,11 +42,11 @@ describe('resolveCcResume', () => {
 
   it('flags mismatch when saved cwd is non-empty but current cwd is undefined', () => {
     const metadata: ChatTopicMetadata = {
-      ccSessionId: 'session-123',
+      heteroSessionId: 'session-123',
       workingDirectory: '/Users/me/projA',
     };
 
-    expect(resolveCcResume(metadata, undefined)).toEqual({
+    expect(resolveHeteroResume(metadata, undefined)).toEqual({
       cwdChanged: true,
       resumeSessionId: undefined,
     });
@@ -57,24 +57,24 @@ describe('resolveCcResume', () => {
     // Passing the stale id through was the original bug — reset instead, and
     // let the next turn rebuild the session with a recorded cwd.
     const metadata: ChatTopicMetadata = {
-      ccSessionId: 'legacy-session',
+      heteroSessionId: 'legacy-session',
     };
 
-    expect(resolveCcResume(metadata, '/Users/me/any')).toEqual({
+    expect(resolveHeteroResume(metadata, '/Users/me/any')).toEqual({
       cwdChanged: true,
       resumeSessionId: undefined,
     });
   });
 
   it('returns no session when nothing is stored', () => {
-    expect(resolveCcResume({}, '/Users/me/projA')).toEqual({
+    expect(resolveHeteroResume({}, '/Users/me/projA')).toEqual({
       cwdChanged: false,
       resumeSessionId: undefined,
     });
   });
 
   it('handles undefined metadata', () => {
-    expect(resolveCcResume(undefined, '/Users/me/projA')).toEqual({
+    expect(resolveHeteroResume(undefined, '/Users/me/projA')).toEqual({
       cwdChanged: false,
       resumeSessionId: undefined,
     });
@@ -87,7 +87,7 @@ describe('resolveCcResume', () => {
       workingDirectory: '/Users/me/projA',
     };
 
-    expect(resolveCcResume(metadata, '/Users/me/projB')).toEqual({
+    expect(resolveHeteroResume(metadata, '/Users/me/projB')).toEqual({
       cwdChanged: false,
       resumeSessionId: undefined,
     });
