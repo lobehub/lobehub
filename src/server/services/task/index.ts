@@ -15,11 +15,14 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { BriefService } from '../brief';
+
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 
 export class TaskService {
   private agentModel: AgentModel;
   private briefModel: BriefModel;
+  private briefService: BriefService;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
@@ -30,6 +33,7 @@ export class TaskService {
     this.taskModel = new TaskModel(db, userId);
     this.taskTopicModel = new TaskTopicModel(db, userId);
     this.briefModel = new BriefModel(db, userId);
+    this.briefService = new BriefService(db, userId);
   }
 
   async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
@@ -135,7 +139,12 @@ export class TaskService {
       if (c.authorUserId) userIds.add(c.authorUserId);
     }
 
-    const authorMap = await this.resolveAuthors(agentIds, userIds);
+    const [authorMap, enrichedBriefs] = await Promise.all([
+      this.resolveAuthors(agentIds, userIds),
+      this.briefService
+        .enrichBriefsWithAgents(briefs)
+        .catch(() => briefs.map((b) => ({ ...b, agents: [] }))),
+    ]);
 
     const activities: TaskDetailActivity[] = [
       ...topics.map((t) => ({
@@ -147,20 +156,28 @@ export class TaskService {
         title: (t.handoff as TaskTopicHandoff | null)?.title || 'Untitled',
         type: 'topic' as const,
       })),
-      ...briefs.map((b) => ({
+      ...enrichedBriefs.map((b) => ({
+        actions: b.actions ?? undefined,
+        agentId: b.agentId,
+        agents: b.agents,
+        artifacts: b.artifacts ?? undefined,
         author: b.agentId ? authorMap.get(b.agentId) : undefined,
         briefType: b.type,
+        createdAt: toISO(b.createdAt),
+        cronJobId: b.cronJobId,
         id: b.id,
         priority: b.priority,
-        resolvedAction: b.resolvedAction
-          ? b.resolvedComment
-            ? `${b.resolvedAction}: ${b.resolvedComment}`
-            : b.resolvedAction
-          : undefined,
+        readAt: toISO(b.readAt),
+        resolvedAction: b.resolvedAction,
+        resolvedAt: toISO(b.resolvedAt),
+        resolvedComment: b.resolvedComment,
         summary: b.summary,
+        taskId: b.taskId,
         time: toISO(b.createdAt),
         title: b.title,
+        topicId: b.topicId,
         type: 'brief' as const,
+        userId: b.userId,
       })),
       ...comments.map((c) => ({
         agentId: c.authorAgentId,

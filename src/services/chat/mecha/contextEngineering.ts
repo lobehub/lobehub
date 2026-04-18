@@ -661,9 +661,20 @@ export const contextEngineering = async ({
     selectedSkills: initialContext?.selectedSkills,
     selectedTools: initialContext?.selectedTools,
 
-    // Skills configuration — expose all installed skills so the AI can discover and activate them
+    // Skills configuration
+    // In auto mode: expose all installed skills so the AI can discover and activate them
+    // In manual mode: only expose user-selected skills (filtered by pluginIds)
     skillsConfig: {
-      enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
+      enabledSkills: plugins
+        ? (() => {
+            const skillSet = resolveClientSkills(plugins);
+            if (!isInAutoSkillMode) {
+              const selectedIds = new Set(plugins);
+              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+            }
+            return skillSet.skills;
+          })()
+        : undefined,
     },
 
     // Tool Discovery configuration

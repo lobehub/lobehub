@@ -171,6 +171,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.effort = chatConfig.effort;
   }
 
+  if (modelExtendParams.includes('opus47Effort') && chatConfig.opus47Effort) {
+    extendParams.effort = chatConfig.opus47Effort;
+  }
+
   // Text verbosity
   if (modelExtendParams.includes('textVerbosity') && chatConfig.textVerbosity) {
     extendParams.verbosity = chatConfig.textVerbosity;

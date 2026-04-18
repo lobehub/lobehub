@@ -23,11 +23,13 @@ const LobeMessage = memo<LobeMessageProps>(
 
     return (
       <Flexbox gap={gap} {...rest}>
-        {avatar ? (
-          <Avatar avatar={avatar} size={avatarSize || fontSize * 2} />
-        ) : (
-          <ProductLogo size={avatarSize || fontSize * 2} />
-        )}
+        <Flexbox align={'center'} justify={'center'}>
+          {avatar ? (
+            <Avatar avatar={avatar} size={avatarSize || fontSize * 2} />
+          ) : (
+            <ProductLogo size={avatarSize || fontSize * 2} />
+          )}
+        </Flexbox>
         <Text as={'h1'} fontSize={fontSize} weight={'bold'}>
           <TypewriterEffect
             cursorCharacter={<LoadingDots size={fontSize} variant={'pulse'} />}

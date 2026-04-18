@@ -11,6 +11,10 @@ import {
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management/client';
 import {
+  ClaudeCodeIdentifier,
+  ClaudeCodeInspectors,
+} from '@lobechat/builtin-tool-claude-code/client';
+import {
   CloudSandboxIdentifier,
   CloudSandboxInspectors,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -59,6 +63,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     string,
     BuiltinInspector
   >,
+  [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
   [CloudSandboxIdentifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
     string,

@@ -1,0 +1,12 @@
+{
+  "name": "@lobechat/markdown-patch",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  }
+}

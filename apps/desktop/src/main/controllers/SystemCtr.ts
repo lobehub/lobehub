@@ -1,8 +1,18 @@
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { promisify } from 'node:util';
 
-import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
+import type {
+  ElectronAppState,
+  GitBranchInfo,
+  GitBranchListItem,
+  GitCheckoutResult,
+  GitLinkedPullRequestResult,
+  GitWorkingTreeStatus,
+  ThemeMode,
+} from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 import { macOS } from 'electron-is';
 import { pathExists, readdir } from 'fs-extra';
@@ -235,7 +245,8 @@ export default class SystemController extends ControllerModule {
     }
   }
 
-  private async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
+  @IpcMethod()
+  async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
     const gitConfigPath = path.join(dirPath, '.git', 'config');
     try {
       const config = await readFile(gitConfigPath, 'utf8');
@@ -244,6 +255,213 @@ export default class SystemController extends ControllerModule {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Read current git branch from `.git/HEAD`. Returns short sha on detached HEAD.
+   * Handles both standard `.git` directories and `.git` worktree pointer files.
+   */
+  @IpcMethod()
+  async getGitBranch(dirPath: string): Promise<GitBranchInfo> {
+    try {
+      const gitDir = await this.resolveGitDir(dirPath);
+      if (!gitDir) return {};
+
+      const head = (await readFile(path.join(gitDir, 'HEAD'), 'utf8')).trim();
+      const refMatch = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
+      if (refMatch) {
+        return { branch: refMatch[1] };
+      }
+      // Detached HEAD — HEAD file contains the full sha
+      if (/^[\da-f]{40}$/i.test(head)) {
+        return { branch: head.slice(0, 7), detached: true };
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Query `gh` CLI for an open pull request whose head branch matches `branch`.
+   * Returns status = 'gh-missing' when `gh` is not installed / not authenticated,
+   * so the UI can render a helpful tooltip instead of an error.
+   */
+  @IpcMethod()
+  async getLinkedPullRequest(payload: {
+    branch: string;
+    path: string;
+  }): Promise<GitLinkedPullRequestResult> {
+    const { path: dirPath, branch } = payload;
+    if (!branch) {
+      return { pullRequest: null, status: 'ok' };
+    }
+
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout } = await execFileAsync(
+        'gh',
+        [
+          'pr',
+          'list',
+          '--head',
+          branch,
+          '--state',
+          'open',
+          '--limit',
+          '5',
+          '--json',
+          'number,url,title,state',
+        ],
+        { cwd: dirPath, timeout: 8000 },
+      );
+      const parsed = JSON.parse(stdout.trim() || '[]') as Array<{
+        number: number;
+        state: string;
+        title: string;
+        url: string;
+      }>;
+      if (parsed.length === 0) {
+        return { pullRequest: null, status: 'ok' };
+      }
+      const [primary, ...rest] = parsed;
+      return {
+        extraCount: rest.length,
+        pullRequest: primary,
+        status: 'ok',
+      };
+    } catch (error: any) {
+      const code = error?.code;
+      const stderr: string = error?.stderr ?? '';
+      // `gh` binary not on PATH
+      if (code === 'ENOENT') {
+        return { pullRequest: null, status: 'gh-missing' };
+      }
+      // gh reports auth issues via stderr; treat as a soft-fail
+      if (/auth\s+login|not\s+logged\s+in|authentication/i.test(stderr)) {
+        return { pullRequest: null, status: 'gh-missing' };
+      }
+      logger.debug('[getLinkedPullRequest] failed', { branch, code, stderr });
+      return { pullRequest: null, status: 'error' };
+    }
+  }
+
+  /**
+   * List local git branches ordered by most recent commit.
+   * `current` is true for the checked-out branch.
+   */
+  @IpcMethod()
+  async listGitBranches(dirPath: string): Promise<GitBranchListItem[]> {
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        [
+          'for-each-ref',
+          '--sort=-committerdate',
+          '--format=%(HEAD)%09%(refname:short)%09%(upstream:short)',
+          'refs/heads',
+        ],
+        { cwd: dirPath, timeout: 5000 },
+      );
+      return stdout
+        .replaceAll('\r', '')
+        .split('\n')
+        .filter((line) => line.length > 0)
+        .map((line) => {
+          // Line format: "<HEAD-marker>\t<branch>\t<upstream>" where HEAD-marker is '*' or ' '
+          const [head, name, upstream] = line.split('\t');
+          return {
+            current: head === '*',
+            name: name ?? '',
+            upstream: upstream || undefined,
+          };
+        })
+        .filter((b) => b.name);
+    } catch (error: any) {
+      logger.warn('[listGitBranches] git command failed', {
+        code: error?.code,
+        cwd: dirPath,
+        message: error?.message,
+        stderr: error?.stderr?.toString?.() ?? error?.stderr,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Count unstaged / staged / untracked files via `git status --porcelain`.
+   */
+  @IpcMethod()
+  async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
+        cwd: dirPath,
+        timeout: 5000,
+      });
+      const lines = stdout.split('\n').filter((line) => line.trim().length > 0);
+      return { clean: lines.length === 0, modified: lines.length };
+    } catch {
+      return { clean: true, modified: 0 };
+    }
+  }
+
+  /**
+   * Check out (or create + check out) a branch.
+   * Relies on git itself to reject unsafe checkouts (dirty tree, non-fast-forward, etc.)
+   * and surfaces git's stderr so the UI can display a meaningful error.
+   */
+  @IpcMethod()
+  async checkoutGitBranch(payload: {
+    branch: string;
+    create?: boolean;
+    path: string;
+  }): Promise<GitCheckoutResult> {
+    const { path: dirPath, branch, create } = payload;
+    if (!branch?.trim()) {
+      return { error: 'Branch name is required', success: false };
+    }
+    // Reject obviously invalid refs early to avoid a confusing git error
+    if (/[\s~^:?*[\\]/.test(branch) || branch.startsWith('-') || branch.includes('..')) {
+      return { error: `Invalid branch name: ${branch}`, success: false };
+    }
+
+    const execFileAsync = promisify(execFile);
+    const args = create ? ['checkout', '-b', branch] : ['checkout', branch];
+    try {
+      await execFileAsync('git', args, { cwd: dirPath, timeout: 10_000 });
+      return { success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[checkoutGitBranch] failed', { args, stderr });
+      return { error: stderr || 'git checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Resolve the actual `.git` directory for a working tree.
+   * Supports both standard layouts and worktree pointer files (`.git` as a regular file).
+   */
+  private async resolveGitDir(dirPath: string): Promise<string | undefined> {
+    const gitPath = path.join(dirPath, '.git');
+    try {
+      const content = await readFile(gitPath, 'utf8');
+      const worktreeMatch = /^gitdir:\s*(\S.*)$/m.exec(content.trim());
+      if (worktreeMatch) {
+        const resolved = worktreeMatch[1].trim();
+        return path.isAbsolute(resolved) ? resolved : path.resolve(dirPath, resolved);
+      }
+    } catch {
+      // `.git` is a directory (EISDIR) or missing — fall through
+    }
+    try {
+      const stat = await readdir(gitPath);
+      if (stat.length > 0) return gitPath;
+    } catch {
+      return undefined;
+    }
+    return undefined;
   }
 
   private async setSystemThemeMode(themeMode: ThemeMode) {

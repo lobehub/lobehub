@@ -2,7 +2,7 @@ import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
 import type { Plans } from '../subscription';
-import { TopicDisplayMode } from '../topic';
+import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
 import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
@@ -39,10 +39,6 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
-   * enable agent working panel entry in chat header menu
-   */
-  enableAgentWorkingPanel: z.boolean().optional(),
-  /**
    * enable server-side agent execution via Gateway WebSocket
    */
   enableGatewayMode: z.boolean().optional(),
@@ -50,6 +46,10 @@ export const UserLabSchema = z.object({
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),
+  /**
+   * enable heterogeneous agent execution (Claude Code, Codex CLI, etc.)
+   */
+  enableHeterogeneousAgent: z.boolean().optional(),
   /**
    * enable markdown rendering in chat input editor
    */
@@ -74,7 +74,8 @@ export interface UserPreference {
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
-  topicDisplayMode?: TopicDisplayMode;
+  topicGroupMode?: TopicGroupMode;
+  topicSortBy?: TopicSortBy;
   /**
    * whether to use cmd + enter to send message
    */
@@ -136,7 +137,8 @@ export const UserPreferenceSchema = z
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
     telemetry: z.boolean().nullable(),
-    topicDisplayMode: z.nativeEnum(TopicDisplayMode).optional(),
+    topicGroupMode: z.enum(['byTime', 'byProject', 'flat']).optional(),
+    topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),
   })
   .partial();

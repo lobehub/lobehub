@@ -117,6 +117,7 @@ describe('AgentOnboardingConversation', () => {
       expect.objectContaining({
         allowExpand: false,
         leftActions: [],
+        rightActions: [],
         showRuntimeConfig: false,
       }),
     );

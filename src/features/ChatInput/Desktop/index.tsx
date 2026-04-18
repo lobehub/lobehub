@@ -63,6 +63,11 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   inputContainerProps?: ChatInputProps;
   leftContent?: ReactNode;
   placeholder?: ReactNode;
+  /**
+   * Custom node to render in place of the default RuntimeConfig bar.
+   * When provided, used instead of `<RuntimeConfig />` (ignores `showRuntimeConfig`).
+   */
+  runtimeConfigSlot?: ReactNode;
   sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
   showRuntimeConfig?: boolean;
@@ -72,6 +77,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
     showRuntimeConfig = true,
+    runtimeConfigSlot,
     inputContainerProps,
     extentHeaderContent,
     actionBarStyle,
@@ -164,7 +170,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         >
           <InputEditor placeholder={placeholder} />
         </ChatInput>
-        {showRuntimeConfig && <RuntimeConfig />}
+        {runtimeConfigSlot ?? (showRuntimeConfig && <RuntimeConfig />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
             <Text className={styles.footnote} type={'secondary'}>

@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "适用于 Nano Banana 2；控制生成图像的宽高比（支持超宽 1:4、4:1、1:8、8:1）。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "适用于 Gemini 3 图像生成模型；控制生成图像的分辨率。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "适用于 Gemini 3.1 Flash Image 模型；控制生成图像的分辨率（支持 512px）。",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "适用于 Claude Opus 4.7；控制努力程度（低/中/高/超高/最大）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "适用于 Claude、Qwen3 等模型；控制用于推理的 Token 预算。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "适用于GLM-5和GLM-4.7；控制推理的令牌预算（最大32k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "适用于Qwen3系列；控制推理的令牌预算（最大80k）。",

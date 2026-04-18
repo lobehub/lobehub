@@ -1,3 +1,4 @@
+import type { ACPBroadcastEvents } from './acp';
 import type { GatewayConnectionBroadcastEvents } from './gatewayConnection';
 import type { NavigationBroadcastEvents } from './navigation';
 import type { ProtocolBroadcastEvents } from './protocol';
@@ -11,6 +12,7 @@ import type { AutoUpdateBroadcastEvents } from './update';
 
 export interface MainBroadcastEvents
   extends
+    ACPBroadcastEvents,
     AutoUpdateBroadcastEvents,
     GatewayConnectionBroadcastEvents,
     NavigationBroadcastEvents,

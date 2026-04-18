@@ -1,6 +1,9 @@
 {
   "about": "About",
   "advanceSettings": "Advanced Settings",
+  "agentOnboardingPromo.actionLabel": "Try it now",
+  "agentOnboardingPromo.description": "Set up your agent teams in a quick chat with Lobe AI. Your existing agents remain unchanged.",
+  "agentOnboardingPromo.title": "Quick Wizard",
   "alert.cloud.action": "Try now",
   "alert.cloud.desc": "All registered users get {{credit}} free computing credits per month—no setup needed. Includes global cloud sync and advanced web search.",
   "alert.cloud.descOnMobile": "All registered users get {{credit}} free computing credits per month—no setup needed.",

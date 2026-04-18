@@ -78,6 +78,8 @@ export class AgentDocumentModel {
       policyLoadFormat,
       policyLoadPosition: settings.policyLoadPosition,
       policyLoadRule: settings.policyLoadRule,
+      source: doc.source ?? null,
+      sourceType: doc.sourceType,
       templateId: settings.templateId ?? null,
       title: doc.title ?? doc.filename ?? '',
       updatedAt: settings.updatedAt,

@@ -12,6 +12,7 @@ import {
   type CopyDocumentArgs,
   type CreateDocumentArgs,
   type EditDocumentArgs,
+  type PatchDocumentArgs,
   type ReadDocumentArgs,
   type RemoveDocumentArgs,
   type RenameDocumentArgs,
@@ -22,6 +23,7 @@ type AgentDocumentsArgs =
   | CopyDocumentArgs
   | CreateDocumentArgs
   | EditDocumentArgs
+  | PatchDocumentArgs
   | ReadDocumentArgs
   | RemoveDocumentArgs
   | RenameDocumentArgs
@@ -44,6 +46,7 @@ const getInspectorSummary = (
     }
     case AgentDocumentsApiName.readDocument:
     case AgentDocumentsApiName.editDocument:
+    case AgentDocumentsApiName.patchDocument:
     case AgentDocumentsApiName.removeDocument:
     case AgentDocumentsApiName.updateLoadRule: {
       return args && 'id' in args ? args.id : undefined;
@@ -64,6 +67,9 @@ const getInspectorLabel = (apiName: string, t: (...args: any[]) => string) => {
     }
     case AgentDocumentsApiName.editDocument: {
       return t('builtins.lobe-agent-documents.apiName.editDocument');
+    }
+    case AgentDocumentsApiName.patchDocument: {
+      return t('builtins.lobe-agent-documents.apiName.patchDocument');
     }
     case AgentDocumentsApiName.removeDocument: {
       return t('builtins.lobe-agent-documents.apiName.removeDocument');

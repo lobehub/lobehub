@@ -1,5 +1,10 @@
 import {
   type ElectronAppState,
+  type GitBranchInfo,
+  type GitBranchListItem,
+  type GitCheckoutResult,
+  type GitLinkedPullRequestResult,
+  type GitWorkingTreeStatus,
   type WindowMinimumSizeParams,
   type WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
@@ -72,6 +77,37 @@ class ElectronSystemService {
     title?: string;
   }): Promise<{ path: string; repoType?: 'git' | 'github' } | undefined> {
     return this.ipc.system.selectFolder(params);
+  }
+
+  async getGitBranch(dirPath: string): Promise<GitBranchInfo> {
+    return this.ipc.system.getGitBranch(dirPath);
+  }
+
+  async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
+    return this.ipc.system.detectRepoType(dirPath);
+  }
+
+  async getLinkedPullRequest(params: {
+    branch: string;
+    path: string;
+  }): Promise<GitLinkedPullRequestResult> {
+    return this.ipc.system.getLinkedPullRequest(params);
+  }
+
+  async listGitBranches(dirPath: string): Promise<GitBranchListItem[]> {
+    return this.ipc.system.listGitBranches(dirPath);
+  }
+
+  async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
+    return this.ipc.system.getGitWorkingTreeStatus(dirPath);
+  }
+
+  async checkoutGitBranch(params: {
+    branch: string;
+    create?: boolean;
+    path: string;
+  }): Promise<GitCheckoutResult> {
+    return this.ipc.system.checkoutGitBranch(params);
   }
 }
 

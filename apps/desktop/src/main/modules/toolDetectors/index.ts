@@ -6,6 +6,7 @@
  */
 
 export { browserAutomationDetectors } from './agentBrowserDetectors';
+export { cliAgentDetectors } from './cliAgentDetectors';
 export { astSearchDetectors, contentSearchDetectors } from './contentSearchDetectors';
 export { fileSearchDetectors } from './fileSearchDetectors';
 export { runtimeEnvironmentDetectors } from './runtimeEnvironmentDetectors';

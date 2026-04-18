@@ -8,8 +8,9 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { shinyTextStyles } from '@/styles';
-import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import {
@@ -29,6 +30,7 @@ import {
   getWorkflowSummaryText,
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
+import type { RenderableAssistantContentBlock } from './types';
 import WorkflowExpandedList from './WorkflowExpandedList';
 
 const WORKFLOW_EXPAND_TOGGLE_ICON_SIZE = 12;
@@ -40,14 +42,14 @@ const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
 interface WorkflowCollapseProps {
   /** Assistant group message id (for generation state) */
   assistantMessageId: string;
-  blocks: AssistantContentBlock[];
+  blocks: RenderableAssistantContentBlock[];
   /** Default expansion state while the workflow is still streaming. Pending intervention always expands. */
   defaultStreamingExpanded?: boolean;
   disableEditing?: boolean;
   workflowChromeComplete?: boolean;
 }
 
-const collectTools = (blocks: AssistantContentBlock[]): ChatToolPayloadWithResult[] => {
+const collectTools = (blocks: RenderableAssistantContentBlock[]): ChatToolPayloadWithResult[] => {
   return blocks.flatMap((b) => b.tools ?? []);
 };
 
@@ -118,12 +120,20 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     workflowChromeComplete = false,
   }) => {
     const { t } = useTranslation('chat');
+    const toolCallsUnit = t('task.metrics.toolCallsShort');
     const allTools = useMemo(() => collectTools(blocks), [blocks]);
     const toolsPhaseComplete = areWorkflowToolsComplete(allTools);
     const pendingInterventionPresent = useMemo(() => hasPendingIntervention(allTools), [allTools]);
     const isGenerating = useConversationStore(
       messageStateSelectors.isMessageGenerating(assistantMessageId),
     );
+    /** Earliest op startTime for this message — anchors the working timer so
+     *  it reflects wall-clock since the op began, not since the component mounted. */
+    const opStartTime = useChatStore((s) => {
+      const ops = operationSelectors.getOperationsByMessage(assistantMessageId)(s);
+      if (ops.length === 0) return undefined;
+      return ops.reduce((min, op) => Math.min(min, op.metadata.startTime), Infinity);
+    });
 
     const allComplete = toolsPhaseComplete && (workflowChromeComplete || !isGenerating);
     const summaryText = useMemo(() => getWorkflowSummaryText(blocks), [blocks]);
@@ -179,9 +189,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       defaultValue: 'Awaiting your confirmation',
     });
     const workingLabel = t('workflow.working', { defaultValue: 'Working...' });
+    const expandedWorkingLabel =
+      allTools.length > 0 ? `${allTools.length} ${toolCallsUnit}` : workingLabel;
     const streamingHeadlineRaw = useMemo(() => {
       if (pendingInterventionPresent) return pendingInterventionLabel;
-      if (showExpandedWorkingLabel) return workingLabel;
+      if (showExpandedWorkingLabel) return expandedWorkingLabel;
       switch (headlineState.kind) {
         case 'thinking': {
           return headlineState.reasoningTitle;
@@ -198,11 +210,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
     }, [
       committedProse,
+      expandedWorkingLabel,
       headlineState,
       pendingInterventionLabel,
       pendingInterventionPresent,
       showExpandedWorkingLabel,
-      workingLabel,
     ]);
     const streamingHeadline = useDebouncedHeadline(
       streamingHeadlineRaw,
@@ -232,7 +244,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
 
       if (activeWorkingStartedAtRef.current === null) {
-        activeWorkingStartedAtRef.current = Date.now();
+        // Initial/remount seeds from op start so elapsed reflects wall-clock
+        // since the op began. Intervention resume seeds from now so pause
+        // time stays excluded from the accumulator.
+        const isInitial = accumulatedWorkingMsRef.current === 0;
+        activeWorkingStartedAtRef.current = isInitial && opStartTime ? opStartTime : Date.now();
       }
 
       const tick = () => {
@@ -248,7 +264,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       const interval = setInterval(tick, 1000);
 
       return () => clearInterval(interval);
-    }, [pendingInterventionPresent, streaming]);
+    }, [opStartTime, pendingInterventionPresent, streaming]);
 
     const showWorkingElapsed =
       !pendingInterventionPresent &&
@@ -373,7 +389,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             </div>
             {showWorkingElapsed && (
               <span style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>
-                ({workingElapsedSeconds}s)
+                ({formatReasoningDuration(workingElapsedSeconds * TIME_MS_PER_SECOND)})
               </span>
             )}
           </Flexbox>

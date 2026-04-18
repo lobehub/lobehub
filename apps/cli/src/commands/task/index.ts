@@ -466,7 +466,12 @@ export function registerTaskCommand(program: Command) {
                   : act.priority === 'normal'
                     ? pc.yellow(' [normal]')
                     : '';
-              const resolved = act.resolvedAction ? pc.green(` ✏️ ${act.resolvedAction}`) : '';
+              const resolvedLabel = act.resolvedAction
+                ? act.resolvedComment
+                  ? `${act.resolvedAction}: ${act.resolvedComment}`
+                  : act.resolvedAction
+                : '';
+              const resolved = resolvedLabel ? pc.green(` ✏️ ${resolvedLabel}`) : '';
               const typeLabel = pc.dim(`[${act.briefType}]`);
               console.log(
                 `  ${icon} ${pc.dim(ago.padStart(7))} Brief ${typeLabel} ${act.title}${pri}${resolved}${idSuffix}`,

@@ -186,17 +186,15 @@ export class StreamingExecutorActionImpl {
       effectivePluginIds,
     );
     // When skillActivateMode is 'manual':
-    // - Builtin agents: skip all default tools (they define their own precise tool set)
-    // - Regular agents: exclude only discovery tools so externally enabled tools remain available
+    // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
+    // (skills, web-browsing, sandbox, memory, etc.) remain available for all agents.
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-    const shouldSkipDefaultForBuiltin = isManualMode && agentConfig.isBuiltinAgent;
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds:
-        isManualMode && !agentConfig.isBuiltinAgent ? manualModeExcludeToolIds : undefined,
+      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
-      skipDefaultTools: disableTools || shouldSkipDefaultForBuiltin || undefined,
+      skipDefaultTools: disableTools || undefined,
       toolIds: mergedToolIds,
     });
 

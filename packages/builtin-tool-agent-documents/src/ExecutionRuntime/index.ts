@@ -1,3 +1,4 @@
+import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -5,6 +6,7 @@ import type {
   CreateDocumentArgs,
   EditDocumentArgs,
   ListDocumentsArgs,
+  PatchDocumentArgs,
   ReadDocumentArgs,
   ReadDocumentByFilenameArgs,
   RemoveDocumentArgs,
@@ -217,6 +219,46 @@ export class AgentDocumentsExecutionRuntime {
     return {
       content: `Updated document ${args.id}.`,
       state: { id: args.id, updated: true },
+      success: true,
+    };
+  }
+
+  async patchDocument(
+    args: PatchDocumentArgs,
+    context?: AgentDocumentOperationContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const agentId = this.resolveAgentId(context);
+    if (!agentId) {
+      return {
+        content: 'Cannot patch agent document without agentId context.',
+        success: false,
+      };
+    }
+
+    const doc = await this.service.readDocument({ agentId, id: args.id });
+    if (!doc) return { content: `Document not found: ${args.id}`, success: false };
+
+    const patched = applyMarkdownPatch(doc.content ?? '', args.hunks);
+    if (!patched.ok) {
+      const message = formatMarkdownPatchError(patched.error);
+      return {
+        content: message,
+        error: { body: patched.error, message, type: patched.error.code },
+        state: { error: patched.error, id: args.id },
+        success: false,
+      };
+    }
+
+    const updated = await this.service.editDocument({
+      agentId,
+      content: patched.content,
+      id: args.id,
+    });
+    if (!updated) return { content: `Failed to patch document ${args.id}.`, success: false };
+
+    return {
+      content: `Patched document ${args.id}. Applied ${patched.applied} hunk(s).`,
+      state: { applied: patched.applied, id: args.id, patched: true },
       success: true,
     };
   }

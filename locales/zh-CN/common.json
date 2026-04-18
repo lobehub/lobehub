@@ -1,6 +1,9 @@
 {
   "about": "关于",
   "advanceSettings": "高级设置",
+  "agentOnboardingPromo.actionLabel": "立即体验",
+  "agentOnboardingPromo.description": "与 Lobe AI 快速聊几句，即可设置你的助理团队。你现有的助理不会受到影响。",
+  "agentOnboardingPromo.title": "快速向导",
   "alert.cloud.action": "立即体验",
   "alert.cloud.desc": "所有注册用户每月可获得 {{credit}} 免费计算额度—无需设置。包括全球云同步和高级网页搜索功能。",
   "alert.cloud.descOnMobile": "所有注册用户每月可获得 {{credit}} 免费计算额度—无需设置。",

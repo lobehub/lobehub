@@ -25,28 +25,12 @@ export const LobeActivatorManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
-    {
-      description:
-        'Activate a skill by name to load its instructions. Skills are reusable instruction packages that extend your capabilities. Returns the skill content that you should follow to complete the task. If the skill is not found, returns a list of available skills.',
-      humanIntervention: 'required',
-      name: ActivatorApiName.activateSkill,
-      parameters: {
-        properties: {
-          name: {
-            description: 'The exact name of the skill to activate.',
-            type: 'string',
-          },
-        },
-        required: ['name'],
-        type: 'object',
-      },
-    },
   ],
   identifier: LobeActivatorIdentifier,
   meta: {
     avatar: '🔧',
-    description: 'Discover and activate tools and skills',
-    title: 'Tools & Skills Activator',
+    description: 'Discover and activate tools',
+    title: 'Tools Activator',
   },
   systemRole: systemPrompt,
   type: 'builtin',

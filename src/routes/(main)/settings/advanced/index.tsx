@@ -39,13 +39,13 @@ const Page = memo(() => {
     isPreferenceInit,
     enableInputMarkdown,
     enableGatewayMode,
-    enableAgentWorkingPanel,
+    enableHeterogeneousAgent,
     updateLab,
   ] = useUserStore((s) => [
     preferenceSelectors.isPreferenceInit(s),
     labPreferSelectors.enableInputMarkdown(s),
     labPreferSelectors.enableGatewayMode(s),
-    labPreferSelectors.enableAgentWorkingPanel(s),
+    labPreferSelectors.enableHeterogeneousAgent(s),
     s.updateLab,
   ]);
 
@@ -123,19 +123,23 @@ const Page = memo(() => {
         label: tLabs('features.inputMarkdown.title'),
         minWidth: undefined,
       },
-      {
-        children: (
-          <Switch
-            checked={enableAgentWorkingPanel}
-            loading={!isPreferenceInit}
-            onChange={(checked: boolean) => updateLab({ enableAgentWorkingPanel: checked })}
-          />
-        ),
-        className: styles.labItem,
-        desc: tLabs('features.agentWorkingPanel.desc'),
-        label: tLabs('features.agentWorkingPanel.title'),
-        minWidth: undefined,
-      },
+      ...(isDesktop
+        ? [
+            {
+              children: (
+                <Switch
+                  checked={enableHeterogeneousAgent}
+                  loading={!isPreferenceInit}
+                  onChange={(checked: boolean) => updateLab({ enableHeterogeneousAgent: checked })}
+                />
+              ),
+              className: styles.labItem,
+              desc: tLabs('features.heterogeneousAgent.desc'),
+              label: tLabs('features.heterogeneousAgent.title'),
+              minWidth: undefined,
+            },
+          ]
+        : []),
       ...(hasGatewayUrl
         ? [
             {

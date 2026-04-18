@@ -1,7 +1,7 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { LOADING_FLAT } from '@lobechat/const';
+import { isDesktop, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
@@ -17,14 +17,16 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
 import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
@@ -339,6 +341,155 @@ export class ConversationLifecycleActionImpl {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,
     });
+
+    // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
+    // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    if (isDesktop && heterogeneousProvider?.type === 'claude-code') {
+      // Resolve cwd up-front so the new topic is bound to a project at
+      // creation time. Otherwise the row stays NULL until the post-execution
+      // metadata write — which never lands on cancel/error and meanwhile
+      // makes By-Project grouping miss the topic and `--resume` unsafe.
+      const workingDirectory =
+        agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+
+      // Persist messages to DB first (same as client mode)
+      let heteroData: SendMessageServerResponse | undefined;
+      try {
+        const { model } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+        heteroData = await aiChatService.sendMessageInServer(
+          {
+            agentId: operationContext.agentId,
+            groupId: operationContext.groupId ?? undefined,
+            newAssistantMessage: { model, provider: 'claude-code' },
+            newTopic: !operationContext.topicId
+              ? {
+                  metadata: workingDirectory ? { workingDirectory } : undefined,
+                  title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                  topicMessageIds: messages.map((m) => m.id),
+                }
+              : undefined,
+            newUserMessage: {
+              content: message,
+              editorData,
+              files: fileIdList,
+              pageSelections,
+              parentId,
+            },
+            threadId: operationContext.threadId ?? undefined,
+            topicId: operationContext.topicId ?? undefined,
+          },
+          abortController,
+        );
+      } catch (e) {
+        console.error('[HeterogeneousAgent] Failed to persist messages:', e);
+        this.#get().failOperation(operationId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'HeterogeneousAgentError',
+        });
+        return;
+      }
+
+      if (!heteroData) return;
+
+      // Update context with server-created topicId
+      const heteroContext = {
+        ...operationContext,
+        topicId: heteroData.topicId ?? operationContext.topicId,
+      };
+
+      // Replace optimistic messages with persisted ones
+      this.#get().replaceMessages(heteroData.messages, {
+        action: 'sendMessage/serverResponse',
+        context: heteroContext,
+      });
+
+      // Handle new topic creation
+      if (heteroData.isCreateNewTopic && heteroData.topicId) {
+        if (heteroData.topics) {
+          const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
+          this.#get().internal_updateTopics(operationContext.agentId, {
+            groupId: operationContext.groupId,
+            items: heteroData.topics.items,
+            pageSize,
+            total: heteroData.topics.total,
+          });
+        }
+        await this.#get().switchTopic(heteroData.topicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+      }
+
+      // Clean up temp messages
+      this.#get().internal_dispatchMessage(
+        { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
+        { operationId },
+      );
+
+      // Complete sendMessage operation, start ACP execution as child operation
+      this.#get().completeOperation(operationId);
+
+      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, true);
+
+      // Start heterogeneous agent execution
+      const { operationId: heteroOpId } = this.#get().startOperation({
+        context: heteroContext,
+        label: 'Heterogeneous Agent Execution',
+        parentOperationId: operationId,
+        type: 'execHeterogeneousAgent',
+      });
+
+      this.#get().associateMessageWithOperation(heteroData.assistantMessageId, heteroOpId);
+
+      try {
+        const { executeHeterogeneousAgent } = await import('./heterogeneousAgentExecutor');
+        // Extract imageList from the persisted user message (chatUploadFileList
+        // may already be cleared by this point, so we read from DB instead)
+        const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
+        const persistedImageList = userMsg?.imageList;
+
+        // Read heterogeneous-agent session id from topic metadata for multi-turn
+        // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
+        // doesn't match the current one, so CC doesn't emit
+        // "No conversation found with session ID".
+        const topic = heteroContext.topicId
+          ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
+          : undefined;
+        const { cwdChanged, resumeSessionId } = resolveHeteroResume(
+          topic?.metadata,
+          workingDirectory,
+        );
+        if (cwdChanged) {
+          antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+        }
+
+        await executeHeterogeneousAgent(() => this.#get(), {
+          assistantMessageId: heteroData.assistantMessageId,
+          context: heteroContext,
+          heterogeneousProvider,
+          imageList: persistedImageList?.length ? persistedImageList : undefined,
+          message,
+          operationId: heteroOpId,
+          resumeSessionId,
+          workingDirectory,
+        });
+      } catch (e) {
+        console.error('[HeterogeneousAgent] Execution failed:', e);
+        this.#get().failOperation(heteroOpId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'HeterogeneousAgentError',
+        });
+      }
+
+      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, false);
+
+      return {
+        assistantMessageId: heteroData.assistantMessageId,
+        userMessageId: heteroData.userMessageId,
+      };
+    }
 
     // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
     if (this.#get().isGatewayModeEnabled()) {

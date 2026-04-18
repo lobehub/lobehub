@@ -44,6 +44,7 @@ export class HomeRepository {
     // 1. Query all agents (non-virtual) with their session info (if exists)
     const agentList = await this.db
       .select({
+        agencyConfig: agents.agencyConfig,
         agentSessionGroupId: agents.sessionGroupId,
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
@@ -98,6 +99,7 @@ export class HomeRepository {
 
   private processAgentList(
     agentItems: Array<{
+      agencyConfig: { heterogeneousProvider?: { type?: string } } | null;
       agentSessionGroupId: string | null;
       avatar: string | null;
       backgroundColor: string | null;
@@ -136,6 +138,7 @@ export class HomeRepository {
         backgroundColor: a.backgroundColor,
         description: a.description,
         groupId: a.agentSessionGroupId ?? a.sessionGroupId,
+        heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
         id: a.id,
         pinned: a.pinned ?? a.sessionPinned ?? false,
         sessionId: a.sessionId,

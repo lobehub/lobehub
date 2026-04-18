@@ -36,6 +36,7 @@ vi.mock('@lobehub/ui', () => ({
     ) : (
       <div />
     ),
+  ShikiLobeTheme: {},
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 

@@ -23,6 +23,7 @@ import ImageAspectRatio2Select from './ImageAspectRatio2Select';
 import ImageAspectRatioSelect from './ImageAspectRatioSelect';
 import ImageResolution2Slider from './ImageResolution2Slider';
 import ImageResolutionSlider from './ImageResolutionSlider';
+import Opus47EffortSlider from './Opus47EffortSlider';
 import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import ReasoningTokenSlider32k from './ReasoningTokenSlider32k';
@@ -182,6 +183,21 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'horizontal',
       minWidth: undefined,
       name: 'effort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <Opus47EffortSlider />,
+      desc: isNarrow ? (
+        <span style={descNarrow}>{t('extendParams.effort.desc')}</span>
+      ) : (
+        t('extendParams.effort.desc')
+      ),
+      label: t('extendParams.effort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'opus47Effort',
       style: {
         paddingBottom: 0,
       },

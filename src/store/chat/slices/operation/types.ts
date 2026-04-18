@@ -18,6 +18,7 @@ export type OperationType =
   // === AI generation ===
   | 'execAgentRuntime' // Execute agent runtime (client-side, entire agent runtime execution)
   | 'execServerAgentRuntime' // Execute server agent runtime (server-side, e.g., Group Chat)
+  | 'execHeterogeneousAgent'
   | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
   // === LLM execution (sub-operations) ===
   | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)
@@ -315,10 +316,12 @@ export interface OperationFilter {
  *
  * Includes:
  * - execAgentRuntime: Client-side agent execution (single chat)
+ * - execHeterogeneousAgent: Heterogeneous agent execution (Claude Code CLI, etc.)
  * - execServerAgentRuntime: Server-side agent execution (Group Chat)
  */
 export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
+  'execHeterogeneousAgent',
   'execServerAgentRuntime',
 ];
 

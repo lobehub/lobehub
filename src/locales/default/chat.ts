@@ -27,6 +27,12 @@ export default {
   'agentDefaultMessageWithoutEdit':
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   'agents': 'Agents',
+  /**
+   * Sidebar tag for agents driven by an external CLI runtime (Claude Code, etc.).
+   * Deliberately separate from `group.profile.external` so it can evolve
+   * independently (e.g. swap to "Claude Code" per provider later).
+   */
+  'agentSidebar.externalTag': 'External',
   'artifact.generating': 'Generating',
   'artifact.inThread':
     'Cannot view in subtopic, please switch to the main conversation area to open',
@@ -141,6 +147,8 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.resumeReset.cwdChanged':
+    'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',
@@ -242,6 +250,7 @@ export default {
   'createModal.placeholder': 'Describe what your agent should do...',
   'createModal.title': 'What should your agent do?',
   'newAgent': 'Create Agent',
+  'newClaudeCodeAgent': 'Add Claude Code',
   'newGroupChat': 'Create Group',
   'newPage': 'Create Page',
   'noAgentsYet': 'This group has no members yet. Click the + button to invite agents.',
@@ -253,6 +262,7 @@ export default {
   'operation.contextCompression': 'Context too long, compressing history...',
   'operation.execAgentRuntime': 'Preparing response',
   'operation.execClientTask': 'Executing task',
+  'operation.execHeterogeneousAgent': 'External agent running',
   'operation.execServerAgentRuntime':
     'Task is running in the server. You are safe to leave this page',
   'operation.sendMessage': 'Sending message',
@@ -452,6 +462,17 @@ export default {
   'tool.intervention.mode.autoRunDesc': 'Automatically approve all tool executions',
   'tool.intervention.mode.manual': 'Manual',
   'tool.intervention.mode.manualDesc': 'Manual approval required for each invocation',
+  'tool.intervention.onboarding.agentIdentity.applyHint':
+    'The new identity will appear after approval.',
+  'tool.intervention.onboarding.agentIdentity.description':
+    'Approving this change updates the Agent shown in Inbox and in this onboarding conversation.',
+  'tool.intervention.onboarding.agentIdentity.emoji': 'Agent avatar',
+  'tool.intervention.onboarding.agentIdentity.eyebrow': 'Onboarding approval',
+  'tool.intervention.onboarding.agentIdentity.name': 'Agent name',
+  'tool.intervention.onboarding.agentIdentity.targetInbox': 'Inbox Agent',
+  'tool.intervention.onboarding.agentIdentity.targetOnboarding': 'Current onboarding Agent',
+  'tool.intervention.onboarding.agentIdentity.targets': 'Applies to',
+  'tool.intervention.onboarding.agentIdentity.title': 'Confirm Agent identity update',
   'tool.intervention.reject': 'Reject',
   'tool.intervention.rejectAndContinue': 'Reject and Retry',
   'tool.intervention.rejectOnly': 'Reject',
@@ -592,14 +613,20 @@ export default {
   'workingPanel.resources.deleteError': 'Failed to delete document',
   'workingPanel.resources.deleteSuccess': 'Document deleted',
   'workingPanel.resources.deleteTitle': 'Delete document?',
-  'workingPanel.resources.empty': 'No agent documents yet',
+  'workingPanel.resources.empty':
+    'No documents yet. Documents associated with this agent will show up here.',
   'workingPanel.resources.error': 'Failed to load resources',
+  'workingPanel.resources.filter.all': 'All',
+  'workingPanel.resources.filter.documents': 'Documents',
+  'workingPanel.resources.filter.web': 'Web',
   'workingPanel.resources.loading': 'Loading resources...',
   'workingPanel.resources.previewError': 'Failed to load preview',
   'workingPanel.resources.previewLoading': 'Loading preview...',
   'workingPanel.resources.renameEmpty': 'Title cannot be empty',
   'workingPanel.resources.renameError': 'Failed to rename document',
   'workingPanel.resources.renameSuccess': 'Document renamed',
+  'workingPanel.resources.viewMode.list': 'List view',
+  'workingPanel.resources.viewMode.tree': 'Tree view',
   'workingPanel.documents.close': 'Close',
   'workingPanel.documents.error': 'Failed to load document',
   'workingPanel.documents.loading': 'Loading document...',
