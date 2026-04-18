@@ -56,6 +56,12 @@ export interface MessageActionsConfig {
    * Actions to display in the dropdown menu
    */
   menu?: MessageActionItemOrDivider[];
+  /**
+   * Render mode. `hetero` swaps to a minimal bar (copy + delete) and skips
+   * actions that don't apply to heterogeneous-agent sessions (edit, regenerate,
+   * translate, branch, etc.).
+   */
+  mode?: 'default' | 'hetero';
 }
 
 /**

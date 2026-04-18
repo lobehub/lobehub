@@ -56,22 +56,21 @@ export const useActionsBarConfig = (): ActionsBarConfig => {
   const hasACPProvider = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
 
   return useMemo(
-    () => ({
-      assistant: {
-        extraBarActions: isDevMode && !hasACPProvider ? [branchingFactory] : [],
-      },
-      // For ACP agents, only show copy + delete in the assistant group action bar
-      ...(hasACPProvider
+    () =>
+      hasACPProvider
         ? {
-            assistantGroup: {
-              extraBarActions: [],
-            },
+            assistant: { mode: 'hetero' as const },
+            assistantGroup: { mode: 'hetero' as const },
+            user: { mode: 'hetero' as const },
           }
-        : {}),
-      user: {
-        extraBarActions: isDevMode ? [branchingFactory] : [],
-      },
-    }),
+        : {
+            assistant: {
+              extraBarActions: isDevMode ? [branchingFactory] : [],
+            },
+            user: {
+              extraBarActions: isDevMode ? [branchingFactory] : [],
+            },
+          },
     [branchingFactory, hasACPProvider, isDevMode],
   );
 };

@@ -17,6 +17,8 @@ import type {
   MessageActionItemOrDivider,
   MessageActionsConfig,
 } from '../../../types';
+import { HeteroActionsBar } from '../../components/HeteroActionsBar';
+import { useHeteroMessageActions } from '../../components/HeteroActionsBar/useHeteroMessageActions';
 import { ErrorActionsBar } from './Error';
 import { useAssistantActions } from './useAssistantActions';
 
@@ -65,7 +67,19 @@ interface AssistantActionsBarProps {
   index: number;
 }
 
-export const AssistantActionsBar = memo<AssistantActionsBarProps>(
+const HeteroAssistantActionsBar = memo<AssistantActionsBarProps>(({ id, data }) => {
+  const { copy, del } = useHeteroMessageActions({ content: data.content, id });
+  return (
+    <Flexbox horizontal align={'center'} gap={8}>
+      <ReactionPicker messageId={id} />
+      <HeteroActionsBar bar={[copy]} menu={[copy, del]} />
+    </Flexbox>
+  );
+});
+
+HeteroAssistantActionsBar.displayName = 'HeteroAssistantActionsBar';
+
+const DefaultAssistantActionsBar = memo<AssistantActionsBarProps>(
   ({ actionsConfig, id, data, index }) => {
     const { error, tools } = data;
     const store = useConversationStoreApi();
@@ -218,5 +232,12 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
     );
   },
 );
+
+DefaultAssistantActionsBar.displayName = 'DefaultAssistantActionsBar';
+
+export const AssistantActionsBar = memo<AssistantActionsBarProps>((props) => {
+  if (props.actionsConfig?.mode === 'hetero') return <HeteroAssistantActionsBar {...props} />;
+  return <DefaultAssistantActionsBar {...props} />;
+});
 
 AssistantActionsBar.displayName = 'AssistantActionsBar';

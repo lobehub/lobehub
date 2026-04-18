@@ -17,6 +17,8 @@ import type {
   MessageActionItemOrDivider,
   MessageActionsConfig,
 } from '../../../types';
+import { HeteroActionsBar } from '../../components/HeteroActionsBar';
+import { useHeteroMessageActions } from '../../components/HeteroActionsBar/useHeteroMessageActions';
 import { useGroupActions } from './useGroupActions';
 
 // Helper to strip handleClick from action items before passing to ActionIconGroup
@@ -211,10 +213,27 @@ const WithoutContentId = memo<Omit<GroupActionsProps, 'contentBlock' | 'contentI
 WithoutContentId.displayName = 'GroupActionsWithoutContentId';
 
 /**
+ * Hetero-agent variant. Only exposes copy + delete — regenerate / edit /
+ * translate / share don't apply to heterogeneous-agent sessions.
+ */
+const HeteroGroupActionsBar = memo<Pick<GroupActionsProps, 'contentBlock' | 'data' | 'id'>>(
+  ({ id, data, contentBlock }) => {
+    const content = contentBlock?.content ?? data.content;
+    const { copy, del } = useHeteroMessageActions({ content, id });
+    return <HeteroActionsBar bar={[copy]} menu={[copy, del]} />;
+  },
+);
+
+HeteroGroupActionsBar.displayName = 'HeteroGroupActionsBar';
+
+/**
  * Main GroupActionsBar component that renders appropriate variant
  */
 export const GroupActionsBar = memo<GroupActionsProps>(
   ({ actionsConfig, id, data, contentBlock, contentId }) => {
+    if (actionsConfig?.mode === 'hetero')
+      return <HeteroGroupActionsBar contentBlock={contentBlock} data={data} id={id} />;
+
     if (!contentId) return <WithoutContentId actionsConfig={actionsConfig} data={data} id={id} />;
 
     return (

@@ -4,6 +4,7 @@ import { ActionIconGroup, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -12,6 +13,8 @@ import {
   type MessageActionItemOrDivider,
   type MessageActionsConfig,
 } from '../../../types';
+import { HeteroActionsBar } from '../../components/HeteroActionsBar';
+import { useHeteroMessageActions } from '../../components/HeteroActionsBar/useHeteroMessageActions';
 import MessageBranch from '../../components/MessageBranch';
 import { useUserActions } from './useUserActions';
 
@@ -60,7 +63,17 @@ interface UserActionsProps {
   id: string;
 }
 
-export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data }) => {
+const HeteroUserActionsBar = memo<UserActionsProps>(({ id, data }) => {
+  const { copy, del } = useHeteroMessageActions({
+    content: cleanSpeakerTag(data.content),
+    id,
+  });
+  return <HeteroActionsBar bar={[copy]} menu={[copy, del]} />;
+});
+
+HeteroUserActionsBar.displayName = 'HeteroUserActionsBar';
+
+const DefaultUserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data }) => {
   // Get default actions from hook
   const defaultActions = useUserActions({ data, id });
 
@@ -146,6 +159,13 @@ export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data 
   );
 
   return <ActionIconGroup items={items} menu={menu} onActionClick={handleAction} />;
+});
+
+DefaultUserActionsBar.displayName = 'DefaultUserActionsBar';
+
+export const UserActionsBar = memo<UserActionsProps>((props) => {
+  if (props.actionsConfig?.mode === 'hetero') return <HeteroUserActionsBar {...props} />;
+  return <DefaultUserActionsBar {...props} />;
 });
 
 UserActionsBar.displayName = 'UserActionsBar';
