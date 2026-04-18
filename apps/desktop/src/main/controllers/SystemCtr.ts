@@ -245,7 +245,8 @@ export default class SystemController extends ControllerModule {
     }
   }
 
-  private async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
+  @IpcMethod()
+  async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
     const gitConfigPath = path.join(dirPath, '.git', 'config');
     try {
       const config = await readFile(gitConfigPath, 'utf8');

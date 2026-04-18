@@ -83,6 +83,10 @@ class ElectronSystemService {
     return this.ipc.system.getGitBranch(dirPath);
   }
 
+  async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
+    return this.ipc.system.detectRepoType(dirPath);
+  }
+
   async getLinkedPullRequest(params: {
     branch: string;
     path: string;

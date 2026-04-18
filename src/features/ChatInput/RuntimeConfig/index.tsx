@@ -24,7 +24,7 @@ import { useAgentId } from '../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
 import ApprovalMode from './ApprovalMode';
 import GitStatus from './GitStatus';
-import { getRecentDirs } from './recentDirs';
+import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
 
 const MODE_ICONS: Record<RuntimeEnvMode, typeof LaptopIcon> = {
@@ -115,10 +115,7 @@ const RuntimeConfig = memo(() => {
   );
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
 
-  const repoType = useMemo(() => {
-    if (!effectiveWorkingDirectory) return undefined;
-    return getRecentDirs().find((d) => d.path === effectiveWorkingDirectory)?.repoType;
-  }, [effectiveWorkingDirectory]);
+  const repoType = useRepoType(effectiveWorkingDirectory);
 
   const dirIconNode = useMemo((): ReactNode => {
     if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;

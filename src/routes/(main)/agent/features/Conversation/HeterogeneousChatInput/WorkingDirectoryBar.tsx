@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import GitStatus from '@/features/ChatInput/RuntimeConfig/GitStatus';
-import { getRecentDirs } from '@/features/ChatInput/RuntimeConfig/recentDirs';
+import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import WorkingDirectoryContent from '@/features/ChatInput/RuntimeConfig/WorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -56,10 +56,7 @@ const WorkingDirectoryBar = memo(() => {
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
 
-  const repoType = useMemo(() => {
-    if (!effectiveWorkingDirectory) return undefined;
-    return getRecentDirs().find((d) => d.path === effectiveWorkingDirectory)?.repoType;
-  }, [effectiveWorkingDirectory]);
+  const repoType = useRepoType(effectiveWorkingDirectory);
 
   const dirIconNode = useMemo((): ReactNode => {
     if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
