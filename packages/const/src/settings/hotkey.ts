@@ -1,4 +1,6 @@
-import { type HotkeyId, HOTKEYS_REGISTRATION } from '../hotkeys';
+import type { HotkeyId } from '@lobechat/types';
+
+import { HOTKEYS_REGISTRATION } from '../hotkeys';
 
 type UserHotkeyConfig = Record<HotkeyId, string>;
 
