@@ -371,7 +371,7 @@ export class OnboardingService {
     options?: {
       finalAgentNames?: string[];
       finishedAt?: string;
-      metadata?: ChatTopicMetadata;
+      metadata?: ChatTopicMetadata | null;
       now?: string;
     },
   ) => {
