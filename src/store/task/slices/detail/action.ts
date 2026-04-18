@@ -84,6 +84,16 @@ export class TaskDetailSliceActionImpl {
       value: detail,
     });
 
+    // When looked up by raw DB id (e.g. `task_xxx`), also store under that key
+    // so `activeTaskId` → `taskDetailMap[activeTaskId]` resolves correctly.
+    if (resolvedId !== detail.identifier) {
+      this.internal_dispatchTaskDetail({
+        id: resolvedId,
+        type: 'setTaskDetail',
+        value: detail,
+      });
+    }
+
     return detail;
   };
 

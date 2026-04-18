@@ -1,73 +1,109 @@
-import type { TaskActivityType, TaskDetailActivity } from '@lobechat/types';
+import type { BriefType, TaskDetailActivity } from '@lobechat/types';
 import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Divider, Tree } from 'antd';
-import type { DataNode } from 'antd/es/tree';
+import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
-import type { LucideIcon } from 'lucide-react';
-import { BotMessageSquare, ChevronDown, MessageCircle, MessagesSquare, Zap } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { BotMessageSquare, MessageCircle, MessagesSquare } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import BriefCard from '@/features/DailyBrief/BriefCard';
+import type { BriefItem } from '@/features/DailyBrief/types';
 import { useTaskStore } from '@/store/task';
-import { taskActivitySelectors } from '@/store/task/selectors';
+import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
 
-const typeIconMap: Record<TaskActivityType, LucideIcon> = {
-  brief: Zap,
+const ROW_TYPE_ICON = {
   comment: MessageCircle,
   topic: MessagesSquare,
+} as const;
+
+/** Convert a brief-type activity to the BriefItem shape expected by BriefCard. */
+const toBriefItem = (act: TaskDetailActivity): BriefItem | null => {
+  if (!act.id || !act.briefType) return null;
+  return {
+    actions: (act.actions ?? null) as BriefItem['actions'],
+    agentId: act.agentId ?? null,
+    agents: (act.agents ?? []).map((a) => ({
+      avatar: a.avatar,
+      backgroundColor: a.backgroundColor,
+      id: a.id,
+      title: a.title,
+    })),
+    artifacts: act.artifacts,
+    createdAt: act.createdAt ?? act.time ?? new Date().toISOString(),
+    cronJobId: act.cronJobId ?? null,
+    id: act.id,
+    priority: act.priority ?? null,
+    readAt: act.readAt ?? null,
+    resolvedAction: act.resolvedAction ?? null,
+    resolvedAt: act.resolvedAt ?? null,
+    resolvedComment: act.resolvedComment ?? null,
+    summary: act.summary ?? '',
+    taskId: act.taskId ?? null,
+    title: act.title ?? '',
+    topicId: act.topicId ?? null,
+    type: act.briefType as BriefType,
+    userId: act.userId ?? '',
+  };
 };
 
-const getActivityDisplayText = (act: TaskDetailActivity, t: TFunction<'chat'>): string => {
-  if (act.type === 'comment') {
-    return act.content || t('taskDetail.activities.fallback.comment');
-  }
-  if (act.type === 'topic') {
-    return act.title || t('taskDetail.activities.fallback.topic');
-  }
-  if (act.type === 'brief') {
-    return act.title || act.summary || t('taskDetail.activities.fallback.brief');
-  }
+const getRowText = (act: TaskDetailActivity, t: TFunction<'chat'>): string => {
+  if (act.type === 'comment') return act.content || t('taskDetail.activities.fallback.comment');
+  if (act.type === 'topic') return act.title || t('taskDetail.activities.fallback.topic');
   return '';
 };
+
+/** Compact one-line row for topic / comment activities. */
+const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
+  const { t } = useTranslation('chat');
+  const TypeIcon = ROW_TYPE_ICON[activity.type as keyof typeof ROW_TYPE_ICON] ?? MessageCircle;
+  const relTime = activity.time ? dayjs(activity.time).fromNow() : '';
+  const text = getRowText(activity, t);
+
+  return (
+    <Flexbox horizontal align={'center'} gap={8} paddingBlock={4}>
+      {activity.author?.avatar ? (
+        <Avatar avatar={activity.author.avatar} size={24} />
+      ) : (
+        <div className={styles.activityAvatar}>
+          <TypeIcon size={12} />
+        </div>
+      )}
+      <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
+        {activity.author?.name && <span style={{ fontWeight: 500 }}>{activity.author.name} </span>}
+        {text}
+        {relTime && (
+          <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>
+            · {relTime}
+          </span>
+        )}
+      </Text>
+    </Flexbox>
+  );
+});
 
 const TaskActivities = memo(() => {
   const { t } = useTranslation('chat');
   const activities = useTaskStore(taskActivitySelectors.activeTaskActivities);
+  const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
+  const refreshTaskDetail = useTaskStore((s) => s.internal_refreshTaskDetail);
 
-  const activityTreeData = useMemo((): DataNode[] => {
-    return activities.map((act, index) => {
-      const TypeIcon = typeIconMap[act.type] ?? MessageCircle;
-      const relTime = act.time ? dayjs(act.time).fromNow() : '';
-      const displayText = getActivityDisplayText(act, t);
-      const key = act.id ?? `activity-${index}`;
+  const refreshActiveTask = useCallback(async () => {
+    if (activeTaskId) await refreshTaskDetail(activeTaskId);
+  }, [activeTaskId, refreshTaskDetail]);
 
-      return {
-        icon: act.author?.avatar ? (
-          <Avatar avatar={act.author.avatar} size={24} />
-        ) : (
-          <div className={styles.activityAvatar}>
-            <TypeIcon size={12} />
-          </div>
-        ),
-        key,
-        title: (
-          <Text ellipsis style={{ color: cssVar.colorTextSecondary }}>
-            {act.author?.name && <span style={{ fontWeight: 500 }}>{act.author.name} </span>}
-            {displayText}
-            {relTime && (
-              <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>
-                · {relTime}
-              </span>
-            )}
-          </Text>
-        ),
-      };
-    });
-  }, [activities, t]);
+  const items = useMemo(
+    () =>
+      activities.map((act, i) => ({
+        activity: act,
+        brief: act.type === 'brief' ? toBriefItem(act) : null,
+        key: act.id ?? `activity-${i}`,
+      })),
+    [activities],
+  );
 
   return (
     <>
@@ -86,18 +122,23 @@ const TaskActivities = memo(() => {
             </Flexbox>
           }
         >
-          {activityTreeData.length > 0 ? (
-            <Tree
-              blockNode
-              defaultExpandAll
-              showIcon
-              showLine
-              className={styles.subtaskTree}
-              selectable={false}
-              style={{ marginTop: 8 }}
-              switcherIcon={<Icon icon={ChevronDown} size={14} />}
-              treeData={activityTreeData}
-            />
+          {items.length > 0 ? (
+            <Flexbox gap={12} paddingBlock={8}>
+              {items.map(({ activity, brief, key }) => {
+                if (brief) {
+                  return (
+                    <BriefCard
+                      brief={brief}
+                      enableNavigation={false}
+                      key={key}
+                      onAfterAddComment={refreshActiveTask}
+                      onAfterResolve={refreshActiveTask}
+                    />
+                  );
+                }
+                return <ActivityRow activity={activity} key={key} />;
+              })}
+            </Flexbox>
           ) : (
             <Empty
               description={t('taskDetail.activitiesEmpty')}

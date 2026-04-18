@@ -1,4 +1,4 @@
-import { type BriefType } from '@lobechat/types';
+import { type BriefAction, type BriefType } from '@lobechat/types';
 
 export interface AgentAvatarInfo {
   avatar: string | null;
@@ -8,7 +8,7 @@ export interface AgentAvatarInfo {
 }
 
 export interface BriefItem {
-  actions: unknown;
+  actions: BriefAction[] | null;
   agentId: string | null;
   agents: AgentAvatarInfo[];
   artifacts: unknown;

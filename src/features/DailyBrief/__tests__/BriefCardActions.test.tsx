@@ -1,3 +1,4 @@
+import type { BriefAction } from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,49 +23,64 @@ vi.mock('react-i18next', () => ({
 
 const mockResolveBrief = vi.fn();
 
+const sampleActions: BriefAction[] = [
+  { key: 'approve', label: 'Approve', type: 'resolve' },
+  { key: 'feedback', label: 'Feedback', type: 'comment' },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   useBriefStore.setState({
-    briefs: [
-      {
-        actions: [
-          { key: 'approve', label: 'Approve', type: 'resolve' },
-          { key: 'feedback', label: 'Feedback', type: 'comment' },
-        ],
-        id: 'brief-1',
-        type: 'decision',
-      } as any,
-    ],
     resolveBrief: mockResolveBrief,
   });
 });
 
 describe('BriefCardActions', () => {
-  it('should render resolve action buttons', () => {
-    render(<BriefCardActions briefId="brief-1" briefType="decision" />);
+  it('should render resolve action buttons from actions prop', () => {
+    render(<BriefCardActions actions={sampleActions} briefId="brief-1" briefType="decision" />);
     expect(screen.getByText('Approve')).toBeInTheDocument();
   });
 
   it('should render comment action button', () => {
     const { container } = render(
-      <BriefCardActions briefId="brief-1" briefType="decision" taskId="task-1" />,
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-1"
+        briefType="decision"
+        taskId="task-1"
+      />,
     );
     const commentButton = container.querySelector('.brief-comment-btn');
     expect(commentButton).toBeInTheDocument();
   });
 
-  it('should call resolveBrief on resolve button click', async () => {
+  it('should call resolveBrief and onAfterResolve on resolve button click', async () => {
     mockResolveBrief.mockResolvedValueOnce(undefined);
-    render(<BriefCardActions briefId="brief-1" briefType="decision" />);
+    const onAfterResolve = vi.fn();
+    render(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-1"
+        briefType="decision"
+        onAfterResolve={onAfterResolve}
+      />,
+    );
 
     fireEvent.click(screen.getByText('Approve'));
 
     expect(mockResolveBrief).toHaveBeenCalledWith('brief-1', 'approve');
+    await Promise.resolve();
+    expect(onAfterResolve).toHaveBeenCalled();
   });
 
   it('should hide action buttons when comment button clicked', () => {
     const { container } = render(
-      <BriefCardActions briefId="brief-1" briefType="decision" taskId="task-1" />,
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-1"
+        briefType="decision"
+        taskId="task-1"
+      />,
     );
     const commentButton = container.querySelector('.brief-comment-btn');
     expect(commentButton).toBeInTheDocument();
@@ -77,18 +93,21 @@ describe('BriefCardActions', () => {
   });
 
   it('should show resolved state when resolvedAction is set', () => {
-    render(<BriefCardActions briefId="brief-1" briefType="decision" resolvedAction="approve" />);
+    render(
+      <BriefCardActions
+        actions={sampleActions}
+        briefId="brief-1"
+        briefType="decision"
+        resolvedAction="approve"
+      />,
+    );
 
     expect(screen.getByText('Marked as resolved')).toBeInTheDocument();
     expect(screen.queryByText('Approve')).not.toBeInTheDocument();
   });
 
-  it('should fallback to DEFAULT_BRIEF_ACTIONS when no actions in brief', () => {
-    useBriefStore.setState({
-      briefs: [{ actions: null, id: 'brief-2', type: 'result' } as any],
-    });
-
-    render(<BriefCardActions briefId="brief-2" briefType="result" />);
+  it('should fallback to DEFAULT_BRIEF_ACTIONS when actions prop is null', () => {
+    render(<BriefCardActions actions={null} briefId="brief-2" briefType="result" />);
 
     expect(screen.getByText('✅ 通过')).toBeInTheDocument();
   });

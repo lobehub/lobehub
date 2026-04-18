@@ -43,52 +43,65 @@ const AgentAvatars = memo<AgentAvatarsProps>(({ agents }) => {
 
 interface BriefCardProps {
   brief: BriefItem;
+  /** When false, disables the header click-to-navigate behavior. */
+  enableNavigation?: boolean;
+  /** Hook invoked after a feedback comment is posted. */
+  onAfterAddComment?: () => void | Promise<void>;
+  /** Hook invoked after the brief is resolved. */
+  onAfterResolve?: () => void | Promise<void>;
 }
 
-const BriefCard = memo<BriefCardProps>(({ brief }) => {
-  const navigate = useNavigate();
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+const BriefCard = memo<BriefCardProps>(
+  ({ brief, enableNavigation = true, onAfterResolve, onAfterAddComment }) => {
+    const navigate = useNavigate();
+    const activeAgentId = useAgentStore((s) => s.activeAgentId);
+    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
-  const targetAgentId = brief.agents[0]?.id || activeAgentId || inboxAgentId;
-  const canNavigate = Boolean(brief.taskId && targetAgentId);
+    const targetAgentId = brief.agents[0]?.id || activeAgentId || inboxAgentId;
+    const canNavigate = enableNavigation && Boolean(brief.taskId && targetAgentId);
 
-  return (
-    <Block
-      className={styles.card}
-      gap={12}
-      padding={12}
-      style={{ borderRadius: cssVar.borderRadiusLG }}
-      variant={'outlined'}
-    >
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={canNavigate ? styles.clickableHeader : undefined}
-        gap={16}
-        justify={'space-between'}
-        onClick={
-          canNavigate ? () => navigate(`/agent/${targetAgentId}/tasks/${brief.taskId}`) : undefined
-        }
+    return (
+      <Block
+        className={styles.card}
+        gap={12}
+        padding={12}
+        style={{ borderRadius: cssVar.borderRadiusLG }}
+        variant={'outlined'}
       >
-        <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
-          <BriefIcon type={brief.type} />
-          <Text ellipsis fontSize={16} style={{ flex: 1 }} weight={500}>
-            {brief.title}
-          </Text>
-          <Time date={brief.createdAt} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={canNavigate ? styles.clickableHeader : undefined}
+          gap={16}
+          justify={'space-between'}
+          onClick={
+            canNavigate
+              ? () => navigate(`/agent/${targetAgentId}/tasks/${brief.taskId}`)
+              : undefined
+          }
+        >
+          <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
+            <BriefIcon type={brief.type} />
+            <Text ellipsis fontSize={16} style={{ flex: 1 }} weight={500}>
+              {brief.title}
+            </Text>
+            <Time date={brief.createdAt} />
+          </Flexbox>
+          {brief.agents.length > 0 && <AgentAvatars agents={brief.agents} />}
         </Flexbox>
-        {brief.agents.length > 0 && <AgentAvatars agents={brief.agents} />}
-      </Flexbox>
-      <BriefCardSummary summary={brief.summary} />
-      <BriefCardActions
-        briefId={brief.id}
-        briefType={brief.type}
-        resolvedAction={brief.resolvedAction}
-        taskId={brief.taskId}
-      />
-    </Block>
-  );
-});
+        <BriefCardSummary summary={brief.summary} />
+        <BriefCardActions
+          actions={brief.actions}
+          briefId={brief.id}
+          briefType={brief.type}
+          resolvedAction={brief.resolvedAction}
+          taskId={brief.taskId}
+          onAfterAddComment={onAfterAddComment}
+          onAfterResolve={onAfterResolve}
+        />
+      </Block>
+    );
+  },
+);
 
 export default BriefCard;

@@ -2,7 +2,7 @@ import { type BriefAction, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Check, SquarePen } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -11,9 +11,15 @@ import { useBriefStore } from '@/store/brief';
 import CommentInput from './CommentInput';
 import { styles } from './style';
 
-interface BriefCardActionsProps {
+export interface BriefCardActionsProps {
+  /** Brief actions from the brief payload — falls back to DEFAULT_BRIEF_ACTIONS by type. */
+  actions?: BriefAction[] | null;
   briefId: string;
   briefType: string;
+  /** Hook invoked after a comment is successfully posted. */
+  onAfterAddComment?: () => void | Promise<void>;
+  /** Hook invoked after the brief is successfully resolved. */
+  onAfterResolve?: () => void | Promise<void>;
   resolvedAction?: string | null;
   taskId?: string | null;
 }
@@ -28,7 +34,15 @@ const SuccessTag = memo<{ label: string }>(({ label }) => (
 ));
 
 const BriefCardActions = memo<BriefCardActionsProps>(
-  ({ briefId, briefType, resolvedAction, taskId }) => {
+  ({
+    actions: actionsProp,
+    briefId,
+    briefType,
+    onAfterAddComment,
+    onAfterResolve,
+    resolvedAction,
+    taskId,
+  }) => {
     const { t } = useTranslation('home');
     const [commentMode, setCommentMode] = useState<CommentMode | null>(null);
     const [loadingKey, setLoadingKey] = useState<string | null>(null);
@@ -44,12 +58,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
       return () => clearTimeout(timer);
     }, [feedbackSent]);
 
-    const actionSelector = useMemo(
-      () => (s: { briefs: { actions: unknown; id: string }[] }) =>
-        s.briefs.find((b) => b.id === briefId)?.actions as BriefAction[] | undefined,
-      [briefId],
-    );
-    const actions = useBriefStore(actionSelector) || DEFAULT_BRIEF_ACTIONS[briefType] || [];
+    const actions = actionsProp ?? DEFAULT_BRIEF_ACTIONS[briefType] ?? [];
 
     const getActionLabel = useCallback(
       (action: BriefAction) => {
@@ -65,11 +74,12 @@ const BriefCardActions = memo<BriefCardActionsProps>(
         setLoadingKey(key);
         try {
           await resolveBrief(briefId, key);
+          await onAfterResolve?.();
         } finally {
           setLoadingKey(null);
         }
       },
-      [briefId, resolveBrief],
+      [briefId, resolveBrief, onAfterResolve],
     );
 
     const handleCommentSubmit = useCallback(
@@ -80,17 +90,21 @@ const BriefCardActions = memo<BriefCardActionsProps>(
           setLoadingKey(commentMode.key);
           try {
             await resolveBrief(briefId, commentMode.key, text);
+            await onAfterResolve?.();
           } finally {
             setLoadingKey(null);
           }
         } else {
-          if (taskId) await addComment(briefId, taskId, text);
+          if (taskId) {
+            await addComment(briefId, taskId, text);
+            await onAfterAddComment?.();
+          }
           setFeedbackSent(true);
         }
 
         setCommentMode(null);
       },
-      [addComment, briefId, commentMode, resolveBrief, taskId],
+      [addComment, briefId, commentMode, resolveBrief, taskId, onAfterResolve, onAfterAddComment],
     );
 
     if (resolvedAction) return <SuccessTag label={t('brief.resolved')} />;
