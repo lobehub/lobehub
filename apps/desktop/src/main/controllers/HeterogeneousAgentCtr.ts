@@ -286,10 +286,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         cliArgs.push(params.prompt);
       }
 
-      logger.info('Spawning agent:', session.command, cliArgs.join(' '));
+      // Fall back to the user's Desktop so the process never inherits
+      // the Electron parent's cwd (which is `/` when launched from Finder).
+      const cwd = session.cwd || electronApp.getPath('desktop');
+
+      logger.info('Spawning agent:', session.command, cliArgs.join(' '), `(cwd: ${cwd})`);
 
       const proc = spawn(session.command, cliArgs, {
-        cwd: session.cwd,
+        cwd,
         env: { ...process.env, ...session.env },
         stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       });

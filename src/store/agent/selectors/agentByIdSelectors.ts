@@ -98,9 +98,8 @@ const getAgentWorkingDirectoryById =
   (_s: AgentStoreState): string | undefined => {
     if (!isDesktop) return;
 
-    return (
-      getLocalAgentWorkingDirectory(agentId) ?? globalAgentContextManager.getContext().homePath
-    );
+    const ctx = globalAgentContextManager.getContext();
+    return getLocalAgentWorkingDirectory(agentId) ?? ctx.desktopPath ?? ctx.homePath;
   };
 
 /**

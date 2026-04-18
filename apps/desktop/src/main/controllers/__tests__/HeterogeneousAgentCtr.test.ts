@@ -8,9 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 
+const FAKE_DESKTOP_PATH = '/Users/fake/Desktop';
+
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
-  app: { on: vi.fn() },
+  app: {
+    getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
+    on: vi.fn(),
+  },
   ipcMain: { handle: vi.fn() },
 }));
 
@@ -25,11 +30,11 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
-const spawnCalls: Array<{ args: string[]; command: string }> = [];
+const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
 vi.mock('node:child_process', () => ({
-  spawn: (command: string, args: string[]) => {
-    spawnCalls.push({ args, command });
+  spawn: (command: string, args: string[], options: any) => {
+    spawnCalls.push({ args, command, options });
     return nextFakeProc;
   },
 }));
@@ -135,7 +140,7 @@ describe('HeterogeneousAgentCtr', () => {
       spawnCalls.length = 0;
     });
 
-    const runSendPrompt = async (prompt: string) => {
+    const runSendPrompt = async (prompt: string, sessionOverrides: Record<string, any> = {}) => {
       const { proc, writes } = createFakeProc();
       nextFakeProc = proc;
 
@@ -143,11 +148,12 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
         command: 'claude',
+        ...sessionOverrides,
       });
       await ctr.sendPrompt({ prompt, sessionId });
 
-      const { args: cliArgs, command } = spawnCalls[0];
-      return { cliArgs, command, writes };
+      const { args: cliArgs, command, options } = spawnCalls[0];
+      return { cliArgs, command, options, writes };
     };
 
     it('passes prompt via stdin stream-json — never as a positional arg', async () => {
@@ -189,6 +195,22 @@ describe('HeterogeneousAgentCtr', () => {
       expect(writes).toHaveLength(1);
       const msg = JSON.parse(writes[0].trimEnd());
       expect(msg.message.content[0].text).toBe(prompt);
+    });
+
+    it('falls back to the user Desktop when no cwd is supplied', async () => {
+      const { options } = await runSendPrompt('hello');
+
+      // When launched from Finder the Electron parent cwd is `/` — the
+      // controller must override that with the user's Desktop so CC writes
+      // land somewhere sensible.
+      expect(options.cwd).toBe(FAKE_DESKTOP_PATH);
+    });
+
+    it('respects an explicit cwd passed to startSession', async () => {
+      const explicitCwd = '/Users/fake/projects/my-repo';
+      const { options } = await runSendPrompt('hello', { cwd: explicitCwd });
+
+      expect(options.cwd).toBe(explicitCwd);
     });
   });
 });
