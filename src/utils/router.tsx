@@ -86,7 +86,12 @@ export function dynamicLayout<P = NonNullable<unknown>>(
   );
 }
 
-export const ErrorBoundary = () => {
+export interface ErrorBoundaryProps {
+  /** Base path for "back home" on the error screen (defaults to `/`). */
+  resetPath?: string;
+}
+
+export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const error = useRouteError() as Error;
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
@@ -95,7 +100,7 @@ export const ErrorBoundary = () => {
 
   return (
     <ThemeProvider theme={{ cssVar: { key: 'lobe-vars' } }}>
-      <ErrorCapture error={error} />
+      <ErrorCapture error={error} resetPath={resetPath} />
     </ThemeProvider>
   );
 };
