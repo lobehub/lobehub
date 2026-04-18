@@ -11,13 +11,8 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-export enum TopicDisplayMode {
-  ByCreatedTime = 'byTime',
-  ByUpdatedTime = 'byUpdatedTime',
-  Flat = 'flat',
-  // AscMessages = 'ascMessages',
-  // DescMessages = 'descMessages',
-}
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat';
+export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 export interface GroupedTopic {
   children: ChatTopic[];

@@ -12,7 +12,6 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
-import { TopicDisplayMode } from '@/types/topic';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
@@ -32,7 +31,7 @@ const TopicList = memo(() => {
     s.closeAllTopicsDrawer,
   ]);
 
-  const [topicDisplayMode] = useUserStore((s) => [preferenceSelectors.topicDisplayMode(s)]);
+  const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
   useFetchTopics(fetchParams);
 
@@ -49,7 +48,7 @@ const TopicList = memo(() => {
           }}
         />
       )}
-      {topicDisplayMode === TopicDisplayMode.Flat ? <FlatMode /> : <ByTimeMode />}
+      {topicGroupMode === 'flat' ? <FlatMode /> : <ByTimeMode />}
       <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
     </>
   );
