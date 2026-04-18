@@ -18,6 +18,7 @@ export enum ClaudeCodeApiName {
   Read = 'Read',
   Skill = 'Skill',
   TodoWrite = 'TodoWrite',
+  ToolSearch = 'ToolSearch',
   Write = 'Write',
 }
 
@@ -47,4 +48,15 @@ export interface TodoWriteArgs {
  */
 export interface SkillArgs {
   skill?: string;
+}
+
+/**
+ * Arguments for CC's built-in `ToolSearch` tool. CC invokes this to load
+ * schemas for deferred tools before calling them. `query` is either
+ * `select:<name>[,<name>...]` for direct fetch, or keyword search with
+ * optional `+term` to require a keyword.
+ */
+export interface ToolSearchArgs {
+  max_results?: number;
+  query?: string;
 }

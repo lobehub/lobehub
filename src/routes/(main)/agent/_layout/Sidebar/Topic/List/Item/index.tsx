@@ -4,6 +4,7 @@ import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import DotsLoading from '@/components/DotsLoading';
 import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
@@ -137,7 +138,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   const { dropdownMenu } = useTopicItemDropdownMenu({
     fav,
     id,
-    toggleEditing,
+    title,
   });
 
   const hasUnread = id && isUnreadCompleted;
@@ -191,7 +192,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={href}
-        title={title}
         icon={(() => {
           if (isLoading) {
             return (
@@ -213,6 +213,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
           );
         })()}
+        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       />

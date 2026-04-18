@@ -43,6 +43,8 @@ export default {
   'importSuccess': 'Successfully imported {{count}} messages',
   'loadMore': 'Load More',
   'newTopic': 'New Topic',
+  'renameModal.description': 'Keep it short and easy to recognize.',
+  'renameModal.title': 'Rename Topic',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
   'temp': 'Temporary',

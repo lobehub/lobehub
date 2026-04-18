@@ -8,6 +8,7 @@ import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import GitStatus from '@/features/ChatInput/RuntimeConfig/GitStatus';
 import { getRecentDirs } from '@/features/ChatInput/RuntimeConfig/recentDirs';
 import WorkingDirectoryContent from '@/features/ChatInput/RuntimeConfig/WorkingDirectory';
 import { useAgentStore } from '@/store/agent';
@@ -55,14 +56,17 @@ const WorkingDirectoryBar = memo(() => {
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
 
+  const repoType = useMemo(() => {
+    if (!effectiveWorkingDirectory) return undefined;
+    return getRecentDirs().find((d) => d.path === effectiveWorkingDirectory)?.repoType;
+  }, [effectiveWorkingDirectory]);
+
   const dirIconNode = useMemo((): ReactNode => {
     if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
-    const dirs = getRecentDirs();
-    const match = dirs.find((d) => d.path === effectiveWorkingDirectory);
-    if (match?.repoType === 'github') return <Github size={14} />;
-    if (match?.repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
+    if (repoType === 'github') return <Github size={14} />;
+    if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
     return <Icon icon={FolderIcon} size={14} />;
-  }, [effectiveWorkingDirectory]);
+  }, [effectiveWorkingDirectory, repoType]);
 
   if (!agentId || isLoading) {
     return (
@@ -104,6 +108,9 @@ const WorkingDirectoryBar = memo(() => {
           )}
         </div>
       </Popover>
+      {effectiveWorkingDirectory && repoType && (
+        <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
+      )}
     </Flexbox>
   );
 });

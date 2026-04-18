@@ -41,6 +41,8 @@
   "importSuccess": "已导入 {{count}} 条消息",
   "loadMore": "更多",
   "newTopic": "新话题",
+  "renameModal.description": "保持简短且易于识别。",
+  "renameModal.title": "重命名话题",
   "searchPlaceholder": "搜索话题…",
   "searchResultEmpty": "暂无搜索结果",
   "temp": "临时",

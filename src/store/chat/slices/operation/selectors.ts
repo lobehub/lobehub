@@ -521,21 +521,35 @@ const isSendingMessage = (s: ChatStoreState): boolean => {
 // === Unread Completion ===
 
 /**
- * Check if an agent has unread completed generation
+ * Number of topics with unread completed generation for the given agent.
+ * Drives the agent-level badge count.
+ */
+const agentUnreadCount =
+  (agentId: string) =>
+  (s: ChatStoreState): number => {
+    return s.unreadCompletedTopicsByAgent[agentId]?.size ?? 0;
+  };
+
+/**
+ * Whether the agent has any unread completed generation.
  */
 const isAgentUnreadCompleted =
   (agentId: string) =>
   (s: ChatStoreState): boolean => {
-    return s.unreadCompletedAgentIds.has(agentId);
+    return (s.unreadCompletedTopicsByAgent[agentId]?.size ?? 0) > 0;
   };
 
 /**
- * Check if a topic has unread completed generation
+ * Whether a specific topic has unread completed generation.
+ * Scans across agents since topic items don't carry agentId in scope here.
  */
 const isTopicUnreadCompleted =
   (topicId: string) =>
   (s: ChatStoreState): boolean => {
-    return s.unreadCompletedTopicIds.has(topicId);
+    for (const set of Object.values(s.unreadCompletedTopicsByAgent)) {
+      if (set.has(topicId)) return true;
+    }
+    return false;
   };
 
 // ━━━ Message Queue Selectors ━━━
@@ -593,6 +607,8 @@ export const operationSelectors = {
   hasRunningOperationType,
   /** @deprecated Use isAgentRuntimeRunning instead */
   isAIGenerating: isAgentRuntimeRunning,
+
+  agentUnreadCount,
 
   isAborting,
 

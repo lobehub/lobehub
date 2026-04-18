@@ -23,6 +23,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useAgentId } from '../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
 import ApprovalMode from './ApprovalMode';
+import GitStatus from './GitStatus';
 import { getRecentDirs } from './recentDirs';
 import WorkingDirectory from './WorkingDirectory';
 
@@ -114,14 +115,17 @@ const RuntimeConfig = memo(() => {
   );
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
 
+  const repoType = useMemo(() => {
+    if (!effectiveWorkingDirectory) return undefined;
+    return getRecentDirs().find((d) => d.path === effectiveWorkingDirectory)?.repoType;
+  }, [effectiveWorkingDirectory]);
+
   const dirIconNode = useMemo((): ReactNode => {
     if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
-    const dirs = getRecentDirs();
-    const match = dirs.find((d) => d.path === effectiveWorkingDirectory);
-    if (match?.repoType === 'github') return <Github size={14} />;
-    if (match?.repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
+    if (repoType === 'github') return <Github size={14} />;
+    if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
     return <Icon icon={FolderIcon} size={14} />;
-  }, [effectiveWorkingDirectory]);
+  }, [effectiveWorkingDirectory, repoType]);
 
   const switchMode = useCallback(
     async (mode: RuntimeEnvMode) => {
@@ -228,26 +232,35 @@ const RuntimeConfig = memo(() => {
   const rightContent = () => {
     if (runtimeMode === 'local') {
       return (
-        <Popover
-          content={<WorkingDirectory agentId={agentId} onClose={() => setDirPopoverOpen(false)} />}
-          open={dirPopoverOpen}
-          placement="bottomLeft"
-          styles={{ content: { padding: 4 } }}
-          trigger="click"
-          onOpenChange={setDirPopoverOpen}
-        >
-          <div>
-            {dirPopoverOpen ? (
-              dirButton
-            ) : (
-              <Tooltip
-                title={effectiveWorkingDirectory || tPlugin('localSystem.workingDirectory.notSet')}
-              >
-                {dirButton}
-              </Tooltip>
-            )}
-          </div>
-        </Popover>
+        <>
+          <Popover
+            open={dirPopoverOpen}
+            placement="bottomLeft"
+            styles={{ content: { padding: 4 } }}
+            trigger="click"
+            content={
+              <WorkingDirectory agentId={agentId} onClose={() => setDirPopoverOpen(false)} />
+            }
+            onOpenChange={setDirPopoverOpen}
+          >
+            <div>
+              {dirPopoverOpen ? (
+                dirButton
+              ) : (
+                <Tooltip
+                  title={
+                    effectiveWorkingDirectory || tPlugin('localSystem.workingDirectory.notSet')
+                  }
+                >
+                  {dirButton}
+                </Tooltip>
+              )}
+            </div>
+          </Popover>
+          {effectiveWorkingDirectory && repoType && (
+            <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
+          )}
+        </>
       );
     }
 

@@ -532,8 +532,8 @@ export class ChatTopicActionImpl {
       n('toggleTopic'),
     );
 
-    if (id) {
-      this.#get().clearUnreadCompletedTopic(id);
+    if (activeAgentId) {
+      this.#get().clearUnreadCompletedTopic(activeAgentId, id ?? null);
     }
 
     if (opts.skipRefreshMessage) return;
@@ -541,10 +541,11 @@ export class ChatTopicActionImpl {
   };
 
   removeSessionTopics = async (): Promise<void> => {
-    const { switchTopic, activeAgentId, refreshTopic } = this.#get();
+    const { switchTopic, activeAgentId, refreshTopic, clearUnreadCompletedAgent } = this.#get();
     if (!activeAgentId) return;
 
     await topicService.removeTopicsByAgentId(activeAgentId);
+    clearUnreadCompletedAgent(activeAgentId);
     await refreshTopic();
 
     // switch to default topic
@@ -552,7 +553,7 @@ export class ChatTopicActionImpl {
   };
 
   removeGroupTopics = async (groupId: string): Promise<void> => {
-    const { switchTopic, refreshTopic } = this.#get();
+    const { switchTopic, refreshTopic, purgeUnreadTopics } = this.#get();
 
     // Get topics for this specific group from the topic map using topicMapKey
     const key = topicMapKey({ groupId });
@@ -561,6 +562,7 @@ export class ChatTopicActionImpl {
 
     if (topicIds.length > 0) {
       await topicService.batchRemoveTopics(topicIds);
+      purgeUnreadTopics(topicIds);
     }
 
     await refreshTopic();
@@ -573,16 +575,25 @@ export class ChatTopicActionImpl {
     const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
+    this.#set({ unreadCompletedTopicsByAgent: {} }, false, n('removeAllTopics/clearUnread'));
     await refreshTopic();
   };
 
   removeTopic = async (id: string): Promise<void> => {
-    const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = this.#get();
+    const {
+      activeAgentId,
+      activeGroupId,
+      activeTopicId,
+      switchTopic,
+      refreshTopic,
+      purgeUnreadTopics,
+    } = this.#get();
     // Allow deletion when either agentId or groupId is active
     if (!activeAgentId && !activeGroupId) return;
 
     // remove topic
     await topicService.removeTopic(id);
+    purgeUnreadTopics([id]);
     await refreshTopic();
 
     // switch back to default topic
@@ -590,10 +601,12 @@ export class ChatTopicActionImpl {
   };
 
   removeUnstarredTopic = async (): Promise<void> => {
-    const { refreshTopic, switchTopic } = this.#get();
+    const { refreshTopic, switchTopic, purgeUnreadTopics } = this.#get();
     const topics = topicSelectors.currentUnFavTopics(this.#get());
+    const topicIds = topics.map((t) => t.id);
 
-    await topicService.batchRemoveTopics(topics.map((t) => t.id));
+    await topicService.batchRemoveTopics(topicIds);
+    purgeUnreadTopics(topicIds);
     await refreshTopic();
 
     // Switch to default topic

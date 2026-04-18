@@ -2,10 +2,11 @@
 
 import { type DropdownItem, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { Copy, Hash, Maximize2, PencilLine, Star, Trash } from 'lucide-react';
+import { Copy, Hash, Maximize2, PencilLine, Star, Trash, Wand2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -23,9 +24,15 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
 
   const activeTopic = useChatStore(topicSelectors.currentActiveTopic);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const [favoriteTopic, removeTopic] = useChatStore((s) => [s.favoriteTopic, s.removeTopic]);
+  const [autoRenameTopicTitle, favoriteTopic, removeTopic, updateTopicTitle] = useChatStore((s) => [
+    s.autoRenameTopicTitle,
+    s.favoriteTopic,
+    s.removeTopic,
+    s.updateTopicTitle,
+  ]);
 
   const topicId = activeTopic?.id;
+  const topicTitle = activeTopic?.title ?? '';
   const isFavorite = !!activeTopic?.favorite;
 
   const menuItems = useMemo<DropdownItem[]>(() => {
@@ -41,12 +48,28 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
             favoriteTopic(topicId, !isFavorite);
           },
         },
+        { type: 'divider' as const },
+        {
+          icon: <Icon icon={Wand2} />,
+          key: 'autoRename',
+          label: t('actions.autoRename', { ns: 'topic' }),
+          onClick: () => {
+            autoRenameTopicTitle(topicId);
+          },
+        },
         {
           icon: <Icon icon={PencilLine} />,
           key: 'rename',
           label: t('rename', { ns: 'common' }),
           onClick: () => {
-            useChatStore.setState({ topicRenamingId: topicId });
+            openRenameModal({
+              defaultValue: topicTitle,
+              description: t('renameModal.description', { ns: 'topic' }),
+              onSave: async (newTitle) => {
+                await updateTopicTitle(topicId, newTitle);
+              },
+              title: t('renameModal.title', { ns: 'topic' }),
+            });
           },
         },
         { type: 'divider' as const },
@@ -112,11 +135,14 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
     return items;
   }, [
     topicId,
+    topicTitle,
     isFavorite,
     workingDirectory,
     wideScreen,
+    autoRenameTopicTitle,
     favoriteTopic,
     removeTopic,
+    updateTopicTitle,
     toggleWideScreen,
     t,
     modal,

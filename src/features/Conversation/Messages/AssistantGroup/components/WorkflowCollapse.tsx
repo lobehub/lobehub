@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { shinyTextStyles } from '@/styles';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -125,6 +127,13 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     const isGenerating = useConversationStore(
       messageStateSelectors.isMessageGenerating(assistantMessageId),
     );
+    /** Earliest op startTime for this message — anchors the working timer so
+     *  it reflects wall-clock since the op began, not since the component mounted. */
+    const opStartTime = useChatStore((s) => {
+      const ops = operationSelectors.getOperationsByMessage(assistantMessageId)(s);
+      if (ops.length === 0) return undefined;
+      return ops.reduce((min, op) => Math.min(min, op.metadata.startTime), Infinity);
+    });
 
     const allComplete = toolsPhaseComplete && (workflowChromeComplete || !isGenerating);
     const summaryText = useMemo(() => getWorkflowSummaryText(blocks), [blocks]);
@@ -235,7 +244,11 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
 
       if (activeWorkingStartedAtRef.current === null) {
-        activeWorkingStartedAtRef.current = Date.now();
+        // Initial/remount seeds from op start so elapsed reflects wall-clock
+        // since the op began. Intervention resume seeds from now so pause
+        // time stays excluded from the accumulator.
+        const isInitial = accumulatedWorkingMsRef.current === 0;
+        activeWorkingStartedAtRef.current = isInitial && opStartTime ? opStartTime : Date.now();
       }
 
       const tick = () => {
@@ -251,7 +264,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       const interval = setInterval(tick, 1000);
 
       return () => clearInterval(interval);
-    }, [pendingInterventionPresent, streaming]);
+    }, [opStartTime, pendingInterventionPresent, streaming]);
 
     const showWorkingElapsed =
       !pendingInterventionPresent &&
