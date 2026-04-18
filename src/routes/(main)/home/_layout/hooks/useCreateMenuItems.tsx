@@ -215,8 +215,7 @@ export const useCreateMenuItems = () => {
           },
           avatar:
             'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claude.webp',
-          systemRole:
-            'You are Claude Code, an AI coding agent. Help users with code-related tasks.',
+          systemRole: '',
           title: 'Claude Code',
         },
         groupId: options?.groupId,
