@@ -14,6 +14,7 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
+import TopicCard from './TopicCard';
 
 const ROW_TYPE_ICON = {
   comment: MessageCircle,
@@ -135,6 +136,9 @@ const TaskActivities = memo(() => {
                       onAfterResolve={refreshActiveTask}
                     />
                   );
+                }
+                if (activity.type === 'topic') {
+                  return <TopicCard activity={activity} key={key} />;
                 }
                 return <ActivityRow activity={activity} key={key} />;
               })}
