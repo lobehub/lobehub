@@ -11,32 +11,6 @@ const qwenChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description: 'Open-source Qwen3.6 text model supporting both thinking and non-thinking modes.',
-    displayName: 'Qwen3.6-35B-A3B',
-    id: 'qwen3.6-35b-a3b',
-    maxOutput: 65_536,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-04-16',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
