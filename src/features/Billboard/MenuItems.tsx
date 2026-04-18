@@ -8,19 +8,35 @@ import { useGlobalStore } from '@/store/global';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import { billboardDismissKey } from './index';
+import { resolveBillboardTitle } from './locale';
 
 export const useBillboardMenuItems = (): MenuProps['items'] => {
   const billboard = useServerConfigStore((s) => s.billboard);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
-  const { t } = useTranslation('notification');
+  const { i18n } = useTranslation();
 
   return useMemo(() => {
     if (!billboard) return [];
+    const title = resolveBillboardTitle(billboard, i18n.language);
     return [
       {
         icon: <Icon icon={Megaphone} />,
         key: `billboard-${billboard.slug}`,
-        label: t('billboard.menuLabel'),
+        label: (
+          <span
+            title={title}
+            style={{
+              display: 'inline-block',
+              maxWidth: 200,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              verticalAlign: 'middle',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {title}
+          </span>
+        ),
         onClick: () => {
           const slug = billboardDismissKey(billboard.slug);
           const current = useGlobalStore.getState().status.readNotificationSlugs ?? [];
@@ -32,5 +48,5 @@ export const useBillboardMenuItems = (): MenuProps['items'] => {
         },
       },
     ];
-  }, [billboard, t, updateSystemStatus]);
+  }, [billboard, i18n.language, updateSystemStatus]);
 };

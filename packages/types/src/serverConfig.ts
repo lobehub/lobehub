@@ -95,8 +95,16 @@ export interface GlobalBillboardItem {
   title: string;
 }
 
+export interface GlobalBillboardLocaleFields {
+  title?: string;
+}
+
 export interface GlobalBillboard {
   endAt: string;
+  /**
+   * 按 locale 覆盖 billboard 级别字段（当前仅 title）。缺失时回退到默认 title。
+   */
+  i18n?: Record<string, GlobalBillboardLocaleFields>;
   id: number;
   items: GlobalBillboardItem[];
   slug: string;

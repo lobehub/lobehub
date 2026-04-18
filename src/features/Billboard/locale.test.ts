@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { GlobalBillboardItem } from '@/types/serverConfig';
+import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
-import { resolveBillboardItem } from './locale';
+import { resolveBillboardItem, resolveBillboardTitle } from './locale';
 
 const base: GlobalBillboardItem = {
   description: 'Default description',
@@ -79,5 +79,36 @@ describe('resolveBillboardItem', () => {
     };
 
     expect(resolveBillboardItem(item, 'en-US').linkLabel).toBeNull();
+  });
+});
+
+describe('resolveBillboardTitle', () => {
+  const baseBillboard: GlobalBillboard = {
+    endAt: '2026-12-31T00:00:00.000Z',
+    id: 1,
+    items: [],
+    slug: 'test',
+    startAt: '2026-01-01T00:00:00.000Z',
+    title: 'Default billboard title',
+  };
+
+  it('falls back to default title when i18n is missing', () => {
+    expect(resolveBillboardTitle(baseBillboard, 'zh-CN')).toBe('Default billboard title');
+  });
+
+  it('uses locale override when present', () => {
+    const billboard: GlobalBillboard = {
+      ...baseBillboard,
+      i18n: { 'zh-CN': { title: '中文标题' } },
+    };
+    expect(resolveBillboardTitle(billboard, 'zh-CN')).toBe('中文标题');
+  });
+
+  it('falls back to sibling regional locale via base code', () => {
+    const billboard: GlobalBillboard = {
+      ...baseBillboard,
+      i18n: { 'zh-CN': { title: '简体标题' } },
+    };
+    expect(resolveBillboardTitle(billboard, 'zh-TW')).toBe('简体标题');
   });
 });

@@ -28,6 +28,13 @@ export interface BillboardItem {
 }
 
 /**
+ * Billboard 级别的可本地化字段（当前仅 title）。
+ */
+export interface BillboardLocaleFields {
+  title?: string;
+}
+
+/**
  * Billboard set（一组 items 在前端轮播）。
  * 在 Sprint-style 模型下，每个 env 最多 1 个 set；
  * 实际展示还受 startAt / endAt 时间窗口约束。
@@ -35,6 +42,10 @@ export interface BillboardItem {
 export interface BillboardSet {
   /** ISO timestamp — 时间窗口结束，到点后 LobeHub 不再展示 */
   endAt: string;
+  /**
+   * 按 locale 覆盖 billboard 级别的文案（当前仅 title，用于 ? 菜单）。
+   */
+  i18n?: Record<string, BillboardLocaleFields>;
   id: number;
   items: BillboardItem[];
   /** 唯一标识符 */
