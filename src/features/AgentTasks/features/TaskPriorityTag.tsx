@@ -32,13 +32,14 @@ const PRIORITY_META: Record<number, PriorityMeta> = {
 interface TaskPriorityTagProps {
   children?: ReactNode;
   disableDropdown?: boolean;
+  onChange?: (priority: number) => void;
   priority?: number | null;
   size?: number;
-  taskIdentifier: string;
+  taskIdentifier?: string;
 }
 
 const TaskPriorityTag = memo<TaskPriorityTagProps>(
-  ({ children, disableDropdown, size = 16, priority, taskIdentifier }) => {
+  ({ children, disableDropdown, onChange, size = 16, priority, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
     const isUrgent = priority === 1;
     const { t } = useTranslation('chat');
@@ -50,12 +51,17 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     const handlePriorityChange = useCallback(
       async (nextPriority: number) => {
         if (nextPriority === (priority ?? 0)) return;
+        if (onChange) {
+          onChange(nextPriority);
+          return;
+        }
+        if (!taskIdentifier) return;
         setLoading(true);
         await updateTask(taskIdentifier, { priority: nextPriority });
         await refreshTaskList();
         setLoading(false);
       },
-      [priority, refreshTaskList, taskIdentifier, updateTask],
+      [onChange, priority, refreshTaskList, taskIdentifier, updateTask],
     );
 
     const menuItems = useMemo<MenuProps['items']>(

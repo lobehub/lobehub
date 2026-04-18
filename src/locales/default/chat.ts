@@ -506,6 +506,12 @@ export default {
   'taskDetail.subtasks': 'Subtasks',
   'taskDetail.reassignDisabled': 'Cannot reassign agent while task is running',
   'taskDetail.titlePlaceholder': 'Enter task title...',
+  'taskDetail.updateFailed': 'Failed to update task',
+
+  'createTask.assignee': 'Assignee',
+  'createTask.instructionPlaceholder': 'Add description...',
+  'createTask.submit': 'Create task',
+  'createTask.titlePlaceholder': 'Task title',
   'taskList.activeTasks': 'Active Tasks',
   'taskList.all': 'All tasks',
   'taskList.breadcrumb.task': 'Task',

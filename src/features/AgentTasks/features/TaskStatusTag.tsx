@@ -69,13 +69,14 @@ const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'cancele
 interface TaskStatusTagProps {
   children?: ReactNode;
   disableDropdown?: boolean;
+  onChange?: (status: TaskStatus) => void;
   size?: number;
   status?: TaskStatus;
-  taskIdentifier: string;
+  taskIdentifier?: string;
 }
 
 const TaskStatusTag = memo<TaskStatusTagProps>(
-  ({ children, disableDropdown, size = 16, status, taskIdentifier }) => {
+  ({ children, disableDropdown, onChange, size = 16, status, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
     const { t } = useTranslation('chat');
     const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
@@ -86,6 +87,11 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     const handleStatusChange = useCallback(
       async (nextStatus: TaskStatus) => {
         if (nextStatus === displayStatus) return;
+        if (onChange) {
+          onChange(nextStatus);
+          return;
+        }
+        if (!taskIdentifier) return;
         setLoading(true);
 
         try {
@@ -94,7 +100,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
           setLoading(false);
         }
       },
-      [displayStatus, taskIdentifier, updateTaskStatus],
+      [displayStatus, onChange, taskIdentifier, updateTaskStatus],
     );
 
     const menuItems = useMemo<MenuProps['items']>(

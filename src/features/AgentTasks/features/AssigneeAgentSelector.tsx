@@ -16,11 +16,12 @@ interface AssigneeAgentSelectorProps {
   children: ReactNode;
   currentAgentId?: string | null;
   disabled?: boolean;
-  taskIdentifier: string;
+  onChange?: (agentId: string) => void;
+  taskIdentifier?: string;
 }
 
 const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
-  ({ children, currentAgentId, disabled, taskIdentifier }) => {
+  ({ children, currentAgentId, disabled, onChange, taskIdentifier }) => {
     const { t } = useTranslation(['chat', 'common']);
     const [key, setKey] = useState(0);
 
@@ -61,9 +62,15 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       (agentId: string) => {
         if (agentId === currentAgentId) return;
         setKey((k) => k + 1);
-        void updateTask(taskIdentifier, { assigneeAgentId: agentId });
+        if (onChange) {
+          onChange(agentId);
+          return;
+        }
+        if (taskIdentifier) {
+          void updateTask(taskIdentifier, { assigneeAgentId: agentId });
+        }
       },
-      [currentAgentId, taskIdentifier, updateTask],
+      [currentAgentId, onChange, taskIdentifier, updateTask],
     );
 
     const trigger = disabled ? (
