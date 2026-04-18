@@ -1,0 +1,50 @@
+<!doctype html>
+<html class="desktop">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+      }
+      html[data-theme='dark'] {
+        background: #141414;
+      }
+      html[data-theme='light'] {
+        background: #fafafa;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var theme = 'system';
+        try {
+          theme = localStorage.getItem('theme') || 'system';
+        } catch (_) {}
+        var systemTheme =
+          window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        var resolvedTheme = theme === 'system' ? systemTheme : theme;
+        if (resolvedTheme === 'dark' || resolvedTheme === 'light') {
+          document.documentElement.setAttribute('data-theme', resolvedTheme);
+        }
+        var urlParams = new URLSearchParams(window.location.search);
+        var locale = urlParams.get('lng') || navigator.language || 'en-US';
+        document.documentElement.lang = locale;
+        var rtl = ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'ur', 'yi'];
+        document.documentElement.dir =
+          rtl.indexOf(locale.split('-')[0].toLowerCase()) >= 0 ? 'rtl' : 'ltr';
+      })();
+    </script>
+    <div id="root" style="height: 100%"></div>
+    <script>
+      window.__SERVER_CONFIG__ = undefined;
+    </script>
+    <script type="module" src="/src/spa/entry.popup.tsx"></script>
+  </body>
+</html>

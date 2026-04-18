@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
-import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
@@ -27,8 +26,7 @@ export const useTopicItemDropdownMenu = ({
   const { modal, message } = App.useApp();
   const navigate = useNavigate();
 
-  const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const openGroupTopicInNewWindow = useGlobalStore((s) => s.openGroupTopicInNewWindow);
   const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   const addTab = useElectronStore((s) => s.addTab);
 
@@ -82,7 +80,7 @@ export const useTopicItemDropdownMenu = ({
               key: 'openInNewWindow',
               label: t('actions.openInNewWindow'),
               onClick: () => {
-                if (activeAgentId) openTopicInNewWindow(activeAgentId, id);
+                if (activeGroupId) openGroupTopicInNewWindow(activeGroupId, id);
               },
             },
             {
@@ -131,12 +129,11 @@ export const useTopicItemDropdownMenu = ({
     ].filter(Boolean) as MenuProps['items'];
   }, [
     id,
-    activeAgentId,
     activeGroupId,
     autoRenameTopicTitle,
     duplicateTopic,
     removeTopic,
-    openTopicInNewWindow,
+    openGroupTopicInNewWindow,
     addTab,
     navigate,
     toggleEditing,

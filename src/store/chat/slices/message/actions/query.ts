@@ -3,6 +3,7 @@ import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
+import { postMessagesMutation } from '@/libs/crossWindowBus';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
@@ -35,9 +36,15 @@ export class MessageQueryActionImpl {
   refreshMessages = async (context?: Partial<ConversationContext>): Promise<void> => {
     const agentId = context?.agentId ?? this.#get().activeAgentId;
     const topicId = context?.topicId !== undefined ? context.topicId : this.#get().activeTopicId;
+    const groupId = context?.groupId ?? this.#get().activeGroupId;
     // TODO: Support threadId refresh when needed
     await mutate([SWR_USE_FETCH_MESSAGES, agentId, topicId, 'session']);
     await mutate([SWR_USE_FETCH_MESSAGES, agentId, topicId, 'group']);
+
+    // Signal sibling windows (e.g. the topic popup window) to revalidate
+    // the same scope. No-op when BroadcastChannel is unavailable or when
+    // this refresh was triggered by a remote event (see suppressBroadcast).
+    postMessagesMutation({ agentId, groupId, topicId: topicId ?? undefined });
   };
 
   replaceMessages = (

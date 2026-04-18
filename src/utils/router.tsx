@@ -15,6 +15,7 @@ import {
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
+import CrossWindowSync from '@/features/CrossWindowSync';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { useGlobalStore } from '@/store/global';
 import { createNavigationRef } from '@/store/global/initialState';
@@ -146,6 +147,7 @@ const RouterRoot = memo(() => (
   <SPAGlobalProvider>
     <BusinessGlobalProvider>
       <NavigatorRegistrar />
+      <CrossWindowSync />
       <Outlet />
     </BusinessGlobalProvider>
   </SPAGlobalProvider>

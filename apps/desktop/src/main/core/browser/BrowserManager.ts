@@ -278,6 +278,16 @@ export class BrowserManager {
     browser?.setWindowMinimumSize(size);
   }
 
+  setWindowAlwaysOnTop(identifier: string, flag: boolean) {
+    const browser = this.browsers.get(identifier);
+    browser?.browserWindow.setAlwaysOnTop(flag);
+  }
+
+  isWindowAlwaysOnTop(identifier: string) {
+    const browser = this.browsers.get(identifier);
+    return browser?.browserWindow.isAlwaysOnTop() ?? false;
+  }
+
   getIdentifierByWebContents(webContents: WebContents): string | null {
     return this.webContentsMap.get(webContents) || null;
   }
