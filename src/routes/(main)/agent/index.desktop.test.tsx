@@ -3,8 +3,8 @@
  */
 import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useLocation } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initialState as initialChatState } from '@/store/chat/initialState';
 import { useChatStore } from '@/store/chat/store';

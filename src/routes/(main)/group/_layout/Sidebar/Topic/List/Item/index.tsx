@@ -8,8 +8,8 @@ import { useTranslation } from 'react-i18next';
 import DotsLoading from '@/components/DotsLoading';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
-import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -221,6 +221,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={!editing ? href : undefined}
+        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={
           isLoading ? (
             <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
@@ -231,7 +232,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         slots={{
           iconPostfix: unreadNode,
         }}
-        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         onClick={handleClick}
         onDoubleClick={() => void handleDoubleClick()}
       />
