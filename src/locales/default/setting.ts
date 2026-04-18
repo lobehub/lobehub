@@ -208,6 +208,7 @@ export default {
   'analytics.title': 'Analytics',
 
   // Claude Code CLI status (shown on agent profile page in CC integration mode)
+  'ccStatus.account.label': 'Account',
   'ccStatus.detecting': 'Detecting Claude Code CLI...',
   'ccStatus.redetect': 'Re-detect',
   'ccStatus.title': 'Claude Code CLI',

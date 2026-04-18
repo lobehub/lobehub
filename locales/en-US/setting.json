@@ -191,6 +191,7 @@
   "analytics.telemetry.desc": "Help us improve {{appName}} with anonymous usage data",
   "analytics.telemetry.title": "Send Anonymous Usage Data",
   "analytics.title": "Analytics",
+  "ccStatus.account.label": "Account",
   "ccStatus.detecting": "Detecting Claude Code CLI...",
   "ccStatus.redetect": "Re-detect",
   "ccStatus.title": "Claude Code CLI",

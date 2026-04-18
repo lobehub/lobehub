@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type ToolStatus } from '@lobechat/electron-client-ipc';
+import { type ClaudeAuthStatus, type ToolStatus } from '@lobechat/electron-client-ipc';
 import { ActionIcon, CopyButton, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
@@ -19,6 +19,11 @@ const useStyles = createStyles(({ css, token }) => ({
 
     background: ${token.colorFillQuaternary};
   `,
+  label: css`
+    min-width: 72px;
+    font-size: 12px;
+    color: ${token.colorTextTertiary};
+  `,
   path: css`
     font-family: ${token.fontFamilyCode};
     font-size: 12px;
@@ -30,7 +35,20 @@ const CCStatusCard = memo(() => {
   const { t } = useTranslation('setting');
   const { styles } = useStyles();
   const [status, setStatus] = useState<ToolStatus | undefined>();
+  const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
   const [detecting, setDetecting] = useState(true);
+
+  // Fetched independently of `detectTool`: an auth-fetch failure must not
+  // flip the CLI status card to unavailable.
+  const fetchAuth = useCallback(async () => {
+    try {
+      const result = await toolDetectorService.getClaudeAuthStatus();
+      setAuth(result);
+    } catch (error) {
+      console.warn('[CCStatusCard] Failed to get claude auth status:', error);
+      setAuth(null);
+    }
+  }, []);
 
   const detect = useCallback(async () => {
     if (!isDesktop) return;
@@ -44,7 +62,8 @@ const CCStatusCard = memo(() => {
     } finally {
       setDetecting(false);
     }
-  }, []);
+    void fetchAuth();
+  }, [fetchAuth]);
 
   useEffect(() => {
     void detect();
@@ -92,6 +111,22 @@ const CCStatusCard = memo(() => {
     );
   };
 
+  const renderAuth = () => {
+    if (detecting || !status?.available || !auth?.loggedIn) return null;
+
+    return (
+      <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
+        <Text className={styles.label}>{t('ccStatus.account.label')}</Text>
+        {auth.email && <Text ellipsis>{auth.email}</Text>}
+        {auth.subscriptionType && (
+          <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+            {auth.subscriptionType.toUpperCase()}
+          </Tag>
+        )}
+      </Flexbox>
+    );
+  };
+
   return (
     <Flexbox className={styles.card} gap={8} style={{ marginBottom: 12 }}>
       <Flexbox horizontal align="center" gap={8} justify="space-between">
@@ -107,6 +142,7 @@ const CCStatusCard = memo(() => {
         </Tooltip>
       </Flexbox>
       {renderBody()}
+      {renderAuth()}
     </Flexbox>
   );
 });
