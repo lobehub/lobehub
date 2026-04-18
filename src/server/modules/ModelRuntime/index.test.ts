@@ -26,6 +26,7 @@ import { type ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
+import apiKeyManager from './apiKeyManager';
 import { buildPayloadFromKeyVaults, initModelRuntimeWithUserPayload } from './index';
 
 // 模拟依赖项
@@ -37,6 +38,11 @@ vi.mock('@/envs/llm', () => ({
 
     AZURE_API_KEY: 'test-azure-key',
     AZURE_ENDPOINT: 'https://test-azure.openai.azure.com',
+
+    AZUREAI_ENDPOINT_KEY: 'test-azureai-key',
+    AZUREAI_ENDPOINT: 'azureai-endpoint',
+
+    COMFYUI_API_KEY: 'test-comfyui-key',
 
     ZHIPU_API_KEY: 'test.zhipu-key',
     MOONSHOT_API_KEY: 'test-moonshot-key',
@@ -493,6 +499,78 @@ describe('initModelRuntimeWithUserPayload method', () => {
       // 根据实际实现，你可能需要检查是否返回了默认的 runtime 实例，或者是否抛出了异常
       // 例如，如果默认使用 OpenAI:
       expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+    });
+  });
+
+  // Security regression: a user-supplied baseURL must not inherit the server-global apiKey.
+  describe('should not leak server-global API key when user supplies custom baseURL', () => {
+    const expectInvalidProviderAPIKey = async (provider: string, payload: ClientSecretPayload) => {
+      try {
+        await initModelRuntimeWithUserPayload(provider, payload);
+        expect.fail('initModelRuntimeWithUserPayload should have thrown InvalidProviderAPIKey');
+      } catch (e) {
+        expect(e).toEqual(expect.objectContaining({ errorType: 'InvalidProviderAPIKey' }));
+      }
+    };
+
+    it('OpenAI: throws InvalidProviderAPIKey instead of using OPENAI_API_KEY', async () => {
+      await expectInvalidProviderAPIKey(ModelProvider.OpenAI, {
+        baseURL: 'https://user-custom-endpoint.com/v1',
+      });
+    });
+
+    it('Unknown provider (falls through to OpenAI defaults): throws InvalidProviderAPIKey', async () => {
+      await expectInvalidProviderAPIKey('unknown', {
+        baseURL: 'https://user-custom-endpoint.com/v1',
+      });
+    });
+
+    it('Azure: throws InvalidProviderAPIKey instead of using AZURE_API_KEY', async () => {
+      await expectInvalidProviderAPIKey(ModelProvider.Azure, {
+        baseURL: 'https://user-custom-azure-endpoint.com',
+      });
+    });
+
+    it('AzureAI: throws InvalidProviderAPIKey instead of using AZUREAI_ENDPOINT_KEY', async () => {
+      await expectInvalidProviderAPIKey(ModelProvider.AzureAI, {
+        baseURL: 'https://user-custom-azureai-endpoint.com',
+      });
+    });
+
+    it('ComfyUI: apiKey stays undefined instead of falling back to COMFYUI_API_KEY', async () => {
+      const jwtPayload: ClientSecretPayload = {
+        authType: 'bearer',
+        baseURL: 'http://user-custom-comfyui:8188',
+      };
+      const runtime = await initModelRuntimeWithUserPayload(ModelProvider.ComfyUI, jwtPayload);
+      expect(runtime['_runtime']).toBeInstanceOf(LobeComfyUI);
+      expect((runtime['_runtime'] as any).options.apiKey).toBeUndefined();
+    });
+
+    it('Custom provider resolved to Azure: throws InvalidProviderAPIKey', async () => {
+      await expectInvalidProviderAPIKey('custom-provider', {
+        baseURL: 'https://user-custom-azure-endpoint.com',
+        runtimeProvider: ModelProvider.Azure,
+      });
+    });
+
+    it('OpenAI with user baseURL + comma-separated apiKey: passes user keys (never the server-global key) to apiKeyManager.pick', async () => {
+      const pickSpy = vi.spyOn(apiKeyManager, 'pick');
+      try {
+        const jwtPayload: ClientSecretPayload = {
+          apiKey: 'user-key-1,user-key-2',
+          baseURL: 'https://user-custom-endpoint.com/v1',
+        };
+        const runtime = await initModelRuntimeWithUserPayload(ModelProvider.OpenAI, jwtPayload);
+        expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
+        expect(runtime['_runtime'].baseURL).toBe(jwtPayload.baseURL);
+        // apiKeyManager.pick must receive the user's raw comma-separated key
+        // string (so multi-key rotation keeps working) and never the server key.
+        expect(pickSpy).toHaveBeenCalledWith('user-key-1,user-key-2');
+        expect(pickSpy).not.toHaveBeenCalledWith('test-openai-key');
+      } finally {
+        pickSpy.mockRestore();
+      }
     });
   });
 });
