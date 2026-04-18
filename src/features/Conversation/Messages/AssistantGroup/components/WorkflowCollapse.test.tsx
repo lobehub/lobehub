@@ -26,7 +26,16 @@ vi.mock('@lobehub/ui', () => ({
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
-    IconComponent ? <IconComponent /> : <div />,
+    IconComponent ? (
+      <div
+        data-icon={IconComponent.displayName || IconComponent.name || 'unknown'}
+        data-testid="icon"
+      >
+        <IconComponent />
+      </div>
+    ) : (
+      <div />
+    ),
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
@@ -232,5 +241,101 @@ describe('WorkflowCollapse', () => {
     rerender(<WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />);
 
     expect(getExpandedKeys()).toBe('["workflow"]');
+  });
+
+  it('shows green check when all tools succeed after completion', () => {
+    mockIsGenerating = false;
+    const blocks: AssistantContentBlock[] = [
+      {
+        content: '',
+        id: 'block-1',
+        tools: [
+          {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-1',
+            identifier: 'search',
+            type: 'builtin',
+            result: { content: 'ok' },
+          } as any,
+          {
+            apiName: 'calculate',
+            arguments: '{}',
+            id: 'tool-2',
+            identifier: 'calculate',
+            type: 'builtin',
+            result: { content: '42' },
+          } as any,
+        ],
+      } as AssistantContentBlock,
+    ];
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+    const icon = screen.getByTestId('icon');
+    expect(icon).toHaveAttribute('data-icon', 'Check');
+  });
+
+  it('shows yellow warning when some tools fail after completion', () => {
+    mockIsGenerating = false;
+    const blocks: AssistantContentBlock[] = [
+      {
+        content: '',
+        id: 'block-1',
+        tools: [
+          {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-1',
+            identifier: 'search',
+            type: 'builtin',
+            result: { content: 'ok' },
+          } as any,
+          {
+            apiName: 'calculate',
+            arguments: '{}',
+            id: 'tool-2',
+            identifier: 'calculate',
+            type: 'builtin',
+            result: { content: null, error: { message: 'bad' } },
+          } as any,
+        ],
+      } as AssistantContentBlock,
+    ];
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+    const icon = screen.getByTestId('icon');
+    expect(icon).toHaveAttribute('data-icon', 'TriangleAlert');
+  });
+
+  it('shows red x when all tools fail after completion', () => {
+    mockIsGenerating = false;
+    const blocks: AssistantContentBlock[] = [
+      {
+        content: '',
+        id: 'block-1',
+        tools: [
+          {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-1',
+            identifier: 'search',
+            type: 'builtin',
+            result: { content: null, error: { message: 'bad' } },
+          } as any,
+          {
+            apiName: 'calculate',
+            arguments: '{}',
+            id: 'tool-2',
+            identifier: 'calculate',
+            type: 'builtin',
+            result: { content: null, error: { message: 'worse' } },
+          } as any,
+        ],
+      } as AssistantContentBlock,
+    ];
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+    const icon = screen.getByTestId('icon');
+    expect(icon).toHaveAttribute('data-icon', 'X');
   });
 });

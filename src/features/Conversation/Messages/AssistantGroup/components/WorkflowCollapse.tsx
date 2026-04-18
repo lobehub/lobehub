@@ -1,7 +1,7 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
 import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
+import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
 import { type Key, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,9 +24,9 @@ import {
 import {
   areWorkflowToolsComplete,
   formatReasoningDuration,
+  getWorkflowCompletionStatus,
   getWorkflowStreamingHeadlineState,
   getWorkflowSummaryText,
-  hasToolError,
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
 import WorkflowExpandedList from './WorkflowExpandedList';
@@ -127,7 +127,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     const allComplete = toolsPhaseComplete && (workflowChromeComplete || !isGenerating);
     const summaryText = useMemo(() => getWorkflowSummaryText(blocks), [blocks]);
-    const errorPresent = hasToolError(allTools);
+    const completionStatus = useMemo(() => getWorkflowCompletionStatus(allTools), [allTools]);
 
     /** Sum of per-round model output duration (not reasoning-only); see ModelPerformance.duration */
     const totalWorkflowMs = useMemo(
@@ -279,8 +279,10 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       ) : (
         <NeuralNetworkLoading size={16} />
       )
-    ) : errorPresent ? (
+    ) : completionStatus === 'error' ? (
       <Icon color={cssVar.colorError} icon={X} />
+    ) : completionStatus === 'partial' ? (
+      <Icon color={cssVar.colorWarning} icon={AlertTriangle} />
     ) : (
       <Icon color={cssVar.colorSuccess} icon={Check} />
     );
