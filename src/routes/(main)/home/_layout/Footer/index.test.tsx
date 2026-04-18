@@ -8,6 +8,7 @@ const analyticsTrack = vi.fn();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: { language: 'en-US' },
     t: (key: string) =>
       ({
         'agentOnboardingPromo.actionLabel': 'Try it now',
