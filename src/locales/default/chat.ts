@@ -581,6 +581,8 @@ export default {
   'workflow.toolDisplayName.upsertDocumentByFilename': 'Updated a document',
   'workflow.toolDisplayName.writeLocalFile': 'Wrote a file',
   'workflow.awaitingConfirmation': 'Awaiting your confirmation',
+  'workflow.collapse': 'Collapse',
+  'workflow.expandFull': 'Expand fully',
   'workflow.working': 'Working...',
   'workingPanel.agentDocuments': 'Agent Documents',
   'workingPanel.progress': 'Progress',

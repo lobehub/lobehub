@@ -295,13 +295,20 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     const expandToggleIcon = expandLevel === 'semi' ? Maximize2 : Minimize2;
 
-    const handleToggleExpand = (e: React.MouseEvent) => {
+    const handleToggleExpand = (e: React.MouseEvent | React.KeyboardEvent) => {
       e.stopPropagation();
       if (expandLevel === 'semi') {
         setExpandLevel('full');
         userOpenedRef.current = true;
       } else {
         setExpandLevel('semi');
+      }
+    };
+
+    const handleToggleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleToggleExpand(e);
       }
     };
 
@@ -396,15 +403,18 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
               exit={{ opacity: 0, scale: 0.9, x: 4 }}
               initial={{ opacity: 0, scale: 0.9, x: 4 }}
               role="button"
+              tabIndex={0}
               title={expandToggleLabel}
               transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
               style={{
                 cursor: 'pointer',
                 flex: 'none',
                 marginInlineStart: 8,
+                outline: 'none',
                 padding: 2,
               }}
               onClick={handleToggleExpand}
+              onKeyDown={handleToggleKeyDown}
             >
               <AnimatePresence initial={false} mode="wait">
                 <motion.span
