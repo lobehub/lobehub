@@ -210,7 +210,7 @@ export const useCreateMenuItems = () => {
           agencyConfig: {
             heterogeneousProvider: {
               command: 'claude',
-              type: 'claudecode' as const,
+              type: 'claude-code' as const,
             },
           },
           avatar:

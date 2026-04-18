@@ -346,17 +346,16 @@ export class ConversationLifecycleActionImpl {
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
-    if (isDesktop && heterogeneousProvider?.type === 'claudecode') {
+    if (isDesktop && heterogeneousProvider?.type === 'claude-code') {
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
-        const { model, provider } =
-          agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+        const { model } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
             groupId: operationContext.groupId ?? undefined,
-            newAssistantMessage: { model, provider: provider! },
+            newAssistantMessage: { model, provider: 'claude-code' },
             newTopic: !operationContext.topicId
               ? {
                   title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),

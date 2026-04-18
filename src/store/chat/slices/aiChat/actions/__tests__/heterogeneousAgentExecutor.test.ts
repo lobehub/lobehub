@@ -107,7 +107,7 @@ const defaultContext = {
 const defaultParams = {
   assistantMessageId: 'ast-initial',
   context: defaultContext,
-  heterogeneousProvider: { command: 'claude', type: 'claudecode' as const },
+  heterogeneousProvider: { command: 'claude', type: 'claude-code' as const },
   message: 'test prompt',
   operationId: 'op-1',
 };
