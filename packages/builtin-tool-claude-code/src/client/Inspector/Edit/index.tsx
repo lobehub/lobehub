@@ -4,7 +4,7 @@ import { createEditLocalFileInspector } from '@lobechat/shared-tool-ui/inspector
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { memo, useMemo } from 'react';
 
-import { ClaudeCodeApiName } from '../types';
+import { ClaudeCodeApiName } from '../../../types';
 
 interface CCEditArgs {
   file_path?: string;
