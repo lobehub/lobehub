@@ -273,19 +273,27 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       threshold: WORKFLOW_EXPANDED_SCROLL_THRESHOLD_PX,
     });
 
-    const statusIcon = streaming ? (
-      pendingInterventionPresent ? (
-        <Icon color={cssVar.colorInfo} icon={HandIcon} />
-      ) : (
-        <NeuralNetworkLoading size={16} />
-      )
-    ) : completionStatus === 'error' ? (
-      <Icon color={cssVar.colorError} icon={X} />
-    ) : completionStatus === 'partial' ? (
-      <Icon color={cssVar.colorWarning} icon={AlertTriangle} />
-    ) : (
-      <Icon color={cssVar.colorSuccess} icon={Check} />
-    );
+    const getStatusIcon = (): React.ReactNode => {
+      if (streaming) {
+        return pendingInterventionPresent ? (
+          <Icon color={cssVar.colorInfo} icon={HandIcon} />
+        ) : (
+          <NeuralNetworkLoading size={16} />
+        );
+      }
+
+      switch (completionStatus) {
+        case 'error': {
+          return <Icon color={cssVar.colorError} icon={X} />;
+        }
+        case 'partial': {
+          return <Icon color={cssVar.colorWarning} icon={AlertTriangle} />;
+        }
+        default: {
+          return <Icon color={cssVar.colorSuccess} icon={Check} />;
+        }
+      }
+    };
 
     const showExpandToggle = expandLevel !== 'collapsed';
     const expandToggleLabel =
@@ -324,7 +332,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           variant="outlined"
           width={24}
         >
-          {statusIcon}
+          {getStatusIcon()}
         </Block>
         {streaming ? (
           <Flexbox
