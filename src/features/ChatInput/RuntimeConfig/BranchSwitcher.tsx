@@ -9,7 +9,14 @@ import {
   DropdownMenuTrigger,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { CheckIcon, GitBranchIcon, GitBranchPlusIcon, LoaderIcon, SearchIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  GitBranchIcon,
+  GitBranchPlusIcon,
+  LoaderIcon,
+  RefreshCwIcon,
+  SearchIcon,
+} from 'lucide-react';
 import { memo, type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -41,6 +48,10 @@ const styles = createStaticStyles(({ css }) => ({
     padding: 8px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
+  createItemWrapper: css`
+    padding: 4px;
+    border-block-start: 1px solid ${cssVar.colorSplit};
+  `,
   createInput: css`
     flex: 1;
   `,
@@ -49,29 +60,6 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
-  `,
-  footer: css`
-    padding: 4px;
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
-  footerItem: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
   item: css`
     display: flex;
@@ -111,16 +99,42 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   searchBar: css`
     padding: 8px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
+  `,
+  refreshButton: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   section: css`
-    padding-block: 6px 2px;
-    padding-inline: 10px;
+    flex: 1;
 
     font-size: 11px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
+  `,
+  sectionRow: css`
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    padding-block: 6px 2px;
+    padding-inline: 10px;
   `,
   spinning: css`
     animation: branch-switcher-spin 0.8s linear infinite;
@@ -137,13 +151,14 @@ interface BranchSwitcherProps {
   children: ReactElement;
   currentBranch?: string;
   onAfterCheckout?: () => void;
+  onExternalRefresh?: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   path: string;
 }
 
 const BranchSwitcher = memo<BranchSwitcherProps>(
-  ({ path, currentBranch, open, onOpenChange, onAfterCheckout, children }) => {
+  ({ path, currentBranch, open, onOpenChange, onAfterCheckout, onExternalRefresh, children }) => {
     const { t } = useTranslation('plugin');
     const [search, setSearch] = useState('');
     const [isCreating, setIsCreating] = useState(false);
@@ -155,16 +170,32 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       data: branches = [],
       isLoading,
       error: branchesError,
+      mutate: mutateBranches,
     } = useSWR(
       open ? ['git-branches', path] : null,
       () => electronSystemService.listGitBranches(path),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
-    const { data: workingStatus } = useSWR(
+    const { data: workingStatus, mutate: mutateWorkingStatus } = useSWR(
       open ? ['git-status', path] : null,
       () => electronSystemService.getGitWorkingTreeStatus(path),
       { revalidateOnFocus: false },
     );
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const handleRefresh = useCallback(async () => {
+      if (isRefreshing) return;
+      setIsRefreshing(true);
+      try {
+        await Promise.all([
+          mutateBranches(),
+          mutateWorkingStatus(),
+          Promise.resolve(onExternalRefresh?.()),
+        ]);
+      } finally {
+        setIsRefreshing(false);
+      }
+    }, [isRefreshing, mutateBranches, mutateWorkingStatus, onExternalRefresh]);
 
     useEffect(() => {
       if (!open) {
@@ -233,13 +264,23 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     prefix={<Icon icon={SearchIcon} size={14} />}
                     size="small"
                     value={search}
+                    variant="filled"
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
 
                 <div className={styles.list}>
-                  <div className={styles.section}>
-                    {t('localSystem.workingDirectory.branchesHeading')}
+                  <div className={styles.sectionRow}>
+                    <div className={styles.section}>
+                      {t('localSystem.workingDirectory.branchesHeading')}
+                    </div>
+                    <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
+                      <Icon
+                        className={cx(isRefreshing && styles.spinning)}
+                        icon={RefreshCwIcon}
+                        size={12}
+                      />
+                    </div>
                   </div>
 
                   {isLoading && branches.length === 0 && (
@@ -304,6 +345,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                       ref={createInputRef as any}
                       size="small"
                       value={newBranch}
+                      variant="filled"
                       onChange={(e) => setNewBranch(e.target.value)}
                       onPressEnter={handleCreateSubmit}
                     />
@@ -328,15 +370,17 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     </Button>
                   </div>
                 ) : (
-                  <div className={styles.footer}>
-                    <div
-                      className={styles.footerItem}
-                      role="button"
+                  <div className={styles.createItemWrapper}>
+                    <DropdownMenuItem
+                      className={styles.item}
+                      closeOnClick={false}
                       onClick={() => setIsCreating(true)}
                     >
-                      <Icon icon={GitBranchPlusIcon} size={14} />
-                      <span>{t('localSystem.workingDirectory.createBranchAction')}</span>
-                    </div>
+                      <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
+                      <div className={styles.itemMain}>
+                        {t('localSystem.workingDirectory.createBranchAction')}
+                      </div>
+                    </DropdownMenuItem>
                   </div>
                 )}
               </div>

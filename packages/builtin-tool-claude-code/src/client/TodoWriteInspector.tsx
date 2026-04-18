@@ -10,7 +10,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ClaudeCodeApiName, type ClaudeCodeTodoItem, type TodoWriteArgs } from '../types';
+import { type ClaudeCodeTodoItem, type TodoWriteArgs } from '../types';
 
 const RING_SIZE = 14;
 const RING_STROKE = 2;
@@ -47,7 +47,7 @@ const ProgressRing = memo<ProgressRingProps>(({ stats }) => {
   const { completed, total } = stats;
   const ratio = total > 0 ? completed / total : 0;
   const allDone = total > 0 && completed === total;
-  const color = allDone ? cssVar.colorSuccess : cssVar.colorPrimary;
+  const color = allDone ? cssVar.colorSuccess : cssVar.colorInfo;
 
   return (
     <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
@@ -86,19 +86,24 @@ const computeStats = (args?: TodoWriteArgs): TodoStats => {
   };
 };
 
-const getSummary = (stats: TodoStats): string | undefined => {
-  if (stats.total === 0) return undefined;
-  if (stats.inProgress) return stats.inProgress.activeForm || stats.inProgress.content;
-  return `${stats.completed}/${stats.total}`;
-};
-
 export const TodoWriteInspector = memo<BuiltinInspectorProps<TodoWriteArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
     const { t } = useTranslation('plugin');
-    const label = t(ClaudeCodeApiName.TodoWrite as any);
 
     const stats = useMemo(() => computeStats(args || partialArgs), [args, partialArgs]);
-    const summary = getSummary(stats);
+    const allDone = stats.total > 0 && stats.completed === stats.total;
+
+    const label = stats.inProgress
+      ? t('builtins.lobe-claude-code.todoWrite.currentStep')
+      : allDone
+        ? t('builtins.lobe-claude-code.todoWrite.allDone')
+        : t('builtins.lobe-claude-code.todoWrite.todos');
+
+    const detail = stats.inProgress
+      ? stats.inProgress.activeForm || stats.inProgress.content
+      : stats.total > 0 && !allDone
+        ? `${stats.completed}/${stats.total}`
+        : undefined;
 
     if (isArgumentsStreaming && stats.total === 0) {
       return <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{label}</div>;
@@ -113,10 +118,10 @@ export const TodoWriteInspector = memo<BuiltinInspectorProps<TodoWriteArgs>>(
       >
         {stats.total > 0 && <ProgressRing stats={stats} />}
         <span>{label}</span>
-        {summary && (
+        {detail && (
           <>
             <span>: </span>
-            <span className={highlightTextStyles.primary}>{summary}</span>
+            <span className={highlightTextStyles.primary}>{detail}</span>
           </>
         )}
       </div>

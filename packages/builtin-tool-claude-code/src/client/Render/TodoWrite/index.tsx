@@ -1,10 +1,12 @@
 'use client';
 
+import { highlightTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Checkbox, Icon, Text } from '@lobehub/ui';
+import { Block, Checkbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight, CircleCheckBig, ListTodo } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { ClaudeCodeTodoItem, TodoWriteArgs } from '../../../types';
 
@@ -22,9 +24,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   headerLabel: css`
     overflow: hidden;
+    display: flex;
     flex: 1;
+    gap: 0;
+    align-items: center;
 
-    color: ${cssVar.colorText};
+    min-width: 0;
+
+    color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -78,7 +85,7 @@ const TodoRow = memo<TodoRowProps>(({ item }) => {
   if (status === 'in_progress') {
     return (
       <div className={cx(styles.itemRow, styles.processingRow)}>
-        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorPrimary }} />
+        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorInfo }} />
         <span className={styles.textProcessing}>{activeForm || content}</span>
       </div>
     );
@@ -114,32 +121,35 @@ interface TodoHeaderProps {
 }
 
 const TodoHeader = memo<TodoHeaderProps>(({ completed, total, inProgress }) => {
+  const { t } = useTranslation('plugin');
   const allDone = total > 0 && completed === total;
 
-  const { icon, color, label } = inProgress
-    ? {
-        color: cssVar.colorPrimary,
-        icon: CircleArrowRight,
-        label: inProgress.activeForm || inProgress.content,
-      }
+  const icon = inProgress ? CircleArrowRight : allDone ? CircleCheckBig : ListTodo;
+  const color = inProgress
+    ? cssVar.colorInfo
     : allDone
-      ? {
-          color: cssVar.colorSuccess,
-          icon: CircleCheckBig,
-          label: 'All tasks completed',
-        }
-      : {
-          color: cssVar.colorTextSecondary,
-          icon: ListTodo,
-          label: 'Todos',
-        };
+      ? cssVar.colorSuccess
+      : cssVar.colorTextSecondary;
+
+  const label = inProgress
+    ? t('builtins.lobe-claude-code.todoWrite.currentStep')
+    : allDone
+      ? t('builtins.lobe-claude-code.todoWrite.allDone')
+      : t('builtins.lobe-claude-code.todoWrite.todos');
+  const detail = inProgress ? inProgress.activeForm || inProgress.content : undefined;
 
   return (
     <div className={styles.header}>
       <Icon icon={icon} size={16} style={{ color, flexShrink: 0 }} />
-      <Text className={styles.headerLabel} strong={!!inProgress}>
-        {label}
-      </Text>
+      <div className={styles.headerLabel}>
+        <span>{label}</span>
+        {detail && (
+          <>
+            <span>: </span>
+            <span className={highlightTextStyles.primary}>{detail}</span>
+          </>
+        )}
+      </div>
       <span className={styles.headerCount}>
         {completed}/{total}
       </span>
