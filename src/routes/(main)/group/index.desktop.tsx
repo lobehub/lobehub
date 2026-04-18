@@ -8,6 +8,7 @@ import TopicInPopupGuard from '@/features/TopicPopupGuard';
 import { useTopicInPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useChatStore } from '@/store/chat';
 
+import ChatHydration from './features/Conversation/ChatHydration';
 import Conversation from './features/Conversation';
 import PageTitle from './features/PageTitle';
 import Portal from './features/Portal';
@@ -24,6 +25,7 @@ const ChatPage = memo(() => {
   if (activeTopicId && popup) {
     return (
       <>
+        <ChatHydration />
         <PageTitle />
         <TopicInPopupGuard popup={popup} />
       </>
@@ -32,6 +34,7 @@ const ChatPage = memo(() => {
 
   return (
     <>
+      <ChatHydration />
       <PageTitle />
       <Flexbox
         horizontal

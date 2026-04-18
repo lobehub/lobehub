@@ -11,7 +11,6 @@ import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import WelcomeChatItem from './AgentWelcome';
-import ChatHydration from './ChatHydration';
 import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
@@ -69,7 +68,6 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
         <ChatList welcome={<WelcomeChatItem />} />
       </Flexbox>
       <MainChatInput />
-      <ChatHydration />
       <ThreadHydration />
       {!mobile && (
         <>

@@ -1,5 +1,5 @@
 import { type TopicPopupInfo } from '@lobechat/electron-client-ipc';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -59,6 +59,11 @@ interface ScopeQuery {
   topicId: string;
 }
 
+interface PopupScope {
+  agentId?: string;
+  groupId?: string;
+}
+
 const findPopup = (popups: TopicPopupInfo[], scope: ScopeQuery): TopicPopupInfo | undefined =>
   popups.find((p) => {
     if (p.topicId !== scope.topicId) return false;
@@ -83,5 +88,30 @@ export const useTopicInPopup = (scope: ScopeQuery): TopicPopupInfo | undefined =
   return useMemo(
     () => findPopup(popups, scope),
     [popups, scope.agentId, scope.groupId, scope.topicId],
+  );
+};
+
+export const useFocusTopicPopup = (scope: PopupScope) => {
+  useEffect(() => {
+    ensureSubscribed();
+  }, []);
+  const popups = useTopicPopupsRegistryStore((s) => s.popups);
+
+  return useCallback(
+    async (topicId?: string) => {
+      if (!topicId) return false;
+
+      const popup = findPopup(popups, { ...scope, topicId });
+      if (!popup) return false;
+
+      try {
+        await ensureElectronIpc().windows.focusTopicPopup({ identifier: popup.identifier });
+        return true;
+      } catch (error) {
+        console.error('[useFocusTopicPopup] Failed to focus popup window:', error);
+        return false;
+      }
+    },
+    [popups, scope.agentId, scope.groupId],
   );
 };
