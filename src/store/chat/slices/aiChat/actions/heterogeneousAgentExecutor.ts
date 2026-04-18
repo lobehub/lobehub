@@ -648,10 +648,12 @@ export const executeHeterogeneousAgent = async (
     // Persist CC session ID + the cwd it was created under, for multi-turn
     // resume. CC stores sessions per-cwd (`~/.claude/projects/<encoded-cwd>/`),
     // so the next turn must verify the cwd hasn't changed before `--resume`.
+    // Reuses `workingDirectory` as the topic-level binding — pinning the
+    // topic to this cwd once CC has executed here.
     if (adapter.sessionId && context.topicId) {
       get().updateTopicMetadata(context.topicId, {
-        ccSessionCwd: workingDirectory ?? '',
         ccSessionId: adapter.sessionId,
+        workingDirectory: workingDirectory ?? '',
       });
     }
   } catch (error) {
