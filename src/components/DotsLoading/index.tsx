@@ -10,7 +10,13 @@ const fade = keyframes`
   }
 `;
 
-const useStyles = createStyles(({ css, token }, { size, gap, color }: Required<StyleArgs>) => ({
+interface StyleParams {
+  color?: string;
+  gap: number;
+  size: number;
+}
+
+const useStyles = createStyles(({ css, token }, { size, gap, color }: StyleParams) => ({
   container: css`
     display: inline-flex;
     flex-direction: row;
