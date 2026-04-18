@@ -1,5 +1,5 @@
 import { type TopicPopupInfo } from '@lobechat/electron-client-ipc';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -78,5 +78,10 @@ export const useTopicInPopup = (scope: ScopeQuery): TopicPopupInfo | undefined =
   useEffect(() => {
     ensureSubscribed();
   }, []);
-  return useTopicPopupsRegistryStore((s) => findPopup(s.popups, scope));
+  const popups = useTopicPopupsRegistryStore((s) => s.popups);
+  // Recompute when either the popup list or the caller's scope changes.
+  return useMemo(
+    () => findPopup(popups, scope),
+    [popups, scope.agentId, scope.groupId, scope.topicId],
+  );
 };
