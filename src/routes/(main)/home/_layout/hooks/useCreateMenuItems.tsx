@@ -214,7 +214,7 @@ export const useCreateMenuItems = () => {
             },
           },
           avatar:
-            'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claude.webp',
+            'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claudecode.webp',
           systemRole: '',
           title: 'Claude Code',
         },
