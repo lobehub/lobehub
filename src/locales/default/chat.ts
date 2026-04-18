@@ -487,6 +487,7 @@ export default {
   'taskDetail.latestActivity.topicWithSeq': 'Topic #{{seq}}: {{title}}',
   'taskDetail.latestActivity.untitledTopic': 'Untitled topic',
   'taskDetail.pauseTask': 'Pause task',
+  'taskDetail.rerunTask': 'Re-run task',
   'taskDetail.runTask': 'Run task',
   'taskDetail.navigation': 'Navigation',
   'taskDetail.subIssueOf': 'Sub-issue of',
