@@ -1,12 +1,9 @@
-import { Github } from '@lobehub/icons';
-import { Icon, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { FolderIcon, GitBranchIcon } from 'lucide-react';
-import { memo, type ReactNode, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
-import { getRecentDirs } from '@/features/ChatInput/RuntimeConfig/recentDirs';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -15,31 +12,22 @@ const styles = createStaticStyles(({ css }) => ({
   chip: css`
     cursor: pointer;
 
+    overflow: hidden;
     display: inline-flex;
-    gap: 4px;
     align-items: center;
 
-    height: 22px;
-    padding-inline: 8px;
-    border-radius: 4px;
+    max-width: 200px;
 
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
+    font-size: 13px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
-    background: ${cssVar.colorFillQuaternary};
-
-    transition: all 0.2s;
+    transition: color 0.2s;
 
     &:hover {
       color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
     }
-  `,
-  label: css`
-    overflow: hidden;
-    max-width: 200px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
 }));
 
@@ -47,14 +35,6 @@ const FolderTag = memo(() => {
   const { t } = useTranslation('tool');
 
   const topicBoundDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-
-  const iconNode = useMemo((): ReactNode => {
-    if (!topicBoundDirectory) return null;
-    const match = getRecentDirs().find((d) => d.path === topicBoundDirectory);
-    if (match?.repoType === 'github') return <Github size={12} />;
-    if (match?.repoType === 'git') return <Icon icon={GitBranchIcon} size={12} />;
-    return <Icon icon={FolderIcon} size={12} />;
-  }, [topicBoundDirectory]);
 
   if (!isDesktop || !topicBoundDirectory) return null;
 
@@ -66,10 +46,9 @@ const FolderTag = memo(() => {
 
   return (
     <Tooltip title={`${topicBoundDirectory} · ${t('localFiles.openFolder')}`}>
-      <div className={styles.chip} onClick={handleOpen}>
-        {iconNode}
-        <span className={styles.label}>{displayName}</span>
-      </div>
+      <span className={styles.chip} onClick={handleOpen}>
+        {displayName}
+      </span>
     </Tooltip>
   );
 });
