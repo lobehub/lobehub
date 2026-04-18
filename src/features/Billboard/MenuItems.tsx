@@ -16,7 +16,12 @@ export const useBillboardMenuItems = (): MenuProps['items'] => {
   const { i18n } = useTranslation();
 
   return useMemo(() => {
-    if (!billboard) return [];
+    if (!billboard || billboard.items.length === 0) return [];
+    const now = Date.now();
+    const start = Date.parse(billboard.startAt);
+    const end = Date.parse(billboard.endAt);
+    const inWindow = Number.isFinite(start) && Number.isFinite(end) && start <= now && now <= end;
+    if (!inWindow) return [];
     const title = resolveBillboardTitle(billboard, i18n.language);
     return [
       {
