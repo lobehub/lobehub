@@ -1,7 +1,6 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, keyframes } from 'antd-style';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import { m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,16 +21,51 @@ import Actions from './Actions';
 import Editing from './Editing';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
+const rippleAnim = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+`;
+
 const styles = createStaticStyles(({ css }) => ({
-  neonDot: css`
-    width: 8px;
-    height: 8px;
+  unreadWrapper: css`
+    position: relative;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 14px;
+    height: 14px;
+  `,
+  unreadDot: css`
+    position: relative;
+    z-index: 1;
+
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
 
     background: ${cssVar.colorInfo};
-    box-shadow:
-      0 0 3px ${cssVar.colorInfo},
-      0 0 6px ${cssVar.colorInfo};
+  `,
+  unreadRipple: css`
+    position: absolute;
+    inset: 0;
+
+    width: 6px;
+    height: 6px;
+    margin: auto;
+    border: 1px solid ${cssVar.colorInfo};
+    border-radius: 50%;
+
+    background: transparent;
+
+    animation: ${rippleAnim} 1.8s ease-out infinite;
   `,
 }));
 
@@ -107,25 +141,11 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const hasUnread = id && isUnreadCompleted;
-  const infoColor = cssVar.colorInfo;
   const unreadIcon = (
-    <m.span
-      className={styles.neonDot}
-      animate={{
-        scale: [1, 1.3, 1],
-        opacity: [1, 0.9, 1],
-        boxShadow: [
-          `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-          `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
-          `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-        ],
-      }}
-      transition={{
-        duration: 1.2,
-        repeat: Infinity,
-        ease: 'easeInOut',
-      }}
-    />
+    <span className={styles.unreadWrapper}>
+      <span className={styles.unreadRipple} />
+      <span className={styles.unreadDot} />
+    </span>
   );
 
   // For default topic (no id)
