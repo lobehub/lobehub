@@ -1,3 +1,4 @@
+import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
 
@@ -80,12 +81,15 @@ const isToolHasUI = (id: string) => (s: ToolStoreState) => {
 const getRenderDisplayControl =
   (identifier: string, apiName: string) =>
   (s: ToolStoreState): RenderDisplayControl => {
-    // Only builtin tools support renderDisplayControl
     const builtinTool = s.builtinTools.find((t) => t.identifier === identifier);
-    if (!builtinTool) return 'collapsed';
+    const manifestControl = builtinTool?.manifest.api.find(
+      (a) => a.name === apiName,
+    )?.renderDisplayControl;
+    if (manifestControl) return manifestControl;
 
-    const api = builtinTool.manifest.api.find((a) => a.name === apiName);
-    return api?.renderDisplayControl ?? 'collapsed';
+    // Fallback for packages that don't ship a LobeChat manifest (e.g. Claude Code —
+    // its tools come from Anthropic tool_use blocks at runtime).
+    return getBuiltinRenderDisplayControl(identifier, apiName) ?? 'collapsed';
   };
 
 export interface AvailableToolForDiscovery {

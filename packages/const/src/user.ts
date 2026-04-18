@@ -7,10 +7,6 @@ import type { UserPreference } from '@lobechat/types';
  */
 export const CURRENT_ONBOARDING_VERSION = 1;
 
-const DEFAULT_TOPIC_DISPLAY_MODE = 'byUpdatedTime' as NonNullable<
-  UserPreference['topicDisplayMode']
->;
-
 export const DEFAULT_PREFERENCE: UserPreference = {
   guide: {
     moveSettingsToAvatar: true,
@@ -20,6 +16,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     enableHeterogeneousAgent: false,
     enableInputMarkdown: true,
   },
-  topicDisplayMode: DEFAULT_TOPIC_DISPLAY_MODE,
+  topicGroupMode: 'byTime',
+  topicSortBy: 'updatedAt',
   useCmdEnterToSend: false,
 };

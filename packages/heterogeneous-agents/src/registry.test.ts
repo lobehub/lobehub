@@ -18,10 +18,11 @@ describe('registry', () => {
   describe('getPreset', () => {
     it('returns preset with stream-json args for claude-code', () => {
       const preset = getPreset('claude-code');
+      expect(preset.baseArgs).toContain('--input-format');
       expect(preset.baseArgs).toContain('--output-format');
       expect(preset.baseArgs).toContain('stream-json');
       expect(preset.baseArgs).toContain('-p');
-      expect(preset.promptMode).toBe('positional');
+      expect(preset.promptMode).toBe('stdin');
     });
 
     it('preset has resumeArgs function', () => {

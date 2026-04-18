@@ -204,6 +204,12 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           get().completeOperation(operationId);
+
+          const completedOp = get().operations[operationId];
+          if (completedOp?.context.agentId) {
+            get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+          }
+
           await fetchAndReplaceMessages(get, context).catch(console.error);
         });
         break;

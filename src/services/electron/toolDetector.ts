@@ -1,4 +1,9 @@
-import { type ToolCategory, type ToolInfo, type ToolStatus } from '@lobechat/electron-client-ipc';
+import {
+  type ClaudeAuthStatus,
+  type ToolCategory,
+  type ToolInfo,
+  type ToolStatus,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -74,6 +79,13 @@ class ToolDetectorService {
    */
   getToolsInCategory = (category: ToolCategory): ToolInfo[] => {
     return ensureElectronIpc().toolDetector.getToolsInCategory(category);
+  };
+
+  /**
+   * Get Claude Code CLI auth/account status
+   */
+  getClaudeAuthStatus = async (): Promise<ClaudeAuthStatus | null> => {
+    return ensureElectronIpc().toolDetector.getClaudeAuthStatus();
   };
 }
 

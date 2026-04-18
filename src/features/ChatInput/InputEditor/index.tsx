@@ -167,6 +167,10 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
 
         if (!input.trim()) return null;
 
+        // Skip when cursor is not at end of paragraph — inserting a placeholder
+        // mid-text causes nested editor updates that freeze the input
+        if (afterText.trim()) return null;
+
         const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
           useUserStore.getState(),
         );

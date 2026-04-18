@@ -67,7 +67,7 @@ import { dynamicElement, redirectElement, ErrorBoundary } from '@/utils/router';
 
 element: dynamicElement(() => import('./chat'), 'Desktop > Chat');
 element: redirectElement('/settings/profile');
-errorElement: <ErrorBoundary resetPath="/chat" />;
+errorElement: <ErrorBoundary />;
 ```
 
 ### Navigation

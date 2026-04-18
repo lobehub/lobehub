@@ -4,7 +4,7 @@ import { createReadLocalFileInspector } from '@lobechat/shared-tool-ui/inspector
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { memo } from 'react';
 
-import { ClaudeCodeApiName } from '../types';
+import { ClaudeCodeApiName } from '../../types';
 
 /**
  * CC Read tool uses Anthropic-native args (`file_path`, `offset`, `limit`);

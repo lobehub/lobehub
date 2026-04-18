@@ -1,4 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { isDesktop } from '@lobechat/const';
 import type { HeterogeneousAgentEvent, ToolCallPayload } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type {
@@ -6,12 +7,32 @@ import type {
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
+import { t } from 'i18next';
 
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
+
+/**
+ * Fire desktop notification + dock badge when a CC/Codex/ACP run finishes.
+ * Notification only shows when the window is hidden (enforced in main); the
+ * badge is always set so a minimized/backgrounded app still signals completion.
+ */
+const notifyCompletion = async (title: string, body: string) => {
+  if (!isDesktop) return;
+  try {
+    const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    await Promise.allSettled([
+      desktopNotificationService.showNotification({ body, title }),
+      desktopNotificationService.setBadgeCount(1),
+    ]);
+  } catch (error) {
+    console.error('[HeterogeneousAgent] Desktop notification failed:', error);
+  }
+};
 
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
@@ -572,6 +593,15 @@ export const executeHeterogeneousAgent = async (
           type: 'agent_runtime_end' as const,
         };
         eventHandler(toStreamEvent(terminal, operationId));
+
+        // Signal completion to the user — dock badge + (window-hidden) notification.
+        // Skip for aborted runs and for error terminations.
+        if (!isAborted() && deferredTerminalEvent?.type !== 'error') {
+          const body = accumulatedContent
+            ? markdownToTxt(accumulatedContent)
+            : t('notification.finishChatGeneration', { ns: 'electron' });
+          notifyCompletion(t('notification.finishChatGeneration', { ns: 'electron' }), body);
+        }
       },
 
       onError: async (error) => {
@@ -615,11 +645,15 @@ export const executeHeterogeneousAgent = async (
     // Send the prompt — blocks until process exits
     await heterogeneousAgentService.sendPrompt(agentSessionId, message, imageList);
 
-    // Persist CC session ID to topic metadata for multi-turn resume.
-    // The adapter extracts session_id from the CC init event.
+    // Persist CC session ID + the cwd it was created under, for multi-turn
+    // resume. CC stores sessions per-cwd (`~/.claude/projects/<encoded-cwd>/`),
+    // so the next turn must verify the cwd hasn't changed before `--resume`.
+    // Reuses `workingDirectory` as the topic-level binding — pinning the
+    // topic to this cwd once CC has executed here.
     if (adapter.sessionId && context.topicId) {
       get().updateTopicMetadata(context.topicId, {
         ccSessionId: adapter.sessionId,
+        workingDirectory: workingDirectory ?? '',
       });
     }
   } catch (error) {

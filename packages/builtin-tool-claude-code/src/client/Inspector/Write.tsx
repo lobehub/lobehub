@@ -4,7 +4,7 @@ import { createWriteLocalFileInspector } from '@lobechat/shared-tool-ui/inspecto
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { memo } from 'react';
 
-import { ClaudeCodeApiName } from '../types';
+import { ClaudeCodeApiName } from '../../types';
 
 /**
  * CC Write tool uses `file_path`; the shared inspector reads `path`.

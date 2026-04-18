@@ -34,3 +34,20 @@ export const removeRecentDir = (path: string): RecentDirEntry[] => {
   localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(updated));
   return updated;
 };
+
+/**
+ * Backfill `repoType` on an existing entry without reordering the list.
+ * No-op when the path isn't in recents (avoids polluting recents with
+ * implicitly-set working directories from agent config).
+ */
+export const setRecentDirRepoType = (
+  path: string,
+  repoType: 'git' | 'github' | undefined,
+): void => {
+  const dirs = getRecentDirs();
+  const idx = dirs.findIndex((d) => d.path === path);
+  if (idx === -1) return;
+  if (dirs[idx].repoType === repoType) return;
+  dirs[idx] = { ...dirs[idx], repoType };
+  localStorage.setItem(RECENT_DIRS_KEY, JSON.stringify(dirs));
+};

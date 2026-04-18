@@ -1,7 +1,14 @@
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+
+import type { ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
+
 import type { ToolCategory, ToolStatus } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
+
+const execPromise = promisify(exec);
 
 const logger = createLogger('controllers:ToolDetectorCtr');
 
@@ -111,5 +118,20 @@ export default class ToolDetectorCtr extends ControllerModule {
       name: detector.name,
       priority: detector.priority,
     }));
+  }
+
+  /**
+   * Get Claude Code CLI auth/account status by running `claude auth status --json`.
+   * Returns null if the CLI is unavailable or the command fails.
+   */
+  @IpcMethod()
+  async getClaudeAuthStatus(): Promise<ClaudeAuthStatus | null> {
+    try {
+      const { stdout } = await execPromise('claude auth status --json', { timeout: 5000 });
+      return JSON.parse(stdout.trim()) as ClaudeAuthStatus;
+    } catch (error) {
+      logger.debug('Failed to get claude auth status:', error);
+      return null;
+    }
   }
 }

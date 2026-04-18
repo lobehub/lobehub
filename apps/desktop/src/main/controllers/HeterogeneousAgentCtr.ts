@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 
 import { app as electronApp, BrowserWindow } from 'electron';
@@ -30,6 +30,8 @@ const CLI_PRESETS: Record<string, CLIPreset> = {
   'claude-code': {
     baseArgs: [
       '-p',
+      '--input-format',
+      'stream-json',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -37,7 +39,7 @@ const CLI_PRESETS: Record<string, CLIPreset> = {
       '--permission-mode',
       'bypassPermissions',
     ],
-    promptMode: 'positional',
+    promptMode: 'stdin',
     resumeArgs: (sid) => ['--resume', sid],
   },
   // Future presets:
@@ -134,7 +136,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   // ─── File cache ───
 
   private get fileCacheDir(): string {
-    return join(this.app.appStoragePath, FILE_CACHE_DIR);
+    return path.join(this.app.appStoragePath, FILE_CACHE_DIR);
   }
 
   /**
@@ -157,8 +159,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   ): Promise<{ buffer: Buffer; mimeType: string }> {
     const cacheDir = this.fileCacheDir;
     const cacheKey = this.getImageCacheKey(image.id);
-    const metaPath = join(cacheDir, `${cacheKey}.meta`);
-    const dataPath = join(cacheDir, cacheKey);
+    const metaPath = path.join(cacheDir, `${cacheKey}.meta`);
+    const dataPath = path.join(cacheDir, cacheKey);
 
     // Check cache first
     try {
@@ -191,11 +193,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   /**
-   * Build a stream-json user message with text + image content blocks.
+   * Build a stream-json user message with text + optional image content blocks.
    */
   private async buildStreamJsonInput(
     prompt: string,
-    imageList: ImageAttachment[],
+    imageList: ImageAttachment[] = [],
   ): Promise<string> {
     const content: any[] = [{ text: prompt, type: 'text' }];
 
@@ -260,13 +262,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const preset = CLI_PRESETS[session.agentType];
     if (!preset) throw new Error(`Unknown agent type: ${session.agentType}`);
 
-    const hasImages = params.imageList && params.imageList.length > 0;
+    const useStdin = preset.promptMode === 'stdin';
 
-    // If images are attached, prepare the stream-json input BEFORE spawning
-    // so any download errors are caught early.
+    // Build stream-json payload up-front so any image download errors
+    // surface before the process is spawned.
     let stdinPayload: string | undefined;
-    if (hasImages) {
-      stdinPayload = await this.buildStreamJsonInput(params.prompt, params.imageList!);
+    if (useStdin) {
+      stdinPayload = await this.buildStreamJsonInput(params.prompt, params.imageList ?? []);
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -279,26 +281,25 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         ...session.args,
       ];
 
-      if (hasImages) {
-        // With files: use stdin stream-json mode
-        cliArgs.push('--input-format', 'stream-json');
-      } else {
-        // Without files: use positional prompt (simple mode)
-        if (preset.promptMode === 'positional') {
-          cliArgs.push(params.prompt);
-        }
+      if (!useStdin && preset.promptMode === 'positional') {
+        // Positional mode: append prompt as a CLI arg (legacy / non-CC presets).
+        cliArgs.push(params.prompt);
       }
 
-      logger.info('Spawning agent:', session.command, cliArgs.join(' '));
+      // Fall back to the user's Desktop so the process never inherits
+      // the Electron parent's cwd (which is `/` when launched from Finder).
+      const cwd = session.cwd || electronApp.getPath('desktop');
+
+      logger.info('Spawning agent:', session.command, cliArgs.join(' '), `(cwd: ${cwd})`);
 
       const proc = spawn(session.command, cliArgs, {
-        cwd: session.cwd,
+        cwd,
         env: { ...process.env, ...session.env },
-        stdio: [hasImages ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+        stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       });
 
-      // If using stdin mode, write the stream-json message and close stdin
-      if (hasImages && stdinPayload && proc.stdin) {
+      // In stdin mode, write the stream-json message and close stdin.
+      if (useStdin && stdinPayload && proc.stdin) {
         const stdin = proc.stdin as Writable;
         stdin.write(stdinPayload + '\n', () => {
           stdin.end();

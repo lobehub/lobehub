@@ -3,6 +3,7 @@ import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import {
   ExternalLink,
+  Link2,
   LucideCopy,
   PanelTop,
   PencilLine,
@@ -15,9 +16,11 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import { openShareModal } from '@/features/ShareModal';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
@@ -26,28 +29,27 @@ import { useGlobalStore } from '@/store/global';
 interface TopicItemDropdownMenuProps {
   fav?: boolean;
   id?: string;
-  toggleEditing: (visible?: boolean) => void;
+  title: string;
 }
 
-export const useTopicItemDropdownMenu = ({
-  fav,
-  id,
-  toggleEditing,
-}: TopicItemDropdownMenuProps) => {
+export const useTopicItemDropdownMenu = ({ fav, id, title }: TopicItemDropdownMenuProps) => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const navigate = useNavigate();
 
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
+  const appOrigin = useAppOrigin();
 
-  const [autoRenameTopicTitle, duplicateTopic, removeTopic, favoriteTopic] = useChatStore((s) => [
-    s.autoRenameTopicTitle,
-    s.duplicateTopic,
-    s.removeTopic,
-    s.favoriteTopic,
-  ]);
+  const [autoRenameTopicTitle, duplicateTopic, removeTopic, favoriteTopic, updateTopicTitle] =
+    useChatStore((s) => [
+      s.autoRenameTopicTitle,
+      s.duplicateTopic,
+      s.removeTopic,
+      s.favoriteTopic,
+      s.updateTopicTitle,
+    ]);
   const handleOpenShareModal = useCallback(() => {
     if (!id) return;
 
@@ -82,8 +84,18 @@ export const useTopicItemDropdownMenu = ({
         key: 'rename',
         label: t('rename', { ns: 'common' }),
         onClick: () => {
-          toggleEditing(true);
+          openRenameModal({
+            defaultValue: title,
+            description: t('renameModal.description', { ns: 'topic' }),
+            onSave: async (newTitle) => {
+              await updateTopicTitle(id, newTitle);
+            },
+            title: t('renameModal.title', { ns: 'topic' }),
+          });
         },
+      },
+      {
+        type: 'divider' as const,
       },
       ...(isDesktop
         ? [
@@ -109,8 +121,22 @@ export const useTopicItemDropdownMenu = ({
                 if (activeAgentId) openTopicInNewWindow(activeAgentId, id);
               },
             },
+            {
+              type: 'divider' as const,
+            },
           ]
         : []),
+      {
+        icon: <Icon icon={Link2} />,
+        key: 'copyLink',
+        label: t('actions.copyLink'),
+        onClick: () => {
+          if (!activeAgentId) return;
+          const url = `${appOrigin}/agent/${activeAgentId}?topic=${id}`;
+          navigator.clipboard.writeText(url);
+          message.success(t('actions.copyLinkSuccess'));
+        },
+      },
       {
         icon: <Icon icon={LucideCopy} />,
         key: 'duplicate',
@@ -118,6 +144,9 @@ export const useTopicItemDropdownMenu = ({
         onClick: () => {
           duplicateTopic(id);
         },
+      },
+      {
+        type: 'divider' as const,
       },
       {
         icon: <Icon icon={Share2} />,
@@ -148,17 +177,20 @@ export const useTopicItemDropdownMenu = ({
   }, [
     id,
     fav,
+    title,
     activeAgentId,
+    appOrigin,
     autoRenameTopicTitle,
     duplicateTopic,
     favoriteTopic,
     removeTopic,
+    updateTopicTitle,
     openTopicInNewWindow,
     addTab,
     navigate,
-    toggleEditing,
     t,
     modal,
+    message,
     handleOpenShareModal,
   ]);
   return { dropdownMenu };

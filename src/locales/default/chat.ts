@@ -147,6 +147,8 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.resumeReset.cwdChanged':
+    'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',
@@ -248,7 +250,7 @@ export default {
   'createModal.placeholder': 'Describe what your agent should do...',
   'createModal.title': 'What should your agent do?',
   'newAgent': 'Create Agent',
-  'newClaudeCodeAgent': 'Claude Code Agent',
+  'newClaudeCodeAgent': 'Add Claude Code',
   'newGroupChat': 'Create Group',
   'newPage': 'Create Page',
   'noAgentsYet': 'This group has no members yet. Click the + button to invite agents.',

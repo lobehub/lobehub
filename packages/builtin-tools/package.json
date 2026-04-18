@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./renders": "./src/renders.ts",
+    "./displayControls": "./src/displayControls.ts",
     "./inspectors": "./src/inspectors.ts",
     "./interventions": "./src/interventions.ts",
     "./placeholders": "./src/placeholders.ts",
