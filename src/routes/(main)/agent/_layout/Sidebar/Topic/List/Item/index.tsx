@@ -1,10 +1,11 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
+import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -22,32 +23,9 @@ import Editing from './Editing';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
 const styles = createStaticStyles(({ css }) => ({
-  neonDotWrapper: css`
-    position: absolute;
-    inset: 0;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-  `,
-  dotContainer: css`
-    will-change: width;
-
-    position: relative;
-
-    width: 18px;
-    height: 18px;
-    margin-inline-start: -6px;
-
-    transition: width 0.2s ${cssVar.motionEaseOut};
-  `,
   neonDot: css`
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
 
     background: ${cssVar.colorInfo};
@@ -130,44 +108,24 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
 
   const hasUnread = id && isUnreadCompleted;
   const infoColor = cssVar.colorInfo;
-  const unreadNode = (
-    <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
-      <AnimatePresence mode="popLayout">
-        {hasUnread && (
-          <m.div
-            className={styles.neonDotWrapper}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{
-              scale: 1,
-              opacity: 1,
-            }}
-            exit={{
-              scale: 0,
-              opacity: 0,
-            }}
-          >
-            <m.span
-              className={styles.neonDot}
-              initial={false}
-              animate={{
-                scale: [1, 1.3, 1],
-                opacity: [1, 0.9, 1],
-                boxShadow: [
-                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-                  `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
-                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-                ],
-              }}
-              transition={{
-                duration: 1.2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-          </m.div>
-        )}
-      </AnimatePresence>
-    </span>
+  const unreadIcon = (
+    <m.span
+      className={styles.neonDot}
+      animate={{
+        scale: [1, 1.3, 1],
+        opacity: [1, 0.9, 1],
+        boxShadow: [
+          `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
+          `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
+          `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
+        ],
+      }}
+      transition={{
+        duration: 1.2,
+        repeat: Infinity,
+        ease: 'easeInOut',
+      }}
+    />
   );
 
   // For default topic (no id)
@@ -177,7 +135,11 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         active={active && !isInAgentSubRoute}
         icon={
           isLoading ? (
-            <Icon spin color={cssVar.colorWarning} icon={Loader2Icon} size={'small'} />
+            <RingLoadingIcon
+              ringColor={cssVar.colorWarningBorder}
+              size={14}
+              style={{ color: cssVar.colorWarning }}
+            />
           ) : (
             <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
           )
@@ -213,9 +175,14 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         icon={(() => {
           if (isLoading) {
             return (
-              <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
+              <RingLoadingIcon
+                ringColor={cssVar.colorWarningBorder}
+                size={14}
+                style={{ color: cssVar.colorWarning }}
+              />
             );
           }
+          if (hasUnread) return unreadIcon;
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
             if (ProviderIcon) {
@@ -226,9 +193,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
           );
         })()}
-        slots={{
-          iconPostfix: unreadNode,
-        }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       />
