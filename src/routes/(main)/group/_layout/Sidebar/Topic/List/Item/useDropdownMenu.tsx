@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
@@ -31,6 +32,7 @@ export const useTopicItemDropdownMenu = ({
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   const addTab = useElectronStore((s) => s.addTab);
+  const appOrigin = useAppOrigin();
 
   const [autoRenameTopicTitle, duplicateTopic, removeTopic] = useChatStore((s) => [
     s.autoRenameTopicTitle,
@@ -96,7 +98,7 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeGroupId) return;
-          const url = `${window.location.origin}/group/${activeGroupId}?topic=${id}`;
+          const url = `${appOrigin}/group/${activeGroupId}?topic=${id}`;
           navigator.clipboard.writeText(url);
           message.success(t('actions.copyLinkSuccess'));
         },
@@ -133,6 +135,7 @@ export const useTopicItemDropdownMenu = ({
     id,
     activeAgentId,
     activeGroupId,
+    appOrigin,
     autoRenameTopicTitle,
     duplicateTopic,
     removeTopic,
