@@ -106,24 +106,20 @@ const classNames = {
 };
 
 export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }) => {
-  const [expand, togglePanel] = useGlobalStore((s) => [
+  const [expand, togglePanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showLeftPanel(s),
     s.toggleLeftPanel,
+    systemStatusSelectors.isStatusInit(s),
   ]);
   const handleSizeChange = useNavPanelSizeChangeHandler();
 
+  // Defer DraggablePanel mount until system status hydrates; otherwise defaultSize
+  // captures the pre-hydration default and the DOM drifts off NavigationBar's live width.
   const defaultWidthRef = useRef(0);
-  if (defaultWidthRef.current === 0) {
+  if (defaultWidthRef.current === 0 && isStatusInit) {
     defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
   }
 
-  const defaultSize = useMemo(
-    () => ({
-      height: '100%',
-      width: defaultWidthRef.current,
-    }),
-    [],
-  );
   const styles = useMemo(
     () => ({
       background: isDesktop && isMacOS() ? 'transparent' : cssVar.colorBgLayout,
@@ -131,6 +127,13 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
     }),
     [],
   );
+
+  if (defaultWidthRef.current === 0) {
+    const pendingWidth = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
+    return <div aria-hidden style={{ flexShrink: 0, height: '100%', width: pendingWidth }} />;
+  }
+
+  const defaultSize = { height: '100%', width: defaultWidthRef.current };
 
   return (
     <DraggablePanel
