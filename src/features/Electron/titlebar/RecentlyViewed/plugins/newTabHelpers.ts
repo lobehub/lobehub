@@ -1,9 +1,12 @@
 import { lambdaClient } from '@/libs/trpc/client';
 import { useChatStore } from '@/store/chat';
 import { usePageStore } from '@/store/page';
+import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
 import { type CachedPageData, type PageReference } from '../types';
 import { type NewTabAction, type NewTabActionResult, type PluginContext } from './types';
+
+const EDITOR_PAGE_FILE_TYPE = 'custom/document';
 
 /**
  * Build a NewTabAction that creates a fresh topic under an agent and
@@ -93,20 +96,54 @@ export const buildPageNewTabAction = (ctx: PluginContext): NewTabAction => {
   return {
     onCreate: async (): Promise<NewTabActionResult | null> => {
       const untitled = ctx.t('pageList.untitled', { ns: 'file' });
-      // `createNewPage` runs the full optimistic flow: dispatches the new
-      // document into the sidebar list and sets `selectedPageId`, so the
-      // nav item highlights the new page in sync with the new tab.
-      const pageId = await usePageStore.getState().createNewPage(untitled);
+      const pageStore = usePageStore.getState();
+
+      // Create the real page via service first — once the row exists on
+      // the server, any SWR revalidation of the page list will include
+      // it and won't clobber the optimistic add we do below.
+      const newPage = await pageStore.createPage({ content: '', title: untitled });
+
+      // Synthesize a `LobeDocument` for the sidebar list.
+      const now = new Date();
+      const document: LobeDocument = {
+        content: newPage.content || '',
+        createdAt: newPage.createdAt ? new Date(newPage.createdAt) : now,
+        editorData:
+          typeof newPage.editorData === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(newPage.editorData);
+                } catch {
+                  return null;
+                }
+              })()
+            : newPage.editorData || null,
+        fileType: newPage.fileType || EDITOR_PAGE_FILE_TYPE,
+        filename: newPage.title || untitled,
+        id: newPage.id,
+        metadata: newPage.metadata || {},
+        source: 'document',
+        sourceType: DocumentSourceType.EDITOR,
+        title: newPage.title || untitled,
+        totalCharCount: (newPage.content || '').length,
+        totalLineCount: 0,
+        updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : now,
+      };
+
+      // Dispatch into the sidebar list and mark selected so the nav item
+      // highlights in sync with the new tab.
+      pageStore.internal_dispatchDocuments({ document, type: 'addDocument' });
+      usePageStore.setState({ selectedPageId: newPage.id }, false, 'TabBar/newPage');
 
       const reference: PageReference<'page'> = {
-        id: `page:${pageId}`,
+        id: `page:${newPage.id}`,
         lastVisited: Date.now(),
-        params: { pageId },
+        params: { pageId: newPage.id },
         type: 'page',
       };
 
       const cached: CachedPageData = {
-        title: untitled,
+        title: document.title || untitled,
       };
 
       return { cached, reference };
