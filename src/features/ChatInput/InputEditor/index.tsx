@@ -7,6 +7,7 @@ import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 import Fuse from 'fuse.js';
+import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
@@ -300,12 +301,22 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
           minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
         }}
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
-        onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
         onBlur={() => {
           disableScope(HotkeyEnum.AddUserMessage);
         }}
         onChange={() => {
           updateMarkdownContent();
+        }}
+        onCompositionStart={({ event }) => {
+          compositionProps.onCompositionStart(event);
+          // Clear autocomplete placeholder nodes before IME composition starts —
+          // composing next to placeholder inline nodes freezes the editor.
+          if (isAutoCompleteEnabled) {
+            editor?.dispatchCommand(
+              KEY_ESCAPE_COMMAND,
+              new KeyboardEvent('keydown', { key: 'Escape' }),
+            );
+          }
         }}
         onContextMenu={async ({ event: e, editor }) => {
           if (isDesktop) {
