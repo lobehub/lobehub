@@ -93,7 +93,11 @@ export const buildPageNewTabAction = (ctx: PluginContext): NewTabAction => {
   return {
     onCreate: async (): Promise<NewTabActionResult | null> => {
       const untitled = ctx.t('pageList.untitled', { ns: 'file' });
-      const newPage = await usePageStore.getState().createPage({ content: '', title: untitled });
+      const pageStore = usePageStore.getState();
+      const newPage = await pageStore.createPage({ content: '', title: untitled });
+
+      // Sync the sidebar / PageExplorer list with the newly-created document.
+      await pageStore.refreshDocuments();
 
       const pageId = newPage.id;
       const reference: PageReference<'page'> = {
