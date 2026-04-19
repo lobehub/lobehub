@@ -928,6 +928,41 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(glob1Create![0].parentId).toBe(turn5AssistantId);
       expect(glob2Create![0].parentId).toBe(turn5AssistantId);
     });
+
+    /**
+     * Regression: when a turn has text BEFORE tool_use under the same message.id,
+     * the tools[] write must carry the accumulated content too. Otherwise the
+     * gateway handler's `tool_end → fetchAndReplaceMessages` reads a tools-only
+     * row and clobbers the in-memory streamed text in the UI.
+     */
+    it('should persist accumulated text alongside tools when turn has text + tool_use', async () => {
+      const writes: Array<{ assistantId: string; content?: string; toolIds?: string[] }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          writes.push({
+            assistantId: id,
+            content: val.content,
+            toolIds: val.tools.map((t: any) => t.id),
+          });
+        }
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // text streams first, then tool_use — same msg.id
+        ccText('msg_01', 'Let me check the file...'),
+        ccToolUse('msg_01', 'toolu_read', 'Read', { file_path: '/a.ts' }),
+        ccToolResult('toolu_read', 'file content'),
+        ccResult(),
+      ]);
+
+      const toolWrites = writes.filter((w) => w.toolIds?.includes('toolu_read'));
+      expect(toolWrites.length).toBeGreaterThanOrEqual(1);
+      // Every tools[] write for this assistant must carry the accumulated text
+      for (const w of toolWrites) {
+        expect(w.content).toBe('Let me check the file...');
+      }
+    });
   });
 
   // ────────────────────────────────────────────────────
