@@ -149,6 +149,11 @@ export default {
   'groupWizard.useTemplate': 'Use Template',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
+  'heteroAgent.switchCwd.cancel': 'Cancel',
+  'heteroAgent.switchCwd.content':
+    'Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',
+  'heteroAgent.switchCwd.ok': 'Switch and start new session',
+  'heteroAgent.switchCwd.title': 'Switch working directory?',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',

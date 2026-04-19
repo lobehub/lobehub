@@ -351,8 +351,17 @@ export class ConversationLifecycleActionImpl {
       // creation time. Otherwise the row stays NULL until the post-execution
       // metadata write — which never lands on cancel/error and meanwhile
       // makes By-Project grouping miss the topic and `--resume` unsafe.
-      const workingDirectory =
+      //
+      // Priority: topic-level cwd (once a topic is bound to a project) wins
+      // over the agent-level default. Without this, a topic pinned to dir A
+      // would silently execute under the agent's current default dir B and
+      // lose resume.
+      const existingTopic = operationContext.topicId
+        ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+        : undefined;
+      const agentWorkingDirectory =
         agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+      const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
 
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
@@ -430,6 +439,13 @@ export class ConversationLifecycleActionImpl {
 
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
+
+      // Clear editor temp state — the user's message is already persisted, so
+      // a later Stop click must NOT restore it into the input (would feel like
+      // the app re-sent the message). Client/Gateway paths clear this at
+      // line 684-686 after `sendMessageInServer` resolves, but the hetero
+      // branch returns early (line 498) and never reaches that clear.
+      this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
 
       if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, true);
 

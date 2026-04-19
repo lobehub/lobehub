@@ -1,6 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon, FolderIcon, FolderOpenIcon, GitBranchIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -108,7 +109,7 @@ interface WorkingDirectoryContentProps {
 }
 
 const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, onClose }) => {
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation(['plugin', 'chat']);
 
   const agentWorkingDirectory = useAgentStore((s) =>
     agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s),
@@ -116,7 +117,12 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const effectiveDir = topicWorkingDirectory || agentWorkingDirectory;
 
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const activeTopic = useChatStore((s) =>
+    s.activeTopicId ? topicSelectors.getTopicById(s.activeTopicId)(s) : undefined,
+  );
   const updateAgentRuntimeEnvConfig = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
+  const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   const [recentDirs, setRecentDirs] = useState(getRecentDirs);
 
@@ -130,11 +136,50 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
 
   const selectDir = useCallback(
     async (entry: RecentDirEntry) => {
-      await updateAgentRuntimeEnvConfig(agentId, { workingDirectory: entry.path });
-      setRecentDirs(addRecentDir(entry));
-      onClose?.();
+      const newPath = entry.path;
+      // Scope of the write: once a topic is active, changing cwd updates the
+      // topic's own binding (each topic is a CC session pinned to a dir).
+      // Only when there's no topic yet (blank conversation) do we touch the
+      // agent-level default so the next new topic inherits it.
+      const commit = async () => {
+        if (activeTopicId) {
+          await updateTopicMetadata(activeTopicId, { workingDirectory: newPath });
+        } else {
+          await updateAgentRuntimeEnvConfig(agentId, { workingDirectory: newPath });
+        }
+        setRecentDirs(addRecentDir(entry));
+        onClose?.();
+      };
+
+      // CC sessions are pinned per-cwd under `~/.claude/projects/<encoded-cwd>/`.
+      // Changing the topic's cwd makes `--resume` fail, so we warn before the
+      // implicit session reset.
+      const priorSessionId = activeTopic?.metadata?.heteroSessionId;
+      const priorCwd = activeTopic?.metadata?.workingDirectory;
+      const wouldResetSession = !!priorSessionId && !!priorCwd && priorCwd !== newPath;
+
+      if (wouldResetSession) {
+        confirmModal({
+          cancelText: t('heteroAgent.switchCwd.cancel', { ns: 'chat' }),
+          content: t('heteroAgent.switchCwd.content', { ns: 'chat' }),
+          okText: t('heteroAgent.switchCwd.ok', { ns: 'chat' }),
+          onOk: commit,
+          title: t('heteroAgent.switchCwd.title', { ns: 'chat' }),
+        });
+        return;
+      }
+
+      await commit();
     },
-    [agentId, updateAgentRuntimeEnvConfig, onClose],
+    [
+      activeTopicId,
+      activeTopic,
+      agentId,
+      t,
+      updateAgentRuntimeEnvConfig,
+      updateTopicMetadata,
+      onClose,
+    ],
   );
 
   const handleChooseFolder = useCallback(async () => {
