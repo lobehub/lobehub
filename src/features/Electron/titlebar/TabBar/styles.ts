@@ -1,6 +1,11 @@
 import { createStaticStyles } from 'antd-style';
 
 export const useStyles = createStaticStyles(({ css, cssVar }) => ({
+  avatarWrapper: css`
+    position: relative;
+    flex-shrink: 0;
+    line-height: 0;
+  `,
   closeIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
@@ -8,6 +13,19 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     &:hover {
       color: ${cssVar.colorText};
     }
+  `,
+  runningDot: css`
+    position: absolute;
+    inset-block-end: -2px;
+    inset-inline-end: -2px;
+
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid ${cssVar.colorBgLayout};
+    border-radius: 50%;
+
+    background: ${cssVar.gold};
+    box-shadow: 0 0 6px ${cssVar.gold};
   `,
   container: css`
     flex: 1;
