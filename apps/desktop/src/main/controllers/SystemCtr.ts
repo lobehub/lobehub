@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 
 import type {
   ElectronAppState,
+  GitAheadBehind,
   GitBranchInfo,
   GitBranchListItem,
   GitCheckoutResult,
@@ -470,6 +471,38 @@ export default class SystemController extends ControllerModule {
       return { added, deleted, modified };
     } catch {
       return { added: [], deleted: [], modified: [] };
+    }
+  }
+
+  /**
+   * Count commits HEAD is ahead/behind its upstream tracking ref.
+   * Returns `hasUpstream: false` when the branch has no upstream configured
+   * (e.g. local-only branches, or after the remote branch is deleted).
+   */
+  @IpcMethod()
+  async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout: upstreamOut } = await execFileAsync(
+        'git',
+        ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+        { cwd: dirPath, timeout: 5000 },
+      );
+      const upstream = upstreamOut.trim();
+      if (!upstream) return { ahead: 0, behind: 0, hasUpstream: false };
+
+      const { stdout } = await execFileAsync(
+        'git',
+        ['rev-list', '--left-right', '--count', `${upstream}...HEAD`],
+        { cwd: dirPath, timeout: 5000 },
+      );
+      const [behindStr, aheadStr] = stdout.trim().split(/\s+/);
+      const behind = Number.parseInt(behindStr ?? '0', 10) || 0;
+      const ahead = Number.parseInt(aheadStr ?? '0', 10) || 0;
+      return { ahead, behind, hasUpstream: true, upstream };
+    } catch {
+      // No upstream configured, detached HEAD, or git error — all treated as "no upstream"
+      return { ahead: 0, behind: 0, hasUpstream: false };
     }
   }
 

@@ -1,5 +1,6 @@
 import {
   type ElectronAppState,
+  type GitAheadBehind,
   type GitBranchInfo,
   type GitBranchListItem,
   type GitCheckoutResult,
@@ -113,6 +114,10 @@ class ElectronSystemService {
 
   async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
     return this.ipc.system.getGitWorkingTreeFiles(dirPath);
+  }
+
+  async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
+    return this.ipc.system.getGitAheadBehind(dirPath);
   }
 
   async checkoutGitBranch(params: {

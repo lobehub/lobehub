@@ -1,17 +1,44 @@
 import { Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { GitBranchIcon, GitPullRequest } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 
 import BranchSwitcher from './BranchSwitcher';
+import { useGitAheadBehind } from './useGitAheadBehind';
 import { useGitInfo } from './useGitInfo';
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 import WorkingTreeFilesContent from './WorkingTreeFilesContent';
 
 const styles = createStaticStyles(({ css }) => ({
+  aheadBehind: css`
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 2px;
+    padding-inline: 4px;
+    border-radius: 4px;
+
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  aheadBehindItem: css`
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+  `,
+  aheadStat: css`
+    color: ${cssVar.colorInfo};
+  `,
+  behindStat: css`
+    color: ${cssVar.colorError};
+  `,
   branchLabel: css`
     overflow: hidden;
     max-width: 160px;
@@ -92,6 +119,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const { t } = useTranslation('plugin');
   const { data, mutate } = useGitInfo(path, isGithub);
   const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
+  const { data: aheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(path);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
 
@@ -128,6 +156,48 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
       })
     : undefined;
 
+  const showAhead = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.ahead > 0;
+  const showBehind = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.behind > 0;
+  const upstreamName = aheadBehind?.upstream ?? '';
+  const aheadBehindTooltip =
+    showAhead && showBehind
+      ? t('localSystem.workingDirectory.aheadBehindTooltip', {
+          ahead: aheadBehind!.ahead,
+          behind: aheadBehind!.behind,
+          upstream: upstreamName,
+        })
+      : showAhead
+        ? t('localSystem.workingDirectory.aheadTooltip', {
+            count: aheadBehind!.ahead,
+            upstream: upstreamName,
+          })
+        : showBehind
+          ? t('localSystem.workingDirectory.behindTooltip', {
+              count: aheadBehind!.behind,
+              upstream: upstreamName,
+            })
+          : undefined;
+
+  const aheadBehindNode =
+    showAhead || showBehind ? (
+      <Tooltip title={aheadBehindTooltip}>
+        <div className={styles.aheadBehind}>
+          {showBehind && (
+            <span className={`${styles.aheadBehindItem} ${styles.behindStat}`}>
+              <Icon icon={ArrowDownIcon} size={12} />
+              {aheadBehind!.behind}
+            </span>
+          )}
+          {showAhead && (
+            <span className={`${styles.aheadBehindItem} ${styles.aheadStat}`}>
+              <Icon icon={ArrowUpIcon} size={12} />
+              {aheadBehind!.ahead}
+            </span>
+          )}
+        </div>
+      </Tooltip>
+    ) : null;
+
   const branchTrigger = (
     <div className={styles.trigger}>
       <Icon icon={GitBranchIcon} size={12} />
@@ -146,9 +216,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
       onAfterCheckout={() => {
         void mutate();
         void mutateWorkingStatus();
+        void mutateAheadBehind();
       }}
       onExternalRefresh={async () => {
-        await Promise.all([mutate(), mutateWorkingStatus()]);
+        await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
       }}
     >
       <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
@@ -194,6 +265,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
       <div className={styles.separator} />
       {branchNode}
       {diffNode}
+      {aheadBehindNode}
       {data.pullRequest && (
         <>
           <div className={styles.separator} />
