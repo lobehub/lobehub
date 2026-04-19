@@ -4,8 +4,6 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   closeIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
-    opacity: 0;
-    transition: opacity 0.15s ${cssVar.motionEaseOut};
 
     &:hover {
       color: ${cssVar.colorText};
@@ -33,16 +31,12 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 12px;
 
-    background-color: ${cssVar.colorFillTertiary};
+    background-color: transparent;
 
     transition: background-color 0.15s ${cssVar.motionEaseInOut};
 
     &:hover {
-      background-color: ${cssVar.colorFillSecondary};
-    }
-
-    &:hover .closeIcon {
-      opacity: 1;
+      background-color: ${cssVar.colorFillTertiary};
     }
   `,
   tabActive: css`
@@ -50,10 +44,6 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       background-color: ${cssVar.colorFill};
-    }
-
-    & .closeIcon {
-      opacity: 1;
     }
   `,
   tabIcon: css`
