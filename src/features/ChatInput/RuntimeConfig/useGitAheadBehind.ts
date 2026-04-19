@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { electronSystemService } from '@/services/electron/system';
+import { electronGitService } from '@/services/electron/git';
 
 /**
  * Ahead/behind commit counts for the current branch vs its upstream tracking ref.
@@ -12,7 +12,7 @@ import { electronSystemService } from '@/services/electron/system';
 export const useGitAheadBehind = (dirPath?: string) => {
   const key = isDesktop && dirPath ? ['git-ahead-behind', dirPath] : null;
 
-  return useClientDataSWR(key, () => electronSystemService.getGitAheadBehind(dirPath!), {
+  return useClientDataSWR(key, () => electronGitService.getGitAheadBehind(dirPath!), {
     focusThrottleInterval: 5 * 1000,
     revalidateOnFocus: true,
     shouldRetryOnError: false,

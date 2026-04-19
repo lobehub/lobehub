@@ -1,12 +1,5 @@
 import {
   type ElectronAppState,
-  type GitAheadBehind,
-  type GitBranchInfo,
-  type GitBranchListItem,
-  type GitCheckoutResult,
-  type GitLinkedPullRequestResult,
-  type GitWorkingTreeFiles,
-  type GitWorkingTreeStatus,
   type WindowMinimumSizeParams,
   type WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
@@ -87,45 +80,6 @@ class ElectronSystemService {
     title?: string;
   }): Promise<{ path: string; repoType?: 'git' | 'github' } | undefined> {
     return this.ipc.system.selectFolder(params);
-  }
-
-  async getGitBranch(dirPath: string): Promise<GitBranchInfo> {
-    return this.ipc.system.getGitBranch(dirPath);
-  }
-
-  async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
-    return this.ipc.system.detectRepoType(dirPath);
-  }
-
-  async getLinkedPullRequest(params: {
-    branch: string;
-    path: string;
-  }): Promise<GitLinkedPullRequestResult> {
-    return this.ipc.system.getLinkedPullRequest(params);
-  }
-
-  async listGitBranches(dirPath: string): Promise<GitBranchListItem[]> {
-    return this.ipc.system.listGitBranches(dirPath);
-  }
-
-  async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
-    return this.ipc.system.getGitWorkingTreeStatus(dirPath);
-  }
-
-  async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
-    return this.ipc.system.getGitWorkingTreeFiles(dirPath);
-  }
-
-  async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
-    return this.ipc.system.getGitAheadBehind(dirPath);
-  }
-
-  async checkoutGitBranch(params: {
-    branch: string;
-    create?: boolean;
-    path: string;
-  }): Promise<GitCheckoutResult> {
-    return this.ipc.system.checkoutGitBranch(params);
   }
 }
 

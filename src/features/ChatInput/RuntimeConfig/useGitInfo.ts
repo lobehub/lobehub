@@ -2,7 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import type { GitLinkedPullRequest } from '@lobechat/electron-client-ipc';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { electronSystemService } from '@/services/electron/system';
+import { electronGitService } from '@/services/electron/git';
 
 export interface GitInfo {
   branch?: string;
@@ -13,13 +13,13 @@ export interface GitInfo {
 }
 
 const fetchGitInfo = async (dirPath: string, isGithub: boolean): Promise<GitInfo> => {
-  const { branch, detached } = await electronSystemService.getGitBranch(dirPath);
+  const { branch, detached } = await electronGitService.getGitBranch(dirPath);
   if (!branch) return {};
 
   // Skip PR lookup for detached HEAD or non-github repos
   if (detached || !isGithub) return { branch, detached };
 
-  const prResult = await electronSystemService.getLinkedPullRequest({ branch, path: dirPath });
+  const prResult = await electronGitService.getLinkedPullRequest({ branch, path: dirPath });
   return {
     branch,
     detached,

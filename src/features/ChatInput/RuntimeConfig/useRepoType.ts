@@ -2,7 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 
-import { electronSystemService } from '@/services/electron/system';
+import { electronGitService } from '@/services/electron/git';
 
 import { getRecentDirs, setRecentDirRepoType } from './recentDirs';
 
@@ -26,7 +26,7 @@ export const useRepoType = (path?: string): RepoType => {
 
   const { data: probed } = useSWR(
     shouldProbe ? ['detect-repo-type', path] : null,
-    () => electronSystemService.detectRepoType(path!),
+    () => electronGitService.detectRepoType(path!),
     {
       dedupingInterval: 60 * 1000,
       revalidateOnFocus: false,

@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { electronSystemService } from '@/services/electron/system';
+import { electronGitService } from '@/services/electron/git';
 
 /**
  * Per-file breakdown of the working tree (paths grouped by add/modify/delete).
@@ -11,7 +11,7 @@ import { electronSystemService } from '@/services/electron/system';
 export const useWorkingTreeFiles = (dirPath?: string, enabled?: boolean) => {
   const key = isDesktop && dirPath && enabled ? ['git-working-tree-files', dirPath] : null;
 
-  return useClientDataSWR(key, () => electronSystemService.getGitWorkingTreeFiles(dirPath!), {
+  return useClientDataSWR(key, () => electronGitService.getGitWorkingTreeFiles(dirPath!), {
     focusThrottleInterval: 5 * 1000,
     revalidateOnFocus: true,
     shouldRetryOnError: false,

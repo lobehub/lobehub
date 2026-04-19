@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
-import { electronSystemService } from '@/services/electron/system';
+import { electronGitService } from '@/services/electron/git';
 
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
@@ -175,7 +175,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       mutate: mutateBranches,
     } = useSWR(
       open ? ['git-branches', path] : null,
-      () => electronSystemService.listGitBranches(path),
+      () => electronGitService.listGitBranches(path),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
     const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
@@ -224,7 +224,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         }
         setBusyBranch(branch);
         try {
-          const result = await electronSystemService.checkoutGitBranch({
+          const result = await electronGitService.checkoutGitBranch({
             branch,
             create,
             path,
