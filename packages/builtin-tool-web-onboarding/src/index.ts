@@ -1,6 +1,6 @@
 export { WebOnboardingManifest } from './manifest';
 export {
-  type PatchDocumentArgs,
+  type UpdateDocumentArgs,
   WebOnboardingApiName,
   type WebOnboardingDocumentType,
   WebOnboardingIdentifier,

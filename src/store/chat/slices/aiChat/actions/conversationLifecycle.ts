@@ -17,6 +17,7 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
@@ -25,6 +26,7 @@ import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
@@ -344,19 +346,26 @@ export class ConversationLifecycleActionImpl {
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
-    if (isDesktop && heterogeneousProvider?.type === 'claudecode') {
+    if (isDesktop && heterogeneousProvider?.type === 'claude-code') {
+      // Resolve cwd up-front so the new topic is bound to a project at
+      // creation time. Otherwise the row stays NULL until the post-execution
+      // metadata write — which never lands on cancel/error and meanwhile
+      // makes By-Project grouping miss the topic and `--resume` unsafe.
+      const workingDirectory =
+        agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
-        const { model, provider } =
-          agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+        const { model } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
             groupId: operationContext.groupId ?? undefined,
-            newAssistantMessage: { model, provider: provider! },
+            newAssistantMessage: { model, provider: 'claude-code' },
             newTopic: !operationContext.topicId
               ? {
+                  metadata: workingDirectory ? { workingDirectory } : undefined,
                   title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -436,18 +445,25 @@ export class ConversationLifecycleActionImpl {
 
       try {
         const { executeHeterogeneousAgent } = await import('./heterogeneousAgentExecutor');
-        const workingDirectory =
-          agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
         // Extract imageList from the persisted user message (chatUploadFileList
         // may already be cleared by this point, so we read from DB instead)
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
         const persistedImageList = userMsg?.imageList;
 
-        // Read CC session ID from topic metadata for multi-turn resume
+        // Read heterogeneous-agent session id from topic metadata for multi-turn
+        // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
+        // doesn't match the current one, so CC doesn't emit
+        // "No conversation found with session ID".
         const topic = heteroContext.topicId
           ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
           : undefined;
-        const resumeSessionId = topic?.metadata?.ccSessionId;
+        const { cwdChanged, resumeSessionId } = resolveHeteroResume(
+          topic?.metadata,
+          workingDirectory,
+        );
+        if (cwdChanged) {
+          antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+        }
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroData.assistantMessageId,

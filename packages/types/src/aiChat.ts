@@ -8,7 +8,7 @@ import { PageSelectionSchema } from './message/ui/params';
 import type { OpenAIChatMessage } from './openai/chat';
 import type { LobeUniformTool } from './tool';
 import { LobeUniformToolSchema } from './tool';
-import type { ChatTopic } from './topic';
+import type { ChatTopic, ChatTopicMetadata } from './topic';
 import type { ChatThreadType } from './topic/thread';
 import { ThreadType } from './topic/thread';
 
@@ -66,6 +66,14 @@ export interface SendMessageServerParams {
    */
   newThread?: CreateThreadWithMessageParams;
   newTopic?: {
+    /**
+     * Topic metadata persisted at creation time. For CC/heterogeneous
+     * agents this carries `workingDirectory` so the topic is bound to a
+     * project from the moment it's created (used by By-Project grouping
+     * and CC `--resume` cwd verification), instead of waiting for the
+     * post-execution metadata write which can be skipped on cancel/error.
+     */
+    metadata?: ChatTopicMetadata;
     title?: string;
     topicMessageIds?: string[];
   };
@@ -111,6 +119,7 @@ export const AiSendMessageServerSchema = z.object({
   newThread: CreateThreadWithMessageSchema.optional(),
   newTopic: z
     .object({
+      metadata: z.custom<ChatTopicMetadata>().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
     })

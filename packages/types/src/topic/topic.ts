@@ -11,13 +11,8 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-export enum TopicDisplayMode {
-  ByCreatedTime = 'byTime',
-  ByUpdatedTime = 'byUpdatedTime',
-  Flat = 'flat',
-  // AscMessages = 'ascMessages',
-  // DescMessages = 'descMessages',
-}
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat';
+export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 export interface GroupedTopic {
   children: ChatTopic[];
@@ -46,25 +41,40 @@ export interface OnboardingFeedbackEntry {
   submittedAt: string;
 }
 
+export interface OnboardingSessionSnapshot {
+  agentIdentityCompletedAt?: string;
+  discoveryCompletedAt?: string;
+  finalAgentNames?: string[];
+  finishedAt?: string;
+  lastActiveAt: string;
+  phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
+  startedAt: string;
+  userIdentityCompletedAt?: string;
+  version: number;
+}
+
 export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   /**
-   * CC session ID for multi-turn resume (desktop only).
-   * Persisted after each CC execution so the next message in the same topic
-   * can use `--resume <sessionId>` to continue the conversation.
-   */
-  ccSessionId?: string;
-  /**
    * Cron job ID that triggered this topic creation (if created by scheduled task)
    */
   cronJobId?: string;
+  /**
+   * Persistent session id for a heterogeneous agent (desktop only).
+   * Saved after each turn so the next message in the same topic can resume
+   * the conversation (e.g. Claude Code CLI uses `--resume <sessionId>`).
+   * CC CLI stores sessions per-cwd under `~/.claude/projects/<encoded-cwd>/`,
+   * so resume requires the current cwd to equal `workingDirectory`.
+   */
+  heteroSessionId?: string;
   model?: string;
   /**
    * Free-form feedback collected after agent onboarding completion.
    * Comment text is stored only here (not analytics) and is length-capped server-side.
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
+  onboardingSession?: OnboardingSessionSnapshot;
   provider?: string;
   /**
    * Currently running Gateway operation on this topic.
@@ -80,8 +90,10 @@ export interface ChatTopicMetadata {
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Local System working directory (desktop only)
-   * Priority is higher than Agent-level settings
+   * Topic-level working directory (desktop only).
+   * Priority is higher than Agent-level settings. Also serves as the
+   * binding cwd for a CC session — written on first CC execution and
+   * checked on subsequent turns to decide whether `--resume` is safe.
    */
   workingDirectory?: string;
 }

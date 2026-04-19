@@ -90,16 +90,16 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Update a document by type with full content. Use "soul" for SOUL.md (agent identity + base template only, no user info), or "persona" for user persona (user identity, work style, context, pain points only, no agent info). Prefer patchDocument for small edits.',
-      name: WebOnboardingApiName.updateDocument,
+        'Write a document with full content, replacing anything that existed. Use "soul" for SOUL.md (agent identity + base template only, no user info), or "persona" for user persona (user identity, work style, context, pain points only, no agent info). Use writeDocument only for the very first write when the document is empty, or when the entire structure must change. For every subsequent edit, call updateDocument instead — it is cheaper and safer.',
+      name: WebOnboardingApiName.writeDocument,
       parameters: {
         properties: {
           content: {
-            description: 'The full updated document content in markdown format.',
+            description: 'The full document content in markdown format.',
             type: 'string',
           },
           type: {
-            description: 'Document type to update.',
+            description: 'Document type to write.',
             enum: ['soul', 'persona'],
             type: 'string',
           },
@@ -110,8 +110,8 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Apply byte-exact SEARCH/REPLACE hunks to a document. Preferred over updateDocument for small edits because it avoids resending the full document. Each hunk's search must match the current document exactly (whitespace, punctuation, casing). If the search appears multiple times, add surrounding context to make it unique or set replaceAll=true. On failure (HUNK_NOT_FOUND / HUNK_AMBIGUOUS), adjust and retry; do not fall back to updateDocument unless many hunks are needed.",
-      name: WebOnboardingApiName.patchDocument,
+        "Update an existing document by applying byte-exact SEARCH/REPLACE hunks. This is the preferred way to persist new information incrementally — it is cheaper, safer, and less error-prone than rewriting the full document with writeDocument. Each hunk's search must match the current document exactly (whitespace, punctuation, casing). If the search appears multiple times, add surrounding context to make it unique or set replaceAll=true. On failure (HUNK_NOT_FOUND / HUNK_AMBIGUOUS), adjust the search string and retry; do not fall back to writeDocument unless most of the document must change.",
+      name: WebOnboardingApiName.updateDocument,
       parameters: {
         properties: {
           hunks: {

@@ -29,10 +29,12 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
     useCreateMenuItems();
 
   const addMenuItems = useMemo(() => {
-    const items = [createAgentMenuItem(), createGroupChatMenuItem()];
     const ccItem = createClaudeCodeMenuItem();
-    if (ccItem) items.splice(1, 0, ccItem);
-    return items;
+    return [
+      createAgentMenuItem(),
+      createGroupChatMenuItem(),
+      ...(ccItem ? [{ type: 'divider' as const }, ccItem] : []),
+    ];
   }, [createAgentMenuItem, createClaudeCodeMenuItem, createGroupChatMenuItem]);
 
   const handleOpenConfigGroupModal = useCallback(() => {

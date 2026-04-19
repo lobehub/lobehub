@@ -1,3 +1,5 @@
+import type { HotkeyGroupId, HotkeyId, HotkeyRegistration, HotkeyScopeId } from '@lobechat/types';
+
 const combineKeys = (keys: string[]) => keys.join('+');
 
 export const KeyEnum = {
@@ -56,33 +58,19 @@ export const HotkeyEnum = {
   ToggleLeftPanel: 'toggleLeftPanel',
   ToggleRightPanel: 'toggleRightPanel',
   ToggleZenMode: 'toggleZenMode',
-} as const;
+} as const satisfies Record<string, HotkeyId>;
 
 export const HotkeyGroupEnum = {
   Conversation: 'conversation',
   Essential: 'essential',
-} as const;
+} as const satisfies Record<string, HotkeyGroupId>;
 
 export const HotkeyScopeEnum = {
   Chat: 'chat',
   Files: 'files',
   Global: 'global',
   Image: 'image',
-} as const;
-
-export type HotkeyId = (typeof HotkeyEnum)[keyof typeof HotkeyEnum];
-export type HotkeyGroupId = (typeof HotkeyGroupEnum)[keyof typeof HotkeyGroupEnum];
-export type HotkeyScopeId = (typeof HotkeyScopeEnum)[keyof typeof HotkeyScopeEnum];
-
-export interface HotkeyItem {
-  group: HotkeyGroupId;
-  id: HotkeyId;
-  keys: string;
-  nonEditable?: boolean;
-  scopes?: HotkeyScopeId[];
-}
-
-export type HotkeyRegistration = HotkeyItem[];
+} as const satisfies Record<string, HotkeyScopeId>;
 
 // mod is the command key on Mac, alt is the ctrl key on Windows
 export const HOTKEYS_REGISTRATION: HotkeyRegistration = [

@@ -83,6 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   sectionTitle: css`
+    padding-block: 6px 2px;
     padding-inline: 8px;
 
     font-size: 11px;

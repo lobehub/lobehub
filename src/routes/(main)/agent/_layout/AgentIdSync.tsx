@@ -32,10 +32,8 @@ const AgentIdSync = () => {
         useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
       }
     }
-    // Clear unread completion indicator for the agent being viewed
-    if (params.aid) {
-      useChatStore.getState().clearUnreadCompletedAgent(params.aid);
-    }
+    // Note: we no longer clear all unread topics on agent visit — the badge counts
+    // unread topics and is cleared per-topic when the user actually opens each one.
   }, [params.aid, prevAgentId]);
 
   useMount(() => {

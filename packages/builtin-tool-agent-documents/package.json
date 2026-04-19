@@ -14,5 +14,13 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5",
+    "antd": "^6",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-i18next": "*"
   }
 }

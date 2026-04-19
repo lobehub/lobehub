@@ -29,33 +29,24 @@ export interface MessageActionItem extends ActionIconGroupItemType {
 export type MessageActionItemOrDivider = MessageActionItem | { type: 'divider' };
 
 /**
- * Factory function type for creating message-specific actions
- * Receives message id and returns an action item or null
+ * Action slot reference. A registered action key (e.g. `'copy'`) or the
+ * reserved `'divider'` literal.
+ *
+ * Uses declarative keys rather than pre-built items so per-message action
+ * construction stays lazy and per-session/role config lives at the route
+ * layer (see `useActionsBarConfig`).
  */
-export type MessageActionFactory = (id: string) => MessageActionItem | null;
+export type MessageActionSlot = string;
 
 /**
- * Action configuration for a specific message type
+ * Action configuration for a specific message type. Lists of registered
+ * action keys resolved at render-time against the action registry.
  */
 export interface MessageActionsConfig {
-  /**
-   * Actions to display in the action bar (always visible)
-   */
-  bar?: MessageActionItemOrDivider[];
-  /**
-   * Extra actions to add to the bar, created per-message using factory functions.
-   * These are appended after the default/configured bar actions.
-   */
-  extraBarActions?: MessageActionFactory[];
-  /**
-   * Extra actions to add to the menu, created per-message using factory functions.
-   * These are appended after the default/configured menu actions.
-   */
-  extraMenuActions?: MessageActionFactory[];
-  /**
-   * Actions to display in the dropdown menu
-   */
-  menu?: MessageActionItemOrDivider[];
+  /** Bar slots (always visible as icons) */
+  bar?: MessageActionSlot[];
+  /** Menu slots (overflow dropdown); when omitted the role's default menu is used */
+  menu?: MessageActionSlot[];
 }
 
 /**

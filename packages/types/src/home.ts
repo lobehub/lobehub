@@ -33,7 +33,7 @@ export interface SidebarAgentItem {
    */
   groupAvatar?: string | null;
   /**
-   * Heterogeneous agent runtime type (e.g. `claudecode`) when the agent is
+   * Heterogeneous agent runtime type (e.g. `claude-code`) when the agent is
    * driven by an external CLI. `null` / absent means it's a regular LobeHub
    * agent. Present so sidebar / list items can render an "External" tag
    * without per-item agent config lookups.

@@ -110,6 +110,8 @@ const ProgressSection = memo(() => {
   );
   const hasTasks = progress.items.length > 0;
 
+  if (!hasTasks) return null;
+
   return (
     <>
       <div className={styles.barWrap}>

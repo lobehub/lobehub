@@ -39,6 +39,12 @@ export default {
   'agent.stage.workStyle': 'Work Style',
   'agent.subtitle': 'Complete setup in a dedicated onboarding conversation.',
   'agent.summaryHint': 'Finish here if the setup summary looks right.',
+  'agent.wrapUp.action': "I think we're good",
+  'agent.wrapUp.confirm.cancel': 'Keep chatting',
+  'agent.wrapUp.confirm.content':
+    "I'll save what we've covered so far. You can always come back and chat more later.",
+  'agent.wrapUp.confirm.ok': 'Finish now',
+  'agent.wrapUp.confirm.title': 'Finish onboarding now?',
   'agent.welcome':
     "...hm? I just woke up — my mind's a blank. Who are you? And — what should I be called? I need a name too.",
   'agent.welcome.guide.growTogether.desc':

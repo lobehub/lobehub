@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +8,6 @@ import { initialState } from '@/store/global/initialState';
 import { useUserStore } from '@/store/user';
 import { initialState as initialUserState } from '@/store/user/initialState';
 
-import Conversation from '../index';
 import AgentWorkingSidebar from './index';
 
 vi.mock('@/libs/swr', async (importOriginal) => {
@@ -38,6 +37,9 @@ vi.mock('@lobehub/ui', () => ({
   Button: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <button {...props}>{children}</button>
   ),
+  Center: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...props}>{children}</div>
+  ),
   Checkbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
   ),
@@ -58,6 +60,7 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </div>
   ),
+  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
   Avatar: ({ avatar }: { avatar?: ReactNode | string }) => <div>{avatar}</div>,
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
     <div {...props}>{children}</div>
@@ -73,6 +76,17 @@ vi.mock('@lobehub/ui', () => ({
   TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
+vi.mock('antd', () => ({
+  App: {
+    useApp: () => ({
+      message: { error: vi.fn(), success: vi.fn() },
+      modal: { confirm: vi.fn() },
+    }),
+  },
+  Progress: () => <div data-testid="workspace-progress-bar" />,
+  Spin: () => <div data-testid="spin" />,
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
@@ -85,47 +99,28 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/components/DragUploadZone', () => ({
-  default: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  useUploadFiles: () => ({ handleUploadFiles: vi.fn() }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector?.({
       activeAgentId: 'agent-1',
-      useFetchBotProviders: () => ({ data: [], isLoading: false }),
-      useFetchPlatformDefinitions: () => ({ data: [], isLoading: false }),
     }),
 }));
 
-vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: {
-    currentAgentModel: () => 'mock-model',
-    currentAgentModelProvider: () => 'mock-provider',
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      activeTopicId: undefined,
+      closeDocument: vi.fn(),
+      dbMessagesMap: {},
+      openDocument: vi.fn(),
+      portalStack: [],
+    }),
+}));
+
+vi.mock('@/store/chat/selectors', () => ({
+  chatPortalSelectors: {
+    portalDocumentId: () => null,
   },
-}));
-
-vi.mock('@/features/Conversation/store', () => ({
-  dataSelectors: {
-    dbMessages: (state: { dbMessages?: unknown[] }) => state.dbMessages,
-  },
-  useConversationStore: (selector: (state: { dbMessages: unknown[] }) => unknown) =>
-    selector({ dbMessages: [] }),
-}));
-
-vi.mock('../ConversationArea', () => ({
-  default: () => <div>conversation-area</div>,
-}));
-
-vi.mock('../Header', () => ({
-  default: () => <div>chat-header</div>,
-}));
-
-vi.mock('./AgentDocumentEditorPanel', () => ({
-  default: ({ selectedDocumentId }: { selectedDocumentId: string | null }) => (
-    <div data-testid="workspace-document-panel">{selectedDocumentId}</div>
-  ),
 }));
 
 beforeEach(() => {
@@ -143,7 +138,7 @@ beforeEach(() => {
     ...initialUserState,
     preference: {
       ...initialUserState.preference,
-      lab: { ...initialUserState.preference.lab, enableAgentWorkingPanel: false },
+      lab: { ...initialUserState.preference.lab },
     },
   });
 });
@@ -152,56 +147,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Conversation right panel mount', () => {
-  it('does not mount the conversation-side right panel path when working panel lab feature is disabled', () => {
-    render(<Conversation />);
+describe('AgentWorkingSidebar', () => {
+  it('renders panel header title and resources empty state', () => {
+    render(<AgentWorkingSidebar />);
 
-    expect(screen.getByText('chat-header')).toBeInTheDocument();
-    expect(screen.getByText('conversation-area')).toBeInTheDocument();
-    expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('workspace-resources')).not.toBeInTheDocument();
-  });
-
-  it('mounts the conversation-side right panel path and defaults the right panel to collapsed when working panel lab feature is enabled', async () => {
-    useUserStore.setState({
-      preference: {
-        ...useUserStore.getState().preference,
-        lab: { ...useUserStore.getState().preference.lab, enableAgentWorkingPanel: true },
-      },
-    });
-
-    const { unmount } = render(<Conversation />);
-
-    expect(screen.getByText('chat-header')).toBeInTheDocument();
-    expect(screen.getByText('conversation-area')).toBeInTheDocument();
-    expect(screen.getByTestId('right-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('right-panel')).toHaveAttribute('data-stable-layout', 'true');
-    expect(screen.getByTestId('workspace-resources')).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByTestId('right-panel')).toHaveAttribute('data-expand', 'false');
-      expect(useGlobalStore.getState().status.showRightPanel).toBe(false);
-    });
-
-    unmount();
-
-    expect(useGlobalStore.getState().status.showRightPanel).toBe(false);
-  });
-
-  it('renders resources section and empty state', () => {
-    render(<AgentWorkingSidebar selectedDocumentId={null} onSelectDocument={vi.fn()} />);
+    // Panel-level title
+    expect(screen.getAllByText('Resources').length).toBeGreaterThan(0);
 
     const resources = screen.getByTestId('workspace-resources');
-
-    expect(resources).toHaveTextContent('Resources');
     expect(resources).toHaveTextContent('No agent documents yet');
   });
 
-  it('switches to document editor inside the right panel when a document is selected', () => {
-    render(<AgentWorkingSidebar selectedDocumentId={'doc-1'} onSelectDocument={vi.fn()} />);
+  it('mounts a right panel wrapper', () => {
+    render(<AgentWorkingSidebar />);
 
     expect(screen.getByTestId('right-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('workspace-document-panel')).toHaveTextContent('doc-1');
-    expect(screen.queryByTestId('workspace-resources')).not.toBeInTheDocument();
+    expect(screen.getByTestId('right-panel')).toHaveAttribute('data-stable-layout', 'true');
   });
 });

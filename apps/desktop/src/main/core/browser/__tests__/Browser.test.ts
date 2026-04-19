@@ -4,76 +4,89 @@ import { type App as AppCore } from '../../App';
 import Browser, { type BrowserWindowOpts } from '../Browser';
 
 // Use vi.hoisted to define mocks before hoisting
-const { mockBrowserWindow, mockNativeTheme, mockIpcMain, mockScreen, MockBrowserWindow } =
-  vi.hoisted(() => {
-    const mockBrowserWindow = {
-      center: vi.fn(),
-      close: vi.fn(),
-      focus: vi.fn(),
-      getBounds: vi.fn().mockReturnValue({ height: 600, width: 800, x: 0, y: 0 }),
-      getContentBounds: vi.fn().mockReturnValue({ height: 600, width: 800 }),
-      hide: vi.fn(),
-      isDestroyed: vi.fn().mockReturnValue(false),
-      isFocused: vi.fn().mockReturnValue(true),
-      isFullScreen: vi.fn().mockReturnValue(false),
-      isMaximized: vi.fn().mockReturnValue(false),
-      isVisible: vi.fn().mockReturnValue(true),
-      loadFile: vi.fn().mockResolvedValue(undefined),
-      loadURL: vi.fn().mockResolvedValue(undefined),
-      maximize: vi.fn(),
-      minimize: vi.fn(),
-      on: vi.fn(),
-      once: vi.fn(),
-      setBackgroundColor: vi.fn(),
-      setBounds: vi.fn(),
-      setFullScreen: vi.fn(),
-      setPosition: vi.fn(),
-      setTitleBarOverlay: vi.fn(),
-      show: vi.fn(),
-      unmaximize: vi.fn(),
-      webContents: {
-        openDevTools: vi.fn(),
-        send: vi.fn(),
-        session: {
-          webRequest: {
-            onBeforeSendHeaders: vi.fn(),
-            onHeadersReceived: vi.fn(),
-          },
+const {
+  mockElectronApp,
+  mockBrowserWindow,
+  mockNativeTheme,
+  mockIpcMain,
+  mockScreen,
+  MockBrowserWindow,
+} = vi.hoisted(() => {
+  const mockBrowserWindow = {
+    center: vi.fn(),
+    close: vi.fn(),
+    focus: vi.fn(),
+    getBounds: vi.fn().mockReturnValue({ height: 600, width: 800, x: 0, y: 0 }),
+    getContentBounds: vi.fn().mockReturnValue({ height: 600, width: 800 }),
+    hide: vi.fn(),
+    isDestroyed: vi.fn().mockReturnValue(false),
+    isFocused: vi.fn().mockReturnValue(true),
+    isFullScreen: vi.fn().mockReturnValue(false),
+    isMaximized: vi.fn().mockReturnValue(false),
+    isVisible: vi.fn().mockReturnValue(true),
+    loadFile: vi.fn().mockResolvedValue(undefined),
+    loadURL: vi.fn().mockResolvedValue(undefined),
+    maximize: vi.fn(),
+    minimize: vi.fn(),
+    on: vi.fn(),
+    once: vi.fn(),
+    setBackgroundColor: vi.fn(),
+    setBounds: vi.fn(),
+    setFullScreen: vi.fn(),
+    setPosition: vi.fn(),
+    setTitleBarOverlay: vi.fn(),
+    show: vi.fn(),
+    unmaximize: vi.fn(),
+    webContents: {
+      openDevTools: vi.fn(),
+      send: vi.fn(),
+      session: {
+        webRequest: {
+          onBeforeSendHeaders: vi.fn(),
+          onHeadersReceived: vi.fn(),
         },
-        on: vi.fn(),
-        setWindowOpenHandler: vi.fn(),
       },
-    };
+      on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+    },
+  };
 
-    return {
-      MockBrowserWindow: vi.fn().mockImplementation(() => mockBrowserWindow),
-      mockBrowserWindow,
-      mockIpcMain: {
-        handle: vi.fn(),
-        removeHandler: vi.fn(),
-      },
-      mockNativeTheme: {
-        off: vi.fn(),
-        on: vi.fn(),
-        shouldUseDarkColors: false,
-        themeSource: 'system',
-      },
-      mockScreen: {
-        getDisplayMatching: vi.fn().mockReturnValue({
-          workArea: { height: 1080, width: 1920, x: 0, y: 0 },
-        }),
-        getDisplayNearestPoint: vi.fn().mockReturnValue({
-          workArea: { height: 1080, width: 1920, x: 0, y: 0 },
-        }),
-        getPrimaryDisplay: vi.fn().mockReturnValue({
-          workArea: { height: 1080, width: 1920, x: 0, y: 0 },
-        }),
-      },
-    };
-  });
+  const mockElectronApp = {
+    dock: { setBadge: vi.fn() },
+    setBadgeCount: vi.fn(),
+  };
+
+  return {
+    MockBrowserWindow: vi.fn().mockImplementation(() => mockBrowserWindow),
+    mockElectronApp,
+    mockBrowserWindow,
+    mockIpcMain: {
+      handle: vi.fn(),
+      removeHandler: vi.fn(),
+    },
+    mockNativeTheme: {
+      off: vi.fn(),
+      on: vi.fn(),
+      shouldUseDarkColors: false,
+      themeSource: 'system',
+    },
+    mockScreen: {
+      getDisplayMatching: vi.fn().mockReturnValue({
+        workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+      }),
+      getDisplayNearestPoint: vi.fn().mockReturnValue({
+        workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+      }),
+      getPrimaryDisplay: vi.fn().mockReturnValue({
+        workArea: { height: 1080, width: 1920, x: 0, y: 0 },
+      }),
+    },
+  };
+});
 
 // Mock electron
 vi.mock('electron', () => ({
+  app: mockElectronApp,
   BrowserWindow: MockBrowserWindow,
   ipcMain: mockIpcMain,
   nativeTheme: mockNativeTheme,

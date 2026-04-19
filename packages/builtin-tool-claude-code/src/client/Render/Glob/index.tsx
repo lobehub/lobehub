@@ -1,32 +1,19 @@
 'use client';
 
+import { ToolResultCard } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { Highlighter, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { FolderSearch } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
   count: css`
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
-  header: css`
-    padding-inline: 4px;
-    color: ${cssVar.colorTextSecondary};
-  `,
   pattern: css`
     font-family: ${cssVar.fontFamilyCode};
-  `,
-  previewBox: css`
-    overflow: hidden;
-    border-radius: 8px;
-    background: ${cssVar.colorBgContainer};
   `,
   scope: css`
     font-size: 12px;
@@ -50,36 +37,37 @@ const Glob = memo<BuiltinRenderProps<GlobArgs>>(({ args, content }) => {
   }, [content]);
 
   return (
-    <Flexbox className={styles.container} gap={8}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8} wrap={'wrap'}>
-        <Icon icon={FolderSearch} size={'small'} />
-        {pattern && (
-          <Text strong className={styles.pattern}>
-            {pattern}
-          </Text>
-        )}
-        {scope && (
-          <Text ellipsis className={styles.scope}>
-            {scope}
-          </Text>
-        )}
-        {matchCount > 0 && <Text className={styles.count}>{`${matchCount} matches`}</Text>}
-      </Flexbox>
-
+    <ToolResultCard
+      wrapHeader
+      icon={FolderSearch}
+      header={
+        <>
+          {pattern && (
+            <Text strong className={styles.pattern}>
+              {pattern}
+            </Text>
+          )}
+          {scope && (
+            <Text ellipsis className={styles.scope}>
+              {scope}
+            </Text>
+          )}
+          {matchCount > 0 && <Text className={styles.count}>{`${matchCount} matches`}</Text>}
+        </>
+      }
+    >
       {content && (
-        <Flexbox className={styles.previewBox}>
-          <Highlighter
-            wrap
-            language={'text'}
-            showLanguage={false}
-            style={{ maxHeight: 240, overflow: 'auto' }}
-            variant={'borderless'}
-          >
-            {content}
-          </Highlighter>
-        </Flexbox>
+        <Highlighter
+          wrap
+          language={'text'}
+          showLanguage={false}
+          style={{ maxHeight: 240, overflow: 'auto' }}
+          variant={'borderless'}
+        >
+          {content}
+        </Highlighter>
       )}
-    </Flexbox>
+    </ToolResultCard>
   );
 });
 

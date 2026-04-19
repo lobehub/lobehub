@@ -9,9 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
-import { TopicDisplayMode } from '@/types/topic';
 
 const hotArea = css`
   &::before {
@@ -58,31 +55,12 @@ export const useTopicActionsDropdownMenu = (
     [importTopic, modal, onUploadClose, t],
   );
 
-  const [topicDisplayMode, updatePreference] = useUserStore((s) => [
-    preferenceSelectors.topicDisplayMode(s),
-    s.updatePreference,
-  ]);
-
   const [topicPageSize, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.topicPageSize(s),
     s.updateSystemStatus,
   ]);
 
   return useMemo(() => {
-    const displayModeOrder = [
-      TopicDisplayMode.ByUpdatedTime,
-      TopicDisplayMode.ByCreatedTime,
-      TopicDisplayMode.Flat,
-    ];
-    const displayModeItems = displayModeOrder.map((mode) => ({
-      icon: topicDisplayMode === mode ? <Icon icon={LucideCheck} /> : <div />,
-      key: mode,
-      label: t(`groupMode.${mode}`),
-      onClick: () => {
-        updatePreference({ topicDisplayMode: mode });
-      },
-    }));
-
     const pageSizeOptions = [20, 40, 60, 100];
     const pageSizeItems = pageSizeOptions.map((size) => ({
       icon: topicPageSize === size ? <Icon icon={LucideCheck} /> : <div />,
@@ -94,10 +72,6 @@ export const useTopicActionsDropdownMenu = (
     }));
 
     return [
-      ...displayModeItems,
-      {
-        type: 'divider' as const,
-      },
       {
         children: pageSizeItems,
         extra: topicPageSize,
@@ -154,9 +128,7 @@ export const useTopicActionsDropdownMenu = (
       },
     ].filter(Boolean) as MenuProps['items'];
   }, [
-    topicDisplayMode,
     topicPageSize,
-    updatePreference,
     updateSystemStatus,
     handleImport,
     onUploadClose,

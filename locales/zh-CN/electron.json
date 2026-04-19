@@ -133,5 +133,7 @@
   "window.close": "关闭窗口",
   "window.maximize": "最大化窗口",
   "window.minimize": "最小化窗口",
-  "window.restore": "恢复窗口"
+  "window.pinToTop": "窗口置顶",
+  "window.restore": "恢复窗口",
+  "window.unpinFromTop": "取消置顶"
 }

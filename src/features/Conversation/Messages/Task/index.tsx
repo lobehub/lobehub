@@ -69,6 +69,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
     <ChatItem
       showTitle
       aboveMessage={null}
+      actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
       avatar={{ ...avatar, title }}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
@@ -79,9 +80,6 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
       placement={'left'}
       time={createdAt}
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
-      actions={
-        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
-      }
       error={
         errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
       }

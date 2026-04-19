@@ -132,6 +132,23 @@ export const hasToolError = (tools: ChatToolPayloadWithResult[]): boolean => {
   return tools.some((t) => t.result?.error);
 };
 
+export const getWorkflowCompletionStatus = (
+  tools: ChatToolPayloadWithResult[],
+): 'success' | 'partial' | 'error' => {
+  const collapsible = tools.filter((t) => t.intervention?.status !== 'pending');
+  if (collapsible.length === 0) return 'success';
+
+  const completed = collapsible.filter(
+    (t) => t.result != null && t.result.content !== LOADING_FLAT,
+  );
+  if (completed.length === 0) return 'success';
+
+  const errorCount = completed.filter((t) => t.result?.error).length;
+  if (errorCount === 0) return 'success';
+  if (errorCount === completed.length) return 'error';
+  return 'partial';
+};
+
 export const getToolFirstDetail = (tool: ChatToolPayloadWithResult): string => {
   try {
     const args = JSON.parse(tool.arguments || '{}');

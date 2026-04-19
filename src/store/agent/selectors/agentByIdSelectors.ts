@@ -98,9 +98,8 @@ const getAgentWorkingDirectoryById =
   (_s: AgentStoreState): string | undefined => {
     if (!isDesktop) return;
 
-    return (
-      getLocalAgentWorkingDirectory(agentId) ?? globalAgentContextManager.getContext().homePath
-    );
+    const ctx = globalAgentContextManager.getContext();
+    return getLocalAgentWorkingDirectory(agentId) ?? ctx.desktopPath ?? ctx.homePath;
   };
 
 /**
@@ -137,6 +136,15 @@ const getAgencyConfigById =
     agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
 
 /**
+ * Whether the agent is driven by an external heterogeneous runtime
+ * (e.g. Claude Code) — by agentId.
+ */
+const isAgentHeterogeneousById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    !!getAgencyConfigById(agentId)(s)?.heterogeneousProvider;
+
+/**
  * Get full agent data by agentId
  * Returns the complete agent object including metadata fields like updatedAt
  */
@@ -159,4 +167,5 @@ export const agentByIdSelectors = {
   getAgentTTSById,
   getAgentWorkingDirectoryById,
   isAgentConfigLoadingById,
+  isAgentHeterogeneousById,
 };

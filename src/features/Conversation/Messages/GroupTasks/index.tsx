@@ -19,7 +19,6 @@ import TaskItem from './TaskItem';
 
 interface GroupTasksMessageProps {
   id: string;
-  index: number;
 }
 
 /**
@@ -62,7 +61,7 @@ const GroupTasksAvatar = memo<{ avatars: { avatar?: string; background?: string 
 
 GroupTasksAvatar.displayName = 'GroupTasksAvatar';
 
-const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id, index }) => {
+const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
   const actionsConfig = useConversationStore((s) => s.actionsBar?.assistant);
@@ -126,6 +125,7 @@ const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id, index }) => {
     <ChatItem
       showTitle
       aboveMessage={null}
+      actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
       avatar={{ title }}
       customAvatarRender={() => <GroupTasksAvatar avatars={taskAgents} />}
       id={id}
@@ -133,9 +133,6 @@ const GroupTasksMessage = memo<GroupTasksMessageProps>(({ id, index }) => {
       placement="left"
       time={createdAt}
       titleAddon={<Tag>{t('task.groupTasks', { count: tasks.length })}</Tag>}
-      actions={
-        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
-      }
     >
       <Flexbox gap={8} width={'100%'}>
         {tasks.map((task) => (

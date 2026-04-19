@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentDocumentModel, buildDocumentFilename } from '@/database/models/agentDocuments';
+import {
+  AgentDocumentModel,
+  buildDocumentFilename,
+  extractMarkdownH1Title,
+} from '@/database/models/agentDocuments';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AgentDocumentsService } from './agentDocuments';
@@ -12,6 +16,7 @@ vi.mock('@/database/models/agentDocuments', () => ({
     BEFORE_FIRST_USER: 'before_first_user',
   },
   buildDocumentFilename: vi.fn(),
+  extractMarkdownH1Title: vi.fn((content: string) => ({ content })),
 }));
 
 describe('AgentDocumentsService', () => {
@@ -30,7 +35,8 @@ describe('AgentDocumentsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (AgentDocumentModel as any).mockImplementation(() => mockModel);
-    vi.mocked(buildDocumentFilename).mockImplementation((title: string) => `${title}.md`);
+    vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
+    vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
   });
 
   describe('createDocument', () => {
@@ -38,15 +44,17 @@ describe('AgentDocumentsService', () => {
       mockModel.findByFilename
         .mockResolvedValueOnce({ id: 'existing-doc' })
         .mockResolvedValueOnce(undefined);
-      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note-2.md' });
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note-2' });
 
       const service = new AgentDocumentsService(db, userId);
       const result = await service.createDocument('agent-1', 'note', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(1, 'agent-1', 'note.md');
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(2, 'agent-1', 'note-2.md');
-      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note-2.md', 'content', undefined);
-      expect(result).toEqual({ id: 'new-doc', filename: 'note-2.md' });
+      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(1, 'agent-1', 'note');
+      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(2, 'agent-1', 'note-2');
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note-2', 'content', {
+        title: 'note',
+      });
+      expect(result).toEqual({ id: 'new-doc', filename: 'note-2' });
     });
 
     it('should throw after too many filename collisions', async () => {
@@ -58,6 +66,23 @@ describe('AgentDocumentsService', () => {
         'Unable to generate a unique filename for "note" after 1000 attempts.',
       );
       expect(mockModel.create).not.toHaveBeenCalled();
+    });
+
+    it('should extract H1 from markdown content as the document title', async () => {
+      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
+        content: 'body',
+        title: 'My Title',
+      });
+      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'fallback', '# My Title\n\nbody');
+
+      expect(vi.mocked(buildDocumentFilename)).toHaveBeenCalledWith('My Title');
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'My Title', 'body', {
+        title: 'My Title',
+      });
     });
   });
 
