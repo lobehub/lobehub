@@ -69,4 +69,25 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  newTabButton: css`
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 26px;
+    height: 22px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    color: ${cssVar.colorTextSecondary};
+
+    transition:
+      background-color 0.15s ${cssVar.motionEaseInOut},
+      color 0.15s ${cssVar.motionEaseInOut};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background-color: ${cssVar.colorFillTertiary};
+    }
+  `,
 }));
