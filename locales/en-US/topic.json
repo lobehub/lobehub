@@ -1,5 +1,6 @@
 {
   "actions.addNewTopic": "Start New Topic",
+  "actions.addNewTopicInProject": "Start new topic in {{directory}}",
   "actions.autoRename": "Smart Rename",
   "actions.confirmRemoveAll": "You are about to delete all topics. This action cannot be undone.",
   "actions.confirmRemoveTopic": "You are about to delete this topic. This action cannot be undone.",

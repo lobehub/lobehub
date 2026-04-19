@@ -34,6 +34,12 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import {
+  ClaudeCodeApiName,
+  type ClaudeCodeTodoItem,
+  type TodoWriteArgs,
+} from '@lobechat/builtin-tool-claude-code';
+
 import type {
   AgentCLIPreset,
   AgentEventAdapter,
@@ -43,6 +49,39 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+
+/**
+ * CC's TodoWrite is a declarative state-write tool: its `tool_use.input` IS
+ * the target todos list, and the `tool_result` content is just a confirmation
+ * string. Translating the input into the shared `StepContextTodos` shape lets
+ * the Gateway/ACP-aligned `pluginState.todos` contract light up the
+ * TodoProgress card without any CC-specific knowledge leaking into selectors
+ * or executors.
+ *
+ * Word mapping: CC `pending|in_progress|completed` → shared `todo|processing|completed`.
+ * Text field: use `activeForm` while in progress (present-continuous is what
+ * the header surfaces), fall back to `content` for every other state.
+ */
+const synthesizeTodoWritePluginState = (
+  args: TodoWriteArgs,
+): {
+  todos: {
+    items: Array<{ status: 'todo' | 'processing' | 'completed'; text: string }>;
+    updatedAt: string;
+  };
+} => {
+  const items = (args.todos || []).map((todo: ClaudeCodeTodoItem) => {
+    const status =
+      todo.status === 'in_progress'
+        ? 'processing'
+        : todo.status === 'pending'
+          ? 'todo'
+          : 'completed';
+    const text = todo.status === 'in_progress' ? todo.activeForm || todo.content : todo.content;
+    return { status, text } as const;
+  });
+  return { todos: { items, updatedAt: new Date().toISOString() } };
+};
 
 /**
  * Convert a raw Anthropic-shape usage object (per-turn or grand-total from
@@ -127,6 +166,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * until the next `fetchAndReplaceMessages`.
    */
   private toolCallsByMessageId = new Map<string, ToolCallPayload[]>();
+  /**
+   * Cached TodoWrite inputs keyed by tool_use.id. Populated in `handleAssistant`
+   * when a TodoWrite tool_use block arrives and drained in `handleUser` at
+   * tool_result time so the synthesized pluginState can travel with the result
+   * event. Entries are deleted immediately after emit to keep long sessions
+   * bounded.
+   */
+  private todoWriteInputs = new Map<string, TodoWriteArgs>();
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -219,6 +266,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           };
           newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
+          if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
+            this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
+          }
           break;
         }
       }
@@ -282,11 +332,29 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                 .join('\n')
             : JSON.stringify(block.content || '');
 
+      // Synthesize pluginState for tools whose input IS the target state.
+      // TodoWrite is currently the only such tool; future CC tools (Task,
+      // Skill activation, …) extend this same collection point.
+      //
+      // Guard on `is_error`: a failed TodoWrite means the snapshot was never
+      // applied on CC's side, so we must not persist it here either. Since
+      // `selectTodosFromMessages` picks the latest `pluginState.todos` from
+      // any producer, leaking a failed write would overwrite the live todo
+      // UI with changes that never actually happened. Drain the cache either
+      // way so a retry with a fresh tool_use id doesn't inherit stale args.
+      const cachedTodoArgs = this.todoWriteInputs.get(toolCallId);
+      if (cachedTodoArgs) this.todoWriteInputs.delete(toolCallId);
+      const pluginState =
+        cachedTodoArgs && !block.is_error
+          ? synthesizeTodoWritePluginState(cachedTodoArgs)
+          : undefined;
+
       // Emit tool_result for executor to persist content to tool message
       events.push(
         this.makeEvent('tool_result', {
           content: resultContent,
           isError: !!block.is_error,
+          pluginState,
           toolCallId,
         } satisfies ToolResultData),
       );

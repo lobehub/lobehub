@@ -135,12 +135,17 @@ interface ToolPersistenceState {
  * - assistant.tools[].result_msg_id is set to the created tool message id, so
  *   the UI's parse() step can link tool messages back to the assistant turn
  *   (otherwise they render as orphan warnings).
+ * - Carries the latest accumulated text/reasoning into the same UPDATE, so DB
+ *   stays in sync with what's been streamed. Without this, gateway handler's
+ *   `tool_end → fetchAndReplaceMessages` would read a tools-only/no-content
+ *   row and clobber the in-memory streamed text in the UI.
  */
 const persistNewToolCalls = async (
   incoming: ToolCallPayload[],
   state: ToolPersistenceState,
   assistantMessageId: string,
   context: ConversationContext,
+  snapshot: { content: string; reasoning: string },
 ) => {
   const freshTools = incoming.filter((t) => !state.persistedIds.has(t.id));
   if (freshTools.length === 0) return;
@@ -148,6 +153,13 @@ const persistNewToolCalls = async (
   // Mark all fresh tools as persisted up front, so re-entrant calls (from
   // Claude Code echoing tool_use blocks) are safely deduped.
   for (const tool of freshTools) state.persistedIds.add(tool.id);
+
+  const buildUpdate = (): Record<string, any> => {
+    const update: Record<string, any> = { tools: state.payloads };
+    if (snapshot.content) update.content = snapshot.content;
+    if (snapshot.reasoning) update.reasoning = { content: snapshot.reasoning };
+    return update;
+  };
 
   // ─── PHASE 1: Write tools[] to assistant FIRST, WITHOUT result_msg_id ───
   //
@@ -161,11 +173,10 @@ const persistNewToolCalls = async (
   // No orphan window.
   for (const tool of freshTools) state.payloads.push({ ...tool } as ChatToolPayload);
   try {
-    await messageService.updateMessage(
-      assistantMessageId,
-      { tools: state.payloads },
-      { agentId: context.agentId, topicId: context.topicId },
-    );
+    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
+      agentId: context.agentId,
+      topicId: context.topicId,
+    });
   } catch (err) {
     console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
   }
@@ -201,11 +212,10 @@ const persistNewToolCalls = async (
   // ─── PHASE 3: Re-write assistant.tools[] with the result_msg_ids ───
   // Without this, the UI can't hydrate tool results back into the inspector.
   try {
-    await messageService.updateMessage(
-      assistantMessageId,
-      { tools: state.payloads },
-      { agentId: context.agentId, topicId: context.topicId },
-    );
+    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
+      agentId: context.agentId,
+      topicId: context.topicId,
+    });
   } catch (err) {
     console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
   }
@@ -213,6 +223,11 @@ const persistNewToolCalls = async (
 
 /**
  * Update a tool message's content in DB when tool_result arrives.
+ *
+ * `pluginState` (when provided by the adapter) is written in the same request
+ * as `content` so downstream consumers observe a single atomic update —
+ * critical for `selectTodosFromMessages` which reads both role=tool and
+ * `pluginState.todos` in one pass.
  */
 const persistToolResult = async (
   toolCallId: string,
@@ -220,6 +235,7 @@ const persistToolResult = async (
   isError: boolean,
   state: ToolPersistenceState,
   context: ConversationContext,
+  pluginState?: Record<string, any>,
 ) => {
   const toolMsgId = state.toolMsgIdByCallId.get(toolCallId);
   if (!toolMsgId) {
@@ -233,6 +249,7 @@ const persistToolResult = async (
       {
         content,
         pluginError: isError ? { message: content } : undefined,
+        pluginState,
       },
       {
         agentId: context.agentId,
@@ -367,13 +384,14 @@ export const executeHeterogeneousAgent = async (
         for (const event of events) {
           // ─── tool_result: update tool message content in DB (ACP-only) ───
           if (event.type === 'tool_result') {
-            const { content, isError, toolCallId } = event.data as {
+            const { content, isError, pluginState, toolCallId } = event.data as {
               content: string;
               isError?: boolean;
+              pluginState?: Record<string, any>;
               toolCallId: string;
             };
             persistQueue = persistQueue.then(() =>
-              persistToolResult(toolCallId, content, !!isError, toolState, context),
+              persistToolResult(toolCallId, content, !!isError, toolState, context, pluginState),
             );
             // Don't forward — the tool_end that follows triggers fetchAndReplaceMessages
             // which reads the updated content from DB.
@@ -508,8 +526,23 @@ export const executeHeterogeneousAgent = async (
             if (chunk?.chunkType === 'tools_calling') {
               const tools = chunk.toolsCalling as ToolCallPayload[];
               if (tools?.length) {
+                // Snapshot accumulators sync — must travel with the same step's
+                // assistantMessageId. A late-bound getter would read NEW step's
+                // content if a step transition lands between scheduling and
+                // execution, while assistantMessageId would still be the OLD
+                // one (also captured sync) → cross-step contamination.
+                const snapshot = {
+                  content: accumulatedContent,
+                  reasoning: accumulatedReasoning,
+                };
                 persistQueue = persistQueue.then(() =>
-                  persistNewToolCalls(tools, toolState, currentAssistantMessageId, context),
+                  persistNewToolCalls(
+                    tools,
+                    toolState,
+                    currentAssistantMessageId,
+                    context,
+                    snapshot,
+                  ),
                 );
               }
             }

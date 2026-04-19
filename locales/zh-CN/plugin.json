@@ -447,6 +447,7 @@
   "localSystem.workingDirectory.createBranchAction": "检出新分支…",
   "localSystem.workingDirectory.current": "当前工作目录",
   "localSystem.workingDirectory.detachedHead": "游离 HEAD，当前提交 {{sha}}",
+  "localSystem.workingDirectory.diffStatTooltip": "新增 {{added}} · 修改 {{modified}} · 删除 {{deleted}}",
   "localSystem.workingDirectory.ghMissing": "安装并登录 GitHub CLI（gh）即可显示关联的 Pull Request",
   "localSystem.workingDirectory.newBranchPlaceholder": "feature/新分支名称",
   "localSystem.workingDirectory.noRecent": "暂无最近目录",

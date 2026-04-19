@@ -8,6 +8,7 @@ import { electronSystemService } from '@/services/electron/system';
 
 import BranchSwitcher from './BranchSwitcher';
 import { useGitInfo } from './useGitInfo';
+import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
@@ -15,6 +16,26 @@ const styles = createStaticStyles(({ css }) => ({
     max-width: 160px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  diffStat: css`
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 4px;
+    align-items: center;
+
+    margin-inline-start: 2px;
+
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  `,
+  diffStatAdded: css`
+    color: ${cssVar.colorSuccess};
+  `,
+  diffStatDeleted: css`
+    color: ${cssVar.colorError};
+  `,
+  diffStatModified: css`
+    color: ${cssVar.colorWarning};
   `,
   prTrigger: css`
     cursor: pointer;
@@ -72,6 +93,7 @@ interface GitStatusProps {
 const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const { t } = useTranslation('plugin');
   const { data, mutate } = useGitInfo(path, isGithub);
+  const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const handleOpenPr = useCallback(() => {
@@ -97,12 +119,44 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
       ? t('localSystem.workingDirectory.ghMissing')
       : undefined;
 
+  const diffStat =
+    workingStatus && !workingStatus.clean ? (
+      <span className={styles.diffStat}>
+        {workingStatus.added > 0 && (
+          <span className={styles.diffStatAdded}>+{workingStatus.added}</span>
+        )}
+        {workingStatus.modified > 0 && (
+          <span className={styles.diffStatModified}>±{workingStatus.modified}</span>
+        )}
+        {workingStatus.deleted > 0 && (
+          <span className={styles.diffStatDeleted}>-{workingStatus.deleted}</span>
+        )}
+      </span>
+    ) : null;
+
+  const diffStatTooltip =
+    workingStatus && !workingStatus.clean
+      ? t('localSystem.workingDirectory.diffStatTooltip', {
+          added: workingStatus.added,
+          deleted: workingStatus.deleted,
+          modified: workingStatus.modified,
+        })
+      : undefined;
+
   const branchTrigger = (
     <div className={styles.trigger}>
       <Icon icon={GitBranchIcon} size={12} />
       <span className={styles.branchLabel}>{data.branch}</span>
+      {diffStat}
     </div>
   );
+
+  const wrappedBranchTrigger =
+    diffStat && diffStatTooltip ? (
+      <Tooltip title={diffStatTooltip}>{branchTrigger}</Tooltip>
+    ) : (
+      branchTrigger
+    );
 
   return (
     <>
@@ -117,12 +171,13 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
           onOpenChange={setSwitcherOpen}
           onAfterCheckout={() => {
             void mutate();
+            void mutateWorkingStatus();
           }}
           onExternalRefresh={async () => {
-            await mutate();
+            await Promise.all([mutate(), mutateWorkingStatus()]);
           }}
         >
-          {branchTrigger}
+          {wrappedBranchTrigger}
         </BranchSwitcher>
       )}
       {data.pullRequest && (

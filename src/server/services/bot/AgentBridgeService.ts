@@ -549,6 +549,7 @@ export class AgentBridgeService {
     const useGatewayTyping = gwClient.isEnabled && platformSupportsTyping;
 
     let progressMessage: SentMessage | undefined;
+    let gatewayConnectionId: string | undefined;
     if (useGatewayTyping) {
       log('executeWithWebhooks: using gateway typing, skipping ack message');
 
@@ -559,15 +560,21 @@ export class AgentBridgeService {
       // the entire AI generation (platform typing expires after ~10s).
       if (botContext?.platformThreadId && botContext?.applicationId) {
         const platform = botContext.platformThreadId.split(':')[0];
-        AgentBotProviderModel.findByPlatformAndAppId(this.db, platform, botContext.applicationId)
-          .then((row) => {
-            if (row?.id) {
-              return gwClient.startTyping(row.id, botContext.platformThreadId!);
-            }
-          })
-          .catch((err) => {
-            log('executeWithWebhooks: gateway startTyping failed: %O', err);
-          });
+        try {
+          const row = await AgentBotProviderModel.findByPlatformAndAppId(
+            this.db,
+            platform,
+            botContext.applicationId,
+          );
+          if (row?.id) {
+            gatewayConnectionId = row.id;
+            gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
+              log('executeWithWebhooks: gateway startTyping failed: %O', err);
+            });
+          }
+        } catch (err) {
+          log('executeWithWebhooks: gateway provider lookup failed: %O', err);
+        }
       }
     } else {
       await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
@@ -638,6 +645,7 @@ export class AgentBridgeService {
       client,
       displayToolCalls,
       files,
+      gatewayConnectionId,
       progressMessage,
       prompt,
       topicId,
@@ -800,6 +808,7 @@ export class AgentBridgeService {
       client?: PlatformClient;
       displayToolCalls?: boolean;
       files?: any;
+      gatewayConnectionId?: string;
       progressMessage?: SentMessage;
       prompt: string;
       topicId?: string;
@@ -817,6 +826,7 @@ export class AgentBridgeService {
       client,
       displayToolCalls,
       files,
+      gatewayConnectionId,
       prompt,
       topicId,
       trigger,
@@ -826,8 +836,18 @@ export class AgentBridgeService {
     let { progressMessage } = opts;
     let operationStartTime = 0;
 
+    const stopGatewayTyping = () => {
+      if (gatewayConnectionId && botContext?.platformThreadId) {
+        const gwClient = getMessageGatewayClient();
+        gwClient.stopTyping(gatewayConnectionId, botContext.platformThreadId).catch((err) => {
+          log('executeWithCallback[local]: gateway stopTyping failed: %O', err);
+        });
+      }
+    };
+
     return new Promise<{ reply: string; topicId: string }>((resolve, reject) => {
       const timeout = setTimeout(() => {
+        stopGatewayTyping();
         reject(new Error(`Agent execution timed out`));
       }, EXECUTION_TIMEOUT);
 
@@ -899,6 +919,7 @@ export class AgentBridgeService {
             {
               handler: async (event) => {
                 clearTimeout(timeout);
+                stopGatewayTyping();
 
                 const reason = event.reason;
                 log('onComplete: reason=%s', reason);

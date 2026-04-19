@@ -247,9 +247,10 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
-    const gitConfigPath = path.join(dirPath, '.git', 'config');
+    const commonDir = await this.resolveCommonGitDir(dirPath);
+    if (!commonDir) return undefined;
     try {
-      const config = await readFile(gitConfigPath, 'utf8');
+      const config = await readFile(path.join(commonDir, 'config'), 'utf8');
       if (config.includes('github.com')) return 'github';
       return 'git';
     } catch {
@@ -390,7 +391,9 @@ export default class SystemController extends ControllerModule {
   }
 
   /**
-   * Count unstaged / staged / untracked files via `git status --porcelain`.
+   * Bucket dirty files into added / modified / deleted via `git status --porcelain`.
+   * Each file is counted once: untracked (`??`) and staged-add (`A`) → added,
+   * any `D` in index or working tree → deleted, everything else (`M`/`R`/`C`/`T`/`U`) → modified.
    */
   @IpcMethod()
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
@@ -400,10 +403,29 @@ export default class SystemController extends ControllerModule {
         cwd: dirPath,
         timeout: 5000,
       });
-      const lines = stdout.split('\n').filter((line) => line.trim().length > 0);
-      return { clean: lines.length === 0, modified: lines.length };
+      let added = 0;
+      let modified = 0;
+      let deleted = 0;
+      for (const line of stdout.split('\n')) {
+        if (line.length < 2) continue;
+        const x = line[0];
+        const y = line[1];
+        if (x === '?' && y === '?') {
+          added++;
+        } else if (x === '!' && y === '!') {
+          // ignored — skip
+        } else if (x === 'D' || y === 'D') {
+          deleted++;
+        } else if (x === 'A' || y === 'A') {
+          added++;
+        } else {
+          modified++;
+        }
+      }
+      const total = added + modified + deleted;
+      return { added, clean: total === 0, deleted, modified, total };
     } catch {
-      return { clean: true, modified: 0 };
+      return { added: 0, clean: true, deleted: 0, modified: 0, total: 0 };
     }
   }
 
@@ -436,6 +458,24 @@ export default class SystemController extends ControllerModule {
       const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
       logger.debug('[checkoutGitBranch] failed', { args, stderr });
       return { error: stderr || 'git checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Resolve the common git dir — where shared state like `config` and
+   * `packed-refs` lives. For linked worktrees, `resolveGitDir` returns
+   * `.git/worktrees/<name>/` which has its own `HEAD` but no `config`;
+   * the `commondir` pointer inside it resolves to the main repo's gitdir.
+   */
+  private async resolveCommonGitDir(dirPath: string): Promise<string | undefined> {
+    const gitDir = await this.resolveGitDir(dirPath);
+    if (!gitDir) return undefined;
+    try {
+      const commondir = (await readFile(path.join(gitDir, 'commondir'), 'utf8')).trim();
+      if (!commondir) return gitDir;
+      return path.isAbsolute(commondir) ? commondir : path.resolve(gitDir, commondir);
+    } catch {
+      return gitDir;
     }
   }
 

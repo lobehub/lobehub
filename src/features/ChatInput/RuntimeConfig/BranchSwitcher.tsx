@@ -24,6 +24,8 @@ import useSWR from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { electronSystemService } from '@/services/electron/system';
 
+import { useWorkingTreeStatus } from './useWorkingTreeStatus';
+
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
     overflow: hidden;
@@ -176,11 +178,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       () => electronSystemService.listGitBranches(path),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
-    const { data: workingStatus, mutate: mutateWorkingStatus } = useSWR(
-      open ? ['git-status', path] : null,
-      () => electronSystemService.getGitWorkingTreeStatus(path),
-      { revalidateOnFocus: false },
-    );
+    const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {
@@ -324,7 +322,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           {isCurrent && workingStatus && !workingStatus.clean && (
                             <div className={styles.itemMeta}>
                               {t('localSystem.workingDirectory.uncommittedChanges', {
-                                count: workingStatus.modified,
+                                count: workingStatus.total,
                               })}
                             </div>
                           )}

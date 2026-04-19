@@ -1,6 +1,13 @@
 'use client';
 
-import { ActionIcon, ContextMenuTrigger, Flexbox, type GenericItemType, Icon } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  ContextMenuTrigger,
+  Flexbox,
+  type GenericItemType,
+  Icon,
+} from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -9,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { type ResolvedPageData } from '@/features/Electron/titlebar/RecentlyViewed/types';
 import { electronStylish } from '@/styles/electron';
 
+import { useTabRunning } from './hooks/useTabRunning';
 import { useStyles } from './styles';
 
 interface TabItemProps {
@@ -38,6 +46,7 @@ const TabItem = memo<TabItemProps>(
     const styles = useStyles;
     const { t } = useTranslation('electron');
     const id = item.reference.id;
+    const isRunning = useTabRunning(item.reference);
 
     const handleClick = useCallback(() => {
       if (!isActive) {
@@ -91,14 +100,27 @@ const TabItem = memo<TabItemProps>(
           gap={6}
           onClick={handleClick}
         >
-          {item.icon && <Icon className={styles.tabIcon} icon={item.icon} size="small" />}
+          {item.avatar ? (
+            <span className={styles.avatarWrapper}>
+              <Avatar
+                emojiScaleWithBackground
+                avatar={item.avatar}
+                background={item.backgroundColor}
+                shape="square"
+                size={16}
+              />
+              {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
+            </span>
+          ) : (
+            item.icon && (
+              <span className={styles.avatarWrapper}>
+                <Icon className={styles.tabIcon} icon={item.icon} size="small" />
+                {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
+              </span>
+            )
+          )}
           <span className={styles.tabTitle}>{item.title}</span>
-          <ActionIcon
-            className={cx('closeIcon', styles.closeIcon)}
-            icon={X}
-            size="small"
-            onClick={handleClose}
-          />
+          <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
         </Flexbox>
       </ContextMenuTrigger>
     );

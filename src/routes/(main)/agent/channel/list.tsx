@@ -209,6 +209,9 @@ const PlatformList = memo<PlatformListProps>(
         case BOT_RUNTIME_STATUSES.starting: {
           return theme.colorInfo;
         }
+        case BOT_RUNTIME_STATUSES.dormant: {
+          return theme.colorWarning;
+        }
         case BOT_RUNTIME_STATUSES.disconnected: {
           return theme.colorTextQuaternary;
         }
@@ -231,6 +234,9 @@ const PlatformList = memo<PlatformListProps>(
         }
         case BOT_RUNTIME_STATUSES.starting: {
           return t('channel.connectStarting');
+        }
+        case BOT_RUNTIME_STATUSES.dormant: {
+          return t('channel.statusDormant');
         }
         case BOT_RUNTIME_STATUSES.disconnected: {
           return t('channel.runtimeDisconnected');

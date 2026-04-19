@@ -1,15 +1,31 @@
 import { createStaticStyles } from 'antd-style';
 
 export const useStyles = createStaticStyles(({ css, cssVar }) => ({
+  avatarWrapper: css`
+    position: relative;
+    flex-shrink: 0;
+    line-height: 0;
+  `,
   closeIcon: css`
     flex-shrink: 0;
     color: ${cssVar.colorTextTertiary};
-    opacity: 0;
-    transition: opacity 0.15s ${cssVar.motionEaseOut};
 
     &:hover {
       color: ${cssVar.colorText};
     }
+  `,
+  runningDot: css`
+    position: absolute;
+    inset-block-end: -2px;
+    inset-inline-end: -2px;
+
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid ${cssVar.colorBgLayout};
+    border-radius: 50%;
+
+    background: ${cssVar.gold};
+    box-shadow: 0 0 6px ${cssVar.gold};
   `,
   container: css`
     flex: 1;
@@ -33,16 +49,12 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 12px;
 
-    background-color: ${cssVar.colorFillTertiary};
+    background-color: transparent;
 
     transition: background-color 0.15s ${cssVar.motionEaseInOut};
 
     &:hover {
-      background-color: ${cssVar.colorFillSecondary};
-    }
-
-    &:hover .closeIcon {
-      opacity: 1;
+      background-color: ${cssVar.colorFillTertiary};
     }
   `,
   tabActive: css`
@@ -50,10 +62,6 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       background-color: ${cssVar.colorFill};
-    }
-
-    & .closeIcon {
-      opacity: 1;
     }
   `,
   tabIcon: css`

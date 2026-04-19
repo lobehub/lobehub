@@ -58,9 +58,15 @@ export interface GitBranchListItem {
 }
 
 export interface GitWorkingTreeStatus {
+  /** Untracked + staged-as-added files */
+  added: number;
   clean: boolean;
-  /** Count of modified / staged / untracked files (each file counted once) */
+  /** Files marked deleted in either index or working tree */
+  deleted: number;
+  /** Modified / renamed / copied / type-changed / unmerged files */
   modified: number;
+  /** Total dirty files (each file counted once) — sum of added + modified + deleted */
+  total: number;
 }
 
 export interface GitCheckoutResult {

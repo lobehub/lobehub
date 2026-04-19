@@ -13,6 +13,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
+import ByProjectMode from './ByProjectMode';
 import ByTimeMode from './ByTimeMode';
 import FlatMode from './FlatMode';
 import SearchResult from './SearchResult';
@@ -46,7 +47,13 @@ const TopicListContent = memo(() => {
           }}
         />
       )}
-      {topicGroupMode === 'flat' ? <FlatMode /> : <ByTimeMode />}
+      {topicGroupMode === 'flat' ? (
+        <FlatMode />
+      ) : topicGroupMode === 'byProject' ? (
+        <ByProjectMode />
+      ) : (
+        <ByTimeMode />
+      )}
     </>
   );
 });

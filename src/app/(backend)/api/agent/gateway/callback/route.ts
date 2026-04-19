@@ -17,7 +17,7 @@ const StateChangeSchema = z.object({
   platform: z.string(),
   state: z.object({
     error: z.string().optional(),
-    status: z.enum(['connected', 'connecting', 'disconnected', 'error']),
+    status: z.enum(['connected', 'connecting', 'disconnected', 'dormant', 'error']),
   }),
 });
 
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
   const statusMap: Partial<Record<string, BotRuntimeStatus>> = {
     connected: BOT_RUNTIME_STATUSES.connected,
     disconnected: BOT_RUNTIME_STATUSES.disconnected,
+    dormant: BOT_RUNTIME_STATUSES.dormant,
     error: BOT_RUNTIME_STATUSES.failed,
   };
 

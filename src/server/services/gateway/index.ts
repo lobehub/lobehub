@@ -4,12 +4,41 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
+import {
+  type BotRuntimeStatus,
+  type BotRuntimeStatusSnapshot,
+} from '../../../types/botRuntimeStatus';
 import type { ConnectionMode } from '../bot/platforms';
 import { getEffectiveConnectionMode, platformRegistry } from '../bot/platforms';
 import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
-import { getMessageGatewayClient } from './MessageGatewayClient';
-import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from './runtimeStatus';
+import {
+  getMessageGatewayClient,
+  type MessageGatewayConnectionStatus,
+} from './MessageGatewayClient';
+import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
+
+function mapGatewayStatusToRuntimeStatus(
+  status: MessageGatewayConnectionStatus['state']['status'],
+): BotRuntimeStatus {
+  switch (status) {
+    case 'connected': {
+      return BOT_RUNTIME_STATUSES.connected;
+    }
+    case 'connecting': {
+      return BOT_RUNTIME_STATUSES.starting;
+    }
+    case 'disconnected': {
+      return BOT_RUNTIME_STATUSES.disconnected;
+    }
+    case 'dormant': {
+      return BOT_RUNTIME_STATUSES.dormant;
+    }
+    case 'error': {
+      return BOT_RUNTIME_STATUSES.failed;
+    }
+  }
+}
 
 const log = debug('lobe-server:service:gateway');
 
@@ -109,6 +138,14 @@ export class GatewayService {
               if (status.state.status === 'connected' || status.state.status === 'connecting') {
                 skippedConnected++;
                 log('Gateway sync: %s already %s, skipping', provider.id, status.state.status);
+                continue;
+              }
+              // Dormant: gateway is running sparse alarm-driven polling and will
+              // self-wake when a message arrives. Reconnecting here would defeat
+              // the purpose — only manual reconnect (startClient) should override.
+              if (status.state.status === 'dormant') {
+                skippedConnected++;
+                log('Gateway sync: %s dormant, skipping (DO is sparse-polling)', provider.id);
                 continue;
               }
               // "error" means credential/config issue (e.g. session expired, unauthorized).
@@ -245,6 +282,93 @@ export class GatewayService {
     await manager!.startClient(platform, applicationId, userId);
     log('Started client %s:%s', platform, applicationId);
     return 'started';
+  }
+
+  /**
+   * Pull live status from the gateway for every enabled provider under an
+   * agent and persist each result to Redis. No-op when the gateway is
+   * disabled; webhook-mode providers are skipped (they have no persistent
+   * gateway connection to query).
+   */
+  async refreshBotRuntimeStatusesByAgent(agentId: string, userId: string): Promise<void> {
+    if (!this.useMessageGateway) return;
+
+    const serverDB = await getServerDB();
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
+    const providers = await model.findByAgentId(agentId);
+    const client = getMessageGatewayClient();
+
+    await Promise.all(
+      providers.map(async (provider) => {
+        if (!provider.enabled) return;
+
+        const definition = platformRegistry.getPlatform(provider.platform);
+        const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+        if (connectionMode === 'webhook') return;
+
+        try {
+          const { state } = await client.getStatus(provider.id);
+          await updateBotRuntimeStatus({
+            applicationId: provider.applicationId,
+            errorMessage: state.error,
+            platform: provider.platform,
+            status: mapGatewayStatusToRuntimeStatus(state.status),
+          });
+        } catch (err) {
+          log(
+            'Bulk refresh: gateway status failed %s:%s: %O',
+            provider.platform,
+            provider.applicationId,
+            err,
+          );
+        }
+      }),
+    );
+  }
+
+  /**
+   * Pull the live connection status from the external message-gateway and
+   * persist it to the local Redis snapshot. When the gateway is disabled or
+   * the provider runs in webhook mode, returns the cached snapshot as-is.
+   */
+  async refreshBotRuntimeStatus(
+    platform: string,
+    applicationId: string,
+    userId: string,
+  ): Promise<BotRuntimeStatusSnapshot> {
+    const cached = await getBotRuntimeStatus(platform, applicationId);
+
+    if (!this.useMessageGateway) return cached;
+
+    const serverDB = await getServerDB();
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
+    const provider = await model.findEnabledByApplicationId(platform, applicationId);
+
+    if (!provider) return cached;
+
+    const definition = platformRegistry.getPlatform(platform);
+    const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+
+    // Webhook-mode bots have no persistent gateway connection to query — the
+    // gateway only holds the webhook URL registration, so the local snapshot
+    // is already the source of truth.
+    if (connectionMode === 'webhook') return cached;
+
+    const client = getMessageGatewayClient();
+    try {
+      const { state } = await client.getStatus(provider.id);
+      return await updateBotRuntimeStatus({
+        applicationId,
+        errorMessage: state.error,
+        platform,
+        status: mapGatewayStatusToRuntimeStatus(state.status),
+      });
+    } catch (err) {
+      log('Refresh runtime status via gateway failed %s:%s: %O', platform, applicationId, err);
+      return cached;
+    }
   }
 
   async stopClient(platform: string, applicationId: string, userId?: string): Promise<void> {

@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -34,6 +34,14 @@ const ChannelPage = memo(() => {
   const { data: providers, isLoading: providersLoading } = useAgentStore((s) =>
     s.useFetchBotProviders(aid),
   );
+  const triggerRefreshAllBotStatuses = useAgentStore((s) => s.triggerRefreshAllBotStatuses);
+
+  // Fire-and-forget a live gateway status refresh on entry. The list renders
+  // from cached statuses immediately; SWR revalidates once Redis is updated.
+  useEffect(() => {
+    if (!aid) return;
+    triggerRefreshAllBotStatuses(aid);
+  }, [aid, triggerRefreshAllBotStatuses]);
 
   const isLoading = platformsLoading || providersLoading;
 
@@ -86,6 +94,7 @@ const ChannelPage = memo(() => {
               agentId={aid}
               currentConfig={currentConfig}
               platformDef={activePlatformDef}
+              runtimeStatus={platformRuntimeStatuses.get(activePlatformDef.id)}
             />
           </div>
         )}

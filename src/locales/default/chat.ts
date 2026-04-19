@@ -27,12 +27,6 @@ export default {
   'agentDefaultMessageWithoutEdit':
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   'agents': 'Agents',
-  /**
-   * Sidebar tag for agents driven by an external CLI runtime (Claude Code, etc.).
-   * Deliberately separate from `group.profile.external` so it can evolve
-   * independently (e.g. swap to "Claude Code" per provider later).
-   */
-  'agentSidebar.externalTag': 'External',
   'artifact.generating': 'Generating',
   'artifact.inThread':
     'Cannot view in subtopic, please switch to the main conversation area to open',
@@ -147,8 +141,16 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.fullAccess.label': 'Full access',
+  'heteroAgent.fullAccess.tooltip':
+    'Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
+  'heteroAgent.switchCwd.cancel': 'Cancel',
+  'heteroAgent.switchCwd.content':
+    'Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',
+  'heteroAgent.switchCwd.ok': 'Switch and start new session',
+  'heteroAgent.switchCwd.title': 'Switch working directory?',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',
@@ -529,6 +531,9 @@ export default {
   'viewMode.normal': 'Standard',
   'viewMode.wideScreen': 'Widescreen',
   'workflow.failedSuffix': '(failed)',
+  'workflow.summaryFailed': '{{count}} failed',
+  'workflow.summaryMoreTools': '+{{count}} more',
+  'workflow.summaryTotalCalls': '{{count}} calls total',
   'workflow.thoughtForDuration': 'Thought for {{duration}}',
   'workflow.toolDisplayName.activateDevice': 'Activated device',
   'workflow.toolDisplayName.activateSkill': 'Activated a skill',

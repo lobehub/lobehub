@@ -454,6 +454,8 @@ export default {
   'localSystem.workingDirectory.current': 'Current working directory',
   'localSystem.workingDirectory.chooseDifferentFolder': 'Choose a different folder',
   'localSystem.workingDirectory.detachedHead': 'Detached HEAD at {{sha}}',
+  'localSystem.workingDirectory.diffStatTooltip':
+    'Added {{added}} · Modified {{modified}} · Deleted {{deleted}}',
   'localSystem.workingDirectory.ghMissing':
     'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
   'localSystem.workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',

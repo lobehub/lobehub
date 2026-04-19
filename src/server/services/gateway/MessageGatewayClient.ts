@@ -24,7 +24,7 @@ export interface MessageGatewayConnectionStatus {
     connectedAt?: number;
     error?: string;
     platform: string;
-    status: 'connected' | 'connecting' | 'disconnected' | 'error';
+    status: 'connected' | 'connecting' | 'disconnected' | 'dormant' | 'error';
   };
 }
 
