@@ -65,6 +65,13 @@ export interface ToolEndData {
 export interface ToolResultData {
   content: string;
   isError?: boolean;
+  /**
+   * Normalized result-domain state for this tool call. Adapters may synthesize
+   * this for tools whose tool_use input *is* the target state (e.g. CC's
+   * TodoWrite) so consumers can render derived UI from a single message shape,
+   * without each consumer re-parsing tool args.
+   */
+  pluginState?: Record<string, any>;
   toolCallId: string;
 }
 

@@ -7,6 +7,9 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
+  "dependencies": {
+    "@lobechat/builtin-tool-claude-code": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   }

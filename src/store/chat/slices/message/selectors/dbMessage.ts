@@ -1,5 +1,4 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   type StepActivatedSkill,
@@ -234,8 +233,13 @@ export const selectActivatedSkillsFromMessages = (
 /**
  * Select the latest todos state from messages array
  *
- * Searches messages in reverse order to find the most recent GTD tool message
- * that contains todos state.
+ * Searches messages in reverse order to find the most recent tool message
+ * that carries a `pluginState.todos` payload — regardless of which tool
+ * produced it. `pluginState.todos` is treated as a shared contract: GTD
+ * writes it via its client state mutation, and heterogeneous agent adapters
+ * (Claude Code TodoWrite, future ACP/Codex equivalents) synthesize it onto
+ * the tool_result event. Any new producer that honors the shape gets picked
+ * up automatically.
  *
  * This is a pure function that can be used for both:
  * - UI display (showing current todos)
@@ -251,8 +255,7 @@ export const selectTodosFromMessages = (
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
 
-    // Check if this is a GTD tool message with todos state
-    if (msg.role === 'tool' && msg.plugin?.identifier === GTDIdentifier && msg.pluginState?.todos) {
+    if (msg.role === 'tool' && msg.pluginState?.todos) {
       const todos = msg.pluginState.todos as { items?: unknown[]; updatedAt?: string };
 
       // Handle the todos structure: { items: TodoItem[], updatedAt: string }
