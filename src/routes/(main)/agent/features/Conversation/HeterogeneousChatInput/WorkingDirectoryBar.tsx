@@ -48,17 +48,18 @@ const styles = createStaticStyles(({ css }) => ({
     }
   `,
   fullAccess: css`
+    cursor: default;
+
     display: flex;
     gap: 6px;
     align-items: center;
 
     padding-block: 2px;
-    padding-inline: 6px;
+    padding-inline: 4px;
     border-radius: 4px;
 
     font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorWarning};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
