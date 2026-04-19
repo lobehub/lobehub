@@ -41,7 +41,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Edit an existing agent document content by ID. Use this for content changes, not title rename.',
+        'Edit an existing agent document content by ID. Use this for content changes, not title rename. Prefer patchDocument for small edits.',
       name: AgentDocumentsApiName.editDocument,
       parameters: {
         properties: {
@@ -55,6 +55,46 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           },
         },
         required: ['id', 'content'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "Apply byte-exact SEARCH/REPLACE hunks to an existing agent document by ID. Preferred over editDocument for small edits because it avoids resending the full document. Each hunk's search must match the current document exactly (whitespace, punctuation, casing). If the search appears multiple times, add surrounding context to make it unique or set replaceAll=true. On failure (HUNK_NOT_FOUND / HUNK_AMBIGUOUS), adjust and retry; fall back to editDocument only for structural rewrites that touch most of the file.",
+      name: AgentDocumentsApiName.patchDocument,
+      parameters: {
+        properties: {
+          hunks: {
+            description: 'Ordered list of SEARCH/REPLACE hunks applied sequentially.',
+            items: {
+              additionalProperties: false,
+              properties: {
+                replace: {
+                  description: 'Replacement text; may be empty to delete the matched region.',
+                  type: 'string',
+                },
+                replaceAll: {
+                  description:
+                    'Replace every occurrence of search. Defaults to false; leave unset unless you explicitly want a global replace.',
+                  type: 'boolean',
+                },
+                search: {
+                  description: 'Byte-exact substring to locate in the current document.',
+                  type: 'string',
+                },
+              },
+              required: ['search', 'replace'],
+              type: 'object',
+            },
+            minItems: 1,
+            type: 'array',
+          },
+          id: {
+            description: 'Target document ID.',
+            type: 'string',
+          },
+        },
+        required: ['id', 'hunks'],
         type: 'object',
       },
     },

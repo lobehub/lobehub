@@ -1,14 +1,30 @@
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { AgentDocumentsApiName } from '../../types';
-import { AgentDocumentsInspector } from './AgentDocumentsInspector';
+import { CopyDocumentInspector } from './CopyDocument';
+import { CreateDocumentInspector } from './CreateDocument';
+import { EditDocumentInspector } from './EditDocument';
+import { ListDocumentsInspector } from './ListDocuments';
+import { PatchDocumentInspector } from './PatchDocument';
+import { ReadDocumentInspector } from './ReadDocument';
+import { ReadDocumentByFilenameInspector } from './ReadDocumentByFilename';
+import { RemoveDocumentInspector } from './RemoveDocument';
+import { RenameDocumentInspector } from './RenameDocument';
+import { UpdateLoadRuleInspector } from './UpdateLoadRule';
+import { UpsertDocumentByFilenameInspector } from './UpsertDocumentByFilename';
 
 export const AgentDocumentsInspectors: Record<string, BuiltinInspector> = {
-  [AgentDocumentsApiName.createDocument]: AgentDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.copyDocument]: AgentDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.editDocument]: AgentDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.readDocument]: AgentDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.removeDocument]: AgentDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.renameDocument]: AgentDocumentsInspector as BuiltinInspector,
-  [AgentDocumentsApiName.updateLoadRule]: AgentDocumentsInspector as BuiltinInspector,
+  [AgentDocumentsApiName.copyDocument]: CopyDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.createDocument]: CreateDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.editDocument]: EditDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.listDocuments]: ListDocumentsInspector as BuiltinInspector,
+  [AgentDocumentsApiName.patchDocument]: PatchDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.readDocument]: ReadDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.readDocumentByFilename]:
+    ReadDocumentByFilenameInspector as BuiltinInspector,
+  [AgentDocumentsApiName.removeDocument]: RemoveDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.renameDocument]: RenameDocumentInspector as BuiltinInspector,
+  [AgentDocumentsApiName.updateLoadRule]: UpdateLoadRuleInspector as BuiltinInspector,
+  [AgentDocumentsApiName.upsertDocumentByFilename]:
+    UpsertDocumentByFilenameInspector as BuiltinInspector,
 };

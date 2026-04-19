@@ -1,10 +1,10 @@
 import { useMount, usePrevious, useUnmount } from 'ahooks';
 import { useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { createStoreUpdater } from 'zustand-utils';
 
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { createStoreUpdater } from '@/store/utils/createStoreUpdater';
 
 const AgentIdSync = () => {
   const useStoreUpdater = createStoreUpdater(useAgentStore);
@@ -16,7 +16,7 @@ const AgentIdSync = () => {
   const prevAgentId = usePrevious(params.aid);
 
   useStoreUpdater('activeAgentId', params.aid);
-  useChatStoreUpdater('activeAgentId', params.aid ?? '');
+  useChatStoreUpdater('activeAgentId', params.aid);
 
   // Reset activeTopicId when switching to a different agent
   // This prevents messages from being saved to the wrong topic bucket
@@ -32,10 +32,8 @@ const AgentIdSync = () => {
         useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
       }
     }
-    // Clear unread completion indicator for the agent being viewed
-    if (params.aid) {
-      useChatStore.getState().clearUnreadCompletedAgent(params.aid);
-    }
+    // Note: we no longer clear all unread topics on agent visit — the badge counts
+    // unread topics and is cleared per-topic when the user actually opens each one.
   }, [params.aid, prevAgentId]);
 
   useMount(() => {

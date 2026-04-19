@@ -210,7 +210,12 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
           `  💬 ${act.time || ''} Topic #${act.seq || '?'} ${act.title || 'Untitled'} ${statusIcon(status)} ${status}${idSuffix}`,
         );
       } else if (act.type === 'brief') {
-        const resolved = act.resolvedAction ? ` ✏️ ${act.resolvedAction}` : '';
+        const resolvedLabel = act.resolvedAction
+          ? act.resolvedComment
+            ? `${act.resolvedAction}: ${act.resolvedComment}`
+            : act.resolvedAction
+          : '';
+        const resolved = resolvedLabel ? ` ✏️ ${resolvedLabel}` : '';
         const priStr = act.priority ? ` [${act.priority}]` : '';
         lines.push(
           `  ${briefIcon(act.briefType || '')} ${act.time || ''} Brief [${act.briefType}] ${act.title}${priStr}${resolved}${idSuffix}`,

@@ -60,6 +60,16 @@ export class UserAuthActionImpl {
   };
 
   logout = async (): Promise<void> => {
+    // Clear the OIDC Provider session for the current browser *before*
+    // destroying the better-auth session. This prevents a stale OIDC session
+    // from silently issuing tokens for the old account after the user signs
+    // in as someone else.
+    try {
+      await fetch('/oidc/clear-session', { method: 'POST' });
+    } catch {
+      // Best-effort: don't block sign-out if the cleanup request fails
+    }
+
     const { signOut } = await import('@/libs/better-auth/auth-client');
     await signOut({
       fetchOptions: {

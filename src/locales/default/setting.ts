@@ -206,6 +206,13 @@ export default {
   'analytics.telemetry.desc': 'Help us improve {{appName}} with anonymous usage data',
   'analytics.telemetry.title': 'Send Anonymous Usage Data',
   'analytics.title': 'Analytics',
+
+  // Claude Code CLI status (shown on agent profile page in CC integration mode)
+  'ccStatus.account.label': 'Account',
+  'ccStatus.detecting': 'Detecting Claude Code CLI...',
+  'ccStatus.redetect': 'Re-detect',
+  'ccStatus.title': 'Claude Code CLI',
+  'ccStatus.unavailable': 'Claude Code CLI not found. Please install or configure it.',
   'checking': 'Checking...',
 
   // Credentials Management
@@ -742,6 +749,9 @@ export default {
   'settingSystemTools.category.browserAutomation': 'Browser Automation',
   'settingSystemTools.category.browserAutomation.desc':
     'Tools for headless browser automation and web interaction',
+  'settingSystemTools.category.cliAgents': 'CLI Agents',
+  'settingSystemTools.category.cliAgents.desc':
+    'Agentic coding CLIs detected on your system, such as Claude Code, Codex, and Kimi',
   'settingSystemTools.category.contentSearch': 'Content Search',
   'settingSystemTools.category.contentSearch.desc': 'Tools for searching text content within files',
   'settingSystemTools.category.fileSearch': 'File Search',
@@ -758,9 +768,14 @@ export default {
   'settingSystemTools.tools.agentBrowser.desc':
     'Agent-browser - headless browser automation CLI for AI agents',
   'settingSystemTools.tools.ag.desc': 'The Silver Searcher - fast code searching tool',
+  'settingSystemTools.tools.aider.desc': 'Aider - AI pair programming in your terminal',
+  'settingSystemTools.tools.claude.desc': 'Claude Code - Anthropic official agentic coding CLI',
+  'settingSystemTools.tools.codex.desc': 'Codex - OpenAI agentic coding CLI',
   'settingSystemTools.tools.fd.desc': 'fd - fast and user-friendly alternative to find',
   'settingSystemTools.tools.find.desc': 'Unix find - standard file search command',
+  'settingSystemTools.tools.gemini.desc': 'Gemini CLI - Google agentic coding CLI',
   'settingSystemTools.tools.grep.desc': 'GNU grep - standard text search tool',
+  'settingSystemTools.tools.kimi.desc': 'Kimi CLI - Moonshot AI agentic coding CLI',
   'settingSystemTools.tools.mdfind.desc': 'macOS Spotlight search (fast indexed search)',
   'settingSystemTools.tools.lobehub.desc': 'LobeHub CLI - manage and connect to LobeHub services',
   'settingSystemTools.tools.bun.desc': 'Bun - fast JavaScript runtime and package manager',
@@ -769,6 +784,7 @@ export default {
   'settingSystemTools.tools.npm.desc': 'npm - Node.js package manager for installing dependencies',
   'settingSystemTools.tools.pnpm.desc': 'pnpm - fast, disk space efficient package manager',
   'settingSystemTools.tools.python.desc': 'Python - programming language runtime',
+  'settingSystemTools.tools.qwen.desc': 'Qwen Code - Alibaba Qwen agentic coding CLI',
   'settingSystemTools.tools.rg.desc': 'ripgrep - extremely fast text search tool',
   'settingSystemTools.tools.uv.desc': 'uv - extremely fast Python package manager',
   'settingTTS.openai.sttModel': 'OpenAI Speech-to-Text Model',

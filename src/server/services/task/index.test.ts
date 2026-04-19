@@ -47,6 +47,7 @@ describe('TaskService', () => {
     getDependencies: vi.fn(),
     getDependenciesByTaskIds: vi.fn(),
     getReviewConfig: vi.fn(),
+    getTreeAgentIdsForTaskIds: vi.fn().mockResolvedValue({}),
     getTreePinnedDocuments: vi.fn(),
     resolve: vi.fn(),
   };
@@ -874,7 +875,7 @@ describe('TaskService', () => {
       expect(result?.workspace).toBeUndefined();
     });
 
-    it('should build brief activities with resolvedAction concatenated with resolvedComment', async () => {
+    it('should build brief activities with full BriefItem fields', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -896,14 +897,23 @@ describe('TaskService', () => {
 
       const briefs = [
         {
+          actions: [{ key: 'approve', label: '✅', type: 'resolve' }],
+          agentId: 'agent-1',
+          artifacts: ['doc_1'],
           createdAt: new Date('2024-01-01T00:00:00Z'),
+          cronJobId: null,
           id: 'brief-1',
           priority: 'urgent',
+          readAt: new Date('2024-01-01T01:00:00Z'),
           resolvedAction: 'approved',
+          resolvedAt: new Date('2024-01-01T02:00:00Z'),
           resolvedComment: 'looks good',
           summary: 'Review brief',
+          taskId: 'task_001',
           title: 'Approval',
+          topicId: null,
           type: 'decision',
+          userId: 'user-1',
         },
       ];
 
@@ -917,22 +927,38 @@ describe('TaskService', () => {
       mockTaskModel.findByIds.mockResolvedValue([]);
       mockTaskModel.getCheckpointConfig.mockReturnValue({});
       mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+      mockTaskModel.getTreeAgentIdsForTaskIds.mockResolvedValue({ task_001: ['agent-1'] });
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([
+        { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
+      ]);
 
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.activities?.[0]).toMatchObject({
+        actions: [{ key: 'approve', label: '✅', type: 'resolve' }],
+        agentId: 'agent-1',
+        agents: [
+          { avatar: 'avatar.png', backgroundColor: '#fff', id: 'agent-1', title: 'Agent One' },
+        ],
+        artifacts: ['doc_1'],
         briefType: 'decision',
+        createdAt: '2024-01-01T00:00:00.000Z',
         id: 'brief-1',
         priority: 'urgent',
-        resolvedAction: 'approved: looks good',
+        readAt: '2024-01-01T01:00:00.000Z',
+        resolvedAction: 'approved',
+        resolvedAt: '2024-01-01T02:00:00.000Z',
+        resolvedComment: 'looks good',
         summary: 'Review brief',
+        taskId: 'task_001',
         title: 'Approval',
         type: 'brief',
+        userId: 'user-1',
       });
     });
 
-    it('should use only resolvedAction when resolvedComment is absent', async () => {
+    it('should keep resolvedAction and resolvedComment as separate fields', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -981,6 +1007,66 @@ describe('TaskService', () => {
 
       expect(result?.activities?.[0]).toMatchObject({
         resolvedAction: 'retry',
+        resolvedComment: null,
+        type: 'brief',
+      });
+    });
+
+    it('should still return task detail when brief agent enrichment fails', async () => {
+      const task = {
+        assigneeAgentId: null,
+        assigneeUserId: null,
+        createdAt: null,
+        description: null,
+        error: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: null,
+        lastHeartbeatAt: null,
+        name: 'Task 1',
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+        totalTopics: 0,
+      };
+
+      const briefs = [
+        {
+          agentId: 'agent-1',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          id: 'brief-1',
+          priority: 'normal',
+          resolvedAction: null,
+          resolvedComment: null,
+          summary: 'Brief',
+          taskId: 'task_001',
+          title: 'Brief A',
+          type: 'insight',
+        },
+      ];
+
+      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockBriefModel.findByTaskId.mockResolvedValue(briefs);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getReviewConfig.mockReturnValue(undefined);
+      mockTaskModel.getTreeAgentIdsForTaskIds.mockRejectedValue(new Error('DB error'));
+
+      const service = new TaskService(db, userId);
+      const result = await service.getTaskDetail('TASK-1');
+
+      expect(result).not.toBeNull();
+      expect(result?.activities).toHaveLength(1);
+      expect(result?.activities?.[0]).toMatchObject({
+        agents: [],
+        id: 'brief-1',
         type: 'brief',
       });
     });

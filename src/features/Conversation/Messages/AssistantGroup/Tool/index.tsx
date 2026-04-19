@@ -82,12 +82,19 @@ const Tool = memo<GroupToolProps>(
       operationSelectors.isMessageInToolCalling(assistantMessageId),
     );
 
-    // Fallback: arguments completed but no final result yet
+    // Only treat "missing/placeholder result" as in-flight while this assistant
+    // message still has a running operation. After the run ends, tools may
+    // legitimately have no merged `result` — do not keep showing "executing".
+    const isAssistantMessageBusy = useChatStore(
+      operationSelectors.isMessageProcessing(assistantMessageId),
+    );
+
     const hasError = !!result?.error;
-    const isToolCallingFallback =
+    const looksLikeWaitingForToolResult =
       !hasError &&
       !isArgumentsStreaming &&
       (!result || result.content === LOADING_FLAT || !result.content);
+    const isToolCallingFallback = looksLikeWaitingForToolResult && isAssistantMessageBusy;
     const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
@@ -142,6 +149,7 @@ const Tool = memo<GroupToolProps>(
             identifier={identifier}
             intervention={intervention}
             isArgumentsStreaming={isArgumentsStreaming}
+            isToolCalling={isToolCalling}
             result={result}
           />
         }

@@ -85,6 +85,7 @@ export const aiChatRouter = router({
           agentId: input.agentId,
           groupId: input.groupId,
           messages: input.newTopic.topicMessageIds,
+          metadata: input.newTopic.metadata,
           sessionId,
           title: input.newTopic.title,
         });

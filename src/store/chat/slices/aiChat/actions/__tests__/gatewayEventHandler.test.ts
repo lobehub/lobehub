@@ -16,6 +16,10 @@ function createMockStore() {
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
+    markUnreadCompleted: vi.fn(),
+    operations: {
+      'op-1': { context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } },
+    } as Record<string, any>,
     replaceMessages: vi.fn(),
   };
 }
@@ -454,6 +458,49 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('agent_runtime_end'));
       await flush();
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+    });
+  });
+
+  describe('step transition timing (orphan tool regression)', () => {
+    /**
+     * Verifies that after the executor fix, tools_calling events at step
+     * boundaries arrive AFTER stream_start (correct order).
+     *
+     * Previously, the executor forwarded stream_chunk(tools_calling) sync
+     * while stream_start was deferred via persistQueue — handler dispatched
+     * tools to the OLD assistant. The fix defers all events during step
+     * transition through persistQueue, guaranteeing correct ordering.
+     */
+    it('should dispatch new-step tools to the NEW assistant when events arrive in correct order', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store, { assistantMessageId: 'ast-old' });
+
+      // Step 1 init
+      handler(makeEvent('stream_start', {}));
+      await flush();
+
+      handler(makeEvent('stream_end'));
+      await flush();
+      vi.clearAllMocks();
+
+      // ── Step boundary: executor now guarantees stream_start arrives FIRST ──
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'ast-new' } }));
+      await flush();
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          toolsCalling: [{ id: 'toolu_new' }],
+        }),
+      );
+      await flush();
+
+      // ── Assert: tools dispatched to the NEW assistant ──
+      const toolsDispatch = store.internal_dispatchMessage.mock.calls.find(
+        ([action]: any) => action.value?.tools,
+      );
+      expect(toolsDispatch).toBeDefined();
+      expect(toolsDispatch![0].id).toBe('ast-new');
     });
   });
 });

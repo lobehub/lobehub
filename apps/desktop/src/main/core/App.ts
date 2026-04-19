@@ -17,6 +17,7 @@ import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
 import {
   astSearchDetectors,
   browserAutomationDetectors,
+  cliAgentDetectors,
   contentSearchDetectors,
   fileSearchDetectors,
   type IToolDetector,
@@ -190,6 +191,7 @@ export class App {
 
     const detectorCategories: Partial<Record<ToolCategory, IToolDetector[]>> = {
       'runtime-environment': runtimeEnvironmentDetectors,
+      'cli-agents': cliAgentDetectors,
       'ast-search': astSearchDetectors,
       'browser-automation': browserAutomationDetectors,
       'content-search': contentSearchDetectors,

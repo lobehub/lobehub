@@ -10,9 +10,10 @@ import type { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
   /**
-   * Agency configuration for external platform bot integrations (Discord, Slack, etc.)
+   * Agency configuration: device binding, heterogeneous agent provider, etc.
    */
   agencyConfig?: LobeAgentAgencyConfig;
+
   avatar?: string;
   backgroundColor?: string;
 

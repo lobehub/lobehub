@@ -102,10 +102,15 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
+  // Canonical nested shape — flat fields above are deprecated. Must be listed
+  // here so zod doesn't strip them from writes going through UpdateMessageParamsSchema
+  // (e.g. messageService.updateMessage, used by the heterogeneous-agent executor).
+  performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
+  usage: ModelUsageSchema.optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
@@ -134,7 +139,15 @@ export interface ModelPerformance {
   ttft?: number;
 }
 
-export interface MessageMetadata extends ModelUsage, ModelPerformance {
+export interface MessageMetadata {
+  // ───────────────────────────────────────────────────────────────
+  // Token usage + performance fields — DEPRECATED flat shape.
+  // New code must write to `metadata.usage` / `metadata.performance` (nested)
+  // instead. Kept here so legacy reads still type-check during migration;
+  // writers should stop populating them.
+  // ───────────────────────────────────────────────────────────────
+  /** @deprecated use `metadata.usage` instead */
+  acceptedPredictionTokens?: number;
   activeBranchIndex?: number;
   activeColumn?: boolean;
   /**
@@ -143,7 +156,27 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    */
   collapsed?: boolean;
   compare?: boolean;
+  /** @deprecated use `metadata.usage` instead */
+  cost?: number;
+  /** @deprecated use `metadata.performance` instead */
+  duration?: number;
   finishType?: string;
+  /** @deprecated use `metadata.usage` instead */
+  inputAudioTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCachedTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCacheMissTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputCitationTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputImageTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputTextTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputToolTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  inputWriteCacheTokens?: number;
   /**
    * Tool inspect expanded state
    * true: expanded, false/undefined: collapsed
@@ -159,11 +192,22 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    * Flag indicating if message content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;
+
   /**
    * Flag indicating if message is from the Supervisor agent in group orchestration
    * Used by conversation-flow to transform role to 'supervisor' for UI rendering
    */
   isSupervisor?: boolean;
+  /** @deprecated use `metadata.performance` instead */
+  latency?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputAudioTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputImageTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputReasoningTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  outputTextTokens?: number;
   /**
    * Page selections attached to user message
    * Used for Ask AI functionality to persist selection context
@@ -178,6 +222,8 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    * Emoji reactions on this message
    */
   reactions?: EmojiReaction[];
+  /** @deprecated use `metadata.usage` instead */
+  rejectedPredictionTokens?: number;
   /**
    * Message scope - indicates the context in which this message was created
    * Used by conversation-flow to determine how to handle message grouping and display
@@ -198,5 +244,15 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
+  /** @deprecated use `metadata.usage` instead */
+  totalInputTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  totalOutputTokens?: number;
+  /** @deprecated use `metadata.usage` instead */
+  totalTokens?: number;
+  /** @deprecated use `metadata.performance` instead */
+  tps?: number;
+  /** @deprecated use `metadata.performance` instead */
+  ttft?: number;
   usage?: ModelUsage;
 }

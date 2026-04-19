@@ -1457,6 +1457,47 @@ export class MessageModel {
   };
 
   /**
+   * List tool/plugin rows for a topic in stable first-seen order.
+   *
+   * This is used by onboarding analytics to reconstruct successful assistant
+   * creation results before the topic is moved into inbox.
+   */
+  listMessagePluginsByTopic = async (topicId: string): Promise<MessagePluginItem[]> => {
+    const rows = await this.db
+      .select({
+        apiName: messagePlugins.apiName,
+        arguments: messagePlugins.arguments,
+        clientId: messagePlugins.clientId,
+        error: messagePlugins.error,
+        id: messagePlugins.id,
+        identifier: messagePlugins.identifier,
+        intervention: messagePlugins.intervention,
+        state: messagePlugins.state,
+        toolCallId: messagePlugins.toolCallId,
+        type: messagePlugins.type,
+        userId: messagePlugins.userId,
+      })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messagePlugins.id, messages.id))
+      .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)))
+      .orderBy(asc(messages.createdAt), asc(messages.id));
+
+    return rows.map((row) => ({
+      apiName: row.apiName ?? undefined,
+      arguments: row.arguments ?? undefined,
+      clientId: row.clientId ?? undefined,
+      error: row.error ?? undefined,
+      id: row.id,
+      identifier: row.identifier ?? undefined,
+      intervention: row.intervention ?? undefined,
+      state: row.state ?? undefined,
+      toolCallId: row.toolCallId ?? undefined,
+      type: row.type ?? 'default',
+      userId: row.userId,
+    }));
+  };
+
+  /**
    * Update tool message with content, metadata, pluginState, and pluginError in a single transaction
    * This prevents race conditions when updating multiple fields
    */

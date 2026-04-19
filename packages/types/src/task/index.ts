@@ -146,20 +146,38 @@ export interface TaskDetailActivityAuthor {
   type: 'agent' | 'user';
 }
 
+export interface TaskDetailActivityAgent {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  title: string | null;
+}
+
 export interface TaskDetailActivity {
+  actions?: unknown;
   agentId?: string | null;
+  agents?: TaskDetailActivityAgent[];
+  artifacts?: unknown;
   author?: TaskDetailActivityAuthor;
   briefType?: string;
   content?: string;
+  createdAt?: string;
+  cronJobId?: string | null;
   id?: string;
   priority?: string | null;
+  readAt?: string | null;
   resolvedAction?: string | null;
+  resolvedAt?: string | null;
+  resolvedComment?: string | null;
   seq?: number | null;
   status?: string | null;
   summary?: string;
+  taskId?: string | null;
   time?: string;
   title?: string;
+  topicId?: string | null;
   type: 'brief' | 'comment' | 'topic';
+  userId?: string | null;
 }
 
 export interface TaskDetailData {

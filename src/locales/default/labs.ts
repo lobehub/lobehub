@@ -1,7 +1,4 @@
 export default {
-  'features.agentWorkingPanel.desc':
-    "A place to view an agent's progress and accessible resources.",
-  'features.agentWorkingPanel.title': 'Working Panel',
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
@@ -10,6 +7,9 @@ export default {
   'features.gatewayMode.title': 'Server-Side Agent Execution (Gateway)',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
+  'features.heterogeneousAgent.desc':
+    'Enable heterogeneous agent execution with Claude Code, Codex CLI, and other external agent CLIs. Creates a "Claude Code Agent" option in the sidebar agent menu.',
+  'features.heterogeneousAgent.title': 'Heterogeneous Agent (Claude Code)',
   'features.inputMarkdown.desc':
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
   'features.inputMarkdown.title': 'Input Markdown Rendering',

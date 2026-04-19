@@ -270,7 +270,15 @@ export type ExtendParamsType =
   | 'imageResolution2'
   | 'urlContext';
 
+export type DisabledParamType = 'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty';
+
 export interface AiModelSettings {
+  /**
+   * Chat params that should be hidden from the agent config UI and stripped from
+   * outbound requests. Use this for models whose API rejects specific sampling
+   * params (e.g. Claude Opus 4.7 returns 400 on any non-default temperature / top_p).
+   */
+  disabledParams?: DisabledParamType[];
   extendParams?: ExtendParamsType[];
   /**
    * How the model layer implements search
@@ -312,7 +320,15 @@ export const ExtendParamsTypeSchema = z.enum([
 
 export const ModelSearchImplementTypeSchema = z.enum(['tool', 'params', 'internal']);
 
+export const DisabledParamTypeSchema = z.enum([
+  'temperature',
+  'top_p',
+  'frequency_penalty',
+  'presence_penalty',
+]);
+
 export const AiModelSettingsSchema = z.object({
+  disabledParams: z.array(DisabledParamTypeSchema).optional(),
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),

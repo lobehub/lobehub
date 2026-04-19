@@ -2,7 +2,10 @@ import { getDocumentTemplate } from '@lobechat/agent-templates';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { CURRENT_ONBOARDING_VERSION } from '@lobechat/const';
 import type {
+  ChatTopicMetadata,
+  MessagePluginItem,
   OnboardingPhase,
+  OnboardingSessionSnapshot,
   SaveUserQuestionField,
   SaveUserQuestionInput,
   UserAgentOnboarding,
@@ -42,6 +45,9 @@ const STRUCTURED_FIELD_LABELS: Record<SaveUserQuestionField, string> = {
   responseLanguage: 'response language',
 };
 
+const AGENT_MANAGEMENT_IDENTIFIER = 'lobe-agent-management';
+const GROUP_AGENT_BUILDER_IDENTIFIER = 'lobe-group-agent-builder';
+
 const defaultAgentOnboardingState = (): UserAgentOnboarding => ({
   version: CURRENT_ONBOARDING_VERSION,
 });
@@ -58,6 +64,43 @@ const isStructuredField = (value: string): value is SaveUserQuestionField =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const normalizeTitle = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const parseToolArguments = (value?: string) => {
+  if (!value) return undefined;
+
+  try {
+    const parsed = JSON.parse(value);
+
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const appendUniqueTitle = (titles: string[], seen: Set<string>, value: unknown) => {
+  const title = normalizeTitle(value);
+  if (!title || seen.has(title)) return;
+
+  seen.add(title);
+  titles.push(title);
+};
+
+const pickPreferredTitle = (...values: unknown[]) => {
+  for (const value of values) {
+    const title = normalizeTitle(value);
+    if (title) return title;
+  }
+
+  return undefined;
+};
 
 interface SaveUserQuestionResult {
   content: string;
@@ -286,6 +329,124 @@ export class OnboardingService {
     return result[0]?.count ?? 0;
   };
 
+  private buildOnboardingSessionSnapshot = (
+    existing: OnboardingSessionSnapshot | undefined,
+    phase: OnboardingSessionSnapshot['phase'],
+    now: string,
+    options?: {
+      finalAgentNames?: string[];
+      finishedAt?: string;
+    },
+  ): OnboardingSessionSnapshot => {
+    const snapshot: OnboardingSessionSnapshot = {
+      agentIdentityCompletedAt: existing?.agentIdentityCompletedAt,
+      discoveryCompletedAt: existing?.discoveryCompletedAt,
+      finalAgentNames: options?.finalAgentNames ?? existing?.finalAgentNames,
+      finishedAt: existing?.finishedAt ?? options?.finishedAt,
+      lastActiveAt: now,
+      phase,
+      startedAt: existing?.startedAt ?? now,
+      userIdentityCompletedAt: existing?.userIdentityCompletedAt,
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+
+    if (!snapshot.agentIdentityCompletedAt && phase !== 'agent_identity') {
+      snapshot.agentIdentityCompletedAt = now;
+    }
+
+    if (!snapshot.userIdentityCompletedAt && ['discovery', 'summary'].includes(phase)) {
+      snapshot.userIdentityCompletedAt = now;
+    }
+
+    if (!snapshot.discoveryCompletedAt && phase === 'summary') {
+      snapshot.discoveryCompletedAt = now;
+    }
+
+    return snapshot;
+  };
+
+  private syncTopicOnboardingSession = async (
+    topicId: string,
+    phase: OnboardingSessionSnapshot['phase'],
+    options?: {
+      finalAgentNames?: string[];
+      finishedAt?: string;
+      metadata?: ChatTopicMetadata | null;
+      now?: string;
+    },
+  ) => {
+    const topic =
+      options?.metadata === undefined ? await this.topicModel.findById(topicId) : undefined;
+    const metadata = options?.metadata ?? topic?.metadata;
+    const now = options?.now ?? new Date().toISOString();
+    const snapshot = this.buildOnboardingSessionSnapshot(
+      metadata?.onboardingSession,
+      phase,
+      now,
+      options,
+    );
+
+    await this.topicModel.updateMetadata(topicId, { onboardingSession: snapshot });
+
+    return snapshot;
+  };
+
+  private getFinalAgentNamesFromToolCalls = (plugins: MessagePluginItem[]) => {
+    const titles: string[] = [];
+    const seen = new Set<string>();
+
+    for (const plugin of plugins) {
+      if (plugin.error) continue;
+
+      const state = isRecord(plugin.state) ? plugin.state : undefined;
+      const args = parseToolArguments(plugin.arguments);
+
+      if (
+        plugin.identifier === AGENT_MANAGEMENT_IDENTIFIER &&
+        plugin.apiName === 'createAgent' &&
+        state?.success === true
+      ) {
+        appendUniqueTitle(titles, seen, pickPreferredTitle(args?.title));
+        continue;
+      }
+
+      if (plugin.identifier !== GROUP_AGENT_BUILDER_IDENTIFIER) continue;
+
+      if (plugin.apiName === 'createAgent' && state?.success === true) {
+        appendUniqueTitle(titles, seen, pickPreferredTitle(state.title, args?.title));
+        continue;
+      }
+
+      if (plugin.apiName !== 'batchCreateAgents') continue;
+
+      const stateAgents = Array.isArray(state?.agents) ? state.agents.filter(isRecord) : [];
+      const argAgents = Array.isArray(args?.agents) ? args.agents.filter(isRecord) : [];
+      const successCount = typeof state?.successCount === 'number' ? state.successCount : 0;
+
+      if (successCount <= 0 && stateAgents.length === 0) continue;
+
+      for (const [index, agent] of stateAgents.entries()) {
+        appendUniqueTitle(titles, seen, pickPreferredTitle(agent.title, argAgents[index]?.title));
+      }
+    }
+
+    return titles;
+  };
+
+  private resolveFinalAgentNames = async (topicId?: string) => {
+    if (!topicId) return [];
+
+    try {
+      const plugins = await this.messageModel.listMessagePluginsByTopic(topicId);
+
+      return this.getFinalAgentNamesFromToolCalls(plugins);
+    } catch (error) {
+      console.error('[OnboardingService] Failed to resolve final agent names:', error);
+
+      return [];
+    }
+  };
+
   private derivePhase = async (
     missingStructuredFields: SaveUserQuestionField[],
     discoveryContext?: { currentUserMessageCount: number; startUserMessageCount: number },
@@ -325,10 +486,14 @@ export class OnboardingService {
 
     await this.ensureWelcomeMessage(topicId, builtinAgent.id);
 
+    const topic = await this.topicModel.findById(topicId);
+    const context = await this.getState();
+
     return {
       agentId: builtinAgent.id,
       agentOnboarding: nextState,
-      context: await this.getState(),
+      context,
+      feedbackSubmitted: !!topic?.metadata?.onboardingFeedback,
       topicId,
     };
   };
@@ -337,18 +502,26 @@ export class OnboardingService {
     const userState = await this.getUserState();
     const state = this.ensureState(userState.agentOnboarding);
     const missingStructuredFields = await this.getMissingStructuredFields();
+    const topicId = state.activeTopicId;
 
     if (state.finishedAt) {
+      if (topicId) {
+        const topic = await this.topicModel.findById(topicId);
+        await this.syncTopicOnboardingSession(topicId, 'summary', {
+          finishedAt: state.finishedAt,
+          metadata: topic?.metadata,
+        });
+      }
+
       return {
         finished: true,
         missingStructuredFields,
         phase: 'summary',
-        topicId: state.activeTopicId,
+        topicId,
         version: state.version,
       };
     }
 
-    const topicId = state.activeTopicId;
     let currentUserMessageCount: number | undefined;
     let discoveryContext:
       | { currentUserMessageCount: number; startUserMessageCount: number }
@@ -381,6 +554,10 @@ export class OnboardingService {
     }
 
     const phase = await this.derivePhase(missingStructuredFields, discoveryContext);
+    if (topicId) {
+      const topic = await this.topicModel.findById(topicId);
+      await this.syncTopicOnboardingSession(topicId, phase, { metadata: topic?.metadata });
+    }
 
     // Compute pacing data for discovery phase
     let discoveryUserMessageCount: number | undefined;
@@ -567,6 +744,7 @@ export class OnboardingService {
     }
 
     const finishedAt = new Date().toISOString();
+    const finalAgentNames = await this.resolveFinalAgentNames(state.activeTopicId);
 
     await this.userModel.updateUser({
       agentOnboarding: {
@@ -580,6 +758,16 @@ export class OnboardingService {
         version: CURRENT_ONBOARDING_VERSION,
       },
     });
+
+    if (state.activeTopicId) {
+      const topic = await this.topicModel.findById(state.activeTopicId);
+      await this.syncTopicOnboardingSession(state.activeTopicId, 'summary', {
+        finalAgentNames,
+        finishedAt,
+        metadata: topic?.metadata,
+        now: finishedAt,
+      });
+    }
 
     await this.safeTransferToInbox(state.activeTopicId);
 

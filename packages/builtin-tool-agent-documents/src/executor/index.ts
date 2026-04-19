@@ -8,6 +8,7 @@ import {
   type CreateDocumentArgs,
   type EditDocumentArgs,
   type ListDocumentsArgs,
+  type PatchDocumentArgs,
   type ReadDocumentArgs,
   type ReadDocumentByFilenameArgs,
   type RemoveDocumentArgs,
@@ -67,6 +68,13 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.editDocument(params, { agentId: ctx.agentId });
+  };
+
+  patchDocument = async (
+    params: PatchDocumentArgs,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.patchDocument(params, { agentId: ctx.agentId });
   };
 
   removeDocument = async (

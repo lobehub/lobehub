@@ -1,10 +1,11 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import DotsLoading from '@/components/DotsLoading';
+import RingLoadingIcon from '@/components/RingLoading';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -21,39 +22,51 @@ import Actions from './Actions';
 import Editing from './Editing';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const styles = createStaticStyles(({ css }) => ({
-  neonDotWrapper: css`
-    position: absolute;
-    inset: 0;
+const rippleAnim = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+`;
 
-    display: flex;
-    flex-shrink: 0;
+const styles = createStaticStyles(({ css }) => ({
+  unreadWrapper: css`
+    position: relative;
+
+    display: inline-flex;
     align-items: center;
     justify-content: center;
 
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
   `,
-  dotContainer: css`
-    will-change: width;
-
+  unreadDot: css`
     position: relative;
+    z-index: 1;
 
-    width: 18px;
-    height: 18px;
-    margin-inline-start: -6px;
-
-    transition: width 0.2s ${cssVar.motionEaseOut};
-  `,
-  neonDot: css`
     width: 6px;
     height: 6px;
     border-radius: 50%;
 
     background: ${cssVar.colorInfo};
-    box-shadow:
-      0 0 3px ${cssVar.colorInfo},
-      0 0 6px ${cssVar.colorInfo};
+  `,
+  unreadRipple: css`
+    position: absolute;
+    inset: 0;
+
+    width: 6px;
+    height: 6px;
+    margin: auto;
+    border: 1px solid ${cssVar.colorInfo};
+    border-radius: 50%;
+
+    background: transparent;
+
+    animation: ${rippleAnim} 1.8s ease-out infinite;
   `,
 }));
 
@@ -68,8 +81,13 @@ interface TopicItemProps {
 
 const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, metadata }) => {
   const { t } = useTranslation('topic');
+  const { isDarkMode } = useTheme();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const addTab = useElectronStore((s) => s.addTab);
+
+  const loadingRingColor = isDarkMode
+    ? cssVar.colorWarningBorder
+    : `color-mix(in srgb, ${cssVar.colorWarning} 45%, transparent)`;
 
   // Construct href for cmd+click support
   const href = useMemo(() => {
@@ -86,7 +104,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     id ? operationSelectors.isTopicUnreadCompleted(id) : () => false,
   );
 
-  const { navigateToTopic, isInAgentSubRoute } = useTopicNavigation();
+  const { focusTopicPopup, navigateToTopic, isInAgentSubRoute } = useTopicNavigation();
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -102,71 +120,41 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     if (isDesktop) {
       clickTimerRef.current = setTimeout(() => {
         clickTimerRef.current = null;
-        navigateToTopic(id);
+        void navigateToTopic(id);
       }, 250);
     } else {
-      navigateToTopic(id);
+      void navigateToTopic(id);
     }
   }, [editing, id, navigateToTopic]);
 
-  const handleDoubleClick = useCallback(() => {
+  const handleDoubleClick = useCallback(async () => {
     if (!id || !activeAgentId || !isDesktop) return;
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
     }
+    if (await focusTopicPopup(id)) {
+      void navigateToTopic(id, { skipPopupFocus: true });
+      return;
+    }
     const reference = pluginRegistry.parseUrl(`/agent/${activeAgentId}`, `topic=${id}`);
     if (reference) {
       addTab(reference);
-      navigateToTopic(id);
+      void navigateToTopic(id);
     }
-  }, [id, activeAgentId, addTab, navigateToTopic]);
+  }, [id, activeAgentId, addTab, focusTopicPopup, navigateToTopic]);
 
   const { dropdownMenu } = useTopicItemDropdownMenu({
     fav,
     id,
-    toggleEditing,
+    title,
   });
 
   const hasUnread = id && isUnreadCompleted;
-  const infoColor = cssVar.colorInfo;
-  const unreadNode = (
-    <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
-      <AnimatePresence mode="popLayout">
-        {hasUnread && (
-          <m.div
-            className={styles.neonDotWrapper}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{
-              scale: 1,
-              opacity: 1,
-            }}
-            exit={{
-              scale: 0,
-              opacity: 0,
-            }}
-          >
-            <m.span
-              className={styles.neonDot}
-              initial={false}
-              animate={{
-                scale: [1, 1.3, 1],
-                opacity: [1, 0.9, 1],
-                boxShadow: [
-                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-                  `0 0 5px ${infoColor}, 0 0 8px color-mix(in srgb, ${infoColor} 60%, transparent)`,
-                  `0 0 3px ${infoColor}, 0 0 6px ${infoColor}`,
-                ],
-              }}
-              transition={{
-                duration: 1.2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-          </m.div>
-        )}
-      </AnimatePresence>
+  const unreadIcon = (
+    <span className={styles.unreadWrapper}>
+      <span className={styles.unreadRipple} />
+      <span className={styles.unreadDot} />
     </span>
   );
 
@@ -175,9 +163,16 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
     return (
       <NavItem
         active={active && !isInAgentSubRoute}
-        loading={isLoading}
         icon={
-          <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          isLoading ? (
+            <RingLoadingIcon
+              ringColor={loadingRingColor}
+              size={14}
+              style={{ color: cssVar.colorWarning }}
+            />
+          ) : (
+            <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          )
         }
         title={
           <Flexbox horizontal align={'center'} flex={1} gap={6}>
@@ -206,9 +201,18 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={href}
-        loading={isLoading}
-        title={title}
+        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={(() => {
+          if (isLoading) {
+            return (
+              <RingLoadingIcon
+                ringColor={loadingRingColor}
+                size={14}
+                style={{ color: cssVar.colorWarning }}
+              />
+            );
+          }
+          if (hasUnread) return unreadIcon;
           if (metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot!.platform);
             if (ProviderIcon) {
@@ -219,11 +223,8 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
             <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
           );
         })()}
-        slots={{
-          iconPostfix: unreadNode,
-        }}
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
+        onDoubleClick={() => void handleDoubleClick()}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
       {active && (

@@ -1,13 +1,15 @@
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import DotsLoading from '@/components/DotsLoading';
 import { isDesktop } from '@/const/version';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -68,6 +70,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   const toggleMobileTopic = useGlobalStore((s) => s.toggleMobileTopic);
   const [activeGroupId, switchTopic] = useAgentGroupStore((s) => [s.activeGroupId, s.switchTopic]);
   const addTab = useElectronStore((s) => s.addTab);
+  const focusTopicPopup = useFocusTopicPopup({ groupId: activeGroupId });
 
   // Construct href for cmd+click support
   const href = useMemo(() => {
@@ -98,20 +101,31 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     if (isDesktop) {
       clickTimerRef.current = setTimeout(() => {
         clickTimerRef.current = null;
-        switchTopic(id);
-        toggleMobileTopic(false);
+        void (async () => {
+          await focusTopicPopup(id);
+          switchTopic(id);
+          toggleMobileTopic(false);
+        })();
       }, 250);
     } else {
-      switchTopic(id);
-      toggleMobileTopic(false);
+      void (async () => {
+        await focusTopicPopup(id);
+        switchTopic(id);
+        toggleMobileTopic(false);
+      })();
     }
-  }, [editing, id, switchTopic, toggleMobileTopic]);
+  }, [editing, focusTopicPopup, id, switchTopic, toggleMobileTopic]);
 
-  const handleDoubleClick = useCallback(() => {
+  const handleDoubleClick = useCallback(async () => {
     if (!id || !activeGroupId || !isDesktop) return;
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
+    }
+    if (await focusTopicPopup(id)) {
+      switchTopic(id);
+      toggleMobileTopic(false);
+      return;
     }
     const reference = pluginRegistry.parseUrl(`/group/${activeGroupId}`, `topic=${id}`);
     if (reference) {
@@ -119,7 +133,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
       switchTopic(id);
       toggleMobileTopic(false);
     }
-  }, [id, activeGroupId, addTab, switchTopic, toggleMobileTopic]);
+  }, [id, activeGroupId, addTab, focusTopicPopup, switchTopic, toggleMobileTopic]);
 
   const dropdownMenu = useTopicItemDropdownMenu({
     id,
@@ -173,9 +187,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     return (
       <NavItem
         active={active}
-        loading={isLoading}
         icon={
-          <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          isLoading ? (
+            <Icon spin color={cssVar.colorWarning} icon={Loader2Icon} size={'small'} />
+          ) : (
+            <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
+          )
         }
         title={
           <Flexbox horizontal align={'center'} flex={1} gap={6}>
@@ -204,16 +221,19 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         contextMenuItems={dropdownMenu}
         disabled={editing}
         href={!editing ? href : undefined}
-        loading={isLoading}
-        title={title}
+        title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
         icon={
-          <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+          isLoading ? (
+            <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
+          ) : (
+            <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
+          )
         }
         slots={{
           iconPostfix: unreadNode,
         }}
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
+        onDoubleClick={() => void handleDoubleClick()}
       />
       <Editing id={id} title={title} toggleEditing={toggleEditing} />
       {active && (

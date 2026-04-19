@@ -30,6 +30,19 @@ const TOOL_CATEGORIES = {
     ],
   },
 
+  'cli-agents': {
+    descKey: 'settingSystemTools.category.cliAgents.desc',
+    titleKey: 'settingSystemTools.category.cliAgents',
+    tools: [
+      { descKey: 'settingSystemTools.tools.claude.desc', name: 'claude' },
+      { descKey: 'settingSystemTools.tools.codex.desc', name: 'codex' },
+      { descKey: 'settingSystemTools.tools.gemini.desc', name: 'gemini' },
+      { descKey: 'settingSystemTools.tools.qwen.desc', name: 'qwen' },
+      { descKey: 'settingSystemTools.tools.kimi.desc', name: 'kimi' },
+      { descKey: 'settingSystemTools.tools.aider.desc', name: 'aider' },
+    ],
+  },
+
   'content-search': {
     descKey: 'settingSystemTools.category.contentSearch.desc',
     titleKey: 'settingSystemTools.category.contentSearch',

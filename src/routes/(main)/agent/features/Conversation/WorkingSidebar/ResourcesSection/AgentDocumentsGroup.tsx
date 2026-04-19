@@ -1,204 +1,312 @@
-import type { SkillResourceTreeNode } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { App } from 'antd';
-import { Pencil, Trash2 } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import { App, Spin } from 'antd';
+import { createStaticStyles, cx } from 'antd-style';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { FileTextIcon, GlobeIcon, type LucideIcon, Trash2Icon } from 'lucide-react';
+import { memo, type MouseEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FileTree, { FileTreeSkeleton } from '@/features/FileTree';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 
-interface AgentDocumentsGroupProps {
-  onSelectDocument: (id: string | null) => void;
-  selectedDocumentId: string | null;
-}
+dayjs.extend(relativeTime);
+
+type ResourceFilter = 'all' | 'documents' | 'web';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  container: css`
+    cursor: pointer;
+    padding: 12px;
+    border-radius: 8px;
+    background: ${cssVar.colorFillTertiary};
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  containerActive: css`
+    background: ${cssVar.colorFillSecondary};
+  `,
+  description: css`
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  groupLabel: css`
+    padding-inline: 4px;
+
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  `,
+  meta: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  pillActive: css`
+    font-weight: 500;
+    color: ${cssVar.colorText};
+    background: ${cssVar.colorFillSecondary};
+
+    &:hover {
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  pillTab: css`
+    cursor: pointer;
+    user-select: none;
+
+    padding-block: 4px;
+    padding-inline: 12px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    line-height: 1.4;
+    color: ${cssVar.colorTextSecondary};
+
+    background: transparent;
+
+    transition:
+      background ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut},
+      color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  title: css`
+    font-weight: 500;
+  `,
+}));
+
+const FILTER_OPTIONS = [
+  { labelKey: 'workingPanel.resources.filter.all', value: 'all' },
+  { labelKey: 'workingPanel.resources.filter.documents', value: 'documents' },
+  { labelKey: 'workingPanel.resources.filter.web', value: 'web' },
+] as const satisfies readonly { labelKey: string; value: ResourceFilter }[];
 
 type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.getDocuments>>[number];
 
-const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
-  ({ onSelectDocument, selectedDocumentId }) => {
-    const { t } = useTranslation(['chat', 'common']);
-    const { message, modal } = App.useApp();
-    const agentId = useAgentStore((s) => s.activeAgentId);
-    const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
+interface DocumentItemProps {
+  agentId: string;
+  document: AgentDocumentListItem;
+  isActive: boolean;
+  mutate: () => Promise<unknown>;
+}
 
-    const {
-      data = [],
-      error,
-      isLoading,
-      mutate,
-    } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documents(agentId) : null, () =>
-      agentDocumentService.getDocuments({ agentId: agentId! }),
-    );
+const DocumentItem = memo<DocumentItemProps>(({ agentId, document, isActive, mutate }) => {
+  const { t } = useTranslation(['chat', 'common']);
+  const { message, modal } = App.useApp();
+  const [deleting, setDeleting] = useState(false);
+  const openDocument = useChatStore((s) => s.openDocument);
+  const closeDocument = useChatStore((s) => s.closeDocument);
 
-    const resourceTree = useMemo<SkillResourceTreeNode[]>(
-      () => [
-        {
-          children: data.map((item) => ({
-            name: item.filename || item.title,
-            path: item.id,
-            type: 'file' as const,
-          })),
-          name: t('workingPanel.agentDocuments'),
-          path: 'agent-documents',
-          type: 'directory' as const,
-        },
-      ],
-      [data, t],
-    );
+  const title = document.title || document.filename || '';
+  const description = document.description ?? undefined;
+  const isWeb = document.sourceType === 'web';
+  const IconComponent: LucideIcon = isWeb ? GlobeIcon : FileTextIcon;
+  const createdAtLabel = document.createdAt ? dayjs(document.createdAt).fromNow() : null;
 
-    const handleCommitRenameDocument = useCallback(
-      async (file: { name: string; path: string }, nextName: string) => {
-        if (!agentId) return;
+  const handleOpen = () => {
+    if (!document.documentId) return;
+    openDocument(document.documentId);
+  };
 
-        const normalizedTitle = nextName.trim();
-        setEditingDocumentId(null);
-
-        if (!normalizedTitle) {
-          message.error(t('workingPanel.resources.renameEmpty', { ns: 'chat' }));
-          return;
-        }
-
-        if (normalizedTitle === file.name) {
-          return;
-        }
-
+  const handleDelete = (e: MouseEvent) => {
+    e.stopPropagation();
+    modal.confirm({
+      centered: true,
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDeleting(true);
         try {
-          await mutate(
-            async (current: AgentDocumentListItem[] = []) => {
-              const renamed = await agentDocumentService.renameDocument({
-                agentId,
-                id: file.path,
-                newTitle: normalizedTitle,
-              });
-
-              return current.map((item) =>
-                item.id === file.path
-                  ? {
-                      ...item,
-                      filename: renamed?.filename ?? item.filename,
-                      title: renamed?.title ?? normalizedTitle,
-                    }
-                  : item,
-              );
-            },
-            {
-              optimisticData: (current: AgentDocumentListItem[] = []) =>
-                current.map((item) =>
-                  item.id === file.path
-                    ? {
-                        ...item,
-                        filename: normalizedTitle,
-                        title: normalizedTitle,
-                      }
-                    : item,
-                ),
-              revalidate: false,
-              rollbackOnError: true,
-            },
-          );
-
-          message.success(t('workingPanel.resources.renameSuccess', { ns: 'chat' }));
+          if (isActive) closeDocument();
+          await agentDocumentService.removeDocument({ agentId, id: document.id });
+          await mutate();
+          message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
         } catch (error) {
           message.error(
             error instanceof Error
               ? error.message
-              : t('workingPanel.resources.renameError', { ns: 'chat' }),
+              : t('workingPanel.resources.deleteError', { ns: 'chat' }),
           );
+        } finally {
+          setDeleting(false);
         }
       },
-      [agentId, message, mutate, t],
-    );
+      title: t('workingPanel.resources.deleteTitle', { ns: 'chat' }),
+    });
+  };
 
-    const handleDeleteDocument = useCallback(
-      (id: string) => {
-        if (!agentId) return;
-
-        modal.confirm({
-          content: t('workingPanel.resources.deleteConfirm', { ns: 'chat' }),
-          okButtonProps: { danger: true },
-          okText: t('delete', { ns: 'common' }),
-          onOk: async () => {
-            const wasSelected = selectedDocumentId === id;
-            if (wasSelected) onSelectDocument(null);
-
-            try {
-              await mutate(
-                async (current = []) => {
-                  await agentDocumentService.removeDocument({ agentId, id });
-                  return current.filter((item) => item.id !== id);
-                },
-                {
-                  optimisticData: (current = []) => current.filter((item) => item.id !== id),
-                  revalidate: false,
-                  rollbackOnError: true,
-                },
-              );
-
-              message.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
-            } catch (error) {
-              if (wasSelected) onSelectDocument(id);
-              message.error(
-                error instanceof Error
-                  ? error.message
-                  : t('workingPanel.resources.deleteError', { ns: 'chat' }),
-              );
-              throw error;
-            }
-          },
-          title: t('workingPanel.resources.deleteTitle', { ns: 'chat' }),
-        });
-      },
-      [agentId, message, modal, mutate, onSelectDocument, selectedDocumentId, t],
-    );
-
-    const getFileContextMenuItems = useCallback(
-      (file: { path: string }) => [
-        {
-          icon: <Icon icon={Pencil} />,
-          key: 'rename',
-          label: t('rename', { ns: 'common' }),
-          onClick: () => setEditingDocumentId(file.path),
-        },
-        { type: 'divider' as const },
-        {
-          danger: true,
-          icon: <Icon icon={Trash2} />,
-          key: 'delete',
-          label: t('delete', { ns: 'common' }),
-          onClick: () => handleDeleteDocument(file.path),
-        },
-      ],
-      [handleDeleteDocument, t],
-    );
-
-    if (!agentId) return null;
-
-    return (
-      <Flexbox gap={8}>
-        {isLoading && <FileTreeSkeleton rows={6} showRootFile={false} />}
-        {error && <Text type={'danger'}>{t('workingPanel.resources.error')}</Text>}
-        {!isLoading && !error && data.length === 0 && (
-          <Text type={'secondary'}>{t('workingPanel.resources.empty')}</Text>
-        )}
-        {!isLoading && !error && data.length > 0 && (
-          <FileTree
-            editableFilePath={editingDocumentId}
-            getFileContextMenuItems={getFileContextMenuItems}
-            resourceTree={resourceTree}
-            rootFile={null}
-            selectedFile={selectedDocumentId || ''}
-            onCancelRenameFile={() => setEditingDocumentId(null)}
-            onCommitRenameFile={handleCommitRenameDocument}
-            onSelectFile={onSelectDocument}
+  return (
+    <Flexbox
+      horizontal
+      align={'flex-start'}
+      className={`${styles.container} ${isActive ? styles.containerActive : ''}`}
+      gap={8}
+      onClick={handleOpen}
+    >
+      <IconComponent size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+      <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} distribution={'space-between'}>
+          <Text ellipsis className={styles.title}>
+            {title}
+          </Text>
+          <ActionIcon
+            icon={Trash2Icon}
+            loading={deleting}
+            size={'small'}
+            title={t('delete', { ns: 'common' })}
+            onClick={handleDelete}
           />
+        </Flexbox>
+        {description && (
+          <Text className={styles.description} ellipsis={{ rows: 2 }}>
+            {description}
+          </Text>
         )}
+        {createdAtLabel && <Text className={styles.meta}>{createdAtLabel}</Text>}
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+DocumentItem.displayName = 'AgentDocumentsGroupItem';
+
+interface AgentDocumentsGroupProps {
+  viewMode?: 'list' | 'tree';
+}
+
+const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ viewMode = 'list' }) => {
+  const { t } = useTranslation('chat');
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const activeDocumentId = useChatStore(chatPortalSelectors.portalDocumentId);
+  const [filter, setFilter] = useState<ResourceFilter>('all');
+
+  const {
+    data = [],
+    error,
+    isLoading,
+    mutate,
+  } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documentsList(agentId) : null, () =>
+    agentDocumentService.getDocuments({ agentId: agentId! }),
+  );
+
+  const filteredData = useMemo(() => {
+    if (filter === 'documents') return data.filter((doc) => doc.sourceType !== 'web');
+    if (filter === 'web') return data.filter((doc) => doc.sourceType === 'web');
+    return data;
+  }, [data, filter]);
+
+  const treeGroups = useMemo(() => {
+    const docs = data.filter((doc) => doc.sourceType !== 'web');
+    const webs = data.filter((doc) => doc.sourceType === 'web');
+    return (
+      [
+        { items: docs, labelKey: 'workingPanel.resources.filter.documents' },
+        { items: webs, labelKey: 'workingPanel.resources.filter.web' },
+      ] as const
+    ).filter((group) => group.items.length > 0);
+  }, [data]);
+
+  if (!agentId) return null;
+
+  if (isLoading) {
+    return (
+      <Center flex={1} paddingBlock={24}>
+        <Spin />
+      </Center>
+    );
+  }
+
+  if (error) {
+    return (
+      <Center flex={1} paddingBlock={24}>
+        <Text type={'danger'}>{t('workingPanel.resources.error')}</Text>
+      </Center>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <Center flex={1} gap={8} paddingBlock={24}>
+        <Empty description={t('workingPanel.resources.empty')} icon={FileTextIcon} />
+      </Center>
+    );
+  }
+
+  if (viewMode === 'tree') {
+    return (
+      <Flexbox gap={16}>
+        {treeGroups.map((group) => (
+          <Flexbox gap={8} key={group.labelKey}>
+            <Text className={styles.groupLabel} type={'secondary'}>
+              {t(group.labelKey)}
+            </Text>
+            <Flexbox gap={8}>
+              {group.items.map((doc) => (
+                <DocumentItem
+                  agentId={agentId}
+                  document={doc}
+                  isActive={activeDocumentId === doc.documentId}
+                  key={doc.id}
+                  mutate={mutate}
+                />
+              ))}
+            </Flexbox>
+          </Flexbox>
+        ))}
       </Flexbox>
     );
-  },
-);
+  }
+
+  return (
+    <Flexbox gap={12}>
+      <Flexbox horizontal gap={4} role={'tablist'}>
+        {FILTER_OPTIONS.map((option) => {
+          const active = filter === option.value;
+          return (
+            <div
+              aria-selected={active}
+              className={cx(styles.pillTab, active && styles.pillActive)}
+              key={option.value}
+              role={'tab'}
+              onClick={() => setFilter(option.value)}
+            >
+              {t(option.labelKey)}
+            </div>
+          );
+        })}
+      </Flexbox>
+      {filteredData.length === 0 ? (
+        <Center flex={1} gap={8} paddingBlock={24}>
+          <Empty
+            description={t('workingPanel.resources.empty')}
+            icon={filter === 'web' ? GlobeIcon : FileTextIcon}
+          />
+        </Center>
+      ) : (
+        <Flexbox gap={8}>
+          {filteredData.map((doc) => (
+            <DocumentItem
+              agentId={agentId}
+              document={doc}
+              isActive={activeDocumentId === doc.documentId}
+              key={doc.id}
+              mutate={mutate}
+            />
+          ))}
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
 
 AgentDocumentsGroup.displayName = 'AgentDocumentsGroup';
 
