@@ -18,7 +18,6 @@
   "agentDefaultMessage": "你好，我是 **{{name}}**。从一句话开始就行。\n\n想让我更贴近你的工作方式：去 [助理设置]({{url}}) 补充助理档案（随时可改）",
   "agentDefaultMessageWithSystemRole": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
   "agentDefaultMessageWithoutEdit": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
-  "agentSidebar.externalTag": "外部",
   "agents": "助理",
   "artifact.generating": "生成中",
   "artifact.inThread": "子话题中暂不支持查看。请回到主对话区打开",

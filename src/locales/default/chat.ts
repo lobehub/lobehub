@@ -27,12 +27,6 @@ export default {
   'agentDefaultMessageWithoutEdit':
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   'agents': 'Agents',
-  /**
-   * Sidebar tag for agents driven by an external CLI runtime (Claude Code, etc.).
-   * Deliberately separate from `group.profile.external` so it can evolve
-   * independently (e.g. swap to "Claude Code" per provider later).
-   */
-  'agentSidebar.externalTag': 'External',
   'artifact.generating': 'Generating',
   'artifact.inThread':
     'Cannot view in subtopic, please switch to the main conversation area to open',
