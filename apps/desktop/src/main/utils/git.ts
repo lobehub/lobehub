@@ -47,6 +47,12 @@ export const resolveCommonGitDir = async (dirPath: string): Promise<string | und
   }
 };
 
+// Match `github.com` only in a remote-URL host position: preceded by `@`, `/`,
+// or line start (covers `git@github.com:`, `https://github.com/`,
+// `ssh://git@github.com/`, etc.) and followed by `:` or `/`. Avoids matching
+// look-alikes like `evilgithub.com` or `github.com.attacker.com`.
+const GITHUB_REMOTE_HOST_RE = /(?:^|[@/])github\.com[:/]/m;
+
 /**
  * Classify a working tree as `git` (plain) / `github` (origin points at github.com) /
  * `undefined` (not a git repo). Reads the shared gitdir's `config` so submodules and
@@ -57,7 +63,7 @@ export const detectRepoType = async (dirPath: string): Promise<'git' | 'github' 
   if (!commonDir) return undefined;
   try {
     const config = await readFile(path.join(commonDir, 'config'), 'utf8');
-    if (config.includes('github.com')) return 'github';
+    if (GITHUB_REMOTE_HOST_RE.test(config)) return 'github';
     return 'git';
   } catch {
     return undefined;
