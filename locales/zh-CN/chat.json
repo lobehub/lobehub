@@ -124,6 +124,8 @@
   "groupWizard.searchTemplates": "搜索模板…",
   "groupWizard.title": "创建群组",
   "groupWizard.useTemplate": "使用模板",
+  "heteroAgent.fullAccess.label": "完全访问权限",
+  "heteroAgent.fullAccess.tooltip": "Claude Code 在本地运行，对工作目录拥有完全的读写权限。当前暂不支持切换权限模式。",
   "heteroAgent.resumeReset.cwdChanged": "工作目录已切换，之前的 Claude Code 会话只能在原目录下继续，已开始新对话。",
   "heteroAgent.switchCwd.cancel": "取消",
   "heteroAgent.switchCwd.content": "Claude Code 会话会绑定到具体的工作目录。切换后将为当前话题开启一个新会话——消息记录会保留，但之前会话的上下文无法恢复。",

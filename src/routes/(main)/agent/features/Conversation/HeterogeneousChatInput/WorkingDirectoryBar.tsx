@@ -3,7 +3,13 @@
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDownIcon, FolderIcon, GitBranchIcon, SquircleDashed } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  CircleAlertIcon,
+  FolderIcon,
+  GitBranchIcon,
+  SquircleDashed,
+} from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +24,6 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
-    gap: 4px;
     padding-block: 0;
     padding-inline: 4px;
   `,
@@ -42,10 +47,24 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  fullAccess: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 2px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-size: 12px;
+    font-weight: 500;
+    color: ${cssVar.colorWarning};
+  `,
 }));
 
 const WorkingDirectoryBar = memo(() => {
   const { t } = useTranslation('plugin');
+  const { t: tChat } = useTranslation('chat');
   const agentId = useAgentId();
   const [open, setOpen] = useState(false);
 
@@ -67,8 +86,9 @@ const WorkingDirectoryBar = memo(() => {
 
   if (!agentId || isLoading) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.bar} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.bar} gap={4} justify={'space-between'}>
         <Skeleton.Button active size="small" style={{ height: 22, minWidth: 100, width: 100 }} />
+        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 80, width: 80 }} />
       </Flexbox>
     );
   }
@@ -85,29 +105,41 @@ const WorkingDirectoryBar = memo(() => {
     </div>
   );
 
+  const fullAccessBadge = (
+    <div className={styles.fullAccess}>
+      <Icon icon={CircleAlertIcon} size={14} />
+      <span>{tChat('heteroAgent.fullAccess.label')}</span>
+    </div>
+  );
+
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar}>
-      <Popover
-        content={<WorkingDirectoryContent agentId={agentId} onClose={() => setOpen(false)} />}
-        open={open}
-        placement="bottomLeft"
-        styles={{ content: { padding: 4 } }}
-        trigger="click"
-        onOpenChange={setOpen}
-      >
-        <div>
-          {open ? (
-            dirButton
-          ) : (
-            <Tooltip title={effectiveWorkingDirectory || t('localSystem.workingDirectory.notSet')}>
-              {dirButton}
-            </Tooltip>
-          )}
-        </div>
-      </Popover>
-      {effectiveWorkingDirectory && repoType && (
-        <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
-      )}
+    <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <Popover
+          content={<WorkingDirectoryContent agentId={agentId} onClose={() => setOpen(false)} />}
+          open={open}
+          placement="bottomLeft"
+          styles={{ content: { padding: 4 } }}
+          trigger="click"
+          onOpenChange={setOpen}
+        >
+          <div>
+            {open ? (
+              dirButton
+            ) : (
+              <Tooltip
+                title={effectiveWorkingDirectory || t('localSystem.workingDirectory.notSet')}
+              >
+                {dirButton}
+              </Tooltip>
+            )}
+          </div>
+        </Popover>
+        {effectiveWorkingDirectory && repoType && (
+          <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
+        )}
+      </Flexbox>
+      <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
     </Flexbox>
   );
 });

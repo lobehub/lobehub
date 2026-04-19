@@ -147,6 +147,9 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.fullAccess.label': 'Full access',
+  'heteroAgent.fullAccess.tooltip':
+    'Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
   'heteroAgent.switchCwd.cancel': 'Cancel',

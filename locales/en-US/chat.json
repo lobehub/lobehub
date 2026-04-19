@@ -124,6 +124,8 @@
   "groupWizard.searchTemplates": "Search templates...",
   "groupWizard.title": "Create Group",
   "groupWizard.useTemplate": "Use Template",
+  "heteroAgent.fullAccess.label": "Full access",
+  "heteroAgent.fullAccess.tooltip": "Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.",
   "heteroAgent.resumeReset.cwdChanged": "Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.",
   "heteroAgent.switchCwd.cancel": "Cancel",
   "heteroAgent.switchCwd.content": "Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.",
