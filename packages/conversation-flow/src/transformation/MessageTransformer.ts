@@ -31,7 +31,15 @@ export class MessageTransformer {
   }
 
   /**
-   * Split metadata into usage and performance objects
+   * Split metadata into usage and performance objects.
+   *
+   * Supports two storage shapes:
+   * - **Nested** (canonical): `metadata.usage = {...}`, `metadata.performance = {...}`
+   *   — written by hetero-agent / Gateway executors.
+   * - **Flat** (legacy): `metadata.totalTokens`, `metadata.ttft`, etc — older write paths
+   *   that splatted token fields directly onto metadata.
+   *
+   * Nested takes priority; flat fields fill in any missing keys (transition state).
    */
   splitMetadata(metadata?: any): {
     performance?: ModelPerformance;
@@ -39,8 +47,10 @@ export class MessageTransformer {
   } {
     if (!metadata) return {};
 
-    const usage: ModelUsage = {};
-    const performance: ModelPerformance = {};
+    const usage: ModelUsage = { ...metadata.usage };
+    const performance: ModelPerformance = { ...metadata.performance };
+    let hasUsage = Object.keys(usage).length > 0;
+    let hasPerformance = Object.keys(performance).length > 0;
 
     const usageFields = [
       'acceptedPredictionTokens',
@@ -63,18 +73,16 @@ export class MessageTransformer {
       'totalTokens',
     ] as const;
 
-    let hasUsage = false;
     usageFields.forEach((field) => {
-      if (metadata[field] !== undefined) {
+      if (metadata[field] !== undefined && (usage as any)[field] === undefined) {
         (usage as any)[field] = metadata[field];
         hasUsage = true;
       }
     });
 
     const performanceFields = ['duration', 'latency', 'tps', 'ttft'] as const;
-    let hasPerformance = false;
     performanceFields.forEach((field) => {
-      if (metadata[field] !== undefined) {
+      if (metadata[field] !== undefined && (performance as any)[field] === undefined) {
         (performance as any)[field] = metadata[field];
         hasPerformance = true;
       }

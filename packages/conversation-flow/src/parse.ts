@@ -70,12 +70,16 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
     'outputImageTokens',
     'outputReasoningTokens',
     'outputTextTokens',
+    // Nested canonical shape — executors write `metadata.usage` / `metadata.performance`
+    // as objects; treat them as part of the usage/performance set alongside the legacy flat keys.
+    'performance',
     'rejectedPredictionTokens',
     'totalInputTokens',
     'totalOutputTokens',
     'totalTokens',
     'tps',
     'ttft',
+    'usage',
   ]);
 
   helperMaps.messageMap.forEach((message, id) => {
