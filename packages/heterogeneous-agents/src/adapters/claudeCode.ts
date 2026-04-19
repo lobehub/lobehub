@@ -107,10 +107,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   /** Track current message.id to detect step boundaries */
   private currentMessageId: string | undefined;
-  /** Track which message.id has already emitted usage (dedup) */
-  private usageEmittedForMessageId: string | undefined;
   /** message.id of the stream_event delta flow currently in flight */
   private currentStreamEventMessageId: string | undefined;
+  /**
+   * Latest model seen for the in-flight message.id — captured from
+   * `message_start` (partial mode) or `assistant` events, emitted alongside
+   * authoritative usage on `message_delta`.
+   */
+  private currentStreamEventModel: string | undefined;
   /** message.ids whose text has already been streamed as deltas — skip the full-block emission */
   private messagesWithStreamedText = new Set<string>();
   /** message.ids whose thinking has already been streamed as deltas — skip the full-block emission */
@@ -181,21 +185,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     events.push(...this.openMainMessage(messageId, raw.message?.model));
 
-    // Per-turn model + usage snapshot — emitted as 'step_complete'-like
-    // metadata event so the executor can persist usage to each step's
-    // assistant message. DEDUP: same message.id carries identical usage on
-    // every content block (thinking, text, tool_use); emit once per message.id.
-    if ((raw.message?.model || raw.message?.usage) && messageId !== this.usageEmittedForMessageId) {
-      this.usageEmittedForMessageId = messageId;
-      events.push(
-        this.makeEvent('step_complete', {
-          model: raw.message?.model,
-          phase: 'turn_metadata',
-          provider: 'claude-code',
-          usage: toUsageData(raw.message?.usage),
-        }),
-      );
-    }
+    // Track the latest model — emitted alongside authoritative usage on the
+    // matching `message_delta`. We deliberately do NOT emit turn_metadata
+    // here: under `--include-partial-messages` (our default), every
+    // content-block `assistant` event echoes a STALE usage snapshot from
+    // `message_start` (e.g. `output_tokens: 8`); the per-turn total only
+    // arrives on `stream_event: message_delta`.
+    if (raw.message?.model) this.currentStreamEventModel = raw.message.model;
 
     // Each content array here is usually ONE block (thinking OR tool_use OR text)
     // but we handle multiple defensively.
@@ -350,6 +346,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       case 'message_start': {
         const msgId: string | undefined = event.message?.id;
         this.currentStreamEventMessageId = msgId;
+        if (event.message?.model) this.currentStreamEventModel = event.message.model;
         return this.openMainMessage(msgId, event.message?.model);
       }
       case 'content_block_delta': {
@@ -365,6 +362,22 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           return [this.makeChunkEvent({ chunkType: 'reasoning', reasoning: delta.thinking })];
         }
         return [];
+      }
+      case 'message_delta': {
+        // Authoritative per-turn usage. CC echoes stale message_start usage on
+        // every `assistant` event, so `handleAssistant` deliberately skips the
+        // emission and lets this branch own it. `message_delta.usage` carries
+        // the full final usage (input + cache + final output_tokens).
+        const usage = toUsageData(event.usage);
+        if (!usage) return [];
+        return [
+          this.makeEvent('step_complete', {
+            model: this.currentStreamEventModel,
+            phase: 'turn_metadata',
+            provider: 'claude-code',
+            usage,
+          }),
+        ];
       }
       default: {
         return [];

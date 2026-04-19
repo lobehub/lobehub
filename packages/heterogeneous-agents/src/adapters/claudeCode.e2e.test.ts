@@ -182,11 +182,21 @@ describe('ClaudeCodeAdapter E2E', () => {
     // 2 boundaries: msg_01 → msg_02, msg_02 → msg_03
     expect(newStepStarts.length).toBe(2);
 
-    // 5. Should have usage metadata events
+    // 5. turn_metadata is now emitted on `stream_event: message_delta`, not on
+    // `assistant` events (CC echoes a stale message_start usage on every
+    // content block). This simplified fixture has no stream_event records, so
+    // no turn_metadata fires here — a dedicated test in claudeCode.test.ts
+    // covers the message_delta flow. We still assert the result_usage summary
+    // lands at session end.
     const metaEvents = allEvents.filter(
       (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
     );
-    expect(metaEvents.length).toBeGreaterThanOrEqual(3); // At least one per assistant turn
+    expect(metaEvents.length).toBe(0);
+    const resultUsage = allEvents.filter(
+      (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+    );
+    // No `result.usage` in this fixture, so none emitted either.
+    expect(resultUsage.length).toBe(0);
 
     // 6. Should end with stream_end + agent_runtime_end (from result)
     const lastTwo = types.slice(-2);
