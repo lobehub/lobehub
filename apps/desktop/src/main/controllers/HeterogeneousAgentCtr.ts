@@ -102,6 +102,14 @@ interface AgentSession {
   agentSessionId?: string;
   agentType: string;
   args: string[];
+  /**
+   * True when *we* initiated the kill (cancelSession / stopSession / before-quit).
+   * The `exit` handler uses this to route signal-induced non-zero exits through
+   * the `complete` broadcast instead of surfacing them as runtime errors —
+   * SIGINT(130) / SIGTERM(143) / SIGKILL(137) from our own kill paths are
+   * intentional, not agent failures.
+   */
+  cancelledByUs?: boolean;
   command: string;
   cwd?: string;
   env?: Record<string, string>;
@@ -362,9 +370,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         reject(err);
       });
 
-      proc.on('exit', (code) => {
-        logger.info('Agent process exited:', { code, sessionId: session.sessionId });
+      proc.on('exit', (code, signal) => {
+        logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
         session.process = undefined;
+
+        // If *we* killed it (cancel / stop / before-quit), treat the non-zero
+        // exit as a clean shutdown — surfacing it as an error would make a
+        // user-initiated cancel look like an agent failure, and an Electron
+        // shutdown affecting OTHER running CC sessions would pollute their
+        // topics with a misleading "Agent exited with code 143" message.
+        if (session.cancelledByUs) {
+          this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+          resolve();
+          return;
+        }
 
         if (code === 0) {
           this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
@@ -435,6 +454,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const session = this.sessions.get(params.sessionId);
     if (!session?.process || session.process.killed) return;
 
+    session.cancelledByUs = true;
     const proc = session.process;
     this.killProcessTree(proc, 'SIGINT');
 
@@ -455,6 +475,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     if (!session) return;
 
     if (session.process && !session.process.killed) {
+      session.cancelledByUs = true;
       const proc = session.process;
       this.killProcessTree(proc, 'SIGTERM');
       setTimeout(() => {
@@ -479,6 +500,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     electronApp.on('before-quit', () => {
       for (const [, session] of this.sessions) {
         if (session.process && !session.process.killed) {
+          session.cancelledByUs = true;
           this.killProcessTree(session.process, 'SIGTERM');
         }
       }
