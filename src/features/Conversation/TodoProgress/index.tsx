@@ -3,7 +3,7 @@
 import { type StepContextTodos } from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDown, ChevronUp, CircleArrowRight, ListTodo } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,11 @@ import { selectTodosFromMessages } from '@/store/chat/slices/message/selectors/d
 import { shinyTextStyles } from '@/styles';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+
+const RING_SIZE = 14;
+const RING_STROKE = 2;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   collapsed: css`
@@ -80,17 +85,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 6px;
     align-items: center;
   `,
-  progress: css`
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
+  ring: css`
+    transform: rotate(-90deg);
+    flex-shrink: 0;
   `,
-  progressFill: css`
-    height: 100%;
-    border-radius: 2px;
-    background: ${cssVar.colorSuccess};
-    transition: width 0.3s ${cssVar.motionEaseInOut};
+  ringProgress: css`
+    transition:
+      stroke-dashoffset 240ms ease,
+      stroke 240ms ease;
+  `,
+  ringTrack: css`
+    stroke: ${cssVar.colorFillSecondary};
   `,
   textCompleted: css`
     color: ${cssVar.colorTextQuaternary};
@@ -136,6 +141,10 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
   // Don't render if no todos
   if (total === 0) return null;
 
+  const allDone = completed === total;
+  const ringColor = allDone ? cssVar.colorSuccess : cssVar.colorInfo;
+  const ringOffset = RING_CIRCUM * (1 - progressPercent / 100);
+
   const toggleExpanded = () => setExpanded(!expanded);
 
   return (
@@ -144,7 +153,28 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
         {/* Header */}
         <Flexbox horizontal align="center" gap={8} justify="space-between">
           <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
-            <Icon icon={ListTodo} size={16} style={{ color: cssVar.colorPrimary, flexShrink: 0 }} />
+            <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
+              <circle
+                className={styles.ringTrack}
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                fill="none"
+                r={RING_RADIUS}
+                strokeWidth={RING_STROKE}
+              />
+              <circle
+                className={styles.ringProgress}
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                fill="none"
+                r={RING_RADIUS}
+                stroke={ringColor}
+                strokeDasharray={RING_CIRCUM}
+                strokeDashoffset={ringOffset}
+                strokeLinecap="round"
+                strokeWidth={RING_STROKE}
+              />
+            </svg>
             <span className={cx(styles.header, isAIGenerating && shinyTextStyles.shinyText)}>
               {currentPendingTask?.text ||
                 t('todoProgress.allCompleted', { defaultValue: 'All tasks completed' })}
@@ -160,13 +190,6 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
             size={16}
             style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
           />
-        </Flexbox>
-
-        {/* Progress Bar */}
-        <Flexbox horizontal gap={8} style={{ marginTop: 8 }}>
-          <div className={styles.progress}>
-            <div className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
-          </div>
         </Flexbox>
 
         {/* Expandable Todo List */}
