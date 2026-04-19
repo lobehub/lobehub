@@ -8,7 +8,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { selectTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
+import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { shinyTextStyles } from '@/styles';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
@@ -121,9 +121,11 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
   const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
 
-  // Extract todos from messages
+  // Extract todos produced within the current agent turn (after the last user
+  // message). Older turns' todos intentionally drop out so a new operation
+  // doesn't keep a stale completed progress bar on screen.
   const todos: StepContextTodos | undefined = useMemo(
-    () => selectTodosFromMessages(dbMessages),
+    () => selectCurrentTurnTodosFromMessages(dbMessages),
     [dbMessages],
   );
 
