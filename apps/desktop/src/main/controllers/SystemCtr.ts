@@ -10,6 +10,7 @@ import type {
   GitBranchListItem,
   GitCheckoutResult,
   GitLinkedPullRequestResult,
+  GitWorkingTreeFiles,
   GitWorkingTreeStatus,
   ThemeMode,
 } from '@lobechat/electron-client-ipc';
@@ -426,6 +427,49 @@ export default class SystemController extends ControllerModule {
       return { added, clean: total === 0, deleted, modified, total };
     } catch {
       return { added: 0, clean: true, deleted: 0, modified: 0, total: 0 };
+    }
+  }
+
+  /**
+   * Return dirty file paths bucketed into added / modified / deleted.
+   * Same classification as getGitWorkingTreeStatus, but with per-file paths.
+   * For renames (`R old -> new`) the destination path is reported.
+   */
+  @IpcMethod()
+  async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
+    const execFileAsync = promisify(execFile);
+    const added: string[] = [];
+    const modified: string[] = [];
+    const deleted: string[] = [];
+    try {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
+        cwd: dirPath,
+        timeout: 5000,
+      });
+      for (const line of stdout.split('\n')) {
+        if (line.length < 3) continue;
+        const x = line[0];
+        const y = line[1];
+        // Porcelain format: `XY <path>` — path starts at index 3; renames use `old -> new`
+        const rest = line.slice(3);
+        const arrowIdx = rest.indexOf(' -> ');
+        const filePath = arrowIdx === -1 ? rest : rest.slice(arrowIdx + 4);
+        if (!filePath) continue;
+        if (x === '?' && y === '?') {
+          added.push(filePath);
+        } else if (x === '!' && y === '!') {
+          // ignored — skip
+        } else if (x === 'D' || y === 'D') {
+          deleted.push(filePath);
+        } else if (x === 'A' || y === 'A') {
+          added.push(filePath);
+        } else {
+          modified.push(filePath);
+        }
+      }
+      return { added, deleted, modified };
+    } catch {
+      return { added: [], deleted: [], modified: [] };
     }
   }
 

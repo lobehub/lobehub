@@ -4,6 +4,7 @@ import {
   type GitBranchListItem,
   type GitCheckoutResult,
   type GitLinkedPullRequestResult,
+  type GitWorkingTreeFiles,
   type GitWorkingTreeStatus,
   type WindowMinimumSizeParams,
   type WindowSizeParams,
@@ -108,6 +109,10 @@ class ElectronSystemService {
 
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
     return this.ipc.system.getGitWorkingTreeStatus(dirPath);
+  }
+
+  async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
+    return this.ipc.system.getGitWorkingTreeFiles(dirPath);
   }
 
   async checkoutGitBranch(params: {
