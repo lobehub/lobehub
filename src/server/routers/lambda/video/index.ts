@@ -1,6 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
-import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { after } from 'next/server';
@@ -291,10 +294,14 @@ export const videoRouter = router({
             metadata: {
               asyncTaskId,
               generationBatchId: createdBatch.id,
-              modelId: model,
               topicId: generationTopicId,
+              ...buildMappedBusinessModelFields({
+                provider,
+                requestedModelId: resolvedModelId === model ? undefined : model,
+                resolvedModelId,
+              }),
             },
-            model,
+            model: resolvedModelId,
             prechargeResult,
             provider,
             userId,
