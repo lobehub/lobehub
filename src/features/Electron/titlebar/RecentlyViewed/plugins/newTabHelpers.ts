@@ -1,5 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 import { useChatStore } from '@/store/chat';
+import { usePageStore } from '@/store/page';
 
 import { type CachedPageData, type PageReference } from '../types';
 import { type NewTabAction, type NewTabActionResult, type PluginContext } from './types';
@@ -77,6 +78,33 @@ export const buildGroupNewTopicAction = (
 
       const cached: CachedPageData = {
         title: defaultTitle,
+      };
+
+      return { cached, reference };
+    },
+  };
+};
+
+/**
+ * Build a NewTabAction that creates a fresh untitled page document and
+ * returns a `page` reference pointing to it.
+ */
+export const buildPageNewTabAction = (ctx: PluginContext): NewTabAction => {
+  return {
+    onCreate: async (): Promise<NewTabActionResult | null> => {
+      const untitled = ctx.t('pageList.untitled', { ns: 'file' });
+      const newPage = await usePageStore.getState().createPage({ content: '', title: untitled });
+
+      const pageId = newPage.id;
+      const reference: PageReference<'page'> = {
+        id: `page:${pageId}`,
+        lastVisited: Date.now(),
+        params: { pageId },
+        type: 'page',
+      };
+
+      const cached: CachedPageData = {
+        title: newPage.title || untitled,
       };
 
       return { cached, reference };
