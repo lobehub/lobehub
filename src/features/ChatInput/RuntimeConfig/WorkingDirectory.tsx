@@ -14,6 +14,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { addRecentDir, getRecentDirs, type RecentDirEntry, removeRecentDir } from './recentDirs';
+import { useRepoType } from './useRepoType';
 
 const styles = createStaticStyles(({ css }) => ({
   chooseFolderItem: css`
@@ -102,6 +103,15 @@ const renderDirIcon = (repoType?: 'git' | 'github'): ReactNode => {
     <Icon icon={repoType === 'git' ? GitBranchIcon : FolderIcon} size={16} style={iconStyle} />
   );
 };
+
+// Backfills `repoType` for entries cached before detection supported submodule /
+// worktree layouts — `useRepoType` probes and updates the recents cache.
+const RecentDirIcon = memo<{ entry: RecentDirEntry }>(({ entry }) => {
+  const probed = useRepoType(entry.path);
+  return <>{renderDirIcon(entry.repoType ?? probed)}</>;
+});
+
+RecentDirIcon.displayName = 'RecentDirIcon';
 
 interface WorkingDirectoryContentProps {
   agentId: string;
@@ -223,7 +233,7 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
               key={entry.path}
               onClick={() => selectDir(entry)}
             >
-              {renderDirIcon(entry.repoType)}
+              <RecentDirIcon entry={entry} />
               <Flexbox flex={1} style={{ minWidth: 0 }}>
                 <div className={styles.dirName}>{getDirName(entry.path)}</div>
                 <div className={styles.dirPath}>{entry.path}</div>
