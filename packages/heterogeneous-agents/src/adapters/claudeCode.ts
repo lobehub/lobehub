@@ -335,11 +335,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // Synthesize pluginState for tools whose input IS the target state.
       // TodoWrite is currently the only such tool; future CC tools (Task,
       // Skill activation, …) extend this same collection point.
+      //
+      // Guard on `is_error`: a failed TodoWrite means the snapshot was never
+      // applied on CC's side, so we must not persist it here either. Since
+      // `selectTodosFromMessages` picks the latest `pluginState.todos` from
+      // any producer, leaking a failed write would overwrite the live todo
+      // UI with changes that never actually happened. Drain the cache either
+      // way so a retry with a fresh tool_use id doesn't inherit stale args.
       const cachedTodoArgs = this.todoWriteInputs.get(toolCallId);
-      const pluginState = cachedTodoArgs
-        ? synthesizeTodoWritePluginState(cachedTodoArgs)
-        : undefined;
       if (cachedTodoArgs) this.todoWriteInputs.delete(toolCallId);
+      const pluginState =
+        cachedTodoArgs && !block.is_error
+          ? synthesizeTodoWritePluginState(cachedTodoArgs)
+          : undefined;
 
       // Emit tool_result for executor to persist content to tool message
       events.push(

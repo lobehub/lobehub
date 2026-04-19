@@ -265,6 +265,71 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.pluginState).toBeUndefined();
     });
 
+    it('does NOT synthesize pluginState when tool_result is marked is_error', () => {
+      // Guard: a failed TodoWrite was never applied on CC's side; persisting
+      // a derived snapshot would let `selectTodosFromMessages` overwrite the
+      // live todo UI with changes that never actually happened.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 't1',
+              input: { todos: [{ activeForm: 'A', content: 'a', status: 'pending' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Invalid todos payload',
+              is_error: true,
+              tool_use_id: 't1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.isError).toBe(true);
+      expect(result!.data.pluginState).toBeUndefined();
+
+      // Cache must still be drained — a later TodoWrite on a new id should
+      // synthesize only from its own args, not inherit the failed one.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            {
+              id: 't2',
+              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const next = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const nextState = next.find((e) => e.type === 'tool_result')!.data.pluginState;
+      expect(nextState.todos.items).toEqual([{ status: 'completed', text: 'b' }]);
+    });
+
     it('drains the cached input so a repeat tool_use id gets a fresh synthesis', () => {
       const adapter = new ClaudeCodeAdapter();
       const first = driveTodoWrite(adapter, {
