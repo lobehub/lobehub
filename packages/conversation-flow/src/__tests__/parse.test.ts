@@ -418,6 +418,63 @@ describe('parse', () => {
     });
   });
 
+  describe('Usage promotion', () => {
+    it('should promote metadata.usage onto the top-level usage field', () => {
+      // UIChatMessage consumers (Extras token badge, tokenCounter) read from
+      // the top-level `usage` field, but executors only write to
+      // `metadata.usage`. `parse` is the single renderer-side transform that
+      // every read flows through, so it owns the promotion.
+      const usage = {
+        inputCacheMissTokens: 6,
+        inputCachedTokens: 16204,
+        inputWriteCacheTokens: 13964,
+        totalInputTokens: 30174,
+        totalOutputTokens: 265,
+        totalTokens: 30439,
+      };
+      const input = [
+        {
+          id: 'u1',
+          role: 'user' as const,
+          content: 'hi',
+          createdAt: 1,
+        },
+        {
+          id: 'a1',
+          role: 'assistant' as const,
+          content: 'hello',
+          parentId: 'u1',
+          metadata: { usage },
+          createdAt: 2,
+        },
+      ];
+
+      const result = parse(input as any[]);
+      const assistant = result.flatList.find((m) => m.id === 'a1');
+      expect(assistant?.usage).toEqual(usage);
+    });
+
+    it('should not overwrite an existing top-level usage', () => {
+      // If a message already carries a top-level `usage` (e.g. aggregated
+      // group-level total), we keep it — `metadata.usage` is only a fallback.
+      const topLevelUsage = { totalTokens: 999, totalInputTokens: 900, totalOutputTokens: 99 };
+      const metaUsage = { totalTokens: 1, totalInputTokens: 1, totalOutputTokens: 0 };
+      const input = [
+        {
+          id: 'a1',
+          role: 'assistant' as const,
+          content: 'hi',
+          createdAt: 1,
+          usage: topLevelUsage,
+          metadata: { usage: metaUsage },
+        },
+      ];
+
+      const result = parse(input as any[]);
+      expect(result.flatList[0]?.usage).toEqual(topLevelUsage);
+    });
+  });
+
   describe('Performance', () => {
     it('should parse 10000 items within 100ms', () => {
       // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)

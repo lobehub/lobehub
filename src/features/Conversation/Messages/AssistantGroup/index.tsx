@@ -177,12 +177,7 @@ const GroupMessage = memo<GroupMessageProps>(
         )}
         {interrupted && <InterruptedHint />}
         {isDevMode && model && (
-          <Usage
-            model={model}
-            performance={performance}
-            provider={provider!}
-            usage={usage ?? metadata?.usage}
-          />
+          <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}
         {reactions.length > 0 && (
           <ReactionDisplay
