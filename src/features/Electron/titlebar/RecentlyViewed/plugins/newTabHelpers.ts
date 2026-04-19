@@ -93,13 +93,11 @@ export const buildPageNewTabAction = (ctx: PluginContext): NewTabAction => {
   return {
     onCreate: async (): Promise<NewTabActionResult | null> => {
       const untitled = ctx.t('pageList.untitled', { ns: 'file' });
-      const pageStore = usePageStore.getState();
-      const newPage = await pageStore.createPage({ content: '', title: untitled });
+      // `createNewPage` runs the full optimistic flow: dispatches the new
+      // document into the sidebar list and sets `selectedPageId`, so the
+      // nav item highlights the new page in sync with the new tab.
+      const pageId = await usePageStore.getState().createNewPage(untitled);
 
-      // Sync the sidebar / PageExplorer list with the newly-created document.
-      await pageStore.refreshDocuments();
-
-      const pageId = newPage.id;
       const reference: PageReference<'page'> = {
         id: `page:${pageId}`,
         lastVisited: Date.now(),
@@ -108,7 +106,7 @@ export const buildPageNewTabAction = (ctx: PluginContext): NewTabAction => {
       };
 
       const cached: CachedPageData = {
-        title: newPage.title || untitled,
+        title: untitled,
       };
 
       return { cached, reference };
