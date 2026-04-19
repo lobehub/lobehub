@@ -384,6 +384,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // The parentId should be the tool message ID from step 1
       const tool1Id = createdIds.find((id) => id.startsWith('tool-'));
       expect(step2Assistant![0].parentId).toBe(tool1Id);
+      // createMessage should carry the adapter provider so step 2's assistant
+      // lands in DB with provider set from the start (no later backfill needed).
+      expect(step2Assistant![0].provider).toBe('claude-code');
     });
 
     it('should fall back to assistant parentId when step has no tools', async () => {
@@ -414,7 +417,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('final content writes (onComplete)', () => {
-    it('should write accumulated content + model to the final assistant message', async () => {
+    it('should write accumulated content + model + provider to the final assistant message', async () => {
       await runWithEvents([
         ccInit(),
         ccAssistant('msg_01', [{ text: 'Hello ', type: 'text' }], {
@@ -427,7 +430,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      // Final updateMessage should include accumulated content + model
+      // Final updateMessage should include accumulated content + model + provider
       const finalWrite = mockUpdateMessage.mock.calls.find(
         ([id, val]: any) => id === 'ast-initial' && val.content === 'Hello world!',
       );
@@ -436,6 +439,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // only the FIRST event per message.id emits turn_metadata, so model stays
       // as 'claude-opus-4-6' from the first event.
       expect(finalWrite![1].model).toBe('claude-opus-4-6');
+      // provider is emitted by the CC adapter on every turn_metadata so it
+      // should ride along with the final content/model write.
+      expect(finalWrite![1].provider).toBe('claude-code');
     });
 
     it('should write accumulated reasoning', async () => {

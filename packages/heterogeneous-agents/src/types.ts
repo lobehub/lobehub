@@ -100,7 +100,7 @@ export interface UsageData {
 
 /**
  * Data shape for `step_complete` events. `phase` disambiguates the subtype:
- *   - `turn_metadata`: per-turn snapshot of model + usage (emitted once per LLM call)
+ *   - `turn_metadata`: per-turn snapshot of model + provider + usage (once per LLM call)
  *   - `result_usage`: authoritative grand total at the end of a session
  */
 export interface StepCompleteData {
@@ -109,6 +109,13 @@ export interface StepCompleteData {
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
   phase: 'turn_metadata' | 'result_usage';
+  /**
+   * Provider identifier for this turn — the CLI / adapter name (e.g.
+   * `claude-code`, `codex`), not the underlying LLM vendor. CLI-wrapped agents
+   * bill via their own subscription so downstream pricing logic keys on the
+   * CLI provider, not on the wrapped model's native vendor.
+   */
+  provider?: string;
   usage?: UsageData;
 }
 

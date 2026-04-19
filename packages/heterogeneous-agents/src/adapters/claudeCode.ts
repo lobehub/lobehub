@@ -191,6 +191,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.makeEvent('step_complete', {
           model: raw.message?.model,
           phase: 'turn_metadata',
+          provider: 'claude-code',
           usage: toUsageData(raw.message?.usage),
         }),
       );

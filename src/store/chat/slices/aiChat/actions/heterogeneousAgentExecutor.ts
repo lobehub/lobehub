@@ -299,6 +299,8 @@ export const executeHeterogeneousAgent = async (
   let accumulatedReasoning = '';
   /** Latest model string — updated per turn, written alongside content on step boundaries. */
   let lastModel: string | undefined;
+  /** Adapter/CLI provider (e.g. `claude-code`) — carried on every turn_metadata. */
+  let lastProvider: string | undefined;
   /**
    * Deferred terminal event (agent_runtime_end or error). We don't forward
    * these to the gateway handler immediately because handler triggers
@@ -392,6 +394,7 @@ export const executeHeterogeneousAgent = async (
           // a healthy run.
           if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
             if (event.data.model) lastModel = event.data.model;
+            if (event.data.provider) lastProvider = event.data.provider;
             const turnUsage = event.data.usage;
             if (turnUsage) {
               persistQueue = persistQueue.then(async () => {
@@ -417,6 +420,7 @@ export const executeHeterogeneousAgent = async (
             const prevContent = accumulatedContent;
             const prevReasoning = accumulatedReasoning;
             const prevModel = lastModel;
+            const prevProvider = lastProvider;
 
             // Reset content accumulators synchronously so new-step chunks go to fresh state
             accumulatedContent = '';
@@ -434,6 +438,7 @@ export const executeHeterogeneousAgent = async (
               if (prevContent) prevUpdate.content = prevContent;
               if (prevReasoning) prevUpdate.reasoning = { content: prevReasoning };
               if (prevModel) prevUpdate.model = prevModel;
+              if (prevProvider) prevUpdate.provider = prevProvider;
               if (Object.keys(prevUpdate).length > 0) {
                 await messageService
                   .updateMessage(currentAssistantMessageId, prevUpdate, {
@@ -456,6 +461,7 @@ export const executeHeterogeneousAgent = async (
                 content: '',
                 model: lastModel,
                 parentId: stepParentId,
+                provider: lastProvider,
                 role: 'assistant',
                 topicId: context.topicId ?? undefined,
               });
@@ -548,6 +554,7 @@ export const executeHeterogeneousAgent = async (
         if (accumulatedContent) updateValue.content = accumulatedContent;
         if (accumulatedReasoning) updateValue.reasoning = { content: accumulatedReasoning };
         if (lastModel) updateValue.model = lastModel;
+        if (lastProvider) updateValue.provider = lastProvider;
 
         if (Object.keys(updateValue).length > 0) {
           await messageService

@@ -288,6 +288,7 @@ describe('ClaudeCodeAdapter', () => {
       );
       expect(meta).toBeDefined();
       expect(meta!.data.model).toBe('claude-sonnet-4-6');
+      expect(meta!.data.provider).toBe('claude-code');
       // Adapter normalizes Anthropic shape → UsageData with no cache tokens.
       expect(meta!.data.usage).toEqual({
         inputCacheMissTokens: 100,
