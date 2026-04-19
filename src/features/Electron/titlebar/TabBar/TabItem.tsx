@@ -1,6 +1,13 @@
 'use client';
 
-import { ActionIcon, ContextMenuTrigger, Flexbox, type GenericItemType, Icon } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  ContextMenuTrigger,
+  Flexbox,
+  type GenericItemType,
+  Icon,
+} from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -91,7 +98,17 @@ const TabItem = memo<TabItemProps>(
           gap={6}
           onClick={handleClick}
         >
-          {item.icon && <Icon className={styles.tabIcon} icon={item.icon} size="small" />}
+          {item.avatar ? (
+            <Avatar
+              emojiScaleWithBackground
+              avatar={item.avatar}
+              background={item.backgroundColor}
+              shape="square"
+              size={16}
+            />
+          ) : (
+            item.icon && <Icon className={styles.tabIcon} icon={item.icon} size="small" />
+          )}
           <span className={styles.tabTitle}>{item.title}</span>
           <ActionIcon
             className={cx('closeIcon', styles.closeIcon)}
