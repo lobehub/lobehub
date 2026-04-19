@@ -161,25 +161,35 @@ export default class GitController extends ControllerModule {
   }
 
   /**
-   * Bucket dirty files into added / modified / deleted via `git status --porcelain`.
+   * Bucket dirty files into added / modified / deleted via `git status --porcelain -z`.
    * Each file is counted once: untracked (`??`) and staged-add (`A`) → added,
    * any `D` in index or working tree → deleted, everything else (`M`/`R`/`C`/`T`/`U`) → modified.
+   *
+   * Uses `-z` so paths are NUL-terminated (no C-style quoting, no `\n` splitting bugs).
+   * Rename/copy entries (`R`/`C`) emit two NUL-separated tokens — dest path then source
+   * path — so the source token must be consumed to keep counts correct.
    */
   @IpcMethod()
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
     const execFileAsync = promisify(execFile);
     try {
-      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
         cwd: dirPath,
         timeout: 5000,
       });
+      const tokens = stdout.split('\0');
       let added = 0;
       let modified = 0;
       let deleted = 0;
-      for (const line of stdout.split('\n')) {
-        if (line.length < 2) continue;
-        const x = line[0];
-        const y = line[1];
+      let i = 0;
+      while (i < tokens.length) {
+        const entry = tokens[i];
+        i++;
+        if (entry.length < 2) continue;
+        const x = entry[0];
+        const y = entry[1];
+        // R/C entries carry an extra source-path token we must consume.
+        if (x === 'R' || x === 'C') i++;
         if (x === '?' && y === '?') {
           added++;
         } else if (x === '!' && y === '!') {
@@ -202,7 +212,11 @@ export default class GitController extends ControllerModule {
   /**
    * Return dirty file paths bucketed into added / modified / deleted.
    * Same classification as getGitWorkingTreeStatus, but with per-file paths.
-   * For renames (`R old -> new`) the destination path is reported.
+   *
+   * Uses `git status --porcelain -z` so paths are NUL-terminated and never C-quoted,
+   * which avoids misparsing filenames that legitimately contain ` -> `, quote chars,
+   * or newlines. For R/C entries the two NUL-separated tokens are `DEST\0SRC`; we
+   * report DEST (the current working-tree path) and discard SRC.
    */
   @IpcMethod()
   async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
@@ -211,18 +225,21 @@ export default class GitController extends ControllerModule {
     const modified: string[] = [];
     const deleted: string[] = [];
     try {
-      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
         cwd: dirPath,
         timeout: 5000,
       });
-      for (const line of stdout.split('\n')) {
-        if (line.length < 3) continue;
-        const x = line[0];
-        const y = line[1];
-        // Porcelain format: `XY <path>` — path starts at index 3; renames use `old -> new`
-        const rest = line.slice(3);
-        const arrowIdx = rest.indexOf(' -> ');
-        const filePath = arrowIdx === -1 ? rest : rest.slice(arrowIdx + 4);
+      const tokens = stdout.split('\0');
+      let i = 0;
+      while (i < tokens.length) {
+        const entry = tokens[i];
+        i++;
+        if (entry.length < 3) continue;
+        const x = entry[0];
+        const y = entry[1];
+        const filePath = entry.slice(3);
+        // R/C entries carry an extra source-path token we must consume.
+        if (x === 'R' || x === 'C') i++;
         if (!filePath) continue;
         if (x === '?' && y === '?') {
           added.push(filePath);
