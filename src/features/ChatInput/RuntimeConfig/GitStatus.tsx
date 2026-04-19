@@ -13,25 +13,15 @@ import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 import WorkingTreeFilesContent from './WorkingTreeFilesContent';
 
 const styles = createStaticStyles(({ css }) => ({
-  aheadBehind: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorTextSecondary};
-  `,
   aheadBehindItem: css`
     display: inline-flex;
-    gap: 2px;
+    gap: 0;
     align-items: center;
+
+    margin-inline-start: -2px;
+
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
   `,
   aheadStat: css`
     color: ${cssVar.colorInfo};
@@ -178,35 +168,32 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
             })
           : undefined;
 
-  const aheadBehindNode =
-    showAhead || showBehind ? (
-      <Tooltip title={aheadBehindTooltip}>
-        <div className={styles.aheadBehind}>
-          {showBehind && (
-            <span className={`${styles.aheadBehindItem} ${styles.behindStat}`}>
-              <Icon icon={ArrowDownIcon} size={12} />
-              {aheadBehind!.behind}
-            </span>
-          )}
-          {showAhead && (
-            <span className={`${styles.aheadBehindItem} ${styles.aheadStat}`}>
-              <Icon icon={ArrowUpIcon} size={12} />
-              {aheadBehind!.ahead}
-            </span>
-          )}
-        </div>
-      </Tooltip>
-    ) : null;
+  const combinedBranchTooltip =
+    branchTooltip && aheadBehindTooltip
+      ? `${branchTooltip} · ${aheadBehindTooltip}`
+      : (branchTooltip ?? aheadBehindTooltip);
 
   const branchTrigger = (
     <div className={styles.trigger}>
       <Icon icon={GitBranchIcon} size={12} />
       <span className={styles.branchLabel}>{data.branch}</span>
+      {showBehind && (
+        <span className={`${styles.aheadBehindItem} ${styles.behindStat}`}>
+          <Icon icon={ArrowDownIcon} size={10} />
+          {aheadBehind!.behind}
+        </span>
+      )}
+      {showAhead && (
+        <span className={`${styles.aheadBehindItem} ${styles.aheadStat}`}>
+          <Icon icon={ArrowUpIcon} size={10} />
+          {aheadBehind!.ahead}
+        </span>
+      )}
     </div>
   );
 
   const branchNode = data.detached ? (
-    <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+    <Tooltip title={combinedBranchTooltip}>{branchTrigger}</Tooltip>
   ) : (
     <BranchSwitcher
       currentBranch={data.branch}
@@ -222,7 +209,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
         await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
       }}
     >
-      <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+      <Tooltip title={combinedBranchTooltip}>{branchTrigger}</Tooltip>
     </BranchSwitcher>
   );
 
@@ -265,7 +252,6 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
       <div className={styles.separator} />
       {branchNode}
       {diffNode}
-      {aheadBehindNode}
       {data.pullRequest && (
         <>
           <div className={styles.separator} />
