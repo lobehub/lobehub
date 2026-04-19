@@ -22,7 +22,7 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'regenerate',
   'del',
 ];
-const EMPTY_GROUP_BAR: MessageActionSlot[] = ['continueGeneration', 'delAndRegenerate', 'del'];
+const IN_PROGRESS_BAR: MessageActionSlot[] = ['del'];
 
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;
@@ -39,9 +39,10 @@ export const GroupActionsBar = memo<GroupActionsProps>(
       [contentBlock, data, id],
     );
 
-    // Empty group (no assistant content) — only allows continuing / reset / delete
+    // No finalized text block yet (group is either empty or last child is a
+    // still-running tool call). Only delete is meaningful here.
     if (!contentId) {
-      return <MessageActionBar bar={actionsConfig?.bar ?? EMPTY_GROUP_BAR} ctx={ctx} />;
+      return <MessageActionBar bar={IN_PROGRESS_BAR} ctx={ctx} />;
     }
 
     const defaultBar = data.tools ? DEFAULT_BAR_WITH_TOOLS : DEFAULT_BAR;
