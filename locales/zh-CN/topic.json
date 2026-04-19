@@ -1,5 +1,6 @@
 {
   "actions.addNewTopic": "开启新话题",
+  "actions.addNewTopicInProject": "在 {{directory}} 中开启新话题",
   "actions.autoRename": "智能重命名",
   "actions.confirmRemoveAll": "您即将删除所有话题，此操作无法撤销。",
   "actions.confirmRemoveTopic": "您即将删除此话题，此操作无法撤销。",
