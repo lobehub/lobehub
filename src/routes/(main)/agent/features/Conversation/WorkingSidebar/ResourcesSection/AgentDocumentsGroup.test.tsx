@@ -7,10 +7,37 @@ import AgentDocumentsGroup from './AgentDocumentsGroup';
 const useClientDataSWR = vi.fn();
 
 vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
+  ActionIcon: ({ onClick, title }: { onClick?: (e: React.MouseEvent) => void; title?: string }) => (
+    <button aria-label={title} onClick={onClick}>
+      {title}
+    </button>
+  ),
+  Center: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
+  Flexbox: ({
+    children,
+    onClick,
+    ...props
+  }: {
+    children?: ReactNode;
+    onClick?: () => void;
+    [key: string]: unknown;
+  }) => (
+    <div onClick={onClick} {...props}>
+      {children}
+    </div>
   ),
   Text: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('antd', () => ({
+  App: {
+    useApp: () => ({
+      message: { error: vi.fn(), success: vi.fn() },
+      modal: { confirm: vi.fn() },
+    }),
+  },
+  Spin: () => <div data-testid="spin" />,
 }));
 
 vi.mock('@/libs/swr', () => ({
@@ -22,12 +49,11 @@ vi.mock('react-i18next', () => ({
     t: (key: string) =>
       (
         ({
-          'workingPanel.agentDocuments': 'Agent Documents',
           'workingPanel.resources.empty': 'No agent documents yet',
           'workingPanel.resources.error': 'Failed to load resources',
-          'workingPanel.resources.loading': 'Loading resources...',
-          'workingPanel.resources.previewError': 'Failed to load preview',
-          'workingPanel.resources.previewLoading': 'Loading preview...',
+          'workingPanel.resources.filter.all': 'All',
+          'workingPanel.resources.filter.documents': 'Documents',
+          'workingPanel.resources.filter.web': 'Web',
         }) as Record<string, string>
       )[key] || key,
   }),
@@ -36,9 +62,11 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentSWRKeys: {
     documents: (agentId: string) => ['agent-documents', agentId],
+    documentsList: (agentId: string) => ['agent-documents-list', agentId],
   },
   agentDocumentService: {
     getDocuments: vi.fn(),
+    removeDocument: vi.fn(),
   },
 }));
 
@@ -47,24 +75,18 @@ vi.mock('@/store/agent', () => ({
     selector({ activeAgentId: 'agent-1' }),
 }));
 
-vi.mock('@/features/FileTree', () => ({
-  default: ({
-    onSelectFile,
-    resourceTree,
-  }: {
-    onSelectFile: (path: string) => void;
-    resourceTree: Array<{ children?: Array<{ name: string; path: string }> }>;
-  }) => (
-    <div>
-      {resourceTree.flatMap((node) =>
-        (node.children || []).map((child) => (
-          <button key={child.path} onClick={() => onSelectFile(child.path)}>
-            {child.name}
-          </button>
-        )),
-      )}
-    </div>
-  ),
+const openDocument = vi.fn();
+const closeDocument = vi.fn();
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ closeDocument, openDocument, portalStack: [] }),
+}));
+
+vi.mock('@/store/chat/selectors', () => ({
+  chatPortalSelectors: {
+    portalDocumentId: () => null,
+  },
 }));
 
 describe('AgentDocumentsGroup', () => {
@@ -72,26 +94,109 @@ describe('AgentDocumentsGroup', () => {
     useClientDataSWR.mockReset();
   });
 
-  it('renders documents and delegates selection to parent', async () => {
-    const onSelectDocument = vi.fn();
-
+  it('renders documents and opens via openDocument', async () => {
     useClientDataSWR.mockImplementation((key: unknown) => {
-      if (Array.isArray(key) && key[0] === 'agent-documents') {
+      if (Array.isArray(key) && key[0] === 'agent-documents-list') {
         return {
-          data: [{ filename: 'brief.md', id: 'doc-1', templateId: 'claw', title: 'Brief' }],
+          data: [
+            {
+              createdAt: new Date('2026-04-16T00:00:00Z'),
+              description: 'A short brief',
+              documentId: 'doc-content-1',
+              filename: 'brief.md',
+              id: 'doc-1',
+              sourceType: 'file',
+              templateId: 'claw',
+              title: 'Brief',
+            },
+          ],
           error: undefined,
           isLoading: false,
+          mutate: vi.fn(),
         };
       }
 
-      return { data: undefined, error: undefined, isLoading: false };
+      return { data: undefined, error: undefined, isLoading: false, mutate: vi.fn() };
     });
 
-    render(<AgentDocumentsGroup selectedDocumentId={null} onSelectDocument={onSelectDocument} />);
+    render(<AgentDocumentsGroup />);
 
-    expect(await screen.findByText('brief.md')).toBeInTheDocument();
+    const item = await screen.findByText('Brief');
+    expect(item).toBeInTheDocument();
+    expect(screen.getByText('A short brief')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('brief.md'));
-    expect(onSelectDocument).toHaveBeenCalledWith('doc-1');
+    fireEvent.click(item);
+    expect(openDocument).toHaveBeenCalledWith('doc-content-1');
+  });
+
+  it('filters documents by source type via segmented tabs', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'File doc',
+          documentId: 'doc-content-1',
+          filename: 'brief.md',
+          id: 'doc-1',
+          sourceType: 'file',
+          templateId: 'claw',
+          title: 'Brief',
+        },
+        {
+          createdAt: new Date('2026-04-16T00:00:00Z'),
+          description: 'Crawled page',
+          documentId: 'doc-content-2',
+          filename: 'example.com',
+          id: 'doc-2',
+          sourceType: 'web',
+          templateId: null,
+          title: 'Example',
+        },
+      ],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    expect(screen.getByText('Brief')).toBeInTheDocument();
+    expect(screen.getByText('Example')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Web'));
+
+    expect(screen.queryByText('Brief')).not.toBeInTheDocument();
+    expect(screen.getByText('Example')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Documents'));
+
+    expect(screen.getByText('Brief')).toBeInTheDocument();
+    expect(screen.queryByText('Example')).not.toBeInTheDocument();
+  });
+
+  it('renders empty state when no documents', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    expect(screen.getByText('No agent documents yet')).toBeInTheDocument();
+  });
+
+  it('renders error state', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [],
+      error: new Error('oops'),
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    expect(screen.getByText('Failed to load resources')).toBeInTheDocument();
   });
 });

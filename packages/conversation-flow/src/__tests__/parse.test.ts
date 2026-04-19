@@ -418,6 +418,125 @@ describe('parse', () => {
     });
   });
 
+  describe('Usage promotion', () => {
+    it('should promote metadata.usage onto the top-level usage field', () => {
+      // UIChatMessage consumers (Extras token badge, tokenCounter) read from
+      // the top-level `usage` field, but executors only write to
+      // `metadata.usage`. `parse` is the single renderer-side transform that
+      // every read flows through, so it owns the promotion.
+      const usage = {
+        inputCacheMissTokens: 6,
+        inputCachedTokens: 16204,
+        inputWriteCacheTokens: 13964,
+        totalInputTokens: 30174,
+        totalOutputTokens: 265,
+        totalTokens: 30439,
+      };
+      const input = [
+        {
+          id: 'u1',
+          role: 'user' as const,
+          content: 'hi',
+          createdAt: 1,
+        },
+        {
+          id: 'a1',
+          role: 'assistant' as const,
+          content: 'hello',
+          parentId: 'u1',
+          metadata: { usage },
+          createdAt: 2,
+        },
+      ];
+
+      const result = parse(input as any[]);
+      const assistant = result.flatList.find((m) => m.id === 'a1');
+      expect(assistant?.usage).toEqual(usage);
+    });
+
+    it('should not overwrite an existing top-level usage', () => {
+      // If a message already carries a top-level `usage` (e.g. aggregated
+      // group-level total), we keep it — `metadata.usage` is only a fallback.
+      const topLevelUsage = { totalTokens: 999, totalInputTokens: 900, totalOutputTokens: 99 };
+      const metaUsage = { totalTokens: 1, totalInputTokens: 1, totalOutputTokens: 0 };
+      const input = [
+        {
+          id: 'a1',
+          role: 'assistant' as const,
+          content: 'hi',
+          createdAt: 1,
+          usage: topLevelUsage,
+          metadata: { usage: metaUsage },
+        },
+      ];
+
+      const result = parse(input as any[]);
+      expect(result.flatList[0]?.usage).toEqual(topLevelUsage);
+    });
+
+    it('should aggregate per-step nested metadata.usage across an assistantGroup chain', () => {
+      // Hetero-agent (Claude Code) writes per-turn usage to `metadata.usage` on
+      // each step assistant message. The assistantGroup virtual message must
+      // sum them — without this, the UI shows only one step's tokens (typically
+      // the last step, which gets surfaced via the lone metadata.usage that
+      // survived Object.assign collapse).
+      const step1Usage = {
+        inputCachedTokens: 100,
+        totalInputTokens: 200,
+        totalOutputTokens: 50,
+        totalTokens: 250,
+      };
+      const step2Usage = {
+        inputCachedTokens: 300,
+        totalInputTokens: 400,
+        totalOutputTokens: 80,
+        totalTokens: 480,
+      };
+      const input = [
+        {
+          id: 'u1',
+          role: 'user' as const,
+          content: 'q',
+          createdAt: 1,
+        },
+        {
+          id: 'a1',
+          role: 'assistant' as const,
+          content: '',
+          parentId: 'u1',
+          tools: [{ id: 'call-1', type: 'default', apiName: 'bash', arguments: '{}' }],
+          metadata: { usage: step1Usage },
+          createdAt: 2,
+        },
+        {
+          id: 't1',
+          role: 'tool' as const,
+          content: 'tool output',
+          parentId: 'a1',
+          tool_call_id: 'call-1',
+          createdAt: 3,
+        },
+        {
+          id: 'a2',
+          role: 'assistant' as const,
+          content: 'final answer',
+          parentId: 't1',
+          metadata: { usage: step2Usage },
+          createdAt: 4,
+        },
+      ];
+
+      const result = parse(input as any[]);
+      const group = result.flatList.find((m) => m.role === 'assistantGroup');
+      expect(group?.usage).toEqual({
+        inputCachedTokens: 400,
+        totalInputTokens: 600,
+        totalOutputTokens: 130,
+        totalTokens: 730,
+      });
+    });
+  });
+
   describe('Performance', () => {
     it('should parse 10000 items within 100ms', () => {
       // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)

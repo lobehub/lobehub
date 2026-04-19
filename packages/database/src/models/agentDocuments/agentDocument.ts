@@ -78,11 +78,52 @@ export class AgentDocumentModel {
       policyLoadFormat,
       policyLoadPosition: settings.policyLoadPosition,
       policyLoadRule: settings.policyLoadRule,
+      source: doc.source ?? null,
+      sourceType: doc.sourceType,
       templateId: settings.templateId ?? null,
       title: doc.title ?? doc.filename ?? '',
       updatedAt: settings.updatedAt,
       userId: settings.userId,
     };
+  }
+
+  async associate(params: {
+    agentId: string;
+    documentId: string;
+    policyLoad?: PolicyLoad;
+  }): Promise<{ id: string }> {
+    const { agentId, documentId, policyLoad } = params;
+
+    // Verify the document belongs to the current user
+    const doc = await this.db.query.documents.findFirst({
+      where: and(eq(documents.id, documentId), eq(documents.userId, this.userId)),
+    });
+
+    if (!doc) return { id: '' };
+
+    const [result] = await this.db
+      .insert(agentDocuments)
+      .values({
+        accessPublic: 0,
+        accessSelf:
+          AgentAccess.EXECUTE |
+          AgentAccess.LIST |
+          AgentAccess.READ |
+          AgentAccess.WRITE |
+          AgentAccess.DELETE,
+        accessShared: 0,
+        agentId,
+        documentId,
+        policyLoad: policyLoad ?? PolicyLoad.PROGRESSIVE,
+        policyLoadFormat: DocumentLoadFormat.RAW,
+        policyLoadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
+        policyLoadRule: DocumentLoadRule.ALWAYS,
+        userId: this.userId,
+      })
+      .onConflictDoNothing()
+      .returning({ id: agentDocuments.id });
+
+    return { id: result?.id };
   }
 
   async create(
@@ -97,6 +138,7 @@ export class AgentDocumentModel {
       policy?: AgentDocumentPolicy;
       policyLoad?: PolicyLoad;
       templateId?: string;
+      title?: string;
       updatedAt?: Date;
     },
   ): Promise<AgentDocument> {
@@ -108,10 +150,11 @@ export class AgentDocumentModel {
       policy,
       policyLoad,
       templateId,
+      title: providedTitle,
       updatedAt,
     } = params ?? {};
 
-    const title = filename.replace(/\.[^.]+$/, '');
+    const title = providedTitle?.trim() || filename.replace(/\.[^.]+$/, '');
     const stats = this.getDocumentStats(content);
     const normalizedPolicy = normalizePolicy(loadPosition, loadRules, policy);
 
@@ -249,7 +292,7 @@ export class AgentDocumentModel {
     const title = newTitle.trim();
     if (!title) return existing;
 
-    const filename = buildDocumentFilename(title, existing.filename);
+    const filename = buildDocumentFilename(title);
     const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
 
     await this.db
@@ -270,10 +313,11 @@ export class AgentDocumentModel {
 
     const title = newTitle?.trim();
     const filename = title
-      ? buildDocumentFilename(title, existing.filename)
+      ? buildDocumentFilename(title)
       : `copy-${Date.now()}-${existing.filename}`;
 
     return this.create(existing.agentId, filename, existing.content, {
+      title,
       loadPosition:
         (existing.policy?.context?.position as DocumentLoadPosition | undefined) ||
         DocumentLoadPosition.BEFORE_FIRST_USER,

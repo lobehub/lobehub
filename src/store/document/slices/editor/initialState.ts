@@ -26,6 +26,7 @@ export interface EditorContentState {
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
+
   /**
    * Whether there are unsaved changes
    */
@@ -87,6 +88,7 @@ export const createInitialEditorContentState = (
 ): EditorContentState => ({
   content: '',
   editorData: null,
+
   isDirty: false,
   lastSavedContent: '',
   lastSavedEditorData: null,

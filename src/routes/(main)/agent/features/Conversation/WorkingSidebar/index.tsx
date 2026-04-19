@@ -1,62 +1,56 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { PanelRightCloseIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import NavHeader from '@/features/NavHeader';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import RightPanel from '@/features/RightPanel';
 import { useGlobalStore } from '@/store/global';
 
-import AgentDocumentEditorPanel from './AgentDocumentEditorPanel';
+import ProgressSection from './ProgressSection';
 import ResourcesSection from './ResourcesSection';
 
-interface AgentWorkingSidebarProps {
-  onSelectDocument: (id: string | null) => void;
-  selectedDocumentId: string | null;
-}
+const styles = createStaticStyles(({ css }) => ({
+  body: css`
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  `,
+  header: css`
+    flex-shrink: 0;
+  `,
+}));
 
-const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(
-  ({ onSelectDocument, selectedDocumentId }) => {
-    const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
-    const isDocumentMode = Boolean(selectedDocumentId);
+const AgentWorkingSidebar = memo(() => {
+  const { t } = useTranslation('chat');
+  const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
 
-    return (
-      <RightPanel defaultWidth={360} maxWidth={720} minWidth={300}>
-        {isDocumentMode ? (
-          <AgentDocumentEditorPanel
-            selectedDocumentId={selectedDocumentId}
-            onClose={() => onSelectDocument(null)}
+  return (
+    <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
+      <Flexbox height={'100%'} width={'100%'}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.header}
+          height={44}
+          justify={'space-between'}
+          paddingInline={16}
+        >
+          <Text strong>{t('workingPanel.resources')}</Text>
+          <ActionIcon
+            icon={PanelRightCloseIcon}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            onClick={() => toggleRightPanel(false)}
           />
-        ) : (
-          <Flexbox height={'100%'} width={'100%'}>
-            <NavHeader
-              showTogglePanelButton={false}
-              right={
-                <ActionIcon
-                  icon={PanelRightCloseIcon}
-                  size={DESKTOP_HEADER_ICON_SIZE}
-                  onClick={() => toggleRightPanel(false)}
-                />
-              }
-              style={{
-                paddingBlock: 8,
-                paddingInline: 8,
-                position: 'absolute',
-              }}
-            />
-            <Flexbox gap={8} height={'100%'} style={{ overflowY: 'auto' }} width={'100%'}>
-              {/* <AgentSummary /> */}
-              {/*<ProgressSection />*/}
-              <ResourcesSection
-                selectedDocumentId={selectedDocumentId}
-                onSelectDocument={onSelectDocument}
-              />
-            </Flexbox>
-          </Flexbox>
-        )}
-      </RightPanel>
-    );
-  },
-);
+        </Flexbox>
+        <Flexbox className={styles.body} gap={8} width={'100%'}>
+          <ProgressSection />
+          <ResourcesSection />
+        </Flexbox>
+      </Flexbox>
+    </RightPanel>
+  );
+});
 
 export default AgentWorkingSidebar;

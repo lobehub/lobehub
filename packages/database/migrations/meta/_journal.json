@@ -686,6 +686,13 @@
       "when": 1774548140282,
       "tag": "0097_add_agent_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1776234919716,
+      "tag": "0098_add_document_history",
+      "breakpoints": true
     }
   ],
   "version": "6"

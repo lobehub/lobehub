@@ -62,7 +62,7 @@ export const TOOL_HEADLINE_TRUNCATION_SUFFIX = '...';
 
 // ─── Post-tool “final answer” block promotion (Group partition) ───────────
 
-/** Sum of heuristic scores at or above this moves blocks after last tool into answer column while generating. */
+/** Sum of heuristic scores at or above this promotes visible prose out of workflow chrome. */
 export const POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD = 3;
 
 /** Add this score when compacted prose length ≥ this (long answer signal). */

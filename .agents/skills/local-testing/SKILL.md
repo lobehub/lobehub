@@ -173,6 +173,10 @@ agent-browser state save auth.json
 agent-browser state load auth.json
 ```
 
+### LobeHub dev server — inject better-auth cookie
+
+`agent-browser --headed` on macOS can create an off-screen Chromium window, blocking manual login. For a local LobeHub dev server (e.g. `localhost:3011`), copy the `better-auth.session_token` cookie out of a **Network request** in the user's own Chrome DevTools and load it via `state load`. See [references/agent-browser-login.md](./references/agent-browser-login.md) for the full recipe.
+
 ## Semantic Locators (Alternative to Refs)
 
 ```bash

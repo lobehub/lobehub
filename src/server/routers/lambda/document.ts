@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { FREE_DOCUMENT_HISTORY_WINDOW_DAYS } from '@/const/documentHistory';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -7,6 +8,20 @@ import { MessageModel } from '@/database/models/message';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
+
+import {
+  compareDocumentHistoryItemsInputSchema,
+  getDocumentHistoryItemInputSchema,
+  listDocumentHistoryInputSchema,
+  saveDocumentHistoryInputSchema,
+  updateDocumentInputSchema,
+} from './_schema/documentHistory';
+
+const getFreeDocumentHistorySince = () => {
+  const now = Date.now();
+
+  return new Date(now - FREE_DOCUMENT_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+};
 
 const documentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -117,6 +132,47 @@ export const documentRouter = router({
       return ctx.documentService.getDocumentById(input.id);
     }),
 
+  listDocumentHistory: documentProcedure
+    .input(listDocumentHistoryInputSchema)
+    .query(async ({ ctx, input }) => {
+      return ctx.documentService.listDocumentHistory(
+        {
+          ...input,
+          beforeSavedAt: input.beforeSavedAt ? new Date(input.beforeSavedAt) : undefined,
+        },
+        {
+          historySince: getFreeDocumentHistorySince(),
+        },
+      );
+    }),
+
+  getDocumentHistoryItem: documentProcedure
+    .input(getDocumentHistoryItemInputSchema)
+    .query(async ({ ctx, input }) => {
+      return ctx.documentService.getDocumentHistoryItem(input, {
+        historySince: getFreeDocumentHistorySince(),
+      });
+    }),
+
+  compareDocumentHistoryItems: documentProcedure
+    .input(compareDocumentHistoryItemsInputSchema)
+    .query(async ({ ctx, input }) => {
+      return ctx.documentService.compareDocumentHistoryItems(input, {
+        historySince: getFreeDocumentHistorySince(),
+      });
+    }),
+
+  saveDocumentHistory: documentProcedure
+    .input(saveDocumentHistoryInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const editorData = JSON.parse(input.editorData);
+      return ctx.documentService.saveDocumentHistory(
+        input.documentId,
+        editorData,
+        input.saveSource,
+      );
+    }),
+
   getFolderBreadcrumb: documentProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -183,25 +239,16 @@ export const documentRouter = router({
     }),
 
   updateDocument: documentProcedure
-    .input(
-      z.object({
-        content: z.string().optional(),
-        editorData: z.string().optional(),
-        fileType: z.string().optional(),
-        id: z.string(),
-        metadata: z.record(z.any()).optional(),
-        parentId: z.string().nullable().optional(),
-        rawData: z.string().optional(),
-        title: z.string().optional(),
-      }),
-    )
+    .input(updateDocumentInputSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, editorData: editorDataString, ...params } = input;
       // Parse editorData from JSON string to object if present
       const editorData = editorDataString ? JSON.parse(editorDataString) : undefined;
-      return ctx.documentService.updateDocument(id, {
+      const result = await ctx.documentService.updateDocument(id, {
         ...params,
         editorData,
       });
+
+      return result;
     }),
 });

@@ -1,32 +1,64 @@
 ---
-title: 快捷键设置、数据导出与多项功能优化 ⚡
-description: LobeHub v1.49.12 已完整支持 DeepSeek R1 模型，为用户带来前所未有的思维链交互体验
+title: "快捷键自定义、数据导出与服务商扩展"
+description: LobeHub 新增快捷键自定义、数据导出功能，并扩展服务商支持，让日常使用更顺手、数据更可迁移。
 tags:
-  - LobeHub 快捷键
-  - CoT
-  - 思维链
+  - LobeHub
+  - 快捷键
+  - 数据导出
 ---
 
-# 完美集成 DeepSeek R1 ，开启思维链新体验
+# 快捷键自定义、数据导出与服务商扩展
 
-LobeHub 在三月持续优化用户体验，新增快捷键自定义、数据导出等实用功能，并扩展 AI 服务商生态。
+三月的版本聚焦于日常体验的打磨。快捷键现在可以自定义，按你的习惯设置。数据导出让对话记录可以随身携带。新增服务商和优化的推理展示进一步完善了这次更新。
 
-## 🌟 重要更新
+## 符合习惯的键盘快捷键
 
-- ⚡ 快捷键自定义：支持自定义键盘快捷键，打造个性化操作体验
-- 💾 数据导出功能：支持 PGlite 和 PostgreSQL 数据导出，数据安全更有保障
-- 🔮 AI 服务商扩展：新增 Xinference、Cohere、Search1API、Infini-AI、PPIO 等服务商
-- 🧠 推理模型优化：支持推理内容选择器，优化 Claude 3.7、DeepSeek R1 等模型的思维链展示
-- 🌐 网页爬取增强：特别支持 YouTube、Reddit、微信公众号链接，优化短内容爬取，新增 Search1API 爬虫实现
+快捷键现已支持自定义。你可以将常用操作映射到自己觉得顺手的按键上，而不必去适应预设的键位布局。
 
-## 📊 模型库更新
+同时新增了清除对话和删除消息的快捷键。如果你偏好键盘驱动的工作流，这些新增快捷键能减少在快节奏会话中伸手去够鼠标的次数。
 
-新增了多个主流 AI 模型，包括 Google 的 Gemini 2.5 Pro Experimental 和 Gemini 2.0 Flash 系列变体，Anthropic 支持上下文缓存功能，OpenAI 的 gpt-4o-mini-tts 语音模型， DeepSeek-V3-0324 和 Hunyuan-T1-Latest，以及 QwQ、QVQ-Max、文心 ernie-x1-32k-preview 等模型。
+## 数据导出用于备份与迁移
 
-## 💫 体验优化
+PgLite 和 PostgreSQL 后端现已支持数据导出。你可以备份对话记录，或在不同安装环境之间迁移数据，无需手动操作数据库。
 
-- 界面改进：重构 Drawer 样式，优化编辑滚动体验，支持截图分享到剪贴板
-- 搜索增强：支持非函数调用模型（如 DeepSeek R1）使用在线搜索，Wenxin、Hunyuan 支持内置网络搜索
-- 文件处理：新增 EPUB 文件分块支持，优化 PDF 处理
-- 性能提升：重构 Agent Runtime 实现，优化数据库核心代码，修复 LiteLLM 流式使用统计
-- 稳定性修复：解决主题闪烁、知识库、微信登录等多个问题
+这在以下场景尤其有用：
+
+- 归档重要的对话历史
+- 将设置迁移到新设备或服务器
+- 在云端存储之外保留本地备份
+
+## 服务商与推理支持扩展
+
+六个新服务商加入：Xinference、Cohere、Search1API、Infini-AI、PPIO。每个都集成到现有的服务商选择流程中，无需额外配置步骤。
+
+推理模型现在拥有专用的内容选择器，Claude 3.7 和 DeepSeek R1 的思维链展示也得到了优化。推理内容在长对话中更易阅读和定位。
+
+## 更完善的网页爬取能力
+
+网页爬取现在能处理更多内容类型，特别支持 YouTube、Reddit 和微信公众号链接。短内容提取已优化，Search1API 提供了额外的爬虫实现以获得更好的覆盖。
+
+## 模型库更新
+
+本次更新带来多个值得关注的新增模型：
+
+- Google Gemini 2.5 Pro Experimental 和 Gemini 2.0 Flash 系列
+- Anthropic 上下文缓存支持
+- OpenAI gpt-4o-mini-tts 语音模型
+- DeepSeek-V3-0324
+- Hunyuan-T1-Latest
+- QwQ、QVQ-Max
+- 百度文心 ernie-x1-32k-preview
+
+## 体验优化与修复
+
+- 界面改进：重构 Drawer 样式、优化编辑器滚动、支持截图分享至剪贴板
+- 搜索增强：在线搜索现支持非函数调用模型（包括 DeepSeek R1）；为文心和混元增加内置网页搜索
+- 文件处理：新增 EPUB 分块支持，优化 PDF 处理
+- 性能提升：重构 Agent Runtime，优化数据库核心代码，修复 LiteLLM 流式统计
+- 稳定性修复：解决主题闪烁、知识库行为异常、微信登录等问题
+
+## Credits
+
+感谢以下贡献者：
+
+@AmAzing129 @arvinxx @hezhijie0327 @tjx666 @lobehub-team

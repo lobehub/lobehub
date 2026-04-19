@@ -1,12 +1,11 @@
 import { memo, type RefObject } from 'react';
 
-import type { AssistantContentBlock } from '@/types/index';
-
 import ContentBlocksScroll from './ContentBlocksScroll';
+import type { RenderableAssistantContentBlock } from './types';
 
 interface WorkflowExpandedListProps {
   assistantId: string;
-  blocks: AssistantContentBlock[];
+  blocks: RenderableAssistantContentBlock[];
   constrained?: boolean;
   disableEditing?: boolean;
   onScroll?: () => void;

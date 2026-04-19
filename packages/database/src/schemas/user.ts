@@ -25,6 +25,7 @@ export const users = pgTable(
     fullName: text('full_name'),
     interests: varchar('interests', { length: 64 }).array(),
 
+    /** @deprecated */
     isOnboarded: boolean('is_onboarded').default(false),
     agentOnboarding: jsonb('agent_onboarding').$type<UserAgentOnboarding>(),
     onboarding: jsonb('onboarding').$type<UserOnboarding>(),

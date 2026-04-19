@@ -4,8 +4,10 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./components": "./src/components/index.ts",
     "./renders": "./src/Render/index.ts",
-    "./inspectors": "./src/Inspector/index.ts"
+    "./inspectors": "./src/Inspector/index.ts",
+    "./styles": "./src/styles.ts"
   },
   "dependencies": {
     "@lobechat/tool-runtime": "workspace:*"

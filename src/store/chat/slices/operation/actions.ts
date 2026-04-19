@@ -8,8 +8,10 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { DEFAULT_TOPIC_UNREAD_KEY } from './initialState';
 import {
   type AfterCompletionCallback,
+  AI_RUNTIME_OPERATION_TYPES,
   type Operation,
   type OperationCancelContext,
   type OperationContext,
@@ -391,11 +393,9 @@ export class OperationActionsImpl {
 
     // 2. Set isAborting flag immediately for agent-runtime operations.
     // This ensures UI (loading button) responds instantly to user cancellation.
-    // Applies to both client-side (execAgentRuntime) and Gateway-mode
-    // (execServerAgentRuntime) runs — the latter needs the flag so the UI
-    // transitions out of loading right away, without waiting for the
-    // round-trip WS `session_complete` after the server acknowledges interrupt.
-    if (operation.type === 'execAgentRuntime' || operation.type === 'execServerAgentRuntime') {
+    // Applies to all AI runtime operation types so the UI transitions out of
+    // loading right away without waiting for the process to fully terminate.
+    if (AI_RUNTIME_OPERATION_TYPES.includes(operation.type)) {
       this.#get().updateOperationMetadata(operationId, { isAborting: true });
     }
 
@@ -645,50 +645,78 @@ export class OperationActionsImpl {
   markUnreadCompleted = (agentId: string, topicId?: string | null): void => {
     const { activeAgentId, activeTopicId } = this.#get();
 
-    // Only mark when user is NOT currently viewing this agent/topic
-    const isViewingAgent = activeAgentId === agentId;
-    const isViewingTopic = isViewingAgent && (activeTopicId ?? null) === (topicId ?? null);
+    // Only mark when user is NOT currently viewing this exact (agent, topic) pair.
+    // The default (no-topic) conversation is represented by DEFAULT_TOPIC_UNREAD_KEY.
+    const isViewingTopic =
+      activeAgentId === agentId && (activeTopicId ?? null) === (topicId ?? null);
+    if (isViewingTopic) return;
 
-    if (!isViewingAgent) {
-      this.#set(
-        produce((state: ChatStore) => {
-          state.unreadCompletedAgentIds.add(agentId);
-        }),
-        false,
-        n(`markUnreadCompleted/agent/${agentId}`),
-      );
-    }
-
-    if (topicId && !isViewingTopic) {
-      this.#set(
-        produce((state: ChatStore) => {
-          state.unreadCompletedTopicIds.add(topicId);
-        }),
-        false,
-        n(`markUnreadCompleted/topic/${topicId}`),
-      );
-    }
+    const key = topicId ?? DEFAULT_TOPIC_UNREAD_KEY;
+    this.#set(
+      produce((state: ChatStore) => {
+        const existing = state.unreadCompletedTopicsByAgent[agentId];
+        if (existing) {
+          existing.add(key);
+        } else {
+          state.unreadCompletedTopicsByAgent[agentId] = new Set([key]);
+        }
+      }),
+      false,
+      n(`markUnreadCompleted/${agentId}/${key || 'default'}`),
+    );
   };
 
   clearUnreadCompletedAgent = (agentId: string): void => {
-    if (!this.#get().unreadCompletedAgentIds.has(agentId)) return;
+    if (!this.#get().unreadCompletedTopicsByAgent[agentId]) return;
     this.#set(
       produce((state: ChatStore) => {
-        state.unreadCompletedAgentIds.delete(agentId);
+        delete state.unreadCompletedTopicsByAgent[agentId];
       }),
       false,
       n(`clearUnreadCompleted/agent/${agentId}`),
     );
   };
 
-  clearUnreadCompletedTopic = (topicId: string): void => {
-    if (!this.#get().unreadCompletedTopicIds.has(topicId)) return;
+  /**
+   * Remove the given topicIds from every agent's unread set.
+   * Used when topics are deleted and we don't know which agents marked them unread
+   * (e.g. group conversations where the bot's agentId — not activeAgentId — owns the entry).
+   */
+  purgeUnreadTopics = (topicIds: string[]): void => {
+    if (topicIds.length === 0) return;
+    const map = this.#get().unreadCompletedTopicsByAgent;
+    const keys = new Set(topicIds);
+    const affected = Object.entries(map).some(([, set]) => {
+      for (const id of keys) if (set.has(id)) return true;
+      return false;
+    });
+    if (!affected) return;
+
     this.#set(
       produce((state: ChatStore) => {
-        state.unreadCompletedTopicIds.delete(topicId);
+        for (const [agentId, set] of Object.entries(state.unreadCompletedTopicsByAgent)) {
+          for (const id of keys) set.delete(id);
+          if (set.size === 0) delete state.unreadCompletedTopicsByAgent[agentId];
+        }
       }),
       false,
-      n(`clearUnreadCompleted/topic/${topicId}`),
+      n(`purgeUnreadTopics/count=${topicIds.length}`),
+    );
+  };
+
+  clearUnreadCompletedTopic = (agentId: string, topicId?: string | null): void => {
+    const key = topicId ?? DEFAULT_TOPIC_UNREAD_KEY;
+    const set = this.#get().unreadCompletedTopicsByAgent[agentId];
+    if (!set?.has(key)) return;
+    this.#set(
+      produce((state: ChatStore) => {
+        const target = state.unreadCompletedTopicsByAgent[agentId];
+        if (!target) return;
+        target.delete(key);
+        if (target.size === 0) delete state.unreadCompletedTopicsByAgent[agentId];
+      }),
+      false,
+      n(`clearUnreadCompleted/${agentId}/${key || 'default'}`),
     );
   };
   // ━━━ Message Queue Actions ━━━

@@ -1,4 +1,6 @@
 {
+  "features.agentWorkingPanel.desc": "在会话中查看当前助理可访问的资源和任务进度。",
+  "features.agentWorkingPanel.title": "工作面板",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
   "features.gatewayMode.desc": "通过 Gateway 在服务端执行 Agent 任务。可实现关闭浏览器后仍然执行 agent。",

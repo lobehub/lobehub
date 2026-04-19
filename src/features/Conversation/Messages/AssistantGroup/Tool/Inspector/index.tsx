@@ -7,7 +7,6 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
-import { LOADING_FLAT } from '@/const/message';
 
 import ExecutionTime from './ExecutionTime';
 import StatusIndicator from './StatusIndicator';
@@ -22,23 +21,32 @@ interface InspectorProps {
    * Whether the tool arguments are currently streaming
    */
   isArgumentsStreaming?: boolean;
+  /**
+   * Whether the tool is currently executing (from operation state)
+   */
+  isToolCalling?: boolean;
   result?: { content: string | null; error?: any; state?: any };
 }
 
 const Inspectors = memo<InspectorProps>(
-  ({ identifier, apiName, arguments: argsStr, result, intervention, isArgumentsStreaming }) => {
-    const hasError = !!result?.error;
-    const hasSuccessResult = !!result?.content && result.content !== LOADING_FLAT;
-    const hasResult = hasSuccessResult || hasError;
-
+  ({
+    identifier,
+    apiName,
+    arguments: argsStr,
+    result,
+    intervention,
+    isArgumentsStreaming,
+    isToolCalling,
+  }) => {
     const isPending = intervention?.status === 'pending';
     const isAborted = intervention?.status === 'aborted';
     const isRejected = intervention?.status === 'rejected';
 
-    // Distinguish between arguments streaming and tool executing
-    const isToolExecuting =
-      !hasResult && !isPending && !isAborted && !isRejected && !isArgumentsStreaming;
-    const isTitleLoading = isArgumentsStreaming || isToolExecuting;
+    // Align with Tool/index.tsx: isToolCalling uses operation state + busy-message fallback.
+    // Do not infer "executing" from missing result alone (ended runs may omit merged result).
+    const isToolCallActive = Boolean(isToolCalling) && !isPending && !isAborted && !isRejected;
+    const isTitleLoading = isArgumentsStreaming || isToolCallActive;
+    const showExecutionTimer = isToolCallActive && !isArgumentsStreaming;
 
     const activateToolsState = result?.state as ActivateToolsState | undefined;
     let statusSuccessVariant: 'warning' | undefined;
@@ -69,6 +77,7 @@ const Inspectors = memo<InspectorProps>(
         <Flexbox allowShrink horizontal align={'center'} gap={6}>
           <StatusIndicator
             intervention={intervention}
+            isToolExecuting={isToolCalling}
             result={result}
             successVariant={statusSuccessVariant}
           />
@@ -84,7 +93,7 @@ const Inspectors = memo<InspectorProps>(
               result={result}
             />
           </SafeBoundary>
-          <ExecutionTime isExecuting={isToolExecuting} />
+          <ExecutionTime isExecuting={showExecutionTimer} />
         </Flexbox>
       );
     }
@@ -96,6 +105,7 @@ const Inspectors = memo<InspectorProps>(
       <Flexbox horizontal align={'center'} gap={6}>
         <StatusIndicator
           intervention={intervention}
+          isToolExecuting={isToolCalling}
           result={result}
           successVariant={statusSuccessVariant}
         />
@@ -107,7 +117,7 @@ const Inspectors = memo<InspectorProps>(
           isLoading={isTitleLoading}
           partialArgs={partialJson || undefined}
         />
-        <ExecutionTime isExecuting={isToolExecuting} />
+        <ExecutionTime isExecuting={showExecutionTimer} />
       </Flexbox>
     );
   },

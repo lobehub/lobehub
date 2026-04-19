@@ -5,10 +5,9 @@ import { Flexbox, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, type RefObject, useMemo } from 'react';
 
-import type { AssistantContentBlock } from '@/types/index';
-
 import { resolveAssistantGroupFromMessages } from '../utils/resolveAssistantGroupFromMessages';
 import ContentBlock from './ContentBlock';
+import type { RenderableAssistantContentBlock } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
   scrollTask: css`
@@ -29,7 +28,7 @@ interface ContentBlocksScrollBaseProps {
 
 interface ContentBlocksScrollFromBlocks extends ContentBlocksScrollBaseProps {
   assistantId: string;
-  blocks: AssistantContentBlock[];
+  blocks: RenderableAssistantContentBlock[];
   messages?: never;
 }
 
@@ -50,7 +49,10 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
   const assistantIdFromProps = 'messages' in props ? undefined : props.assistantId;
   const blocksFromProps = 'messages' in props ? undefined : props.blocks;
 
-  const { assistantId, blocks } = useMemo(() => {
+  const { assistantId, blocks } = useMemo<{
+    assistantId: string;
+    blocks: RenderableAssistantContentBlock[];
+  }>(() => {
     if (messagesList !== undefined) {
       return resolveAssistantGroupFromMessages(messagesList);
     }
@@ -64,7 +66,7 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
     <Flexbox gap={8}>
       {blocks.map((block) => (
         <ContentBlock
-          key={block.id}
+          key={block.renderKey ?? block.id}
           {...block}
           assistantId={assistantId}
           disableEditing={disableEditing}

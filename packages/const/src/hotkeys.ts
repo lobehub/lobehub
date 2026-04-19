@@ -1,15 +1,76 @@
-import type { DesktopHotkeyItem, HotkeyItem } from '@lobechat/types';
-import {
-  DesktopHotkeyEnum,
-  HotkeyEnum,
-  HotkeyGroupEnum,
-  HotkeyScopeEnum,
-  KeyEnum,
-} from '@lobechat/types';
+import type { HotkeyGroupId, HotkeyId, HotkeyRegistration, HotkeyScopeId } from '@lobechat/types';
 
 const combineKeys = (keys: string[]) => keys.join('+');
 
-export type HotkeyRegistration = HotkeyItem[];
+export const KeyEnum = {
+  Alt: 'alt',
+  Backquote: 'backquote',
+  Backslash: 'backslash',
+  Backspace: 'backspace',
+  BracketLeft: 'bracketleft',
+  BracketRight: 'bracketright',
+  Comma: 'comma',
+  Ctrl: 'ctrl',
+  Down: 'down',
+  Enter: 'enter',
+  Equal: 'equal',
+  Esc: 'esc',
+  Left: 'left',
+  LeftClick: 'left-click',
+  LeftDoubleClick: 'left-double-click',
+  Meta: 'meta',
+  MiddleClick: 'middle-click',
+  Minus: 'minus',
+  Mod: 'mod',
+  Number: '1-9',
+  Period: 'period',
+  Plus: 'equal',
+  QuestionMark: 'slash',
+  Quote: 'quote',
+  Right: 'right',
+  RightClick: 'right-click',
+  RightDoubleClick: 'right-double-click',
+  Semicolon: 'semicolon',
+  Shift: 'shift',
+  Slash: 'slash',
+  Space: 'space',
+  Tab: 'tab',
+  Up: 'up',
+  Zero: '0',
+} as const;
+
+export const HotkeyEnum = {
+  AddUserMessage: 'addUserMessage',
+  ClearCurrentMessages: 'clearCurrentMessages',
+  CommandPalette: 'commandPalette',
+  DeleteAndRegenerateMessage: 'deleteAndRegenerateMessage',
+  DeleteLastMessage: 'deleteLastMessage',
+  EditMessage: 'editMessage',
+  NavigateToChat: 'navigateToChat',
+  OpenChatSettings: 'openChatSettings',
+  OpenHotkeyHelper: 'openHotkeyHelper',
+  RegenerateMessage: 'regenerateMessage',
+  SaveDocument: 'saveDocument',
+  SaveTopic: 'saveTopic',
+  Search: 'search',
+  ShowApp: 'showApp',
+  SwitchAgent: 'switchAgent',
+  ToggleLeftPanel: 'toggleLeftPanel',
+  ToggleRightPanel: 'toggleRightPanel',
+  ToggleZenMode: 'toggleZenMode',
+} as const satisfies Record<string, HotkeyId>;
+
+export const HotkeyGroupEnum = {
+  Conversation: 'conversation',
+  Essential: 'essential',
+} as const satisfies Record<string, HotkeyGroupId>;
+
+export const HotkeyScopeEnum = {
+  Chat: 'chat',
+  Files: 'files',
+  Global: 'global',
+  Image: 'image',
+} as const satisfies Record<string, HotkeyScopeId>;
 
 // mod is the command key on Mac, alt is the ctrl key on Windows
 export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
@@ -118,20 +179,5 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     id: HotkeyEnum.SaveDocument,
     keys: combineKeys([KeyEnum.Mod, 's']),
     scopes: [HotkeyScopeEnum.Files],
-  },
-];
-
-type DesktopHotkeyRegistration = DesktopHotkeyItem[];
-
-// Desktop hotkey configuration
-export const DESKTOP_HOTKEYS_REGISTRATION: DesktopHotkeyRegistration = [
-  {
-    id: DesktopHotkeyEnum.ShowApp,
-    keys: combineKeys([KeyEnum.Ctrl, 'e']),
-  },
-  {
-    id: DesktopHotkeyEnum.OpenSettings,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Comma]),
-    nonEditable: true,
   },
 ];

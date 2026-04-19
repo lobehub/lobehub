@@ -1,5 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { HotkeyEnum } from '@lobechat/types';
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';

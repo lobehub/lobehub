@@ -155,9 +155,15 @@ const AgentOnboardingPage = memo(() => {
         >
           <ErrorBoundary fallbackRender={() => null}>
             <AgentOnboardingConversation
+              discoveryUserMessageCount={data?.context?.discoveryUserMessageCount}
+              feedbackSubmitted={!!data?.feedbackSubmitted}
               finishTargetUrl={finishTargetUrl}
               onboardingFinished={onboardingFinished}
+              phase={data?.context?.phase}
               readOnly={viewingHistoricalTopic}
+              showFeedback={!viewingHistoricalTopic}
+              topicId={effectiveTopicId}
+              onAfterWrapUp={syncOnboardingContext}
             />
           </ErrorBoundary>
         </OnboardingConversationProvider>

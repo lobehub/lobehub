@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasTemperatureTopPConflict } from '../const/models';
+import { hasTemperatureTopPConflict, shouldOmitSamplingParams } from '../const/models';
 import {
   createParameterResolver,
   resolveModelSamplingParameters,
@@ -277,6 +277,39 @@ describe('resolveModelSamplingParameters', () => {
     expect(result).not.toHaveProperty('temperature');
     expect(result).not.toHaveProperty('top_p');
   });
+
+  it('should omit temperature and top_p for models that reject sampling params', () => {
+    const result = resolveModelSamplingParameters(
+      'claude-opus-4-7',
+      { temperature: 0.7, top_p: 0.9 },
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    // Both keys present with undefined values so spreading clears any pre-set payload fields
+    expect(result).toEqual({ temperature: undefined, top_p: undefined });
+  });
+
+  it('should omit temperature and top_p for Bedrock Opus 4.7 id', () => {
+    const result = resolveModelSamplingParameters(
+      'us.anthropic.claude-opus-4-7-v1',
+      { temperature: 0.7, top_p: 0.9 },
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({ temperature: undefined, top_p: undefined });
+  });
+
+  it('should not add spurious keys when omit-model input has no sampling fields', () => {
+    const result = resolveModelSamplingParameters(
+      'claude-opus-4-7',
+      {},
+      { normalizeTemperature: false, preferTemperature: true },
+    );
+
+    expect(result).toEqual({});
+    expect(result).not.toHaveProperty('temperature');
+    expect(result).not.toHaveProperty('top_p');
+  });
 });
 
 describe('createParameterResolver', () => {
@@ -339,5 +372,38 @@ describe('hasTemperatureTopPConflict', () => {
     it('should return false for Bedrock Claude 3.x models', () => {
       expect(hasTemperatureTopPConflict('anthropic.claude-3-5-sonnet-20240620-v1:0')).toBe(false);
     });
+  });
+});
+
+describe('shouldOmitSamplingParams', () => {
+  it('should return true for Claude Opus 4.7 (Anthropic API id)', () => {
+    expect(shouldOmitSamplingParams('claude-opus-4-7')).toBe(true);
+  });
+
+  it('should return true for Claude Opus 4.7 on Bedrock (with and without region prefix)', () => {
+    expect(shouldOmitSamplingParams('anthropic.claude-opus-4-7')).toBe(true);
+    expect(shouldOmitSamplingParams('us.anthropic.claude-opus-4-7-v1')).toBe(true);
+  });
+
+  it('should return true for Claude Opus 4.7 on OpenRouter (dot notation)', () => {
+    expect(shouldOmitSamplingParams('anthropic/claude-opus-4.7')).toBe(true);
+    expect(shouldOmitSamplingParams('anthropic/claude-4.7-opus')).toBe(true);
+  });
+
+  it('should return false for hypothetical dash-form OpenRouter id', () => {
+    // OpenRouter uses dot notation; dash form is not a real id and must not match
+    // to avoid accidentally stripping params from unrelated future model ids.
+    expect(shouldOmitSamplingParams('anthropic/claude-opus-4-7')).toBe(false);
+  });
+
+  it('should return false for Claude Opus 4.6 and earlier', () => {
+    expect(shouldOmitSamplingParams('claude-opus-4-6')).toBe(false);
+    expect(shouldOmitSamplingParams('claude-sonnet-4-5-20250929')).toBe(false);
+    expect(shouldOmitSamplingParams('anthropic.claude-opus-4-6-v1')).toBe(false);
+  });
+
+  it('should return false for non-Claude models', () => {
+    expect(shouldOmitSamplingParams('gpt-4o')).toBe(false);
+    expect(shouldOmitSamplingParams('gemini-2.5-pro')).toBe(false);
   });
 });

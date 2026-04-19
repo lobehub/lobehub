@@ -1,12 +1,13 @@
 import { isDesktop } from '@lobechat/const';
+import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { chainInputCompletion } from '@lobechat/prompts';
-import { HotkeyEnum, KeyEnum } from '@lobechat/types';
 import { isCommandPressed, merge } from '@lobechat/utils';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin, ReactMathPlugin } from '@lobehub/editor';
 import { Editor, FloatMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
 import Fuse from 'fuse.js';
+import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 
@@ -167,6 +168,10 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
 
         if (!input.trim()) return null;
 
+        // Skip when cursor is not at end of paragraph — inserting a placeholder
+        // mid-text causes nested editor updates that freeze the input
+        if (afterText.trim()) return null;
+
         const { enabled: _, ...config } = systemAgentSelectors.inputCompletion(
           useUserStore.getState(),
         );
@@ -296,12 +301,22 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
           minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
         }}
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
-        onCompositionStart={({ event }) => compositionProps.onCompositionStart(event)}
         onBlur={() => {
           disableScope(HotkeyEnum.AddUserMessage);
         }}
         onChange={() => {
           updateMarkdownContent();
+        }}
+        onCompositionStart={({ event }) => {
+          compositionProps.onCompositionStart(event);
+          // Clear autocomplete placeholder nodes before IME composition starts —
+          // composing next to placeholder inline nodes freezes the editor.
+          if (isAutoCompleteEnabled) {
+            editor?.dispatchCommand(
+              KEY_ESCAPE_COMMAND,
+              new KeyboardEvent('keydown', { key: 'Escape' }),
+            );
+          }
         }}
         onContextMenu={async ({ event: e, editor }) => {
           if (isDesktop) {

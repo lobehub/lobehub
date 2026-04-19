@@ -3,6 +3,10 @@ import {
   AgentBuilderStreamings,
 } from '@lobechat/builtin-tool-agent-builder/client';
 import {
+  AgentDocumentsManifest,
+  AgentDocumentsStreamings,
+} from '@lobechat/builtin-tool-agent-documents/client';
+import {
   AgentManagementManifest,
   AgentManagementStreamings,
 } from '@lobechat/builtin-tool-agent-management/client';
@@ -38,6 +42,7 @@ import { type BuiltinStreaming } from '@lobechat/types';
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderStreamings as Record<string, BuiltinStreaming>,
+  [AgentDocumentsManifest.identifier]: AgentDocumentsStreamings as Record<string, BuiltinStreaming>,
   [AgentManagementManifest.identifier]: AgentManagementStreamings as Record<
     string,
     BuiltinStreaming

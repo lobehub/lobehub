@@ -162,11 +162,11 @@ const MessageItem = memo<MessageItemProps>(
           );
         }
         case 'tasks': {
-          return <TasksMessage id={id} index={index} />;
+          return <TasksMessage id={id} />;
         }
 
         case 'groupTasks': {
-          return <GroupTasksMessage id={id} index={index} />;
+          return <GroupTasksMessage id={id} />;
         }
 
         case 'agentCouncil': {

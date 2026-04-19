@@ -75,7 +75,7 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
       const values = await form.validateFields();
       setLoading(true);
 
-      const response = await lambdaClient.market.submitFeedback.mutate({
+      await lambdaClient.market.submitFeedback.mutate({
         clientInfo: {
           language: navigator.language,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

@@ -9,6 +9,12 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 export const agentDocumentSWRKeys = {
   documents: (agentId: string) => ['agent-documents', agentId] as const,
+  /**
+   * UI-side list: raw AgentDocumentWithRules (includes documentId, sourceType, createdAt).
+   * Kept separate from `documents` because the agent store writes mapAgentDocumentsToContext(...)
+   * under that key, which drops those fields.
+   */
+  documentsList: (agentId: string) => ['agent-documents-list', agentId] as const,
   readDocument: (agentId: string, id: string) =>
     ['workspace-agent-document-editor', agentId, id] as const,
 };
@@ -29,6 +35,7 @@ export const normalizeAgentDocumentPosition = (
 
 const revalidateAgentDocuments = async (agentId: string) => {
   await mutate(agentDocumentSWRKeys.documents(agentId));
+  await mutate(agentDocumentSWRKeys.documentsList(agentId));
 };
 
 const revalidateReadDocument = async (agentId: string, id: string) => {
@@ -65,6 +72,13 @@ class AgentDocumentService {
     filename: string;
   }) => {
     const result = await lambdaClient.agentDocument.upsertDocumentByFilename.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
+
+    return result;
+  };
+
+  associateDocument = async (params: { agentId: string; documentId: string }) => {
+    const result = await lambdaClient.agentDocument.associateDocument.mutate(params);
     await revalidateAgentDocuments(params.agentId);
 
     return result;

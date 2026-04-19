@@ -1,5 +1,6 @@
 import { EMPTY_DOCUMENT_MESSAGES } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
+import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import {
   type UserInitializationState,
   type UserPreference,
@@ -274,6 +275,71 @@ export const userRouter = router({
       });
 
       return { id: result.document.id, type: 'persona' as const };
+    }),
+
+  patchOnboardingDocument: userProcedure
+    .input(
+      z.object({
+        hunks: z
+          .array(
+            z.object({
+              replace: z.string(),
+              replaceAll: z.boolean().optional(),
+              search: z.string(),
+            }),
+          )
+          .min(1),
+        type: z.enum(['soul', 'persona']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const readCurrent = async (): Promise<string> => {
+        if (input.type === 'soul') {
+          const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+          const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+          const inboxAgentId = await onboardingService.getInboxAgentId();
+          const doc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
+          return doc?.content ?? '';
+        }
+
+        const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+        const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+        const persona = await personaModel.getLatestPersonaDocument();
+        return persona?.persona ?? '';
+      };
+
+      const current = await readCurrent();
+      const patched = applyMarkdownPatch(current, input.hunks);
+      if (!patched.ok) {
+        throw new TRPCError({
+          cause: patched.error,
+          code: 'BAD_REQUEST',
+          message: formatMarkdownPatchError(patched.error),
+        });
+      }
+
+      if (input.type === 'soul') {
+        const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const inboxAgentId = await onboardingService.getInboxAgentId();
+        const doc = await docService.upsertDocumentByFilename({
+          agentId: inboxAgentId,
+          content: patched.content,
+          filename: 'SOUL.md',
+        });
+
+        return { applied: patched.applied, id: doc?.id, type: 'soul' as const };
+      }
+
+      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+      const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+      const result = await personaModel.upsertPersona({
+        editedBy: 'agent_tool',
+        persona: patched.content,
+        profile: 'default',
+      });
+
+      return { applied: patched.applied, id: result.document.id, type: 'persona' as const };
     }),
 
   resetAgentOnboarding: userProcedure.mutation(async ({ ctx }) => {

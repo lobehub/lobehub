@@ -39,6 +39,96 @@ beforeEach(async () => {
 });
 
 describe('AgentDocumentModel', () => {
+  describe('associate', () => {
+    it('should link an existing document to an agent and return the new id', async () => {
+      // Create a document in the documents table directly
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'crawled content',
+          fileType: 'article',
+          filename: 'page.html',
+          source: 'https://example.com',
+          sourceType: 'web',
+          title: 'Example Page',
+          totalCharCount: 15,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const result = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+
+      expect(result.id).toBeDefined();
+      expect(result.id).not.toBe('');
+
+      // Verify the agentDocuments row was created
+      const [row] = await serverDB
+        .select()
+        .from(agentDocuments)
+        .where(eq(agentDocuments.id, result.id));
+
+      expect(row).toBeDefined();
+      expect(row?.agentId).toBe(agentId);
+      expect(row?.documentId).toBe(doc!.id);
+      expect(row?.userId).toBe(userId);
+      expect(row?.policyLoad).toBe(PolicyLoad.PROGRESSIVE);
+    });
+
+    it('should be idempotent (onConflictDoNothing)', async () => {
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'content',
+          fileType: 'article',
+          filename: 'dup.html',
+          source: 'https://example.com/dup',
+          sourceType: 'web',
+          title: 'Dup Page',
+          totalCharCount: 7,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const first = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+      const second = await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+
+      expect(first.id).toBeDefined();
+      // Second call should not throw, id may be undefined due to onConflictDoNothing
+      expect(second).toBeDefined();
+    });
+
+    it('should not create documents row — only the link', async () => {
+      const [doc] = await serverDB
+        .insert(documents)
+        .values({
+          content: 'existing',
+          fileType: 'article',
+          filename: 'existing.html',
+          source: 'https://example.com/existing',
+          sourceType: 'web',
+          title: 'Existing',
+          totalCharCount: 8,
+          totalLineCount: 1,
+          userId,
+        })
+        .returning();
+
+      const countBefore = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.userId, userId));
+      await agentDocumentModel.associate({ agentId, documentId: doc!.id });
+      const countAfter = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.userId, userId));
+
+      expect(countAfter.length).toBe(countBefore.length);
+    });
+  });
+
   describe('create', () => {
     it('should create an agent document with normalized policy and linked document row', async () => {
       const result = await agentDocumentModel.create(agentId, 'identity.md', 'line1\nline2', {
@@ -178,22 +268,22 @@ describe('AgentDocumentModel', () => {
       const renamed = await agentDocumentModel.rename(created.id, 'New Name');
 
       expect(renamed?.title).toBe('New Name');
-      expect(renamed?.filename).toBe('New Name.md');
+      expect(renamed?.filename).toBe('New Name');
 
       const [doc] = await serverDB
         .select()
         .from(documents)
         .where(eq(documents.id, created.documentId));
 
-      expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('New Name.md')}`);
+      expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('New Name')}`);
     });
 
-    it('should preserve typed extension when renaming', async () => {
+    it('uses the new title verbatim as filename when renaming', async () => {
       const created = await agentDocumentModel.create(agentId, 'identity.md', 'hello');
 
-      const renamed = await agentDocumentModel.rename(created.id, 'IDENTITY 2.md');
+      const renamed = await agentDocumentModel.rename(created.id, 'IDENTITY 2');
 
-      expect(renamed?.filename).toBe('IDENTITY 2.md');
+      expect(renamed?.filename).toBe('IDENTITY 2');
     });
 
     it('should copy into a new record and keep policy/template metadata', async () => {
@@ -209,7 +299,7 @@ describe('AgentDocumentModel', () => {
       expect(copied).toBeDefined();
       expect(copied?.id).not.toBe(created.id);
       expect(copied?.documentId).not.toBe(created.documentId);
-      expect(copied?.filename).toBe('Copied Title.md');
+      expect(copied?.filename).toBe('Copied Title');
       expect(copied?.templateId).toBe('claw');
       expect(copied?.policy?.context?.maxTokens).toBe(200);
       expect(copied?.metadata).toMatchObject({ description: 'source desc', domain: 'A' });
