@@ -247,10 +247,10 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   async detectRepoType(dirPath: string): Promise<'git' | 'github' | undefined> {
-    const gitDir = await this.resolveGitDir(dirPath);
-    if (!gitDir) return undefined;
+    const commonDir = await this.resolveCommonGitDir(dirPath);
+    if (!commonDir) return undefined;
     try {
-      const config = await readFile(path.join(gitDir, 'config'), 'utf8');
+      const config = await readFile(path.join(commonDir, 'config'), 'utf8');
       if (config.includes('github.com')) return 'github';
       return 'git';
     } catch {
@@ -458,6 +458,24 @@ export default class SystemController extends ControllerModule {
       const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
       logger.debug('[checkoutGitBranch] failed', { args, stderr });
       return { error: stderr || 'git checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Resolve the common git dir — where shared state like `config` and
+   * `packed-refs` lives. For linked worktrees, `resolveGitDir` returns
+   * `.git/worktrees/<name>/` which has its own `HEAD` but no `config`;
+   * the `commondir` pointer inside it resolves to the main repo's gitdir.
+   */
+  private async resolveCommonGitDir(dirPath: string): Promise<string | undefined> {
+    const gitDir = await this.resolveGitDir(dirPath);
+    if (!gitDir) return undefined;
+    try {
+      const commondir = (await readFile(path.join(gitDir, 'commondir'), 'utf8')).trim();
+      if (!commondir) return gitDir;
+      return path.isAbsolute(commondir) ? commondir : path.resolve(gitDir, commondir);
+    } catch {
+      return gitDir;
     }
   }
 
