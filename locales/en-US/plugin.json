@@ -447,6 +447,7 @@
   "localSystem.workingDirectory.createBranchAction": "Checkout new branch…",
   "localSystem.workingDirectory.current": "Current working directory",
   "localSystem.workingDirectory.detachedHead": "Detached HEAD at {{sha}}",
+  "localSystem.workingDirectory.diffStatTooltip": "Added {{added}} · Modified {{modified}} · Deleted {{deleted}}",
   "localSystem.workingDirectory.ghMissing": "Install and log in to the GitHub CLI (`gh`) to see linked pull requests",
   "localSystem.workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "localSystem.workingDirectory.noRecent": "No recent directories",
