@@ -20,6 +20,7 @@ import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
 import TaskProperties from './TaskProperties';
 import TaskSubtasks from './TaskSubtasks';
+import TopicChatDrawer from './TopicChatDrawer';
 
 interface TaskDetailPageProps {
   agentId: string;
@@ -86,6 +87,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
           )}
         </WideScreenContainer>
       </Flexbox>
+      <TopicChatDrawer />
     </Flexbox>
   );
 });

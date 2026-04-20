@@ -4,10 +4,8 @@ import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { MessagesSquare } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { useTaskStore } from '@/store/task';
-import { taskDetailSelectors } from '@/store/task/selectors';
 
 const TOPIC_STATUS_COLOR: Record<string, string> = {
   canceled: cssVar.colorTextSecondary,
@@ -31,8 +29,7 @@ interface TopicCardProps {
 }
 
 const TopicCard = memo<TopicCardProps>(({ activity }) => {
-  const navigate = useNavigate();
-  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const isRunning = activity.status === 'running';
 
   const [elapsed, setElapsed] = useState(() =>
@@ -48,10 +45,8 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
   }, [isRunning, activity.time]);
 
   const handleClick = useCallback(() => {
-    if (activity.id && agentId) {
-      navigate(`/agent/${agentId}?topic=${activity.id}`);
-    }
-  }, [activity.id, agentId, navigate]);
+    if (activity.id) openTopicDrawer(activity.id);
+  }, [activity.id, openTopicDrawer]);
 
   const statusColor = TOPIC_STATUS_COLOR[activity.status ?? ''] ?? cssVar.colorTextQuaternary;
   const timeDisplay = isRunning

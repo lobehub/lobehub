@@ -71,6 +71,8 @@ const canCancelActiveTask = (s: TaskStoreState): boolean => {
 
 const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
 
+const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
+
 export const taskDetailSelectors = {
   activeTaskAgentId,
   activeTaskAutomationMode,
@@ -92,6 +94,7 @@ export const taskDetailSelectors = {
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskWorkspace,
+  activeTopicDrawerTopicId,
   canCancelActiveTask,
   canPauseActiveTask,
   canRunActiveTask,

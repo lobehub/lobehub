@@ -526,6 +526,7 @@ export default {
   'taskDetail.subtaskInstructionPlaceholder': 'Describe the sub-task...',
   'taskDetail.reassignDisabled': 'Cannot reassign agent while task is running',
   'taskDetail.titlePlaceholder': 'Enter task title...',
+  'taskDetail.topicDrawer.untitled': 'Untitled',
   'taskDetail.updateFailed': 'Failed to update task',
 
   'createTask.assignee': 'Assignee',

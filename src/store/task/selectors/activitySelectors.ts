@@ -28,7 +28,14 @@ const unresolvedBriefCount = (s: TaskStoreState): number =>
 
 const hasUnresolvedBriefs = (s: TaskStoreState): boolean => unresolvedBriefCount(s) > 0;
 
+const activeDrawerTopicActivity = (s: TaskStoreState): TaskDetailActivity | undefined => {
+  const topicId = s.activeTopicDrawerTopicId;
+  if (!topicId) return undefined;
+  return activeTaskTopics(s).find((a) => a.id === topicId);
+};
+
 export const taskActivitySelectors = {
+  activeDrawerTopicActivity,
   activeTaskActivities,
   activeTaskBriefs,
   activeTaskComments,

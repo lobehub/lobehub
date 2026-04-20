@@ -467,6 +467,7 @@
   "taskDetail.subtaskInstructionPlaceholder": "描述这个子任务…",
   "taskDetail.subtasks": "子任务",
   "taskDetail.titlePlaceholder": "输入任务标题…",
+  "taskDetail.topicDrawer.untitled": "未命名",
   "taskDetail.updateFailed": "任务更新失败",
   "taskList.activeTasks": "进行中的任务",
   "taskList.all": "全部任务",

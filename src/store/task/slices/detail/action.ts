@@ -176,7 +176,21 @@ export class TaskDetailSliceActionImpl {
 
   setActiveTaskId = (taskId?: string): void => {
     if (this.#get().activeTaskId === taskId) return;
-    this.#set({ activeTaskId: taskId }, false, 'setActiveTaskId');
+    this.#set(
+      { activeTaskId: taskId, activeTopicDrawerTopicId: undefined },
+      false,
+      'setActiveTaskId',
+    );
+  };
+
+  openTopicDrawer = (topicId: string): void => {
+    if (this.#get().activeTopicDrawerTopicId === topicId) return;
+    this.#set({ activeTopicDrawerTopicId: topicId }, false, 'openTopicDrawer');
+  };
+
+  closeTopicDrawer = (): void => {
+    if (!this.#get().activeTopicDrawerTopicId) return;
+    this.#set({ activeTopicDrawerTopicId: undefined }, false, 'closeTopicDrawer');
   };
 
   unpinDocument = async (taskId: string, documentId: string): Promise<void> => {
