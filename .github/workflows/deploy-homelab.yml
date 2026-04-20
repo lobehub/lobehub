@@ -28,10 +28,11 @@ name: Deploy to homelab
 #   PULUMI_ACCESS_TOKEN                          — Pulumi Cloud access token
 
 on:
-  # Primary trigger: any commit that updates the Pulumi stack config on canary.
+  # Primary trigger: any commit that updates the Pulumi stack config on canary or main.
   push:
     branches:
       - canary
+      - main
     paths:
       - deployment/homelab/**
 
@@ -43,6 +44,7 @@ on:
       - completed
     branches:
       - canary
+      - main
 
   # Also allow manual deploys with explicit image overrides
   workflow_dispatch:

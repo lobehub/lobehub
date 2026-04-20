@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - canary
+      - main
     paths:
       - deployment/homelab/images/lobehub/**
       - .github/workflows/build-lobehub-image.yml
@@ -70,7 +71,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           for i in 1 2 3; do
-            git pull --rebase origin canary
+            git pull --rebase origin "${GITHUB_REF_NAME}"
             yq e '.config["lobehub:lobehubImage"] = "${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}"' \
               -i deployment/homelab/Pulumi.dev.yaml
             git add deployment/homelab/Pulumi.dev.yaml
