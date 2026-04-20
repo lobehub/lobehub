@@ -48,6 +48,7 @@ const menu = {
   'file.newAgent': 'New Agent',
   'file.newAgentGroup': 'New Agent Group',
   'file.newPage': 'New Page',
+  'file.newTab': 'New Tab',
   'file.newTopic': 'New Topic',
   'file.preferences': 'Preferences',
   'file.quit': 'Quit',

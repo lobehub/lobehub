@@ -164,6 +164,10 @@ const TabBar = () => {
     if (url) startTransition(() => navigate(url));
   }, [newTabAction, addTab, pluginCtx, navigate]);
 
+  useWatchBroadcast('createNewTab', () => {
+    void handleNewTab();
+  });
+
   if (tabs.length === 0) return null;
 
   return (
