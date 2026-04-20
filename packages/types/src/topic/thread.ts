@@ -34,8 +34,6 @@ export interface ThreadMetadata {
   clientMode?: boolean;
   /** Task completion time */
   completedAt?: string;
-  /** Description of the task (e.g. CC Task tool's `description` input) */
-  description?: string;
   /** Execution duration in milliseconds */
   duration?: number;
   /** Error details when task failed */
@@ -111,7 +109,6 @@ export interface CreateThreadParams {
 export const threadMetadataSchema = z.object({
   clientMode: z.boolean().optional(),
   completedAt: z.string().optional(),
-  description: z.string().optional(),
   duration: z.number().optional(),
   error: z.any().optional(),
   operationId: z.string().optional(),

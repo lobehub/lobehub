@@ -56,19 +56,23 @@ export interface ChatFileItem {
  * message's tool_use entries.
  */
 export interface TaskBlock {
-  /** Description from the spawning tool_use input (e.g. CC Task `description`) */
-  description?: string;
-  /** Execution duration in milliseconds (Thread.metadata.duration) */
+  /** Execution duration in milliseconds (`Thread.metadata.duration`) */
   duration?: number;
-  /** Error details when subagent failed */
+  /** Error details when subagent failed (`Thread.metadata.error`) */
   error?: any;
   /** Equals the parent tool_use id that spawned this subagent */
   id: string;
+  /** Thread execution status */
+  status?: ThreadStatus;
   /** Subagent type, e.g. CC's `subagent_type` input (Explore, Plan, ...) */
   subagentType?: string;
-  /** Status of the underlying Thread */
   threadId: string;
-  /** Title pulled from the thread (defaults to description) */
+  /**
+   * Short summary rendered in the folded header — sourced from `Thread.title`
+   * (for CC Task spawns, the executor persists the tool_use's `description`
+   * input there at create time, so there is no separate `description` field
+   * on this block).
+   */
   title?: string;
   /** Total cost in dollars */
   totalCost?: number;
