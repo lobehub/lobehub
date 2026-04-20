@@ -73,7 +73,7 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         <Flexbox horizontal align={'center'} gap={8} style={{ overflow: 'hidden' }}>
           <Icon color={cssVar.colorTextDescription} icon={MessagesSquare} size={16} />
           <Text ellipsis weight={500}>
-            {activity.title || 'Untitled'}
+            {activity.title}
           </Text>
           {activity.seq != null && (
             <Text fontSize={12} type={'secondary'}>

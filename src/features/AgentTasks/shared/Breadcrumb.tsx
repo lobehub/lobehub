@@ -96,15 +96,19 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
             </Link>
           ),
         },
-        {
-          title: (
-            <Link to={`/agent/${agentId}/tasks`}>
-              <Text color={'inherit'} weight={500}>
-                {t('taskList.breadcrumb.task')}
-              </Text>
-            </Link>
-          ),
-        },
+        ...(taskId
+          ? []
+          : [
+              {
+                title: (
+                  <Link to={`/agent/${agentId}/tasks`}>
+                    <Text color={'inherit'} weight={500}>
+                      {t('taskList.breadcrumb.task')}
+                    </Text>
+                  </Link>
+                ),
+              },
+            ]),
         ...ancestors.map((identifier) => ({
           key: identifier,
           title: (
@@ -139,7 +143,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
                         {taskIdentifier}
                       </Text>
                     )}
-                    <Text ellipsis color={'inherit'} weight={500}>
+                    <Text ellipsis color={'inherit'} style={{ maxWidth: 240 }} weight={500}>
                       {taskTitle || taskId}
                     </Text>
                   </span>

@@ -4,6 +4,7 @@ import { memo, useEffect } from 'react';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -41,11 +42,12 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
       <NavHeader
+        right={<ToggleRightPanelButton hideWhenExpanded />}
         left={
           <>
             <Breadcrumb agentId={agentId} taskId={taskId} />
             <TaskDetailHeaderActions />
-            {saveStatus !== 'idle' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
+            {saveStatus === 'saving' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
           </>
         }
         styles={{

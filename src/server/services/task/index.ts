@@ -87,17 +87,41 @@ export class TaskService {
       childrenMap.get(parentId)!.push(t);
     }
 
+    // Resolve subtask assignee agents in batch so the UI can render avatars
+    // without depending on client-side agent store state.
+    const subtaskAssigneeIds = [
+      ...new Set(
+        allDescendants.map((s) => s.assigneeAgentId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const subtaskAgents =
+      subtaskAssigneeIds.length > 0
+        ? await this.agentModel.getAgentAvatarsByIds(subtaskAssigneeIds)
+        : [];
+    const subtaskAgentMap = new Map(subtaskAgents.map((a) => [a.id, a]));
+
     const buildSubtaskTree = (parentId: string): TaskDetailSubtask[] | undefined => {
       const children = childrenMap.get(parentId);
       if (!children || children.length === 0) return undefined;
-      return children.map((s) => ({
-        blockedBy: depMap.get(s.id),
-        children: buildSubtaskTree(s.id),
-        identifier: s.identifier,
-        name: s.name,
-        priority: s.priority,
-        status: s.status,
-      }));
+      return children.map((s) => {
+        const agent = s.assigneeAgentId ? subtaskAgentMap.get(s.assigneeAgentId) : undefined;
+        return {
+          assignee: agent
+            ? {
+                avatar: agent.avatar,
+                backgroundColor: agent.backgroundColor,
+                id: agent.id,
+                title: agent.title,
+              }
+            : null,
+          blockedBy: depMap.get(s.id),
+          children: buildSubtaskTree(s.id),
+          identifier: s.identifier,
+          name: s.name,
+          priority: s.priority,
+          status: s.status,
+        };
+      });
     };
 
     // Root level: always return array (empty [] when no subtasks) for consistent API shape
@@ -183,7 +207,7 @@ export class TaskService {
         seq: t.seq,
         status: t.status,
         time: toISO(t.createdAt),
-        title: (t.handoff as TaskTopicHandoff | null)?.title || 'Untitled',
+        title: (t.handoff as TaskTopicHandoff | null)?.title,
         type: 'topic' as const,
       })),
       ...enrichedBriefs.map((b) => ({

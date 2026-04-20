@@ -135,7 +135,15 @@ export interface NewTask {
 
 // ── Task Detail (shared across CLI, viewTask tool, task.detail router) ──
 
+export interface TaskDetailSubtaskAssignee {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  title: string | null;
+}
+
 export interface TaskDetailSubtask {
+  assignee?: TaskDetailSubtaskAssignee | null;
   blockedBy?: string;
   children?: TaskDetailSubtask[];
   identifier: string;

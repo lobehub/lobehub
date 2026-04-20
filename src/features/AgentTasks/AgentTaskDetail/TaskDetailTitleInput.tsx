@@ -39,7 +39,7 @@ const TaskDetailTitleInput = memo(() => {
 
   return (
     <Input.TextArea
-      autoSize
+      autoSize={{ minRows: 1 }}
       className={styles.titleInput}
       placeholder={t('taskDetail.titlePlaceholder')}
       value={localName}

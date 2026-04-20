@@ -1,5 +1,5 @@
 import type { BriefType, TaskDetailActivity } from '@lobechat/types';
-import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
@@ -7,6 +7,7 @@ import { BotMessageSquare, CirclePlus, MessageCircle, MessagesSquare } from 'luc
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import BriefCard from '@/features/DailyBrief/BriefCard';
 import type { BriefItem } from '@/features/DailyBrief/types';
 import { useTaskStore } from '@/store/task';
@@ -67,17 +68,48 @@ const ActivityRow = memo<{ activity: TaskDetailActivity }>(({ activity }) => {
   const relTime = activity.time ? dayjs(activity.time).fromNow() : '';
   const text = getRowText(activity, t);
 
+  const isAgent = activity.author?.type === 'agent';
+  const avatarNode = activity.author?.avatar ? (
+    <Avatar avatar={activity.author.avatar} size={24} />
+  ) : (
+    <div className={styles.activityAvatar}>
+      <TypeIcon size={12} />
+    </div>
+  );
+
+  const authorNode = (
+    <Flexbox horizontal align={'center'} gap={6} style={{ flexShrink: 0 }}>
+      {avatarNode}
+      {activity.author?.name && (
+        <Text
+          className={isAgent ? styles.agentAuthorName : undefined}
+          style={isAgent ? undefined : { color: cssVar.colorTextSecondary, fontWeight: 500 }}
+        >
+          {activity.author.name}
+        </Text>
+      )}
+      {isAgent && (
+        <Tag size={'small'} style={{ flexShrink: 0 }}>
+          {t('taskDetail.activities.agentTag')}
+        </Tag>
+      )}
+    </Flexbox>
+  );
+
   return (
     <Flexbox horizontal align={'center'} gap={8} paddingBlock={4}>
-      {activity.author?.avatar ? (
-        <Avatar avatar={activity.author.avatar} size={24} />
+      {isAgent && activity.author?.id ? (
+        <AgentProfilePopup
+          agent={{ avatar: activity.author.avatar, title: activity.author.name }}
+          agentId={activity.author.id}
+          trigger={'hover'}
+        >
+          {authorNode}
+        </AgentProfilePopup>
       ) : (
-        <div className={styles.activityAvatar}>
-          <TypeIcon size={12} />
-        </div>
+        authorNode
       )}
-      <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
-        {activity.author?.name && <span style={{ fontWeight: 500 }}>{activity.author.name} </span>}
+      <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1, minWidth: 0 }}>
         {text}
         {relTime && (
           <span style={{ color: cssVar.colorTextQuaternary, marginInlineStart: 4 }}>

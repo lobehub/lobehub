@@ -1,8 +1,9 @@
 import { Button } from '@lobehub/ui';
-import { CircleStop, PlayIcon, RotateCcwIcon } from 'lucide-react';
+import { PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import StopLoadingIcon from '@/components/StopLoading';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -24,17 +25,20 @@ const TaskDetailRunPauseAction = memo(() => {
 
   if (!canRun && !canPause) return null;
 
+  if (canPause) {
+    return (
+      <Button icon={StopLoadingIcon} onClick={handleRunOrPause}>
+        {t('taskDetail.stopTask')}
+      </Button>
+    );
+  }
+
   const runLabel = isRerun ? t('taskDetail.rerunTask') : t('taskDetail.runTask');
   const runIcon = isRerun ? RotateCcwIcon : PlayIcon;
 
   return (
-    <Button
-      icon={canRun ? runIcon : CircleStop}
-      size={'small'}
-      type={'primary'}
-      onClick={handleRunOrPause}
-    >
-      {canRun ? runLabel : t('taskDetail.pauseTask')}
+    <Button icon={runIcon} type={'primary'} onClick={handleRunOrPause}>
+      {runLabel}
     </Button>
   );
 });

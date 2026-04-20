@@ -2,16 +2,18 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   titleInput: css`
-    resize: none;
+    &.ant-input {
+      resize: none;
 
-    flex: 1;
+      flex: 1;
 
-    padding-block: 0;
-    padding-inline: 0;
+      min-height: auto;
+      padding: 0;
 
-    font-size: 24px;
-    font-weight: 600;
-    line-height: 1.3;
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
   `,
 
   breadcrumb: css`
@@ -107,5 +109,28 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     inset-block-start: 8px;
     inset-inline-end: 8px;
+  `,
+
+  addSubtaskButton: css`
+    &.ant-btn {
+      font-size: 13px;
+      color: ${cssVar.colorTextDescription};
+    }
+
+    &.ant-btn:hover,
+    &.ant-btn:focus {
+      color: ${cssVar.colorTextSecondary};
+    }
+  `,
+
+  agentAuthorName: css`
+    cursor: pointer;
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
   `,
 }));
