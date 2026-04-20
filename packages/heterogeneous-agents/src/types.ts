@@ -81,6 +81,15 @@ export interface ToolCallPayload {
   arguments: string;
   id: string;
   identifier: string;
+  /**
+   * When the tool_use came from a subagent spawned by a parent tool
+   * (e.g. Claude Code's `Task` / `Agent` tool), this carries the parent
+   * tool_use id so downstream consumers can group the subagent's
+   * intermediate tools under the parent in the UI / data model.
+   *
+   * Absent for top-level (main-agent) tool calls.
+   */
+  parentToolCallId?: string;
   type: string;
 }
 

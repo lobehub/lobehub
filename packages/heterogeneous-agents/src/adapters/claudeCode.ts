@@ -230,15 +230,28 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const events: HeterogeneousAgentEvent[] = [];
     const messageId = raw.message?.id;
 
-    events.push(...this.openMainMessage(messageId, raw.message?.model));
+    // CC marks subagent events (Agent-tool spawned flows) with
+    // `parent_tool_use_id` pointing back at the outer tool_use. Each subagent
+    // turn introduces a new `message.id`, which the main-agent step tracker
+    // would otherwise read as "new main-agent step" and force stream_end +
+    // stream_start(newStep), producing orphan assistant bubbles. We keep the
+    // main agent's message boundary + model tracker stable across subagent
+    // events, but still stamp the parent pointer onto their tool payloads so
+    // downstream consumers can nest them.
+    const parentToolUseId: string | undefined = raw.parent_tool_use_id;
+    const isSubagentEvent = !!parentToolUseId;
 
-    // Track the latest model — emitted alongside authoritative usage on the
-    // matching `message_delta`. We deliberately do NOT emit turn_metadata
-    // here: under `--include-partial-messages` (our default), every
-    // content-block `assistant` event echoes a STALE usage snapshot from
-    // `message_start` (e.g. `output_tokens: 8`); the per-turn total only
-    // arrives on `stream_event: message_delta`.
-    if (raw.message?.model) this.currentStreamEventModel = raw.message.model;
+    if (!isSubagentEvent) {
+      events.push(...this.openMainMessage(messageId, raw.message?.model));
+
+      // Track the latest model — emitted alongside authoritative usage on the
+      // matching `message_delta`. We deliberately do NOT emit turn_metadata
+      // here: under `--include-partial-messages` (our default), every
+      // content-block `assistant` event echoes a STALE usage snapshot from
+      // `message_start` (e.g. `output_tokens: 8`); the per-turn total only
+      // arrives on `stream_event: message_delta`.
+      if (raw.message?.model) this.currentStreamEventModel = raw.message.model;
+    }
 
     // Each content array here is usually ONE block (thinking OR tool_use OR text)
     // but we handle multiple defensively.
@@ -262,6 +275,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
+            // Preserve the subagent pointer so downstream can nest tools under
+            // the spawning parent (Task / Agent tool_use).
+            ...(parentToolUseId ? { parentToolCallId: parentToolUseId } : {}),
             type: 'default',
           };
           newToolCalls.push(toolPayload);
@@ -274,18 +290,28 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
     }
 
-    // Skip full-block emission when deltas have already been streamed for
-    // this message.id (partial-messages mode). Otherwise the UI would see
-    // the text/thinking twice — once as deltas, once as a giant trailing chunk.
-    const textAlreadyStreamed = !!messageId && this.messagesWithStreamedText.has(messageId);
-    const thinkingAlreadyStreamed = !!messageId && this.messagesWithStreamedThinking.has(messageId);
-    if (textParts.length > 0 && !textAlreadyStreamed) {
-      events.push(this.makeChunkEvent({ chunkType: 'text', content: textParts.join('') }));
-    }
-    if (reasoningParts.length > 0 && !thinkingAlreadyStreamed) {
-      events.push(
-        this.makeChunkEvent({ chunkType: 'reasoning', reasoning: reasoningParts.join('') }),
-      );
+    // Subagent text / reasoning aren't streamed into the main assistant bubble —
+    // CC packages the subagent's final answer into the outer Task/Agent
+    // tool_result, and subagent assistant events only carry intermediate
+    // tool_use blocks in practice (verified against a real CC trace where
+    // 76 subagent assistant events carried only tool_use content, zero
+    // text / thinking). Dropping any stray text here keeps the main agent's
+    // accumulator uncorrupted.
+    if (!isSubagentEvent) {
+      // Skip full-block emission when deltas have already been streamed for
+      // this message.id (partial-messages mode). Otherwise the UI would see
+      // the text/thinking twice — once as deltas, once as a giant trailing chunk.
+      const textAlreadyStreamed = !!messageId && this.messagesWithStreamedText.has(messageId);
+      const thinkingAlreadyStreamed =
+        !!messageId && this.messagesWithStreamedThinking.has(messageId);
+      if (textParts.length > 0 && !textAlreadyStreamed) {
+        events.push(this.makeChunkEvent({ chunkType: 'text', content: textParts.join('') }));
+      }
+      if (reasoningParts.length > 0 && !thinkingAlreadyStreamed) {
+        events.push(
+          this.makeChunkEvent({ chunkType: 'reasoning', reasoning: reasoningParts.join('') }),
+        );
+      }
     }
     if (newToolCalls.length > 0) {
       const msgKey = messageId ?? '';
