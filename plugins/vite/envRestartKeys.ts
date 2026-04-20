@@ -78,7 +78,7 @@ export function viteEnvRestartKeys(keys: string[]): Plugin {
       return {
         server: {
           watch: {
-            ignored: ['**/.env', '**/.env.*'],
+            ignored: ['**/.env', '**/.env.*', '**/*.test.ts', '**/*.test.tsx'],
           },
         },
       };

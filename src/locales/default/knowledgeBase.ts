@@ -23,5 +23,4 @@ export default {
   'tab.files': 'Files',
   'tab.settings': 'Settings',
   'tab.testing': 'Recall Testing',
-  'title': 'Library',
 };

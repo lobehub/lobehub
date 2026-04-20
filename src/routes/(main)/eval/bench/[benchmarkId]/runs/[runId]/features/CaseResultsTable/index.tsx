@@ -6,10 +6,12 @@ import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { Badge, Input, Select, Table, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Footprints, RotateCcw } from 'lucide-react';
+import { Footprints, Play, RotateCcw } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+
+import { getResumeTarget } from '../resumeTarget';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   caseLink: css`
@@ -47,6 +49,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface CaseResultsTableProps {
   benchmarkId: string;
   k?: number;
+  onResumeCase?: (testCaseId: string, threadId?: string) => Promise<void>;
   onRetryCase?: (testCaseId: string) => Promise<void>;
   results: any[];
   runId: string;
@@ -94,7 +97,7 @@ const StatusBadge = memo<{ record: any }>(({ record }) => {
   }
 
   if (status === 'completed') {
-    // 完成代表运行完成 + 评测完成，不代表结果一定通过
+    // 'completed' means run finished + evaluation finished, does not mean the result necessarily passed
     const badge = <Badge color="blue" text={<BadgeText>{t('run.status.completed')}</BadgeText>} />;
     return <Tooltip title={t('run.status.completed.tooltip')}>{badge}</Tooltip>;
   }
@@ -110,7 +113,11 @@ const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => (
     {threads.map((thread) => {
       let color: string = cssVar.colorTextTertiary;
 
-      if (thread.passed === true) {
+      if (thread.status === 'running') {
+        color = cssVar.colorPrimary;
+      } else if (thread.status === 'error') {
+        color = cssVar.colorError;
+      } else if (thread.passed === true) {
         color = cssVar.colorSuccess;
       } else if (thread.passed === false) {
         color = cssVar.colorError;
@@ -126,15 +133,19 @@ const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => (
 
       const label = thread.error
         ? 'error'
-        : thread.passed === true
-          ? 'passed'
-          : thread.passed === false && thread.status !== 'completed'
-            ? 'failed'
-            : thread.status === 'external'
-              ? 'Awaiting for external evaluation'
-              : thread.status === 'completed'
-                ? 'completed'
-                : 'pending';
+        : thread.status === 'error'
+          ? 'error'
+          : thread.status === 'running'
+            ? 'running'
+            : thread.passed === true
+              ? 'passed'
+              : thread.passed === false && thread.status !== 'completed'
+                ? 'failed'
+                : thread.status === 'external'
+                  ? 'Awaiting for external evaluation'
+                  : thread.status === 'completed'
+                    ? 'completed'
+                    : 'pending';
 
       return (
         <Tooltip key={thread.threadId} title={label}>
@@ -177,17 +188,18 @@ const RunningTimer = memo<{ startTime: string }>(({ startTime }) => {
 
 const RETRYABLE_STATUSES = new Set(['error', 'failed', 'timeout']);
 const FINISHED_RUN_STATUSES = new Set(['completed', 'failed', 'aborted']);
-
 const CaseResultsTable = memo<CaseResultsTableProps>(
-  ({ results, benchmarkId, runId, k = 1, onRetryCase, runStatus }) => {
+  ({ results, benchmarkId, runId, k = 1, onRetryCase, onResumeCase, runStatus }) => {
     const { t } = useTranslation('eval');
     const [searchText, setSearchText] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [pageSize, setPageSize] = useState(20);
     const [retryingCaseId, setRetryingCaseId] = useState<string | null>(null);
+    const [resumingCaseId, setResumingCaseId] = useState<string | null>(null);
 
     const isMultiK = k > 1;
-    const canRetryCase = onRetryCase && runStatus && FINISHED_RUN_STATUSES.has(runStatus);
+    const canRetryCase = !!onRetryCase && !!runStatus && FINISHED_RUN_STATUSES.has(runStatus);
+    const canResumeCase = !!onResumeCase;
 
     const filteredResults = useMemo(() => {
       let filtered = results;
@@ -381,37 +393,74 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
         });
       }
 
-      if (canRetryCase) {
+      if (canRetryCase || canResumeCase) {
         cols.push({
           key: 'actions',
           render: (_: any, record: any) => {
-            if (!RETRYABLE_STATUSES.has(record.status)) return null;
+            const showRetry = canRetryCase && RETRYABLE_STATUSES.has(record.status);
+            const resumeTarget = getResumeTarget(record, k);
+            const showResume = canResumeCase && !!resumeTarget;
+            if (!showRetry && !showResume) return null;
             const isRetrying = retryingCaseId === record.testCaseId;
+            const isResuming = resumingCaseId === record.testCaseId;
             return (
-              <Tooltip title={t('run.actions.retryCase')}>
-                <ActionIcon
-                  icon={RotateCcw}
-                  loading={isRetrying}
-                  size="small"
-                  onClick={async () => {
-                    setRetryingCaseId(record.testCaseId);
-                    try {
-                      await onRetryCase!(record.testCaseId);
-                    } finally {
-                      setRetryingCaseId(null);
-                    }
-                  }}
-                />
-              </Tooltip>
+              <Flexbox horizontal gap={4}>
+                {showRetry && (
+                  <Tooltip title={t('run.actions.retryCase')}>
+                    <ActionIcon
+                      icon={RotateCcw}
+                      loading={isRetrying}
+                      size="small"
+                      onClick={async () => {
+                        setRetryingCaseId(record.testCaseId);
+                        try {
+                          await onRetryCase!(record.testCaseId);
+                        } finally {
+                          setRetryingCaseId(null);
+                        }
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {showResume && (
+                  <Tooltip title={t('run.actions.resumeCase')}>
+                    <ActionIcon
+                      icon={Play}
+                      loading={isResuming}
+                      size="small"
+                      onClick={async () => {
+                        setResumingCaseId(record.testCaseId);
+                        try {
+                          await onResumeCase!(record.testCaseId, resumeTarget?.threadId);
+                        } finally {
+                          setResumingCaseId(null);
+                        }
+                      }}
+                    />
+                  </Tooltip>
+                )}
+              </Flexbox>
             );
           },
           title: '',
-          width: 48,
+          width: 80,
         });
       }
 
       return cols;
-    }, [benchmarkId, runId, t, isMultiK, k, canRetryCase, retryingCaseId, onRetryCase]);
+    }, [
+      benchmarkId,
+      runId,
+      t,
+      isMultiK,
+      k,
+      canRetryCase,
+      canResumeCase,
+      retryingCaseId,
+      resumingCaseId,
+      onRetryCase,
+      onResumeCase,
+    ]);
 
     return (
       <Flexbox gap={0}>

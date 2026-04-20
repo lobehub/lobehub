@@ -1,54 +1,50 @@
 import type { SWRResponse } from 'swr';
-import type { StateCreator } from 'zustand/vanilla';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
 import type { EvalStore } from '@/store/eval/store';
+import { type StoreSetter } from '@/store/types';
 
 const FETCH_TEST_CASES_KEY = 'FETCH_TEST_CASES';
 
-export interface TestCaseAction {
-  getTestCasesByDatasetId: (datasetId: string) => any[];
-  getTestCasesTotalByDatasetId: (datasetId: string) => number;
-  isLoadingTestCases: (datasetId: string) => boolean;
-  refreshTestCases: (datasetId: string) => Promise<void>;
-  useFetchTestCases: (params: {
+type Setter = StoreSetter<EvalStore>;
+
+export const createTestCaseSlice = (set: Setter, get: () => EvalStore, _api?: unknown) =>
+  new TestCaseActionImpl(set, get, _api);
+
+export class TestCaseActionImpl {
+  readonly #get: () => EvalStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => EvalStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  getTestCasesByDatasetId = (datasetId: string): any[] => {
+    return this.#get().testCasesCache[datasetId]?.data || [];
+  };
+
+  getTestCasesTotalByDatasetId = (datasetId: string): number => {
+    return this.#get().testCasesCache[datasetId]?.total || 0;
+  };
+
+  isLoadingTestCases = (datasetId: string): boolean => {
+    return this.#get().loadingTestCaseIds.includes(datasetId);
+  };
+
+  refreshTestCases = async (datasetId: string): Promise<void> => {
+    await mutate(
+      (key) => Array.isArray(key) && key[0] === FETCH_TEST_CASES_KEY && key[1] === datasetId,
+    );
+  };
+
+  useFetchTestCases = (params: {
     datasetId: string;
     limit?: number;
     offset?: number;
-  }) => SWRResponse;
-}
-
-export const createTestCaseSlice: StateCreator<
-  EvalStore,
-  [['zustand/devtools', never]],
-  [],
-  TestCaseAction
-> = (set, get) => ({
-  // Get test cases for a specific dataset from cache
-  getTestCasesByDatasetId: (datasetId) => {
-    return get().testCasesCache[datasetId]?.data || [];
-  },
-
-  // Get total count for a specific dataset from cache
-  getTestCasesTotalByDatasetId: (datasetId) => {
-    return get().testCasesCache[datasetId]?.total || 0;
-  },
-
-  // Check if test cases are currently loading for a dataset
-  isLoadingTestCases: (datasetId) => {
-    return get().loadingTestCaseIds.includes(datasetId);
-  },
-
-  refreshTestCases: async (datasetId) => {
-    // Mutate all SWR keys that start with [FETCH_TEST_CASES_KEY, datasetId]
-    await mutate(
-      (key) =>
-        Array.isArray(key) && key[0] === FETCH_TEST_CASES_KEY && key[1] === datasetId,
-    );
-  },
-
-  useFetchTestCases: (params) => {
+  }): SWRResponse => {
     const { datasetId, limit = 10, offset = 0 } = params;
 
     return useClientDataSWR(
@@ -56,7 +52,7 @@ export const createTestCaseSlice: StateCreator<
       () => agentEvalService.listTestCases({ datasetId, limit, offset }),
       {
         onSuccess: (data: any) => {
-          set(
+          this.#set(
             (state) => ({
               loadingTestCaseIds: state.loadingTestCaseIds.filter((id) => id !== datasetId),
               testCasesCache: {
@@ -74,5 +70,7 @@ export const createTestCaseSlice: StateCreator<
         },
       },
     );
-  },
-});
+  };
+}
+
+export type TestCaseAction = Pick<TestCaseActionImpl, keyof TestCaseActionImpl>;

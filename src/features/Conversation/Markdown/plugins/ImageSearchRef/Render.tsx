@@ -127,9 +127,7 @@ const Render = memo<MarkdownElementProps<ImageSearchRefProperties>>(({ node, id 
         title={image.title ? stripHtml(image.title) : undefined}
       >
         <Flexbox gap={2}>
-          {image.title && (
-            <div className={styles.imageTitle} dangerouslySetInnerHTML={{ __html: image.title }} />
-          )}
+          {image.title && <div className={styles.imageTitle}>{stripHtml(image.title)}</div>}
           {image.domain && (
             <Flexbox horizontal align="center" gap={4}>
               <Image

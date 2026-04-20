@@ -3,6 +3,8 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
+import { flattenActions } from '../utils/flattenActions';
 import { type ChatGroupAction } from './action';
 import { chatGroupAction } from './action';
 import { type ChatGroupState } from './initialState';
@@ -14,7 +16,7 @@ const createStore: StateCreator<ChatGroupStore, [['zustand/devtools', never]]> =
   ...params: Parameters<StateCreator<ChatGroupStore, [['zustand/devtools', never]]>>
 ) => ({
   ...initialChatGroupState,
-  ...chatGroupAction(...params),
+  ...flattenActions<ChatGroupAction>([chatGroupAction(...params)]),
 });
 
 const devtools = createDevtools('agentGroup');
@@ -23,5 +25,7 @@ export const useAgentGroupStore = createWithEqualityFn<ChatGroupStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('agentGroup', useAgentGroupStore);
 
 export const getChatGroupStoreState = () => useAgentGroupStore.getState();

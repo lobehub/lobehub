@@ -7,6 +7,37 @@ import { getAgentRuntimeRedisClient } from './redis';
 const log = debug('lobe-server:agent-runtime:stream-event-manager');
 const timing = debug('lobe-server:agent-runtime:timing');
 
+const extractReasonFromError = (error: any): string | undefined => {
+  if (!error) return undefined;
+
+  // ChatMessageError format: { body: { error: { message } }, message, type }
+  if (error.body?.error?.message) return error.body.error.message;
+  if (error.body?.message) return error.body.message;
+
+  // ChatCompletionErrorPayload format: { error: { message }, errorType }
+  if (error.error?.error?.message) return error.error.error.message;
+  if (error.error?.message) return error.error.message;
+
+  // Direct message (skip "[object Object]")
+  if (error.message && error.message !== '[object Object]' && error.message !== 'error') {
+    return error.message;
+  }
+
+  return error.type || error.errorType || undefined;
+};
+
+export const getDefaultReasonDetail = (finalState: any, reason?: string): string => {
+  if (reason === 'error') {
+    return extractReasonFromError(finalState?.error) || 'Agent runtime failed';
+  }
+
+  if (reason === 'interrupted') {
+    return extractReasonFromError(finalState?.error) || 'Agent runtime interrupted';
+  }
+
+  return 'Agent runtime completed successfully';
+};
+
 export interface StreamEvent {
   data: any;
   id?: string; // Redis Stream event ID
@@ -19,6 +50,7 @@ export interface StreamEvent {
     | 'stream_start'
     | 'stream_chunk'
     | 'stream_end'
+    | 'stream_retry'
     | 'tool_start'
     | 'tool_end'
     | 'step_start'
@@ -167,7 +199,7 @@ export class StreamEventManager {
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',
-        reasonDetail: reasonDetail || 'Agent runtime completed successfully',
+        reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
       },
       stepIndex,
       type: 'agent_runtime_end',

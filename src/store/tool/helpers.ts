@@ -1,5 +1,4 @@
-import { type LobeTool } from '@lobechat/types';
-import { type PluginSchema } from '@lobehub/chat-plugin-sdk';
+import { type LobeTool, type ToolManifestSettings } from '@lobechat/types';
 
 import { type MetaData } from '@/types/meta';
 
@@ -14,7 +13,7 @@ const getPluginAvatar = (meta?: MetaData) => meta?.avatar || '🧩';
 const isCustomPlugin = (id: string, pluginList: LobeTool[]) =>
   pluginList.some((i) => i.identifier === id && i.type === 'customPlugin');
 
-const isSettingSchemaNonEmpty = (schema?: PluginSchema) =>
+const isSettingSchemaNonEmpty = (schema?: ToolManifestSettings) =>
   schema?.properties && Object.keys(schema.properties).length > 0;
 
 export const pluginHelpers = {

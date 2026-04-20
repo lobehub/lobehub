@@ -1,7 +1,8 @@
 {
-  "desc": "Aquí encontrarás actualizaciones ocasionales sobre nuevas funciones que estamos explorando. ¡No dudes en probarlas!",
   "features.assistantMessageGroup.desc": "Agrupa los mensajes del agente y los resultados de sus herramientas para mostrarlos juntos",
   "features.assistantMessageGroup.title": "Agrupación de Mensajes del Agente",
+  "features.gatewayMode.desc": "Ejecuta las tareas del agente en el servidor a través del WebSocket de Gateway en lugar de hacerlo localmente. Permite una ejecución más rápida y reduce el uso de recursos del cliente.",
+  "features.gatewayMode.title": "Ejecución del agente del lado del servidor (Gateway)",
   "features.groupChat.desc": "Activa la coordinación de chat grupal con múltiples agentes.",
   "features.groupChat.title": "Chat Grupal (Multiagente)",
   "features.inputMarkdown.desc": "Renderiza Markdown en el área de entrada en tiempo real (texto en negrita, bloques de código, tablas, etc.).",

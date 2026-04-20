@@ -28,6 +28,7 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
   if (!content && !hasTools) return <ContentLoading id={id} />;
 
   if (content === LOADING_FLAT) {
+    if (hasTools) return null;
     return <ContentLoading id={id} />;
   }
 
@@ -36,11 +37,7 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
 
   return (
     content && (
-      <MarkdownMessage
-        {...markdownProps}
-        animated={isToolSingleLine ? false : markdownProps.animated}
-        className={cx(isToolSingleLine && styles.pWithTool)}
-      >
+      <MarkdownMessage {...markdownProps} className={cx(isToolSingleLine && styles.pWithTool)}>
         {message}
       </MarkdownMessage>
     )

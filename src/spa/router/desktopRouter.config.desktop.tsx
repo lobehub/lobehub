@@ -9,6 +9,10 @@ import {
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
 import DesktopMainLayout from '@/routes/(main)/_layout';
+import ImagePage from '@/routes/(main)/(create)/image';
+import DesktopImageLayout from '@/routes/(main)/(create)/image/_layout';
+import VideoPage from '@/routes/(main)/(create)/video';
+import DesktopVideoLayout from '@/routes/(main)/(create)/video/_layout';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
@@ -22,6 +26,7 @@ import CommunityDetailGroupAgentPage from '@/routes/(main)/community/(detail)/gr
 import CommunityDetailMcpPage from '@/routes/(main)/community/(detail)/mcp';
 import CommunityDetailModelPage from '@/routes/(main)/community/(detail)/model';
 import CommunityDetailProviderPage from '@/routes/(main)/community/(detail)/provider';
+import CommunityDetailSkillPage from '@/routes/(main)/community/(detail)/skill';
 import CommunityDetailUserPage from '@/routes/(main)/community/(detail)/user';
 import CommunityListLayout from '@/routes/(main)/community/(list)/_layout';
 import CommunityListHomePage from '@/routes/(main)/community/(list)/(home)';
@@ -32,6 +37,8 @@ import CommunityListMcpLayout from '@/routes/(main)/community/(list)/mcp/_layout
 import CommunityListModelPage from '@/routes/(main)/community/(list)/model';
 import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_layout';
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
+import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
+import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -43,8 +50,6 @@ import EvalCaseDetailPage from '@/routes/(main)/eval/bench/[benchmarkId]/runs/[r
 import GroupPage from '@/routes/(main)/group';
 import DesktopGroupLayout from '@/routes/(main)/group/_layout';
 import GroupProfilePage from '@/routes/(main)/group/profile';
-import ImagePage from '@/routes/(main)/image';
-import DesktopImageLayout from '@/routes/(main)/image/_layout';
 import DesktopMemoryLayout from '@/routes/(main)/memory/_layout';
 import MemoryHomePage from '@/routes/(main)/memory/(home)';
 import MemoryActivitiesPage from '@/routes/(main)/memory/activities';
@@ -64,8 +69,6 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
-import VideoPage from '@/routes/(main)/video';
-import DesktopVideoLayout from '@/routes/(main)/video/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -101,7 +104,7 @@ export const desktopRoutes: RouteObject[] = [
               },
             ],
             element: <DesktopChatLayout />,
-            errorElement: <ErrorBoundary resetPath="/agent" />,
+            errorElement: <ErrorBoundary />,
             path: ':aid',
           },
         ],
@@ -127,7 +130,7 @@ export const desktopRoutes: RouteObject[] = [
               },
             ],
             element: <DesktopGroupLayout />,
-            errorElement: <ErrorBoundary resetPath="/group" />,
+            errorElement: <ErrorBoundary />,
             path: ':gid',
           },
         ],
@@ -167,6 +170,16 @@ export const desktopRoutes: RouteObject[] = [
               {
                 children: [
                   {
+                    element: <CommunityListSkillPage />,
+                    index: true,
+                  },
+                ],
+                element: <CommunityListSkillLayout />,
+                path: 'skill',
+              },
+              {
+                children: [
+                  {
                     element: <CommunityListMcpPage />,
                     index: true,
                   },
@@ -201,6 +214,10 @@ export const desktopRoutes: RouteObject[] = [
                 path: 'provider/:slug',
               },
               {
+                element: <CommunityDetailSkillPage />,
+                path: 'skill/:slug',
+              },
+              {
                 element: <CommunityDetailMcpPage />,
                 path: 'mcp/:slug',
               },
@@ -213,7 +230,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <CommunityLayout />,
-        errorElement: <ErrorBoundary resetPath="/community" />,
+        errorElement: <ErrorBoundary />,
         path: 'community',
       },
 
@@ -247,7 +264,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <ResourceLayout />,
-        errorElement: <ErrorBoundary resetPath="/resource" />,
+        errorElement: <ErrorBoundary />,
         path: 'resource',
       },
 
@@ -280,7 +297,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <SettingsLayout />,
-        errorElement: <ErrorBoundary resetPath="/settings" />,
+        errorElement: <ErrorBoundary />,
         path: 'settings',
       },
 
@@ -313,7 +330,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopMemoryLayout />,
-        errorElement: <ErrorBoundary resetPath="/memory" />,
+        errorElement: <ErrorBoundary />,
         path: 'memory',
       },
 
@@ -326,7 +343,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopVideoLayout />,
-        errorElement: <ErrorBoundary resetPath="/video" />,
+        errorElement: <ErrorBoundary />,
         path: 'video',
       },
 
@@ -339,7 +356,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopImageLayout />,
-        errorElement: <ErrorBoundary resetPath="/image" />,
+        errorElement: <ErrorBoundary />,
         path: 'image',
       },
 
@@ -388,7 +405,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <EvalLayout />,
-        errorElement: <ErrorBoundary resetPath="/eval" />,
+        errorElement: <ErrorBoundary />,
         path: 'eval',
       },
 
@@ -405,7 +422,7 @@ export const desktopRoutes: RouteObject[] = [
           },
         ],
         element: <DesktopPageLayout />,
-        errorElement: <ErrorBoundary resetPath="/page" />,
+        errorElement: <ErrorBoundary />,
         path: 'page',
       },
 
@@ -420,7 +437,7 @@ export const desktopRoutes: RouteObject[] = [
       },
     ],
     element: <DesktopMainLayout />,
-    errorElement: <ErrorBoundary resetPath="/" />,
+    errorElement: <ErrorBoundary />,
     path: '/',
   },
 
@@ -442,6 +459,25 @@ export const desktopRoutes: RouteObject[] = [
 // Desktop onboarding route (Electron only in .desktop.tsx)
 desktopRoutes.push({
   element: <DesktopOnboarding />,
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/desktop-onboarding',
+});
+
+// Web onboarding aliases redirect to the desktop-specific onboarding flow.
+desktopRoutes.push({
+  element: redirectElement('/desktop-onboarding'),
+  errorElement: <ErrorBoundary />,
+  path: '/onboarding',
+});
+
+desktopRoutes.push({
+  element: redirectElement('/desktop-onboarding'),
+  errorElement: <ErrorBoundary />,
+  path: '/onboarding/agent',
+});
+
+desktopRoutes.push({
+  element: redirectElement('/desktop-onboarding'),
+  errorElement: <ErrorBoundary />,
+  path: '/onboarding/classic',
 });

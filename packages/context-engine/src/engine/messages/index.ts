@@ -18,6 +18,7 @@ export type {
   ToolDiscoveryConfig,
   ToolDiscoveryMeta,
   ToolsConfig,
+  TopicReferenceItem,
   UIChatMessage,
   UserMemoryActivityItem,
   UserMemoryConfig,

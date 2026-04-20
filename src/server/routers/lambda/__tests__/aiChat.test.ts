@@ -821,12 +821,15 @@ describe('aiChatRouter', () => {
       const result = await caller.outputJSON(input);
 
       expect(initModelRuntimeFromDB).toHaveBeenCalledWith({}, 'u1', 'openai');
-      expect(mockGenerateObject).toHaveBeenCalledWith({
-        messages: input.messages,
-        model: 'gpt-4o',
-        schema: input.schema,
-        tools: undefined,
-      });
+      expect(mockGenerateObject).toHaveBeenCalledWith(
+        {
+          messages: input.messages,
+          model: 'gpt-4o',
+          schema: input.schema,
+          tools: undefined,
+        },
+        { metadata: { trigger: 'chat' } },
+      );
       expect(result).toEqual(mockResult);
     });
 
@@ -862,12 +865,15 @@ describe('aiChatRouter', () => {
 
       await caller.outputJSON(input);
 
-      expect(mockGenerateObject).toHaveBeenCalledWith({
-        messages: [],
-        model: 'gpt-4o',
-        schema: undefined,
-        tools: mockTools,
-      });
+      expect(mockGenerateObject).toHaveBeenCalledWith(
+        {
+          messages: [],
+          model: 'gpt-4o',
+          schema: undefined,
+          tools: mockTools,
+        },
+        { metadata: { trigger: 'chat' } },
+      );
     });
   });
 });

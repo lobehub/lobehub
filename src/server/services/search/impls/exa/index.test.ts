@@ -178,7 +178,7 @@ describe('ExaImpl', () => {
 
       const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
       expect(body.query).toBe('my search query');
-      expect(body.numResults).toBe(15);
+      expect(body.numResults).toBe(10);
       expect(body.type).toBe('auto');
     });
 

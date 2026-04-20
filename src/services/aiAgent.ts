@@ -1,4 +1,28 @@
+import type { ExecAgentResult } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
+
+export type { ExecAgentResult };
+
+/**
+ * Resume instruction for an operation that hit `human_approve_required`. When
+ * present, the new op acts as the "continue" step: server reads the target tool
+ * message, writes the user's decision, and either re-dispatches the tool
+ * (approved) or feeds the rejection back to the LLM as user feedback
+ * (rejected / rejected_continue).
+ *
+ * Kept as a top-level field (not folded into `appContext`) so the server schema
+ * can validate it independently.
+ */
+export interface ResumeApprovalParam {
+  decision: 'approved' | 'rejected' | 'rejected_continue';
+  /** ID of the pending `role='tool'` message this decision targets. */
+  parentMessageId: string;
+  /** Optional user-supplied rejection reason (only meaningful for rejected variants). */
+  rejectionReason?: string;
+  /** tool_call_id of the pending tool call being approved/rejected. */
+  toolCallId: string;
+}
 
 export interface ExecAgentTaskParams {
   agentId?: string;
@@ -10,8 +34,21 @@ export interface ExecAgentTaskParams {
     topicId?: string | null;
   };
   autoStart?: boolean;
+  /**
+   * Runtime of the client initiating this request. When 'desktop', server
+   * enables `executor: 'client'` tools (local-system, stdio MCP) and
+   * dispatches them over the Agent Gateway WS back to this client.
+   */
+  clientRuntime?: 'desktop' | 'web';
+  deviceId?: string;
   existingMessageIds?: string[];
+  /** File IDs of already-uploaded attachments to attach to the new user message */
+  fileIds?: string[];
+  /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
+  parentMessageId?: string;
   prompt: string;
+  /** Resume a previous op paused on `human_approve_required` instead of starting from a fresh user prompt. */
+  resumeApproval?: ResumeApprovalParam;
   slug?: string;
 }
 
@@ -90,9 +127,10 @@ export interface UpdateClientTaskThreadStatusParams {
 
 class AiAgentService {
   /**
-   * Execute a single Agent task
+   * Execute a single Agent task.
+   * Returns the operationId needed to connect to the Agent Gateway.
    */
-  async execAgentTask(params: ExecAgentTaskParams) {
+  async execAgentTask(params: ExecAgentTaskParams): Promise<ExecAgentResult> {
     return await lambdaClient.aiAgent.execAgent.mutate(params);
   }
 
@@ -102,6 +140,13 @@ class AiAgentService {
    * - Group mode: pass groupId, Thread will be associated with the Group
    * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
    */
+  /**
+   * Get a fresh JWT token for Gateway WebSocket reconnection.
+   */
+  async refreshGatewayToken(topicId: string): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
+  }
+
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }

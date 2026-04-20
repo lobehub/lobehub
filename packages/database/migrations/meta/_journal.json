@@ -658,6 +658,48 @@
       "when": 1773653550268,
       "tag": "0093_add_bm25_indexes_with_icu",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1773764776073,
+      "tag": "0094_agent_bot_providers_add_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1774502940061,
+      "tag": "0095_add_agent_task_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1774514478074,
+      "tag": "0096_add_notification_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1774548140282,
+      "tag": "0097_add_agent_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1776234919716,
+      "tag": "0098_add_document_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1776674965365,
+      "tag": "0099_topic_status_tasks_automation_mode",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -1,14 +1,25 @@
+import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@lobechat/utils/apiKey';
+import { hashApiKey } from '@lobechat/utils/server';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
-import { hashApiKey } from '@/utils/server/apiKeyHash';
 
 import type { ApiKeyItem, NewApiKeyItem } from '../schemas';
 import { apiKeys } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export class ApiKeyModel {
+  static findByKey = async (db: LobeChatDatabase, key: string) => {
+    if (!validateApiKeyFormat(key)) {
+      return null;
+    }
+    const keyHash = hashApiKey(key);
+
+    return db.query.apiKeys.findFirst({
+      where: eq(apiKeys.keyHash, keyHash),
+    });
+  };
+
   private userId: string;
   private db: LobeChatDatabase;
   private gateKeeperPromise: Promise<KeyVaultsGateKeeper> | null = null;
@@ -75,14 +86,7 @@ export class ApiKeyModel {
   };
 
   findByKey = async (key: string) => {
-    if (!validateApiKeyFormat(key)) {
-      return null;
-    }
-    const keyHash = hashApiKey(key);
-
-    return this.db.query.apiKeys.findFirst({
-      where: eq(apiKeys.keyHash, keyHash),
-    });
+    return ApiKeyModel.findByKey(this.db, key);
   };
 
   validateKey = async (key: string) => {

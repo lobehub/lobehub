@@ -4,11 +4,13 @@ import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { type ReactNode } from 'react';
+import { type ReactNode, use } from 'react';
 import { memo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useChatInputStore } from '@/features/ChatInput/store';
+import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -23,7 +25,7 @@ import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     .show-on-hover {
       opacity: 0;
@@ -46,6 +48,8 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     height: 100%;
     margin-block-start: 0;
+
+    background: ${cssVar.colorBgContainer};
   `,
   inputFullscreen: css`
     border: none;
@@ -58,6 +62,12 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   extentHeaderContent?: ReactNode;
   inputContainerProps?: ChatInputProps;
   leftContent?: ReactNode;
+  placeholder?: ReactNode;
+  /**
+   * Custom node to render in place of the default RuntimeConfig bar.
+   * When provided, used instead of `<RuntimeConfig />` (ignores `showRuntimeConfig`).
+   */
+  runtimeConfigSlot?: ReactNode;
   sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
   showRuntimeConfig?: boolean;
@@ -67,6 +77,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
     showRuntimeConfig = true,
+    runtimeConfigSlot,
     inputContainerProps,
     extentHeaderContent,
     actionBarStyle,
@@ -74,9 +85,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     leftContent,
+    placeholder,
     sendAreaPrefix,
   }) => {
     const { t } = useTranslation('chat');
+    const layoutContainerRef = use(LayoutContainerContext);
     const [chatInputHeight, updateSystemStatus] = useGlobalStore((s) => [
       systemStatusSelectors.chatInputHeight(s),
       s.updateSystemStatus,
@@ -93,15 +106,18 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
 
+    const setExpand = useChatInputStore((s) => s.setExpand);
+
     useEffect(() => {
       if (editor) editor.focus();
-    }, [chatKey, editor]);
+      setExpand(false);
+    }, [chatKey, editor, setExpand]);
 
     const shouldShowContextContainer =
       leftActions.flat().includes('fileUpload') || hasContextSelections || hasFiles;
     const contextContainerNode = shouldShowContextContainer && <ContextContainer />;
 
-    return (
+    const content = (
       <Flexbox
         className={cx(styles.container, expand && styles.fullscreen)}
         gap={8}
@@ -152,9 +168,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor />
+          <InputEditor placeholder={placeholder} />
         </ChatInput>
-        {showRuntimeConfig && <RuntimeConfig />}
+        {runtimeConfigSlot ?? (showRuntimeConfig && <RuntimeConfig />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
             <Text className={styles.footnote} type={'secondary'}>
@@ -164,6 +180,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         )}
       </Flexbox>
     );
+
+    if (expand && layoutContainerRef.current)
+      return createPortal(content, layoutContainerRef.current);
+
+    return content;
   },
 );
 

@@ -36,9 +36,8 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
   message?: ReactNode;
   messageExtra?: ReactNode;
   /**
-   * Dynamic min-height for new screen effect, e.g. "calc(100dvh - 350px)"
+   * Avatar click handler
    */
-  newScreenMinHeight?: string;
   onAvatarClick?: () => void;
   onDoubleClick?: DivProps['onDoubleClick'];
   /**

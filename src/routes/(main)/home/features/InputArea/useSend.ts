@@ -1,6 +1,7 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
 import { useCallback } from 'react';
 
+import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -17,59 +18,64 @@ export const useSend = () => {
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
 
-  const send = useCallback(async () => {
-    const { inputMessage, mainInputEditor } = useChatStore.getState();
-    const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
-    const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
-    const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsResearch, inputActiveMode } =
-      useHomeStore.getState();
+  const send = useCallback<SendButtonHandler>(
+    async ({ getEditorData }) => {
+      const { inputMessage, mainInputEditor } = useChatStore.getState();
+      const editorData = getEditorData?.() ?? mainInputEditor?.getJSONState();
+      const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
+      const contextList = fileChatSelectors.chatContextSelections(useFileStore.getState());
+      const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsResearch, inputActiveMode } =
+        useHomeStore.getState();
 
-    // Require input content (except for default inbox which can have files/context)
-    if (!inputMessage && fileList.length === 0 && contextList.length === 0) return;
+      // Require input content (except for default inbox which can have files/context)
+      if (!inputMessage && fileList.length === 0 && contextList.length === 0) return;
 
-    try {
-      switch (inputActiveMode) {
-        case 'agent': {
-          await sendAsAgent(inputMessage);
-          break;
+      try {
+        switch (inputActiveMode) {
+          case 'agent': {
+            await sendAsAgent({ editorData, message: inputMessage });
+            break;
+          }
+
+          case 'group': {
+            await sendAsGroup({ editorData, message: inputMessage });
+            break;
+          }
+
+          case 'write': {
+            await sendAsWrite({ editorData, message: inputMessage });
+            break;
+          }
+
+          case 'research': {
+            await sendAsResearch(inputMessage);
+            break;
+          }
+
+          default: {
+            // Default inbox behavior
+            if (!inboxAgentId) return;
+
+            sendMessage({
+              context: { agentId: inboxAgentId },
+              contexts: contextList,
+              editorData,
+              files: fileList,
+              message: inputMessage,
+            });
+
+            router.push(SESSION_CHAT_URL(inboxAgentId, false));
+          }
         }
-
-        case 'group': {
-          await sendAsGroup(inputMessage);
-          break;
-        }
-
-        case 'write': {
-          await sendAsWrite(inputMessage);
-          break;
-        }
-
-        case 'research': {
-          await sendAsResearch(inputMessage);
-          break;
-        }
-
-        default: {
-          // Default inbox behavior
-          if (!inboxAgentId) return;
-
-          sendMessage({
-            context: { agentId: inboxAgentId },
-            contexts: contextList,
-            files: fileList,
-            message: inputMessage,
-          });
-
-          router.push(SESSION_CHAT_URL(inboxAgentId, false));
-        }
+      } finally {
+        // Clear input and files after send
+        clearChatUploadFileList();
+        clearChatContextSelections();
+        mainInputEditor?.clearContent();
       }
-    } finally {
-      // Clear input and files after send
-      clearChatUploadFileList();
-      clearChatContextSelections();
-      mainInputEditor?.clearContent();
-    }
-  }, [inboxAgentId, sendMessage, clearChatContextSelections, clearChatUploadFileList, router]);
+    },
+    [inboxAgentId, sendMessage, clearChatContextSelections, clearChatUploadFileList, router],
+  );
 
   return {
     inboxAgentId,

@@ -1,3 +1,4 @@
+import { type OpenAIChatMessage } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type MenuProps } from '@lobehub/ui';
@@ -31,6 +32,7 @@ export interface PublicState {
   agentId?: string;
   allowExpand?: boolean;
   expand?: boolean;
+  getMessages?: () => OpenAIChatMessage[];
   leftActions: ActionKeys[];
   mentionItems?: SlashOptions['items'];
   mobile?: boolean;
@@ -47,6 +49,7 @@ export interface PublicState {
 }
 
 export interface State extends PublicState {
+  _savedEditorState?: Record<string, any>;
   editor?: IEditor;
   isContentEmpty: boolean;
   markdownContent: string;

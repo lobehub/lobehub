@@ -3,11 +3,15 @@ import fs from 'node:fs';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getUserIdFromApiKey } from '../auth/apiKey';
 import { saveCredentials } from '../auth/credentials';
 import { loadSettings, saveSettings } from '../settings';
 import { log } from '../utils/logger';
 import { registerLoginCommand, resolveCommandExecutable } from './login';
 
+vi.mock('../auth/apiKey', () => ({
+  getUserIdFromApiKey: vi.fn(),
+}));
 vi.mock('../auth/credentials', () => ({
   saveCredentials: vi.fn(),
 }));
@@ -37,6 +41,7 @@ vi.mock('node:child_process', () => ({
 
 describe('login command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  const originalApiKey = process.env.LOBEHUB_CLI_API_KEY;
   const originalPath = process.env.PATH;
   const originalPathext = process.env.PATHEXT;
   const originalSystemRoot = process.env.SystemRoot;
@@ -46,11 +51,13 @@ describe('login command', () => {
     vi.stubGlobal('fetch', vi.fn());
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     vi.mocked(loadSettings).mockReturnValue(null);
+    delete process.env.LOBEHUB_CLI_API_KEY;
   });
 
   afterEach(() => {
     vi.useRealTimers();
     exitSpy.mockRestore();
+    process.env.LOBEHUB_CLI_API_KEY = originalApiKey;
     process.env.PATH = originalPath;
     process.env.PATHEXT = originalPathext;
     process.env.SystemRoot = originalSystemRoot;
@@ -102,8 +109,12 @@ describe('login command', () => {
     } as any;
   }
 
+  async function runLogin(program: Command, args: string[] = []) {
+    return program.parseAsync(['node', 'test', 'login', ...args]);
+  }
+
   async function runLoginAndAdvanceTimers(program: Command, args: string[] = []) {
-    const parsePromise = program.parseAsync(['node', 'test', 'login', ...args]);
+    const parsePromise = runLogin(program, args);
     // Advance timers to let sleep resolve in the polling loop
     for (let i = 0; i < 10; i++) {
       await vi.advanceTimersByTimeAsync(2000);
@@ -130,6 +141,19 @@ describe('login command', () => {
     expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
   });
 
+  it('should use environment api key without storing credentials', async () => {
+    process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-env-test';
+    vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-123');
+
+    const program = createProgram();
+    await runLogin(program);
+
+    expect(getUserIdFromApiKey).toHaveBeenCalledWith('sk-lh-env-test', 'https://app.lobehub.com');
+    expect(saveCredentials).not.toHaveBeenCalled();
+    expect(saveSettings).toHaveBeenCalledWith({ serverUrl: 'https://app.lobehub.com' });
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Login successful'));
+  });
+
   it('should persist custom server into settings', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(deviceAuthResponse())
@@ -152,6 +176,23 @@ describe('login command', () => {
 
     const program = createProgram();
     await runLoginAndAdvanceTimers(program, ['--server', 'https://test.com/']);
+
+    expect(saveSettings).toHaveBeenCalledWith({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://test.com',
+    });
+  });
+
+  it('should preserve existing gateway for environment api key on the same server', async () => {
+    process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-env-test';
+    vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-123');
+    vi.mocked(loadSettings).mockReturnValueOnce({
+      gatewayUrl: 'https://gateway.example.com',
+      serverUrl: 'https://test.com',
+    });
+
+    const program = createProgram();
+    await runLogin(program, ['--server', 'https://test.com/']);
 
     expect(saveSettings).toHaveBeenCalledWith({
       gatewayUrl: 'https://gateway.example.com',

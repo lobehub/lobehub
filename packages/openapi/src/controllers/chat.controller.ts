@@ -10,7 +10,7 @@ import type {
 
 export class ChatController extends BaseController {
   /**
-   * 通用聊天接口
+   * General chat endpoint
    * POST /api/v1/chat
    * Body: ChatServiceParams
    */
@@ -22,7 +22,7 @@ export class ChatController extends BaseController {
       const db = await this.getDatabase();
       const chatService = new ChatService(db, userId);
 
-      // 如果是流式响应，直接返回
+      // If streaming response, return directly
       if (chatParams.stream) {
         return await chatService.chat(chatParams);
       }
@@ -35,7 +35,7 @@ export class ChatController extends BaseController {
   }
 
   /**
-   * 翻译文本接口
+   * Text translation endpoint
    * POST /api/v1/chat/translate
    * Body: TranslateServiceParams
    */
@@ -55,7 +55,7 @@ export class ChatController extends BaseController {
   }
 
   /**
-   * 生成消息回复接口
+   * Message reply generation endpoint
    * POST /api/v1/chat/generate-reply
    * Body: MessageGenerationParams
    */

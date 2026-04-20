@@ -102,6 +102,15 @@ export interface WriteLocalFileParams {
   path: string;
 }
 
+export interface AuditSafePathsParams {
+  paths: string[];
+  resolveAgainstScope: string;
+}
+
+export interface AuditSafePathsResult {
+  allSafe: boolean;
+}
+
 export interface LocalReadFileResult {
   /**
    * Character count of the content within the specified `loc` range.
@@ -175,6 +184,8 @@ export interface RunCommandParams {
   command: string;
   cwd?: string;
   description?: string;
+  /** Merged into the child process environment (after `process.env`). */
+  env?: Record<string, string>;
   run_in_background?: boolean;
   timeout?: number;
 }

@@ -6,8 +6,10 @@ import retry from 'async-retry';
 import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
+import { netFetch } from '@/utils/net-fetch';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -93,10 +95,26 @@ export default class RemoteServerConfigCtr extends ControllerModule {
    */
   async isRemoteServerConfigured(config?: DataSyncConfig): Promise<boolean> {
     const effectiveConfig = config ?? (await this.getRemoteServerConfig());
-    return (
-      effectiveConfig.active &&
-      (effectiveConfig.storageMode !== 'selfHost' || !!effectiveConfig.remoteServerUrl)
-    );
+    const isActive = Boolean(effectiveConfig.active);
+    const isSelfHostConfigured =
+      effectiveConfig.storageMode !== 'selfHost' ||
+      this.isValidSelfHostRemoteUrl(effectiveConfig.remoteServerUrl);
+
+    return isActive && isSelfHostConfigured;
+  }
+
+  private isValidSelfHostRemoteUrl(remoteServerUrl?: string): boolean {
+    if (!remoteServerUrl) return false;
+    const normalizedUrl = remoteServerUrl.trim();
+
+    if (!normalizedUrl) return false;
+
+    try {
+      const parsedUrl = new URL(normalizedUrl);
+      return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -303,6 +321,13 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Also clear from persistent storage
     logger.debug(`Deleting tokens from store key: ${this.encryptedTokensKey}`);
     this.app.storeManager.delete(this.encryptedTokensKey);
+
+    // Disconnect gateway when tokens are cleared (logout / token refresh failure)
+    const gatewaySrv = this.app.getService(GatewayConnectionService);
+    if (gatewaySrv) {
+      logger.debug('Disconnecting gateway due to token clear');
+      await gatewaySrv.disconnect();
+    }
   }
 
   /**
@@ -461,7 +486,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(headers);
-      const response = await fetch(tokenUrl.toString(), { body, headers, method: 'POST' });
+      const response = await netFetch(tokenUrl.toString(), { body, headers, method: 'POST' });
 
       if (!response.ok) {
         // Try to parse error response
@@ -537,7 +562,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   }
 
   async getRemoteServerUrl(config?: DataSyncConfig) {
-    const dataConfig = this.normalizeConfig(config ? config : await this.getRemoteServerConfig());
+    const dataConfig = this.normalizeConfig(config ?? (await this.getRemoteServerConfig()));
 
     return dataConfig.storageMode === 'cloud' ? OFFICIAL_CLOUD_SERVER : dataConfig.remoteServerUrl;
   }

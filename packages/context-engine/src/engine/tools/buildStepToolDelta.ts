@@ -6,6 +6,11 @@ export interface BuildStepToolDeltaParams {
    */
   activeDeviceId?: string;
   /**
+   * IDs of tools that are already enabled/activated at operation level.
+   * Used to deduplicate — tools already enabled won't be injected again.
+   */
+  enabledToolIds: string[];
+  /**
    * Force finish flag — strips all tools for pure text output
    */
   forceFinish?: boolean;
@@ -32,12 +37,13 @@ export interface BuildStepToolDeltaParams {
  */
 export function buildStepToolDelta(params: BuildStepToolDeltaParams): StepToolDelta {
   const delta: StepToolDelta = { activatedTools: [] };
+  const enabledSet = new Set(params.enabledToolIds);
 
   // Device activation → inject local-system tools
   if (
     params.activeDeviceId &&
     params.localSystemManifest &&
-    !params.operationManifestMap[params.localSystemManifest.identifier]
+    !enabledSet.has(params.localSystemManifest.identifier)
   ) {
     delta.activatedTools.push({
       id: params.localSystemManifest.identifier,
@@ -49,7 +55,7 @@ export function buildStepToolDelta(params: BuildStepToolDeltaParams): StepToolDe
   // @tool mentions
   if (params.mentionedToolIds?.length) {
     for (const id of params.mentionedToolIds) {
-      if (!params.operationManifestMap[id]) {
+      if (!enabledSet.has(id)) {
         delta.activatedTools.push({ id, source: 'mention' });
       }
     }

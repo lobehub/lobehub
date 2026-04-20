@@ -1,11 +1,11 @@
 'use client';
 
-import { Flexbox, Modal } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { McpIcon } from '@lobehub/ui/icons';
 import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MCPTag from '@/components/Plugins/MCPTag';
-import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import SkillSourceTag from '@/components/SkillSourceTag';
 import McpDetail from '@/features/MCP/MCPDetail';
@@ -48,7 +48,11 @@ const McpSkillItem = memo<McpSkillItemProps>(
         >
           <Flexbox horizontal align="center" gap={12} style={{ flex: 1, overflow: 'hidden' }}>
             <div className={styles.icon}>
-              <PluginAvatar avatar={avatar} size={32} />
+              {avatar && avatar !== 'MCP_AVATAR' ? (
+                <Avatar avatar={avatar} shape={'square'} size={32} />
+              ) : (
+                <Icon icon={McpIcon} size={28} />
+              )}
             </div>
             <Flexbox horizontal align="center" gap={8} style={{ overflow: 'hidden' }}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>

@@ -59,5 +59,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
     display: inline-flex;
     outline: none;
+
+    /* SVG icons (from @lobehub/icons IconAvatar) can receive focus when dropdown closes,
+       causing an unwanted blue outline ring */
+    svg:focus {
+      outline: none;
+    }
   `,
 }));

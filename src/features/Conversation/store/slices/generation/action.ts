@@ -1,10 +1,46 @@
+import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { type StateCreator } from 'zustand';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/index';
 import { useChatStore } from '@/store/chat';
+import {
+  parseMentionedAgentsFromEditorData,
+  parseSelectedSkillsFromEditorData,
+  parseSelectedToolsFromEditorData,
+} from '@/store/chat/slices/aiChat/actions/commandBus';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type Store as ConversationStore } from '../../action';
+
+const buildRetryInitialContext = (editorData: Record<string, any> | null | undefined) => {
+  const normalizedEditorData = editorData ?? undefined;
+  const selectedSkills = parseSelectedSkillsFromEditorData(normalizedEditorData);
+  const selectedTools = parseSelectedToolsFromEditorData(normalizedEditorData);
+  const mentionedAgents = parseMentionedAgentsFromEditorData(normalizedEditorData);
+
+  const effectiveSelectedTools =
+    mentionedAgents.length > 0 &&
+    !selectedTools.some((tool) => tool.identifier === AgentManagementIdentifier)
+      ? [...selectedTools, { identifier: AgentManagementIdentifier, name: 'Agent Management' }]
+      : selectedTools;
+
+  const hasInitialContext =
+    effectiveSelectedTools.length > 0 || selectedSkills.length > 0 || mentionedAgents.length > 0;
+
+  if (!hasInitialContext) return undefined;
+
+  return {
+    initialContext: {
+      ...(selectedSkills.length > 0 ? { selectedSkills } : undefined),
+      ...(effectiveSelectedTools.length > 0
+        ? { selectedTools: effectiveSelectedTools }
+        : undefined),
+      ...(mentionedAgents.length > 0 ? { mentionedAgents } : undefined),
+    },
+    phase: 'init' as const,
+  };
+};
 
 /**
  * Generation Actions
@@ -279,14 +315,15 @@ export const generationSlice: StateCreator<
     const { context, displayMessages, hooks } = get();
     const chatStore = useChatStore.getState();
 
-    // Check if already regenerating
-    const isRegenerating = chatStore.messageLoadingIds.includes(messageId);
+    // Check if already regenerating via operation system
+    const isRegenerating = operationSelectors.isMessageProcessing(messageId)(chatStore);
     if (isRegenerating) return;
 
     // Find the message in current conversation messages
     const currentIndex = displayMessages.findIndex((c) => c.id === messageId);
     const item = displayMessages[currentIndex];
     if (!item) return;
+    const initialContext = buildRetryInitialContext(item.editorData);
 
     // Get context messages up to and including the target message
     const contextMessages = displayMessages.slice(0, currentIndex + 1);
@@ -312,14 +349,37 @@ export const generationSlice: StateCreator<
       // New branch index = current children count (since index is 0-based)
       const nextBranchIndex = childrenCount;
 
-      // Switch to a new branch (pass operationId for correct context in optimistic update)
+      // Switch to the new branch so the UI shows the incoming response immediately
       await chatStore.switchMessageBranch(messageId, nextBranchIndex, {
         operationId,
       });
 
+      // ── Gateway mode: trigger server-side regeneration ──
+      if (chatStore.isGatewayModeEnabled()) {
+        // Keep the regenerate operation running until the gateway session completes,
+        // so isMessageRegenerating stays true and duplicate clicks are blocked.
+        await chatStore.executeGatewayAgent({
+          context,
+          message: item.content,
+          onComplete: () => {
+            chatStore.completeOperation(operationId);
+            if (hooks.onRegenerateComplete) {
+              hooks.onRegenerateComplete(messageId);
+            }
+          },
+          parentMessageId: messageId,
+        });
+
+        return;
+      }
+
+      // ── Client mode: run agent locally ──
+      // (switchMessageBranch already called above)
+
       // Execute agent runtime with full context from ConversationStore
       await chatStore.internal_execAgentRuntime({
         context,
+        initialContext,
         messages: contextMessages,
         parentMessageId: messageId,
         parentMessageType: 'user',

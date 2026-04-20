@@ -1,0 +1,429 @@
+---
+title: Adding a New Bot Platform
+description: >-
+  Learn how to add a new bot platform (e.g., Slack, WhatsApp) to LobeHub's
+  channel system, including schema definition, client implementation, and
+  platform registration.
+tags:
+  - Bot Platform
+  - Message Channels
+  - Integration
+  - Development Guide
+---
+
+# Adding a New Bot Platform
+
+This guide walks through the steps to add a new bot platform to LobeHub's channel system. The platform architecture is modular — each platform is a self-contained directory under `src/server/services/bot/platforms/`.
+
+## Architecture Overview
+
+```
+src/server/services/bot/platforms/
+├── types.ts            # Core interfaces (FieldSchema, PlatformClient, ClientFactory, etc.)
+├── registry.ts         # PlatformRegistry class
+├── index.ts            # Singleton registry + platform registration
+├── utils.ts            # Shared utilities
+├── discord/            # Example: Discord platform
+│   ├── definition.ts   # PlatformDefinition export
+│   ├── schema.ts       # FieldSchema[] for credentials & settings
+│   ├── client.ts       # ClientFactory + PlatformClient implementation
+│   └── api.ts          # Platform API helper class
+└── <your-platform>/    # Your new platform
+```
+
+**Key concepts:**
+
+- **FieldSchema** — Declarative schema that drives both server-side validation and frontend form auto-generation
+- **PlatformClient** — Runtime interface for interacting with the platform (messaging, lifecycle)
+- **ClientFactory** — Creates PlatformClient instances and validates credentials
+- **PlatformDefinition** — Metadata + schema + factory, registered in the global registry
+- **Chat SDK Adapter** — Bridges the platform's webhook/events into the unified Chat SDK
+
+## Prerequisite: Chat SDK Adapter
+
+Each platform requires a **Chat SDK adapter** that bridges the platform's webhook events into the unified [Vercel Chat SDK](https://github.com/vercel/chat) (`chat` npm package). Before implementing the platform, determine which adapter to use:
+
+### Option A: Use an existing npm adapter
+
+Some platforms have official adapters published under `@chat-adapter/*`:
+
+- `@chat-adapter/discord` — Discord
+- `@chat-adapter/slack` — Slack
+- `@chat-adapter/telegram` — Telegram
+
+Check npm with `npm view @chat-adapter/<platform>` to see if one exists.
+
+### Option B: Develop a custom adapter in `packages/`
+
+If no npm adapter exists, you need to create one as a workspace package. Reference the existing implementations:
+
+- `packages/chat-adapter-feishu` — Feishu/Lark adapter (`@lobechat/chat-adapter-feishu`)
+- `packages/chat-adapter-qq` — QQ adapter (`@lobechat/chat-adapter-qq`)
+
+Each adapter package follows this structure:
+
+```
+packages/chat-adapter-<platform>/
+├── package.json        # name: @lobechat/chat-adapter-<platform>
+├── tsconfig.json
+├── tsup.config.ts
+└── src/
+    ├── index.ts            # Public exports: createXxxAdapter, XxxApiClient, etc.
+    ├── adapter.ts          # Adapter class implementing chat SDK's Adapter interface
+    ├── api.ts              # Platform API client (webhook verification, message parsing)
+    ├── crypto.ts           # Request signature verification
+    ├── format-converter.ts # Message format conversion (platform format ↔ chat SDK AST)
+    └── types.ts            # Platform-specific type definitions
+```
+
+Key points for developing a custom adapter:
+
+- The adapter must implement the `Adapter` interface from the `chat` package
+- It handles webhook request verification, event parsing, and message format conversion
+- The `createXxxAdapter(config)` factory function is what `PlatformClient.createAdapter()` will call
+- Add `"chat": "^4.14.0"` as a dependency in `package.json`
+
+## Step 1: Create the Platform Directory
+
+```bash
+mkdir src/server/services/bot/platforms/<platform-name>
+```
+
+You will create four files:
+
+| File            | Purpose                                           |
+| --------------- | ------------------------------------------------- |
+| `schema.ts`     | Credential and settings field definitions         |
+| `api.ts`        | Lightweight API client for outbound messaging     |
+| `client.ts`     | `ClientFactory` + `PlatformClient` implementation |
+| `definition.ts` | `PlatformDefinition` export                       |
+
+## Step 2: Define the Schema (`schema.ts`)
+
+The schema is an array of `FieldSchema` objects with two top-level sections: `credentials` and `settings`.
+
+```ts
+import type { FieldSchema } from '../types';
+
+export const schema: FieldSchema[] = [
+  {
+    key: 'credentials',
+    label: 'channel.credentials',
+    properties: [
+      {
+        key: 'applicationId',
+        description: 'channel.applicationIdHint',
+        label: 'channel.applicationId',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'botToken',
+        description: 'channel.botTokenEncryptedHint',
+        label: 'channel.botToken',
+        required: true,
+        type: 'password', // Encrypted in storage, masked in UI
+      },
+    ],
+    type: 'object',
+  },
+  {
+    key: 'settings',
+    label: 'channel.settings',
+    properties: [
+      {
+        key: 'charLimit',
+        default: 4000,
+        description: 'channel.charLimitHint',
+        label: 'channel.charLimit',
+        minimum: 100,
+        type: 'number',
+      },
+      // Add platform-specific settings...
+    ],
+    type: 'object',
+  },
+];
+```
+
+**Schema conventions:**
+
+- `type: 'password'` fields are encrypted at rest and masked in the form
+- Use existing i18n keys (e.g., `channel.botToken`, `channel.charLimit`) for shared fields
+- Use `channel.<platform>.<key>` for platform-specific i18n keys
+- `devOnly: true` fields only appear when `NODE_ENV === 'development'`
+- Credentials must include a field that resolves to `applicationId` — either an explicit `applicationId` field, an `appId` field, or a `botToken` from which the ID is derived (see `resolveApplicationId` in the channel detail page)
+
+## Step 3: Create the API Client (`api.ts`)
+
+A lightweight class for outbound messaging operations used by the callback service (outside the Chat SDK adapter):
+
+```ts
+import debug from 'debug';
+
+const log = debug('bot-platform:<platform>:client');
+
+export const API_BASE = 'https://api.example.com';
+
+export class PlatformApi {
+  private readonly token: string;
+
+  constructor(token: string) {
+    this.token = token;
+  }
+
+  async sendMessage(channelId: string, text: string): Promise<{ id: string }> {
+    log('sendMessage: channel=%s', channelId);
+    return this.call('messages.send', { channel: channelId, text });
+  }
+
+  async editMessage(channelId: string, messageId: string, text: string): Promise<void> {
+    log('editMessage: channel=%s, message=%s', channelId, messageId);
+    await this.call('messages.update', { channel: channelId, id: messageId, text });
+  }
+
+  // ... other operations (typing indicator, reactions, etc.)
+
+  private async call(method: string, body: Record<string, unknown>): Promise<any> {
+    const response = await fetch(`${API_BASE}/${method}`, {
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      log('API error: method=%s, status=%d, body=%s', method, response.status, text);
+      throw new Error(`API ${method} failed: ${response.status} ${text}`);
+    }
+
+    return response.json();
+  }
+}
+```
+
+## Step 4: Implement the Client (`client.ts`)
+
+Implement `PlatformClient` and extend `ClientFactory`:
+
+```ts
+import { createPlatformAdapter } from '@chat-adapter/<platform>';
+import debug from 'debug';
+
+import {
+  type BotPlatformRuntimeContext,
+  type BotProviderConfig,
+  ClientFactory,
+  type PlatformClient,
+  type PlatformMessenger,
+  type ValidationResult,
+} from '../types';
+import { PlatformApi } from './api';
+
+const log = debug('bot-platform:<platform>:bot');
+
+class MyPlatformClient implements PlatformClient {
+  readonly id = '<platform>';
+  readonly applicationId: string;
+
+  private config: BotProviderConfig;
+  private context: BotPlatformRuntimeContext;
+
+  constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
+    this.config = config;
+    this.context = context;
+    this.applicationId = config.applicationId;
+  }
+
+  // --- Lifecycle ---
+
+  async start(): Promise<void> {
+    // Register webhook or start listening
+    // For webhook platforms: configure the webhook URL with the platform API
+    // For gateway platforms: open a persistent connection
+  }
+
+  async stop(): Promise<void> {
+    // Cleanup: remove webhook registration or close connection
+  }
+
+  // --- Runtime Operations ---
+
+  createAdapter(): Record<string, any> {
+    // Return a Chat SDK adapter instance for inbound message handling
+    return {
+      '<platform>': createPlatformAdapter({
+        botToken: this.config.credentials.botToken,
+        // ... adapter-specific config
+      }),
+    };
+  }
+
+  getMessenger(platformThreadId: string): PlatformMessenger {
+    const api = new PlatformApi(this.config.credentials.botToken);
+    const channelId = platformThreadId.split(':')[1];
+
+    return {
+      createMessage: (content) => api.sendMessage(channelId, content).then(() => {}),
+      editMessage: (messageId, content) => api.editMessage(channelId, messageId, content),
+      removeReaction: (messageId, emoji) => api.removeReaction(channelId, messageId, emoji),
+      triggerTyping: () => Promise.resolve(),
+    };
+  }
+
+  extractChatId(platformThreadId: string): string {
+    return platformThreadId.split(':')[1];
+  }
+
+  parseMessageId(compositeId: string): string {
+    return compositeId;
+  }
+
+  // --- Optional methods ---
+
+  // sanitizeUserInput(text: string): string { ... }
+  // shouldSubscribe(threadId: string): boolean { ... }
+  // formatReply(body: string, stats?: UsageStats): string { ... }
+}
+
+export class MyPlatformClientFactory extends ClientFactory {
+  createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
+    return new MyPlatformClient(config, context);
+  }
+
+  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+    // Call the platform API to verify the credentials are valid
+    try {
+      const res = await fetch('https://api.example.com/auth.test', {
+        headers: { Authorization: `Bearer ${credentials.botToken}` },
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return { valid: true };
+    } catch {
+      return {
+        errors: [{ field: 'botToken', message: 'Failed to authenticate' }],
+        valid: false,
+      };
+    }
+  }
+}
+```
+
+**Key interfaces to implement:**
+
+| Method                | Purpose                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `start()`             | Register webhook or start gateway listener                  |
+| `stop()`              | Clean up resources on shutdown                              |
+| `createAdapter()`     | Return Chat SDK adapter for inbound event handling          |
+| `getMessenger()`      | Return outbound messaging interface for a thread            |
+| `extractChatId()`     | Parse platform channel ID from composite thread ID          |
+| `parseMessageId()`    | Convert composite message ID to platform-native format      |
+| `sanitizeUserInput()` | *(Optional)* Strip bot mention artifacts from user input    |
+| `shouldSubscribe()`   | *(Optional)* Control thread auto-subscription behavior      |
+| `formatReply()`       | *(Optional)* Append platform-specific formatting to replies |
+
+## Step 5: Export the Definition (`definition.ts`)
+
+```ts
+import type { PlatformDefinition } from '../types';
+import { MyPlatformClientFactory } from './client';
+import { schema } from './schema';
+
+export const myPlatform: PlatformDefinition = {
+  id: '<platform>',
+  name: 'Platform Name',
+  connectionMode: 'webhook', // 'webhook' | 'websocket' | 'polling'
+  description: 'Connect a Platform bot',
+  documentation: {
+    portalUrl: 'https://developers.example.com',
+    setupGuideUrl: 'https://lobehub.com/docs/usage/channels/<platform>',
+  },
+  schema,
+  showWebhookUrl: true, // Set to true if users need to manually copy the webhook URL
+  clientFactory: new MyPlatformClientFactory(),
+};
+```
+
+**`showWebhookUrl`:** Set to `true` for platforms where the user must manually paste a webhook URL (e.g., Slack, Feishu). Set to `false` (or omit) for platforms that auto-register webhooks via API (e.g., Telegram).
+
+## Step 6: Register the Platform
+
+Edit `src/server/services/bot/platforms/index.ts`:
+
+```ts
+import { myPlatform } from './<platform>/definition';
+
+// Add to exports
+export { myPlatform } from './<platform>/definition';
+
+// Register
+platformRegistry.register(myPlatform);
+```
+
+## Step 7: Add i18n Keys
+
+### Default keys (`src/locales/default/agent.ts`)
+
+Add platform-specific keys. Reuse generic keys where possible:
+
+```ts
+// Reusable (already exist):
+// 'channel.botToken', 'channel.applicationId', 'channel.charLimit', etc.
+
+// Platform-specific:
+'channel.<platform>.description': 'Connect this assistant to Platform for ...',
+'channel.<platform>.someFieldHint': 'Description of this field.',
+```
+
+### Translations (`locales/zh-CN/agent.json`, `locales/en-US/agent.json`)
+
+Add corresponding translations for all new keys in both locale files.
+
+## Step 8: Add User Documentation
+
+Create setup guides in `docs/usage/channels/`:
+
+- `<platform>.mdx` — English guide
+- `<platform>.zh-CN.mdx` — Chinese guide
+
+Follow the structure of existing docs (e.g., `discord.mdx`): Prerequisites → Create App → Configure in LobeHub → Configure Webhooks → Test Connection → Configuration Reference → Troubleshooting.
+
+## Frontend: Automatic UI Generation
+
+The frontend automatically generates the configuration form from the schema. No frontend code changes are needed unless your platform requires a custom icon. The icon resolution works by matching the platform `name` against known icons in `@lobehub/ui/icons`:
+
+```
+// src/routes/(main)/agent/channel/const.ts
+const ICON_NAMES = ['Discord', 'GoogleChat', 'Lark', 'Slack', 'Telegram', ...];
+```
+
+If your platform's `name` matches an icon name (case-insensitive), the icon is used automatically. Otherwise, add an alias in `ICON_ALIASES`.
+
+## Webhook URL Pattern
+
+All platforms share the same webhook route:
+
+```
+POST /api/agent/webhooks/[platform]/[appId]
+```
+
+The `BotMessageRouter` handles routing, on-demand bot loading, and Chat SDK integration automatically.
+
+## Checklist
+
+- [ ] Ensure a Chat SDK adapter exists (`@chat-adapter/*` on npm or custom `packages/chat-adapter-<platform>`)
+- [ ] Create `src/server/services/bot/platforms/<platform>/`
+  - [ ] `schema.ts` — Field definitions for credentials and settings
+  - [ ] `api.ts` — Outbound API client
+  - [ ] `client.ts` — `ClientFactory` + `PlatformClient`
+  - [ ] `definition.ts` — `PlatformDefinition` export
+- [ ] Register in `src/server/services/bot/platforms/index.ts`
+- [ ] Add i18n keys in `src/locales/default/agent.ts`
+- [ ] Add translations in `locales/zh-CN/agent.json` and `locales/en-US/agent.json`
+- [ ] Add setup docs in `docs/usage/channels/<platform>.mdx` (en + zh-CN)
+- [ ] Verify icon resolves in `const.ts` (or add alias)

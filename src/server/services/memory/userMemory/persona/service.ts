@@ -11,6 +11,7 @@ import {
 } from '@lobechat/memory-user-memory';
 import { desc, eq } from 'drizzle-orm';
 
+import { getBusinessModelRuntimeHooks } from '@/business/server/model-runtime';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -78,13 +79,21 @@ export class UserPersonaService {
       {} as ProviderKeyVaultMap,
     );
 
-    const runtime = await resolveRuntimeAgentConfig({ ...this.agentConfig }, keyVaults, {
-      fallback: {
-        apiKey: this.agentConfig.apiKey,
-        baseURL: this.agentConfig.baseURL,
-      },
-      preferred: { providerIds: [providerId] },
-    } satisfies RuntimeResolveOptions);
+    const hooks = getBusinessModelRuntimeHooks(payload.userId, 'lobehub');
+
+    const runtime = await resolveRuntimeAgentConfig(
+      { ...this.agentConfig },
+      keyVaults,
+      {
+        fallback: {
+          apiKey: this.agentConfig.apiKey,
+          baseURL: this.agentConfig.baseURL,
+        },
+        preferred: { providerIds: [providerId] },
+        userId: payload.userId,
+      } satisfies RuntimeResolveOptions,
+      hooks,
+    );
 
     const personaModel = new UserPersonaModel(this.db, payload.userId);
     const lastDocument = await personaModel.getLatestPersonaDocument();

@@ -1,22 +1,18 @@
-import { type ChatCompletionErrorPayload, type ModelRuntime } from '@lobechat/model-runtime';
+import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { context as otContext } from '@lobechat/observability-otel/api';
 import { type ClientSecretPayload } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { getXorPayload } from '@lobechat/utils/server';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
-import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
+import { LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-import { checkAuthMethod } from './utils';
-
-type CreateRuntime = (jwtPayload: ClientSecretPayload) => ModelRuntime;
-type RequestOptions = { createRuntime?: CreateRuntime; params: Promise<{ provider?: string }> };
+type RequestOptions = { params: Promise<{ provider?: string }> };
 
 export type RequestHandler = (
   req: Request,
@@ -39,52 +35,37 @@ export const checkAuth =
 
     // we have a special header to debug the api endpoint in development mode
     const isDebugApi = req.headers.get('lobe-auth-dev-backend-api') === '1';
-    if (process.env.NODE_ENV === 'development' && isDebugApi) {
+    const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
+    if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
+      const mockUserId = process.env.MOCK_DEV_USER_ID || 'DEV_USER';
       return handler(clonedReq, {
         ...options,
-        jwtPayload: { userId: 'DEV_USER' },
+        jwtPayload: { userId: mockUserId },
         serverDB,
-        userId: 'DEV_USER',
+        userId: mockUserId,
       });
     }
 
-    let jwtPayload: ClientSecretPayload;
+    let userId: string;
 
     try {
-      // get Authorization from header
-      const authorization = req.headers.get(LOBE_CHAT_AUTH_HEADER);
-      const oauthAuthorized = !!req.headers.get(OAUTH_AUTHORIZED);
-
-      // better auth handler
-      const session = await auth.api.getSession({
-        headers: req.headers,
-      });
-
-      const betterAuthAuthorized = !!session?.user?.id;
-
-      if (!authorization) throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
-
-      jwtPayload = getXorPayload(authorization);
-
+      // OIDC authentication (CLI)
       const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
-      let isUseOidcAuth = false;
-      if (!!oidcAuthorization) {
+      if (oidcAuthorization) {
         const oidc = await validateOIDCJWT(oidcAuthorization);
-
-        isUseOidcAuth = true;
-
-        jwtPayload = {
-          ...jwtPayload,
-          userId: oidc.userId,
-        };
-      }
-
-      if (!isUseOidcAuth)
-        checkAuthMethod({
-          apiKey: jwtPayload.apiKey,
-          betterAuthAuthorized,
-          nextAuthAuthorized: oauthAuthorized,
+        userId = oidc.userId;
+      } else {
+        // Better Auth session authentication (web)
+        const session = await auth.api.getSession({
+          headers: req.headers,
         });
+
+        if (!session?.user?.id) {
+          throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
+        }
+
+        userId = session.user.id;
+      }
     } catch (e) {
       const params = await options.params;
 
@@ -112,7 +93,7 @@ export const checkAuth =
       return createErrorResponse(errorType, { error, ...res, provider: params?.provider });
     }
 
-    const userId = jwtPayload.userId || '';
+    const jwtPayload: ClientSecretPayload = { userId };
 
     const extractedContext = extractTraceContext(req.headers);
 

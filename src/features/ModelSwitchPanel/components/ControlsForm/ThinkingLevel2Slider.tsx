@@ -7,7 +7,7 @@ type ThinkingLevel2 = (typeof THINKING_LEVELS_2)[number];
 export type ThinkingLevel2SliderProps = CreatedLevelSliderProps<ThinkingLevel2>;
 
 const ThinkingLevel2Slider = createLevelSliderComponent<ThinkingLevel2>({
-  configKey: 'thinkingLevel',
+  configKey: 'thinkingLevel2',
   defaultValue: 'high',
   levels: THINKING_LEVELS_2,
   style: { minWidth: 110 },

@@ -27,6 +27,9 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       execAgent: { mutate: vi.fn() },
       getOperationStatus: { query: vi.fn() },
     },
+    device: {
+      listDevices: { query: vi.fn() },
+    },
   },
 }));
 
@@ -38,13 +41,18 @@ const { mockStreamAgentEvents } = vi.hoisted(() => ({
   mockStreamAgentEvents: vi.fn(),
 }));
 
-const { mockGetAuthInfo } = vi.hoisted(() => ({
-  mockGetAuthInfo: vi.fn(),
+const { mockGetAgentStreamAuthInfo } = vi.hoisted(() => ({
+  mockGetAgentStreamAuthInfo: vi.fn(),
+}));
+
+const { mockResolveLocalDeviceId } = vi.hoisted(() => ({
+  mockResolveLocalDeviceId: vi.fn(),
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../api/http', () => ({ getAuthInfo: mockGetAuthInfo }));
+vi.mock('../api/http', () => ({ getAgentStreamAuthInfo: mockGetAgentStreamAuthInfo }));
 vi.mock('../utils/agentStream', () => ({ streamAgentEvents: mockStreamAgentEvents }));
+vi.mock('../utils/device', () => ({ resolveLocalDeviceId: mockResolveLocalDeviceId }));
 vi.mock('../utils/logger', () => ({
   log: { debug: vi.fn(), error: vi.fn(), heartbeat: vi.fn(), info: vi.fn(), warn: vi.fn() },
   setVerbose: vi.fn(),
@@ -58,18 +66,23 @@ describe('agent command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    mockGetAuthInfo.mockResolvedValue({
-      accessToken: 'test-token',
-      headers: { 'Content-Type': 'application/json', 'Oidc-Auth': 'test-token' },
+    mockGetAgentStreamAuthInfo.mockResolvedValue({
+      headers: { 'Oidc-Auth': 'test-token' },
       serverUrl: 'https://example.com',
     });
     mockStreamAgentEvents.mockResolvedValue(undefined);
+    mockResolveLocalDeviceId.mockReset();
     for (const method of Object.values(mockTrpcClient.agent)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
     for (const method of Object.values(mockTrpcClient.aiAgent)) {
+      for (const fn of Object.values(method)) {
+        (fn as ReturnType<typeof vi.fn>).mockReset();
+      }
+    }
+    for (const method of Object.values(mockTrpcClient.device)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
@@ -297,7 +310,6 @@ describe('agent command', () => {
         expect.objectContaining({ json: undefined, verbose: undefined }),
       );
     });
-
     it('should support --slug option', async () => {
       mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
         operationId: 'op-456',
@@ -382,6 +394,186 @@ describe('agent command', () => {
       expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
         expect.objectContaining({ appContext: { topicId: 't1' } }),
       );
+    });
+
+    it('should pass --device local as deviceId', async () => {
+      mockResolveLocalDeviceId.mockReturnValue('local-device-1');
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'local-device-1', online: true },
+      ]);
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-device',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--device',
+        'local',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', deviceId: 'local-device-1', prompt: 'Hi' }),
+      );
+    });
+
+    it('should pass --topic-id and --device local together', async () => {
+      mockResolveLocalDeviceId.mockReturnValue('local-device-1');
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'local-device-1', online: true },
+      ]);
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-topic-device',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--topic-id',
+        't1',
+        '--device',
+        'local',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ appContext: { topicId: 't1' }, deviceId: 'local-device-1' }),
+      );
+    });
+
+    it('should pass explicit --device id as deviceId', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'device-remote-1', online: true },
+      ]);
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-explicit-device',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--device',
+        'device-remote-1',
+      ]);
+
+      expect(mockResolveLocalDeviceId).not.toHaveBeenCalled();
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1', deviceId: 'device-remote-1', prompt: 'Hi' }),
+      );
+    });
+
+    it('should exit when explicit device is not found', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'other-device', online: true },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--device',
+        'device-remote-1',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('was not found'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should exit when local device cannot be resolved', async () => {
+      mockResolveLocalDeviceId.mockReturnValue(undefined);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--device',
+        'local',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining("Run 'lh connect' first"));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should exit when local device is offline', async () => {
+      mockResolveLocalDeviceId.mockReturnValue('local-device-1');
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'local-device-1', online: false },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--device',
+        'local',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('is not online'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should exit when explicit device is offline', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'device-remote-1', online: false },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+        '--device',
+        'device-remote-1',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Bring it online'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
     it('should pass --json to stream options', async () => {

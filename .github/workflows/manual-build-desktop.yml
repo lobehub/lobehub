@@ -6,10 +6,10 @@ on:
       channel:
         description: 'Release channel for desktop build (affects version suffix and workflow:set-desktop-version)'
         required: true
-        default: nightly
+        default: canary
         type: choice
         options:
-          - nightly
+          - canary
           - beta
           - stable
       build_macos:
@@ -41,7 +41,6 @@ permissions:
 
 env:
   NODE_VERSION: 24.11.1
-  BUN_VERSION: 1.2.23
 
 jobs:
   version:
@@ -102,18 +101,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node & pnpm
-        uses: ./.github/actions/setup-node-pnpm
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: 'false'
-
-      # node-linker=hoisted 模式将可以确保 asar 压缩可用
-      - name: Install dependencies
-        run: |
-          pnpm install --node-linker=hoisted &
-          npm run install-isolated --prefix=./apps/desktop &
-          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -127,8 +118,8 @@ jobs:
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_PROJECT_ID || secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
-          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID || secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
           CSC_FOR_PULL_REQUEST: true
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -193,8 +184,8 @@ jobs:
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
-          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_PROJECT_ID || secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
-          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID || secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
           TEMP: C:\temp
           TMP: C:\temp
 
@@ -222,17 +213,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node & pnpm
-        uses: ./.github/actions/setup-node-pnpm
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: 'false'
-
-      - name: Install dependencies
-        run: |
-          pnpm install --node-linker=hoisted &
-          npm run install-isolated --prefix=./apps/desktop &
-          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -244,8 +228,8 @@ jobs:
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
-          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_PROJECT_ID || secrets.UMAMI_NIGHTLY_DESKTOP_PROJECT_ID }}
-          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
+          NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_PROJECT_ID || secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
+          NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
@@ -274,12 +258,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node & Bun
-        uses: ./.github/actions/setup-node-bun
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          bun-version: ${{ env.BUN_VERSION }}
-          package-manager-cache: 'false'
 
       - name: Download artifacts
         uses: actions/download-artifact@v7

@@ -1,9 +1,10 @@
 import isEqual from 'fast-deep-equal';
+import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { userMemoryService } from '@/services/userMemory';
+import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { type RetrieveMemoryParams, type RetrieveMemoryResult } from '@/types/userMemory';
 import { LayersEnum } from '@/types/userMemory';
@@ -13,6 +14,11 @@ import { type UserMemoryStore } from '../../store';
 import { type IdentityForInjection } from '../../types';
 import { userMemoryCacheKey } from '../../utils/cacheKey';
 import { createMemorySearchParams } from '../../utils/searchParams';
+import { activityInitialState } from '../activity/initialState';
+import { contextInitialState } from '../context/initialState';
+import { experienceInitialState } from '../experience/initialState';
+import { identityInitialState } from '../identity/initialState';
+import { preferenceInitialState } from '../preference/initialState';
 
 const SWR_FETCH_USER_MEMORY = 'SWR_FETCH_USER_MEMORY';
 const n = setNamespace('userMemory');
@@ -43,6 +49,70 @@ export class BaseActionImpl {
       false,
       n('clearEditingMemory'),
     );
+  };
+
+  purgeAllMemories = async (): Promise<void> => {
+    const { memoryCRUDService } = await import('@/services/userMemory');
+
+    await memoryCRUDService.deleteAll();
+
+    this.#set(
+      produce((draft) => {
+        Object.assign(draft, activityInitialState);
+        Object.assign(draft, contextInitialState);
+        Object.assign(draft, experienceInitialState);
+        Object.assign(draft, identityInitialState);
+        Object.assign(draft, preferenceInitialState);
+
+        draft.activeParams = undefined;
+        draft.activeParamsKey = undefined;
+        draft.editingMemoryContent = undefined;
+        draft.editingMemoryId = undefined;
+        draft.editingMemoryLayer = undefined;
+        draft.memoryFetchedAtMap = {};
+        draft.memoryMap = {};
+        draft.persona = undefined;
+        draft.personaInit = true;
+        draft.roles = [];
+        draft.tags = [];
+        draft.tagsInit = true;
+      }),
+      false,
+      n('purgeAllMemories'),
+    );
+
+    await Promise.all([
+      mutate((key) => typeof key === 'string' && key.startsWith('memoryDetail-'), undefined, {
+        revalidate: true,
+      }),
+      mutate((key) => typeof key === 'string' && key.startsWith('useFetchActivities'), undefined, {
+        revalidate: true,
+      }),
+      mutate((key) => typeof key === 'string' && key.startsWith('useFetchContexts'), undefined, {
+        revalidate: true,
+      }),
+      mutate((key) => typeof key === 'string' && key.startsWith('useFetchExperiences'), undefined, {
+        revalidate: true,
+      }),
+      mutate((key) => typeof key === 'string' && key.startsWith('useFetchIdentities'), undefined, {
+        revalidate: true,
+      }),
+      mutate((key) => typeof key === 'string' && key.startsWith('useFetchPreferences'), undefined, {
+        revalidate: true,
+      }),
+      mutate((key) => Array.isArray(key) && key[0] === SWR_FETCH_USER_MEMORY, undefined, {
+        revalidate: true,
+      }),
+      mutate('useFetchPersona', null, { revalidate: false }),
+      mutate(
+        'useFetchTags',
+        {
+          roles: [],
+          tags: [],
+        },
+        { revalidate: false },
+      ),
+    ]);
   };
 
   refreshUserMemory = async (params: RetrieveMemoryParams): Promise<void> => {
@@ -79,7 +149,6 @@ export class BaseActionImpl {
   };
 
   updateMemory = async (id: string, content: string, layer: LayersEnum): Promise<void> => {
-    const { memoryCRUDService } = await import('@/services/userMemory');
     const {
       resetActivitiesList,
       resetContextsList,

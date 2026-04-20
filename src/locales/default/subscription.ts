@@ -27,6 +27,10 @@ export default {
   'billing.subscriptionId': 'Subscription ID',
   'billing.unpaid': 'Unpaid',
   'billing.view': 'View',
+  'crossPlatform.desc':
+    'This subscription was purchased through the mobile app and cannot be modified here. Please manage your subscription on your mobile device.',
+  'crossPlatform.manageOnMobile': 'Manage on mobile device',
+  'crossPlatform.title': 'Cross-Platform Subscription',
   'cancelPlan.alert':
     'You will still enjoy the benefits until the current plan expires ({{date}}). You can resubscribe at any time before expiration.',
   'cancelPlan.desc':
@@ -71,11 +75,10 @@ export default {
   'credits.autoTopUp.saveError': 'Failed to save auto top-up settings',
   'credits.autoTopUp.saveSuccess': 'Auto top-up settings saved',
   'credits.autoTopUp.targetBalance': 'Target Balance',
-  'credits.autoTopUp.targetBalanceDesc':
-    'The balance amount to restore to when auto top-up triggers',
+  'credits.autoTopUp.targetBalanceDesc': 'The credit level to restore to when auto top-up triggers',
   'credits.autoTopUp.threshold': 'Threshold',
   'credits.autoTopUp.thresholdDesc':
-    'Auto top-up triggers when your balance falls to or below this amount',
+    'Auto top-up triggers when your credits fall to or below this level',
   'credits.autoTopUp.title': 'Auto Top-Up',
   'credits.autoTopUp.toggle': 'Enable Auto Top-Up',
   'credits.autoTopUp.upgradeHint': 'Subscribe to a paid plan to enable auto top-up',
@@ -93,6 +96,7 @@ export default {
   'credits.packages.filter.gift': 'Gift',
   'credits.packages.filter.manual': 'Manual',
   'credits.packages.noPackages': 'No credit packages',
+  'credits.packages.charged': 'Charged ${{amount}}',
   'credits.packages.purchaseFirst': 'Purchase your first credit package',
   'credits.packages.purchasedOn': 'Purchased on {{date}}',
   'credits.packages.sort.amountAsc': 'Amount: Low to High',
@@ -212,8 +216,9 @@ export default {
   'payment.success.actions.viewBill': 'View Billing History',
   'payment.success.desc': 'Your subscription plan has been activated successfully',
   'payment.success.title': 'Subscription Successful',
-  'payment.switchSuccess.desc': 'Your subscription plan will automatically switch on {{switchAt}}',
-  'payment.switchSuccess.title': 'Switch Successful',
+  'payment.switchSuccess.desc':
+    'Your subscription will automatically downgrade from <bold>{{from}}</bold> to <bold>{{to}}</bold> on {{switchAt}}',
+  'payment.switchSuccess.title': 'Downgrade Scheduled',
   'payment.upgradeFailed.alert.reason.bank3DS':
     'Your bank requires 3DS verification, please confirm again',
   'payment.upgradeFailed.alert.reason.inefficient': 'Insufficient card balance',
@@ -246,7 +251,11 @@ export default {
   'plans.current': 'Current Plan',
   'plans.downgradePlan': 'Target Downgrade Plan',
   'plans.downgradeTip':
-    'You have already switched subscription. You cannot perform other operations until the switch is complete',
+    'Your subscription has been canceled. You cannot perform other operations until the cancellation is complete',
+  'plans.downgradeWillCancel': 'This action will cancel your scheduled plan downgrade',
+  'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
+  'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
+  'plans.pendingDowngrade': 'Pending Downgrade',
   'plans.embeddingStorage.embeddings': 'entries',
   'plans.embeddingStorage.title': 'Vector Storage',
   'plans.embeddingStorage.tooltip':
@@ -286,9 +295,14 @@ export default {
   'plans.payonce.cancel': 'Cancel',
   'plans.payonce.ok': 'Confirm Selection',
   'plans.payonce.popconfirm':
-    'After one-time payment, you must wait until subscription expires to switch plans or change billing cycle. Please confirm your selection.',
+    'After one-time payment, you can upgrade anytime but downgrade requires waiting for expiration. Please confirm your selection.',
   'plans.payonce.tooltip':
-    'One-time payment requires waiting until subscription expires to switch plans or change billing cycle',
+    'One-time payment only supports upgrading to a higher tier or longer duration',
+  'plans.payonce.upgradeOk': 'Confirm Upgrade',
+  'plans.payonce.upgradePopconfirm':
+    'Remaining value from your current plan will be applied as a discount to the new plan.',
+  'plans.payonce.upgradePopconfirmNoProration':
+    'You will be charged the full price of the new plan. Your current plan will be replaced immediately.',
   'plans.plan.enterprise.contactSales': 'Contact Sales',
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
@@ -388,6 +402,8 @@ export default {
   'referral.rules.registration':
     'Registration method: Invited users register via referral link or enter referral code on registration page',
   'referral.rules.reward': 'Reward: Referrer and invitee each receive {{reward}}M credits',
+  'referral.rules.rewardDelay':
+    'Reward processing: Credits will be distributed after verification, which may take up to 6 hours',
   'referral.rules.title': 'Program Rules',
   'referral.rules.validInvitation':
     'Valid invitation: Invitee registers with your referral code and performs one valid action',
@@ -406,7 +422,7 @@ export default {
   'referral.table.columns.inviterRewardAmount': 'My Reward',
   'referral.table.columns.rewardedAt': 'Reward Time',
   'referral.table.columns.status': 'Status',
-  'referral.table.columns.suspectedReason': 'Anomaly Reason',
+  'referral.table.status.pending_reward': 'Under Review',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',
   'referral.table.status.rewarded': 'Rewarded',
@@ -420,19 +436,20 @@ export default {
   'summary.title': 'Billing Summary',
   'summary.usageThisMonth': 'View your usage this month.',
   'summary.viewBillingHistory': 'View Payment History',
-  'switchPlan': 'Switch Plan',
+  'switchDowngradeTarget': 'Switch Downgrade Target',
+  'switchPlan': 'Downgrade',
   'switchToMonthly.desc':
     'After switching, monthly billing will take effect after the current yearly plan expires.',
   'switchToMonthly.title': 'Switch to Monthly Billing',
   'switchToYearly.desc':
     'After switching, yearly billing will take effect immediately after paying the difference. Start date inherits from previous plan.',
   'switchToYearly.title': 'Switch to Yearly Billing',
-  'tab.billing': 'Billing Management',
-  'tab.credits': 'Credits Management',
+  'tab.billing': 'Billing',
+  'tab.credits': 'Credits',
   'tab.plans': 'Plans',
   'tab.referral': 'Referral Rewards',
   'tab.spend': 'Credits Details',
-  'tab.usage': 'Usage Statistics',
+  'tab.usage': 'Usage',
   'upgrade': 'Upgrade',
   'upgradeNow': 'Upgrade Now',
   'upgradePlan': 'Upgrade Plan',

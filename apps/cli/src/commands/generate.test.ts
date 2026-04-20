@@ -61,7 +61,6 @@ describe('generate command', () => {
       headers: {
         'Content-Type': 'application/json',
         'Oidc-Auth': 'test-token',
-        'X-lobe-chat-auth': 'test-xor-token',
       },
       serverUrl: 'https://app.lobehub.com',
     });
@@ -270,6 +269,48 @@ describe('generate command', () => {
         }),
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Video generation started'));
+    });
+
+    it('should pass image-to-video params', async () => {
+      mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-3');
+      mockTrpcClient.video.createVideo.mutate.mockResolvedValue({
+        data: { generationId: 'gen-v2' },
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'video',
+        'a cat waving',
+        '--model',
+        'cogvideox',
+        '--provider',
+        'zhipu',
+        '--image',
+        'https://example.com/first.png',
+        '--end-image',
+        'https://example.com/last.png',
+        '--images',
+        'https://example.com/a.png',
+        'https://example.com/b.png',
+      ]);
+
+      expect(mockTrpcClient.video.createVideo.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationTopicId: 'topic-3',
+          model: 'cogvideox',
+          params: {
+            endImageUrl: 'https://example.com/last.png',
+            imageUrl: 'https://example.com/first.png',
+            imageUrls: ['https://example.com/a.png', 'https://example.com/b.png'],
+            prompt: 'a cat waving',
+          },
+          provider: 'zhipu',
+        }),
+      );
     });
   });
 

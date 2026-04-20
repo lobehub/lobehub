@@ -15,7 +15,7 @@ export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, Exec
 
     const description = args?.description || partialArgs?.description;
 
-    // 参数还在流式传输且没有 description
+    // Arguments are still streaming and no description yet
     if (isArgumentsStreaming) {
       if (!description)
         return (
@@ -32,7 +32,7 @@ export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, Exec
       );
     }
 
-    // 有 description 时，根据 loading 状态显示不同文案
+    // When description is available, show different text based on loading state
     if (description) {
       return (
         <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>

@@ -1,5 +1,3 @@
-import { type NavigateFunction } from 'react-router-dom';
-
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
 import { getAgentStoreState } from '@/store/agent';
@@ -8,11 +6,17 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
+import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type StarterMode } from './initialState';
 
 const n = setNamespace('homeInput');
+
+interface SendMessageWithEditorParams {
+  editorData?: Record<string, any>;
+  message: string;
+}
 
 type Setter = StoreSetter<HomeStore>;
 export const createHomeInputSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -32,7 +36,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
   };
 
-  sendAsAgent = async (message: string): Promise<string> => {
+  sendAsAgent = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
@@ -57,10 +61,7 @@ export class HomeInputActionImpl {
       });
 
       // 3. Navigate to Agent profile page
-      const { navigate } = this.#get();
-      if (navigate) {
-        navigate(`/agent/${result.agentId}/profile`);
-      }
+      getStableNavigate()?.(`/agent/${result.agentId}/profile`);
 
       // 4. Refresh agent list
       this.#get().refreshAgentList();
@@ -77,6 +78,7 @@ export class HomeInputActionImpl {
 
         await sendMessage({
           context: { agentId: agentBuilderId!, scope: 'agent_builder' },
+          editorData,
           message,
         });
       }
@@ -90,7 +92,7 @@ export class HomeInputActionImpl {
     }
   };
 
-  sendAsGroup = async (message: string): Promise<string> => {
+  sendAsGroup = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
 
     try {
@@ -120,10 +122,7 @@ export class HomeInputActionImpl {
       this.#get().refreshAgentList();
 
       // 5. Navigate to Group profile page
-      const { navigate } = this.#get();
-      if (navigate) {
-        navigate(`/group/${group.id}/profile`);
-      }
+      getStableNavigate()?.(`/group/${group.id}/profile`);
 
       // 6. Update groupAgentBuilder's model config and send initial message
       const groupAgentBuilderId = builtinAgentSelectors.groupAgentBuilderId(agentState);
@@ -137,6 +136,7 @@ export class HomeInputActionImpl {
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
           context: { agentId: groupAgentBuilderId, scope: 'group_agent_builder' },
+          editorData,
           message,
         });
       }
@@ -158,7 +158,7 @@ export class HomeInputActionImpl {
     this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
   };
 
-  sendAsWrite = async (message: string): Promise<string> => {
+  sendAsWrite = async ({ editorData, message }: SendMessageWithEditorParams): Promise<string> => {
     this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
@@ -180,10 +180,7 @@ export class HomeInputActionImpl {
       });
 
       // 3. Navigate to Page
-      const { navigate } = this.#get();
-      if (navigate) {
-        navigate(`/page/${newDoc.id}`);
-      }
+      getStableNavigate()?.(`/page/${newDoc.id}`);
 
       // 4. Update pageAgent's model config and send initial message
       const pageAgentId = builtinAgentSelectors.pageAgentId(agentState);
@@ -197,6 +194,7 @@ export class HomeInputActionImpl {
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
           context: { agentId: pageAgentId, scope: 'page' },
+          editorData,
           message,
         });
       }
@@ -212,10 +210,6 @@ export class HomeInputActionImpl {
 
   setInputActiveMode = (mode: StarterMode): void => {
     this.#set({ inputActiveMode: mode }, false, n('setInputActiveMode', mode));
-  };
-
-  setNavigate = (navigate: NavigateFunction): void => {
-    this.#set({ navigate }, false, n('setNavigate'));
   };
 }
 

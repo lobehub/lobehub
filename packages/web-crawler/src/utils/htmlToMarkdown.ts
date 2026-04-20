@@ -31,13 +31,21 @@ export const htmlToMarkdown = (
   { url, filterOptions }: { filterOptions: FilterOptions; url: string },
 ): HtmlToMarkdownOutput => {
   const html = rawHtml.length > MAX_HTML_SIZE ? rawHtml.slice(0, MAX_HTML_SIZE) : rawHtml;
-  const window = new Window({ url });
+  const window = new Window({
+    settings: { disableCSSFileLoading: true, disableJavaScriptEvaluation: true },
+    url,
+  });
 
   const document = window.document;
   document.body.innerHTML = html;
 
-  // @ts-expect-error reason: Readability expects a Document type
-  const parsedContent = new Readability(document).parse();
+  let parsedContent: ReturnType<Readability<string>['parse']> = null;
+  try {
+    // @ts-expect-error reason: Readability expects a Document type
+    parsedContent = new Readability(document).parse();
+  } catch {
+    // happy-dom may throw on pages with invalid CSS selectors — fall back to raw HTML
+  }
 
   const useReadability = filterOptions.enableReadability ?? true;
 

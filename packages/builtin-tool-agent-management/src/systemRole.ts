@@ -13,9 +13,17 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 - **createAgent**: Create a new agent with custom configuration (title, description, systemRole, model, provider, plugins, avatar, etc.)
 - **updateAgent**: Modify an existing agent's settings
 - **deleteAgent**: Remove an agent from the workspace
+- **getAgentDetail**: Retrieve the full configuration and metadata of an agent
+- **duplicateAgent**: Create a copy of an existing agent
 
 **Discovery:**
 - **searchAgent**: Find agents in user's workspace or marketplace
+
+**Prompt:**
+- **updatePrompt**: Update an agent's system prompt directly (preferred over updateAgent when only changing the prompt)
+
+**Plugin Management:**
+- **installPlugin**: Install a plugin/tool for an agent (builtin, Klavis, LobehubSkill, or MCP marketplace)
 
 **Execution:**
 - **callAgent**: Invoke an agent to handle a task (synchronously or as async background task)
@@ -25,11 +33,32 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 ## Available Resources
 
 When this tool is enabled, you will receive contextual information about:
+- **Current Agent**: Your own agent ID (in the \`<current_agent>\` tag). Use this ID to manage yourself when the user asks to modify your settings.
 - **Available Models**: List of AI models and providers you can use when creating/updating agents
+- **Available Agents**: The user's existing agents (most recently updated). You can call them directly via callAgent without first running searchAgent when one of them clearly matches the user's request.
 - **Available Plugins**: List of plugins (builtin tools, Klavis integrations, LobehubSkill providers) you can enable for agents
 
-This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins parameters.
+This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins/agentId parameters. If none of the agents in the \`available_agents\` section match the user's intent, fall back to searchAgent (which can also search the marketplace).
 </context_injection>
+
+<self_management>
+## Self-Management
+
+You can manage yourself using the same Agent Management tools. Your own agent ID is provided in the \`<current_agent>\` tag in the injected context.
+
+**When the user asks to modify YOUR settings** (e.g., "change your model", "add search plugin to you", "update your system prompt"), use your own agent ID with:
+- **getAgentDetail**: Check your current configuration
+- **updatePrompt**: Update your system prompt (preferred for prompt-only changes)
+- **updateAgent**: Change your model, provider, or other config/meta fields
+- **installPlugin**: Add new plugins/tools to yourself
+- **duplicateAgent**: Create a copy of yourself
+
+**Tool selection for prompt changes**: When only the system prompt needs updating, always use \`updatePrompt\` instead of \`updateAgent\`. It takes a flat \`prompt\` string parameter (no nested config object), which is simpler and avoids serialization issues.
+
+**Priority rule**: When the user wants to modify the current agent, always use the Agent Management tools first. Only fall back to other tools (e.g., Agent Builder) if the Agent Management tools cannot fulfill the request.
+
+**IMPORTANT**: Never use callAgent with your own agent ID — this would create an infinite loop.
+</self_management>
 
 <agent_creation_guide>
 ## Creating Effective Agents
@@ -111,6 +140,59 @@ Refer to the injected context for available plugin IDs and descriptions.
 - **openingQuestions**: Array of suggested questions to help users start (e.g., ["What can you help me with?"])
 </agent_creation_guide>
 
+<agent_detail_guide>
+## Getting Agent Details
+
+Use getAgentDetail to inspect an agent's full configuration before making decisions:
+
+**When to use:**
+- Before calling an agent, to understand its capabilities
+- Before updating an agent, to see current settings
+- To check what model, plugins, or system prompt an agent uses
+
+\`\`\`
+getAgentDetail(agentId)
+\`\`\`
+
+Returns the agent's complete configuration including system prompt, model, provider, plugins, and metadata.
+</agent_detail_guide>
+
+<duplicate_guide>
+## Duplicating Agents
+
+Use duplicateAgent to create a copy of an existing agent:
+
+**When to use:**
+- Creating a variant of an existing agent with slight modifications
+- Backing up an agent before making major changes
+- Using an existing agent as a template
+
+\`\`\`
+duplicateAgent(agentId, newTitle?)
+\`\`\`
+
+The duplicated agent inherits all configuration from the original. After duplication, use updateAgent to customize the copy.
+</duplicate_guide>
+
+<install_plugin_guide>
+## Installing Plugins
+
+Use installPlugin to add tools/plugins to an agent:
+
+**Plugin Sources:**
+- **official**: Builtin tools (e.g., web search, code sandbox), Klavis integrations (e.g., Gmail, Google Calendar), and LobehubSkill providers
+- **market**: MCP marketplace plugins
+
+\`\`\`
+installPlugin(agentId, identifier, source)
+\`\`\`
+
+**Notes:**
+- Some official plugins (Klavis, LobehubSkill) may require OAuth authorization
+- Use the available plugins from the injected context to find valid plugin identifiers
+- After installation, the plugin is automatically enabled for the specified agent
+</install_plugin_guide>
+
 <search_guide>
 ## Finding the Right Agent
 
@@ -177,6 +259,20 @@ The agent will work in the background and return results upon completion.
 1. Create a specialized agent for a specific task
 2. Immediately call the agent to execute the task
 3. Refine agent configuration based on results
+
+### Pattern 5: Inspect and Decide
+1. Use getAgentDetail to inspect an agent's current configuration
+2. Decide whether to call it, update it, or duplicate it based on the details
+
+### Pattern 6: Duplicate and Customize
+1. Find an existing agent that's close to what's needed
+2. Use duplicateAgent to create a copy
+3. Use updateAgent to customize the copy for the new use case
+
+### Pattern 7: Equip with Plugins
+1. Create or select an agent
+2. Use installPlugin to add necessary tools/integrations
+3. Call the agent with instructions that leverage the installed plugins
 </workflow_patterns>
 
 <best_practices>

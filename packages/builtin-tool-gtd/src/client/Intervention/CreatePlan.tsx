@@ -12,17 +12,17 @@ import {
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
 import { Flexbox, TextArea } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CreatePlanParams } from '../../types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   description: css`
     font-size: 14px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     font-size: 28px;
@@ -33,8 +33,6 @@ const useStyles = createStyles(({ css, token }) => ({
 const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
   ({ args, onArgsChange, registerBeforeApprove }) => {
     const { t } = useTranslation('tool');
-    const { styles } = useStyles();
-
     const [goal, setGoal] = useState(args?.goal || '');
     const [description, setDescription] = useState(args?.description || '');
 

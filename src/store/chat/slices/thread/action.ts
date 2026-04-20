@@ -15,14 +15,13 @@ import { chatService } from '@/services/chat';
 import { threadService } from '@/services/thread';
 import { threadSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
-import { globalHelpers } from '@/store/global/helpers';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { displayMessageSelectors } from '../message/selectors';
 import { PortalViewType } from '../portal/initialState';
 import { type ThreadDispatch } from './reducer';
 import { threadReducer } from './reducer';
@@ -52,10 +51,19 @@ export class ChatThreadActionImpl {
   };
 
   openThreadCreator = (messageId: string): void => {
-    const { activeAgentId, activeTopicId, newThreadMode, replaceMessages } = this.#get();
+    const { activeAgentId, activeGroupId, activeTopicId, newThreadMode, replaceMessages } =
+      this.#get();
 
-    // Get parent messages up to and including the source message
-    const displayMessages = displayMessageSelectors.activeDisplayMessages(this.#get());
+    // Always use main scope key to get messages, not activeDisplayMessages,
+    // because activeDisplayMessages includes activeThreadId in the key.
+    // When inside a subtopic, that would return thread-scoped messages
+    // instead of main conversation messages, causing the fork to fail (LOBE-5023).
+    const mainKey = messageMapKey({
+      agentId: activeAgentId,
+      groupId: activeGroupId,
+      topicId: activeTopicId,
+    });
+    const displayMessages = this.#get().messagesMap[mainKey] || [];
     // Filter out messages that have threadId (they belong to other threads)
     const mainMessages = displayMessages.filter((m) => !m.threadId);
     const parentMessages = genParentMessages(mainMessages, messageId, newThreadMode);
@@ -206,8 +214,7 @@ export class ChatThreadActionImpl {
         threadConfig,
         chainSummaryTitle(
           messages,
-          userGeneralSettingsSelectors.responseLanguage(useUserStore.getState()) ||
-            globalHelpers.getCurrentLanguage(),
+          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
         ),
       ),
     });

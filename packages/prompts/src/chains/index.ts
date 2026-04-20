@@ -1,8 +1,10 @@
 export * from './abstractChunk';
 export * from './answerWithContext';
 export * from './compressContext';
+export * from './inputCompletion';
 export * from './langDetect';
 export * from './pickEmoji';
+export * from './rewriteGenerationPrompt';
 export * from './rewriteQuery';
 export * from './summaryAgentName';
 export * from './summaryDescription';
@@ -10,4 +12,5 @@ export * from './summaryGenerationTitle';
 export * from './summaryHistory';
 export * from './summaryTags';
 export * from './summaryTitle';
+export * from './taskTopicHandoff';
 export * from './translate';

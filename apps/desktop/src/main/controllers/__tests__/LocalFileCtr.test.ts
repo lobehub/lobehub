@@ -5,11 +5,14 @@ import { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, fetchMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  fetchMock: vi.fn(),
 }));
 
-const fetchMock = vi.fn();
+vi.mock('@/utils/net-fetch', () => ({
+  netFetch: fetchMock,
+}));
 
 // Mock logger
 vi.mock('@/utils/logger', () => ({
@@ -37,14 +40,13 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.stubGlobal('fetch', fetchMock);
-
 // Mock node:fs/promises and node:fs
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
   mkdir: vi.fn(),
   readFile: vi.fn(),
   readdir: vi.fn(),
+  realpath: vi.fn(),
   rename: vi.fn(),
   rm: vi.fn(),
   stat: vi.fn(),
@@ -298,6 +300,46 @@ describe('LocalFileCtr', () => {
       });
 
       expect(result).toEqual({ success: false, error: 'Failed to write file: Write failed' });
+    });
+  });
+
+  describe('auditSafePaths', () => {
+    it('should treat real temporary paths as safe', async () => {
+      vi.mocked(mockFsPromises.access).mockResolvedValue(undefined);
+      vi.mocked(mockFsPromises.realpath).mockImplementation(async (targetPath: string) => {
+        if (targetPath === '/tmp') return '/private/tmp';
+        if (targetPath === '/var/tmp') return '/private/var/tmp';
+        if (targetPath === '/tmp/out') return '/private/tmp/out';
+        return targetPath;
+      });
+
+      const result = await localFileCtr.auditSafePaths({
+        paths: ['/tmp/out'],
+        resolveAgainstScope: '/Users/me/project',
+      });
+
+      expect(result).toEqual({ allSafe: true });
+    });
+
+    it('should reject safe-path candidates whose real target escapes the temporary roots', async () => {
+      vi.mocked(mockFsPromises.access).mockImplementation(async (targetPath: string) => {
+        if (targetPath === '/tmp/out/config') {
+          throw new Error('ENOENT');
+        }
+      });
+      vi.mocked(mockFsPromises.realpath).mockImplementation(async (targetPath: string) => {
+        if (targetPath === '/tmp') return '/private/tmp';
+        if (targetPath === '/var/tmp') return '/private/var/tmp';
+        if (targetPath === '/tmp/out') return '/Users/me/.ssh';
+        return targetPath;
+      });
+
+      const result = await localFileCtr.auditSafePaths({
+        paths: ['/tmp/out/config'],
+        resolveAgainstScope: '/Users/me/project',
+      });
+
+      expect(result).toEqual({ allSafe: false });
     });
   });
 

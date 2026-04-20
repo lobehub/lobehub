@@ -22,8 +22,8 @@ const APP_URL = process.env.APP_URL
   : isInVercel
     ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
-      ? 'http://localhost:3010'
-      : 'http://localhost:3210';
+      ? `http://localhost:${process.env.PORT || 3010}`
+      : `http://localhost:${process.env.PORT || 3210}`;
 
 // INTERNAL_APP_URL is used for server-to-server calls to bypass CDN/proxy
 // Falls back to APP_URL if not set
@@ -75,6 +75,8 @@ export const getAppConfig = () => {
        */
       MARKET_TRUSTED_CLIENT_ID: z.string().optional(),
 
+      AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
+      AGENT_GATEWAY_URL: z.string().url().optional(),
       /**
        * Enable Queue-based Agent Runtime
        * When true, use QStash for async agent execution (production)
@@ -118,6 +120,8 @@ export const getAppConfig = () => {
       MARKET_TRUSTED_CLIENT_SECRET: process.env.MARKET_TRUSTED_CLIENT_SECRET,
       MARKET_TRUSTED_CLIENT_ID: process.env.MARKET_TRUSTED_CLIENT_ID,
 
+      AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
+      AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
     },

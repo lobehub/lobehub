@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Markdown } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useDetailContext } from '../DetailProvider';
@@ -16,18 +16,28 @@ import Versions from './Versions';
 
 const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTabParam = searchParams.get('activeTab') as SkillNavKey | null;
-  const [activeTab, setActiveTab] = useState<SkillNavKey>(activeTabParam || SkillNavKey.Overview);
+  const activeTabParam = searchParams.get('activeTab');
+  const urlActiveTab = Object.values(SkillNavKey).includes(activeTabParam as SkillNavKey)
+    ? (activeTabParam as SkillNavKey)
+    : SkillNavKey.Overview;
+  const [activeTab, setActiveTab] = useState<SkillNavKey>(urlActiveTab);
   const { content } = useDetailContext();
+
+  useEffect(() => {
+    setActiveTab(urlActiveTab);
+  }, [urlActiveTab]);
 
   const handleSetActiveTab = (tab: SkillNavKey) => {
     setActiveTab(tab);
+    const nextSearchParams = new URLSearchParams(searchParams);
+
     if (tab === SkillNavKey.Overview) {
-      searchParams.delete('activeTab');
+      nextSearchParams.delete('activeTab');
     } else {
-      searchParams.set('activeTab', tab);
+      nextSearchParams.set('activeTab', tab);
     }
-    setSearchParams(searchParams, { replace: true });
+
+    setSearchParams(nextSearchParams, { replace: true });
   };
 
   const skillContent = <Markdown variant={'chat'}>{content ?? ''}</Markdown>;

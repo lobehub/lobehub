@@ -1,0 +1,29 @@
+name: Setup Environment
+description: Setup Node.js, pnpm (install) and Bun (script runner) for workflows
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: false
+    default: '24.11.1'
+  package-manager-cache:
+    description: Pass-through to actions/setup-node package-manager-cache
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        run_install: false
+
+    - name: Install bun
+      uses: oven-sh/setup-bun@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        package-manager-cache: ${{ inputs.package-manager-cache }}

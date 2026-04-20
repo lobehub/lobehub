@@ -3,7 +3,7 @@ import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import { type API } from '@lobechat/prompts';
 import { apiPrompt, toolPrompt } from '@lobechat/prompts';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { type IEditor } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Icon, Image } from '@lobehub/ui';
@@ -21,27 +21,27 @@ import { hydrationPrompt } from '@/utils/promptTemplate';
 import MentionDropdown from './MentionDropdown';
 import { type MentionListOption, type MentionMetadata } from './types';
 
-// 根据 identifier 获取 Klavis 服务器类型配置
+// Get Klavis server type config by identifier
 const getKlavisServerType = (identifier: string) =>
   KLAVIS_SERVER_TYPES.find((type) => type.identifier === identifier);
 
 /**
- * Klavis 服务器图标组件
- * 对于 string 类型的 icon，使用 Image 组件渲染
- * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
+ * Klavis server icon component
+ * For string type icon, renders using Image component
+ * For IconType type icon, renders using Icon component and sets fill color based on theme
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return <Image alt={label} height={20} src={icon} style={{ flex: 'none' }} width={20} />;
   }
 
-  // 使用主题色填充，在深色模式下自动适应
+  // Fill with theme color, automatically adapts in dark mode
   return <Icon fill={cssVar.colorText} icon={icon} size={20} />;
 });
 
 const toolNameResolver = new ToolNameResolver();
 
-const buildApiList = (identifier: string, manifest?: LobeChatPluginManifest): API[] => {
+const buildApiList = (identifier: string, manifest?: ToolManifest): API[] => {
   if (!manifest?.api) return [];
 
   return manifest.api.map((api) => ({
@@ -58,7 +58,7 @@ const hydrateSystemRole = (systemRole?: string) => {
 
 const resolveInstructions = (
   metadata: MentionMetadata,
-  manifest?: LobeChatPluginManifest,
+  manifest?: ToolManifest,
   fallbackDesc?: string,
 ) => {
   if (metadata.instructions) return metadata.instructions;
@@ -70,7 +70,7 @@ const resolveInstructions = (
 
 const resolveApiName = (
   metadata: MentionMetadata,
-  manifest: LobeChatPluginManifest | undefined,
+  manifest: ToolManifest | undefined,
   pluginId?: string,
   fallbackLabel?: string,
 ) => {
@@ -93,7 +93,7 @@ const resolveApiName = (
 
 const resolveApiDescription = (
   metadata: MentionMetadata,
-  manifest: LobeChatPluginManifest | undefined,
+  manifest: ToolManifest | undefined,
   pluginId: string | undefined,
   apiName?: string,
 ) => {
@@ -133,7 +133,7 @@ const useMentionOptions = () => {
         type: 'collection',
       });
 
-      // 优先使用 Klavis 图标，否则使用 PluginAvatar
+      // Prefer Klavis icon, fall back to PluginAvatar
       const klavisServerType = getKlavisServerType(tool.identifier);
       const icon = klavisServerType ? (
         <KlavisIcon icon={klavisServerType.icon} label={klavisServerType.label} />

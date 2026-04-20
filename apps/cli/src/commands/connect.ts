@@ -11,6 +11,7 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
+import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import {
   appendLog,
@@ -23,7 +24,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
-import { loadSettings, saveSettings } from '../settings';
+import { loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -172,9 +173,9 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 }
 
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
-  const auth = await resolveToken(options);
+  let auth = await resolveToken(options);
   const settings = loadSettings();
-  const gatewayUrl = options.gateway?.replace(/\/$/, '') || settings?.gatewayUrl;
+  const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
 
   if (!gatewayUrl && settings?.serverUrl) {
     log.error(
@@ -194,7 +195,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     deviceId: options.deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
+    serverUrl: auth.serverUrl,
     token: auth.token,
+    tokenType: auth.tokenType,
     userId: auth.userId,
   });
 
@@ -214,20 +217,19 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
   info(`  Gateway   : ${resolvedGatewayUrl}`);
-  info(`  Auth      : jwt`);
+  info(`  Auth      : ${auth.tokenType}`);
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
 
-  // Update status file for daemon mode
+  // Update local connection status so other CLI commands can resolve the current device
   const updateStatus = (connectionStatus: string) => {
-    if (isDaemonChild) {
-      writeStatus({
-        connectionStatus,
-        gatewayUrl: resolvedGatewayUrl,
-        pid: process.pid,
-        startedAt: startedAt.toISOString(),
-      });
-    }
+    writeStatus({
+      connectionStatus,
+      deviceId: client.currentDeviceId,
+      gatewayUrl: resolvedGatewayUrl,
+      pid: process.pid,
+      startedAt: startedAt.toISOString(),
+    });
   };
 
   const startedAt = new Date();
@@ -285,20 +287,37 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Handle auth failed
   client.on('auth_failed', (reason) => {
     error(`Authentication failed: ${reason}`);
-    error("Run 'lh login' to re-authenticate.");
+    error(
+      `Run 'lh login', or set ${CLI_API_KEY_ENV} and run 'lh login --server <url>' to configure API key authentication.`,
+    );
     cleanup();
     process.exit(1);
   });
 
-  // Handle auth expired
+  // Handle auth expired — refresh token and reconnect automatically
   client.on('auth_expired', async () => {
-    error('Authentication expired. Attempting to refresh...');
-    const refreshed = await resolveToken({});
-    if (refreshed) {
-      info('Token refreshed. Please reconnect.');
-    } else {
-      error("Could not refresh token. Run 'lh login' to re-authenticate.");
+    if (auth.tokenType === 'apiKey') {
+      // API keys don't expire; ignore stale auth_expired signals
+      return;
     }
+
+    info('Authentication expired. Attempting to refresh token...');
+
+    try {
+      const refreshed = await resolveToken({});
+      if (refreshed) {
+        info('Token refreshed successfully. Reconnecting...');
+        client.updateToken(refreshed.token);
+        // Update cached auth so subsequent refreshes use the latest token
+        auth = refreshed;
+        await client.reconnect();
+        return;
+      }
+    } catch {
+      // refresh failed — fall through
+    }
+
+    error("Could not refresh token. Run 'lh login' to re-authenticate.");
     cleanup();
     process.exit(1);
   });
@@ -313,8 +332,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     info('Shutting down...');
     cleanupAllProcesses();
     client.disconnect();
+    removeStatus();
     if (isDaemonChild) {
-      removeStatus();
       removePid();
     }
   };

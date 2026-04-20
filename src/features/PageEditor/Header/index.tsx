@@ -43,7 +43,6 @@ const Header = memo(() => {
               </Text>
             </>
           )}
-          {/* Auto Save Status */}
           {documentId && <AutoSaveHint documentId={documentId} style={{ marginLeft: 6 }} />}
         </>
       }

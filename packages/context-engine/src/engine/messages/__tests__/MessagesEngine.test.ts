@@ -369,7 +369,7 @@ describe('MessagesEngine', () => {
       // Should inject tool system role when manifests are provided
       const systemMessage = result.messages.find((msg) => msg.role === 'system');
       expect(systemMessage).toBeDefined();
-      expect(systemMessage!.content).toContain('tool1');
+      expect(systemMessage!.content).toContain('Tool 1');
     });
 
     it('should skip tool system role provider when no tools', async () => {

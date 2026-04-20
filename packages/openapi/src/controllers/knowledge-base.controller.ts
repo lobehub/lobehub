@@ -13,12 +13,12 @@ import type {
 } from '../types/knowledge-base.type';
 
 /**
- * 知识库控制器
- * 处理知识库相关的HTTP请求
+ * Knowledge base controller
+ * Handles knowledge base-related HTTP requests
  */
 export class KnowledgeBaseController extends BaseController {
   /**
-   * 获取知识库列表
+   * Retrieves the knowledge base list
    * GET /knowledge-bases
    */
   async getKnowledgeBases(c: Context) {
@@ -38,7 +38,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 获取单个知识库详情
+   * Retrieves a single knowledge base's details
    * GET /knowledge-bases/:id
    */
   async getKnowledgeBase(c: Context) {
@@ -58,7 +58,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 获取知识库下的文件列表
+   * Retrieves the file list under a knowledge base
    * GET /knowledge-bases/:id/files
    */
   async getKnowledgeBaseFiles(c: Context) {
@@ -79,7 +79,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 批量添加文件到知识库
+   * Batch adds files to a knowledge base
    * POST /knowledge-bases/:id/files/batch
    */
   async addFilesToKnowledgeBase(c: Context) {
@@ -100,7 +100,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 批量从知识库移除文件
+   * Batch removes files from a knowledge base
    * DELETE /knowledge-bases/:id/files/batch
    */
   async removeFilesFromKnowledgeBase(c: Context) {
@@ -121,7 +121,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 批量移动文件到其他知识库
+   * Batch moves files to another knowledge base
    * POST /knowledge-bases/:id/files/move
    */
   async moveFilesBetweenKnowledgeBases(c: Context) {
@@ -142,7 +142,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 创建知识库
+   * Creates a knowledge base
    * POST /knowledge-bases
    */
   async createKnowledgeBase(c: Context) {
@@ -162,7 +162,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 更新知识库
+   * Updates a knowledge base
    * PATCH /knowledge-bases/:id
    */
   async updateKnowledgeBase(c: Context) {
@@ -183,7 +183,7 @@ export class KnowledgeBaseController extends BaseController {
   }
 
   /**
-   * 删除知识库
+   * Deletes a knowledge base
    * DELETE /knowledge-bases/:id
    */
   async deleteKnowledgeBase(c: Context) {

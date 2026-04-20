@@ -10,18 +10,18 @@ import type {
 } from '../types/user.type';
 
 /**
- * 用户控制器类
- * 处理用户相关的HTTP请求和响应
+ * User controller class
+ * Handles user-related HTTP requests and responses
  */
 export class UserController extends BaseController {
   /**
-   * 获取当前登录用户信息
+   * Retrieves the currently logged-in user's information
    * @param c Hono Context
-   * @returns 用户公开信息响应
+   * @returns User public information response
    */
   async getCurrentUser(c: Context): Promise<Response> {
     try {
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const userInfo = await userService.getCurrentUser();
@@ -33,15 +33,15 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 统一获取用户列表 (支持搜索和分页)
+   * Retrieves the user list (supports search and pagination)
    * @param c Hono Context
-   * @returns 用户列表响应
+   * @returns User list response
    */
   async queryUsers(c: Context): Promise<Response> {
     try {
       const request = this.getQuery<UserListRequest>(c);
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
 
@@ -54,15 +54,15 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 创建新用户
+   * Creates a new user
    * @param c Hono Context
-   * @returns 创建的用户信息响应
+   * @returns Created user information response
    */
   async createUser(c: Context): Promise<Response> {
     try {
       const userData = await this.getBody<CreateUserRequest>(c);
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const newUser = await userService.createUser(userData);
@@ -74,15 +74,15 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 根据ID获取用户详情
+   * Retrieves user details by ID
    * @param c Hono Context
-   * @returns 用户详情响应
+   * @returns User detail response
    */
   async getUserById(c: Context): Promise<Response> {
     try {
       const { id } = this.getParams<{ id: string }>(c);
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const user = await userService.getUserById(id);
@@ -94,16 +94,16 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 更新用户信息
+   * Updates user information
    * @param c Hono Context
-   * @returns 更新后的用户信息响应
+   * @returns Updated user information response
    */
   async updateUser(c: Context): Promise<Response> {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       const userData = await this.getBody<UpdateUserRequest>(c);
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const updatedUser = await userService.updateUser(id, userData);
@@ -115,15 +115,15 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 删除用户
+   * Deletes a user
    * @param c Hono Context
-   * @returns 删除操作结果响应
+   * @returns Deletion operation result response
    */
   async deleteUser(c: Context): Promise<Response> {
     try {
       const { id } = this.getParams<{ id: string }>(c);
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const result = await userService.deleteUser(id);
@@ -135,10 +135,10 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 更新用户角色 (RESTful 部分更新)
+   * Updates user roles (RESTful partial update)
    * PATCH /api/v1/users/:id/roles
    * @param c Hono Context
-   * @returns 用户角色更新响应
+   * @returns User role update response
    */
   async updateUserRoles(c: Context): Promise<Response> {
     try {
@@ -149,7 +149,7 @@ export class UserController extends BaseController {
         return this.error(c, '请求体不能为空', 400);
       }
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const result = await userService.updateUserRoles(id, body);
@@ -161,7 +161,7 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 清空用户角色
+   * Clears user roles
    * DELETE /api/v1/users/:id/roles
    */
   async clearUserRoles(c: Context): Promise<Response> {
@@ -179,16 +179,16 @@ export class UserController extends BaseController {
   }
 
   /**
-   * 获取用户角色信息
+   * Retrieves user role information
    * GET /api/v1/users/:id/roles
    * @param c Hono Context
-   * @returns 用户角色信息响应
+   * @returns User role information response
    */
   async getUserRoles(c: Context): Promise<Response> {
     try {
       const { id } = this.getParams<{ id: string }>(c);
 
-      // 获取数据库连接并创建服务实例
+      // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
       const userRoles = await userService.getUserRoles(id);

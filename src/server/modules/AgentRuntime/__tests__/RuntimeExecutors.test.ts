@@ -7,11 +7,21 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 
+const mockCreateCompressionGroup = vi.fn();
+const mockFinalizeCompression = vi.fn();
+
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn().mockResolvedValue(new Response('done')),
   }),
+}));
+
+vi.mock('@/server/services/message', () => ({
+  MessageService: vi.fn().mockImplementation(() => ({
+    createCompressionGroup: mockCreateCompressionGroup,
+    finalizeCompression: mockFinalizeCompression,
+  })),
 }));
 
 // @lobechat/model-runtime resolves to @cloud/business-model-runtime which has
@@ -44,10 +54,21 @@ describe('RuntimeExecutors', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateCompressionGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: [],
+      success: true,
+    });
+    mockFinalizeCompression.mockResolvedValue({ success: true });
 
     mockMessageModel = {
       create: vi.fn().mockResolvedValue({ id: 'msg-123' }),
+      // call_llm does a parent existence preflight; return a truthy row by
+      // default so existing tests don't have to stub it.
+      findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
+      query: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateToolMessage: vi.fn().mockResolvedValue({ success: true }),
     };
 
     mockStreamManager = {
@@ -66,6 +87,7 @@ describe('RuntimeExecutors', () => {
     };
 
     ctx = {
+      loadAgentState: vi.fn().mockResolvedValue(null),
       messageModel: mockMessageModel,
       operationId: 'op-123',
       serverDB: {} as any, // Mock serverDB
@@ -111,6 +133,14 @@ describe('RuntimeExecutors', () => {
       total: 0,
     },
     total: 0,
+  });
+
+  const createCompressContextInstruction = (messages: any[]) => ({
+    payload: {
+      currentTokenCount: 1000,
+      messages,
+    },
+    type: 'compress_context' as const,
   });
 
   describe('call_llm executor', () => {
@@ -210,6 +240,36 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should throw ConversationParentMissing if parent preflight misses (LOBE-7158)', async () => {
+      // parent existence preflight — if the parent row was deleted between
+      // operation kickoff and call_llm, fail fast before spending LLM tokens
+      // on a chain that would hit a FK violation anyway.
+      mockMessageModel.findById.mockResolvedValueOnce(null);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentId: 'gone-msg',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toMatchObject({
+        errorType: 'ConversationParentMissing',
+        parentId: 'gone-msg',
+      });
+      // LLM never got invoked
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+      // No assistant message got created either
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+    });
+
     it('should pass undefined parentId when neither parentId nor parentMessageId is provided', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -257,6 +317,424 @@ describe('RuntimeExecutors', () => {
         expect.objectContaining({
           model: 'gpt-3.5-turbo',
           provider: 'openai',
+        }),
+      );
+    });
+
+    it('should preserve reasoning in newState when assistant returns tool calls', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_1',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onThinking?.('Need to inspect the search results first.');
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        await options?.callback?.onCompletion?.({
+          usage: {
+            totalInputTokens: 1,
+            totalOutputTokens: 2,
+            totalTokens: 3,
+          },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      const result = await executors.call_llm!(instruction, state);
+
+      expect(result.newState.messages.at(-1)).toEqual(
+        expect.objectContaining({
+          id: 'msg-123',
+          reasoning: { content: 'Need to inspect the search results first.' },
+          role: 'assistant',
+          tool_calls: [expect.objectContaining({ id: 'call_1' })],
+        }),
+      );
+    });
+
+    it('should push assistant message with persisted DB id so request_human_approve can find parent', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_sensitive',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        await options?.callback?.onCompletion?.({
+          usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.create.mockResolvedValueOnce({ id: 'persisted-assistant-id' });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const lastAssistant = result.newState.messages.at(-1);
+      expect(lastAssistant).toMatchObject({
+        id: 'persisted-assistant-id',
+        role: 'assistant',
+      });
+      // The id must match the same message that nextContext exposes as
+      // parentMessageId, so request_human_approve sees a single source of truth.
+      expect((result.nextContext?.payload as any).parentMessageId).toBe('persisted-assistant-id');
+    });
+
+    it('should execute compress_context and return compression_result', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onText?.('summary');
+        await options?.callback?.onCompletion?.({
+          usage: {
+            completionTokens: 5,
+            promptTokens: 10,
+            totalTokens: 15,
+          },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+      ]);
+      mockCreateCompressionGroup.mockResolvedValue({
+        messageGroupId: 'group-123',
+        messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+        success: true,
+      });
+      mockFinalizeCompression.mockResolvedValue({
+        messages: [
+          { content: 'summary', id: 'group-123', role: 'compressedGroup' },
+          { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        ],
+        success: true,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'x '.repeat(70000), role: 'user' }],
+      });
+
+      const instruction = createCompressContextInstruction([
+        { content: 'x '.repeat(70000), role: 'user' },
+      ]);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockCreateCompressionGroup).toHaveBeenCalledTimes(1);
+      expect(mockFinalizeCompression).toHaveBeenCalledTimes(1);
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(result.nextContext?.phase).toBe('compression_result');
+      expect((result.nextContext?.payload as any).compressedMessages[0]).toEqual({
+        content: 'summary',
+        id: 'group-123',
+        role: 'compressedGroup',
+      });
+      expect((result.nextContext?.payload as any).parentMessageId).toBe('assistant-existing');
+      expect(result.events).toContainEqual({
+        groupId: 'group-123',
+        parentMessageId: 'assistant-existing',
+        type: 'compression_complete',
+      });
+      expect(result.newState.usage.llm.tokens.total).toBe(15);
+    });
+
+    it('should skip compress_context when topic metadata is missing', async () => {
+      const executors = createRuntimeExecutors({
+        ...ctx,
+      });
+      const state = createMockState({
+        messages: [{ content: 'history', role: 'user' }],
+        metadata: {
+          agentId: 'agent-123',
+        },
+      });
+
+      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
+      expect((result.nextContext?.payload as any).skipped).toBe(true);
+    });
+
+    it('should skip compress_context when userId is missing', async () => {
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        userId: undefined,
+      });
+      const state = createMockState({
+        messages: [{ content: 'history', role: 'user' }],
+      });
+
+      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
+      expect((result.nextContext?.payload as any).skipped).toBe(true);
+    });
+
+    it('should skip compress_context when there are no compressible messages after preserving the trailing user message', async () => {
+      mockMessageModel.query.mockResolvedValue([]);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'continue with this exact instruction', role: 'user' }],
+      });
+
+      const instruction = createCompressContextInstruction(state.messages);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockCreateCompressionGroup).not.toHaveBeenCalled();
+      expect(result.nextContext?.payload as any).toMatchObject({
+        compressedMessages: state.messages,
+        groupId: '',
+        parentMessageId: undefined,
+        skipped: true,
+      });
+    });
+
+    it('should skip compress_context when compression model config is missing', async () => {
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+      ]);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'history', role: 'user' }],
+        modelRuntimeConfig: undefined,
+      });
+
+      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockCreateCompressionGroup).toHaveBeenCalledTimes(1);
+      expect(mockFinalizeCompression).not.toHaveBeenCalled();
+      expect(result.nextContext?.payload as any).toMatchObject({
+        compressedMessages: [{ content: 'history', role: 'user' }],
+        parentMessageId: 'assistant-existing',
+        skipped: true,
+      });
+    });
+
+    it('should continue when compress_context fails', async () => {
+      mockCreateCompressionGroup.mockRejectedValueOnce(new Error('compression failed'));
+
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+      ]);
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'history', role: 'user' }],
+      });
+
+      const instruction = createCompressContextInstruction([{ content: 'history', role: 'user' }]);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(result.nextContext?.phase).toBe('compression_result');
+      expect((result.nextContext?.payload as any).skipped).toBe(true);
+      expect(mockFinalizeCompression).not.toHaveBeenCalled();
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0]).toMatchObject({ type: 'compression_error' });
+    });
+
+    it('should preserve the trailing user message outside compression', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onText?.('summary');
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+      ]);
+      mockCreateCompressionGroup.mockResolvedValue({
+        messageGroupId: 'group-123',
+        messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+        success: true,
+      });
+      mockFinalizeCompression.mockResolvedValue({
+        messages: [{ content: 'summary', id: 'group-123', role: 'compressedGroup' }],
+        success: true,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [
+          { content: 'history', id: 'msg-history', role: 'user' },
+          { content: 'continue with this exact instruction', role: 'user' },
+        ],
+      });
+
+      const instruction = createCompressContextInstruction(state.messages);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockCreateCompressionGroup).toHaveBeenCalledWith(
+        'topic-123',
+        ['msg-history', 'assistant-existing'],
+        expect.any(Object),
+      );
+      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+        { content: 'summary', id: 'group-123', role: 'compressedGroup' },
+        { content: 'continue with this exact instruction', role: 'user' },
+      ]);
+    });
+
+    it('should fallback to messagesToSummarize when finalizeCompression does not return messages', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onText?.('summary');
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+      ]);
+      mockCreateCompressionGroup.mockResolvedValue({
+        messageGroupId: 'group-123',
+        messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+        success: true,
+      });
+      mockFinalizeCompression.mockResolvedValue({
+        messages: undefined,
+        success: true,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'history', role: 'user' }],
+      });
+
+      const instruction = createCompressContextInstruction(state.messages);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+        { content: 'history', id: 'msg-history', role: 'user' },
+      ]);
+    });
+
+    it('should not duplicate the preserved trailing user message when it is already present in finalized messages', async () => {
+      const preservedMessage = {
+        content: 'continue with this exact instruction',
+        id: 'msg-follow-up',
+        role: 'user',
+      };
+
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onText?.('summary');
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+        preservedMessage,
+      ]);
+      mockCreateCompressionGroup.mockResolvedValue({
+        messageGroupId: 'group-123',
+        messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+        success: true,
+      });
+      mockFinalizeCompression.mockResolvedValue({
+        messages: [
+          { content: 'summary', id: 'group-123', role: 'compressedGroup' },
+          preservedMessage,
+        ],
+        success: true,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'history', id: 'msg-history', role: 'user' }, preservedMessage],
+      });
+
+      const instruction = createCompressContextInstruction(state.messages);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect((result.nextContext?.payload as any).compressedMessages).toEqual([
+        { content: 'summary', id: 'group-123', role: 'compressedGroup' },
+        preservedMessage,
+      ]);
+    });
+
+    it('should continue with skipped compression when the compression model reports a summary error', async () => {
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onError?.({ message: 'summary failed' });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.query.mockResolvedValue([
+        { content: 'history', id: 'msg-history', role: 'user' },
+        { content: 'loading', id: 'assistant-existing', role: 'assistant' },
+      ]);
+      mockCreateCompressionGroup.mockResolvedValue({
+        messageGroupId: 'group-123',
+        messagesToSummarize: [{ content: 'history', id: 'msg-history', role: 'user' }],
+        success: true,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        messages: [{ content: 'history', role: 'user' }],
+      });
+
+      const instruction = createCompressContextInstruction(state.messages);
+
+      const result = await executors.compress_context!(instruction, state);
+
+      expect(mockFinalizeCompression).not.toHaveBeenCalled();
+      expect((result.nextContext?.payload as any).skipped).toBe(true);
+      expect(result.events).toContainEqual(
+        expect.objectContaining({
+          type: 'compression_error',
         }),
       );
     });
@@ -751,6 +1229,95 @@ describe('RuntimeExecutors', () => {
           name: 'Enabled KB',
         });
       });
+
+      it('should skip topic reference resolution when messages already contain topic_reference_context', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [
+              {
+                content:
+                  '<refer_topic name="Old topic" id="topic-abc" />\nHello\n<system_context>\n<context type="topic_reference_context">\n<referred_topics>...</referred_topics>\n</context>\n</system_context>',
+                role: 'user',
+              },
+            ],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('topicReferences');
+      });
+
+      it('should resolve topic references when messages do not contain topic_reference_context', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Just a normal message without any topic refs', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        // resolveTopicReferences ran but found no <refer_topic> tags → topicReferences is undefined
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('topicReferences');
+      });
+
+      it('should skip rebuilding onboarding context when messages already contain onboarding injection', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: ['lobe-web-onboarding'],
+            slug: 'web-onboarding',
+            systemRole: 'test',
+          } as any,
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [
+              {
+                content:
+                  '<onboarding_context>\n<phase>existing</phase>\n</onboarding_context>\nHello',
+                role: 'user',
+              },
+            ],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledTimes(1);
+        const callArgs = engineSpy.mock.calls[0][0];
+        expect(callArgs).not.toHaveProperty('onboardingContext');
+      });
     });
   });
 
@@ -836,6 +1403,35 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should persist tool execution time in metadata when creating tool message', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-456',
+          toolCalling: {
+            apiName: 'crawl',
+            arguments: '{"url": "https://example.com"}',
+            id: 'tool-call-2',
+            identifier: 'web-browsing',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      await executors.call_tool!(instruction, state);
+
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: {
+            toolExecutionTimeMs: 100,
+          },
+        }),
+      );
+    });
+
     it('should return tool message ID as parentMessageId in nextContext for parentId chain', async () => {
       // Setup: mock messageModel.create to return a specific tool message ID
       const toolMessageId = 'tool-msg-789';
@@ -867,8 +1463,11 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tool_result');
     });
 
-    it('should return undefined parentMessageId if messageModel.create fails', async () => {
-      // Setup: mock messageModel.create to throw an error
+    it('should re-throw when messageModel.create fails (LOBE-7158: no silent swallow)', async () => {
+      // Before LOBE-7158 we silently swallowed this error and returned
+      // `parentMessageId: undefined`, which let the operation continue into
+      // the next step and re-hit the same failure without context. The fix
+      // requires the executor to propagate so the whole step fails.
       mockMessageModel.create.mockRejectedValue(new Error('Database error'));
 
       const executors = createRuntimeExecutors(ctx);
@@ -888,11 +1487,511 @@ describe('RuntimeExecutors', () => {
         type: 'call_tool' as const,
       };
 
+      await expect(executors.call_tool!(instruction, state)).rejects.toThrow('Database error');
+    });
+
+    it('should throw ConversationParentMissing on a parent_id FK violation (LOBE-7158)', async () => {
+      // Simulate the drizzle + postgres-js wrapped error shape.
+      const fkError: any = new Error(
+        'Failed query: insert into "messages" ... violates foreign key constraint',
+      );
+      fkError.cause = {
+        code: '23503',
+        constraint: 'messages_parent_id_messages_id_fk',
+      };
+      mockMessageModel.create.mockRejectedValue(fkError);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'deleted-parent',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      await expect(executors.call_tool!(instruction, state)).rejects.toMatchObject({
+        errorType: 'ConversationParentMissing',
+        parentId: 'deleted-parent',
+      });
+
+      // Stream event must carry the normalized error, not raw SQL text —
+      // clients treat `error` events as terminal and surface data.error
+      // directly, so leaking driver output here would show up to users.
+      const errorEventPublishes = mockStreamManager.publishStreamEvent.mock.calls.filter(
+        ([, event]: [string, any]) => event.type === 'error',
+      );
+      expect(errorEventPublishes.length).toBeGreaterThan(0);
+      for (const [, event] of errorEventPublishes) {
+        expect(event.data.errorType).toBe('ConversationParentMissing');
+        expect(event.data.error).not.toMatch(/Failed query/);
+      }
+    });
+
+    it('should retry tool execution when kind is retry and eventually succeed', async () => {
+      mockToolExecutionService.executeTool
+        .mockResolvedValueOnce({
+          content: 'timeout-1',
+          error: { kind: 'retry', message: 'timeout' },
+          executionTime: 50,
+          state: {},
+          success: false,
+        })
+        .mockResolvedValueOnce({
+          content: 'timeout-2',
+          error: { kind: 'retry', message: 'timeout' },
+          executionTime: 50,
+          state: {},
+          success: false,
+        })
+        .mockResolvedValueOnce({
+          content: 'Tool result success',
+          error: null,
+          executionTime: 80,
+          state: {},
+          success: true,
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-retry-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
       const result = await executors.call_tool!(instruction, state);
 
-      // parentMessageId should be undefined when message creation fails
-      const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBeUndefined();
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(3);
+      expect((result.nextContext!.payload as any).isSuccess).toBe(true);
+    });
+
+    it('should stop retrying tool execution after operation is interrupted', async () => {
+      mockToolExecutionService.executeTool.mockResolvedValue({
+        content: 'timeout',
+        error: { kind: 'retry', message: 'timeout' },
+        executionTime: 50,
+        state: {},
+        success: false,
+      });
+      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
+
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        loadAgentState,
+      });
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-retry-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(1);
+      expect(loadAgentState).toHaveBeenCalledWith('op-123');
+      expect((result.nextContext!.payload as any).isSuccess).toBe(false);
+    });
+
+    it('should materialize failed tool result after retry exhaustion', async () => {
+      mockToolExecutionService.executeTool.mockResolvedValue({
+        content: 'still failing',
+        error: { kind: 'retry', message: 'timeout' },
+        executionTime: 50,
+        state: {},
+        success: false,
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-retry-2',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(3);
+      expect((result.nextContext!.payload as any).isSuccess).toBe(false);
+    });
+
+    it('should not retry for replan or stop kinds', async () => {
+      mockToolExecutionService.executeTool
+        .mockResolvedValueOnce({
+          content: 'invalid args',
+          error: { kind: 'replan', message: 'invalid schema' },
+          executionTime: 30,
+          state: {},
+          success: false,
+        })
+        .mockResolvedValueOnce({
+          content: 'permission denied',
+          error: { kind: 'stop', message: 'forbidden' },
+          executionTime: 30,
+          state: {},
+          success: false,
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const replanInstruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-replan-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const stopInstruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-stop-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      await executors.call_tool!(replanInstruction, state);
+      await executors.call_tool!(stopInstruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
+    });
+
+    describe('skipCreateToolMessage (resumption after human approval)', () => {
+      it('should update existing tool message instead of creating a new one', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'pending-tool-msg-1',
+            skipCreateToolMessage: true,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        await executors.call_tool!(instruction, state);
+
+        expect(mockMessageModel.create).not.toHaveBeenCalled();
+        expect(mockMessageModel.updateToolMessage).toHaveBeenCalledWith(
+          'pending-tool-msg-1',
+          expect.objectContaining({
+            content: 'Tool result',
+            metadata: { toolExecutionTimeMs: 100 },
+          }),
+        );
+      });
+
+      it('should return the existing toolMessageId as parentMessageId for the next LLM step', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'pending-tool-msg-42',
+            skipCreateToolMessage: true,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-42',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        const result = await executors.call_tool!(instruction, state);
+
+        const nextPayload = result.nextContext?.payload as { parentMessageId?: string } | undefined;
+        expect(nextPayload?.parentMessageId).toBe('pending-tool-msg-42');
+      });
+
+      it('should fall back to creating a new tool message when skipCreateToolMessage is false', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'assistant-msg-7',
+            skipCreateToolMessage: false,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-7',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        await executors.call_tool!(instruction, state);
+
+        expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+        expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('request_human_approve executor', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [
+        {
+          content: 'assistant response',
+          id: 'assistant-msg-1',
+          role: 'assistant',
+        } as any,
+      ],
+      metadata: {
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: 'topic-123',
+      },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    const makePendingTools = () => [
+      {
+        apiName: 'search',
+        arguments: '{"q":"test"}',
+        id: 'tool-call-1',
+        identifier: 'web-search',
+        type: 'default' as const,
+      },
+      {
+        apiName: 'write',
+        arguments: '{"file":"a.md"}',
+        id: 'tool-call-2',
+        identifier: 'local-system',
+        type: 'default' as const,
+      },
+    ];
+
+    it('should create a pending tool message for each pendingToolsCalling', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const instruction = {
+        pendingToolsCalling: makePendingTools(),
+        type: 'request_human_approve' as const,
+      };
+
+      await executors.request_human_approve!(instruction, state);
+
+      expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentId: 'agent-123',
+          content: '',
+          parentId: 'assistant-msg-1',
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          parentId: 'assistant-msg-1',
+          pluginIntervention: { status: 'pending' },
+          tool_call_id: 'tool-call-2',
+        }),
+      );
+    });
+
+    it('should set state to waiting_for_human and copy pendingToolsCalling', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+      const pending = makePendingTools();
+
+      const result = await executors.request_human_approve!(
+        { pendingToolsCalling: pending, type: 'request_human_approve' as const },
+        state,
+      );
+
+      expect(result.newState.status).toBe('waiting_for_human');
+      expect(result.newState.pendingToolsCalling).toEqual(pending);
+    });
+
+    it('should publish tools_calling chunk with toolMessageIds mapping', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
+        (call: any[]) => call[2]?.chunkType === 'tools_calling',
+      );
+      expect(chunkCall).toBeTruthy();
+      expect(chunkCall![2].toolMessageIds).toEqual({
+        'tool-call-1': 'tool-msg-1',
+        'tool-call-2': 'tool-msg-2',
+      });
+    });
+
+    it('should skip message creation when skipCreateToolMessage is true', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.query.mockResolvedValueOnce([
+        { id: 'existing-tool-1', role: 'tool', tool_call_id: 'tool-call-1' },
+        { id: 'existing-tool-2', role: 'tool', tool_call_id: 'tool-call-2' },
+      ]);
+
+      await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          skipCreateToolMessage: true,
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+      const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
+        (call: any[]) => call[2]?.chunkType === 'tools_calling',
+      );
+      expect(chunkCall![2].toolMessageIds).toEqual({
+        'tool-call-1': 'existing-tool-1',
+        'tool-call-2': 'existing-tool-2',
+      });
+    });
+
+    it('should throw if no parent assistant message can be found', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({ messages: [] });
+      mockMessageModel.query.mockResolvedValueOnce([]);
+
+      await expect(
+        executors.request_human_approve!(
+          {
+            pendingToolsCalling: makePendingTools(),
+            type: 'request_human_approve' as const,
+          },
+          state,
+        ),
+      ).rejects.toThrow(/No assistant message found/);
+    });
+
+    it('should emit human_approve_required and tool_pending events', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const result = await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(result.events).toContainEqual(
+        expect.objectContaining({ type: 'human_approve_required' }),
+      );
+      expect(result.events).toContainEqual(expect.objectContaining({ type: 'tool_pending' }));
+    });
+
+    it('should NOT return a nextContext (operation pauses)', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const result = await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(result.nextContext).toBeUndefined();
     });
   });
 
@@ -989,6 +2088,80 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should apply retry policy per tool in batch mode', async () => {
+      const attemptsByTool: Record<string, number> = {};
+
+      mockToolExecutionService.executeTool.mockImplementation((payload: any) => {
+        const toolId = payload.id as string;
+        const nextAttempt = (attemptsByTool[toolId] || 0) + 1;
+        attemptsByTool[toolId] = nextAttempt;
+
+        if (toolId === 'tool-call-retry-batch' && nextAttempt < 3) {
+          return Promise.resolve({
+            content: 'timeout',
+            error: { kind: 'retry', message: 'timeout' },
+            executionTime: 40,
+            state: {},
+            success: false,
+          });
+        }
+
+        if (toolId === 'tool-call-stop-batch') {
+          return Promise.resolve({
+            content: 'permission denied',
+            error: { kind: 'stop', message: 'forbidden' },
+            executionTime: 40,
+            state: {},
+            success: false,
+          });
+        }
+
+        return Promise.resolve({
+          content: 'ok',
+          error: null,
+          executionTime: 60,
+          state: {},
+          success: true,
+        });
+      });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-retry-batch',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-stop-batch',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      const result = await executors.call_tools_batch!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(4);
+      expect((result.nextContext!.payload as any).toolResults).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ isSuccess: true }),
+          expect.objectContaining({ isSuccess: false }),
+        ]),
+      );
+    });
+
     it('should refresh messages from database after batch execution', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({ messages: [{ content: 'old', role: 'user' }] });
@@ -1012,11 +2185,14 @@ describe('RuntimeExecutors', () => {
       const result = await executors.call_tools_batch!(instruction, state);
 
       // Should query messages from database with agentId, threadId, and topicId
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-123',
-        threadId: 'thread-123',
-        topicId: 'topic-123',
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+        expect.any(Object),
+      );
 
       // Messages should be refreshed from database (4 messages from mock)
       expect(result.newState.messages).toHaveLength(4);
@@ -1096,8 +2272,11 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
-    it('should fallback to original parentMessageId if no tool messages created', async () => {
-      // All tool message creations fail
+    it('should propagate persist failures instead of silently falling back (LOBE-7158)', async () => {
+      // Before LOBE-7158 we fell back to the original parentMessageId here,
+      // which was itself the deleted parent that caused the failure — so the
+      // next step would hit the same FK violation with no context. The fix
+      // requires the batch to short-circuit on persist failure.
       mockMessageModel.create.mockRejectedValue(new Error('Database error'));
 
       const executors = createRuntimeExecutors(ctx);
@@ -1119,11 +2298,44 @@ describe('RuntimeExecutors', () => {
         type: 'call_tools_batch' as const,
       };
 
-      const result = await executors.call_tools_batch!(instruction, state);
+      await expect(executors.call_tools_batch!(instruction, state)).rejects.toThrow(
+        'Database error',
+      );
+    });
 
-      // Should fallback to original parentMessageId
-      const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBe('original-parent-123');
+    it('should throw ConversationParentMissing on a parent_id FK violation (LOBE-7158)', async () => {
+      const fkError: any = new Error(
+        'Failed query: insert into "messages" ... violates foreign key constraint',
+      );
+      fkError.cause = {
+        code: '23503',
+        constraint: 'messages_parent_id_messages_id_fk',
+      };
+      mockMessageModel.create.mockRejectedValue(fkError);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'deleted-parent',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await expect(executors.call_tools_batch!(instruction, state)).rejects.toMatchObject({
+        errorType: 'ConversationParentMissing',
+        parentId: 'deleted-parent',
+      });
     });
 
     it('should continue processing other tools if one tool execution fails', async () => {
@@ -1177,8 +2389,10 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
-    it('should continue if tool message creation fails for one tool', async () => {
-      // First message creation succeeds, second fails
+    it('should fail the batch if tool message creation fails for any tool (LOBE-7158)', async () => {
+      // Before LOBE-7158 we swallowed per-tool persist failures and kept
+      // going. The fix requires the batch to abort — a FK violation on one
+      // tool means every concurrent tool has the same doomed parent.
       mockMessageModel.create
         .mockResolvedValueOnce({ id: 'tool-msg-1' })
         .mockRejectedValueOnce(new Error('Database error'));
@@ -1209,17 +2423,9 @@ describe('RuntimeExecutors', () => {
         type: 'call_tools_batch' as const,
       };
 
-      const result = await executors.call_tools_batch!(instruction, state);
-
-      // Both tools should be executed
-      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
-
-      // Should still return result
-      expect(result.nextContext).toBeDefined();
-
-      // parentMessageId should be the first successful tool message
-      const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBe('tool-msg-1');
+      await expect(executors.call_tools_batch!(instruction, state)).rejects.toThrow(
+        'Database error',
+      );
     });
 
     it('should publish tool_start and tool_end events for each tool', async () => {
@@ -1340,11 +2546,14 @@ describe('RuntimeExecutors', () => {
       await executors.call_tools_batch!(instruction, state);
 
       // Should query messages with agentId, threadId, and topicId from state.metadata
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-abc',
-        threadId: 'thread-xyz',
-        topicId: 'topic-abc-123',
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-abc',
+          threadId: 'thread-xyz',
+          topicId: 'topic-abc-123',
+        },
+        expect.any(Object),
+      );
     });
 
     // LOBE-5143: After DB refresh, state.messages stores raw UIChatMessage[]
@@ -1476,11 +2685,14 @@ describe('RuntimeExecutors', () => {
       const result = await executors.call_tools_batch!(instruction, state);
 
       // Verify agentId is passed in the query
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-123',
-        threadId: 'thread-123',
-        topicId: undefined,
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: undefined,
+        },
+        expect.any(Object),
+      );
 
       // Expected: newState.messages should NOT be empty
       // The next call_llm step needs messages to work properly
@@ -1553,6 +2765,69 @@ describe('RuntimeExecutors', () => {
       expect(state.usage.tools.totalCalls).toBe(0);
     });
 
+    it('should persist execution time metadata for each tool message in batch execution', async () => {
+      mockToolExecutionService.executeTool
+        .mockResolvedValueOnce({
+          content: 'Search result',
+          error: null,
+          executionTime: 150,
+          state: {},
+          success: true,
+        })
+        .mockResolvedValueOnce({
+          content: 'Crawl result',
+          error: null,
+          executionTime: 250,
+          state: {},
+          success: true,
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{"query": "test"}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+            {
+              apiName: 'crawl',
+              arguments: '{"url": "https://example.com"}',
+              id: 'tool-call-2',
+              identifier: 'web-browsing',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          metadata: {
+            toolExecutionTimeMs: 150,
+          },
+        }),
+      );
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          metadata: {
+            toolExecutionTimeMs: 250,
+          },
+        }),
+      );
+    });
+
     it('should pass toolResultMaxLength from agentConfig to executeTool', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
@@ -1590,6 +2865,42 @@ describe('RuntimeExecutors', () => {
         expect.anything(),
         expect.objectContaining({
           toolResultMaxLength: 5000,
+        }),
+      );
+    });
+
+    it('should pass agentId from runtime metadata to executeTool', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        metadata: {
+          agentId: 'agent-docs-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'createDocument',
+              arguments: '{"title":"Test","content":"Hello"}',
+              id: 'tool-call-1',
+              identifier: 'lobe-agent-documents',
+              type: 'builtin' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          agentId: 'agent-docs-123',
         }),
       );
     });
@@ -1820,8 +3131,10 @@ describe('RuntimeExecutors', () => {
       });
     });
 
-    it('should continue processing remaining tools if one fails to create', async () => {
-      // Mock: first call succeeds, second call fails
+    it('should propagate persist failures instead of silently swallowing (LOBE-7158)', async () => {
+      // The pre-LOBE-7158 behavior logged the error and kept walking the
+      // aborted-tool list. That left a half-persisted state and hid the real
+      // cause from ops. Now we fail fast.
       mockMessageModel.create
         .mockResolvedValueOnce({ id: 'tool-msg-1' })
         .mockRejectedValueOnce(new Error('Database error'));
@@ -1852,18 +3165,9 @@ describe('RuntimeExecutors', () => {
         type: 'resolve_aborted_tools' as const,
       };
 
-      const result = await executors.resolve_aborted_tools!(instruction, state);
-
-      // Should still complete and emit done event
-      expect(result.newState.status).toBe('done');
-      expect(result.events).toContainEqual(
-        expect.objectContaining({
-          type: 'done',
-        }),
+      await expect(executors.resolve_aborted_tools!(instruction, state)).rejects.toThrow(
+        'Database error',
       );
-
-      // Only the first tool message should be added to state
-      expect(result.newState.messages).toHaveLength(1);
     });
   });
 
@@ -1899,7 +3203,9 @@ describe('RuntimeExecutors', () => {
       vi.mocked(consumeStreamUntilDone).mockResolvedValue(undefined);
     });
 
-    it('should throw when LLM stream contains error events from provider', async () => {
+    it('should retry and eventually throw when LLM stream contains error events from provider', async () => {
+      vi.useFakeTimers();
+
       // Import real implementations directly from source (bypassing the @lobechat/model-runtime mock)
       const { consumeStreamUntilDone: realConsume } =
         await import('../../../../../packages/model-runtime/src/utils/consumeStream');
@@ -1943,15 +3249,33 @@ describe('RuntimeExecutors', () => {
         type: 'call_llm' as const,
       };
 
-      await expect(executors.call_llm!(instruction, state)).rejects.toThrow(/LLM stream error/);
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+        const rejectionExpectation = expect(resultPromise).rejects.toThrow(/LLM stream error/);
 
-      // Error event should be published to stream manager
-      expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
-        'op-123',
-        expect.objectContaining({
-          type: 'error',
-        }),
-      );
+        await Promise.resolve();
+        await vi.runAllTimersAsync();
+
+        await rejectionExpectation;
+
+        expect(mockChat).toHaveBeenCalledTimes(6);
+
+        const retryEvents = mockStreamManager.publishStreamEvent.mock.calls.filter(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        );
+
+        expect(retryEvents).toHaveLength(5);
+
+        // Error event should be published to stream manager after retries are exhausted
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'error',
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should throw and not produce llm_result when modelRuntime.chat rejects', async () => {
@@ -1982,10 +3306,222 @@ describe('RuntimeExecutors', () => {
           type: 'error',
           data: expect.objectContaining({
             error: '401 Unauthorized',
+            errorType: 'Error',
             phase: 'llm_execution',
           }),
         }),
       );
+    });
+
+    it('should retry llm execution, emit stream_retry, and commit only the successful attempt', async () => {
+      vi.useFakeTimers();
+
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'tool-call-1',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi
+        .fn()
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onGrounding?.({ query: 'draft' });
+          await options.callback.onToolsCalling?.({ toolsCalling: toolCallPayload });
+          throw new Error('network timeout');
+        })
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onText?.('final');
+          await options.callback.onCompletion?.({
+            usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+          });
+          return new Response('done');
+        });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+
+        await vi.runOnlyPendingTimersAsync();
+
+        const result = await resultPromise;
+
+        expect(mockChat).toHaveBeenCalledTimes(2);
+        expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({ content: 'final' }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should not retry llm execution after operation is interrupted', async () => {
+      const mockChat = vi.fn().mockRejectedValue(new Error('network timeout'));
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
+
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        loadAgentState,
+      });
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toThrow('network timeout');
+
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(loadAgentState).toHaveBeenCalledWith('op-123');
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        ),
+      ).toBe(false);
+    });
+
+    it('should not retry llm execution if operation is interrupted during backoff', async () => {
+      vi.useFakeTimers();
+
+      const mockChat = vi.fn().mockRejectedValue(new Error('network timeout'));
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const loadAgentState = vi
+        .fn()
+        .mockResolvedValueOnce({ status: 'running' })
+        .mockResolvedValueOnce({ status: 'interrupted' });
+
+      const executors = createRuntimeExecutors({
+        ...ctx,
+        loadAgentState,
+      });
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+        const rejectionExpectation = expect(resultPromise).rejects.toThrow('network timeout');
+
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+
+        await rejectionExpectation;
+
+        expect(mockChat).toHaveBeenCalledTimes(1);
+        expect(loadAgentState).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should apply exponential backoff across multiple llm retries', async () => {
+      vi.useFakeTimers();
+
+      const mockChat = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('network timeout-1'))
+        .mockRejectedValueOnce(new Error('network timeout-2'))
+        .mockRejectedValueOnce(new Error('network timeout-3'))
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onText?.('final');
+          await options.callback.onCompletion?.({
+            usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+          });
+          return new Response('done');
+        });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentMessageId: 'parent-msg-123',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+
+        await vi.runOnlyPendingTimersAsync();
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+        await Promise.resolve();
+        await vi.runOnlyPendingTimersAsync();
+
+        const result = await resultPromise;
+
+        expect(mockChat).toHaveBeenCalledTimes(4);
+        expect(result.nextContext?.phase).toBe('llm_result');
+
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 2, delayMs: 1000, maxAttempts: 6 },
+          }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 3, delayMs: 2000, maxAttempts: 6 },
+          }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            type: 'stream_retry',
+            data: { attempt: 4, delayMs: 4000, maxAttempts: 6 },
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

@@ -5,12 +5,15 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-agent-documents": "workspace:*",
+    "@lobechat/builtin-tool-agent-management": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
-    "@lobechat/business-const": "workspace:*",
-    "@lobechat/const": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",
     "@lobechat/builtin-tool-gtd": "workspace:*",
-    "@lobechat/builtin-tool-notebook": "workspace:*"
+    "@lobechat/builtin-tool-notebook": "workspace:*",
+    "@lobechat/builtin-tool-user-interaction": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
+    "@lobechat/const": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

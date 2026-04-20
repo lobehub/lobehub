@@ -2,7 +2,7 @@
 
 import { type ToolStatus } from '@lobechat/electron-client-ipc';
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Button, CopyButton, Flexbox, Form, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Button, CopyButton, Flexbox, Form, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,9 +19,27 @@ const TOOL_CATEGORIES = {
     descKey: 'settingSystemTools.category.runtimeEnvironment.desc',
     titleKey: 'settingSystemTools.category.runtimeEnvironment',
     tools: [
+      { descKey: 'settingSystemTools.tools.lobehub.desc', name: 'lobehub' },
       { descKey: 'settingSystemTools.tools.node.desc', name: 'node' },
       { descKey: 'settingSystemTools.tools.python.desc', name: 'python' },
       { descKey: 'settingSystemTools.tools.npm.desc', name: 'npm' },
+      { descKey: 'settingSystemTools.tools.bun.desc', name: 'bun' },
+      { descKey: 'settingSystemTools.tools.bunx.desc', name: 'bunx' },
+      { descKey: 'settingSystemTools.tools.pnpm.desc', name: 'pnpm' },
+      { descKey: 'settingSystemTools.tools.uv.desc', name: 'uv' },
+    ],
+  },
+
+  'cli-agents': {
+    descKey: 'settingSystemTools.category.cliAgents.desc',
+    titleKey: 'settingSystemTools.category.cliAgents',
+    tools: [
+      { descKey: 'settingSystemTools.tools.claude.desc', name: 'claude' },
+      { descKey: 'settingSystemTools.tools.codex.desc', name: 'codex' },
+      { descKey: 'settingSystemTools.tools.gemini.desc', name: 'gemini' },
+      { descKey: 'settingSystemTools.tools.qwen.desc', name: 'qwen' },
+      { descKey: 'settingSystemTools.tools.kimi.desc', name: 'kimi' },
+      { descKey: 'settingSystemTools.tools.aider.desc', name: 'aider' },
     ],
   },
 
@@ -108,36 +126,28 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
 const ToolDetectorSection = memo(() => {
   const { t } = useTranslation('setting');
   const [toolStatuses, setToolStatuses] = useState<Record<string, ToolStatus>>({});
-  const [loading, setLoading] = useState(true);
-  const [detecting, setDetecting] = useState(false);
+  const [detecting, setDetecting] = useState(true);
 
   const detectTools = useCallback(async (force = false) => {
     try {
-      if (force) {
-        setDetecting(true);
-      }
+      setDetecting(true);
       const statuses = await toolDetectorService.detectAllTools(force);
       setToolStatuses(statuses);
     } catch (error) {
       console.error('Failed to detect tools:', error);
     } finally {
-      setLoading(false);
       setDetecting(false);
     }
   }, []);
 
   // Auto-detect on mount
   useEffect(() => {
-    detectTools(true);
+    void detectTools(true);
   }, [detectTools]);
 
   const handleRedetect = useCallback(() => {
     detectTools(true);
   }, [detectTools]);
-
-  if (loading) {
-    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
-  }
 
   const formItems: FormGroupItemType[] = Object.entries(TOOL_CATEGORIES).map(
     ([, categoryConfig]) => ({
@@ -179,7 +189,6 @@ const ToolDetectorSection = memo(() => {
           justify="flex-end"
           style={{ marginBlockStart: 8 }}
         >
-          <Text type="secondary">{t('settingSystemTools.autoSelectDesc')}</Text>
           <Button
             icon={<Icon icon={RefreshCw} spin={detecting} />}
             loading={detecting}

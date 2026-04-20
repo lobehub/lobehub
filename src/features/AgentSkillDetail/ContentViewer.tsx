@@ -157,7 +157,8 @@ const isMarkdownFile = (path: string) => {
   return ext === 'md' || ext === 'mdx';
 };
 
-const parseFrontmatter = (content: string): { body: string; frontmatter?: string } => {
+const parseFrontmatter = (content?: string): { body: string; frontmatter?: string } => {
+  if (!content) return { body: '' };
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) return { body: content };
   return { body: match[2], frontmatter: match[1] };

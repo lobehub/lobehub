@@ -90,6 +90,13 @@ export class FileModel {
     return this.db.insert(globalFiles).values(file).returning();
   };
 
+  updateGlobalFile = async (
+    hashId: string,
+    data: Partial<Pick<NewGlobalFile, 'metadata' | 'url'>>,
+  ) => {
+    return this.db.update(globalFiles).set(data).where(eq(globalFiles.hashId, hashId));
+  };
+
   checkHash = async (hash: string) => {
     const item = await this.db.query.globalFiles.findFirst({
       where: eq(globalFiles.hashId, hash),
@@ -383,31 +390,11 @@ export class FileModel {
         const batchChunkIds = chunkIds.slice(startIdx, startIdx + BATCH_SIZE);
         if (batchChunkIds.length === 0) continue;
 
-        // Process each batch in the correct deletion order, failures do not block the flow
+        // Process each batch in the correct deletion order.
         const batchPromise = (async () => {
-          // 1. Delete embeddings (top-level, has foreign key dependencies)
-          try {
-            await trx.delete(embeddings).where(inArray(embeddings.chunkId, batchChunkIds));
-          } catch (e) {
-            // Silent handling, does not block deletion process
-            console.warn('Failed to delete embeddings:', e);
-          }
-
-          // 2. Delete documentChunks association (if exists)
-          try {
-            await trx.delete(documentChunks).where(inArray(documentChunks.chunkId, batchChunkIds));
-          } catch (e) {
-            // Silent handling, does not block deletion process
-            console.warn('Failed to delete documentChunks:', e);
-          }
-
-          // 3. Delete chunks (core data)
-          try {
-            await trx.delete(chunks).where(inArray(chunks.id, batchChunkIds));
-          } catch (e) {
-            // Silent handling, does not block deletion process
-            console.warn('Failed to delete chunks:', e);
-          }
+          await trx.delete(embeddings).where(inArray(embeddings.chunkId, batchChunkIds));
+          await trx.delete(documentChunks).where(inArray(documentChunks.chunkId, batchChunkIds));
+          await trx.delete(chunks).where(inArray(chunks.id, batchChunkIds));
         })();
 
         batchPromises.push(batchPromise);
@@ -418,12 +405,7 @@ export class FileModel {
     }
 
     // 4. Finally delete fileChunks association table records
-    try {
-      await trx.delete(fileChunks).where(inArray(fileChunks.fileId, fileIds));
-    } catch (e) {
-      // Silent handling, does not block deletion process
-      console.warn('Failed to delete fileChunks:', e);
-    }
+    await trx.delete(fileChunks).where(inArray(fileChunks.fileId, fileIds));
 
     return chunkIds;
   };

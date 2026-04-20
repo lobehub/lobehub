@@ -3,7 +3,7 @@ name: Daily i18n Update
 on:
   schedule:
     - cron: '0 0 * * *'
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 # Add permissions configuration
 permissions:
@@ -25,13 +25,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
 
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ secrets.BUN_VERSION }}
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Update i18n
         run: bun run i18n

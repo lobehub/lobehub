@@ -6,6 +6,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
+import ActionBar from '@/routes/(main)/memory/features/ActionBar';
 import MemoryAnalysis from '@/routes/(main)/memory/features/MemoryAnalysis';
 import MemoryEmpty from '@/routes/(main)/memory/features/MemoryEmpty';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/memory/features/TimeLineView/useScrollParent';
@@ -31,11 +32,10 @@ const Home: FC = () => {
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         right={
-          <Flexbox horizontal gap={8}>
+          <ActionBar showAnalysis showPurge>
             {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
-            <MemoryAnalysis iconOnly />
             <WideScreenButton />
-          </Flexbox>
+          </ActionBar>
         }
         style={{
           zIndex: 1,

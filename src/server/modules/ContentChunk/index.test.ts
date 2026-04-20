@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { knowledgeEnv } from '@/envs/knowledge';
-import { ChunkingLoader } from '@/libs/langchain';
+import { ChunkingLoader } from '@/libs/document-loaders';
 
 import { ContentChunk } from './index';
 
 // Mock the dependencies
-vi.mock('@/libs/langchain');
+vi.mock('@/libs/document-loaders');
 vi.mock('@/envs/knowledge', () => ({
   knowledgeEnv: {
     FILE_TYPE_CHUNKING_RULES: '',
@@ -70,7 +70,7 @@ describe('ContentChunk', () => {
         index: 0,
         metadata: { source: 'test' },
         text: 'Test content chunk 1',
-        type: 'LangChainElement',
+        type: 'DocumentChunk',
       });
       expect(result.unstructuredChunks).toBeUndefined();
     });
@@ -143,13 +143,13 @@ describe('ContentChunk', () => {
           loc: { lines: { from: 1, to: 10 } },
         },
         text: 'First paragraph content',
-        type: 'LangChainElement',
+        type: 'DocumentChunk',
       });
       expect(result.chunks[1]).toMatchObject({
         id: 'chunk-2',
         index: 1,
         text: 'Second paragraph content',
-        type: 'LangChainElement',
+        type: 'DocumentChunk',
       });
     });
 
@@ -242,7 +242,7 @@ describe('ContentChunk', () => {
         index: 0,
         metadata: {},
         text: 'Content with no metadata',
-        type: 'LangChainElement',
+        type: 'DocumentChunk',
       });
     });
   });

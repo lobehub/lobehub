@@ -5,11 +5,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./executor": "./src/executor/index.ts"
+    "./executor": "./src/executor/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/electron-client-ipc": "workspace:*"
+    "@lobechat/electron-client-ipc": "workspace:*",
+    "@lobechat/shared-tool-ui": "workspace:*",
+    "@lobechat/tool-runtime": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

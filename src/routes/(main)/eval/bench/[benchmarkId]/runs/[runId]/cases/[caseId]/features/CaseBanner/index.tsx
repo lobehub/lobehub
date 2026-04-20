@@ -4,7 +4,7 @@ import type { EvalRunTopicResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
 import { Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -17,29 +17,29 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   backLink: css`
     cursor: pointer;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
 
     &:hover {
-      color: ${token.colorText};
+      color: ${cssVar.colorText};
     }
   `,
   header: css`
     padding-inline: 16px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   metricCard: css`
     gap: 8px;
 
     padding-block: 6px;
     padding-inline: 8px 16px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     font-size: 12px;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
   `,
   metricIcon: css`
     display: flex;
@@ -48,23 +48,23 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 28px;
     height: 28px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   metricLabel: css`
     font-size: 11px;
     line-height: 1;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   metricValue: css`
     font-family: monospace;
     font-size: 14px;
     font-weight: 500;
     line-height: 1.4;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -81,8 +81,6 @@ interface CaseHeaderProps {
 const CaseHeader = memo<CaseHeaderProps>(
   ({ passed, caseNumber, runName, evalResult, onBack, onPrev, onNext }) => {
     const { t } = useTranslation('eval');
-    const { styles } = useStyles();
-
     const metrics = [
       {
         icon: Clock,

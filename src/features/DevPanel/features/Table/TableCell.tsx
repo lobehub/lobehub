@@ -30,7 +30,7 @@ const TableCell = ({ dataItem, column }: TableCellProps) => {
 
   return (
     <td key={column}>
-      {/* 不能使用 antd 的 Text， 会有大量的重渲染导致滚动极其卡顿 */}
+      {/* Cannot use antd's Text component — it causes excessive re-renders that make scrolling extremely sluggish */}
       {content}
     </td>
   );

@@ -6,6 +6,7 @@ import {
   type AIRealtimeModelCard,
   type AISTTModelCard,
   type AITTSModelCard,
+  type AIVideoModelCard,
 } from '../types/aiModel';
 
 export const gptImage1ParamsSchema: ModelParamsSchema = {
@@ -123,7 +124,65 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort'],
+      extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 400_000,
+    description:
+      "GPT-5.4 mini is OpenAI's strongest mini model for coding, computer use, and subagents.",
+    displayName: 'GPT-5.4 mini',
+    enabled: true,
+    id: 'gpt-5.4-mini',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-18',
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 400_000,
+    description:
+      "GPT-5.4 nano is OpenAI's cheapest GPT-5.4-class model for simple high-volume tasks.",
+    displayName: 'GPT-5.4 nano',
+    enabled: true,
+    id: 'gpt-5.4-nano',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-03-18',
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -138,7 +197,6 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.3 Chat is the latest ChatGPT model used in ChatGPT with improved conversation experiences.',
     displayName: 'GPT-5.3 Chat',
-    enabled: true,
     id: 'gpt-5.3-chat-latest',
     maxOutput: 16_384,
     pricing: {
@@ -503,7 +561,6 @@ export const openaiChatModels: AIChatModelCard[] = [
     description:
       'A faster, more cost-efficient GPT-5 variant for well-defined tasks, delivering quicker responses while maintaining quality.',
     displayName: 'GPT-5 mini',
-    enabled: true,
     id: 'gpt-5-mini',
     maxOutput: 128_000,
     pricing: {
@@ -1630,6 +1687,55 @@ export const openaiRealtimeModels: AIRealtimeModelCard[] = [
   },
 ];
 
+export const openaiVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Sora 2 is our new powerful media generation model, generating videos with synced audio. It can create richly detailed, dynamic clips from natural language or images.',
+    displayName: 'Sora 2',
+    enabled: true,
+    id: 'sora-2',
+    parameters: {
+      duration: { default: 4, enum: [4, 8, 12] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      size: {
+        default: '720x1280',
+        enum: ['720x1280', '1280x720', '1024x1792', '1792x1024'],
+      },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-12-08',
+    type: 'video',
+  },
+  {
+    description:
+      'Sora 2 Pro is our state-of-the-art, most advanced media generation model, generating videos with synced audio. It can create richly detailed, dynamic clips from natural language or images.',
+    displayName: 'Sora 2 Pro',
+    enabled: true,
+    id: 'sora-2-pro',
+    parameters: {
+      duration: { default: 4, enum: [4, 8, 12] },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      size: {
+        default: '720x1280',
+        enum: ['720x1280', '1280x720', '1024x1792', '1792x1024'],
+      },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.5, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-10-06',
+    type: 'video',
+  },
+];
+
 export const allModels = [
   ...openaiChatModels,
   ...openaiEmbeddingModels,
@@ -1637,6 +1743,7 @@ export const allModels = [
   ...openaiSTTModels,
   ...openaiImageModels,
   ...openaiRealtimeModels,
+  ...openaiVideoModels,
 ];
 
 export default allModels;

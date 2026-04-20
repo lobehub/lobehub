@@ -9,6 +9,7 @@ import { useToolStore } from '../../store';
 
 vi.mock('@/services/plugin', () => ({
   pluginService: {
+    getInstalledPlugins: vi.fn().mockResolvedValue([]),
     updatePluginSettings: vi.fn(),
     removeAllPlugins: vi.fn(),
   },
@@ -23,13 +24,6 @@ describe('useToolStore:plugin', () => {
   describe('checkPluginsIsInstalled', () => {
     it('should be deprecated and do nothing', async () => {
       // Old plugin system has been deprecated
-      const loadPluginStoreMock = vi.fn();
-      const installPluginsMock = vi.fn();
-      useToolStore.setState({
-        loadPluginStore: loadPluginStoreMock,
-        installPlugins: installPluginsMock,
-      });
-
       const { result } = renderHook(() => useToolStore());
 
       await act(async () => {
@@ -37,8 +31,6 @@ describe('useToolStore:plugin', () => {
       });
 
       // Should not call any methods since old plugin system is deprecated
-      expect(loadPluginStoreMock).not.toHaveBeenCalled();
-      expect(installPluginsMock).not.toHaveBeenCalled();
     });
   });
 

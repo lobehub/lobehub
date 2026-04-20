@@ -3,6 +3,7 @@ import {
   type CheckFileHashResult,
   type FileItem,
   type FileListItem,
+  type KnowledgeItemStatus,
   type QueryFileListParams,
   type QueryFileListSchemaType,
   type UploadFileParams,
@@ -58,6 +59,18 @@ export class FileService {
     return lambdaClient.file.getKnowledgeItems.query(params as QueryFileListSchemaType);
   };
 
+  getKnowledgeItemStatusesByIds = async (ids: string[]): Promise<KnowledgeItemStatus[]> => {
+    return lambdaClient.file.getKnowledgeItemStatusesByIds.query({ ids });
+  };
+
+  resolveKnowledgeItemIds = async (params: QueryFileListParams) => {
+    return lambdaClient.file.resolveKnowledgeItemIds.query(params as QueryFileListSchemaType);
+  };
+
+  deleteKnowledgeItemsByQuery = async (params: QueryFileListParams) => {
+    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(params as QueryFileListSchemaType);
+  };
+
   // V2.0 Migrate from getFileItem to getKnowledgeItem
   // This method handles both files (file_ prefix) and documents (docs_ prefix)
   getKnowledgeItem = async (id: string) => {
@@ -107,7 +120,14 @@ export class FileService {
     return lambdaClient.file.removeFileAsyncTask.mutate({ id, type });
   };
 
-  updateFile = async (id: string, data: { parentId?: string | null }) => {
+  updateFile = async (
+    id: string,
+    data: {
+      metadata?: Record<string, any>;
+      name?: string;
+      parentId?: string | null;
+    },
+  ) => {
     return lambdaClient.file.updateFile.mutate({ id, ...data });
   };
 

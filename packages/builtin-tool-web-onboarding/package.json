@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/builtin-tool-web-onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./utils": "./src/ExecutionRuntime/utils.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/markdown-patch": "workspace:*",
+    "@lobechat/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

@@ -2,12 +2,11 @@ import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import { type AssistantContentBlock } from '@/types/index';
-
 import { useConversationStore } from '../../../store';
 import ContentBlock from './ContentBlock';
+import type { RenderableAssistantContentBlock } from './types';
 
-interface GroupItemProps extends AssistantContentBlock {
+interface GroupItemProps extends RenderableAssistantContentBlock {
   assistantId: string;
   contentId?: string;
   disableEditing?: boolean;

@@ -5,6 +5,10 @@ import { lambdaClient } from '@/libs/trpc/client';
 class MemoryCRUDService {
   // ============ Identity CRUD ============
 
+  deleteAll = async () => {
+    return lambdaClient.userMemory.deleteAll.mutate();
+  };
+
   createIdentity = async (data: NewUserMemoryIdentity) => {
     return lambdaClient.userMemory.createIdentity.mutate(data);
   };

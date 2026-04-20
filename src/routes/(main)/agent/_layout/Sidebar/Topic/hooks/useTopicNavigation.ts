@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import urlJoin from 'url-join';
 
+import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
@@ -10,12 +11,17 @@ import { useGlobalStore } from '@/store/global';
  * Hook to handle topic navigation with automatic route detection
  * If in agent sub-route (e.g., /agent/:aid/profile), navigate back to chat first
  */
+interface NavigateToTopicOptions {
+  skipPopupFocus?: boolean;
+}
+
 export const useTopicNavigation = () => {
   const pathname = usePathname();
   const activeAgentId = useChatStore((s) => s.activeAgentId);
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
   const switchTopic = useChatStore((s) => s.switchTopic);
+  const focusTopicPopup = useFocusTopicPopup({ agentId: activeAgentId });
 
   const isInAgentSubRoute = useCallback(() => {
     if (!activeAgentId) return false;
@@ -29,7 +35,11 @@ export const useTopicNavigation = () => {
   }, [pathname, activeAgentId]);
 
   const navigateToTopic = useCallback(
-    (topicId?: string) => {
+    async (topicId?: string, options?: NavigateToTopicOptions) => {
+      if (!options?.skipPopupFocus) {
+        await focusTopicPopup(topicId);
+      }
+
       // If in agent sub-route, navigate back to agent chat first
       if (isInAgentSubRoute() && activeAgentId) {
         const basePath = urlJoin('/agent', activeAgentId as string);
@@ -42,10 +52,11 @@ export const useTopicNavigation = () => {
       switchTopic(topicId);
       toggleConfig(false);
     },
-    [activeAgentId, router, switchTopic, toggleConfig, isInAgentSubRoute],
+    [activeAgentId, focusTopicPopup, router, switchTopic, toggleConfig, isInAgentSubRoute],
   );
 
   return {
+    focusTopicPopup,
     isInAgentSubRoute: isInAgentSubRoute(),
     navigateToTopic,
   };

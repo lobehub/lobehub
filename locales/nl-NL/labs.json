@@ -1,7 +1,8 @@
 {
-  "desc": "Hier vind je af en toe updates over nieuwe functies die we aan het verkennen zijn—voel je vrij om ze uit te proberen!",
   "features.assistantMessageGroup.desc": "Groepeer berichten van de agent en de resultaten van hun tool-aanroepen samen voor weergave",
   "features.assistantMessageGroup.title": "Agentberichtengroepering",
+  "features.gatewayMode.desc": "Voer agenttaken op de server uit via de Gateway‑WebSocket in plaats van ze lokaal uit te voeren. Zorgt voor snellere uitvoering en vermindert het gebruik van clientbronnen.",
+  "features.gatewayMode.title": "Server-side uitvoering van agenten (Gateway)",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",
   "features.groupChat.title": "Groepschat (Meerdere Agenten)",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",

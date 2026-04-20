@@ -5,6 +5,18 @@ import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:in-memory-stream-event-manager');
 
+const getDefaultReasonDetail = (finalState: any, reason?: string): string => {
+  if (reason === 'error') {
+    return finalState?.error?.message || finalState?.error?.type || 'Agent runtime failed';
+  }
+
+  if (reason === 'interrupted') {
+    return finalState?.error?.message || 'Agent runtime interrupted';
+  }
+
+  return 'Agent runtime completed successfully';
+};
+
 type EventCallback = (events: StreamEvent[]) => void;
 
 /**
@@ -98,7 +110,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',
-        reasonDetail: reasonDetail || 'Agent runtime completed successfully',
+        reasonDetail: reasonDetail || getDefaultReasonDetail(finalState, reason),
       },
       stepIndex,
       type: 'agent_runtime_end',

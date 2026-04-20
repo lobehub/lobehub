@@ -9,15 +9,15 @@ import type {
 } from '../types/agent-group.type';
 
 /**
- * AgentGroup 控制器类
- * 处理助理分类相关的 HTTP 请求和响应
+ * AgentGroup controller class
+ * Handles agent category-related HTTP requests and responses
  */
 export class AgentGroupController extends BaseController {
   /**
-   * 获取助理分类列表
+   * Retrieves the list of agent categories
    * GET /api/v1/agent-groups
    * @param c Hono Context
-   * @returns 助理分类列表响应
+   * @returns Agent category list response
    */
   async getAgentGroups(c: Context): Promise<Response> {
     try {
@@ -32,10 +32,10 @@ export class AgentGroupController extends BaseController {
   }
 
   /**
-   * 根据 ID 获取助理分类详情
+   * Retrieves agent category details by ID
    * GET /api/v1/agent-groups/:id
    * @param c Hono Context
-   * @returns 助理分类详情响应
+   * @returns Agent category detail response
    */
   async getAgentGroupById(c: Context): Promise<Response> {
     try {
@@ -60,10 +60,10 @@ export class AgentGroupController extends BaseController {
   }
 
   /**
-   * 创建助理分类
+   * Creates an agent category
    * POST /api/v1/agent-groups
    * @param c Hono Context
-   * @returns 创建完成的助理分类 ID 响应
+   * @returns Created agent category ID response
    */
   async createAgentGroup(c: Context): Promise<Response> {
     try {
@@ -88,10 +88,10 @@ export class AgentGroupController extends BaseController {
   }
 
   /**
-   * 更新助理分类
+   * Updates an agent category
    * PATCH /api/v1/agent-groups/:id
    * @param c Hono Context
-   * @returns 更新结果响应
+   * @returns Update result response
    */
   async updateAgentGroup(c: Context): Promise<Response> {
     try {
@@ -118,10 +118,10 @@ export class AgentGroupController extends BaseController {
   }
 
   /**
-   * 删除助理分类
+   * Deletes an agent category
    * DELETE /api/v1/agent-groups/:id
    * @param c Hono Context
-   * @returns 删除结果响应
+   * @returns Deletion result response
    */
   async deleteAgentGroup(c: Context): Promise<Response> {
     try {

@@ -39,6 +39,7 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
   group: [],
   page: [],
   painting: [],
+  video: [],
   resource: [],
   settings: [
     {

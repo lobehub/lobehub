@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Hono } from 'hono';
 
-import { verifyDesktopToken } from './auth';
+import { resolveSocketAuth, verifyApiKeyToken, verifyDesktopToken } from './auth';
 import type { DeviceAttachment, Env } from './types';
 
 const AUTH_TIMEOUT = 10_000; // 10s to authenticate after connect
@@ -58,24 +58,25 @@ export class DeviceGatewayDO extends DurableObject<Env> {
       if (att.authenticated) return; // Already authenticated, ignore
 
       try {
-        const token = data.token as string;
-        if (!token) throw new Error('Missing token');
+        const token = data.token as string | undefined;
+        const tokenType = data.tokenType as 'apiKey' | 'jwt' | 'serviceToken' | undefined;
+        const serverUrl = data.serverUrl as string | undefined;
+        const storedUserId = await this.ctx.storage.get<string>('_userId');
 
-        let verifiedUserId: string;
-
-        if (token === this.env.SERVICE_TOKEN) {
-          // Service token auth (for CLI debugging)
-          const storedUserId = await this.ctx.storage.get<string>('_userId');
-          if (!storedUserId) throw new Error('Missing userId');
-          verifiedUserId = storedUserId;
-        } else {
-          // JWT auth (normal desktop flow)
-          const result = await verifyDesktopToken(this.env, token);
-          verifiedUserId = result.userId;
-        }
+        const verifiedUserId = await resolveSocketAuth({
+          serverUrl,
+          serviceToken: this.env.SERVICE_TOKEN,
+          storedUserId,
+          token,
+          tokenType,
+          verifyApiKey: verifyApiKeyToken,
+          verifyJwt: async (jwt) => {
+            const result = await verifyDesktopToken(this.env, jwt);
+            return { userId: result.userId };
+          },
+        });
 
         // Verify userId matches the DO routing
-        const storedUserId = await this.ctx.storage.get<string>('_userId');
         if (storedUserId && verifiedUserId !== storedUserId) {
           throw new Error('userId mismatch');
         }

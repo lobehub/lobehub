@@ -23,9 +23,18 @@ export function isChunkLoadError(error: unknown): boolean {
   return CHUNK_ERROR_PATTERNS.some((p) => combined.includes(p));
 }
 
+const RELOAD_KEY = 'lobe-chunk-reload';
+
 /**
- * Show user notification for chunk load error (no reload).
+ * Auto-reload on chunk load error. Uses sessionStorage to prevent infinite reload loops.
  */
 export function notifyChunkError(): void {
-  toast.info('Web app has been updated so it needs to be reloaded.');
+  const reloaded = sessionStorage.getItem(RELOAD_KEY);
+  if (reloaded) {
+    sessionStorage.removeItem(RELOAD_KEY);
+    toast.error('There is a new version for the web app. Refresh the page to update');
+    return;
+  }
+  sessionStorage.setItem(RELOAD_KEY, '1');
+  window.location.reload();
 }

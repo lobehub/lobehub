@@ -1,4 +1,3 @@
-
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,6 +28,11 @@ vi.mock('electron', () => ({
   },
   ipcMain: {
     handle: ipcMainHandleMock,
+  },
+  net: {
+    fetch: vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      global.fetch(input as any, init as any),
+    ),
   },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
@@ -100,6 +104,7 @@ const mockApp = {
     }
     return null;
   }),
+  getService: vi.fn(() => null),
 } as unknown as App;
 
 describe('AuthCtr', () => {

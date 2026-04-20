@@ -4,9 +4,16 @@ import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
 import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { BrainIcon, MessageSquareHeartIcon, MessagesSquareIcon, UserIcon } from 'lucide-react';
+import {
+  BookTextIcon,
+  BrainIcon,
+  MessageSquareHeartIcon,
+  MessagesSquareIcon,
+  UserIcon,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { shallow } from 'zustand/shallow';
 
 import Menu from '@/components/Menu';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
@@ -18,10 +25,10 @@ import { ChatSettingsTabs } from '@/store/global/initialState';
 const Content = memo(() => {
   const { t } = useTranslation('setting');
   const theme = useTheme();
-  const [agentId, isInbox] = useAgentStore((s) => [
-    s.activeAgentId,
-    builtinAgentSelectors.isInboxAgent(s),
-  ]);
+  const [agentId, isInbox] = useAgentStore(
+    (s) => [s.activeAgentId, builtinAgentSelectors.isInboxAgent(s)],
+    shallow,
+  );
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const [tab, setTab] = useState(isInbox ? ChatSettingsTabs.Modal : ChatSettingsTabs.Meta);
@@ -53,6 +60,11 @@ const Content = memo(() => {
               label: t('agentTab.opening'),
             }
           : null,
+        {
+          icon: <Icon icon={BookTextIcon} />,
+          key: ChatSettingsTabs.Documents,
+          label: t('agentTab.documents'),
+        },
         {
           icon: <Icon icon={MessagesSquareIcon} />,
           key: ChatSettingsTabs.Chat,

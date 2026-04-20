@@ -1,3 +1,5 @@
+import { isDesktop } from '@lobechat/const';
+import { ClaudeCode } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
@@ -10,6 +12,7 @@ import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import { type CreateAgentParams } from '@/services/agent';
 import { type GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
@@ -17,6 +20,8 @@ import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
 import { usePageStore } from '@/store/page';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 interface CreateAgentOptions {
   groupId?: string;
@@ -34,6 +39,7 @@ export const useCreateMenuItems = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const groupTemplates = useGroupTemplates();
+  const enableHeterogeneousAgent = useUserStore(labPreferSelectors.enableHeterogeneousAgent);
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
   const [addGroup, refreshAgentList, switchToGroup] = useHomeStore((s) => [
@@ -65,12 +71,12 @@ export const useCreateMenuItems = () => {
   // SWR-based group creation with auto navigation to profile
   const { trigger: mutateGroup, isMutating: isMutatingGroup } = useSWRMutation(
     'group.createGroup',
-    async (_key: string, { arg }: { arg?: CreateAgentOptions }) => {
+    async (_key: string, { arg }: { arg?: CreateAgentOptions & { title?: string } }) => {
       const groupId = await createGroup(
         {
           config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
           groupId: arg?.groupId,
-          title: t('defaultGroupChat'),
+          title: arg?.title || t('defaultGroupChat'),
         },
         [],
         true, // silent mode - don't switch session, we'll navigate instead
@@ -87,11 +93,12 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create agent action
+   * Create agent action (optionally with a prompt as systemRole)
    */
   const createAgent = useCallback(
-    async (options?: CreateAgentOptions) => {
-      await mutateAgent({ groupId: options?.groupId });
+    async (options?: CreateAgentOptions & { prompt?: string }) => {
+      const config = options?.prompt ? { systemRole: options.prompt } : undefined;
+      await mutateAgent({ config, groupId: options?.groupId });
       options?.onSuccess?.();
     },
     [mutateAgent],
@@ -181,6 +188,49 @@ export const useCreateMenuItems = () => {
   );
 
   /**
+   * Create empty group and navigate to profile
+   */
+  const createEmptyGroup = useCallback(
+    async (options?: CreateAgentOptions & { title?: string }) => {
+      await mutateGroup(options);
+    },
+    [mutateGroup],
+  );
+
+  /**
+   * Create a Claude Code agent with ACP provider pre-configured.
+   *
+   * Bypasses `mutateAgent` so we skip its default /profile redirect —
+   * CC agents land straight on the chat page since their config is fixed.
+   */
+  const createClaudeCodeAgent = useCallback(
+    async (options?: CreateAgentOptions) => {
+      const result = await storeCreateAgent({
+        config: {
+          agencyConfig: {
+            heterogeneousProvider: {
+              command: 'claude',
+              type: 'claude-code' as const,
+            },
+          },
+          avatar:
+            'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claudecode.webp',
+          systemRole: '',
+          title: 'Claude Code',
+        },
+        groupId: options?.groupId,
+      });
+      await refreshAgentList();
+      navigate(`/agent/${result.agentId}`);
+      options?.onSuccess?.();
+    },
+    [storeCreateAgent, refreshAgentList, navigate],
+  );
+
+  const agentModal = useOptionalAgentModal();
+  const openCreateModal = agentModal?.openCreateModal;
+
+  /**
    * Create agent menu item
    */
   const createAgentMenuItem = useCallback(
@@ -190,20 +240,35 @@ export const useCreateMenuItems = () => {
       label: t('newAgent'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
-        await createAgent(options);
+        if (options?.groupId) {
+          await createAgent(options);
+        } else if (openCreateModal) {
+          openCreateModal('agent');
+        } else {
+          await createAgent(options);
+        }
       },
     }),
-    [t, createAgent],
+    [t, createAgent, openCreateModal],
   );
 
   /**
-   * Create empty group and navigate to profile
+   * Create Claude Code agent menu item (Desktop only)
    */
-  const createEmptyGroup = useCallback(
-    async (options?: CreateAgentOptions) => {
-      await mutateGroup(options);
+  const createClaudeCodeMenuItem = useCallback(
+    (options?: CreateAgentOptions): ItemType | null => {
+      if (!isDesktop || !enableHeterogeneousAgent) return null;
+      return {
+        icon: <ClaudeCode size={'1em'} />,
+        key: 'newClaudeCodeAgent',
+        label: t('newClaudeCodeAgent'),
+        onClick: async (info) => {
+          info.domEvent?.stopPropagation();
+          await createClaudeCodeAgent(options);
+        },
+      };
     },
-    [mutateGroup],
+    [t, createClaudeCodeAgent, enableHeterogeneousAgent],
   );
 
   /**
@@ -217,10 +282,16 @@ export const useCreateMenuItems = () => {
       label: t('newGroupChat'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
-        await createEmptyGroup(options);
+        if (options?.groupId) {
+          await createEmptyGroup(options);
+        } else if (openCreateModal) {
+          openCreateModal('group');
+        } else {
+          await createEmptyGroup(options);
+        }
       },
     }),
-    [t, createEmptyGroup],
+    [t, createEmptyGroup, openCreateModal],
   );
 
   /**
@@ -291,6 +362,8 @@ export const useCreateMenuItems = () => {
     configMenuItem,
     createAgent,
     createAgentMenuItem,
+    createClaudeCodeAgent,
+    createClaudeCodeMenuItem,
     createEmptyGroup,
     createGroupChatMenuItem,
     createGroupFromTemplate,
@@ -298,6 +371,7 @@ export const useCreateMenuItems = () => {
     createPage,
     createPageMenuItem,
     createSessionGroupMenuItem,
+    openCreateModal,
 
     // Loading states
     isCreatingGroup,

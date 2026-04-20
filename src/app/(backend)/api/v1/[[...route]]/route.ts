@@ -2,7 +2,7 @@ import lobeOpenApi from '@lobechat/openapi';
 
 const handler = (request: Request) => lobeOpenApi.fetch(request);
 
-// 导出所有需要的HTTP方法处理器
+// Export all required HTTP method handlers
 export const GET = handler;
 export const POST = handler;
 export const PUT = handler;

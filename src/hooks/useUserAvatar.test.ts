@@ -9,15 +9,14 @@ import { useUserAvatar } from './useUserAvatar';
 
 vi.mock('zustand/traditional');
 
-// Mock @lobechat/const
-let mockIsDesktop = false;
+const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
 
 vi.mock('@lobechat/const', async (importOriginal) => {
   const actual = await importOriginal<typeof LobechatConstModule>();
   return {
     ...actual,
     get isDesktop() {
-      return mockIsDesktop;
+      return mockConstEnv.isDesktop;
     },
     DEFAULT_USER_AVATAR: 'default-avatar.png',
     OFFICIAL_URL: 'https://app.lobehub.com',
@@ -48,7 +47,7 @@ describe('useUserAvatar', () => {
   });
 
   it('should return original avatar in non-desktop environment', () => {
-    mockIsDesktop = false;
+    mockConstEnv.isDesktop = false;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
@@ -64,7 +63,7 @@ describe('useUserAvatar', () => {
   });
 
   it('should return original avatar when no remote server URL in desktop environment (selfHost mode)', () => {
-    mockIsDesktop = true;
+    mockConstEnv.isDesktop = true;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
@@ -80,7 +79,7 @@ describe('useUserAvatar', () => {
   });
 
   it('should prepend remote server URL when avatar starts with / in desktop environment (selfHost mode)', () => {
-    mockIsDesktop = true;
+    mockConstEnv.isDesktop = true;
     const mockAvatar = '/api/avatar.png';
     const mockServerUrl = 'https://server.com';
 
@@ -97,7 +96,7 @@ describe('useUserAvatar', () => {
   });
 
   it('should not prepend remote server URL when avatar does not start with / in desktop environment', () => {
-    mockIsDesktop = true;
+    mockConstEnv.isDesktop = true;
     const mockAvatar = 'https://example.com/avatar.png';
     const mockServerUrl = 'https://server.com';
 
@@ -114,7 +113,7 @@ describe('useUserAvatar', () => {
   });
 
   it('should use OFFICIAL_URL when storageMode is cloud in desktop environment', () => {
-    mockIsDesktop = true;
+    mockConstEnv.isDesktop = true;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
@@ -131,7 +130,7 @@ describe('useUserAvatar', () => {
   });
 
   it('should return original avatar when storageMode is selfHost but no URL configured', () => {
-    mockIsDesktop = true;
+    mockConstEnv.isDesktop = true;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {

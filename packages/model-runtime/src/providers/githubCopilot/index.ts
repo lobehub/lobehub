@@ -1,13 +1,23 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
+import { responsesAPIModels } from '../../const/models';
+import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
-import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
-import { OpenAIStream } from '../../core/streams';
+import {
+  convertOpenAIMessages,
+  convertOpenAIResponseInputs,
+  pruneReasoningPayload,
+} from '../../core/contextBuilders/openai';
+import { transformResponseAPIToStream } from '../../core/openaiCompatibleFactory';
+import { AnthropicStream, OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
+import { debugResponse, debugStream } from '../../utils/debugStream';
+import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 
 const COPILOT_BASE_URL = 'https://api.githubcopilot.com';
@@ -15,6 +25,12 @@ const TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
 
 const MAX_TOTAL_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_RETRIES = 3;
+const QUOTA_EXHAUSTION_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+const debugParams = {
+  chatCompletion: () => process.env.DEBUG_GITHUBCOPILOT_CHAT_COMPLETION === '1',
+  responses: () => process.env.DEBUG_GITHUBCOPILOT_RESPONSES === '1',
+};
 
 interface CachedToken {
   expiresAt: number;
@@ -151,8 +167,77 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     return this.executeWithRetry(async () => {
+      const inputStartAt = Date.now();
+
       // Use cached bearer token if available, otherwise exchange
       const bearerToken = this.cachedBearerToken || (await tokenManager.getToken(this.githubToken));
+
+      const { model, ...rest } = this.handlePayload(payload);
+      const shouldStream = rest.stream !== false;
+
+      if (model.toLowerCase().includes('claude')) {
+        const anthropicClient = new Anthropic({
+          apiKey: bearerToken,
+          baseURL: this.baseURL,
+          defaultHeaders: {
+            'Authorization': `Bearer ${bearerToken}`,
+            'Copilot-Integration-Id': 'vscode-chat',
+            'Editor-Plugin-Version': 'LobeChat/1.0',
+            'Editor-Version': 'LobeChat/1.0',
+            'anthropic-version': '2023-06-01',
+          },
+        });
+
+        const anthropicPayload = await buildDefaultAnthropicPayload({
+          ...(rest as ChatStreamPayload),
+          model,
+        });
+
+        const finalPayload = { ...anthropicPayload, stream: shouldStream };
+
+        if (debugParams.chatCompletion()) {
+          // eslint-disable-next-line no-console
+          console.log('[requestPayload]');
+          // eslint-disable-next-line no-console
+          console.log(JSON.stringify(finalPayload), '\n');
+        }
+
+        const response = await anthropicClient.messages.create(
+          {
+            ...finalPayload,
+            metadata: options?.user ? { user_id: options.user } : undefined,
+          },
+          {
+            headers: options?.requestHeaders,
+            signal: options?.signal,
+          },
+        );
+
+        const pricing = await getModelPricing(model, ModelProvider.GithubCopilot);
+
+        const streamResponse = response as any;
+        const [prod, useForDebug] = streamResponse.tee();
+
+        if (debugParams.chatCompletion()) {
+          const useForDebugStream =
+            useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
+
+          debugStream(useForDebugStream).catch(console.error);
+        }
+
+        return StreamingResponse(
+          AnthropicStream(prod, {
+            callbacks: options?.callback,
+            inputStartAt,
+            payload: {
+              model,
+              pricing,
+              provider: ModelProvider.GithubCopilot,
+            },
+          }),
+          { headers: options?.headers },
+        );
+      }
 
       const client = new OpenAI({
         apiKey: bearerToken,
@@ -164,13 +249,132 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         },
       });
 
-      const { model, ...rest } = this.handlePayload(payload);
-      const shouldStream = rest.stream !== false;
+      if (
+        responsesAPIModels.has(model) ||
+        model.toLowerCase().includes('oswe') ||
+        (payload as any).apiMode === 'responses'
+      ) {
+        const {
+          messages,
+          reasoning_effort,
+          tools,
+          reasoning,
+          max_tokens,
+          verbosity,
+          ...responseRest
+        } = rest as any;
 
-      const response = await client.chat.completions.create(
-        { ...rest, model, stream: shouldStream } as OpenAI.ChatCompletionCreateParamsStreaming,
-        { signal: options?.signal },
-      );
+        delete responseRest.apiMode;
+        delete responseRest.frequency_penalty;
+        delete responseRest.presence_penalty;
+
+        const input = await convertOpenAIResponseInputs(messages as any, {
+          forceImageBase64: true,
+          strictToolPairing: true,
+        });
+
+        const responseTools = tools?.map(this.convertChatCompletionToolToResponseTool);
+        const responsePayload = {
+          ...responseRest,
+          ...(reasoning || reasoning_effort
+            ? {
+                reasoning: {
+                  ...reasoning,
+                  ...(reasoning_effort && { effort: reasoning_effort }),
+                  summary: 'detailed',
+                },
+              }
+            : {}),
+          ...(max_tokens && { max_output_tokens: max_tokens }),
+          text: verbosity ? { verbosity } : undefined,
+          input,
+          model,
+          stream: shouldStream,
+          ...(responseTools ? { tools: responseTools } : {}),
+        };
+
+        if (debugParams.responses()) {
+          // eslint-disable-next-line no-console
+          console.log('[requestPayload]');
+          // eslint-disable-next-line no-console
+          console.log(JSON.stringify(responsePayload), '\n');
+        }
+
+        const response = await client.responses.create(responsePayload, {
+          signal: options?.signal,
+        });
+
+        if (shouldStream) {
+          const stream = response as any;
+          const [prod, useForDebug] = stream.tee();
+
+          if (debugParams.responses()) {
+            const useForDebugStream =
+              useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
+
+            debugStream(useForDebugStream).catch(console.error);
+          }
+
+          return StreamingResponse(
+            OpenAIResponsesStream(prod, {
+              callbacks: options?.callback,
+              payload: { model, provider: ModelProvider.GithubCopilot },
+            }),
+            { headers: options?.headers },
+          );
+        }
+
+        const responseStream = transformResponseAPIToStream(response as OpenAI.Responses.Response);
+
+        if (debugParams.responses()) {
+          debugResponse(response);
+        }
+
+        return StreamingResponse(
+          OpenAIResponsesStream(responseStream, {
+            callbacks: options?.callback,
+            enableStreaming: false,
+            payload: { model, provider: ModelProvider.GithubCopilot },
+          }),
+          { headers: options?.headers },
+        );
+      }
+
+      const { apiMode: _, ...cleanedRest } = rest as any;
+      const messages = await convertOpenAIMessages(cleanedRest.messages as any, {
+        forceImageBase64: true,
+      });
+
+      const chatCompletionPayload = {
+        ...cleanedRest,
+        messages,
+        model,
+        stream: shouldStream,
+      } as OpenAI.ChatCompletionCreateParamsStreaming;
+
+      if (debugParams.chatCompletion()) {
+        // eslint-disable-next-line no-console
+        console.log('[requestPayload]');
+        // eslint-disable-next-line no-console
+        console.log(JSON.stringify(chatCompletionPayload), '\n');
+      }
+
+      let response = await client.chat.completions.create(chatCompletionPayload, {
+        signal: options?.signal,
+      });
+
+      if (shouldStream && debugParams.chatCompletion()) {
+        const [prod, useForDebug] = (response as any).tee();
+        const useForDebugStream =
+          useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
+
+        debugStream(useForDebugStream).catch(console.error);
+        response = prod;
+      }
+
+      if (!shouldStream && debugParams.chatCompletion()) {
+        debugResponse(response);
+      }
 
       return StreamingResponse(
         OpenAIStream(response, {
@@ -224,6 +428,10 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
     return { ...payload, stream: true };
   }
 
+  private convertChatCompletionToolToResponseTool = (tool: any): OpenAI.Responses.Tool => {
+    return { type: tool.type, ...tool.function } as any;
+  };
+
   private async executeWithRetry<T>(fn: () => Promise<T>): Promise<T> {
     let totalAttempts = 0;
     let hasRefreshedAuth = false;
@@ -249,6 +457,11 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         if (status === 429 && rateLimitAttempts < MAX_RATE_LIMIT_RETRIES) {
           rateLimitAttempts++;
           const retryAfter = this.getRetryAfterMs(error) ?? 1000 * Math.pow(2, rateLimitAttempts);
+
+          // If retry-after exceeds the quota exhaustion threshold, surface immediately
+          if (retryAfter > QUOTA_EXHAUSTION_THRESHOLD_MS) {
+            throw this.mapError(error);
+          }
 
           await new Promise<void>((resolve) => {
             setTimeout(resolve, Math.min(retryAfter, 10_000));

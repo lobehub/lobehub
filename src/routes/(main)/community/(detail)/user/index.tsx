@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useMarketAuth, useMarketUserProfile } from '@/layout/AuthProvider/MarketAuth';
@@ -23,7 +23,8 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
   const username = decodeURIComponent(params.slug ?? '');
   const navigate = useNavigate();
 
-  const { getCurrentUserInfo, isAuthenticated, openProfileSetup } = useMarketAuth();
+  const { checkAndShowClaimableResources, getCurrentUserInfo, isAuthenticated, openProfileSetup } =
+    useMarketAuth();
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
   const { data, isLoading, mutate } = useUserProfile({ username });
@@ -35,6 +36,20 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
   // Check if the current user is viewing their own profile
   const isOwner =
     isAuthenticated && !!currentUser && data?.user?.namespace === currentUserProfile?.namespace;
+
+  // Track if we've already checked for claimable resources in this session
+  const hasCheckedClaimable = useRef(false);
+
+  // Check for claimable resources when owner visits their profile
+  useEffect(() => {
+    if (isOwner && !hasCheckedClaimable.current) {
+      hasCheckedClaimable.current = true;
+      // Pass mutate callback to refresh page data after claim
+      checkAndShowClaimableResources(() => {
+        mutate();
+      });
+    }
+  }, [isOwner, checkAndShowClaimableResources, mutate]);
 
   const { handleStatusChange } = useUserDetail({ onMutate: mutate });
 
@@ -61,7 +76,17 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
 
   const contextConfig = useMemo(() => {
     if (!data || !data.user) return null;
-    const { user, agents, agentGroups, forkedAgents, forkedAgentGroups, favoriteAgents, favoriteAgentGroups } = data;
+    const {
+      user,
+      agents,
+      agentGroups,
+      forkedAgents,
+      forkedAgentGroups,
+      favoriteAgents,
+      favoriteAgentGroups,
+      skills,
+      plugins,
+    } = data;
     const totalInstalls = agents.reduce((sum, agent) => sum + (agent.installCount || 0), 0);
     return {
       agentCount: agents.length,
@@ -76,6 +101,8 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
       mobile,
       onEditProfile: handleEditProfile,
       onStatusChange: isOwner ? handleStatusChange : undefined,
+      plugins: plugins || [],
+      skills: skills || [],
       totalInstalls,
       user,
     };

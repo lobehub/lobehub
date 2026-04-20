@@ -11,6 +11,7 @@
   "author": "LobeHub",
   "main": "./dist/main/index.js",
   "scripts": {
+    "build:cli": "cd ../cli && cross-env MINIFY=1 bun run build",
     "build:main": "cross-env NODE_OPTIONS=--max-old-space-size=8192 electron-vite build",
     "build:run-unpack": "electron .",
     "dev": "electron-vite dev",
@@ -41,8 +42,7 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.70",
-    "electron-liquid-glass": "^1.1.1"
+    "@napi-rs/canvas": "^0.1.70"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -51,6 +51,7 @@
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron-toolkit/utils": "^4.0.0",
     "@lobechat/desktop-bridge": "workspace:*",
+    "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
@@ -67,10 +68,10 @@
     "consola": "^3.4.2",
     "cookie": "^1.1.1",
     "cross-env": "^10.1.0",
-    "diff": "^8.0.2",
-    "electron": "^38.7.2",
-    "electron-builder": "^26.0.12",
-    "electron-devtools-installer": "^3.2.0",
+    "diff": "^8.0.4",
+    "electron": "41.1.0",
+    "electron-builder": "^26.8.1",
+    "electron-devtools-installer": "4.0.0",
     "electron-is": "^3.0.0",
     "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",

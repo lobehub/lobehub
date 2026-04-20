@@ -384,6 +384,29 @@ describe('LobeZhipuAI - custom features', () => {
       });
     });
 
+    describe('tool_stream for streaming tool calls', () => {
+      it.each([
+        ['glm-4.6', true, true],
+        ['glm-4.7', true, true],
+        ['glm-5', true, true],
+        ['glm-5.1', true, true],
+        ['glm-4.5', true, undefined],
+        ['glm-5-turbo', true, undefined],
+        ['glm-4', true, undefined],
+        ['glm-5.1', false, undefined],
+      ] as const)('model=%s stream=%s → tool_stream=%s', async (model, stream, expected) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          stream,
+          temperature: 0.5,
+        });
+
+        const callArgs = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(callArgs.tool_stream).toBe(expected);
+      });
+    });
+
     describe('Preserve other payload properties', () => {
       it('should preserve all other properties', async () => {
         await instance.chat({
@@ -636,6 +659,76 @@ describe('LobeZhipuAI - custom features', () => {
         });
 
         // Read the stream to trigger the transform
+        const reader = result.body?.getReader();
+        if (reader) {
+          let done = false;
+          while (!done) {
+            const { value, done: isDone } = await reader.read();
+            done = isDone;
+          }
+        }
+
+        expect(result).toBeDefined();
+      });
+
+      it('should filter out incomplete placeholder tool_call chunks from proxies', async () => {
+        // Some proxies (e.g., aihubmix) send empty placeholder chunks without
+        // id/function.name when tool_stream is enabled. These must be filtered
+        // out to prevent ZodError in parseToolCalls.
+        const mockStream = new ReadableStream({
+          start(controller) {
+            // Placeholder chunks (no id, no name, empty arguments)
+            controller.enqueue({
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [{ type: 'function', function: { arguments: '' }, index: 0 }],
+                  },
+                  finish_reason: null,
+                  index: 0,
+                },
+              ],
+              created: 1234567890,
+              id: 'chatcmpl-123',
+              model: 'glm-5',
+              object: 'chat.completion.chunk',
+            });
+            // Real chunk with id and name
+            controller.enqueue({
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        id: 'tool-abc123',
+                        type: 'function',
+                        function: { name: 'calculator', arguments: '{"expression":"1+1"}' },
+                        index: 0,
+                      },
+                    ],
+                  },
+                  finish_reason: null,
+                  index: 0,
+                },
+              ],
+              created: 1234567890,
+              id: 'chatcmpl-123',
+              model: 'glm-5',
+              object: 'chat.completion.chunk',
+            });
+            controller.close();
+          },
+        });
+
+        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
+
+        // Should not throw ZodError from incomplete placeholder chunks
+        const result = await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5',
+          temperature: 0.5,
+        });
+
         const reader = result.body?.getReader();
         if (reader) {
           let done = false;

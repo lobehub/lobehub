@@ -1,3 +1,4 @@
+import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import debug from 'debug';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
@@ -100,9 +101,33 @@ export class BuiltinToolActionImpl {
   // ========== Uninstalled Builtin Tools Management ==========
 
   /**
+   * Ensure the real user preference is loaded before mutating the uninstalled list.
+   * Without this, install/uninstall would diff against the default seed value and
+   * silently overwrite whatever the user had actually configured.
+   */
+  #ensureUninstalledToolsLoaded = async (): Promise<void> => {
+    if (!this.#get().uninstalledBuiltinToolsLoading) return;
+
+    const userState = await userService.getUserState();
+    const userUninstalled = userState?.settings?.tool?.uninstalledBuiltinTools;
+
+    this.#set(
+      {
+        uninstalledBuiltinTools:
+          userUninstalled === undefined ? defaultUninstalledBuiltinTools : userUninstalled,
+        uninstalledBuiltinToolsLoading: false,
+      },
+      false,
+      n('ensureUninstalledToolsLoaded'),
+    );
+  };
+
+  /**
    * Install a builtin tool by removing it from the uninstalled list
    */
   installBuiltinTool = async (identifier: string): Promise<void> => {
+    await this.#ensureUninstalledToolsLoaded();
+
     const currentUninstalled = this.#get().uninstalledBuiltinTools;
 
     if (!currentUninstalled.includes(identifier)) return;
@@ -125,6 +150,8 @@ export class BuiltinToolActionImpl {
    * Uninstall a builtin tool by adding it to the uninstalled list
    */
   uninstallBuiltinTool = async (identifier: string): Promise<void> => {
+    await this.#ensureUninstalledToolsLoaded();
+
     const currentUninstalled = this.#get().uninstalledBuiltinTools;
 
     if (currentUninstalled.includes(identifier)) return;
@@ -158,10 +185,15 @@ export class BuiltinToolActionImpl {
       enabled ? UNINSTALLED_BUILTIN_TOOLS : null,
       async () => {
         const userState = await userService.getUserState();
-        return userState?.settings?.tool?.uninstalledBuiltinTools ?? [];
+        const userUninstalled = userState?.settings?.tool?.uninstalledBuiltinTools;
+
+        // If user has never set their preference, use default (non-recommended tools are uninstalled)
+        if (userUninstalled === undefined) return defaultUninstalledBuiltinTools;
+
+        return userUninstalled;
       },
       {
-        fallbackData: [],
+        fallbackData: defaultUninstalledBuiltinTools,
         onSuccess: (data) => {
           this.#set(
             { uninstalledBuiltinTools: data, uninstalledBuiltinToolsLoading: false },

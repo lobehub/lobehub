@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
+import CliCtr from '../CliCtr';
 import ShellCommandCtr from '../ShellCommandCtr';
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
@@ -32,7 +33,17 @@ vi.mock('node:crypto', () => ({
   randomUUID: vi.fn(() => 'test-uuid-123'),
 }));
 
-const mockApp = {} as unknown as App;
+vi.mock('../CliCtr', () => ({
+  default: class CliCtr {},
+}));
+
+const mockCliCtr = {
+  runCliCommand: vi.fn().mockResolvedValue({ exitCode: 0, stderr: '', stdout: 'cli output\n' }),
+};
+
+const mockApp = {
+  getController: vi.fn((c: unknown) => (c === CliCtr ? mockCliCtr : undefined)),
+} as unknown as App;
 
 describe('ShellCommandCtr (thin wrapper)', () => {
   let ctr: ShellCommandCtr;
@@ -116,6 +127,28 @@ describe('ShellCommandCtr (thin wrapper)', () => {
 
     expect(result.success).toBe(true);
     expect(mockChildProcess.kill).toHaveBeenCalled();
+  });
+
+  it('should route lh commands to CliCtr.runCliCommand', async () => {
+    const result = await ctr.handleRunCommand({
+      command: 'lh status --json',
+      description: 'lh status',
+    });
+
+    expect(mockCliCtr.runCliCommand).toHaveBeenCalledWith('status --json');
+    expect(result.success).toBe(true);
+    expect(result.stdout).toContain('cli output');
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('should route lobehub commands to CliCtr.runCliCommand', async () => {
+    const result = await ctr.handleRunCommand({
+      command: 'lobehub search test',
+      description: 'lobehub search',
+    });
+
+    expect(mockCliCtr.runCliCommand).toHaveBeenCalledWith('search test');
+    expect(result.success).toBe(true);
   });
 
   it('should return error for non-existent shell_id', async () => {

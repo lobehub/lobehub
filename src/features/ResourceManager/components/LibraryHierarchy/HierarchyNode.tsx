@@ -5,7 +5,7 @@ import { ActionIcon, Block, Flexbox, Icon, showContextMenu, stopPropagation } fr
 import { App, Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,53 +14,39 @@ import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import {
   getTransparentDragImage,
   useDragActive,
-  useDragState,
+  useSetCurrentDrag,
 } from '@/routes/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { useFileStore } from '@/store/file';
+import type { TreeItem } from '@/store/tree';
+import { useTreeStore } from '@/store/tree';
 
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import { styles } from './styles';
-import { clearTreeFolderCache } from './treeState';
-import { type TreeItem } from './types';
 
 interface HierarchyNodeProps {
-  expandedFolders: Set<string>;
-  folderChildrenCache: Map<string, TreeItem[]>;
+  isExpanded: boolean;
+  isLoading: boolean;
   item: TreeItem;
   level?: number;
-  loadingFolders: Set<string>;
-  onLoadFolder: (_: string) => Promise<void>;
-  onToggleFolder: (_: string) => void;
+  onToggle: (folderId: string) => void;
+  parentKey: string;
   selectedKey: string | null;
-  updateKey?: number;
 }
 
-// Row component for folder / file tree (virtualized by flattening visible nodes)
 export const HierarchyNode = memo<HierarchyNodeProps>(
-  ({
-    item,
-    level = 0,
-    expandedFolders,
-    loadingFolders,
-    onToggleFolder,
-    onLoadFolder,
-    selectedKey,
-    folderChildrenCache,
-  }) => {
+  ({ item, level = 0, isExpanded, isLoading, onToggle, selectedKey, parentKey }) => {
     const navigate = useNavigate();
     const { message } = App.useApp();
 
     const [setMode, libraryId] = useResourceManagerStore((s) => [s.setMode, s.libraryId]);
 
-    const renameFolder = useFileStore((s) => s.renameFolder);
+    const renameItem = useTreeStore((s) => s.renameItem);
 
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(item.name);
     const inputRef = useRef<any>(null);
 
-    // Memoize computed values that don't change frequently
     const { itemKey, isPage, emoji } = useMemo(() => {
       const lowerFileType = item.fileType?.toLowerCase();
       const lowerName = item.name?.toLowerCase();
@@ -88,7 +74,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     const handleRenameStart = useCallback(() => {
       setIsRenaming(true);
       setRenamingValue(item.name);
-      // Focus input after render
       setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -107,17 +92,14 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       }
 
       try {
-        await renameFolder(item.id, renamingValue.trim());
-        if (libraryId) {
-          await clearTreeFolderCache(libraryId);
-        }
+        await renameItem(item.id, parentKey, renamingValue.trim());
         message.success('Renamed successfully');
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
         message.error('Rename failed');
       }
-    }, [item.id, item.name, libraryId, renamingValue, renameFolder, message]);
+    }, [item.id, item.name, parentKey, renamingValue, renameItem, message]);
 
     const handleRenameCancel = useCallback(() => {
       setIsRenaming(false);
@@ -135,11 +117,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     });
 
     const isDragActive = useDragActive();
-    const { setCurrentDrag } = useDragState();
+    const setCurrentDrag = useSetCurrentDrag();
     const [isDragging, setIsDragging] = useState(false);
     const [isOver, setIsOver] = useState(false);
 
-    // Memoize drag data to prevent recreation
     const dragData = useMemo(
       () => ({
         fileType: item.fileType,
@@ -150,17 +131,16 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       [item.fileType, item.isFolder, item.name, item.sourceType],
     );
 
-    // Native HTML5 drag event handlers
     const handleDragStart = useCallback(
       (e: React.DragEvent<HTMLDivElement>) => {
         setIsDragging(true);
         setCurrentDrag({
           data: dragData,
           id: item.id,
+          parentKey,
           type: item.isFolder ? 'folder' : 'file',
         });
 
-        // Set drag image to be transparent (we use custom overlay)
         const img = getTransparentDragImage();
         if (img && e.dataTransfer) {
           e.dataTransfer.setDragImage(img, 0, 0);
@@ -169,7 +149,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           e.dataTransfer.effectAllowed = 'move';
         }
       },
-      [dragData, item.id, item.isFolder, setCurrentDrag],
+      [dragData, item.id, item.isFolder, parentKey, setCurrentDrag],
     );
 
     const handleDragEnd = useCallback(() => {
@@ -192,7 +172,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     }, []);
 
     const handleDrop = useCallback(() => {
-      // Clear the highlight after drop
       setIsOver(false);
     }, []);
 
@@ -215,18 +194,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     );
 
     if (item.isFolder) {
-      const isExpanded = expandedFolders.has(itemKey);
       const isActive = selectedKey === itemKey;
-      const isLoading = loadingFolders.has(itemKey);
 
-      const handleToggle = async () => {
-        // Toggle folder expansion
-        onToggleFolder(itemKey);
-
-        // Only load if not already cached
-        if (!isExpanded && !folderChildrenCache.has(itemKey)) {
-          await onLoadFolder(itemKey);
-        }
+      const handleToggle = () => {
+        onToggle(item.id);
       };
 
       return (
@@ -264,7 +235,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             {isLoading ? (
               <ActionIcon spin icon={LoadingOutlined as any} size={'small'} style={{ width: 20 }} />
             ) : (
-              <motion.div
+              <m.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}
                 initial={false}
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
@@ -278,7 +249,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
                     handleToggle();
                   }}
                 />
-              </motion.div>
+              </m.div>
             )}
             <Flexbox
               horizontal

@@ -7,7 +7,7 @@ import type {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
-import type { SearchMemoryResult } from '@lobechat/types';
+import type { QueryTaxonomyOptionsResult, SearchMemoryResult } from '@lobechat/types';
 import type { z } from 'zod';
 
 export const MemoryApiName = {
@@ -16,6 +16,7 @@ export const MemoryApiName = {
   addExperienceMemory: 'addExperienceMemory',
   addIdentityMemory: 'addIdentityMemory',
   addPreferenceMemory: 'addPreferenceMemory',
+  queryTaxonomyOptions: 'queryTaxonomyOptions',
   removeIdentityMemory: 'removeIdentityMemory',
   searchUserMemory: 'searchUserMemory',
   updateIdentityMemory: 'updateIdentityMemory',
@@ -32,6 +33,7 @@ export const UserMemoryApiName = MemoryApiName;
 
 // SearchUserMemoryState is the same as SearchMemoryResult (executor returns result directly as state)
 export type SearchUserMemoryState = SearchMemoryResult;
+export type QueryTaxonomyOptionsState = QueryTaxonomyOptionsResult;
 
 // Add Context
 export type AddContextMemoryParams = z.infer<typeof ContextMemoryItemSchema>;
@@ -81,4 +83,9 @@ export interface RemoveIdentityMemoryState {
   reason?: string;
 }
 
-export { type SearchMemoryParams, type SearchMemoryResult } from '@lobechat/types';
+export {
+  type QueryTaxonomyOptionsParams,
+  type QueryTaxonomyOptionsResult,
+  type SearchMemoryParams,
+  type SearchMemoryResult,
+} from '@lobechat/types';

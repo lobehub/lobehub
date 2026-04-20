@@ -65,6 +65,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
         <Button
           block
           loading={loading}
+          style={{ bottom: 0, position: 'sticky' }}
           type={'primary'}
           onClick={async () => {
             const sortMap = items.map((item, index) => ({

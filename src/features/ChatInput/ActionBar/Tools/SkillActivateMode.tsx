@@ -1,4 +1,4 @@
-import { Icon, Segmented } from '@lobehub/ui';
+import { Icon, Segmented, Tooltip } from '@lobehub/ui';
 import { SlidersHorizontal, Sparkles } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,13 +23,19 @@ const SkillActivateMode = memo(() => {
       value={currentMode}
       options={[
         {
-          icon: <Icon icon={Sparkles} />,
-          title: t('tools.skillActivateMode.auto.desc'),
+          label: (
+            <Tooltip title={t('tools.skillActivateMode.auto.desc')}>
+              <Icon icon={Sparkles} />
+            </Tooltip>
+          ),
           value: 'auto',
         },
         {
-          icon: <Icon icon={SlidersHorizontal} />,
-          title: t('tools.skillActivateMode.manual.desc'),
+          label: (
+            <Tooltip title={t('tools.skillActivateMode.manual.desc')}>
+              <Icon icon={SlidersHorizontal} />
+            </Tooltip>
+          ),
           value: 'manual',
         },
       ]}

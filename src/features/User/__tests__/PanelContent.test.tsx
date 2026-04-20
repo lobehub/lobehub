@@ -103,7 +103,7 @@ describe('PanelContent', () => {
 
       renderWithRouter(<PanelContent closePopover={closePopover} />);
 
-      expect(screen.getAllByText('Mocked Menu').length).toBe(3);
+      expect(screen.getAllByText('Mocked Menu').length).toBe(2);
     });
 
     it('should render SignInBlock when user is not signed in', () => {

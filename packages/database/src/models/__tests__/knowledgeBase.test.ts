@@ -293,6 +293,110 @@ describe('KnowledgeBaseModel', () => {
       expect(addedFiles).toHaveLength(0);
     });
 
+    it("should NOT allow adding files to another user's knowledge base (IDOR)", async () => {
+      // Setup: victim creates a knowledge base
+      const victimModel = new KnowledgeBaseModel(serverDB, 'user2');
+      const { id: victimKbId } = await victimModel.create({ name: 'Victim KB' });
+
+      // Setup: attacker uploads their own file
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash_attacker',
+          url: 'https://example.com/malicious.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file_attacker',
+          name: 'malicious.pdf',
+          url: 'https://example.com/malicious.pdf',
+          fileHash: 'hash_attacker',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId, // attacker's file
+        },
+      ]);
+
+      // Attack: attacker tries to add their file to victim's knowledge base
+      const result = await knowledgeBaseModel.addFilesToKnowledgeBase(victimKbId, [
+        'file_attacker',
+      ]);
+
+      // The operation should be rejected - no files should be inserted
+      expect(result).toHaveLength(0);
+
+      // Verify no files were added to victim's knowledge base
+      const kbFiles = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, victimKbId),
+      });
+      expect(kbFiles).toHaveLength(0);
+    });
+
+    it("should NOT allow adding documents to another user's knowledge base (IDOR)", async () => {
+      // Setup: victim creates a knowledge base
+      const victimModel = new KnowledgeBaseModel(serverDB, 'user2');
+      const { id: victimKbId } = await victimModel.create({ name: 'Victim KB' });
+
+      // Setup: attacker has a document with a mirror file
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash_attacker_doc',
+          url: 'https://example.com/malicious_doc.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file_attacker_doc',
+          name: 'malicious_doc.pdf',
+          url: 'https://example.com/malicious_doc.pdf',
+          fileHash: 'hash_attacker_doc',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+      await serverDB.insert(documents).values([
+        {
+          id: 'docs_attacker',
+          title: 'Malicious Document',
+          content: 'Injected content',
+          fileType: 'application/pdf',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          sourceType: 'file',
+          source: 'malicious.pdf',
+          fileId: 'file_attacker_doc',
+          userId,
+        },
+      ]);
+
+      // Attack: attacker tries to add their document to victim's knowledge base
+      const result = await knowledgeBaseModel.addFilesToKnowledgeBase(victimKbId, [
+        'docs_attacker',
+      ]);
+
+      // The operation should be rejected
+      expect(result).toHaveLength(0);
+
+      // Verify no files were added to victim's knowledge base
+      const kbFiles = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, victimKbId),
+      });
+      expect(kbFiles).toHaveLength(0);
+
+      // Verify the document's knowledgeBaseId was NOT updated to victim's KB
+      const doc = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, 'docs_attacker'),
+      });
+      expect(doc?.knowledgeBaseId).toBeNull();
+    });
+
     it('should handle mixed document IDs and file IDs', async () => {
       await serverDB.insert(globalFiles).values([
         {
@@ -529,6 +633,346 @@ describe('KnowledgeBaseModel', () => {
       });
       expect(remainingFiles).toHaveLength(1);
       expect(remainingFiles[0].fileId).toBe('file1');
+    });
+  });
+
+  describe('findExclusiveFileIds', () => {
+    it('should return file IDs that belong only to this knowledge base', async () => {
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+        {
+          hashId: 'hash2',
+          url: 'https://example.com/b.pdf',
+          size: 200,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+        {
+          id: 'file2',
+          name: 'b.pdf',
+          url: 'https://example.com/b.pdf',
+          fileHash: 'hash2',
+          size: 200,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
+      const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1', 'file2']);
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb2, ['file1']);
+      const exclusiveIds = await knowledgeBaseModel.findExclusiveFileIds(kb1);
+      expect(exclusiveIds).toEqual(['file2']);
+    });
+
+    it('should return empty array when all files are shared', async () => {
+      await serverDB
+        .insert(globalFiles)
+        .values([
+          {
+            hashId: 'hash1',
+            url: 'https://example.com/a.pdf',
+            size: 100,
+            fileType: 'application/pdf',
+            creator: userId,
+          },
+        ]);
+      await serverDB
+        .insert(files)
+        .values([
+          {
+            id: 'file1',
+            name: 'a.pdf',
+            url: 'https://example.com/a.pdf',
+            fileHash: 'hash1',
+            size: 100,
+            fileType: 'application/pdf',
+            userId,
+          },
+        ]);
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
+      const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1']);
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb2, ['file1']);
+      const exclusiveIds = await knowledgeBaseModel.findExclusiveFileIds(kb1);
+      expect(exclusiveIds).toEqual([]);
+    });
+
+    it('should return all files when none are shared', async () => {
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+        {
+          hashId: 'hash2',
+          url: 'https://example.com/b.pdf',
+          size: 200,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+        {
+          id: 'file2',
+          name: 'b.pdf',
+          url: 'https://example.com/b.pdf',
+          fileHash: 'hash2',
+          size: 200,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1', 'file2']);
+      const exclusiveIds = await knowledgeBaseModel.findExclusiveFileIds(kb1);
+      expect(exclusiveIds.sort()).toEqual(['file1', 'file2']);
+    });
+
+    it('should return empty array when KB has no files', async () => {
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'Empty KB' });
+      const exclusiveIds = await knowledgeBaseModel.findExclusiveFileIds(kb1);
+      expect(exclusiveIds).toEqual([]);
+    });
+  });
+
+  describe('deleteWithFiles', () => {
+    it('should delete KB and its exclusive files', async () => {
+      await serverDB
+        .insert(globalFiles)
+        .values([
+          {
+            hashId: 'hash1',
+            url: 'https://example.com/a.pdf',
+            size: 100,
+            fileType: 'application/pdf',
+            creator: userId,
+          },
+        ]);
+      await serverDB
+        .insert(files)
+        .values([
+          {
+            id: 'file1',
+            name: 'a.pdf',
+            url: 'https://example.com/a.pdf',
+            fileHash: 'hash1',
+            size: 100,
+            fileType: 'application/pdf',
+            userId,
+          },
+        ]);
+      const { id: kbId } = await knowledgeBaseModel.create({ name: 'KB1' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kbId, ['file1']);
+      const result = await knowledgeBaseModel.deleteWithFiles(kbId);
+      expect(
+        await serverDB.query.knowledgeBases.findFirst({ where: eq(knowledgeBases.id, kbId) }),
+      ).toBeUndefined();
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, 'file1') }),
+      ).toBeUndefined();
+      const kbFiles = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, kbId),
+      });
+      expect(kbFiles).toHaveLength(0);
+      expect(result.deletedFiles).toHaveLength(1);
+    });
+
+    it('should NOT delete files shared with another KB', async () => {
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+        {
+          hashId: 'hash2',
+          url: 'https://example.com/b.pdf',
+          size: 200,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+        {
+          id: 'file2',
+          name: 'b.pdf',
+          url: 'https://example.com/b.pdf',
+          fileHash: 'hash2',
+          size: 200,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
+      const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1', 'file2']);
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb2, ['file1']);
+      const result = await knowledgeBaseModel.deleteWithFiles(kb1);
+      expect(
+        await serverDB.query.knowledgeBases.findFirst({ where: eq(knowledgeBases.id, kb1) }),
+      ).toBeUndefined();
+      expect(await serverDB.query.files.findFirst({ where: eq(files.id, 'file1') })).toBeDefined();
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, 'file2') }),
+      ).toBeUndefined();
+      const kb2Files = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, kb2),
+      });
+      expect(kb2Files).toHaveLength(1);
+      expect(kb2Files[0].fileId).toBe('file1');
+      expect(result.deletedFiles).toHaveLength(1);
+    });
+
+    it('should handle KB with no files', async () => {
+      const { id: kbId } = await knowledgeBaseModel.create({ name: 'Empty KB' });
+      const result = await knowledgeBaseModel.deleteWithFiles(kbId);
+      expect(
+        await serverDB.query.knowledgeBases.findFirst({ where: eq(knowledgeBases.id, kbId) }),
+      ).toBeUndefined();
+      expect(result.deletedFiles).toHaveLength(0);
+    });
+  });
+
+  describe('deleteAllWithFiles', () => {
+    it('should delete all KBs and their exclusive files', async () => {
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+        {
+          hashId: 'hash2',
+          url: 'https://example.com/b.pdf',
+          size: 200,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+        {
+          id: 'file2',
+          name: 'b.pdf',
+          url: 'https://example.com/b.pdf',
+          fileHash: 'hash2',
+          size: 200,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
+      const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1']);
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb2, ['file2']);
+      const result = await knowledgeBaseModel.deleteAllWithFiles();
+      const remaining = await serverDB.query.knowledgeBases.findMany({
+        where: eq(knowledgeBases.userId, userId),
+      });
+      expect(remaining).toHaveLength(0);
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, 'file1') }),
+      ).toBeUndefined();
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, 'file2') }),
+      ).toBeUndefined();
+      expect(result.deletedFiles.length).toBe(2);
+    });
+
+    it('should delete shared file when both KBs sharing it are deleted', async () => {
+      await serverDB
+        .insert(globalFiles)
+        .values([
+          {
+            hashId: 'hash1',
+            url: 'https://example.com/a.pdf',
+            size: 100,
+            fileType: 'application/pdf',
+            creator: userId,
+          },
+        ]);
+      await serverDB
+        .insert(files)
+        .values([
+          {
+            id: 'file1',
+            name: 'a.pdf',
+            url: 'https://example.com/a.pdf',
+            fileHash: 'hash1',
+            size: 100,
+            fileType: 'application/pdf',
+            userId,
+          },
+        ]);
+      const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
+      const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1']);
+      await knowledgeBaseModel.addFilesToKnowledgeBase(kb2, ['file1']);
+      const result = await knowledgeBaseModel.deleteAllWithFiles();
+      expect(
+        await serverDB.query.files.findFirst({ where: eq(files.id, 'file1') }),
+      ).toBeUndefined();
+      expect(result.deletedFiles.length).toBe(1);
+    });
+
+    it('should not delete other users KBs or files', async () => {
+      const anotherModel = new KnowledgeBaseModel(serverDB, 'user2');
+      const { id: otherKb } = await anotherModel.create({ name: 'Other KB' });
+      await knowledgeBaseModel.deleteAllWithFiles();
+      expect(
+        await serverDB.query.knowledgeBases.findFirst({ where: eq(knowledgeBases.id, otherKb) }),
+      ).toBeDefined();
     });
   });
 

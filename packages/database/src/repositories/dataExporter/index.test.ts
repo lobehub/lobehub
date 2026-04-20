@@ -22,9 +22,9 @@ import { DATA_EXPORT_CONFIG, DataExporterRepos } from './index';
 
 let db: LobeChatDatabase;
 
-// 设置测试数据
+// Set up test data
 describe('DataExporterRepos', () => {
-  // 测试数据 ID
+  // Test data IDs
   const testIds = {
     userId: 'test-user-id',
     fileId: 'test-file-id',
@@ -36,7 +36,7 @@ describe('DataExporterRepos', () => {
     knowledgeBaseId: 'test-kb-id',
   };
 
-  // 设置测试环境
+  // Set up test environment
   const userId: string = testIds.userId;
 
   beforeAll(async () => {
@@ -45,20 +45,20 @@ describe('DataExporterRepos', () => {
 
   const setupTestData = async () => {
     await db.transaction(async (trx) => {
-      // 用户数据
+      // User data
       await trx.insert(users).values({
         id: testIds.userId,
         username: 'testuser',
         email: 'test@example.com',
       });
 
-      // 用户设置
+      // User settings
       await trx.insert(userSettings).values({
         id: testIds.userId,
         general: { theme: 'light' },
       });
 
-      // 全局文件
+      // Global files
       await trx.insert(globalFiles).values({
         hashId: testIds.fileHash,
         fileType: 'text/plain',
@@ -67,7 +67,7 @@ describe('DataExporterRepos', () => {
         creator: testIds.userId,
       });
 
-      // 文件数据
+      // File data
       await trx.insert(files).values({
         id: testIds.fileId,
         userId: testIds.userId,
@@ -78,13 +78,13 @@ describe('DataExporterRepos', () => {
         url: 'https://example.com/test-file.txt',
       });
 
-      // 会话组
+      // Session groups
       await trx.insert(sessionGroups).values({
         name: 'Test Group',
         userId: testIds.userId,
       });
 
-      // 会话
+      // Sessions
       await trx.insert(sessions).values({
         id: testIds.sessionId,
         slug: 'test-session',
@@ -92,7 +92,7 @@ describe('DataExporterRepos', () => {
         userId: testIds.userId,
       });
 
-      // 主题
+      // Topics
       await trx.insert(topics).values({
         id: testIds.topicId,
         title: 'Test Topic',
@@ -100,7 +100,7 @@ describe('DataExporterRepos', () => {
         userId: testIds.userId,
       });
 
-      // 消息
+      // Messages
       await trx.insert(messages).values({
         id: testIds.messageId,
         role: 'user',
@@ -110,42 +110,42 @@ describe('DataExporterRepos', () => {
         topicId: testIds.topicId,
       });
 
-      // 代理
+      // Agents
       await trx.insert(agents).values({
         id: testIds.agentId,
         title: 'Test Agent',
         userId: testIds.userId,
       });
 
-      // 代理到会话的关联
+      // Agent-to-session associations
       await trx.insert(agentsToSessions).values({
         agentId: testIds.agentId,
         sessionId: testIds.sessionId,
         userId: testIds.userId,
       });
 
-      // 文件到会话的关联
+      // File-to-session associations
       await trx.insert(filesToSessions).values({
         fileId: testIds.fileId,
         sessionId: testIds.sessionId,
         userId: testIds.userId,
       });
 
-      // 知识库
+      // Knowledge bases
       await trx.insert(knowledgeBases).values({
         id: testIds.knowledgeBaseId,
         name: 'Test Knowledge Base',
         userId: testIds.userId,
       });
 
-      // 知识库文件
+      // Knowledge base files
       await trx.insert(knowledgeBaseFiles).values({
         knowledgeBaseId: testIds.knowledgeBaseId,
         fileId: testIds.fileId,
         userId: testIds.userId,
       });
 
-      // 代理知识库
+      // Agent knowledge bases
       await trx.insert(agentsKnowledgeBases).values({
         agentId: testIds.agentId,
         knowledgeBaseId: testIds.knowledgeBaseId,
@@ -155,7 +155,7 @@ describe('DataExporterRepos', () => {
   };
 
   beforeEach(async () => {
-    // 清理并插入测试数据
+    // Clean up and insert test data
     await db.delete(users);
     await db.delete(globalFiles);
     await setupTestData();
@@ -170,17 +170,17 @@ describe('DataExporterRepos', () => {
 
   describe('export', () => {
     it('should export all user data correctly', async () => {
-      // 创建导出器实例
+      // Create exporter instance
       const dataExporter = new DataExporterRepos(db, userId);
 
-      // 执行导出
+      // Execute export
       const result = await dataExporter.export();
 
-      // 验证基础表导出结果
+      // Verify base table export results
       // expect(result).toHaveProperty('users');
       // expect(result.users).toHaveLength(1);
       // expect(result.users[0]).toHaveProperty('id', testIds.userId);
-      // expect(result.users[0]).not.toHaveProperty('userId'); // userId 字段应该被移除
+      // expect(result.users[0]).not.toHaveProperty('userId'); // the userId field should be removed
 
       expect(result).toHaveProperty('userSettings');
       expect(result.userSettings).toHaveLength(1);
@@ -212,7 +212,7 @@ describe('DataExporterRepos', () => {
       // expect(result.knowledgeBases).toHaveLength(1);
       // expect(result.knowledgeBases[0]).toHaveProperty('id', testIds.knowledgeBaseId);
 
-      // 验证关联表导出结果
+      // Verify relation table export results
       // expect(result).toHaveProperty('globalFiles');
       // expect(result.globalFiles).toHaveLength(1);
       // expect(result.globalFiles[0]).toHaveProperty('hashId', testIds.fileHash);
@@ -237,18 +237,18 @@ describe('DataExporterRepos', () => {
     });
 
     it('should handle empty database gracefully', async () => {
-      // 清空数据库
+      // Clear the database
 
       await db.delete(users);
       await db.delete(globalFiles);
 
-      // 创建导出器实例
+      // Create exporter instance
       const dataExporter = new DataExporterRepos(db, userId);
 
-      // 执行导出
+      // Execute export
       const result = await dataExporter.export();
 
-      // 验证所有表都返回空数组
+      // Verify all tables return empty arrays
       DATA_EXPORT_CONFIG.baseTables.forEach(({ table }) => {
         expect(result).toHaveProperty(table);
         expect(result[table]).toEqual([]);
@@ -261,17 +261,17 @@ describe('DataExporterRepos', () => {
     });
 
     it('should handle database query errors', async () => {
-      // 模拟查询错误
+      // Simulate a query error
       // @ts-ignore
       vi.spyOn(db.query.users, 'findMany').mockRejectedValueOnce(new Error('Database error'));
 
-      // 创建导出器实例
+      // Create exporter instance
       const dataExporter = new DataExporterRepos(db, userId);
 
-      // 执行导出
+      // Execute export
       const result = await dataExporter.export();
 
-      // 验证其他表仍然被导出
+      // Verify other tables are still exported
       expect(result).toHaveProperty('sessions');
       expect(result.sessions).toHaveLength(1);
     });
@@ -329,7 +329,7 @@ describe('DataExporterRepos', () => {
     });
 
     it('should export data for a different user', async () => {
-      // 创建另一个用户
+      // Create another user
       const anotherUserId = 'another-user-id';
       await db.transaction(async (trx) => {
         await trx.insert(users).values({
@@ -345,13 +345,13 @@ describe('DataExporterRepos', () => {
         });
       });
 
-      // 创建导出器实例，使用另一个用户 ID
+      // Create exporter instance using another user ID
       const dataExporter = new DataExporterRepos(db, anotherUserId);
 
-      // 执行导出
+      // Execute export
       const result = await dataExporter.export();
 
-      // 验证只导出了另一个用户的数据
+      // Verify only the other user's data was exported
       // expect(result).toHaveProperty('users');
       // expect(result.users).toHaveLength(1);
       // expect(result.users[0]).toHaveProperty('id', anotherUserId);

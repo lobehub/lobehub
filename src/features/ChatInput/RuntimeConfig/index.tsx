@@ -1,16 +1,18 @@
 import { isDesktop } from '@lobechat/const';
 import { type RuntimeEnvMode } from '@lobechat/types';
+import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,
   CloudIcon,
   FolderIcon,
+  GitBranchIcon,
   LaptopIcon,
   MonitorOffIcon,
   SquircleDashed,
 } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
@@ -21,6 +23,8 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useAgentId } from '../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../hooks/useUpdateAgentConfig';
 import ApprovalMode from './ApprovalMode';
+import GitStatus from './GitStatus';
+import { useRepoType } from './useRepoType';
 import WorkingDirectory from './WorkingDirectory';
 
 const MODE_ICONS: Record<RuntimeEnvMode, typeof LaptopIcon> = {
@@ -105,12 +109,20 @@ const RuntimeConfig = memo(() => {
     chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
   ]);
 
-  // Get working directory
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDirectory = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
   );
   const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+
+  const repoType = useRepoType(effectiveWorkingDirectory);
+
+  const dirIconNode = useMemo((): ReactNode => {
+    if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
+    if (repoType === 'github') return <Github size={14} />;
+    if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
+    return <Icon icon={FolderIcon} size={14} />;
+  }, [effectiveWorkingDirectory, repoType]);
 
   const switchMode = useCallback(
     async (mode: RuntimeEnvMode) => {
@@ -208,7 +220,7 @@ const RuntimeConfig = memo(() => {
 
   const dirButton = (
     <div className={styles.button}>
-      <Icon icon={effectiveWorkingDirectory ? FolderIcon : SquircleDashed} size={14} />
+      {dirIconNode}
       <span>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
@@ -217,25 +229,35 @@ const RuntimeConfig = memo(() => {
   const rightContent = () => {
     if (runtimeMode === 'local') {
       return (
-        <Popover
-          content={<WorkingDirectory agentId={agentId} onClose={() => setDirPopoverOpen(false)} />}
-          open={dirPopoverOpen}
-          placement="bottomRight"
-          trigger="click"
-          onOpenChange={setDirPopoverOpen}
-        >
-          <div>
-            {dirPopoverOpen ? (
-              dirButton
-            ) : (
-              <Tooltip
-                title={effectiveWorkingDirectory || tPlugin('localSystem.workingDirectory.notSet')}
-              >
-                {dirButton}
-              </Tooltip>
-            )}
-          </div>
-        </Popover>
+        <>
+          <Popover
+            open={dirPopoverOpen}
+            placement="bottomLeft"
+            styles={{ content: { padding: 4 } }}
+            trigger="click"
+            content={
+              <WorkingDirectory agentId={agentId} onClose={() => setDirPopoverOpen(false)} />
+            }
+            onOpenChange={setDirPopoverOpen}
+          >
+            <div>
+              {dirPopoverOpen ? (
+                dirButton
+              ) : (
+                <Tooltip
+                  title={
+                    effectiveWorkingDirectory || tPlugin('localSystem.workingDirectory.notSet')
+                  }
+                >
+                  {dirButton}
+                </Tooltip>
+              )}
+            </div>
+          </Popover>
+          {effectiveWorkingDirectory && repoType && (
+            <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
+          )}
+        </>
       );
     }
 

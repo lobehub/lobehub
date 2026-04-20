@@ -11,7 +11,7 @@ const vercelConfig = {
       'node_modules/.pnpm/@napi-rs+canvas-*-musl*',
       'node_modules/.pnpm/@img+sharp-libvips-*musl*',
       // Exclude SPA/desktop/mobile build artifacts from serverless functions
-      'public/spa/**',
+      'public/_spa/**',
       'dist/desktop/**',
       'dist/mobile/**',
       'apps/desktop/**',

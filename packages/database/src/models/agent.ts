@@ -1,5 +1,5 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -71,6 +71,31 @@ export class AgentModel {
       .orderBy(desc(agents.updatedAt))
       .limit(limit)
       .offset(offset);
+  };
+
+  /**
+   * Get minimal agent info (avatar, title, backgroundColor) by IDs.
+   * For inbox agent (slug='inbox'), falls back to LobeAI defaults when avatar/title are missing.
+   */
+  getAgentAvatarsByIds = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        slug: agents.slug,
+        title: agents.title,
+      })
+      .from(agents)
+      .where(and(eq(agents.userId, this.userId), inArray(agents.id, ids)));
+
+    return rows.map(({ slug, ...row }) => ({
+      ...row,
+      avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
+      title: row.title || (slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+    }));
   };
 
   /**

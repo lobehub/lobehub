@@ -1,0 +1,8 @@
+{
+  "inbox.archiveAll": "Archiver tout",
+  "inbox.empty": "Aucune notification pour le moment",
+  "inbox.emptyUnread": "Aucune notification non lue",
+  "inbox.filterUnread": "Afficher uniquement les non lues",
+  "inbox.markAllRead": "Marquer tout comme lu",
+  "inbox.title": "Notifications"
+}

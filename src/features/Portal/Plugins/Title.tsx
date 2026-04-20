@@ -18,7 +18,7 @@ const Title = () => {
 
   const { t } = useTranslation('plugin');
   const pluginMeta = useToolStore(toolSelectors.getMetaById(toolUIIdentifier), isEqual);
-  const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? t('unknownPlugin');
+  const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? toolUIIdentifier;
 
   if (toolUIIdentifier === WebBrowsingManifest.identifier) {
     return (

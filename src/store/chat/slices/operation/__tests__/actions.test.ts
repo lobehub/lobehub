@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { produce } from 'immer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mergeQueuedMessages } from '@/store/chat/slices/operation/types';
 import { useChatStore } from '@/store/chat/store';
 
 describe('Operation Actions', () => {
@@ -11,6 +12,51 @@ describe('Operation Actions', () => {
 
   afterEach(() => {
     vi.clearAllTimers();
+  });
+
+  describe('mergeQueuedMessages', () => {
+    it('should preserve merged editorData for queued rich text messages', () => {
+      const firstParagraph = {
+        children: [
+          {
+            actionCategory: 'tool',
+            actionLabel: 'Notebook',
+            actionType: 'lobe-notebook',
+            type: 'action-tag',
+          },
+        ],
+        type: 'paragraph',
+      };
+      const secondParagraph = {
+        children: [{ text: 'second message', type: 'text', version: 1 }],
+        type: 'paragraph',
+      };
+
+      const merged = mergeQueuedMessages([
+        {
+          content: 'first message',
+          createdAt: 1,
+          editorData: { root: { children: [firstParagraph], type: 'root', version: 1 } },
+          id: 'q1',
+          interruptMode: 'soft',
+        },
+        {
+          content: 'second message',
+          createdAt: 2,
+          editorData: { root: { children: [secondParagraph], type: 'root', version: 1 } },
+          id: 'q2',
+          interruptMode: 'soft',
+        },
+      ]);
+
+      expect(merged.content).toBe('first message\n\nsecond message');
+      expect(merged.editorData?.root.children).toHaveLength(3);
+      expect(merged.editorData?.root.children[0]).toEqual(firstParagraph);
+      expect(merged.editorData?.root.children[1]).toEqual(
+        expect.objectContaining({ children: [], type: 'paragraph' }),
+      );
+      expect(merged.editorData?.root.children[2]).toEqual(secondParagraph);
+    });
   });
 
   describe('startOperation', () => {
@@ -395,6 +441,31 @@ describe('Operation Actions', () => {
       expect(result.current.operations[op1!].status).toBe('cancelled');
       expect(result.current.operations[op2!].status).toBe('cancelled');
       expect(result.current.operations[op3!].status).toBe('running'); // Not cancelled
+    });
+
+    it('should treat null and undefined topicId as the same context when cancelling', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let operationId: string;
+
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', topicId: undefined },
+        }).operationId;
+      });
+
+      act(() => {
+        const cancelled = result.current.cancelOperations({
+          agentId: 'session1',
+          status: 'running',
+          topicId: null,
+          type: ['sendMessage', 'execAgentRuntime', 'execServerAgentRuntime'],
+        });
+        expect(cancelled).toContain(operationId!);
+      });
+
+      expect(result.current.operations[operationId!].status).toBe('cancelled');
     });
   });
 

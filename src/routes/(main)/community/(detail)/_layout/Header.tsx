@@ -29,7 +29,7 @@ const Header = memo(() => {
     }
 
     // Types that have their own list pages
-    const typesWithListPage = ['agent', 'model', 'provider', 'mcp'];
+    const typesWithListPage = ['agent', 'model', 'provider', 'mcp', 'skill'];
 
     if (detailType && typesWithListPage.includes(detailType)) {
       navigate(urlJoin('/community', detailType));

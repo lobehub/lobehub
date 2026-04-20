@@ -1,13 +1,14 @@
 import { type DropdownMenuCheckboxItem, type DropdownMenuProps } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { ChevronRight, Languages } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Menu from '@/components/Menu';
 import { localeOptions } from '@/locales/resources';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+import { electronStylish } from '@/styles/electron';
 
 const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: number }>(
   ({ placement, size }) => {
@@ -68,18 +69,30 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
       trigger = <ActionIcon icon={Languages} size={size} />;
     } else {
       trigger = (
-        <div>
-          <Menu
-            items={[
-              {
-                extra: <Icon icon={ChevronRight} size={'small'} />,
-                icon: <Icon icon={Languages} />,
-                key: 'language',
-                label: t('settingCommon.lang.title'),
-              },
-            ]}
-          />
-        </div>
+        <Flexbox
+          horizontal
+          align="center"
+          gap={12}
+          style={{
+            borderRadius: 8,
+            boxSizing: 'content-box',
+            cursor: 'pointer',
+            height: 28,
+            marginInline: 4,
+            paddingBlock: 6,
+            paddingInline: 12,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = cssVar.colorFillTertiary as string;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <Icon icon={Languages} size={'small'} style={{ color: cssVar.colorTextSecondary }} />
+          <Flexbox flex={1}>{t('settingCommon.lang.title')}</Flexbox>
+          <Icon icon={ChevronRight} size={'small'} style={{ color: cssVar.colorTextSecondary }} />
+        </Flexbox>
       );
     }
 
@@ -87,11 +100,14 @@ const LangButton = memo<{ placement?: DropdownMenuProps['placement']; size?: num
       <DropdownMenu
         items={items}
         placement={placement}
+        trigger="hover"
         popupProps={{
+          className: electronStylish.nodrag,
           style: {
             maxHeight: 360,
             minWidth: 240,
             overflow: 'auto',
+            transition: 'none',
           },
         }}
       >

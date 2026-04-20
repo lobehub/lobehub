@@ -99,13 +99,82 @@ describe('AgentRuntimeCoordinator', () => {
         operationId,
         newState.stepCount,
         newState,
+        'done',
+      );
+    });
+
+    it('should publish end event when status changes to error', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { error: { message: 'boom' }, status: 'error', stepCount: 5 };
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState(operationId, newState as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        newState.stepCount,
+        newState,
+        'error',
+      );
+    });
+
+    it('should fallback to previous stepCount when terminal state is missing stepCount', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { error: { message: 'boom' }, status: 'error' };
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState(operationId, newState as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        previousState.stepCount,
+        newState,
+        'error',
+      );
+    });
+
+    it('should publish end event when status changes to interrupted', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'interrupted', stepCount: 5 };
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState(operationId, newState as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        newState.stepCount,
+        newState,
+        'interrupted',
+      );
+    });
+
+    it('should publish end event when status changes to waiting_for_human so the client releases its loading state', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'waiting_for_human', stepCount: 4 };
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState(operationId, newState as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        newState.stepCount,
+        newState,
+        'waiting_for_human',
       );
     });
 
     it('should not publish end event when status was already done', async () => {
       const operationId = 'test-operation-id';
       const previousState = { status: 'done', stepCount: 5 };
-      const newState = { status: 'done', stepCount: 5 };
+      const newState = { status: 'error', stepCount: 5 };
 
       mockStateManager.loadAgentState.mockResolvedValue(previousState);
 
@@ -149,6 +218,87 @@ describe('AgentRuntimeCoordinator', () => {
         operationId,
         5,
         stepResult.newState,
+        'done',
+      );
+    });
+
+    it('should publish end event when status becomes error', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { error: { message: 'boom' }, status: 'error', stepCount: 5 },
+        stepIndex: 5,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        5,
+        stepResult.newState,
+        'error',
+      );
+    });
+
+    it('should fallback to stepResult.stepIndex when terminal step result state is missing stepCount', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { error: { message: 'boom' }, status: 'error' },
+        stepIndex: 5,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        stepResult.stepIndex,
+        stepResult.newState,
+        'error',
+      );
+    });
+
+    it('should publish end event when status becomes waiting_for_human (paused awaiting approval)', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { status: 'waiting_for_human', stepCount: 4 },
+        stepIndex: 4,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        4,
+        stepResult.newState,
+        'waiting_for_human',
+      );
+    });
+
+    it('should publish end event when status becomes interrupted', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { status: 'interrupted', stepCount: 5 },
+        stepIndex: 5,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 4 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith(
+        operationId,
+        5,
+        stepResult.newState,
+        'interrupted',
       );
     });
 
@@ -172,7 +322,7 @@ describe('AgentRuntimeCoordinator', () => {
       const operationId = 'test-operation-id';
       const stepResult = {
         executionTime: 1000,
-        newState: { status: 'done', stepCount: 5 },
+        newState: { status: 'error', stepCount: 5 },
         stepIndex: 5,
       };
 

@@ -16,6 +16,8 @@ import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { useGlobalStore } from '@/store/global';
 
+import { APP_VERSION } from './appVersion';
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   logo: css`
     border-radius: calc(${cssVar.borderRadiusLG} * 2);
@@ -133,7 +135,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <Flexbox align={'flex-start'} gap={6}>
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
-            <Tag>v{CURRENT_VERSION}</Tag>
+            <Tag>v{APP_VERSION}</Tag>
 
             {buildChannel && buildChannel !== 'stable' && (
               <Tag color={'gold'}>

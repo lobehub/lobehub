@@ -1,6 +1,6 @@
 import { type NewChunkItem, type NewUnstructuredChunkItem } from '@/database/schemas';
 import { knowledgeEnv } from '@/envs/knowledge';
-import { ChunkingLoader } from '@/libs/langchain';
+import { ChunkingLoader } from '@/libs/document-loaders';
 
 import { type ChunkingService } from './rules';
 import { ChunkingRuleParser } from './rules';
@@ -18,11 +18,11 @@ interface ChunkResult {
 }
 
 export class ContentChunk {
-  private langchainClient: ChunkingLoader;
+  private chunkingClient: ChunkingLoader;
   private chunkingRules: Record<string, ChunkingService[]>;
 
   constructor() {
-    this.langchainClient = new ChunkingLoader();
+    this.chunkingClient = new ChunkingLoader();
     this.chunkingRules = ChunkingRuleParser.parse(knowledgeEnv.FILE_TYPE_CHUNKING_RULES || '');
   }
 
@@ -43,7 +43,7 @@ export class ContentChunk {
           }
 
           default: {
-            return await this.chunkByLangChain(params.filename, params.content);
+            return await this.chunkByDefault(params.filename, params.content);
           }
         }
       } catch (error) {
@@ -54,26 +54,23 @@ export class ContentChunk {
       }
     }
 
-    // Fallback to langchain if no service succeeded
-    return await this.chunkByLangChain(params.filename, params.content);
+    // Fallback to default chunking if no service succeeded
+    return await this.chunkByDefault(params.filename, params.content);
   }
 
   private canUseUnstructured(): boolean {
     return !!(knowledgeEnv.UNSTRUCTURED_API_KEY && knowledgeEnv.UNSTRUCTURED_SERVER_URL);
   }
 
-  private chunkByLangChain = async (
-    filename: string,
-    content: Uint8Array,
-  ): Promise<ChunkResult> => {
-    const res = await this.langchainClient.partitionContent(filename, content);
+  private chunkByDefault = async (filename: string, content: Uint8Array): Promise<ChunkResult> => {
+    const res = await this.chunkingClient.partitionContent(filename, content);
 
     const documents = res.map((item, index) => ({
       id: item.id,
       index,
       metadata: item.metadata,
       text: item.pageContent,
-      type: 'LangChainElement',
+      type: 'DocumentChunk',
     }));
 
     return { chunks: documents };

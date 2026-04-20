@@ -293,7 +293,7 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
       });
 
-      it('should persist selected slash skills as preload messages before sending', async () => {
+      it('should persist selected slash skills into user message content before sending', async () => {
         const { result } = renderHook(() => useChatStore());
 
         const sendMessageInServerSpy = vi
@@ -303,7 +303,7 @@ describe('ConversationLifecycle actions', () => {
               createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
               createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
             ],
-            topics: [],
+            topics: undefined,
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
@@ -359,54 +359,27 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+        const requestPayload = sendMessageInServerSpy.mock.calls[0]?.[0];
+
+        expect(requestPayload?.newUserMessage).toEqual(
           expect.objectContaining({
-            newUserMessage: expect.objectContaining({
-              content:
-                '<action type="user_memory" category="skill" /> ' + TEST_CONTENT.USER_MESSAGE,
-              editorData: expect.objectContaining({
-                root: expect.any(Object),
-              }),
+            content: expect.stringContaining(TEST_CONTENT.USER_MESSAGE),
+            editorData: expect.objectContaining({
+              root: expect.any(Object),
             }),
-            preloadMessages: [
-              expect.objectContaining({
-                content: '',
-                role: 'assistant',
-                tools: [
-                  expect.objectContaining({
-                    apiName: 'activateSkill',
-                    arguments: JSON.stringify({ name: 'User Memory' }),
-                    identifier: 'lobe-skills',
-                  }),
-                ],
-              }),
-              expect.objectContaining({
-                content: 'Use the user memory skill content.',
-                role: 'tool',
-              }),
-              expect.objectContaining({
-                content: '',
-                role: 'assistant',
-                tools: [
-                  expect.objectContaining({
-                    apiName: 'activateSkill',
-                    arguments: JSON.stringify({ name: 'Instruction' }),
-                    identifier: 'lobe-skills',
-                  }),
-                ],
-              }),
-              expect.objectContaining({
-                content: 'Use the instruction skill content.',
-                role: 'tool',
-              }),
-            ],
           }),
-          expect.any(AbortController),
         );
-        expect(
-          sendMessageInServerSpy.mock.calls[0]?.[0].newUserMessage.editorData?.root.children[0]
-            .children,
-        ).toEqual(
+        expect(requestPayload?.newUserMessage.content).toContain('<selected_skill_context>');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="user_memory"');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="instruction"');
+        expect(requestPayload?.newUserMessage.content).toContain(
+          'Use the user memory skill content.',
+        );
+        expect(requestPayload?.newUserMessage.content).toContain(
+          'Use the instruction skill content.',
+        );
+        expect(requestPayload?.preloadMessages).toBeUndefined();
+        expect(requestPayload?.newUserMessage.editorData?.root.children[0].children).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               actionCategory: 'skill',
@@ -415,19 +388,7 @@ describe('ConversationLifecycle actions', () => {
             }),
           ]),
         );
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
-          expect.objectContaining({
-            initialContext: expect.objectContaining({
-              initialContext: {
-                selectedSkills: [
-                  { identifier: 'user_memory', name: 'User Memory' },
-                  { identifier: 'instruction', name: 'Instruction' },
-                ],
-              },
-              phase: 'init',
-            }),
-          }),
-        );
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
       });
 
       it('should work when sending from home page (activeAgentId is empty but context.agentId exists)', async () => {
@@ -475,18 +436,20 @@ describe('ConversationLifecycle actions', () => {
         expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
       });
 
-      it('should pass selected tool tags into runtime initialContext', async () => {
+      it('should persist selected tool tags into user message content before runtime execution', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topics: [],
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        const sendMessageInServerSpy = vi
+          .spyOn(aiChatService, 'sendMessageInServer')
+          .mockResolvedValue({
+            messages: [
+              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+            ],
+            topics: undefined,
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          } as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -519,18 +482,76 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        expect(result.current.internal_execAgentRuntime).toHaveBeenCalledWith(
-          expect.objectContaining({
-            initialContext: expect.objectContaining({
-              initialContext: {
-                selectedTools: [
-                  { identifier: 'lobe-notebook', name: 'Notebook' },
-                  { identifier: 'lobe-artifacts', name: 'Artifacts' },
+        const requestPayload = sendMessageInServerSpy.mock.calls[0]?.[0];
+
+        expect(requestPayload?.newUserMessage.content).toContain(TEST_CONTENT.USER_MESSAGE);
+        expect(requestPayload?.newUserMessage.content).toContain('<selected_tool_context>');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="lobe-notebook"');
+        expect(requestPayload?.newUserMessage.content).toContain('name="Notebook"');
+        expect(requestPayload?.newUserMessage.content).toContain('identifier="lobe-artifacts"');
+        expect(requestPayload?.newUserMessage.content).toContain('name="Artifacts"');
+        expect(result.current.internal_execAgentRuntime).toHaveBeenCalled();
+      });
+
+      it('should preserve editorData when enqueueing a queued message', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const context = createTestContext();
+        const contextKey = messageMapKey(context);
+        const editorData = {
+          root: {
+            children: [
+              {
+                children: [
+                  {
+                    actionCategory: 'tool',
+                    actionLabel: 'Notebook',
+                    actionType: 'lobe-notebook',
+                    type: 'action-tag',
+                  },
+                  { text: ' queued message', type: 'text' },
                 ],
+                type: 'paragraph',
               },
-              phase: 'init',
-            }),
+            ],
+            type: 'root',
+          },
+        };
+
+        act(() => {
+          useChatStore.setState({
+            operations: {
+              'op-running': {
+                childOperationIds: [],
+                context,
+                id: 'op-running',
+                metadata: {},
+                status: 'running',
+                type: 'execAgentRuntime',
+              },
+            } as any,
+            operationsByContext: {
+              [contextKey]: ['op-running'],
+            },
+          });
+        });
+
+        const enqueueMessageSpy = vi.spyOn(result.current, 'enqueueMessage');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context,
+            editorData: editorData as any,
+            message: 'queued message',
+          });
+        });
+
+        expect(enqueueMessageSpy).toHaveBeenCalledWith(
+          contextKey,
+          expect.objectContaining({
+            content: 'queued message',
+            editorData,
           }),
+          'op-running',
         );
       });
     });
@@ -893,6 +914,213 @@ describe('ConversationLifecycle actions', () => {
         const execCall = (result.current.internal_execAgentRuntime as any).mock.calls[0]?.[0];
         const initialCtx = execCall?.initialContext?.initialContext;
         expect(initialCtx?.mentionedAgents).toBeUndefined();
+      });
+    });
+
+    describe('auto-dismiss pending tool interventions', () => {
+      it('should abort pending flat tool messages when user sends a new message', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId: null });
+
+        const pendingToolMsg = createMockMessage({
+          id: 'tool-pending-1',
+          role: 'tool',
+          content: '',
+          pluginIntervention: { status: 'pending' },
+          topicId: undefined,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: { [key]: [pendingToolMsg] },
+            dbMessagesMap: { [key]: [pendingToolMsg] },
+          });
+        });
+
+        const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+        const updatePluginSpy = vi
+          .spyOn(messageService, 'updateMessagePlugin')
+          .mockResolvedValue({ success: true } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            pendingToolMsg,
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: undefined }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: undefined }),
+          ],
+          topics: [],
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: 'override pending interaction',
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // Should dispatch a single merged update for pluginIntervention + content
+        const abortCalls = dispatchSpy.mock.calls.filter(
+          ([payload]) =>
+            payload.type === 'updateMessage' &&
+            (payload as any).value?.pluginIntervention?.status === 'aborted',
+        );
+        expect(abortCalls).toHaveLength(1);
+        expect(abortCalls[0][0]).toEqual(
+          expect.objectContaining({
+            id: 'tool-pending-1',
+            type: 'updateMessage',
+            value: expect.objectContaining({
+              pluginIntervention: { status: 'aborted' },
+              content: 'User bypassed this interaction by sending a message directly.',
+            }),
+          }),
+        );
+
+        // Should persist intervention status to server
+        expect(updatePluginSpy).toHaveBeenCalledWith(
+          'tool-pending-1',
+          { intervention: { status: 'aborted' } },
+          expect.any(Object),
+        );
+      });
+
+      it('should abort pending interventions in group message children', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId: null });
+
+        const groupMsg = createMockMessage({
+          id: 'group-1',
+          role: 'assistant',
+          topicId: undefined,
+          children: [
+            {
+              id: 'child-1',
+              content: '',
+              tools: [
+                {
+                  apiName: 'askUserQuestion',
+                  arguments: '{}',
+                  id: 'tool-call-1',
+                  identifier: 'lobe-user-interaction',
+                  intervention: { status: 'pending' },
+                  result_msg_id: 'tool-result-1',
+                },
+              ],
+            },
+          ] as any,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: { [key]: [groupMsg] },
+            dbMessagesMap: { [key]: [groupMsg] },
+          });
+        });
+
+        const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+        vi.spyOn(messageService, 'updateMessagePlugin').mockResolvedValue({
+          success: true,
+        } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            groupMsg,
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: undefined }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: undefined }),
+          ],
+          topics: [],
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: 'override group interaction',
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // Should dispatch abort for the tool result message found in children
+        const abortCalls = dispatchSpy.mock.calls.filter(
+          ([payload]) =>
+            payload.type === 'updateMessage' &&
+            (payload as any).value?.pluginIntervention?.status === 'aborted',
+        );
+        expect(abortCalls).toHaveLength(1);
+        expect(abortCalls[0][0]).toEqual(
+          expect.objectContaining({
+            id: 'tool-result-1',
+            type: 'updateMessage',
+            value: expect.objectContaining({
+              pluginIntervention: { status: 'aborted' },
+            }),
+          }),
+        );
+      });
+
+      it('should not dispatch if no pending interventions exist', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId: null });
+
+        const normalMsg = createMockMessage({
+          id: 'normal-1',
+          role: 'assistant',
+          topicId: undefined,
+        });
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: { [key]: [normalMsg] },
+            dbMessagesMap: { [key]: [normalMsg] },
+          });
+        });
+
+        const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+        const updatePluginSpy = vi
+          .spyOn(messageService, 'updateMessagePlugin')
+          .mockResolvedValue({ success: true } as any);
+
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            normalMsg,
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: undefined }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: undefined }),
+          ],
+          topics: [],
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: 'normal message',
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // No updateMessage dispatch for intervention abort
+        const abortDispatches = dispatchSpy.mock.calls.filter(
+          ([payload]) =>
+            payload.type === 'updateMessage' &&
+            (payload as any).value?.pluginIntervention?.status === 'aborted',
+        );
+        expect(abortDispatches).toHaveLength(0);
+        expect(updatePluginSpy).not.toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ intervention: { status: 'aborted' } }),
+          expect.any(Object),
+        );
       });
     });
 

@@ -1,5 +1,7 @@
 import type { DiscoverAssistantItem } from './assistants';
 import type { DiscoverGroupAgentItem } from './groupAgents';
+import type { DiscoverPluginItem } from './plugins';
+import type { DiscoverSkillItem } from './skills';
 
 export * from './assistants';
 export * from './fork';
@@ -86,5 +88,13 @@ export interface DiscoverUserProfile {
    * Agents forked by the user
    */
   forkedAgents?: DiscoverAssistantItem[];
+  /**
+   * Plugins owned by the user
+   */
+  plugins?: DiscoverPluginItem[];
+  /**
+   * Skills owned by the user
+   */
+  skills?: DiscoverSkillItem[];
   user: DiscoverUserInfo;
 }

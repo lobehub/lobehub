@@ -4,6 +4,7 @@ import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
 
 const Kibi = 1024;
+const MAX_VALUE = 64 * Kibi; // 65536
 
 const exponent = (num: number) => Math.log2(num);
 const powerKibi = (num: number) => Math.round(Math.pow(2, num) * Kibi);
@@ -29,7 +30,7 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
   const updateWithPowValue = (value: number) => {
     setPowValue(value);
 
-    setTokens(Math.min(powerKibi(value), 64_000));
+    setTokens(Math.min(powerKibi(value), MAX_VALUE));
   };
 
   const updateWithRealValue = (value: number) => {
@@ -76,7 +77,7 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
       <div>
         <InputNumber
           changeOnWheel
-          max={64_000}
+          max={MAX_VALUE}
           min={0}
           step={step}
           style={{ width: 80 }}

@@ -37,6 +37,7 @@ vi.mock('@/database/models/agent', () => ({
       provider: 'openai',
       systemRole: 'You are a helpful assistant',
     }),
+    queryAgents: vi.fn().mockResolvedValue([]),
   })),
 }));
 
@@ -64,6 +65,8 @@ vi.mock('@/database/models/plugin', () => ({
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-new' }),
+    findById: vi.fn().mockResolvedValue(undefined),
+    updateMetadata: vi.fn().mockResolvedValue(undefined),
   })),
 }));
 
@@ -174,6 +177,7 @@ describe('AiAgentService.execAgent - topic history loading', () => {
       // Verify messageModel.query was called to load history for the topic
       expect(mockMessageQuery).toHaveBeenCalledWith(
         expect.objectContaining({ topicId: 'topic-existing' }),
+        expect.objectContaining({ postProcessUrl: expect.any(Function) }),
       );
 
       // Verify createOperation received all history messages + the new user message

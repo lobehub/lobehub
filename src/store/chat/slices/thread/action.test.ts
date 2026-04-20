@@ -80,7 +80,7 @@ vi.mock('@/store/user/selectors', () => ({
     thread: vi.fn(() => ({})),
   },
   userGeneralSettingsSelectors: {
-    responseLanguage: vi.fn(() => undefined),
+    currentResponseLanguage: vi.fn(() => 'en-US'),
   },
   userProfileSelectors: {
     userAvatar: vi.fn(() => 'avatar-url'),
@@ -158,6 +158,146 @@ describe('thread action', () => {
         type: 'thread',
         startMessageId: 'message-id',
       });
+    });
+
+    it('should initialize optimistic parent messages from main scope messages', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const mainMessages: UIChatMessage[] = [
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'first',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'reply',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+        {
+          id: 'msg-3',
+          role: 'user',
+          content: 'second',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+      ];
+
+      act(() => {
+        useChatStore.setState({
+          messagesMap: {
+            'main_test-session-id_test-topic-id': mainMessages,
+          },
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      act(() => {
+        result.current.openThreadCreator('msg-3');
+      });
+
+      // Should call replaceMessages with all 3 parent messages (continuation mode)
+      expect(replaceMessagesSpy).toHaveBeenCalledWith(
+        mainMessages,
+        expect.objectContaining({ action: 'initThreadMessages' }),
+      );
+    });
+
+    it('should use main scope messages even when activeThreadId is set (LOBE-5023)', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const mainMessages: UIChatMessage[] = [
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'first',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'reply',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+        {
+          id: 'msg-3',
+          role: 'user',
+          content: 'second',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+      ];
+
+      const threadMessages: UIChatMessage[] = [
+        {
+          id: 'msg-1',
+          role: 'user',
+          content: 'first',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+        },
+        {
+          id: 'thread-msg-1',
+          role: 'user',
+          content: 'thread msg',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+          threadId: 'existing-thread',
+        },
+        {
+          id: 'thread-msg-2',
+          role: 'assistant',
+          content: 'thread reply',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          agentId: 'test-session-id',
+          threadId: 'existing-thread',
+        },
+      ];
+
+      act(() => {
+        useChatStore.setState({
+          activeThreadId: 'existing-thread',
+          messagesMap: {
+            // Main scope has all messages including msg-3
+            'main_test-session-id_test-topic-id': mainMessages,
+            // Thread scope does NOT have msg-3
+            'thread_test-session-id_test-topic-id_existing-thread': threadMessages,
+          },
+        });
+      });
+
+      const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
+
+      act(() => {
+        // Fork from msg-3 which only exists in main scope
+        result.current.openThreadCreator('msg-3');
+      });
+
+      // BUG: if openThreadCreator uses activeDisplayMessages (which includes activeThreadId),
+      // it gets thread-scoped messages that don't contain msg-3,
+      // genParentMessages returns [], and replaceMessages is never called.
+      //
+      // FIX: openThreadCreator should always use main scope key to get messages.
+      expect(replaceMessagesSpy).toHaveBeenCalledWith(
+        mainMessages,
+        expect.objectContaining({ action: 'initThreadMessages' }),
+      );
     });
   });
 

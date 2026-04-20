@@ -25,6 +25,7 @@ import metadata from './metadata';
 import migration from './migration';
 import modelProvider from './modelProvider';
 import models from './models';
+import notification from './notification';
 import oauth from './oauth';
 import onboarding from './onboarding';
 import plugin from './plugin';
@@ -72,6 +73,7 @@ const resources = {
   migration,
   modelProvider,
   models,
+  notification,
   oauth,
   onboarding,
   plugin,

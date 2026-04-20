@@ -1,9 +1,9 @@
 import { Flexbox, Highlighter } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
+import SafeBoundary from '@/components/ErrorBoundary';
 import { LOADING_FLAT } from '@/const/message';
 import { useErrorContent } from '@/features/Conversation/Error';
-import { type AssistantContentBlock } from '@/types/index';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -11,13 +11,14 @@ import ImageFileListViewer from '../../components/ImageFileListViewer';
 import Reasoning from '../../components/Reasoning';
 import { Tools } from '../Tools';
 import MessageContent from './MessageContent';
+import type { RenderableAssistantContentBlock } from './types';
 
-interface ContentBlockProps extends AssistantContentBlock {
+interface ContentBlockProps extends RenderableAssistantContentBlock {
   assistantId: string;
   disableEditing?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({ id, tools, content, imageList, reasoning, error, assistantId, disableEditing }) => {
+  ({ id, tools, content, imageList, reasoning, error, domId, assistantId, disableEditing }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -28,11 +29,13 @@ const ContentBlock = memo<ContentBlockProps>(
     const hasTools = tools && tools.length > 0;
     const showReasoning =
       (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+    const hasContent = !!content && content !== LOADING_FLAT;
+    const showMessageContent = hasContent || content === LOADING_FLAT || hasTools;
 
     const handleRegenerate = useCallback(async () => {
       await deleteMessage(id);
       continueGeneration(assistantId);
-    }, [id]);
+    }, [assistantId, continueGeneration, deleteMessage, id]);
 
     if (error && (content === LOADING_FLAT || !content)) {
       return (
@@ -61,17 +64,30 @@ const ContentBlock = memo<ContentBlockProps>(
     }
 
     return (
-      <Flexbox gap={8} id={id}>
-        {showReasoning && <Reasoning {...reasoning} id={id} />}
+      <Flexbox gap={8} id={domId ?? id}>
+        {showReasoning && (
+          <SafeBoundary>
+            <Reasoning {...reasoning} id={id} />
+          </SafeBoundary>
+        )}
 
-        {/* Content - markdown text */}
-        <MessageContent content={content} hasTools={hasTools} id={id} />
+        {showMessageContent && (
+          <SafeBoundary variant="alert">
+            <MessageContent content={content} hasTools={hasTools} id={id} />
+          </SafeBoundary>
+        )}
 
-        {/* Image files */}
-        {showImageItems && <ImageFileListViewer items={imageList} />}
+        {showImageItems && (
+          <SafeBoundary>
+            <ImageFileListViewer items={imageList} />
+          </SafeBoundary>
+        )}
 
-        {/* Tools */}
-        {hasTools && <Tools disableEditing={disableEditing} messageId={id} tools={tools} />}
+        {hasTools && (
+          <SafeBoundary>
+            <Tools disableEditing={disableEditing} messageId={id} tools={tools} />
+          </SafeBoundary>
+        )}
       </Flexbox>
     );
   },

@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import DefaultAgentForm from '../agent/features/DefaultAgentForm';
 import SystemAgentForm from '../agent/features/SystemAgentForm';
 import Image from '../image/features/Image';
 import OpenAI from '../tts/features/OpenAI';
@@ -19,12 +18,13 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.serviceModel')} />
-      <DefaultAgentForm />
       <SystemAgentForm systemAgentKey="topic" />
       <SystemAgentForm systemAgentKey="generationTopic" />
       <SystemAgentForm systemAgentKey="translation" />
       <SystemAgentForm systemAgentKey="historyCompress" />
       <SystemAgentForm systemAgentKey="agentMeta" />
+      <SystemAgentForm allowDisable systemAgentKey="inputCompletion" />
+      <SystemAgentForm allowDisable systemAgentKey="promptRewrite" />
       {enableKnowledgeBase && (
         <SystemAgentForm
           allowCustomPrompt

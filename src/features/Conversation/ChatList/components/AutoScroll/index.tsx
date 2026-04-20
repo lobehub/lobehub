@@ -8,7 +8,6 @@ import {
   useConversationStore,
   virtuaListSelectors,
 } from '../../../store';
-import { useAutoScrollEnabled } from './useAutoScrollEnabled';
 
 /**
  * AutoScroll component - handles auto-scrolling logic during AI generation.
@@ -23,9 +22,8 @@ const AutoScroll = memo(() => {
   const isGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
-  const isAutoScrollEnabled = useAutoScrollEnabled();
 
-  const shouldAutoScroll = isAutoScrollEnabled && atBottom && isGenerating && !isScrolling;
+  const shouldAutoScroll = atBottom && isGenerating && !isScrolling;
 
   // Get the content length of the last message to monitor streaming output
   const lastMessage = dbMessages.at(-1);

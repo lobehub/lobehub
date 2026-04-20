@@ -556,8 +556,39 @@ export const topicRouter = router({
       z.object({
         id: z.string(),
         metadata: z.object({
+          boundDeviceId: z.string().optional(),
+          heteroSessionId: z.string().optional(),
           model: z.string().optional(),
+          onboardingFeedback: z
+            .object({
+              comment: z.string().max(500).optional(),
+              rating: z.enum(['good', 'bad']),
+              submittedAt: z.string(),
+            })
+            .optional(),
+          onboardingSession: z
+            .object({
+              agentIdentityCompletedAt: z.string().optional(),
+              discoveryCompletedAt: z.string().optional(),
+              finalAgentNames: z.array(z.string()).optional(),
+              finishedAt: z.string().optional(),
+              lastActiveAt: z.string(),
+              phase: z.enum(['agent_identity', 'user_identity', 'discovery', 'summary']),
+              startedAt: z.string(),
+              userIdentityCompletedAt: z.string().optional(),
+              version: z.number(),
+            })
+            .optional(),
           provider: z.string().optional(),
+          runningOperation: z
+            .object({
+              assistantMessageId: z.string(),
+              operationId: z.string(),
+              scope: z.string().optional(),
+              threadId: z.string().nullable().optional(),
+            })
+            .nullable()
+            .optional(),
           workingDirectory: z.string().optional(),
         }),
       }),

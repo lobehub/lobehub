@@ -5,6 +5,7 @@ import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
+import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
   type OperationCreationParams,
@@ -56,14 +57,6 @@ vi.mock('@/server/services/search', () => ({
   },
 }));
 
-// Mock plugin gateway service to avoid server-side env access
-vi.mock('@/server/services/pluginGateway', () => ({
-  PluginGatewayService: vi.fn().mockImplementation(() => ({
-    getPluginManifest: vi.fn(),
-    executePlugin: vi.fn(),
-  })),
-}));
-
 // Mock factory and redis dependencies to break env import chains,
 // so the barrel can be imported with real AgentRuntimeCoordinator + InMemory backends
 vi.mock('@/server/modules/AgentRuntime/factory', async () => {
@@ -93,7 +86,7 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
 });
 
 vi.mock('@lobechat/agent-runtime', () => ({
-  AgentRuntime: vi.fn().mockImplementation((agent, options) => ({
+  AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
     step: vi.fn(),
   })),
 }));
@@ -180,6 +173,7 @@ describe('AgentRuntimeService', () => {
 
   afterEach(() => {
     delete process.env.AGENT_RUNTIME_BASE_URL;
+    hookDispatcher.unregister('test-operation-1');
   });
 
   describe('constructor', () => {
@@ -310,6 +304,50 @@ describe('AgentRuntimeService', () => {
         }),
       );
     });
+
+    it('should abort before creating operation when signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort(new Error('startup aborted'));
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          signal: controller.signal,
+        }),
+      ).rejects.toMatchObject({
+        message: 'startup aborted',
+        name: 'AbortError',
+      });
+
+      expect(mockCoordinator.createAgentOperation).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('should cleanup partially created operation when aborted before scheduling', async () => {
+      const controller = new AbortController();
+      const originalCreateAgentOperation =
+        mockCoordinator.createAgentOperation.getMockImplementation();
+
+      mockCoordinator.createAgentOperation.mockImplementationOnce(async (...args: any[]) => {
+        await originalCreateAgentOperation?.(...args);
+        controller.abort(new Error('startup aborted'));
+      });
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          hooks: [{ handler: vi.fn(), id: 'hook-1', type: 'onComplete' }],
+          signal: controller.signal,
+        }),
+      ).rejects.toMatchObject({
+        message: 'startup aborted',
+        name: 'AbortError',
+      });
+
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+      expect(mockCoordinator.deleteAgentOperation).toHaveBeenCalledWith('test-operation-1');
+      expect(hookDispatcher.hasHooks('test-operation-1')).toBe(false);
+    });
   });
 
   describe('executeStep', () => {
@@ -419,26 +457,24 @@ describe('AgentRuntimeService', () => {
           stepIndex: 1,
           phase: 'step_execution',
           error: 'Runtime error',
+          errorType: '500',
         },
       });
     });
 
-    it('should call onComplete with error in finalState when execution fails', async () => {
+    it('should dispatch onComplete hook with error in finalState when execution fails', async () => {
       const error = new Error('Runtime error');
       const mockRuntime = { step: vi.fn().mockRejectedValue(error) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
 
-      // Register onComplete callback
-      const mockOnComplete = vi.fn();
-      service.registerStepCallbacks('test-operation-1', {
-        onComplete: mockOnComplete,
-      });
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
       await expect(service.executeStep(mockParams)).rejects.toThrow('Runtime error');
 
-      // Verify onComplete is called with error in finalState as ChatMessageError
-      // ChatErrorType.InternalServerError = 500
-      expect(mockOnComplete).toHaveBeenCalledWith(
+      // Verify onComplete hooks dispatched with error in finalState as ChatMessageError
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-1',
+        'onComplete',
         expect.objectContaining({
           operationId: 'test-operation-1',
           reason: 'error',
@@ -450,10 +486,13 @@ describe('AgentRuntimeService', () => {
             }),
           }),
         }),
+        undefined,
       );
+
+      dispatchSpy.mockRestore();
     });
 
-    it('should call onComplete with ChatCompletionErrorPayload in finalState', async () => {
+    it('should dispatch onComplete hook with ChatCompletionErrorPayload in finalState', async () => {
       // Simulate LLM error format: { errorType: 'InvalidProviderAPIKey', error: { ... } }
       const llmError = {
         errorType: 'InvalidProviderAPIKey',
@@ -463,16 +502,14 @@ describe('AgentRuntimeService', () => {
       const mockRuntime = { step: vi.fn().mockRejectedValue(llmError) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
 
-      // Register onComplete callback
-      const mockOnComplete = vi.fn();
-      service.registerStepCallbacks('test-operation-1', {
-        onComplete: mockOnComplete,
-      });
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
       await expect(service.executeStep(mockParams)).rejects.toEqual(llmError);
 
       // Verify error is formatted correctly with type from errorType
-      expect(mockOnComplete).toHaveBeenCalledWith(
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-1',
+        'onComplete',
         expect.objectContaining({
           operationId: 'test-operation-1',
           reason: 'error',
@@ -484,7 +521,10 @@ describe('AgentRuntimeService', () => {
             }),
           }),
         }),
+        undefined,
       );
+
+      dispatchSpy.mockRestore();
     });
 
     it('should save error state to coordinator for later retrieval (inMemory mode fix)', async () => {
@@ -624,8 +664,7 @@ describe('AgentRuntimeService', () => {
     });
 
     it('should extract tool output from data field for single tool_result', async () => {
-      const mockOnAfterStep = vi.fn();
-      service.registerStepCallbacks('test-operation-1', { onAfterStep: mockOnAfterStep });
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
       const mockStepResult = {
         newState: { ...mockState, stepCount: 2, status: 'running' },
@@ -653,7 +692,9 @@ describe('AgentRuntimeService', () => {
 
       await service.executeStep(mockParams);
 
-      expect(mockOnAfterStep).toHaveBeenCalledWith(
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-1',
+        'afterStep',
         expect.objectContaining({
           toolsResult: [
             expect.objectContaining({
@@ -663,12 +704,14 @@ describe('AgentRuntimeService', () => {
             }),
           ],
         }),
+        undefined,
       );
+
+      dispatchSpy.mockRestore();
     });
 
     it('should extract tool output from data field for tools_batch_result', async () => {
-      const mockOnAfterStep = vi.fn();
-      service.registerStepCallbacks('test-operation-1', { onAfterStep: mockOnAfterStep });
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
       const mockStepResult = {
         newState: { ...mockState, stepCount: 2, status: 'running' },
@@ -709,7 +752,9 @@ describe('AgentRuntimeService', () => {
 
       await service.executeStep(mockParams);
 
-      expect(mockOnAfterStep).toHaveBeenCalledWith(
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-1',
+        'afterStep',
         expect.objectContaining({
           toolsResult: [
             expect.objectContaining({
@@ -724,12 +769,14 @@ describe('AgentRuntimeService', () => {
             }),
           ],
         }),
+        undefined,
       );
+
+      dispatchSpy.mockRestore();
     });
 
     it('should handle tool result with undefined data', async () => {
-      const mockOnAfterStep = vi.fn();
-      service.registerStepCallbacks('test-operation-1', { onAfterStep: mockOnAfterStep });
+      const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined);
 
       const mockStepResult = {
         newState: { ...mockState, stepCount: 2, status: 'running' },
@@ -755,7 +802,9 @@ describe('AgentRuntimeService', () => {
 
       await service.executeStep(mockParams);
 
-      expect(mockOnAfterStep).toHaveBeenCalledWith(
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        'test-operation-1',
+        'afterStep',
         expect.objectContaining({
           toolsResult: [
             expect.objectContaining({
@@ -765,7 +814,10 @@ describe('AgentRuntimeService', () => {
             }),
           ],
         }),
+        undefined,
       );
+
+      dispatchSpy.mockRestore();
     });
   });
 

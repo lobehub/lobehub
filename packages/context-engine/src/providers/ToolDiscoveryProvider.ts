@@ -22,7 +22,8 @@ export interface ToolDiscoveryMeta {
 }
 
 export interface ToolDiscoveryProviderConfig {
-  availableTools: ToolDiscoveryMeta[];
+  availableTools?: ToolDiscoveryMeta[];
+  enabled?: boolean;
 }
 
 export class ToolDiscoveryProvider extends BaseFirstUserContentProvider {
@@ -36,6 +37,8 @@ export class ToolDiscoveryProvider extends BaseFirstUserContentProvider {
   }
 
   protected buildContent(_context: PipelineContext): string | null {
+    if (this.config.enabled === false) return null;
+
     const { availableTools } = this.config;
 
     if (!availableTools || availableTools.length === 0) {

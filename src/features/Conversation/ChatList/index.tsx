@@ -3,8 +3,10 @@
 import { type ReactNode } from 'react';
 import { memo, useCallback } from 'react';
 
+import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -25,6 +27,10 @@ export interface ChatListProps {
    */
   itemContent?: (index: number, id: string) => ReactNode;
   /**
+   * Force showing welcome component even when messages exist
+   */
+  showWelcome?: boolean;
+  /**
    * Welcome component to display when there are no messages
    */
   welcome?: ReactNode;
@@ -34,7 +40,7 @@ export interface ChatListProps {
  *
  * Uses ConversationStore for message data and fetching.
  */
-const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent }) => {
+const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent, showWelcome }) => {
   // Fetch messages (SWR key is null when skipFetch is true)
   const context = useConversationStore((s) => s.context);
   const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
@@ -42,12 +48,14 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent 
     dataSelectors.skipFetch(s),
     s.useFetchMessages,
   ]);
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
   useFetchMessages(context, skipFetch);
 
   // Skip fetching notebook and memories for share pages (they require authentication)
   const isSharePage = !!context.topicShareId;
 
   // Fetch notebook documents when topic is selected (skip for share pages)
+  useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
   useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
   useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
@@ -72,7 +80,7 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent 
     return <SkeletonList />;
   }
 
-  if (displayMessageIds.length === 0) {
+  if ((showWelcome || displayMessageIds.length === 0) && welcome) {
     return (
       <WideScreenContainer
         style={{

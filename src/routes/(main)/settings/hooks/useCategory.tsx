@@ -1,7 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import {
-  Blocks,
+  // BellIcon,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -14,6 +15,7 @@ import {
   Info,
   KeyboardIcon,
   KeyIcon,
+  KeyRound,
   Map,
   PaletteIcon,
   Sparkles,
@@ -99,6 +101,12 @@ export const useCategory = () => {
         key: SettingsTabs.Hotkey,
         label: t('tab.hotkey'),
       },
+      // TODO: temporarily disabled until notification UI is polished
+      // enableBusinessFeatures && {
+      //   icon: BellIcon,
+      //   key: SettingsTabs.Notification,
+      //   label: t('tab.notification'),
+      // },
     ].filter(Boolean) as CategoryItem[];
 
     groups.push({
@@ -126,7 +134,7 @@ export const useCategory = () => {
 
     // Agent group
     const agentItems: CategoryItem[] = [
-      {
+      (!enableBusinessFeatures || isDevMode) && {
         icon: Brain,
         key: SettingsTabs.Provider,
         label: t('tab.provider'),
@@ -137,7 +145,7 @@ export const useCategory = () => {
         label: t('tab.serviceModel'),
       },
       {
-        icon: Blocks,
+        icon: SkillsIcon,
         key: SettingsTabs.Skill,
         label: t('tab.skill'),
       },
@@ -145,6 +153,11 @@ export const useCategory = () => {
         icon: BrainCircuit,
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
+      },
+      {
+        icon: KeyRound,
+        key: SettingsTabs.Creds,
+        label: t('tab.creds'),
       },
       showApiKeyManage && {
         icon: KeyIcon,

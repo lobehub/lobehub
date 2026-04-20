@@ -3,26 +3,42 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import type { StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
+import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type EvalStoreState, initialState } from './initialState';
 import { type BenchmarkAction, createBenchmarkSlice } from './slices/benchmark/action';
 import { createDatasetSlice, type DatasetAction } from './slices/dataset/action';
 import { createRunSlice, type RunAction } from './slices/run/action';
 import { createTestCaseSlice, type TestCaseAction } from './slices/testCase/action';
 
-export type EvalStore = EvalStoreState &
-  BenchmarkAction &
+type EvalStoreAction = BenchmarkAction &
   DatasetAction &
   RunAction &
-  TestCaseAction;
+  TestCaseAction &
+  ResetableStore;
 
-const createStore: StateCreator<EvalStore, [['zustand/devtools', never]]> = (set, get, store) => ({
+export type EvalStore = EvalStoreState & EvalStoreAction;
+
+class EvalStoreResetAction extends ResetableStoreAction<EvalStore> {
+  protected readonly resetActionName = 'resetEvalStore';
+}
+
+const createStore: StateCreator<EvalStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<EvalStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createBenchmarkSlice(set, get, store),
-  ...createDatasetSlice(set, get, store),
-  ...createRunSlice(set, get, store),
-  ...createTestCaseSlice(set, get, store),
+  ...flattenActions<EvalStoreAction>([
+    createBenchmarkSlice(...parameters),
+    createDatasetSlice(...parameters),
+    createRunSlice(...parameters),
+    createTestCaseSlice(...parameters),
+    new EvalStoreResetAction(...parameters),
+  ]),
 });
 
 const devtools = createDevtools('eval');
 
 export const useEvalStore = createWithEqualityFn<EvalStore>()(devtools(createStore), shallow);
+
+expose('eval', useEvalStore);

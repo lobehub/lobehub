@@ -5,8 +5,13 @@ import type { App } from '@/core/App';
 
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, mockFetch } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  mockFetch: vi.fn(),
+}));
+
+vi.mock('@/utils/net-fetch', () => ({
+  netFetch: mockFetch,
 }));
 
 // Mock logger
@@ -47,8 +52,14 @@ const mockBrowserManager = {
   broadcastToAllWindows: vi.fn(),
 };
 
+const mockGatewayConnectionSrv = {
+  disconnect: vi.fn().mockResolvedValue({ success: true }),
+};
+
 const mockApp = {
   browserManager: mockBrowserManager,
+  getController: vi.fn(),
+  getService: vi.fn().mockReturnValue(mockGatewayConnectionSrv),
   storeManager: mockStoreManager,
 } as unknown as App;
 
@@ -294,6 +305,13 @@ describe('RemoteServerConfigCtr', () => {
       const accessToken = await controller.getAccessToken();
       expect(accessToken).toBeNull();
     });
+
+    it('should disconnect gateway when tokens are cleared', async () => {
+      await controller.saveTokens('access', 'refresh', 3600);
+      await controller.clearTokens();
+
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalled();
+    });
   });
 
   describe('getTokenExpiresAt', () => {
@@ -407,13 +425,6 @@ describe('RemoteServerConfigCtr', () => {
   });
 
   describe('refreshAccessToken', () => {
-    let mockFetch: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      mockFetch = vi.fn();
-      global.fetch = mockFetch;
-    });
-
     it('should return error when remote server is not active', async () => {
       mockStoreManager.get.mockImplementation((key) => {
         if (key === 'dataSyncConfig') {
@@ -747,6 +758,16 @@ describe('RemoteServerConfigCtr', () => {
   });
 
   describe('isRemoteServerConfigured', () => {
+    it('should return false when active is undefined', async () => {
+      mockStoreManager.get.mockReturnValue({
+        storageMode: 'cloud',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
     it('should return true for active cloud mode (no remoteServerUrl needed)', async () => {
       mockStoreManager.get.mockReturnValue({
         active: true,
@@ -787,6 +808,30 @@ describe('RemoteServerConfigCtr', () => {
         active: true,
         storageMode: 'selfHost',
         // remoteServerUrl is undefined
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode with blank remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: '   ',
+        storageMode: 'selfHost',
+      });
+
+      const result = await controller.isRemoteServerConfigured();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for selfHost mode with invalid remoteServerUrl', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: 'foo',
+        storageMode: 'selfHost',
       });
 
       const result = await controller.isRemoteServerConfigured();

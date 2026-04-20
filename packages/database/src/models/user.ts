@@ -80,6 +80,7 @@ export class UserModel {
     const result = await this.db
       .select({
         avatar: users.avatar,
+        agentOnboarding: users.agentOnboarding,
         email: users.email,
         firstName: users.firstName,
         fullName: users.fullName,
@@ -138,6 +139,7 @@ export class UserModel {
 
     return {
       avatar: state.avatar || undefined,
+      agentOnboarding: state.agentOnboarding || undefined,
       email: state.email || undefined,
       firstName: state.firstName || undefined,
       fullName: state.fullName || undefined,
@@ -292,6 +294,11 @@ export class UserModel {
 
   static findByEmail = async (db: LobeChatDatabase, email: string) => {
     return db.query.users.findFirst({ where: eq(users.email, email) });
+  };
+
+  static findByIds = async (db: LobeChatDatabase, ids: string[]) => {
+    if (ids.length === 0) return [];
+    return db.query.users.findMany({ where: inArray(users.id, ids) });
   };
 
   static getUserApiKeys = async (

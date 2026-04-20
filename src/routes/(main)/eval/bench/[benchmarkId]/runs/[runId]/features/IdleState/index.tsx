@@ -2,14 +2,14 @@
 
 import { Button, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cx } from 'antd-style';
 import { Brain, ChartBar, MessageSquare, Play } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEvalStore } from '@/store/eval';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   center: css`
     position: absolute;
     inset: 0;
@@ -23,9 +23,9 @@ const useStyles = createStyles(({ css, token }) => ({
     margin: auto;
     border-radius: 50%;
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   container: css`
     position: relative;
@@ -40,7 +40,7 @@ const useStyles = createStyles(({ css, token }) => ({
   hint: css`
     margin-block-start: 24px;
     font-size: 13px;
-    color: ${token.colorTextQuaternary};
+    color: ${cssVar.colorTextQuaternary};
   `,
   icon: css`
     position: absolute;
@@ -57,27 +57,27 @@ const useStyles = createStyles(({ css, token }) => ({
   icon1: css`
     inset-block-start: 15px;
     inset-inline-start: 100px;
-    color: ${token.geekblue};
-    background: ${token.geekblue1};
+    color: ${cssVar.geekblue};
+    background: ${cssVar.geekblue1};
   `,
   icon2: css`
     inset-block-start: 143px;
     inset-inline-start: 174px;
-    color: ${token.colorSuccess};
-    background: ${token.colorSuccessBg};
+    color: ${cssVar.colorSuccess};
+    background: ${cssVar.colorSuccessBg};
   `,
   icon3: css`
     inset-block-start: 143px;
     inset-inline-start: 26px;
-    color: ${token.purple};
-    background: ${token.purple1};
+    color: ${cssVar.purple};
+    background: ${cssVar.purple1};
   `,
   orbit: css`
     position: absolute;
     inset: 0;
 
     margin: auto;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 50%;
   `,
   orbit1: css`
@@ -105,7 +105,6 @@ interface IdleStateProps {
 
 const IdleState = memo<IdleStateProps>(({ run }) => {
   const { t } = useTranslation('eval');
-  const { cx, styles } = useStyles();
   const { modal, message } = App.useApp();
   const startRun = useEvalStore((s) => s.startRun);
   const [starting, setStarting] = useState(false);

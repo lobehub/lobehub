@@ -1,8 +1,8 @@
-import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
 import type { ILobeAgentRuntimeErrorType } from '../../agentRuntime';
 import type { ErrorType } from '../../fetch';
+import type { IToolErrorType } from '../../tool/error';
 
 /**
  * Chat message error object
@@ -10,7 +10,7 @@ import type { ErrorType } from '../../fetch';
 export interface ChatMessageError {
   body?: any;
   message?: string;
-  type: ErrorType | IPluginErrorType | ILobeAgentRuntimeErrorType;
+  type: ErrorType | IToolErrorType | ILobeAgentRuntimeErrorType;
 }
 
 export const ChatMessageErrorSchema = z.object({

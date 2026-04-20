@@ -1,6 +1,7 @@
 import { type IEditor } from '@lobehub/editor';
 
 export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
+export type RightPanelMode = 'copilot' | 'history';
 
 export interface PublicState {
   autoSave?: boolean;
@@ -23,6 +24,7 @@ export interface State extends PublicState {
   lastSavedEmoji?: string;
   lastSavedTitle?: string;
   metaSaveStatus?: MetaSaveStatus;
+  rightPanelMode: RightPanelMode;
 }
 
 export const initialState: State = {
@@ -31,5 +33,6 @@ export const initialState: State = {
   emoji: undefined,
   isMetaDirty: false,
   metaSaveStatus: 'idle',
+  rightPanelMode: 'copilot',
   title: undefined,
 };

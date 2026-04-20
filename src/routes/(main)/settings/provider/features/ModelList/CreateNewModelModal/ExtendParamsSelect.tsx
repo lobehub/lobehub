@@ -16,8 +16,11 @@ import ImageAspectRatio2Select from '@/features/ModelSwitchPanel/components/Cont
 import ImageAspectRatioSelect from '@/features/ModelSwitchPanel/components/ControlsForm/ImageAspectRatioSelect';
 import ImageResolution2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolution2Slider';
 import ImageResolutionSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ImageResolutionSlider';
+import Opus47EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Opus47EffortSlider';
 import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningEffortSlider';
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
+import ReasoningTokenSlider32k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider32k';
+import ReasoningTokenSlider80k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider80k';
 import TextVerbositySlider from '@/features/ModelSwitchPanel/components/ControlsForm/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingBudgetSlider';
 import ThinkingLevel2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel2Slider';
@@ -50,8 +53,20 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'reasoningBudgetToken',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint',
+    key: 'reasoningBudgetToken32k',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint',
+    key: 'reasoningBudgetToken80k',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.effort.hint',
     key: 'effort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint',
+    key: 'opus47Effort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
@@ -145,6 +160,9 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_2ReasoningEffort: 'reasoningEffort',
   grok4_20ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
+  opus47Effort: 'effort',
+  reasoningBudgetToken32k: 'reasoningBudgetToken',
+  reasoningBudgetToken80k: 'reasoningBudgetToken',
   thinkingLevel2: 'thinkingLevel',
   thinkingLevel3: 'thinkingLevel',
   thinkingLevel4: 'thinkingLevel',
@@ -189,7 +207,18 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
+  opus47Effort: { labelSuffix: ' (Opus 4.7)', previewWidth: 280, tag: 'output_config.effort' },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
+  reasoningBudgetToken32k: {
+    labelSuffix: ' (32k)',
+    previewWidth: 350,
+    tag: 'thinking.budget_tokens',
+  },
+  reasoningBudgetToken80k: {
+    labelSuffix: ' (80k)',
+    previewWidth: 350,
+    tag: 'thinking.budget_tokens',
+  },
   reasoningEffort: { previewWidth: 250, tag: 'reasoning_effort' },
   textVerbosity: { labelSuffix: '', previewWidth: 250, tag: 'text_verbosity' },
   thinking: { labelSuffix: ' (Doubao)', previewWidth: 300, tag: 'thinking.type' },
@@ -213,9 +242,20 @@ type ExtendParamsDefinition = {
 };
 
 interface ExtendParamsSelectProps {
-  onChange?: (value: ExtendParamsType[] | undefined) => void;
+  onChange?: (value: ExtendParamsType[]) => void;
   value?: ExtendParamsType[];
 }
+
+export const normalizeExtendParamsValue = (
+  value: ExtendParamsType[] | undefined,
+  definitionMap: Map<ExtendParamsType, ExtendParamsDefinition>,
+): ExtendParamsType[] => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [];
+  }
+
+  return value.filter((item) => definitionMap.has(item));
+};
 
 const PreviewContent = ({
   desc,
@@ -296,7 +336,10 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,
       imageResolution2: <ImageResolution2Slider value="1K" />,
+      opus47Effort: <Opus47EffortSlider value="high" />,
       reasoningBudgetToken: <ReasoningTokenSlider defaultValue={1 * 1024} />,
+      reasoningBudgetToken32k: <ReasoningTokenSlider32k defaultValue={1 * 1024} />,
+      reasoningBudgetToken80k: <ReasoningTokenSlider80k defaultValue={1 * 1024} />,
       reasoningEffort: <ReasoningEffortSlider value="medium" />,
       textVerbosity: <TextVerbositySlider value="medium" />,
       thinking: <ThinkingSlider value="auto" />,
@@ -392,13 +435,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
 
   const placeholder = String(t('providerModels.item.modelConfig.extendParams.placeholder'));
   const handleChange = (val: ExtendParamsType[]) => {
-    if (!Array.isArray(val) || val.length === 0) {
-      onChange?.(undefined);
-      return;
-    }
-
-    const filtered = val.filter((item) => definitionMap.has(item));
-    onChange?.(filtered.length ? filtered : undefined);
+    onChange?.(normalizeExtendParamsValue(val, definitionMap));
   };
 
   return (

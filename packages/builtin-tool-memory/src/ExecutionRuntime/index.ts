@@ -15,6 +15,8 @@ import type {
   AddIdentityMemoryResult,
   AddPreferenceMemoryResult,
   BuiltinServerRuntimeOutput,
+  QueryTaxonomyOptionsParams,
+  QueryTaxonomyOptionsResult,
   RemoveIdentityMemoryResult,
   SearchMemoryParams,
   SearchMemoryResult,
@@ -38,6 +40,7 @@ export interface MemoryRuntimeService {
   addPreferenceMemory: (
     params: z.infer<typeof PreferenceMemoryItemSchema>,
   ) => Promise<AddPreferenceMemoryResult>;
+  queryTaxonomyOptions: (params: QueryTaxonomyOptionsParams) => Promise<QueryTaxonomyOptionsResult>;
   removeIdentityMemory: (
     params: z.infer<typeof RemoveIdentityActionSchema>,
   ) => Promise<RemoveIdentityMemoryResult>;
@@ -75,15 +78,37 @@ export class MemoryExecutionRuntime {
   async searchUserMemory(params: SearchMemoryParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.service.searchMemory(params);
+      const formattedQuery = params.queries?.join(' | ') || 'facet-only search';
+
+      const { meta: _meta, ...safeResult } = result;
 
       return {
-        content: formatMemorySearchResults({ query: params.query, results: result }),
-        state: result,
+        content: formatMemorySearchResults({ query: formattedQuery, results: result }),
+        state: safeResult,
         success: true,
       };
     } catch (e) {
       return {
         content: `searchUserMemory with error detail: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async queryTaxonomyOptions(
+    params: QueryTaxonomyOptionsParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const result = await this.service.queryTaxonomyOptions(params);
+
+      return {
+        content: JSON.stringify(result),
+        state: result,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `queryTaxonomyOptions with error detail: ${(e as Error).message}`,
         success: false,
       };
     }

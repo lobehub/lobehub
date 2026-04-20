@@ -477,7 +477,7 @@ describe('ModelRuntime', () => {
 
   describe('hooks', () => {
     const createMockRuntime = (hooks?: ModelRuntimeHooks) => {
-      const mockRuntimeAI = { chat: vi.fn(), generateObject: vi.fn() } as any;
+      const mockRuntimeAI = { chat: vi.fn(), embeddings: vi.fn(), generateObject: vi.fn() } as any;
       return { runtime: new ModelRuntime(mockRuntimeAI, hooks), mockRuntimeAI };
     };
 
@@ -511,6 +511,20 @@ describe('ModelRuntime', () => {
 
         await expect(runtime.chat(chatPayload)).rejects.toThrow('budget exceeded');
         expect(mockRuntimeAI.chat).not.toHaveBeenCalled();
+      });
+
+      it('beforeChat throwing triggers onChatError before re-throwing', async () => {
+        const budgetError = { errorType: 'FreePlanLimit', error: { message: 'Budget exceeded' } };
+        const beforeChat = vi.fn().mockRejectedValue(budgetError);
+        const onChatError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat, onChatError });
+
+        await expect(runtime.chat(chatPayload)).rejects.toBe(budgetError);
+        expect(mockRuntimeAI.chat).not.toHaveBeenCalled();
+        expect(onChatError).toHaveBeenCalledWith(budgetError, {
+          options: undefined,
+          payload: chatPayload,
+        });
       });
 
       it('onChatFinal is injected into callback chain, existing onFinal called first', async () => {
@@ -591,6 +605,23 @@ describe('ModelRuntime', () => {
         expect(mockRuntimeAI.generateObject).not.toHaveBeenCalled();
       });
 
+      it('beforeGenerateObject throwing triggers onGenerateObjectError before re-throwing', async () => {
+        const budgetError = { errorType: 'FreePlanLimit', error: { message: 'Budget exceeded' } };
+        const beforeGenerateObject = vi.fn().mockRejectedValue(budgetError);
+        const onGenerateObjectError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          beforeGenerateObject,
+          onGenerateObjectError,
+        });
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(budgetError);
+        expect(mockRuntimeAI.generateObject).not.toHaveBeenCalled();
+        expect(onGenerateObjectError).toHaveBeenCalledWith(budgetError, {
+          options: undefined,
+          payload: genObjPayload,
+        });
+      });
+
       it('onGenerateObjectFinal wraps onUsage, existing onUsage called first', async () => {
         const callOrder: string[] = [];
         const existingOnUsage = vi.fn().mockImplementation(() => callOrder.push('existing'));
@@ -628,6 +659,27 @@ describe('ModelRuntime', () => {
         mockRuntimeAI.generateObject.mockResolvedValue({ result: 'ok' });
 
         await expect(runtime.generateObject(genObjPayload)).resolves.toEqual({ result: 'ok' });
+      });
+    });
+
+    describe('embeddings hooks', () => {
+      const embeddingsPayload = { model: 'text-embedding-ada-002', input: 'hello' };
+
+      it('beforeEmbeddings throwing triggers onEmbeddingsError before re-throwing', async () => {
+        const budgetError = { errorType: 'FreePlanLimit', error: { message: 'Budget exceeded' } };
+        const beforeEmbeddings = vi.fn().mockRejectedValue(budgetError);
+        const onEmbeddingsError = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          beforeEmbeddings,
+          onEmbeddingsError,
+        });
+
+        await expect(runtime.embeddings(embeddingsPayload)).rejects.toBe(budgetError);
+        expect(mockRuntimeAI.embeddings).not.toHaveBeenCalled();
+        expect(onEmbeddingsError).toHaveBeenCalledWith(budgetError, {
+          options: undefined,
+          payload: embeddingsPayload,
+        });
       });
     });
   });

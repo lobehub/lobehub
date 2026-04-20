@@ -1,51 +1,20 @@
 'use client';
 
-import { DraggablePanel, Freeze } from '@lobehub/ui';
+import { DraggablePanel } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { type ReactNode } from 'react';
-import { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, Suspense, useMemo, useRef } from 'react';
 
 import { isDesktop } from '@/const/version';
 import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
+import Footer from '@/routes/(main)/home/_layout/Footer';
 import { USER_DROPDOWN_ICON_ID } from '@/routes/(main)/home/_layout/Header/components/User';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
 import { BACK_BUTTON_ID } from './BackButton';
-
-type MotionDirection = -1 | 0 | 1;
-
-const MOTION_OFFSET = 8;
-
-const isMotionDisabled = (mode?: string) => mode === 'disabled';
-
-const getMotionDirectionByHistory = (history: string[], nextKey: string): MotionDirection => {
-  const currentKey = history.at(-1);
-  if (currentKey === nextKey) return 0;
-
-  return history.includes(nextKey) ? -1 : 1;
-};
-
-const motionVariants = {
-  animate: { opacity: 1, x: 0 },
-  exit: (direction: MotionDirection) => ({
-    opacity: 0,
-    x: -direction * MOTION_OFFSET,
-  }),
-  initial: (direction: MotionDirection) => ({
-    opacity: 0,
-    x: direction * MOTION_OFFSET,
-  }),
-  transition: {
-    duration: 0.28,
-    ease: [0.4, 0, 0.2, 1],
-  },
-} as const;
 
 const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
@@ -53,6 +22,7 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
 
     overflow: hidden;
     display: flex;
+    flex-direction: column;
 
     height: 100%;
     min-height: 100%;
@@ -66,12 +36,9 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
 
     min-width: 240px;
     max-width: 100%;
-    min-height: 100%;
-    max-height: 100%;
+    min-height: 0;
   `,
   layer: css`
-    will-change: opacity, transform;
-
     position: absolute;
     inset: 0;
 
@@ -134,43 +101,25 @@ interface NavPanelDraggableProps {
   };
 }
 
-interface ExitingFrozenContentProps {
-  children: ReactNode;
-}
-
 const classNames = {
   content: draggableStyles.content,
 };
 
-const ExitingFrozenContent = memo<ExitingFrozenContentProps>(({ children }) => {
-  const isPresent = useIsPresent();
-
-  return <Freeze frozen={!isPresent}>{children}</Freeze>;
-});
-
-ExitingFrozenContent.displayName = 'ExitingFrozenContent';
-
 export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }) => {
-  const [expand, togglePanel] = useGlobalStore((s) => [
+  const [expand, togglePanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showLeftPanel(s),
     s.toggleLeftPanel,
+    systemStatusSelectors.isStatusInit(s),
   ]);
-  const animationMode = useUserStore(userGeneralSettingsSelectors.animationMode);
-  const shouldUseMotion = !isMotionDisabled(animationMode);
   const handleSizeChange = useNavPanelSizeChangeHandler();
 
+  // Defer DraggablePanel mount until system status hydrates; otherwise defaultSize
+  // captures the pre-hydration default and the DOM drifts off NavigationBar's live width.
   const defaultWidthRef = useRef(0);
-  if (defaultWidthRef.current === 0) {
+  if (defaultWidthRef.current === 0 && isStatusInit) {
     defaultWidthRef.current = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
   }
 
-  const defaultSize = useMemo(
-    () => ({
-      height: '100%',
-      width: defaultWidthRef.current,
-    }),
-    [],
-  );
   const styles = useMemo(
     () => ({
       background: isDesktop && isMacOS() ? 'transparent' : cssVar.colorBgLayout,
@@ -179,34 +128,12 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
     [],
   );
 
-  const historyRef = useRef([activeContent.key]);
-  const directionRef = useRef<MotionDirection>(0);
-
-  const history = historyRef.current;
-  const direction = shouldUseMotion ? getMotionDirectionByHistory(history, activeContent.key) : 0;
-  if (direction !== 0) {
-    directionRef.current = direction;
+  if (defaultWidthRef.current === 0) {
+    const pendingWidth = systemStatusSelectors.leftPanelWidth(useGlobalStore.getState());
+    return <div aria-hidden style={{ flexShrink: 0, height: '100%', width: pendingWidth }} />;
   }
 
-  useLayoutEffect(() => {
-    if (!shouldUseMotion) return;
-
-    const snapshot = historyRef.current;
-    const currentKey = snapshot.at(-1);
-    const nextKey = activeContent.key;
-
-    if (currentKey === nextKey) return;
-
-    const existingIndex = snapshot.lastIndexOf(nextKey);
-    if (existingIndex !== -1) {
-      snapshot.splice(existingIndex + 1);
-      return;
-    }
-
-    snapshot.push(nextKey);
-  }, [activeContent.key, shouldUseMotion]);
-
-  const motionDirection = shouldUseMotion ? directionRef.current : 0;
+  const defaultSize = { height: '100%', width: defaultWidthRef.current };
 
   return (
     <DraggablePanel
@@ -224,27 +151,13 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
       onSizeDragging={handleSizeChange}
     >
       <div className={draggableStyles.inner}>
-        {shouldUseMotion ? (
-          <AnimatePresence custom={motionDirection} initial={false} mode="sync">
-            <motion.div
-              animate="animate"
-              className={draggableStyles.layer}
-              custom={motionDirection}
-              exit="exit"
-              initial="initial"
-              key={activeContent.key}
-              transition={motionVariants.transition}
-              variants={motionVariants}
-            >
-              <ExitingFrozenContent>{activeContent.node}</ExitingFrozenContent>
-            </motion.div>
-          </AnimatePresence>
-        ) : (
-          <div className={draggableStyles.layer} key={activeContent.key}>
-            {activeContent.node}
-          </div>
-        )}
+        <div className={draggableStyles.layer} key={activeContent.key}>
+          {activeContent.node}
+        </div>
       </div>
+      <Suspense>
+        <Footer />
+      </Suspense>
     </DraggablePanel>
   );
 });

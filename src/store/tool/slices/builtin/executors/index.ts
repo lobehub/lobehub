@@ -8,21 +8,27 @@ import { agentBuilderExecutor } from '@lobechat/builtin-tool-agent-builder/execu
 import { agentManagementExecutor } from '@lobechat/builtin-tool-agent-management/executor';
 import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
+import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
+import { cronExecutor } from '@lobechat/builtin-tool-cron/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
-import { topicReferenceExecutor } from '@lobechat/builtin-tool-topic-reference/executor';
 
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
+import { activatorExecutor } from './lobe-activator';
+import { agentDocumentsExecutor } from './lobe-agent-documents';
+import { messageExecutor } from './lobe-message';
 import { notebookExecutor } from './lobe-notebook';
 import { pageAgentExecutor } from './lobe-page-agent';
 import { skillStoreExecutor } from './lobe-skill-store';
 import { skillsExecutor } from './lobe-skills';
-import { toolsActivatorExecutor } from './lobe-tools';
+import { topicReferenceExecutor } from './lobe-topic-reference';
+import { userInteractionExecutor } from './lobe-user-interaction';
 import { webBrowsing } from './lobe-web-browsing';
+import { webOnboardingExecutor } from './lobe-web-onboarding';
 
 // ==================== Import and register all executors ====================
 
@@ -127,20 +133,26 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
 // Register all executor instances
 registerExecutors([
   agentBuilderExecutor,
+  agentDocumentsExecutor,
   agentManagementExecutor,
   calculatorExecutor,
   cloudSandboxExecutor,
+  credsExecutor,
+  cronExecutor,
   groupAgentBuilderExecutor,
   groupManagementExecutor,
   gtdExecutor,
   knowledgeBaseExecutor,
   localSystemExecutor,
   memoryExecutor,
+  messageExecutor,
   notebookExecutor,
   pageAgentExecutor,
   skillStoreExecutor,
   skillsExecutor,
-  toolsActivatorExecutor,
+  activatorExecutor,
   topicReferenceExecutor,
+  userInteractionExecutor,
+  webOnboardingExecutor,
   webBrowsing,
 ]);

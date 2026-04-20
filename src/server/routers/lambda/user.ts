@@ -1,4 +1,6 @@
+import { EMPTY_DOCUMENT_MESSAGES } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { isDesktop } from '@lobechat/const';
+import { applyMarkdownPatch, formatMarkdownPatchError } from '@lobechat/markdown-patch';
 import {
   type UserInitializationState,
   type UserPreference,
@@ -6,6 +8,8 @@ import {
 } from '@lobechat/types';
 import {
   Plans,
+  SaveUserQuestionInputSchema,
+  UserAgentOnboardingSchema,
   UserGuideSchema,
   UserOnboardingSchema,
   UserPreferenceSchema,
@@ -24,7 +28,9 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
+import { OnboardingService } from '@/server/services/onboarding';
 
 const usernameSchema = z
   .string()
@@ -32,6 +38,30 @@ const usernameSchema = z
   .min(1, { message: 'USERNAME_REQUIRED' })
   .max(64, { message: 'USERNAME_TOO_LONG' })
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
+
+const AVATAR_WEBAPI_PREFIX = '/webapi/';
+
+// Accept only: base64 data URL, absolute http(s) URL, empty string,
+// or an internal /webapi/user/avatar/<userId>/... path scoped to the caller.
+// Any other value (relative path, file://, s3://, path-traversal, or another
+// user's prefix) is rejected so a later upload can't be tricked into deleting
+// an arbitrary S3 key via the "delete old avatar" step.
+const assertSafeAvatarInput = (input: string, userId: string) => {
+  if (input.length === 0) return;
+  if (input.startsWith('data:image')) return;
+
+  const ownPrefix = `${AVATAR_WEBAPI_PREFIX}user/avatar/${userId}/`;
+  if (input.startsWith(ownPrefix) && !input.includes('..')) return;
+
+  try {
+    const { protocol } = new URL(input);
+    if (protocol === 'http:' || protocol === 'https:') return;
+  } catch {
+    /* not a parseable absolute URL — fall through to reject */
+  }
+
+  throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AVATAR_URL' });
+};
 
 const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   return next({
@@ -94,6 +124,7 @@ export const userRouter = router({
       // Has conversation if there are messages or has created any assistant
       hasConversation: hasAnyMessages || hasExtraSession,
 
+      agentOnboarding: state.agentOnboarding,
       interests: state.interests,
 
       // always return true for community version
@@ -121,6 +152,8 @@ export const userRouter = router({
   }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
+    assertSafeAvatarInput(input, ctx.userId);
+
     // If it's Base64 data, need to upload to S3
     if (input.startsWith('data:image')) {
       try {
@@ -154,9 +187,15 @@ export const userRouter = router({
 
         await s3.uploadBuffer(filePath, buffer, mimeType);
 
-        // Delete old avatar
-        if (oldAvatarUrl && oldAvatarUrl.startsWith('/webapi/')) {
-          const oldFilePath = oldAvatarUrl.replace('/webapi/', '');
+        // Delete old avatar — defense in depth: only touch keys inside the
+        // caller's own avatar prefix, never external URLs or traversal paths.
+        const ownAvatarWebapiPrefix = `${AVATAR_WEBAPI_PREFIX}user/avatar/${ctx.userId}/`;
+        if (
+          oldAvatarUrl &&
+          oldAvatarUrl.startsWith(ownAvatarWebapiPrefix) &&
+          !oldAvatarUrl.includes('..')
+        ) {
+          const oldFilePath = oldAvatarUrl.slice(AVATAR_WEBAPI_PREFIX.length);
           await s3.deleteFile(oldFilePath);
         }
 
@@ -188,6 +227,188 @@ export const userRouter = router({
   updateInterests: userProcedure.input(z.array(z.string())).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updateUser({ interests: input });
   }),
+
+  getOrCreateOnboardingState: userProcedure.query(async ({ ctx }) => {
+    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+
+    return onboardingService.getOrCreateState();
+  }),
+
+  getOnboardingState: userProcedure.query(async ({ ctx }) => {
+    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+
+    return onboardingService.getState();
+  }),
+
+  saveUserQuestion: userProcedure
+    .input(SaveUserQuestionInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+
+      return onboardingService.saveUserQuestion(input);
+    }),
+
+  finishOnboarding: userProcedure.input(z.object({})).mutation(async ({ ctx, input }) => {
+    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+    void input;
+
+    return onboardingService.finishOnboarding();
+  }),
+
+  readOnboardingDocument: userProcedure
+    .input(z.object({ type: z.enum(['soul', 'persona']) }))
+    .query(async ({ ctx, input }) => {
+      if (input.type === 'soul') {
+        const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const inboxAgentId = await onboardingService.getInboxAgentId();
+        const doc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
+
+        return {
+          content: doc?.content || EMPTY_DOCUMENT_MESSAGES.soul,
+          id: doc?.id ?? null,
+          type: 'soul' as const,
+        };
+      }
+
+      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+      const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+      const persona = await personaModel.getLatestPersonaDocument();
+
+      return {
+        content: persona?.persona || EMPTY_DOCUMENT_MESSAGES.persona,
+        id: persona?.id ?? null,
+        type: 'persona' as const,
+      };
+    }),
+
+  updateOnboardingDocument: userProcedure
+    .input(z.object({ content: z.string(), type: z.enum(['soul', 'persona']) }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.type === 'soul') {
+        const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const inboxAgentId = await onboardingService.getInboxAgentId();
+        const doc = await docService.upsertDocumentByFilename({
+          agentId: inboxAgentId,
+          content: input.content,
+          filename: 'SOUL.md',
+        });
+
+        return { id: doc?.id, type: 'soul' as const };
+      }
+
+      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+      const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+      const result = await personaModel.upsertPersona({
+        editedBy: 'agent_tool',
+        persona: input.content,
+        profile: 'default',
+      });
+
+      return { id: result.document.id, type: 'persona' as const };
+    }),
+
+  patchOnboardingDocument: userProcedure
+    .input(
+      z.object({
+        hunks: z
+          .array(
+            z.union([
+              z.object({
+                mode: z.literal('replace').optional(),
+                replace: z.string(),
+                replaceAll: z.boolean().optional(),
+                search: z.string(),
+              }),
+              z.object({
+                mode: z.literal('delete'),
+                replaceAll: z.boolean().optional(),
+                search: z.string(),
+              }),
+              z.object({
+                endLine: z.number().int(),
+                mode: z.literal('deleteLines'),
+                startLine: z.number().int(),
+              }),
+              z.object({
+                content: z.string(),
+                line: z.number().int(),
+                mode: z.literal('insertAt'),
+              }),
+              z.object({
+                content: z.string(),
+                endLine: z.number().int(),
+                mode: z.literal('replaceLines'),
+                startLine: z.number().int(),
+              }),
+            ]),
+          )
+          .min(1),
+        type: z.enum(['soul', 'persona']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const readCurrent = async (): Promise<string> => {
+        if (input.type === 'soul') {
+          const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+          const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+          const inboxAgentId = await onboardingService.getInboxAgentId();
+          const doc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
+          return doc?.content ?? '';
+        }
+
+        const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+        const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+        const persona = await personaModel.getLatestPersonaDocument();
+        return persona?.persona ?? '';
+      };
+
+      const current = await readCurrent();
+      const patched = applyMarkdownPatch(current, input.hunks);
+      if (!patched.ok) {
+        throw new TRPCError({
+          cause: patched.error,
+          code: 'BAD_REQUEST',
+          message: formatMarkdownPatchError(patched.error),
+        });
+      }
+
+      if (input.type === 'soul') {
+        const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const inboxAgentId = await onboardingService.getInboxAgentId();
+        const doc = await docService.upsertDocumentByFilename({
+          agentId: inboxAgentId,
+          content: patched.content,
+          filename: 'SOUL.md',
+        });
+
+        return { applied: patched.applied, id: doc?.id, type: 'soul' as const };
+      }
+
+      const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
+      const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
+      const result = await personaModel.upsertPersona({
+        editedBy: 'agent_tool',
+        persona: patched.content,
+        profile: 'default',
+      });
+
+      return { applied: patched.applied, id: result.document.id, type: 'persona' as const };
+    }),
+
+  resetAgentOnboarding: userProcedure.mutation(async ({ ctx }) => {
+    const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
+
+    return onboardingService.reset();
+  }),
+
+  updateAgentOnboarding: userProcedure
+    .input(UserAgentOnboardingSchema)
+    .mutation(async ({ ctx, input }) => {
+      return ctx.userModel.updateUser({ agentOnboarding: input });
+    }),
 
   updateOnboarding: userProcedure.input(UserOnboardingSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updateUser({ onboarding: input });

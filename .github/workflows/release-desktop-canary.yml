@@ -45,6 +45,7 @@ jobs:
     name: Calculate Canary Version
     runs-on: ubuntu-latest
     outputs:
+      release_notes: ${{ steps.release-notes.outputs.release_notes }}
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       should_build: ${{ steps.check.outputs.should_build }}
@@ -121,6 +122,66 @@ jobs:
           echo "✅ Canary version: ${version}"
           echo "🏷️ Tag: ${tag}"
 
+      - name: Generate canary release notes
+        if: steps.check.outputs.should_build == 'true'
+        id: release-notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          previous_canary=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$' | head -n 1)
+          latest_stable=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+
+          if [ -n "$previous_canary" ]; then
+            compare_from="$previous_canary"
+            compare_range="${previous_canary}..HEAD"
+          elif [ -n "$latest_stable" ]; then
+            compare_from="$latest_stable"
+            compare_range="${latest_stable}..HEAD"
+          else
+            compare_from="initial commit"
+            compare_range="HEAD"
+          fi
+
+          commit_count=$(git rev-list --count "$compare_range")
+          commits=$(git log --no-merges --pretty='- `%h` %s (%an)' "$compare_range")
+
+          if [ -z "$commits" ]; then
+            commits='- No new commits recorded.'
+          fi
+
+          {
+            echo "release_notes<<EOF"
+            echo "## 🐤 Canary Build — ${TAG}"
+            echo
+            echo "> Automated canary build from \`canary\` branch."
+            echo
+            echo "### Commit Information"
+            echo
+            echo "- Based on changes since \`${compare_from}\`"
+            echo "- Commit count: ${commit_count}"
+            echo
+            printf '%s\n' "$commits"
+            echo
+            echo "### ⚠️ Important Notes"
+            echo
+            echo "- **This is an automated canary build and is NOT intended for production use.**"
+            echo "- Canary builds are triggered by \`build\`/\`fix\`/\`style\` commits on the \`canary\` branch."
+            echo "- May contain **unstable or incomplete changes**. **Use at your own risk.**"
+            echo "- It is strongly recommended to **back up your data** before using a canary build."
+            echo
+            echo "### 📦 Installation"
+            echo
+            echo "Download the appropriate installer for your platform from the assets below."
+            echo
+            echo "| Platform | File |"
+            echo "|----------|------|"
+            echo "| macOS (Apple Silicon) | \`.dmg\` (arm64) |"
+            echo "| macOS (Intel) | \`.dmg\` (x64) |"
+            echo "| Windows | \`.exe\` |"
+            echo "| Linux | \`.AppImage\` / \`.deb\` |"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
   # ============================================
   # 代码质量检查
   # ============================================
@@ -133,19 +194,13 @@ jobs:
       - name: Checkout base
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
         run: bun run lint
@@ -188,6 +243,7 @@ jobs:
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -207,6 +263,7 @@ jobs:
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -222,6 +279,7 @@ jobs:
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -247,16 +305,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Download artifacts
         uses: actions/download-artifact@v7
@@ -311,28 +363,7 @@ jobs:
           tag_name: ${{ needs.calculate-version.outputs.tag }}
           name: 'Desktop Canary ${{ needs.calculate-version.outputs.tag }}'
           prerelease: true
-          body: |
-            ## 🐤 Canary Build — ${{ needs.calculate-version.outputs.tag }}
-
-            > Automated canary build from `canary` branch.
-
-            ### ⚠️ Important Notes
-
-            - **This is an automated canary build and is NOT intended for production use.**
-            - Canary builds are triggered by `build`/`fix`/`style` commits on the `canary` branch.
-            - May contain **unstable or incomplete changes**. **Use at your own risk.**
-            - It is strongly recommended to **back up your data** before using a canary build.
-
-            ### 📦 Installation
-
-            Download the appropriate installer for your platform from the assets below.
-
-            | Platform | File |
-            |----------|------|
-            | macOS (Apple Silicon) | `.dmg` (arm64) |
-            | macOS (Intel) | `.dmg` (x64) |
-            | Windows | `.exe` |
-            | Linux | `.AppImage` / `.deb` |
+          body: ${{ needs.calculate-version.outputs.release_notes }}
           files: |
             release/latest*
             release/*.dmg*

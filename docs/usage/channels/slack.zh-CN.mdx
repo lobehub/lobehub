@@ -1,0 +1,229 @@
+---
+title: 将 LobeHub 连接到 Slack
+description: 了解如何创建一个 Slack 应用并将其连接到您的 LobeHub 代理作为消息渠道，使您的 AI 助手能够直接在 Slack 频道和私信中与用户互动。
+tags:
+  - Slack
+  - 消息渠道
+  - 机器人设置
+  - 集成
+---
+
+# 将 LobeHub 连接到 Slack
+
+通过将 Slack 渠道连接到您的 LobeHub 代理，用户可以直接通过 Slack 频道和私信与 AI 助手互动。
+
+## 前置条件
+
+- 一个拥有有效订阅的 LobeHub 账户
+- 一个拥有安装应用权限的 Slack 工作区
+
+## 连接模式
+
+LobeHub 支持两种 Slack 连接模式：
+
+- **Socket Mode / WebSocket（推荐）** — 通过 WebSocket 实时接收事件。无需公网 URL。适合开发环境和私有部署。
+- **Webhook** — 通过 Events API 的无状态 HTTP 回调。需要公网可访问的 URL。如果您的 Slack 应用已配置了事件订阅，请使用此模式。
+
+## Socket Mode 设置（推荐）
+
+### 第一步：通过 Manifest 创建 Slack 应用
+
+<Steps>
+  ### 打开 Slack API 控制台
+
+  访问 [api.slack.com/apps](https://api.slack.com/apps)，点击 **Create New App** → **From an app manifest**。
+
+  ### 选择工作区
+
+  选择您要安装应用的 Slack 工作区。
+
+  ### 粘贴 Manifest 模板
+
+  选择 **YAML** 格式，粘贴以下模板：
+
+  ```yaml
+  display_information:
+    name: LobeHub Assistant
+    description: AI assistant powered by LobeHub
+  features:
+    app_home:
+      home_tab_enabled: false
+      messages_tab_enabled: true
+      messages_tab_read_only_enabled: false
+    bot_user:
+      display_name: LobeHub Assistant
+      always_online: true
+    slash_commands:
+      - command: /new
+        description: Start a new conversation
+        should_escape: false
+      - command: /stop
+        description: Stop the current execution
+        should_escape: false
+  oauth_config:
+    scopes:
+      bot:
+        - app_mentions:read
+        - channels:history
+        - channels:read
+        - chat:write
+        - commands
+        - groups:history
+        - groups:read
+        - im:history
+        - im:read
+        - mpim:history
+        - mpim:read
+        - reactions:read
+        - reactions:write
+        - users:read
+        - assistant:write
+  settings:
+    event_subscriptions:
+      bot_events:
+        - app_mention
+        - message.channels
+        - message.groups
+        - message.im
+        - message.mpim
+        - member_joined_channel
+        - assistant_thread_started
+        - assistant_thread_context_changed
+    interactivity:
+      is_enabled: true
+    org_deploy_enabled: false
+    socket_mode_enabled: true
+    token_rotation_enabled: false
+  ```
+
+  > **注意：** `socket_mode_enabled: true` 表示无需配置 Request URL。事件（包括 Slash Commands）通过 WebSocket 推送。
+
+  ### 创建应用
+
+  确认配置摘要后，点击 **Create**。
+
+  ![](/blog/assets3865756ef6158a855aee64dd01bd3d6b.webp)
+</Steps>
+
+### 第二步：获取凭证
+
+<Steps>
+  ### 复制 App ID 和 Signing Secret
+
+  在 **Basic Information** 页面，复制：
+
+  - **App ID** — 显示在页面顶部
+  - **Signing Secret** — 在 **App Credentials** 部分
+
+  ### 生成应用级别 Token
+
+  向下滚动到 **App-Level Tokens**，点击 **Generate Token and Scopes**。命名（如 "socket-mode"），添加 `connections:write` 权限，点击 **Generate**。
+
+  复制生成的 Token（以 `xapp-` 开头）。
+
+  > **重要：** 此 Token 仅显示一次，请妥善保管。
+
+  ### 安装应用到工作区
+
+  进入侧边栏的 **OAuth & Permissions**，点击 **Install to Workspace** 并授权。复制 **Bot User OAuth Token**（以 `xoxb-` 开头）。
+
+  ![](/blog/assetsfd4606a4b5d801a8764bf333cde77d57.webp)
+</Steps>
+
+### 第三步：在 LobeHub 中配置 Slack
+
+<Steps>
+  ### 打开渠道设置
+
+  在 LobeHub 中，导航到代理设置 → **渠道** 标签 → 点击 **Slack**。
+
+  ### 输入凭证
+
+  填写：
+
+  - **应用 ID** — App ID
+  - **Bot Token** — Bot User OAuth Token（`xoxb-...`）
+  - **签名密钥** — Signing Secret
+  - **应用级别 Token** — App-Level Token（`xapp-...`）
+
+  ### 选择连接模式
+
+  在 **高级设置** 中，将 **连接模式** 设置为 **WebSocket**。
+
+  ### 保存配置
+
+  点击 **保存配置**。机器人将自动通过 Socket Mode 连接。无需配置 Webhook URL。
+
+  ![](/blog/assetsc3042da681a9df811e70473636a8f461.webp)
+</Steps>
+
+### 第四步：测试连接
+
+在 LobeHub 点击 **测试连接**，然后进入 Slack，将机器人邀请到频道，通过 `@LobeHub Assistant` 提及它，确认是否正常响应。
+
+> **Slash Commands：** 如果您使用了上方的 Manifest 模板，`/new` 和 `/stop` 命令已自动配置。在 Slack 输入 `/new` 可以重置对话，输入 `/stop` 可以停止当前执行。您也可以通过 `@bot /new` 的方式使用这些命令。
+
+---
+
+## Webhook 设置（备选方案）
+
+如果您的 Slack 应用已配置了 Event Subscriptions 的公网 HTTP 端点，或无法使用 Socket Mode，请使用此方式。
+
+<Steps>
+  ### 创建 Slack 应用
+
+  访问 [api.slack.com/apps](https://api.slack.com/apps)，点击 **Create New App** → **From scratch**。命名应用并选择工作区。
+
+  ### 添加 Bot Token 权限
+
+  进入 **OAuth & Permissions** → **Bot Token Scopes**，添加：`app_mentions:read`、`channels:history`、`channels:read`、`chat:write`、`groups:history`、`groups:read`、`im:history`、`im:read`、`mpim:history`、`mpim:read`、`reactions:read`、`reactions:write`、`users:read`。
+
+  ### 安装到工作区
+
+  点击 **Install to Workspace**，复制 **Bot User OAuth Token**（`xoxb-...`）。
+
+  ### 在 LobeHub 中配置
+
+  在 LobeHub 的 Slack 渠道设置中输入 **应用 ID**、**Bot Token** 和 **签名密钥**。在高级设置中将 **连接模式** 设为 **Webhook**。保存后复制显示的 **Webhook URL**。
+
+  ### 启用 App Home 消息功能
+
+  在 Slack API 控制台 → **App Home** 中，找到 **Show Tabs** 区域，勾选 **Messages Tab**，并确保 **"Allow users to send Slash commands and messages from the messages tab"** 已启用。这样用户才能在私信中与机器人对话。
+
+  ### 配置事件订阅
+
+  在 Slack API 控制台 → **Event Subscriptions** 中，启用事件，将 Webhook URL 粘贴为 **Request URL**，订阅事件：`app_mention`、`message.channels`、`message.groups`、`message.im`、`message.mpim`、`member_joined_channel`。
+
+  ![](/blog/assets8f3657f3785fc04c42b0f53c17daa72e.webp)
+
+  ### 配置 Slash Commands（可选）
+
+  在 Slack API 控制台 → **Slash Commands** 中，点击 **Create New Command**，添加以下命令：
+
+  | Command | Request URL        | Short Description          |
+  | ------- | ------------------ | -------------------------- |
+  | `/new`  | 与上方相同的 Webhook URL | Start a new conversation   |
+  | `/stop` | 与上方相同的 Webhook URL | Stop the current execution |
+
+  > **注意：** Webhook 模式下 Request URL 为必填项。如果您使用 Socket Mode，推荐通过 Manifest 模板创建应用，Slash Commands 会自动配置，无需手动添加。
+
+  同时确保在 **OAuth & Permissions** → **Bot Token Scopes** 中添加 `commands` 权限，并在 **Interactivity & Shortcuts** 中启用 Interactivity，将 Request URL 设为相同的 Webhook URL。
+</Steps>
+
+## 配置参考
+
+| 字段             | 是否必需          | 描述                                     |
+| -------------- | ------------- | -------------------------------------- |
+| **应用 ID**      | 是             | 您的 Slack 应用 ID                         |
+| **Bot Token**  | 是             | Bot User OAuth Token（`xoxb-...`）       |
+| **签名密钥**       | 是             | 用于验证来自 Slack 的请求                       |
+| **应用级别 Token** | 仅 Socket Mode | 应用级别 Token（`xapp-...`），用于 WebSocket 连接 |
+| **连接模式**       | 否             | `websocket` 或 `webhook`（默认：`webhook`）  |
+
+## 故障排除
+
+- **私信显示 "Sending messages to this app has been turned off"：** 在 Slack API 控制台 → **App Home** → **Show Tabs** 中，确保 **Messages Tab** 已启用，并勾选 "Allow users to send Slash commands and messages from the messages tab"。如果使用 Manifest 模板创建应用则默认已开启。
+- **机器人未响应：** 确认机器人已被邀请到频道。Socket Mode 下请确保应用级别 Token 正确且 Socket Mode 已在 Slack 应用设置中启用。
+- **测试连接失败：** 仔细检查应用 ID 和 Bot Token 是否正确。确保应用已安装到工作区。
+- **Webhook 验证失败（Webhook 模式）：** 确保签名密钥匹配且 Webhook URL 正确。
+- **Socket Mode 无法连接：** 验证应用级别 Token 具有 `connections:write` 权限。检查 Slack 应用设置中的 **Socket Mode** 是否已启用。

@@ -33,6 +33,7 @@ export class EditorRuntime {
   private titleSetter: ((title: string) => void) | null = null;
   private titleGetter: (() => string) | null = null;
   private currentDocId: string | undefined = undefined;
+  private beforeMutateHandler: (() => void | Promise<void>) | null = null;
 
   /**
    * Set the current editor instance
@@ -54,6 +55,14 @@ export class EditorRuntime {
    */
   getCurrentDocId(): string | undefined {
     return this.currentDocId;
+  }
+
+  /**
+   * Set a handler to be called before any mutating operation.
+   * This can be used to save history or perform other pre-mutation tasks.
+   */
+  setBeforeMutateHandler(handler: (() => void | Promise<void>) | null) {
+    this.beforeMutateHandler = handler;
   }
 
   /**
@@ -91,17 +100,23 @@ export class EditorRuntime {
    * @returns Raw result with nodeCount and extractedTitle
    */
   async initPage(args: InitDocumentArgs): Promise<InitPageRuntimeResult> {
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const editor = this.getEditor();
 
     let markdown = args.markdown;
     let extractedTitle: string | undefined;
 
     // Check if markdown starts with a # title heading
-    const titleMatch = /^#\s+(.+)(?:\r?\n|$)/.exec(markdown);
-    if (titleMatch) {
-      extractedTitle = titleMatch[1].trim();
+    if (markdown.startsWith('# ')) {
+      const endOfLine = markdown.search(/\r?\n/);
+      const titleLine = endOfLine === -1 ? markdown : markdown.slice(0, endOfLine);
+      extractedTitle = titleLine.slice(2).trim();
       // Remove the title line from markdown
-      markdown = markdown.slice(titleMatch[0].length).trimStart();
+      markdown = markdown.slice(titleLine.length).trimStart();
 
       // Set the title separately if title handlers are available
       if (this.titleSetter) {
@@ -126,6 +141,11 @@ export class EditorRuntime {
    * @returns Raw result with newTitle and previousTitle
    */
   async editTitle(args: EditTitleArgs): Promise<EditTitleRuntimeResult> {
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const { setter, getter } = this.getTitleHandlers();
     const previousTitle = getter();
 
@@ -193,6 +213,11 @@ export class EditorRuntime {
    * @returns Raw result with results, successCount and totalCount
    */
   async modifyNodes(args: ModifyNodesArgs): Promise<ModifyNodesRuntimeResult> {
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const editor = this.getEditor();
     let { operations } = args;
 
@@ -448,6 +473,11 @@ export class EditorRuntime {
    * @returns Raw result with modifiedNodeIds and replacementCount
    */
   async replaceText(args: ReplaceTextArgs): Promise<ReplaceTextRuntimeResult> {
+    try {
+      await this.beforeMutateHandler?.();
+    } catch {
+      /* ignore pre-mutation errors */
+    }
     const editor = this.getEditor();
     const { searchText, newText, useRegex = false, replaceAll = true, nodeIds } = args;
 
@@ -531,8 +561,9 @@ export class EditorRuntime {
 
         // Build the updated LiteXML for this node
         // Extract attributes from the original fullMatch
-        const attrMatch = /<\w+\s+([^>]*)>/.exec(node.fullMatch);
-        const attributes = attrMatch ? attrMatch[1] : `id="${node.id}"`;
+        const firstSpace = node.fullMatch.indexOf(' ');
+        const attributes =
+          firstSpace > 0 ? node.fullMatch.slice(firstSpace + 1, -1) : `id="${node.id}"`;
 
         const updatedLitexml = `<${node.tagName} ${attributes}>${newContent}</${node.tagName}>`;
         litexmlUpdates.push(updatedLitexml);

@@ -28,6 +28,7 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
+import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
 import { StreamingResponse } from '../../utils/response';
 
 /**
@@ -284,6 +285,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       );
     } catch (e) {
       const err = e as Error & { $metadata: any };
+      const errorType = isExceededContextWindowError(err.message)
+        ? AgentRuntimeErrorType.ExceededContextWindow
+        : AgentRuntimeErrorType.ProviderBizError;
 
       throw AgentRuntimeError.chat({
         error: {
@@ -291,7 +295,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
           message: err.message,
           type: err.name,
         },
-        errorType: AgentRuntimeErrorType.ProviderBizError,
+        errorType,
         provider: this.id,
         region: this.region,
       });

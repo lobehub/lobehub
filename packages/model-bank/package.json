@@ -15,6 +15,7 @@
     "./azureai": "./src/aiModels/azureai.ts",
     "./azure": "./src/aiModels/azure.ts",
     "./baichuan": "./src/aiModels/baichuan.ts",
+    "./bailianCodingPlan": "./src/aiModels/bailianCodingPlan.ts",
     "./bedrock": "./src/aiModels/bedrock.ts",
     "./bfl": "./src/aiModels/bfl.ts",
     "./cerebras": "./src/aiModels/cerebras.ts",
@@ -29,6 +30,7 @@
     "./github": "./src/aiModels/github.ts",
     "./githubCopilot": "./src/aiModels/githubCopilot.ts",
     "./google": "./src/aiModels/google.ts",
+    "./glmCodingPlan": "./src/aiModels/glmCodingPlan.ts",
     "./groq": "./src/aiModels/groq.ts",
     "./lobehub": "./src/aiModels/lobehub/index.ts",
     "./higress": "./src/aiModels/higress.ts",
@@ -37,9 +39,11 @@
     "./infiniai": "./src/aiModels/infiniai.ts",
     "./internlm": "./src/aiModels/internlm.ts",
     "./jina": "./src/aiModels/jina.ts",
+    "./kimiCodingPlan": "./src/aiModels/kimiCodingPlan.ts",
     "./lmstudio": "./src/aiModels/lmstudio.ts",
     "./longcat": "./src/aiModels/longcat.ts",
     "./minimax": "./src/aiModels/minimax.ts",
+    "./minimaxCodingPlan": "./src/aiModels/minimaxCodingPlan.ts",
     "./mistral": "./src/aiModels/mistral.ts",
     "./modelscope": "./src/aiModels/modelscope.ts",
     "./moonshot": "./src/aiModels/moonshot.ts",
@@ -63,6 +67,7 @@
     "./spark": "./src/aiModels/spark.ts",
     "./stepfun": "./src/aiModels/stepfun.ts",
     "./straico": "./src/aiModels/straico.ts",
+    "./streamlake": "./src/aiModels/streamlake.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
@@ -72,6 +77,7 @@
     "./vertexai": "./src/aiModels/vertexai.ts",
     "./vllm": "./src/aiModels/vllm.ts",
     "./volcengine": "./src/aiModels/volcengine.ts",
+    "./volcengineCodingPlan": "./src/aiModels/volcengineCodingPlan.ts",
     "./wenxin": "./src/aiModels/wenxin.ts",
     "./xai": "./src/aiModels/xai.ts",
     "./xiaomimimo": "./src/aiModels/xiaomimimo.ts",
@@ -82,12 +88,17 @@
     "./types": "./src/types/index.ts"
   },
   "scripts": {
+    "build": "tsdown",
     "test": "vitest",
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
     "type-fest": "^5.2.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.21.4",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "zod": "^3.25.76"

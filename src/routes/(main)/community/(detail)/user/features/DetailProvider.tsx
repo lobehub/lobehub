@@ -7,6 +7,8 @@ import { type MarketUserProfile } from '@/layout/AuthProvider/MarketAuth/types';
 import {
   type DiscoverAssistantItem,
   type DiscoverGroupAgentItem,
+  type DiscoverPluginItem,
+  type DiscoverSkillItem,
   type DiscoverUserInfo,
 } from '@/types/discover';
 
@@ -27,6 +29,8 @@ export interface UserDetailContextConfig {
     action: 'publish' | 'unpublish' | 'deprecate',
     type?: 'agent' | 'group',
   ) => void;
+  plugins?: DiscoverPluginItem[];
+  skills?: DiscoverSkillItem[];
   totalInstalls: number;
   user: DiscoverUserInfo;
 }

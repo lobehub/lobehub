@@ -1,5 +1,4 @@
 import { Alert, Flexbox } from '@lobehub/ui';
-import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,6 +6,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+
+import { isPathWithinScope } from '../../utils/path';
 
 interface OutOfScopeWarningProps {
   /**
@@ -16,25 +17,11 @@ interface OutOfScopeWarningProps {
 }
 
 /**
- * Check if a path is within the working directory
- */
-const isPathWithinWorkingDirectory = (targetPath: string, workingDirectory: string): boolean => {
-  const normalizedTarget = path.resolve(targetPath);
-  const normalizedWorkingDir = path.resolve(workingDirectory);
-
-  return (
-    normalizedTarget === normalizedWorkingDir ||
-    normalizedTarget.startsWith(normalizedWorkingDir + path.sep)
-  );
-};
-
-/**
  * Warning component displayed in Intervention UI when paths are outside the working directory
  */
 const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
   const { t } = useTranslation('tool');
 
-  // Get working directory from topic or agent store
   const topicWorkingDir = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const agentWorkingDir = useAgentStore(agentSelectors.currentAgentWorkingDirectory);
   const workingDirectory = topicWorkingDir || agentWorkingDir;
@@ -42,7 +29,7 @@ const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
   // Find paths that are outside the working directory
   const outsidePaths = useMemo(() => {
     if (!workingDirectory) return [];
-    return paths.filter((p) => p && !isPathWithinWorkingDirectory(p, workingDirectory));
+    return paths.filter((p) => p && !isPathWithinScope(p, workingDirectory));
   }, [paths, workingDirectory]);
 
   // Don't render if no working directory set or all paths are within scope

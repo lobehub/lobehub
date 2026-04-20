@@ -13,7 +13,7 @@ import type {
 } from '../types/provider.type';
 
 /**
- * Provider 控制器，负责处理 Provider 相关的 HTTP 请求
+ * Provider controller, responsible for handling Provider-related HTTP requests
  */
 export class ProviderController extends BaseController {
   async handleGetProviders(c: Context): Promise<Response> {

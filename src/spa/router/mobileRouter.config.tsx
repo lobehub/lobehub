@@ -37,7 +37,7 @@ export const mobileRoutes: RouteObject[] = [
               () => import('@/routes/(mobile)/chat/_layout'),
               'Mobile > Chat > Layout',
             ),
-            errorElement: <ErrorBoundary resetPath="/agent" />,
+            errorElement: <ErrorBoundary />,
             path: ':aid',
           },
         ],
@@ -165,7 +165,7 @@ export const mobileRoutes: RouteObject[] = [
           () => import('@/routes/(mobile)/community/_layout'),
           'Mobile > Discover > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/community" />,
+        errorElement: <ErrorBoundary />,
         path: 'community',
       },
 
@@ -214,7 +214,7 @@ export const mobileRoutes: RouteObject[] = [
           () => import('@/routes/(mobile)/settings/_layout'),
           'Mobile > Settings > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/settings" />,
+        errorElement: <ErrorBoundary />,
         path: 'settings',
       },
 
@@ -269,7 +269,7 @@ export const mobileRoutes: RouteObject[] = [
             ),
           },
         ],
-        errorElement: <ErrorBoundary resetPath="/me" />,
+        errorElement: <ErrorBoundary />,
         path: 'me',
       },
 
@@ -294,14 +294,30 @@ export const mobileRoutes: RouteObject[] = [
       },
     ],
     element: dynamicLayout(() => import('@/routes/(mobile)/_layout'), 'Mobile > Main > Layout'),
-    errorElement: <ErrorBoundary resetPath="/" />,
+    errorElement: <ErrorBoundary />,
     path: '/',
   },
   // Onboarding route (outside main layout)
   {
     element: dynamicElement(() => import('@/routes/onboarding'), 'Mobile > Onboarding'),
-    errorElement: <ErrorBoundary resetPath="/" />,
+    errorElement: <ErrorBoundary />,
     path: '/onboarding',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/onboarding/agent'),
+      'Mobile > Onboarding > Agent',
+    ),
+    errorElement: <ErrorBoundary />,
+    path: '/onboarding/agent',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/onboarding/classic'),
+      'Mobile > Onboarding > Classic',
+    ),
+    errorElement: <ErrorBoundary />,
+    path: '/onboarding/classic',
   },
   ...BusinessMobileRoutesWithoutMainLayout,
 

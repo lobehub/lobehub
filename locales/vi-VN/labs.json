@@ -1,7 +1,8 @@
 {
-  "desc": "Tại đây, bạn sẽ tìm thấy các cập nhật thỉnh thoảng về những tính năng mới mà chúng tôi đang khám phá — hãy thoải mái dùng thử nhé!",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.gatewayMode.desc": "Thực thi các tác vụ của tác nhân trên máy chủ thông qua Gateway WebSocket thay vì chạy cục bộ. Giúp tăng tốc độ xử lý và giảm mức sử dụng tài nguyên trên thiết bị của người dùng.",
+  "features.gatewayMode.title": "Thực thi tác nhân phía máy chủ (Gateway)",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",

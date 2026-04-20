@@ -51,7 +51,7 @@ export const desktopRoutes: RouteObject[] = [
               () => import('@/routes/(main)/agent/_layout'),
               'Desktop > Chat > Layout',
             ),
-            errorElement: <ErrorBoundary resetPath="/agent" />,
+            errorElement: <ErrorBoundary />,
             path: ':aid',
           },
         ],
@@ -86,7 +86,7 @@ export const desktopRoutes: RouteObject[] = [
               () => import('@/routes/(main)/group/_layout'),
               'Desktop > Group > Layout',
             ),
-            errorElement: <ErrorBoundary resetPath="/group" />,
+            errorElement: <ErrorBoundary />,
             path: ':gid',
           },
         ],
@@ -246,7 +246,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/community/_layout'),
           'Desktop > Discover > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/community" />,
+        errorElement: <ErrorBoundary />,
         path: 'community',
       },
 
@@ -298,7 +298,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/resource/_layout'),
           'Desktop > Resource > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/resource" />,
+        errorElement: <ErrorBoundary />,
         path: 'resource',
       },
 
@@ -344,7 +344,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/settings/_layout'),
           'Desktop > Settings > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/settings" />,
+        errorElement: <ErrorBoundary />,
         path: 'settings',
       },
 
@@ -398,7 +398,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/memory/_layout'),
           'Desktop > Memory > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/memory" />,
+        errorElement: <ErrorBoundary />,
         path: 'memory',
       },
 
@@ -406,15 +406,18 @@ export const desktopRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/video'), 'Desktop > Video'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/video'),
+              'Desktop > Video',
+            ),
             index: true,
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/video/_layout'),
+          () => import('@/routes/(main)/(create)/video/_layout'),
           'Desktop > Video > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/video" />,
+        errorElement: <ErrorBoundary />,
         path: 'video',
       },
 
@@ -422,15 +425,18 @@ export const desktopRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: dynamicElement(() => import('@/routes/(main)/image'), 'Desktop > Image'),
+            element: dynamicElement(
+              () => import('@/routes/(main)/(create)/image'),
+              'Desktop > Image',
+            ),
             index: true,
           },
         ],
         element: dynamicLayout(
-          () => import('@/routes/(main)/image/_layout'),
+          () => import('@/routes/(main)/(create)/image/_layout'),
           'Desktop > Image > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/image" />,
+        errorElement: <ErrorBoundary />,
         path: 'image',
       },
 
@@ -504,7 +510,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/eval/_layout'),
           'Desktop > Eval > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/eval" />,
+        errorElement: <ErrorBoundary />,
         path: 'eval',
       },
 
@@ -527,7 +533,7 @@ export const desktopRoutes: RouteObject[] = [
           () => import('@/routes/(main)/page/_layout'),
           'Desktop > Page > Layout',
         ),
-        errorElement: <ErrorBoundary resetPath="/page" />,
+        errorElement: <ErrorBoundary />,
         path: 'page',
       },
 
@@ -542,7 +548,7 @@ export const desktopRoutes: RouteObject[] = [
       },
     ],
     element: dynamicLayout(() => import('@/routes/(main)/_layout'), 'Desktop > Main > Layout'),
-    errorElement: <ErrorBoundary resetPath="/" />,
+    errorElement: <ErrorBoundary />,
     path: '/',
   },
   // Onboarding route (outside main layout)
@@ -567,6 +573,24 @@ export const desktopRoutes: RouteObject[] = [
 
 desktopRoutes.push({
   element: dynamicElement(() => import('@/routes/onboarding'), 'Desktop > Onboarding'),
-  errorElement: <ErrorBoundary resetPath="/" />,
+  errorElement: <ErrorBoundary />,
   path: '/onboarding',
+});
+
+desktopRoutes.push({
+  element: dynamicElement(
+    () => import('@/routes/onboarding/agent'),
+    'Desktop > Onboarding > Agent',
+  ),
+  errorElement: <ErrorBoundary />,
+  path: '/onboarding/agent',
+});
+
+desktopRoutes.push({
+  element: dynamicElement(
+    () => import('@/routes/onboarding/classic'),
+    'Desktop > Onboarding > Classic',
+  ),
+  errorElement: <ErrorBoundary />,
+  path: '/onboarding/classic',
 });

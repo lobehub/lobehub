@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Opis",
+  "gateway.descriptionPlaceholder": "Opcjonalne",
+  "gateway.deviceName": "Nazwa urządzenia",
+  "gateway.deviceNamePlaceholder": "Wprowadź nazwę urządzenia",
+  "gateway.enableConnection": "Połącz z bramą",
+  "gateway.statusConnected": "Połączono z bramą",
+  "gateway.statusConnecting": "Łączenie z bramą...",
+  "gateway.statusDisconnected": "Nie połączono z bramą",
+  "gateway.title": "Bramka urządzenia",
   "navigation.chat": "Czat",
   "navigation.discover": "Odkryj",
   "navigation.discoverAssistants": "Odkryj Asystentów",
@@ -120,5 +129,9 @@
   "waitingOAuth.errorTitle": "Nie udało się nawiązać połączenia autoryzacyjnego",
   "waitingOAuth.helpText": "Jeśli przeglądarka nie otworzyła się automatycznie, kliknij Anuluj i spróbuj ponownie",
   "waitingOAuth.retry": "Spróbuj ponownie",
-  "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne"
+  "waitingOAuth.title": "Oczekiwanie na połączenie autoryzacyjne",
+  "window.close": "Zamknij okno",
+  "window.maximize": "Maksymalizuj okno",
+  "window.minimize": "Minimalizuj okno",
+  "window.restore": "Przywróć okno"
 }

@@ -14,27 +14,27 @@ import type {
 } from '../types/file.type';
 
 /**
- * 文件上传控制器
- * 处理文件上传相关的HTTP请求
+ * File upload controller
+ * Handles file upload-related HTTP requests
  */
 export class FileController extends BaseController {
   /**
-   * 批量文件上传
+   * Batch file upload
    * POST /files/batches
    */
   async batchUploadFiles(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
 
       const db = await this.getDatabase();
       const fileService = new FileUploadService(db, userId);
 
-      // 处理 multipart/form-data（返回对象：{ fields, files }）
+      // Process multipart/form-data (returns object: { fields, files })
       const formData = await this.getFormData(c);
       const files: File[] = [];
 
-      // 兼容写法：从 'files' 或 'files[]' 字段获取文件
-      // 因为Stainless SDK 会将数组字段自动添加 [] 后缀
+      // Compatibility: get files from 'files' or 'files[]' field
+      // because the Stainless SDK automatically appends [] suffix to array fields
       let fileEntries = formData.getAll('files');
       if (fileEntries.length === 0) {
         fileEntries = formData.getAll('files[]');
@@ -48,7 +48,7 @@ export class FileController extends BaseController {
         return this.error(c, 'No files provided', 400);
       }
 
-      // 获取其他参数
+      // Get other parameters
       const knowledgeBaseId = (formData.get('knowledgeBaseId') as string | null) || null;
       const skipCheckFileType = formData.get('skipCheckFileType') === 'true';
       const directory = (formData.get('directory') as string | null) || null;
@@ -77,7 +77,7 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 获取文件列表
+   * Retrieves the file list
    * GET /files
    */
   async getFiles(c: Context) {
@@ -98,12 +98,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 获取单个文件详情
+   * Retrieves a single file's details
    * GET /files/:id
    */
   async getFile(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const db = await this.getDatabase();
       const fileService = new FileUploadService(db, userId);
@@ -117,16 +117,16 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 获取文件访问URL
+   * Retrieves the file access URL
    * GET /files/:id/url
    */
   async getFileUrl(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const query = this.getQuery(c);
 
-      // 解析查询参数
+      // Parse query parameters
       const options: FileUrlRequest = {
         expiresIn: query.expiresIn ? parseInt(query.expiresIn as string, 10) : undefined,
       };
@@ -143,12 +143,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 文件上传
+   * File upload
    * POST /files
    */
   async uploadFile(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
 
       const db = await this.getDatabase();
       const fileService = new FileUploadService(db, userId);
@@ -160,7 +160,7 @@ export class FileController extends BaseController {
         return this.error(c, 'No file provided', 400);
       }
 
-      // 获取其他参数
+      // Get other parameters
       const knowledgeBaseId = (formData.get('knowledgeBaseId') as string | null) || null;
       const skipCheckFileType = formData.get('skipCheckFileType') === 'true';
       const directory = (formData.get('directory') as string | null) || null;
@@ -186,16 +186,16 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 解析文件内容
+   * Parses file content
    * POST /files/:id/parses
    */
   async parseFile(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const query = this.getQuery<{ skipExist?: boolean }>(c);
 
-      // 解析查询参数
+      // Parse query parameters
       const options: Partial<FileParseRequest> = {
         skipExist: query.skipExist,
       };
@@ -212,12 +212,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 创建分块任务（可选自动触发嵌入）
+   * Creates a chunking task (optionally auto-triggers embedding)
    * POST /files/:id/chunks
    */
   async createChunkTask(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth ensures userId exists
       const { id } = this.getParams(c);
       const body = await this.getBody<Partial<FileChunkRequest>>(c);
 
@@ -236,12 +236,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 查询文件分块结果和状态
+   * Retrieves file chunk results and status
    * GET /files/:id/chunks
    */
   async getFileChunkStatus(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth ensures userId exists
       const { id } = this.getParams(c);
 
       const db = await this.getDatabase();
@@ -256,12 +256,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 删除文件
+   * Deletes a file
    * DELETE /files/:id
    */
   async deleteFile(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const db = await this.getDatabase();
       const fileService = new FileUploadService(db, userId);
@@ -275,12 +275,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 批量获取文件详情和内容
+   * Batch retrieves file details and content
    * POST /files/queries
    */
   async queries(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const body = await this.getBody<BatchGetFilesRequest>(c);
 
       if (!body || !body.fileIds || body.fileIds.length === 0) {
@@ -299,12 +299,12 @@ export class FileController extends BaseController {
   }
 
   /**
-   * 更新文件
+   * Updates a file
    * PATCH /files/:id
    */
   async updateFile(c: Context) {
     try {
-      const userId = this.getUserId(c)!; // requireAuth 中间件已确保 userId 存在
+      const userId = this.getUserId(c)!; // requireAuth middleware ensures userId exists
       const { id } = this.getParams(c);
       const body = await this.getBody<UpdateFileRequest>(c);
 

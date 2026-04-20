@@ -10,7 +10,7 @@ import type {
 
 export class MessageTranslationController extends BaseController {
   /**
-   * 获取指定消息的翻译信息
+   * Retrieves translation information for a specific message
    * GET /api/v1/message_translates/:messageId
    * Param: { messageId: string }
    */
@@ -30,7 +30,7 @@ export class MessageTranslationController extends BaseController {
   }
 
   /**
-   * 翻译指定消息
+   * Translates a specific message
    * POST /api/v1/message_translates/:messageId
    * Body: { from?: string, to: string }
    */
@@ -54,7 +54,7 @@ export class MessageTranslationController extends BaseController {
   }
 
   /**
-   * 更新消息翻译信息
+   * Updates message translation information
    * PUT /api/v1/message-translates/:messageId
    * Body: { from: string, to: string, content: string }
    */
@@ -75,7 +75,7 @@ export class MessageTranslationController extends BaseController {
   }
 
   /**
-   * 删除消息的翻译信息
+   * Deletes translation information for a message
    * DELETE /api/v1/message-translates/:messageId
    */
   async handleDeleteTranslate(c: Context) {

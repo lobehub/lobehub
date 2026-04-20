@@ -50,6 +50,14 @@ describe('isExceededContextWindowError', () => {
     expect(isExceededContextWindowError('too many input tokens')).toBe(true);
   });
 
+  it('should detect configured input token limit errors', () => {
+    expect(
+      isExceededContextWindowError(
+        '400 Input tokens exceed the configured limit of 272000 tokens. Your messages resulted in 479832 tokens. Please reduce the length of the messages.',
+      ),
+    ).toBe(true);
+  });
+
   it('should detect Google "exceeds the maximum number of tokens" errors', () => {
     expect(
       isExceededContextWindowError(

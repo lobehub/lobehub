@@ -13,12 +13,14 @@ import { z } from 'zod';
 
 import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
 import { TopicModel } from '@/database/models/topic';
-import {   UserMemoryActivityModel,
+import {
+  UserMemoryActivityModel,
   UserMemoryContextModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
-UserMemoryModel,
-  UserMemoryPreferenceModel } from '@/database/models/userMemory';
+  UserMemoryModel,
+  UserMemoryPreferenceModel,
+} from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -95,6 +97,12 @@ export const userMemoryRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.activityModel.delete(input.id);
     }),
+
+  deleteAll: userMemoryProcedure.mutation(async ({ ctx }) => {
+    await ctx.userMemoryModel.deleteAll();
+
+    return { success: true };
+  }),
 
   // ============ Context CRUD ============
   deleteContext: userMemoryProcedure
@@ -267,7 +275,7 @@ export const userMemoryRouter = router({
       const baseUrl = webhook.baseUrl || appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
 
       try {
-        await MemoryExtractionWorkflowService.triggerProcessUsers(
+        const { workflowRunId } = await MemoryExtractionWorkflowService.triggerProcessUsers(
           buildWorkflowPayloadInput(
             normalizeMemoryExtractionPayload({
               asyncTaskId: taskId,
@@ -284,6 +292,17 @@ export const userMemoryRouter = router({
           ),
           { extraHeaders: upstashWorkflowExtraHeaders },
         );
+
+        await ctx.asyncTaskModel.update(taskId, {
+          metadata: {
+            ...metadata,
+            control: {
+              upstash: {
+                workflowRunIds: workflowRunId ? [workflowRunId] : [],
+              },
+            },
+          } as UserMemoryExtractionMetadata,
+        });
       } catch (error) {
         await ctx.asyncTaskModel.update(taskId, {
           error: new AsyncTaskError(

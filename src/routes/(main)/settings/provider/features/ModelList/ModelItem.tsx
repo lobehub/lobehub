@@ -170,7 +170,9 @@ const ModelItem = memo<ModelItemProps>(
       </Tag>
     );
 
-    const EnableSwitch = (
+    const canToggle = modelEditable || type !== 'embedding';
+
+    const EnableSwitch = canToggle ? (
       <Switch
         checked={checked}
         loading={isModelLoading}
@@ -180,7 +182,7 @@ const ModelItem = memo<ModelItemProps>(
           await toggleModelEnabled({ enabled: e, id, source, type });
         }}
       />
-    );
+    ) : null;
 
     const Actions =
       modelEditable &&

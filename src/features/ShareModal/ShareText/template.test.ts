@@ -175,4 +175,22 @@ describe('generateMarkdown', () => {
 
     expect(result).toContain('**Bold** *Italic* `Code`');
   });
+
+  it('should normalize think tags before exporting markdown', () => {
+    const messagesWithThinkTags = [
+      {
+        id: '1',
+        content: 'Intro<think>Reasoning</think>Outro',
+        role: 'assistant',
+        createdAt: Date.now(),
+      },
+    ] as UIChatMessage[];
+
+    const result = generateMarkdown({
+      ...defaultParams,
+      messages: messagesWithThinkTags,
+    });
+
+    expect(result).toContain('Intro\n\n<think>\n\nReasoning\n\n</think>\n\nOutro');
+  });
 });

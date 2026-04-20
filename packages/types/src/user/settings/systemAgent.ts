@@ -9,10 +9,16 @@ export interface QueryRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled'
   enabled: boolean;
 }
 
+export interface PromptRewriteSystemAgent extends Omit<SystemAgentItem, 'enabled'> {
+  enabled: boolean;
+}
+
 export interface UserSystemAgentConfig {
   agentMeta: SystemAgentItem;
   generationTopic: SystemAgentItem;
   historyCompress: SystemAgentItem;
+  inputCompletion: SystemAgentItem;
+  promptRewrite: PromptRewriteSystemAgent;
   queryRewrite: QueryRewriteSystemAgent;
   thread: SystemAgentItem;
   topic: SystemAgentItem;

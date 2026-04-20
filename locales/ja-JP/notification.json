@@ -1,0 +1,8 @@
+{
+  "inbox.archiveAll": "すべてをアーカイブ",
+  "inbox.empty": "通知はまだありません",
+  "inbox.emptyUnread": "未読の通知はありません",
+  "inbox.filterUnread": "未読のみ表示",
+  "inbox.markAllRead": "すべてを既読にする",
+  "inbox.title": "通知"
+}

@@ -35,10 +35,10 @@ export async function POST(request: Request): Promise<Response> {
     progressMessageId,
   );
 
-  if (!type || !applicationId || !platformThreadId || !progressMessageId) {
+  if (!type || !applicationId || !platformThreadId) {
     return NextResponse.json(
       {
-        error: 'Missing required fields: type, applicationId, platformThreadId, progressMessageId',
+        error: 'Missing required fields: type, applicationId, platformThreadId',
       },
       { status: 400 },
     );

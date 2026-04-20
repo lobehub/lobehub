@@ -1,7 +1,8 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { LOADING_FLAT } from '@lobechat/const';
+import { isDesktop, LOADING_FLAT } from '@lobechat/const';
+import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatImageItem,
@@ -16,13 +17,16 @@ import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
-import { prepareSelectedSkillPreload } from '@/services/chat/mecha/skillPreload';
+import { resolveSelectedSkillsWithContent } from '@/services/chat/mecha/skillPreload';
+import { resolveSelectedToolsWithContent } from '@/services/chat/mecha/toolPreload';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
@@ -46,7 +50,6 @@ import {
   parseSelectedToolsFromEditorData,
   processCommands,
 } from './commandBus';
-
 /**
  * Extended params for sendMessage with context
  */
@@ -149,7 +152,7 @@ export class ConversationLifecycleActionImpl {
         compressContext.topicId &&
         !hasRunningCompressionOperation(Object.values(this.#get().operations), compressContext)
       ) {
-        await this.#executeCompression(compressContext, '');
+        await this.executeCompression(compressContext, '');
       }
       return;
     }
@@ -196,15 +199,47 @@ export class ConversationLifecycleActionImpl {
     };
 
     const fileIdList = files?.map((f) => f.id);
-    const preloadMessages = await prepareSelectedSkillPreload({
+
+    // Enrich selected skills/tools with preloaded content, injected directly
+    // via SelectedSkillInjector/SelectedToolInjector — no fake tool-call preload messages
+    const enrichedSelectedSkills = await resolveSelectedSkillsWithContent({
       message,
       selectedSkills,
+    });
+    const enrichedSelectedTools = resolveSelectedToolsWithContent({
+      message,
+      selectedTools,
     });
 
     const hasFile = !!fileIdList && fileIdList.length > 0;
 
     // if message is empty or no files, then stop
     if (!message && !hasFile) return;
+
+    // ━━━ Message Queue: enqueue if agent is currently running ━━━
+    // Check if there's a running execAgentRuntime operation in the current context.
+    // If so, enqueue the message instead of starting a new operation.
+    const currentContextKey = messageMapKey(operationContext);
+    const contextOpIds = this.#get().operationsByContext[currentContextKey] || [];
+    const runningAgentOp = contextOpIds
+      .map((id) => this.#get().operations[id])
+      .find((op) => op && op.type === 'execAgentRuntime' && op.status === 'running');
+
+    if (runningAgentOp) {
+      this.#get().enqueueMessage(
+        currentContextKey,
+        {
+          id: nanoid(),
+          content: message,
+          editorData: editorData ?? undefined,
+          files: fileIdList,
+          interruptMode: 'soft',
+          createdAt: Date.now(),
+        },
+        runningAgentOp.id,
+      );
+      return;
+    }
 
     if (onlyAddUserMessage) {
       await this.#get().addUserMessage({ message, fileList: fileIdList });
@@ -272,7 +307,7 @@ export class ConversationLifecycleActionImpl {
         files: fileIdList,
         role: 'user',
         agentId: operationContext.agentId,
-        // if there is topicId，then add topicId to message
+        // if there is topicId, then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
         imageList: tempImages.length > 0 ? tempImages : undefined,
@@ -287,7 +322,7 @@ export class ConversationLifecycleActionImpl {
         content: LOADING_FLAT,
         role: 'assistant',
         agentId: operationContext.agentId,
-        // if there is topicId，then add topicId to message
+        // if there is topicId, then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
         // Pass isSupervisor metadata for group orchestration (consistent with server)
@@ -295,7 +330,6 @@ export class ConversationLifecycleActionImpl {
       },
       { operationId, tempMessageId: tempAssistantId },
     );
-    this.#get().internal_toggleMessageLoading(true, tempId);
 
     // Associate temp messages with operation
     this.#get().associateMessageWithOperation(tempId, operationId);
@@ -308,22 +342,240 @@ export class ConversationLifecycleActionImpl {
       inputSendErrorMsg: undefined,
     });
 
+    // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
+    // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
+    const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
+    if (isDesktop && heterogeneousProvider?.type === 'claude-code') {
+      // Resolve cwd up-front so the new topic is bound to a project at
+      // creation time. Otherwise the row stays NULL until the post-execution
+      // metadata write — which never lands on cancel/error and meanwhile
+      // makes By-Project grouping miss the topic and `--resume` unsafe.
+      //
+      // Priority: topic-level cwd (once a topic is bound to a project) wins
+      // over the agent-level default. Without this, a topic pinned to dir A
+      // would silently execute under the agent's current default dir B and
+      // lose resume.
+      const existingTopic = operationContext.topicId
+        ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
+        : undefined;
+      const agentWorkingDirectory =
+        agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+      const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
+
+      // Persist messages to DB first (same as client mode)
+      let heteroData: SendMessageServerResponse | undefined;
+      try {
+        const { model } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+        heteroData = await aiChatService.sendMessageInServer(
+          {
+            agentId: operationContext.agentId,
+            groupId: operationContext.groupId ?? undefined,
+            newAssistantMessage: { model, provider: 'claude-code' },
+            newTopic: !operationContext.topicId
+              ? {
+                  metadata: workingDirectory ? { workingDirectory } : undefined,
+                  title: message.slice(0, 20) || t('defaultTitle', { ns: 'topic' }),
+                  topicMessageIds: messages.map((m) => m.id),
+                }
+              : undefined,
+            newUserMessage: {
+              content: message,
+              editorData,
+              files: fileIdList,
+              pageSelections,
+              parentId,
+            },
+            threadId: operationContext.threadId ?? undefined,
+            topicId: operationContext.topicId ?? undefined,
+          },
+          abortController,
+        );
+      } catch (e) {
+        console.error('[HeterogeneousAgent] Failed to persist messages:', e);
+        this.#get().failOperation(operationId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'HeterogeneousAgentError',
+        });
+        return;
+      }
+
+      if (!heteroData) return;
+
+      // Update context with server-created topicId
+      const heteroContext = {
+        ...operationContext,
+        topicId: heteroData.topicId ?? operationContext.topicId,
+      };
+
+      // Replace optimistic messages with persisted ones
+      this.#get().replaceMessages(heteroData.messages, {
+        action: 'sendMessage/serverResponse',
+        context: heteroContext,
+      });
+
+      // Handle new topic creation
+      if (heteroData.isCreateNewTopic && heteroData.topicId) {
+        if (heteroData.topics) {
+          const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
+          this.#get().internal_updateTopics(operationContext.agentId, {
+            groupId: operationContext.groupId,
+            items: heteroData.topics.items,
+            pageSize,
+            total: heteroData.topics.total,
+          });
+        }
+        await this.#get().switchTopic(heteroData.topicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+      }
+
+      // Clean up temp messages
+      this.#get().internal_dispatchMessage(
+        { ids: [tempId, tempAssistantId], type: 'deleteMessages' },
+        { operationId },
+      );
+
+      // Complete sendMessage operation, start ACP execution as child operation
+      this.#get().completeOperation(operationId);
+
+      // Clear editor temp state — the user's message is already persisted, so
+      // a later Stop click must NOT restore it into the input (would feel like
+      // the app re-sent the message). Client/Gateway paths clear this at
+      // line 684-686 after `sendMessageInServer` resolves, but the hetero
+      // branch returns early (line 498) and never reaches that clear.
+      this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
+
+      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, true);
+
+      // Start heterogeneous agent execution
+      const { operationId: heteroOpId } = this.#get().startOperation({
+        context: heteroContext,
+        label: 'Heterogeneous Agent Execution',
+        parentOperationId: operationId,
+        type: 'execHeterogeneousAgent',
+      });
+
+      this.#get().associateMessageWithOperation(heteroData.assistantMessageId, heteroOpId);
+
+      try {
+        const { executeHeterogeneousAgent } = await import('./heterogeneousAgentExecutor');
+        // Extract imageList from the persisted user message (chatUploadFileList
+        // may already be cleared by this point, so we read from DB instead)
+        const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);
+        const persistedImageList = userMsg?.imageList;
+
+        // Read heterogeneous-agent session id from topic metadata for multi-turn
+        // resume. `resolveHeteroResume` drops the sessionId when the saved cwd
+        // doesn't match the current one, so CC doesn't emit
+        // "No conversation found with session ID".
+        const topic = heteroContext.topicId
+          ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
+          : undefined;
+        const { cwdChanged, resumeSessionId } = resolveHeteroResume(
+          topic?.metadata,
+          workingDirectory,
+        );
+        if (cwdChanged) {
+          antdMessage.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
+        }
+
+        await executeHeterogeneousAgent(() => this.#get(), {
+          assistantMessageId: heteroData.assistantMessageId,
+          context: heteroContext,
+          heterogeneousProvider,
+          imageList: persistedImageList?.length ? persistedImageList : undefined,
+          message,
+          operationId: heteroOpId,
+          resumeSessionId,
+          workingDirectory,
+        });
+      } catch (e) {
+        console.error('[HeterogeneousAgent] Execution failed:', e);
+        this.#get().failOperation(heteroOpId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'HeterogeneousAgentError',
+        });
+      }
+
+      if (heteroData.topicId) this.#get().internal_updateTopicLoading(heteroData.topicId, false);
+
+      return {
+        assistantMessageId: heteroData.assistantMessageId,
+        userMessageId: heteroData.userMessageId,
+      };
+    }
+
+    // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
+    if (this.#get().isGatewayModeEnabled()) {
+      this.#get().completeOperation(operationId);
+
+      try {
+        const result = await this.#get().executeGatewayAgent({
+          context: operationContext,
+          fileIds: fileIdList,
+          message,
+        });
+
+        return {
+          assistantMessageId: result.assistantMessageId,
+          userMessageId: result.userMessageId,
+        };
+      } catch (e) {
+        console.error('[Gateway] Failed to start server-side agent:', e);
+        this.#get().failOperation(operationId, {
+          message: e instanceof Error ? e.message : 'Unknown error',
+          type: 'GatewayError',
+        });
+        return;
+      }
+    }
+
+    // ── Client mode: send via server API then run agent locally ──
     let data: SendMessageServerResponse | undefined;
     try {
       const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
 
       const topicId = operationContext.topicId;
+
+      // Persist selected skill/tool context into user message content so it survives across turns.
+      // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
+      const previouslyMentionedSkills = new Set<string>();
+      const previouslyMentionedTools = new Set<string>();
+
+      for (const m of messages) {
+        if (m.role !== 'user') continue;
+        for (const s of parseSelectedSkillsFromEditorData(m.editorData ?? undefined)) {
+          previouslyMentionedSkills.add(s.identifier);
+        }
+        for (const t of parseSelectedToolsFromEditorData(m.editorData ?? undefined)) {
+          previouslyMentionedTools.add(t.identifier);
+        }
+      }
+      const dedupedSkills = enrichedSelectedSkills.filter(
+        (s) => !previouslyMentionedSkills.has(s.identifier),
+      );
+      const dedupedTools = enrichedSelectedTools.filter(
+        (t) => !previouslyMentionedTools.has(t.identifier),
+      );
+
+      const skillContext = formatSelectedSkillsContext(dedupedSkills);
+      const toolContext = formatSelectedToolsContext(dedupedTools);
+      const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
+      const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
+
       data = await aiChatService.sendMessageInServer(
         {
           newUserMessage: {
-            content: message,
+            content: persistedContent,
             editorData,
             files: fileIdList,
             pageSelections,
             parentId,
           },
-          preloadMessages: preloadMessages.length > 0 ? preloadMessages : undefined,
-          // if there is topicId，then add topicId to message
+          preloadMessages: undefined,
+          // if there is topicId, then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,
           // Support creating new thread along with message
@@ -434,8 +686,6 @@ export class ConversationLifecycleActionImpl {
       }
     }
 
-    this.#get().internal_toggleMessageLoading(false, tempId);
-
     // Clear editor temp state after message created
     if (data) {
       this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
@@ -475,43 +725,79 @@ export class ConversationLifecycleActionImpl {
     // execAgentRuntime is a separate operation (child) that handles AI response generation
     this.#get().completeOperation(operationId);
 
-    // ── AI execution ──
-    {
-      const execContext = {
-        ...operationContext,
-        topicId: data.topicId ?? operationContext.topicId,
-        threadId: data.createdThreadId ?? operationContext.threadId,
-      };
+    const execContext = {
+      ...operationContext,
+      topicId: data.topicId ?? operationContext.topicId,
+      threadId: data.createdThreadId ?? operationContext.threadId,
+    };
 
+    // ── Auto-dismiss pending tool interventions ──
+    // Uses direct dispatch (updateMessage) instead of optimisticUpdatePlugin because
+    // agent runtime checks pluginIntervention.status, not plugin.intervention.status.
+    {
+      const msgs = displayMessageSelectors.getDisplayMessagesByKey(messageMapKey(execContext))(
+        this.#get(),
+      );
+
+      const pendingToolMsgIds = msgs.flatMap((m) => {
+        const ids: string[] = [];
+        if (m.role === 'tool' && m.pluginIntervention?.status === 'pending') ids.push(m.id);
+
+        const childIds =
+          m.children?.flatMap((child) =>
+            (child.tools ?? [])
+              .filter((t) => t.intervention?.status === 'pending' && t.result_msg_id)
+              .map((t) => t.result_msg_id!),
+          ) ?? [];
+
+        return [...ids, ...childIds];
+      });
+
+      for (const msgId of pendingToolMsgIds) {
+        this.#get().internal_dispatchMessage({
+          id: msgId,
+          type: 'updateMessage',
+          value: {
+            pluginIntervention: { status: 'aborted' },
+            content: 'User bypassed this interaction by sending a message directly.',
+          },
+        });
+        void messageService.updateMessagePlugin(
+          msgId,
+          { intervention: { status: 'aborted' } },
+          {
+            agentId: execContext.agentId,
+            groupId: execContext.groupId,
+            threadId: execContext.threadId,
+            topicId: execContext.topicId,
+          },
+        );
+      }
+    }
+
+    // ── AI execution (client mode) ──
+    {
       const displayMessages = displayMessageSelectors.getDisplayMessagesByKey(
         messageMapKey(execContext),
       )(this.#get());
 
       try {
-        // When agents are @mentioned in non-group context, auto-enable agent-management tool
-        // so the supervisor can delegate via callAgent
-        const effectiveSelectedTools =
-          hasMentionedAgents &&
-          !selectedTools.some((t) => t.identifier === AgentManagementIdentifier)
-            ? [
-                ...selectedTools,
-                { identifier: AgentManagementIdentifier, name: 'Agent Management' },
-              ]
-            : selectedTools;
+        // When agents are @mentioned, inject a slim callAgent-only manifest
+        // so the AI can delegate directly without activating the full agent-management tool
+        const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
 
-        const hasInitialContext =
-          effectiveSelectedTools.length > 0 || selectedSkills.length > 0 || hasMentionedAgents;
+        const hasInitialContext = hasMentionedAgents || !!injectedManifests;
 
+        // Note: selectedSkills and selectedTools are NOT passed here — they are
+        // persisted into the user message content above so they survive across
+        // turns without re-injection.
         const agentRuntimeInitialContext = hasInitialContext
           ? {
               initialContext: {
-                ...(selectedSkills.length > 0 ? { selectedSkills } : undefined),
-                ...(effectiveSelectedTools.length > 0
-                  ? { selectedTools: effectiveSelectedTools }
-                  : undefined),
                 // Only inject mentionedAgents in non-group context to avoid
                 // group @member mentions (including ALL_MEMBERS) leaking into agent-management
                 ...(hasMentionedAgents ? { mentionedAgents } : undefined),
+                ...(injectedManifests ? { injectedManifests } : undefined),
               },
               phase: 'init' as const,
             }
@@ -596,7 +882,7 @@ export class ConversationLifecycleActionImpl {
    * Execute context compression for /compact command.
    * Reuses the same service methods as the agent runtime's compress_context executor.
    */
-  #executeCompression = async (
+  executeCompression = async (
     context: Record<string, any>,
     parentOperationId: string,
   ): Promise<void> => {

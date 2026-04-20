@@ -1,5 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type ToolManifest } from '@lobechat/types';
 import { ActionIcon, Checkbox, Flexbox, FormItem, Input } from '@lobehub/ui';
 import { type FormInstance } from 'antd';
 import { Form } from 'antd';
@@ -39,7 +39,7 @@ const UrlManifestForm = memo<{ form: FormInstance; isEditMode: boolean }>(
   ({ form, isEditMode }) => {
     const { t } = useTranslation('plugin');
 
-    const [manifest, setManifest] = useState<LobeChatPluginManifest>();
+    const [manifest, setManifest] = useState<ToolManifest>();
 
     const urlKey = ['customParams', 'manifestUrl'];
     const proxyKey = ['customParams', 'useProxy'];
@@ -89,7 +89,7 @@ const UrlManifestForm = memo<{ form: FormInstance; isEditMode: boolean }>(
                 }
               },
             },
-            // 编辑模式下，不进行重复校验
+            // In edit mode, skip duplicate validation
             isEditMode
               ? {}
               : {

@@ -1,4 +1,3 @@
-import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
@@ -26,11 +25,21 @@ export interface ChatPluginPayload {
 /**
  * Tool source indicates where the tool comes from
  */
-export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill';
+export type ToolSource = 'builtin' | 'client' | 'mcp' | 'klavis' | 'lobehubSkill';
+
+/**
+ * Tool executor indicates where the tool is executed for a given invocation.
+ * Orthogonal to ToolSource (origin): executor describes dispatch target.
+ */
+export type ToolExecutor = 'client' | 'server';
 
 export interface ChatToolPayload {
   apiName: string;
   arguments: string;
+  /**
+   * Tool executor: dispatch target for this invocation.
+   */
+  executor?: ToolExecutor;
   id: string;
   identifier: string;
   intervention?: ToolIntervention;
@@ -129,5 +138,5 @@ export const ChatToolPayloadSchema = z.object({
 export interface ChatMessagePluginError {
   body?: any;
   message: string;
-  type: IPluginErrorType;
+  type: string;
 }

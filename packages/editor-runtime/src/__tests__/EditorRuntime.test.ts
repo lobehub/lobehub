@@ -523,6 +523,66 @@ describe('EditorRuntime', () => {
     });
   });
 
+  describe('beforeMutateHandler', () => {
+    it('should call beforeMutateHandler before initPage', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      runtime.setBeforeMutateHandler(handler);
+
+      await runtime.initPage({ markdown: 'Test content' });
+      await moment();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call beforeMutateHandler before editTitle', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      runtime.setBeforeMutateHandler(handler);
+
+      await runtime.editTitle({ title: 'New Title' });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call beforeMutateHandler before modifyNodes', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      runtime.setBeforeMutateHandler(handler);
+
+      await runtime.modifyNodes({
+        operations: [{ action: 'insert', afterId: 'root', litexml: '<p>Test</p>' }],
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call beforeMutateHandler before replaceText', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      runtime.setBeforeMutateHandler(handler);
+
+      await runtime.replaceText({ searchText: 'old', newText: 'new' });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still proceed when beforeMutateHandler is not set', async () => {
+      runtime.setBeforeMutateHandler(null);
+
+      const result = await runtime.editTitle({ title: 'Another Title' });
+      expect(result.newTitle).toBe('Another Title');
+    });
+
+    it('should still proceed when beforeMutateHandler throws', async () => {
+      const handler = vi.fn().mockRejectedValue(new Error('Handler failed'));
+      runtime.setBeforeMutateHandler(handler);
+
+      // Should not throw; initPage should proceed
+      const result = await runtime.initPage({ markdown: 'Test content' });
+      await moment();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(result.nodeCount).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe('getPageContentContext', () => {
     beforeEach(async () => {
       await runtime.initPage({ markdown: 'Test content for context' });

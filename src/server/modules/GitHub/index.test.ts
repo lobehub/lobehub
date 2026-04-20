@@ -79,6 +79,40 @@ describe('GitHub', () => {
       expect(result.path).toBeUndefined();
     });
 
+    it('should parse /blob/ URL and strip file name to get directory path', () => {
+      const result = gh.parseRepoUrl(
+        'https://github.com/kepano/obsidian-skills/blob/main/skills/json-canvas/SKILL.md',
+      );
+      expect(result).toEqual({
+        branch: 'main',
+        owner: 'kepano',
+        path: 'skills/json-canvas',
+        repo: 'obsidian-skills',
+      });
+    });
+
+    it('should parse /blob/ URL pointing to a file at repo root (no subdirectory)', () => {
+      const result = gh.parseRepoUrl('https://github.com/owner/repo/blob/main/SKILL.md');
+      expect(result).toEqual({
+        branch: 'main',
+        owner: 'owner',
+        repo: 'repo',
+      });
+      expect(result.path).toBeUndefined();
+    });
+
+    it('should parse /blob/ URL with nested path', () => {
+      const result = gh.parseRepoUrl(
+        'https://github.com/anthropics/skills/blob/main/skills/pptx/SKILL.md',
+      );
+      expect(result).toEqual({
+        branch: 'main',
+        owner: 'anthropics',
+        path: 'skills/pptx',
+        repo: 'skills',
+      });
+    });
+
     it('should parse GitHub URL without protocol', () => {
       const result = gh.parseRepoUrl('github.com/lobehub/lobe-chat');
       expect(result).toEqual({

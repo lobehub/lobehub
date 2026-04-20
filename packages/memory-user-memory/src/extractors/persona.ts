@@ -1,4 +1,5 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
+import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import { userPersonaPrompt } from '../prompts';
@@ -115,11 +116,14 @@ export class UserPersonaExtractor extends BaseMemoryExtractor<
       { content: userPrompt, role: 'user' as const },
     ];
 
-    const result = (await this.runtime.generateObject({
-      messages,
-      model: this.model,
-      tools: this.getTools(options || {}),
-    })) as unknown;
+    const result = (await this.runtime.generateObject(
+      {
+        messages,
+        model: this.model,
+        tools: this.getTools(options || {}),
+      },
+      { metadata: { trigger: RequestTrigger.Memory } },
+    )) as unknown;
 
     if (Array.isArray(result)) {
       const firstCall = result[0];

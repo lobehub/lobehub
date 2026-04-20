@@ -28,7 +28,7 @@ const ArtifactItem = memo<ArtifactItemProps>(({ payload, messageId, identifier =
   const pluginMeta = useToolStore(toolSelectors.getMetaById(identifier), isEqual);
   const isToolHasUI = useToolStore(toolSelectors.isToolHasUI(identifier));
   const openToolUI = useChatStore((s) => s.openToolUI);
-  const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? t('unknownPlugin');
+  const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? identifier;
 
   return (
     <Flexbox

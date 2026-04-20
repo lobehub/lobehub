@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { AnimatePresence, m as motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
@@ -8,13 +8,15 @@ import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import CommunityRecommend from '../CommunityRecommend';
 import SuggestQuestions from '../SuggestQuestions';
 import ModeTag from './ModeTag';
-import SkillInstallBanner from './SkillInstallBanner';
+import SkillInstallBanner, { SKILL_INSTALL_BANNER_ID } from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
@@ -25,7 +27,10 @@ const InputArea = () => {
   const inputActiveMode = useHomeStore((s) => s.inputActiveMode);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
-  const showSkillBanner = isLobehubSkillEnabled || isKlavisEnabled;
+  const isSkillBannerDismissed = useGlobalStore(
+    systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
+  );
+  const showSkillBanner = (isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed;
   const chatInputRef = useRef<HTMLDivElement>(null);
 
   // When a starter mode is activated (e.g. Create Agent / Create Group / Write),
@@ -126,7 +131,7 @@ const InputArea = () => {
       </div>
       <AnimatePresence mode="popLayout">
         {showSuggestQuestions && (
-          <motion.div
+          <m.div
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 8 }}
             initial={{ opacity: 0, scale: 0.98, y: 8 }}
@@ -141,7 +146,7 @@ const InputArea = () => {
               <SuggestQuestions mode={inputActiveMode} />
               <CommunityRecommend mode={inputActiveMode} />
             </Flexbox>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </Flexbox>

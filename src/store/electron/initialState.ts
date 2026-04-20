@@ -1,9 +1,11 @@
 import {
   type DataSyncConfig,
   type ElectronAppState,
+  type GatewayConnectionStatus,
   type NetworkProxySettings,
 } from '@lobechat/electron-client-ipc';
 
+import { type GatewayDeviceInfo } from './actions/gateway';
 import { type NavigationHistoryState } from './actions/navigationHistory';
 import { navigationHistoryInitialState } from './actions/navigationHistory';
 import { type RecentPagesState } from './actions/recentPages';
@@ -26,6 +28,8 @@ export interface ElectronState extends NavigationHistoryState, RecentPagesState,
   appState: ElectronAppState;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
+  gatewayConnectionStatus: GatewayConnectionStatus;
+  gatewayDeviceInfo?: GatewayDeviceInfo;
   isAppStateInit?: boolean;
   isConnectingServer?: boolean;
   isConnectionDrawerOpen?: boolean;
@@ -43,6 +47,7 @@ export const initialState: ElectronState = {
   appState: {},
   dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
+  gatewayConnectionStatus: 'disconnected',
   isAppStateInit: false,
   isConnectingServer: false,
   isConnectionDrawerOpen: false,

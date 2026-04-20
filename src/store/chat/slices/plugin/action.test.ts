@@ -6,14 +6,11 @@ import i18n from 'i18next';
 import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { chatSelectors } from '@/store/chat/selectors';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useToolStore } from '@/store/tool';
-
-const invokeStandaloneTypePlugin = useChatStore.getState().invokeStandaloneTypePlugin;
 
 vi.mock('zustand/traditional');
 
@@ -186,75 +183,6 @@ describe('ChatPluginAction', () => {
 
       // 验证 coreProcessMessage 没有被正确调用
       expect(result.current.internal_execAgentRuntime).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('invokeDefaultTypePlugin', () => {
-    it('should run the default plugin type and update message content', async () => {
-      const pluginPayload = { apiName: 'testApi', arguments: { key: 'value' } };
-      const messageId = 'message-id';
-      const pluginApiResponse = 'Plugin API response';
-
-      const storeState = useChatStore.getState();
-
-      vi.spyOn(storeState, 'refreshMessages');
-      vi.spyOn(storeState, 'triggerAIMessage').mockResolvedValue(undefined);
-      vi.spyOn(storeState, 'optimisticUpdateMessageContent').mockResolvedValue();
-
-      const runSpy = vi.spyOn(chatService, 'runPluginApi').mockResolvedValue({
-        text: pluginApiResponse,
-        traceId: '',
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.invokeDefaultTypePlugin(messageId, pluginPayload);
-      });
-
-      expect(runSpy).toHaveBeenCalledWith(pluginPayload, { signal: undefined, trace: {} });
-      expect(storeState.optimisticUpdateMessageContent).toHaveBeenCalledWith(
-        messageId,
-        pluginApiResponse,
-        undefined,
-        undefined,
-      );
-    });
-
-    it('should handle errors when the plugin API call fails', async () => {
-      const pluginPayload = { apiName: 'testApi', arguments: { key: 'value' } };
-      const messageId = 'message-id';
-      const error = new Error('API call failed');
-      const mockMessages = [{ id: 'msg-1', content: 'test' }] as any;
-
-      // Mock the service to return messages
-      (messageService.updateMessageError as Mock).mockResolvedValue({
-        success: true,
-        messages: mockMessages,
-      });
-
-      const storeState = useChatStore.getState();
-      const replaceMessagesSpy = vi.spyOn(storeState, 'replaceMessages');
-      vi.spyOn(storeState, 'triggerAIMessage').mockResolvedValue(undefined);
-
-      vi.spyOn(chatService, 'runPluginApi').mockRejectedValue(error);
-
-      const { result } = renderHook(() => useChatStore());
-      await act(async () => {
-        await result.current.invokeDefaultTypePlugin(messageId, pluginPayload);
-      });
-
-      expect(chatService.runPluginApi).toHaveBeenCalledWith(pluginPayload, { trace: {} });
-      // Context now includes groupId from the message
-      expect(messageService.updateMessageError).toHaveBeenCalledWith(
-        messageId,
-        error,
-        expect.objectContaining({ topicId: undefined }),
-      );
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        context: expect.objectContaining({ topicId: undefined }),
-      });
-      expect(storeState.triggerAIMessage).not.toHaveBeenCalled(); // 确保在错误情况下不调用此方法
     });
   });
 
@@ -670,84 +598,6 @@ describe('ChatPluginAction', () => {
     });
   });
 
-  describe('invokeMarkdownTypePlugin', () => {
-    it('should invoke a markdown type plugin', async () => {
-      const payload = {
-        apiName: 'markdownApi',
-        identifier: 'abc',
-        type: 'markdown',
-        arguments: JSON.stringify({ key: 'value' }),
-      } as ChatToolPayload;
-      const messageId = 'message-id';
-
-      const runPluginApiMock = vi.fn();
-
-      act(() => {
-        useChatStore.setState({ internal_callPluginApi: runPluginApiMock });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.invokeMarkdownTypePlugin(messageId, payload);
-      });
-
-      // Verify that the markdown type plugin was invoked
-      expect(runPluginApiMock).toHaveBeenCalledWith(messageId, payload);
-    });
-  });
-
-  describe('invokeStandaloneTypePlugin', () => {
-    it('should update message with error and refresh messages if plugin settings are invalid', async () => {
-      const messageId = 'message-id';
-      const mockMessages = [{ id: 'msg-1', content: 'test' }] as any;
-
-      const payload = {
-        identifier: 'pluginName',
-      } as ChatToolPayload;
-
-      // Mock the service to return messages
-      (messageService.updateMessageError as Mock).mockResolvedValue({
-        success: true,
-        messages: mockMessages,
-      });
-
-      const replaceMessagesSpy = vi.fn();
-
-      act(() => {
-        useToolStore.setState({
-          validatePluginSettings: vi
-            .fn()
-            .mockResolvedValue({ valid: false, errors: ['Invalid setting'] }),
-        });
-
-        useChatStore.setState({ replaceMessages: replaceMessagesSpy, invokeStandaloneTypePlugin });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.invokeStandaloneTypePlugin(messageId, payload);
-      });
-
-      const call = vi.mocked(messageService.updateMessageError).mock.calls[0];
-
-      expect(call[1]).toEqual({
-        body: {
-          error: ['Invalid setting'],
-          message: '[plugin] your settings is invalid with plugin manifest setting schema',
-        },
-        message: 'response.PluginSettingsInvalid',
-        type: 'PluginSettingsInvalid',
-      });
-
-      // Context now includes groupId from the message
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        context: expect.objectContaining({ topicId: undefined }),
-      });
-    });
-  });
-
   describe('reInvokeToolMessage', () => {
     it('should re-invoke a tool message', async () => {
       const messageId = 'message-id';
@@ -873,92 +723,6 @@ describe('ChatPluginAction', () => {
       //   expect.objectContaining({ tools: expect.any(Array) }),
       // );
       expect(result.current.refreshMessages).toHaveBeenCalled();
-    });
-  });
-
-  describe('internal_callPluginApi', () => {
-    it('should call plugin API and update message content', async () => {
-      const messageId = 'message-id';
-      const payload: ChatToolPayload = {
-        id: 'tool-id',
-        type: 'default',
-        identifier: 'plugin-id',
-        apiName: 'api-name',
-        arguments: '{}',
-      };
-      const apiResponse = 'API response';
-
-      vi.spyOn(chatService, 'runPluginApi').mockResolvedValue({
-        text: apiResponse,
-        traceId: 'trace-id',
-      });
-
-      act(() => {
-        useChatStore.setState({
-          optimisticUpdateMessageContent: vi.fn(),
-          refreshMessages: vi.fn(),
-        });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.internal_callPluginApi(messageId, payload);
-      });
-
-      expect(chatService.runPluginApi).toHaveBeenCalledWith(payload, expect.any(Object));
-      expect(result.current.optimisticUpdateMessageContent).toHaveBeenCalledWith(
-        messageId,
-        apiResponse,
-        undefined,
-        undefined,
-      );
-      expect(messageService.updateMessage).toHaveBeenCalledWith(messageId, { traceId: 'trace-id' });
-    });
-
-    it('should handle API call errors', async () => {
-      const messageId = 'message-id';
-      const payload: ChatToolPayload = {
-        id: 'tool-id',
-        type: 'default',
-        identifier: 'plugin-id',
-        apiName: 'api-name',
-        arguments: '{}',
-      };
-      const error = new Error('API call failed');
-      const mockMessages = [{ id: 'msg-1', content: 'test' }] as any;
-
-      // Mock the service to return messages
-      (messageService.updateMessageError as Mock).mockResolvedValue({
-        success: true,
-        messages: mockMessages,
-      });
-
-      vi.spyOn(chatService, 'runPluginApi').mockRejectedValue(error);
-
-      const replaceMessagesSpy = vi.fn();
-
-      act(() => {
-        useChatStore.setState({
-          replaceMessages: replaceMessagesSpy,
-        });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-
-      await act(async () => {
-        await result.current.internal_callPluginApi(messageId, payload);
-      });
-
-      // Context now includes groupId from the message
-      expect(messageService.updateMessageError).toHaveBeenCalledWith(
-        messageId,
-        error,
-        expect.objectContaining({ topicId: undefined }),
-      );
-      expect(replaceMessagesSpy).toHaveBeenCalledWith(mockMessages, {
-        context: expect.objectContaining({ topicId: undefined }),
-      });
     });
   });
 

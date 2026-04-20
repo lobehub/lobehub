@@ -4,6 +4,7 @@ import { systemPrompt } from './systemRole';
 import { LocalSystemApiName, LocalSystemIdentifier } from './types';
 
 export const LocalSystemManifest: BuiltinToolManifest = {
+  executors: ['client', 'server'],
   api: [
     {
       description:

@@ -20,7 +20,7 @@ const ModelRoutes = new Hono();
 ModelRoutes.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_READ'), '您没有权限查看模型列表'),
+  requireAnyPermission(getAllScopePermissions('AI_MODEL_READ'), 'You do not have permission to view model list'),
   zValidator('query', ModelsListQuerySchema),
   (c) => {
     const controller = new ModelController();
@@ -32,7 +32,7 @@ ModelRoutes.get(
 ModelRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_CREATE'), '您没有权限创建模型'),
+  requireAnyPermission(getAllScopePermissions('AI_MODEL_CREATE'), 'You do not have permission to create a model'),
   zValidator('json', CreateModelRequestSchema),
   (c) => {
     const controller = new ModelController();
@@ -44,7 +44,7 @@ ModelRoutes.post(
 ModelRoutes.get(
   '/:providerId/:modelId',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_READ'), '您没有权限查看模型详情'),
+  requireAnyPermission(getAllScopePermissions('AI_MODEL_READ'), 'You do not have permission to view model details'),
   zValidator('param', ModelIdParamSchema),
   (c) => {
     const controller = new ModelController();
@@ -56,7 +56,7 @@ ModelRoutes.get(
 ModelRoutes.patch(
   '/:providerId/:modelId',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_MODEL_UPDATE'), '您没有权限更新模型'),
+  requireAnyPermission(getAllScopePermissions('AI_MODEL_UPDATE'), 'You do not have permission to update a model'),
   zValidator('param', ModelIdParamSchema),
   zValidator('json', UpdateModelRequestSchema),
   (c) => {

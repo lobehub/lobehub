@@ -1,5 +1,42 @@
 [
   {
+    "children": {
+      "fixes": ["fix minify cli.", "recent delete."]
+    },
+    "date": "2026-04-16",
+    "version": "2.1.51"
+  },
+  {
+    "children": {},
+    "date": "2026-04-16",
+    "version": "2.1.50"
+  },
+  {
+    "children": {
+      "improvements": ["add agent task system database schema."]
+    },
+    "date": "2026-03-26",
+    "version": "2.1.45"
+  },
+  {
+    "children": {
+      "fixes": ["misc UI/UX improvements and bug fixes."],
+      "improvements": ["add image/video switch."]
+    },
+    "date": "2026-03-20",
+    "version": "2.1.44"
+  },
+  {
+    "children": {
+      "improvements": [
+        "add BM25 indexes with ICU tokenizer for search optimization.",
+        "add agent_documents table."
+      ]
+    },
+    "date": "2026-03-16",
+    "version": "2.1.43"
+  },
+  {
     "children": {},
     "date": "2026-03-14",
     "version": "2.1.42"

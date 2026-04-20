@@ -100,7 +100,7 @@ const ImportPreviewModal = ({
   const tables = getNonEmptyTables(importData);
   const totalRecords = getTotalRecords(tables);
 
-  // 表格列定义
+  // Table column definitions
   const columns = [
     {
       dataIndex: 'name',

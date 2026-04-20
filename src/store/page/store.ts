@@ -3,7 +3,9 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type PageState } from './initialState';
 import { initialState } from './initialState';
 import { type CrudAction } from './slices/crud';
@@ -17,9 +19,18 @@ import { createSelectionSlice } from './slices/selection';
 
 //  ===============  Aggregate createStoreFn ============ //
 
-export type PageStore = PageState & InternalAction & ListAction & SelectionAction & CrudAction;
+export type PageStore = PageState &
+  InternalAction &
+  ListAction &
+  SelectionAction &
+  CrudAction &
+  ResetableStore;
 
-type PageStoreAction = InternalAction & ListAction & SelectionAction & CrudAction;
+type PageStoreAction = InternalAction & ListAction & SelectionAction & CrudAction & ResetableStore;
+
+class PageStoreResetAction extends ResetableStoreAction<PageStore> {
+  protected readonly resetActionName = 'resetPageStore';
+}
 
 const createStore: StateCreator<PageStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<PageStore, [['zustand/devtools', never]]>>
@@ -30,6 +41,7 @@ const createStore: StateCreator<PageStore, [['zustand/devtools', never]]> = (
     createListSlice(...parameters),
     createSelectionSlice(...parameters),
     createCrudSlice(...parameters),
+    new PageStoreResetAction(...parameters),
   ]),
 });
 
@@ -37,5 +49,7 @@ const createStore: StateCreator<PageStore, [['zustand/devtools', never]]> = (
 const devtools = createDevtools('page');
 
 export const usePageStore = createWithEqualityFn<PageStore>()(devtools(createStore), shallow);
+
+expose('page', usePageStore);
 
 export const getPageStoreState = () => usePageStore.getState();

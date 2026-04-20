@@ -30,9 +30,13 @@ export class GitHub {
    * - https://github.com/owner/repo
    * - https://github.com/owner/repo/tree/branch
    * - https://github.com/owner/repo/tree/branch/path/to/dir
+   * - https://github.com/owner/repo/blob/branch/path/to/file.md
    * - github.com/owner/repo
    * - owner/repo (shorthand)
    * - https://github.com/owner/repo.git
+   *
+   * When a /blob/ URL pointing to a file is provided, the file name is stripped
+   * and the parent directory is used as the path.
    */
   parseRepoUrl(url: string, defaultBranch = 'main'): GitHubRepoInfo {
     log('parseRepoUrl: input url=%s, defaultBranch=%s', url, defaultBranch);
@@ -46,9 +50,9 @@ export class GitHub {
     }
 
     // Handle full URL formats
-    // Capture: owner, repo, branch, and optional path after branch
+    // Capture: owner, repo, type (tree/blob), branch, and optional path after branch
     const match = url.match(
-      /(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+)(?:\/tree\/([^/]+)(?:\/(.+))?)?$/,
+      /^(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+)(?:\/(tree|blob)\/([^/]+)(?:\/(.+))?)?$/,
     );
 
     if (!match) {
@@ -56,16 +60,29 @@ export class GitHub {
       throw new GitHubParseError(`Invalid GitHub URL format: ${url}`);
     }
 
-    const [, owner, repo, branch, path] = match;
+    const [, owner, repo, urlType, branch, rawPath] = match;
     const result: GitHubRepoInfo = {
       branch: branch || defaultBranch,
       owner,
       repo: repo.replace(/\.git$/, ''),
     };
 
-    // Add path if it exists (subdirectory within the repo)
-    if (path) {
-      result.path = path;
+    // Process path: for /blob/ URLs pointing to a file, strip the file name to get the directory
+    if (rawPath) {
+      let path = rawPath;
+      if (urlType === 'blob') {
+        // Strip trailing file name (e.g. "skills/json-canvas/SKILL.md" -> "skills/json-canvas")
+        const lastSlash = path.lastIndexOf('/');
+        if (lastSlash > 0) {
+          path = path.slice(0, lastSlash);
+        } else {
+          // The path is just a file at the repo root, no subdirectory
+          path = '';
+        }
+      }
+      if (path) {
+        result.path = path;
+      }
     }
 
     log('parseRepoUrl: matched full URL format, result=%o', result);

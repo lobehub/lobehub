@@ -8,7 +8,8 @@ import { createContext } from 'zustand-utils';
 import { type IFeatureFlagsState } from '@/config/featureFlags';
 import { DEFAULT_FEATURE_FLAGS, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import { createDevtools } from '@/store/middleware/createDevtools';
-import { type GlobalServerConfig } from '@/types/serverConfig';
+import { expose } from '@/store/middleware/expose';
+import { type GlobalBillboard, type GlobalServerConfig } from '@/types/serverConfig';
 import { merge } from '@/utils/merge';
 
 import { flattenActions } from '../utils/flattenActions';
@@ -16,6 +17,7 @@ import { type ServerConfigAction } from './action';
 import { createServerConfigSlice } from './action';
 
 interface ServerConfigState {
+  billboard?: GlobalBillboard | null;
   featureFlags: IFeatureFlagsState;
   isMobile?: boolean;
   segmentVariants?: string;
@@ -24,6 +26,7 @@ interface ServerConfigState {
 }
 
 const initialState: ServerConfigState = {
+  billboard: null,
   featureFlags: mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS),
   segmentVariants: '',
   serverConfig: { aiProvider: {}, telemetry: {} },
@@ -73,6 +76,8 @@ export const createServerConfigStore = (initState?: Partial<ServerConfigStore>) 
     if (typeof window !== 'undefined') {
       window.global_serverConfigStore = store;
     }
+
+    expose('serverConfig', store);
   }
 
   return store;

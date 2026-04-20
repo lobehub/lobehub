@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Block,
   DropdownMenuPopup,
   DropdownMenuPortal,
@@ -10,10 +11,11 @@ import {
   menuSharedStyles,
 } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
-import { LucideArrowRight } from 'lucide-react';
+import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import urlJoin from 'url-join';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useUserStore } from '@/store/user';
@@ -83,6 +85,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Flexbox
             horizontal
             className={styles.groupHeader}
+            justify="space-between"
             key={`header-${item.provider.id}`}
             paddingBlock={'12px 4px'}
             paddingInline={'12px 8px'}
@@ -92,6 +95,23 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               name={item.provider.name}
               provider={item.provider.id}
               source={item.provider.source}
+            />
+            <ActionIcon
+              className="settings-icon"
+              icon={LucideBolt}
+              size="small"
+              title={t('ModelSwitchPanel.goToSettings')}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const url = urlJoin('/settings/provider', item.provider.id || 'all');
+                if (e.ctrlKey || e.metaKey) {
+                  window.open(url, '_blank');
+                } else {
+                  navigate(url);
+                }
+                onClose();
+              }}
             />
           </Flexbox>
         );

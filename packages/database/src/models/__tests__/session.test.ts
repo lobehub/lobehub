@@ -25,19 +25,19 @@ const sessionModel = new SessionModel(serverDB, userId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
-  // 并创建初始用户
+  // and create the initial user
   await serverDB.insert(users).values({ id: userId });
 });
 
 afterEach(async () => {
-  // 在每个测试用例之后, 清空用户表 (应该会自动级联删除所有数据)
+  // After each test case, clear the users table (should auto-cascade delete all data)
   await serverDB.delete(users);
 });
 
 describe('SessionModel', () => {
   describe('query', () => {
     it('should query sessions by user ID', async () => {
-      // 创建一些测试数据
+      // Create some test data
       await serverDB.insert(users).values([{ id: '456' }]);
 
       await serverDB.insert(sessions).values([
@@ -46,10 +46,10 @@ describe('SessionModel', () => {
         { id: '3', userId: '456', updatedAt: new Date('2023-03-01') },
       ]);
 
-      // 调用 query 方法
+      // Call the query method
       const result = await sessionModel.query();
 
-      // 断言结果
+      // Assert results
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('2');
       expect(result[1].id).toBe('1');
@@ -76,7 +76,7 @@ describe('SessionModel', () => {
 
   describe('queryWithGroups', () => {
     it('should return sessions grouped by group', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.transaction(async (trx) => {
         await trx.insert(users).values([{ id: '456' }]);
         await trx.insert(sessionGroups).values([
@@ -94,10 +94,10 @@ describe('SessionModel', () => {
         ]);
       });
 
-      // 调用 queryWithGroups 方法
+      // Call the queryWithGroups method
       const result = await sessionModel.queryWithGroups();
 
-      // 断言结果
+      // Assert results
       expect(result.sessions).toHaveLength(6);
       expect(result.sessionGroups).toHaveLength(2);
       expect(result.sessionGroups[0].id).toBe('group1');
@@ -107,10 +107,10 @@ describe('SessionModel', () => {
     });
 
     it('should return empty groups if no sessions', async () => {
-      // 调用 queryWithGroups 方法
+      // Call the queryWithGroups method
       const result = await sessionModel.queryWithGroups();
 
-      // 断言结果
+      // Assert results
       expect(result.sessions).toHaveLength(0);
       expect(result.sessionGroups).toHaveLength(0);
     });
@@ -236,7 +236,7 @@ describe('SessionModel', () => {
 
   describe('count', () => {
     it('should return the count of sessions for the user', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.insert(users).values([{ id: '456' }]);
       await serverDB.insert(sessions).values([
         { id: '1', userId },
@@ -244,22 +244,22 @@ describe('SessionModel', () => {
         { id: '3', userId: '456' },
       ]);
 
-      // 调用 count 方法
+      // Call the count method
       const result = await sessionModel.count();
 
-      // 断言结果
+      // Assert results
       expect(result).toBe(2);
     });
 
     it('should return 0 if no sessions exist for the user', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.insert(users).values([{ id: '456' }]);
       await serverDB.insert(sessions).values([{ id: '3', userId: '456' }]);
 
-      // 调用 count 方法
+      // Call the count method
       const result = await sessionModel.count();
 
-      // 断言结果
+      // Assert results
       expect(result).toBe(0);
     });
 
@@ -366,7 +366,7 @@ describe('SessionModel', () => {
 
   describe('create', () => {
     it('should create a new session', async () => {
-      // 调用 create 方法
+      // Call the create method
       const result = await sessionModel.create({
         type: 'agent',
         session: {
@@ -375,7 +375,7 @@ describe('SessionModel', () => {
         config: { model: 'gpt-3.5-turbo' },
       });
 
-      // 断言结果
+      // Assert results
       const sessionId = result.id;
       expect(sessionId).toBeDefined();
       expect(sessionId.startsWith('ssn_')).toBeTruthy();
@@ -390,7 +390,7 @@ describe('SessionModel', () => {
     });
 
     it('should create a new session with custom ID', async () => {
-      // 调用 create 方法,传入自定义 ID
+      // Call the create method with a custom ID
       const customId = 'custom-id';
       const result = await sessionModel.create({
         type: 'agent',
@@ -399,7 +399,7 @@ describe('SessionModel', () => {
         id: customId,
       });
 
-      // 断言结果
+      // Assert results
       expect(result.id).toBe(customId);
     });
 
@@ -471,7 +471,7 @@ describe('SessionModel', () => {
 
   describe('batchCreate', () => {
     it('should batch create sessions', async () => {
-      // 调用 batchCreate 方法
+      // Call the batchCreate method
       const sessions: NewSession[] = [
         {
           id: '1',
@@ -490,13 +490,13 @@ describe('SessionModel', () => {
       ];
       const result = await sessionModel.batchCreate(sessions);
 
-      // 断言结果
+      // Assert results
       // pglite return affectedRows while postgres return rowCount
       expect((result as any).affectedRows || result.rowCount).toEqual(2);
     });
 
     it.skip('should set group to default if group does not exist', async () => {
-      // 调用 batchCreate 方法,传入不存在的 group
+      // Call the batchCreate method with a non-existent group
       const sessions: NewSession[] = [
         {
           id: '1',
@@ -509,14 +509,14 @@ describe('SessionModel', () => {
       ];
       const result = await sessionModel.batchCreate(sessions);
 
-      // 断言结果
+      // Assert results
       // expect(result[0].group).toBe('default');
     });
   });
 
   describe('duplicate', () => {
     it('should duplicate a session', async () => {
-      // 创建一个用户和一个 session
+      // Create a user and a session
       await serverDB.transaction(async (trx) => {
         await trx
           .insert(sessions)
@@ -525,10 +525,10 @@ describe('SessionModel', () => {
         await trx.insert(agentsToSessions).values({ agentId: 'agent-1', sessionId: '1', userId });
       });
 
-      // 调用 duplicate 方法
+      // Call the duplicate method
       const result = (await sessionModel.duplicate('1', 'Duplicated Session')) as SessionItem;
 
-      // 断言结果
+      // Assert results
       expect(result.id).not.toBe('1');
       expect(result.userId).toBe(userId);
       expect(result.type).toBe('agent');
@@ -542,34 +542,34 @@ describe('SessionModel', () => {
     });
 
     it('should return undefined if session does not exist', async () => {
-      // 调用 duplicate 方法,传入不存在的 session ID
+      // Call the duplicate method with a non-existent session ID
       const result = await sessionModel.duplicate('non-existent-id');
 
-      // 断言结果
+      // Assert results
       expect(result).toBeUndefined();
     });
   });
 
   describe('update', () => {
     it('should update a session', async () => {
-      // 创建一个测试 session
+      // Create a test session
       const sessionId = '123';
       await serverDB.insert(sessions).values({ userId, id: sessionId, title: 'Test Session' });
 
-      // 调用 update 方法更新 session
+      // Call the update method to update the session
       const updatedSessions = await sessionModel.update(sessionId, {
         title: 'Updated Test Session',
         description: 'This is an updated test session',
       });
 
-      // 断言更新后的结果
+      // Assert the updated results
       expect(updatedSessions).toHaveLength(1);
       expect(updatedSessions[0].title).toBe('Updated Test Session');
       expect(updatedSessions[0].description).toBe('This is an updated test session');
     });
 
     it('should not update a session if user ID does not match', async () => {
-      // 创建一个测试 session,但使用不同的 user ID
+      // Create a test session with a different user ID
       await serverDB.insert(users).values([{ id: '777' }]);
 
       const sessionId = '123';
@@ -578,7 +578,7 @@ describe('SessionModel', () => {
         .insert(sessions)
         .values({ userId: '777', id: sessionId, title: 'Test Session' });
 
-      // 尝试更新这个 session,应该不会有任何更新
+      // Attempt to update this session — should produce no updates
       const updatedSessions = await sessionModel.update(sessionId, {
         title: 'Updated Test Session',
       });
@@ -589,26 +589,26 @@ describe('SessionModel', () => {
 
   describe('delete', () => {
     it('should handle deleting a session with no associated messages or topics', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.insert(sessions).values({ id: '1', userId });
 
-      // 调用 delete 方法
+      // Call the delete method
       await sessionModel.delete('1');
 
-      // 断言删除结果
+      // Assert deletion results
       const result = await serverDB.select({ id: sessions.id }).from(sessions);
 
       expect(result).toHaveLength(0);
     });
 
     it('should handle concurrent deletions gracefully', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.insert(sessions).values({ id: '1', userId });
 
-      // 并发调用 delete 方法
+      // Concurrently call the delete method
       await Promise.all([sessionModel.delete('1'), sessionModel.delete('1')]);
 
-      // 断言删除结果
+      // Assert deletion results
       const result = await serverDB.select({ id: sessions.id }).from(sessions);
 
       expect(result).toHaveLength(0);
@@ -673,35 +673,35 @@ describe('SessionModel', () => {
 
   describe('batchDelete', () => {
     it('should handle deleting sessions with no associated messages or topics', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.insert(sessions).values([
         { id: '1', userId },
         { id: '2', userId },
       ]);
 
-      // 调用 batchDelete 方法
+      // Call the batchDelete method
       await sessionModel.batchDelete(['1', '2']);
 
-      // 断言删除结果
+      // Assert deletion results
       const result = await serverDB.select({ id: sessions.id }).from(sessions);
 
       expect(result).toHaveLength(0);
     });
 
     it('should handle concurrent batch deletions gracefully', async () => {
-      // 创建测试数据
+      // Create test data
       await serverDB.insert(sessions).values([
         { id: '1', userId },
         { id: '2', userId },
       ]);
 
-      // 并发调用 batchDelete 方法
+      // Concurrently call the batchDelete method
       await Promise.all([
         sessionModel.batchDelete(['1', '2']),
         sessionModel.batchDelete(['1', '2']),
       ]);
 
-      // 断言删除结果
+      // Assert deletion results
       const result = await serverDB.select({ id: sessions.id }).from(sessions);
 
       expect(result).toHaveLength(0);
@@ -1519,7 +1519,7 @@ describe('SessionModel', () => {
 
   describe('findSessionsByKeywords', () => {
     it('should handle errors gracefully and return empty array', async () => {
-      // 这个测试旨在覆盖 findSessionsByKeywords 中的错误处理逻辑
+      // This test aims to cover the error-handling logic in findSessionsByKeywords
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       // Mock the database query to throw an error
@@ -1528,7 +1528,7 @@ describe('SessionModel', () => {
 
       const result = await sessionModel.findSessionsByKeywords({ keyword: 'test' });
 
-      // 即使发生错误，方法也应该返回一个空数组
+      // Even when an error occurs, the method should return an empty array
       expect(Array.isArray(result)).toBe(true);
       expect(result).toEqual([]);
       expect(consoleSpy).toHaveBeenCalledWith('findSessionsByKeywords error:', expect.any(Error), {

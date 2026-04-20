@@ -2,7 +2,7 @@
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
 import type { GoogleGenAIOptions } from '@google/genai';
-import type { ChatModelCard } from '@lobechat/types';
+import { AgentRuntimeErrorType, type ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { ClientOptions } from 'openai';
 import type OpenAI from 'openai';
@@ -90,6 +90,7 @@ export interface RouteAttemptResult {
   channelId?: string;
   durationMs: number;
   error?: unknown;
+  metadata?: Record<string, unknown>;
   model: string;
   optionIndex: number;
   providerId: string;
@@ -302,6 +303,7 @@ export const createRouterRuntime = ({
     private async runWithFallback<T>(
       model: string,
       requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
+      metadata?: Record<string, unknown>,
     ): Promise<T> {
       const matchedRouter = await this.resolveMatchedRouter(model);
       const routerOptions = this.normalizeRouterOptions(matchedRouter);
@@ -354,6 +356,7 @@ export const createRouterRuntime = ({
               apiType: resolvedApiType,
               channelId,
               durationMs: Date.now() - startTime,
+              metadata,
               model,
               optionIndex: index,
               providerId: id,
@@ -376,6 +379,7 @@ export const createRouterRuntime = ({
               channelId,
               durationMs: Date.now() - startTime,
               error,
+              metadata,
               model,
               optionIndex: index,
               providerId: id,
@@ -387,6 +391,14 @@ export const createRouterRuntime = ({
             .catch((e) => {
               log('onRouteAttempt callback error: %O', e);
             });
+
+          // Non-retryable errors: the request itself is invalid, retrying with another channel won't help
+          if (
+            (error as ChatCompletionErrorPayload)?.errorType ===
+            AgentRuntimeErrorType.ExceededContextWindow
+          ) {
+            throw error;
+          }
 
           if (attempt < totalOptions) {
             log(
@@ -452,8 +464,10 @@ export const createRouterRuntime = ({
      */
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
-        return await this.runWithFallback(payload.model, (runtime) =>
-          runtime.chat!(payload, options),
+        return await this.runWithFallback(
+          payload.model,
+          (runtime) => runtime.chat!(payload, options),
+          options?.metadata,
         );
       } catch (e) {
         if (params.chatCompletion?.handleError) {
@@ -485,14 +499,18 @@ export const createRouterRuntime = ({
     }
 
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.generateObject!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.generateObject!(payload, options),
+        options?.metadata,
       );
     }
 
     async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
-      return this.runWithFallback(payload.model, (runtime) =>
-        runtime.embeddings!(payload, options),
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.embeddings!(payload, options),
+        options?.metadata,
       );
     }
 

@@ -1,5 +1,9 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -8,6 +12,8 @@ import { type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
+// TODO: temporarily disabled until notification UI is polished
+// import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
@@ -155,6 +161,22 @@ const categorizeError = (
     };
   }
 
+  // Content moderation / policy violation — return a clean, generic message
+  const errorMsg: string = error.message || error.error?.message || '';
+  const errorCode: string = error.code || error.error?.code || '';
+  if (
+    errorCode === 'InputTextSensitiveContentDetected' ||
+    errorCode === 'content_policy_violation' ||
+    errorMsg.toLowerCase().includes('content policy') ||
+    errorMsg.toLowerCase().includes('sensitive information')
+  ) {
+    return {
+      errorMessage:
+        'The request content may violate content policy. Please modify your prompt and try again.',
+      errorType: AsyncTaskErrorType.ServerError,
+    };
+  }
+
   if (error instanceof AsyncTaskError) {
     return {
       errorMessage: typeof error.body === 'string' ? error.body : error.body.detail,
@@ -239,6 +261,10 @@ export const imageRouter = router({
       try {
         const imageGenerationPromise = async (signal: AbortSignal) => {
           log('Initializing agent runtime for provider: %s', provider);
+          const { requestedModelId, resolvedModelId } = await resolveBusinessModelMapping(
+            provider,
+            model,
+          );
 
           // Read user's provider config from database
           const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
@@ -247,7 +273,7 @@ export const imageRouter = router({
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
           const response = await modelRuntime.createImage!({
-            model,
+            model: resolvedModelId,
             params: params as unknown as RuntimeImageGenParams,
           });
 
@@ -342,14 +368,28 @@ export const imageRouter = router({
             status: AsyncTaskStatus.Success,
           });
 
+          // TODO: temporarily disabled until notification UI is polished
+          // notifyImageCompleted({
+          //   duration,
+          //   generationBatchId,
+          //   model,
+          //   prompt: params.prompt,
+          //   topicId: generationTopicId,
+          //   userId: ctx.userId,
+          // }).catch((err) => console.error('[image-async] notification failed:', err));
+
           if (ENABLE_BUSINESS_FEATURES) {
             await chargeAfterGenerate({
               metrics: { latency: duration },
               metadata: {
                 asyncTaskId: taskId,
                 generationBatchId,
-                modelId: model,
                 topicId: generationTopicId,
+                ...buildMappedBusinessModelFields({
+                  provider,
+                  requestedModelId,
+                  resolvedModelId,
+                }),
               },
               modelUsage,
               provider,

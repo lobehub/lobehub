@@ -7,9 +7,11 @@ import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { type LobeDocument } from '@/types/document';
 import { DocumentSourceType } from '@/types/document';
+import { type ResourceItem } from '@/types/resource';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type FileStore } from '../../store';
+import type { FileStore } from '../../store';
+import { getResourceQueryKey } from '../resource/utils';
 import { type DocumentQueryFilter } from './initialState';
 
 const n = setNamespace('document');
@@ -17,6 +19,22 @@ const n = setNamespace('document');
 const ALLOWED_DOCUMENT_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
 const ALLOWED_DOCUMENT_FILE_TYPES = new Set(['custom/document', 'application/pdf']);
 const EDITOR_DOCUMENT_FILE_TYPE = 'custom/document';
+
+interface ResourceDocumentSnapshot {
+  content?: string | null;
+  createdAt?: Date | string;
+  editorData?: LobeDocument['editorData'] | string;
+  fileType?: string;
+  id: string;
+  knowledgeBaseId?: string;
+  metadata?: LobeDocument['metadata'] | null;
+  parentId?: string | null;
+  slug?: string | null;
+  source?: string | null;
+  title?: string | null;
+  totalCharCount?: number;
+  updatedAt?: Date | string;
+}
 
 /**
  * Check if a page should be displayed in the page list
@@ -41,6 +59,149 @@ export class DocumentActionImpl {
     this.#set = set;
     this.#get = get;
   }
+
+  #findExistingDocument = (documentId: string): LobeDocument | undefined => {
+    const { documents, localDocumentMap } = this.#get();
+
+    return localDocumentMap.get(documentId) ?? documents.find((doc) => doc.id === documentId);
+  };
+
+  #normalizeDate = (value: Date | string | undefined, fallback: Date) => {
+    return value ? new Date(value) : fallback;
+  };
+
+  #parseEditorData = (
+    editorData: LobeDocument['editorData'] | string | undefined,
+    fallback: ResourceItem['editorData'],
+  ): ResourceItem['editorData'] => {
+    if (editorData === undefined) return fallback;
+    if (editorData === null) return null;
+
+    return typeof editorData === 'string' ? JSON.parse(editorData) : editorData;
+  };
+
+  #createUpdatedDocument = (
+    existingDocument: LobeDocument,
+    updates: Partial<LobeDocument>,
+  ): LobeDocument => {
+    const mergedMetadata =
+      updates.metadata !== undefined
+        ? { ...existingDocument.metadata, ...updates.metadata }
+        : existingDocument.metadata;
+
+    const cleanedMetadata = mergedMetadata
+      ? Object.fromEntries(Object.entries(mergedMetadata).filter(([, v]) => v !== undefined))
+      : {};
+
+    return {
+      ...existingDocument,
+      ...updates,
+      metadata: cleanedMetadata,
+      title: updates.title || existingDocument.title,
+      updatedAt: new Date(),
+    };
+  };
+
+  #setLocalDocument = (documentId: string, document: LobeDocument, actionName: string) => {
+    const { localDocumentMap } = this.#get();
+    const newMap = new Map(localDocumentMap);
+    newMap.set(documentId, document);
+    this.#set({ localDocumentMap: newMap }, false, actionName);
+  };
+
+  #isResourceVisibleInCurrentQuery = (resource: ResourceItem): boolean => {
+    const { queryParams, resourceMap } = this.#get();
+
+    if (!queryParams) return false;
+
+    if (
+      queryParams.libraryId !== undefined &&
+      (resource.knowledgeBaseId ?? undefined) !== queryParams.libraryId
+    ) {
+      return false;
+    }
+
+    const keyword = queryParams.q?.trim().toLowerCase();
+    if (keyword) {
+      const candidate = `${resource.name} ${resource.title ?? ''}`.trim().toLowerCase();
+      if (!candidate.includes(keyword)) return false;
+    }
+
+    if (queryParams.parentId == null) {
+      return (resource.parentId ?? null) === null;
+    }
+
+    if (!resource.parentId) return false;
+    if (resource.parentId === queryParams.parentId) return true;
+
+    const parentResource = resourceMap.get(resource.parentId);
+    return parentResource?.slug === queryParams.parentId;
+  };
+
+  #createResourceItem = (
+    document: ResourceDocumentSnapshot,
+    fallback?: ResourceItem,
+    options?: { optimistic?: boolean },
+  ): ResourceItem => {
+    const optimistic = options?.optimistic ?? false;
+    const now = new Date();
+
+    return {
+      ...fallback,
+      _optimistic: optimistic
+        ? {
+            error: fallback?._optimistic?.error,
+            isPending: true,
+            lastSyncAttempt: fallback?._optimistic?.lastSyncAttempt,
+            queryKey: getResourceQueryKey(this.#get().queryParams),
+            retryCount: fallback?._optimistic?.retryCount ?? 0,
+          }
+        : undefined,
+      content: document.content !== undefined ? document.content : (fallback?.content ?? null),
+      createdAt: this.#normalizeDate(document.createdAt, fallback?.createdAt ?? now),
+      editorData: this.#parseEditorData(document.editorData, fallback?.editorData),
+      fileType: document.fileType ?? fallback?.fileType ?? EDITOR_DOCUMENT_FILE_TYPE,
+      id: document.id,
+      knowledgeBaseId: document.knowledgeBaseId ?? fallback?.knowledgeBaseId,
+      metadata: document.metadata ?? fallback?.metadata,
+      name:
+        document.title !== undefined
+          ? (document.title ?? 'Untitled')
+          : (fallback?.name ?? fallback?.title ?? 'Untitled'),
+      parentId: document.parentId !== undefined ? document.parentId : (fallback?.parentId ?? null),
+      size: document.totalCharCount ?? fallback?.size ?? document.content?.length ?? 0,
+      slug: document.slug !== undefined ? document.slug : fallback?.slug,
+      sourceType: 'document',
+      title:
+        document.title !== undefined
+          ? (document.title ?? undefined)
+          : (fallback?.title ?? undefined),
+      updatedAt: this.#normalizeDate(document.updatedAt, fallback?.updatedAt ?? now),
+      url: document.source !== undefined ? (document.source ?? '') : (fallback?.url ?? ''),
+    };
+  };
+
+  #syncResourceItem = (resource: ResourceItem, options?: { allowInsert?: boolean }) => {
+    const { queryParams, removeLocalResource, replaceLocalResource, resourceList, resourceMap } =
+      this.#get();
+    const exists =
+      resourceMap.has(resource.id) || resourceList.some((item) => item.id === resource.id);
+
+    if (exists) {
+      if (!queryParams || this.#isResourceVisibleInCurrentQuery(resource)) {
+        replaceLocalResource(resource.id, resource);
+      } else {
+        removeLocalResource(resource.id);
+      }
+
+      return;
+    }
+
+    if (options?.allowInsert === false || !queryParams) return;
+    if (!this.#isResourceVisibleInCurrentQuery(resource)) return;
+
+    replaceLocalResource(resource.id, resource);
+  };
 
   createDocument = async ({
     title,
@@ -68,9 +229,25 @@ export class DocumentActionImpl {
       title,
     });
 
-    // Don't refresh pages here - the caller will handle replacing the temp page
-    // with the real one via replaceTempDocumentWithReal, which provides a smooth UX
-    // without triggering the loading skeleton
+    this.#syncResourceItem(
+      this.#createResourceItem(
+        {
+          content: newPage.content,
+          createdAt: newPage.createdAt,
+          editorData: newPage.editorData,
+          fileType: newPage.fileType,
+          id: newPage.id,
+          knowledgeBaseId,
+          metadata: newPage.metadata,
+          parentId: newPage.parentId,
+          source: newPage.source,
+          title: newPage.title,
+          totalCharCount: newPage.totalCharCount,
+          updatedAt: newPage.updatedAt,
+        },
+        undefined,
+      ),
+    );
 
     return newPage;
   };
@@ -99,9 +276,26 @@ export class DocumentActionImpl {
       title: name,
     });
 
-    // Refetch resource list to show the new folder
-    const { revalidateResources } = await import('../resource/hooks');
-    await revalidateResources();
+    this.#syncResourceItem(
+      this.#createResourceItem(
+        {
+          content: folder.content,
+          createdAt: folder.createdAt,
+          editorData: folder.editorData,
+          fileType: folder.fileType,
+          id: folder.id,
+          knowledgeBaseId,
+          metadata: folder.metadata,
+          parentId: folder.parentId,
+          slug: folder.slug,
+          source: folder.source,
+          title: folder.title,
+          totalCharCount: folder.totalCharCount,
+          updatedAt: folder.updatedAt,
+        },
+        undefined,
+      ),
+    );
 
     return folder.id;
   };
@@ -426,9 +620,35 @@ export class DocumentActionImpl {
       title: updates.title,
     });
 
-    // Refetch resource list to show updated document
-    const { revalidateResources } = await import('../resource/hooks');
-    await revalidateResources();
+    const existingDocument = this.#findExistingDocument(id);
+
+    if (existingDocument) {
+      const updatedDocument = this.#createUpdatedDocument(existingDocument, updates);
+      this.#setLocalDocument(id, updatedDocument, n('updateDocument'));
+      this.#syncResourceItem(
+        this.#createResourceItem(updatedDocument, this.#get().resourceMap.get(id)),
+      );
+      return;
+    }
+
+    const existingResource = this.#get().resourceMap.get(id);
+    if (!existingResource) return;
+
+    this.#syncResourceItem(
+      this.#createResourceItem(
+        {
+          content: updates.content,
+          editorData: updates.editorData,
+          fileType: existingResource.fileType,
+          id,
+          metadata: updates.metadata,
+          parentId: updates.parentId,
+          title: updates.title,
+          updatedAt: new Date(),
+        },
+        existingResource,
+      ),
+    );
   };
 
   updateDocumentOptimistically = async (
@@ -448,30 +668,17 @@ export class DocumentActionImpl {
       return;
     }
 
-    // Create updated page with new timestamp
-    // Merge metadata if both exist, otherwise use the update's metadata or preserve existing
-    const mergedMetadata =
-      updates.metadata !== undefined
-        ? { ...existingPage.metadata, ...updates.metadata }
-        : existingPage.metadata;
-
-    // Clean up undefined values from metadata
-    const cleanedMetadata = mergedMetadata
-      ? Object.fromEntries(Object.entries(mergedMetadata).filter(([, v]) => v !== undefined))
-      : {};
-
-    const updatedPage: LobeDocument = {
-      ...existingPage,
-      ...updates,
-      metadata: cleanedMetadata,
-      title: updates.title || existingPage.title,
-      updatedAt: new Date(),
-    };
+    const existingResource = this.#get().resourceMap.get(documentId);
+    const updatedPage = this.#createUpdatedDocument(existingPage, updates);
 
     // Update local map immediately for optimistic UI
-    const newMap = new Map(localDocumentMap);
-    newMap.set(documentId, updatedPage);
-    this.#set({ localDocumentMap: newMap }, false, n('updateDocumentOptimistically'));
+    this.#setLocalDocument(documentId, updatedPage, n('updateDocumentOptimistically'));
+
+    if (existingResource) {
+      this.#syncResourceItem(
+        this.#createResourceItem(updatedPage, existingResource, { optimistic: true }),
+      );
+    }
 
     // Queue background sync to DB
     try {
@@ -483,13 +690,12 @@ export class DocumentActionImpl {
             : JSON.stringify(updatedPage.editorData || {}),
         id: documentId,
         metadata: updatedPage.metadata || {},
-        parentId: updatedPage.parentId || undefined,
+        parentId: updatedPage.parentId !== undefined ? updatedPage.parentId : undefined,
         title: updatedPage.title || updatedPage.filename,
       });
-
-      // After successful sync, refetch resources to get server state
-      const { revalidateResources } = await import('../resource/hooks');
-      await revalidateResources();
+      if (existingResource) {
+        this.#syncResourceItem(this.#createResourceItem(updatedPage, existingResource));
+      }
     } catch (error) {
       console.error('[updateDocumentOptimistically] Failed to sync to DB:', error);
       // On error, revert the optimistic update
@@ -500,6 +706,10 @@ export class DocumentActionImpl {
         revertMap.delete(documentId);
       }
       this.#set({ localDocumentMap: revertMap }, false, n('revertOptimisticUpdate'));
+
+      if (existingResource) {
+        this.#syncResourceItem(existingResource);
+      }
     }
   };
 

@@ -8,7 +8,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useQueryState } from '@/hooks/useQueryParam';
-import MemoryAnalysis from '@/routes/(main)/memory/features/MemoryAnalysis';
+import ActionBar from '@/routes/(main)/memory/features/ActionBar';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/memory/features/TimeLineView/useScrollParent';
 import { useUserMemoryStore } from '@/store/userMemory';
 
@@ -88,11 +88,10 @@ const ContextsArea = memo(() => {
           )
         }
         right={
-          <>
-            <MemoryAnalysis iconOnly />
+          <ActionBar showAnalysis showPurge>
             <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
             <WideScreenButton />
-          </>
+          </ActionBar>
         }
       />
       <Flexbox

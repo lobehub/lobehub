@@ -19,9 +19,11 @@ import {
 
 import { agentRouter } from './agent';
 import { agentGroupRouter } from './agentGroup';
+import { credsRouter } from './creds';
 import { oidcRouter } from './oidc';
 import { skillRouter } from './skill';
 import { socialRouter } from './social';
+import { socialProfileRouter } from './socialProfile';
 import { userRouter } from './user';
 
 const log = debug('lambda-router:market');
@@ -54,9 +56,11 @@ export const marketRouter = router({
   // ============================== Agent Group Management (authenticated) ==============================
   agentGroup: agentGroupRouter,
 
+  // ============================== Credential Management ==============================
+  creds: credsRouter,
+
   // ============================== Skill Management ==============================
   skill: skillRouter,
-
 
   getAgentsByPlugin: marketProcedure
     .input(
@@ -82,7 +86,7 @@ export const marketRouter = router({
     }),
 
   // ============================== Assistant Market ==============================
-getAssistantCategories: marketProcedure
+  getAssistantCategories: marketProcedure
     .input(
       z
         .object({
@@ -889,6 +893,9 @@ getAssistantCategories: marketProcedure
 
   // ============================== Social Features ==============================
   social: socialRouter,
+
+  // ============================== Social Profile OAuth ==============================
+  socialProfile: socialProfileRouter,
 
   submitFeedback: marketProcedure
     .input(

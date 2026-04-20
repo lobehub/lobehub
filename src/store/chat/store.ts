@@ -5,7 +5,9 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type ChatStoreState } from './initialState';
 import { initialState } from './initialState';
 import { type ChatAIAgentAction } from './slices/aiAgent/actions';
@@ -41,11 +43,16 @@ export type ChatStoreAction = ChatMessageAction &
   ChatBuiltinToolAction &
   ChatPortalAction &
   OperationActions &
-  ChatAIAgentAction;
+  ChatAIAgentAction &
+  ResetableStore;
 
 export type ChatStore = ChatStoreAction & ChatStoreState;
 
 //  ===============  Aggregate createStoreFn ============ //
+
+class ChatStoreResetAction extends ResetableStoreAction<ChatStore> {
+  protected readonly resetActionName = 'resetChatStore';
+}
 
 const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
   ...params: Parameters<StateCreator<ChatStore, [['zustand/devtools', never]]>>
@@ -64,6 +71,7 @@ const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
       new ChatPortalActionImpl(...params),
       new OperationActionsImpl(...params),
       chatAiAgent(...params),
+      new ChatStoreResetAction(...params),
     ]) as ChatStoreAction),
     // cloud
   }) as ChatStore;
@@ -76,8 +84,6 @@ export const useChatStore = createWithEqualityFn<ChatStore>()(
   shallow,
 );
 
-if (typeof window !== 'undefined') {
-  window.__CHAT_STORE__ = useChatStore;
-}
+expose('chat', useChatStore);
 
 export const getChatStoreState = () => useChatStore.getState();

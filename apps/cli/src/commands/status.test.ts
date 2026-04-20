@@ -3,10 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock resolveToken
 vi.mock('../auth/resolveToken', () => ({
-  resolveToken: vi.fn().mockResolvedValue({ token: 'test-token', userId: 'test-user' }),
+  resolveToken: vi.fn().mockResolvedValue({
+    serverUrl: 'https://app.lobehub.com',
+    token: 'test-token',
+    tokenType: 'jwt',
+    userId: 'test-user',
+  }),
 }));
 vi.mock('../settings', () => ({
   loadSettings: vi.fn().mockReturnValue(null),
+  normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
   saveSettings: vi.fn(),
 }));
 
@@ -114,6 +120,16 @@ describe('status command', () => {
       gatewayUrl: 'https://gateway.example.com',
       serverUrl: 'https://self-hosted.example.com',
     });
+  });
+  it('should pass the resolved serverUrl to GatewayClient', async () => {
+    const program = createProgram();
+    const parsePromise = program.parseAsync(['node', 'test', 'status']);
+    await vi.advanceTimersByTimeAsync(0);
+
+    clientEventHandlers['connected']?.();
+
+    await parsePromise;
+    expect(clientOptions.serverUrl).toBe('https://app.lobehub.com');
   });
 
   it('should log CONNECTED on successful connection', async () => {

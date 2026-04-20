@@ -1,4 +1,13 @@
 {
+  "gateway.description": "설명",
+  "gateway.descriptionPlaceholder": "선택 사항",
+  "gateway.deviceName": "장치 이름",
+  "gateway.deviceNamePlaceholder": "장치 이름을 입력하세요",
+  "gateway.enableConnection": "게이트웨이에 연결",
+  "gateway.statusConnected": "게이트웨이에 연결됨",
+  "gateway.statusConnecting": "게이트웨이에 연결 중...",
+  "gateway.statusDisconnected": "게이트웨이에 연결되지 않음",
+  "gateway.title": "장치 게이트웨이",
   "navigation.chat": "채팅",
   "navigation.discover": "발견",
   "navigation.discoverAssistants": "어시스턴트 발견",
@@ -120,5 +129,9 @@
   "waitingOAuth.errorTitle": "권한 연결 실패",
   "waitingOAuth.helpText": "브라우저가 자동으로 열리지 않으면, 취소를 클릭한 후 다시 시도하세요.",
   "waitingOAuth.retry": "다시 시도",
-  "waitingOAuth.title": "인증 연결 대기 중"
+  "waitingOAuth.title": "인증 연결 대기 중",
+  "window.close": "창 닫기",
+  "window.maximize": "창 최대화",
+  "window.minimize": "창 최소화",
+  "window.restore": "창 복원"
 }

@@ -1,7 +1,8 @@
 {
-  "desc": "這裡會不定期更新我們正在探索的新功能，歡迎試用！",
   "features.assistantMessageGroup.desc": "將助手訊息及其工具調用結果彙整成群組顯示",
   "features.assistantMessageGroup.title": "助手訊息彙整群組",
+  "features.gatewayMode.desc": "透過 Gateway WebSocket 在伺服器端執行代理任務，而非在本機運行。可加快執行速度並降低用戶端資源使用。",
+  "features.gatewayMode.title": "伺服器端代理執行（Gateway）",
   "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",
   "features.groupChat.title": "群組聊天（多智能體）",
   "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",

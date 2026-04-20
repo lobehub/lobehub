@@ -209,6 +209,42 @@ describe('Batch Execution (execAgents)', () => {
     expect(createdTopics.map((t) => t.title).sort()).toEqual(['Topic 1 prompt', 'Topic 2 prompt']);
   });
 
+  it('should preserve deviceId bindings for batch tasks', async () => {
+    mockResponsesCreate.mockResolvedValue(
+      createMockResponsesAPIStream('Response for device-bound topics') as any,
+    );
+
+    const caller = aiAgentRouter.createCaller(createTestContext());
+
+    await caller.execAgents({
+      tasks: [
+        {
+          agentId: testAgentId,
+          autoStart: false,
+          deviceId: 'device-batch-1',
+          prompt: 'Device-bound task 1',
+        },
+        {
+          agentId: testAgentId,
+          autoStart: false,
+          deviceId: 'device-batch-2',
+          prompt: 'Device-bound task 2',
+        },
+      ],
+    });
+
+    const createdTopics = await serverDB
+      .select()
+      .from(topics)
+      .where(eq(topics.agentId, testAgentId));
+
+    expect(createdTopics).toHaveLength(2);
+    expect(createdTopics.map((topic) => topic.metadata?.boundDeviceId).sort()).toEqual([
+      'device-batch-1',
+      'device-batch-2',
+    ]);
+  });
+
   it('should support autoStart for batch tasks', async () => {
     mockResponsesCreate.mockResolvedValue(createMockResponsesAPIStream('Auto start test') as any);
 

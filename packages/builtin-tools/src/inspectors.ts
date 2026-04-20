@@ -1,4 +1,8 @@
 import {
+  LobeActivatorInspectors,
+  LobeActivatorManifest,
+} from '@lobechat/builtin-tool-activator/client';
+import {
   AgentBuilderInspectors,
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
@@ -6,6 +10,10 @@ import {
   AgentManagementInspectors,
   AgentManagementManifest,
 } from '@lobechat/builtin-tool-agent-management/client';
+import {
+  ClaudeCodeIdentifier,
+  ClaudeCodeInspectors,
+} from '@lobechat/builtin-tool-claude-code/client';
 import {
   CloudSandboxIdentifier,
   CloudSandboxInspectors,
@@ -28,6 +36,7 @@ import {
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryInspectors, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
+import { MessageInspectors, MessageManifest } from '@lobechat/builtin-tool-message/client';
 import { NotebookInspectors, NotebookManifest } from '@lobechat/builtin-tool-notebook/client';
 import { PageAgentInspectors, PageAgentManifest } from '@lobechat/builtin-tool-page-agent/client';
 import {
@@ -35,7 +44,6 @@ import {
   SkillStoreManifest,
 } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsInspectors, SkillsManifest } from '@lobechat/builtin-tool-skills/client';
-import { LobeToolsInspectors, LobeToolsManifest } from '@lobechat/builtin-tool-tools/client';
 import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
@@ -55,6 +63,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
     string,
     BuiltinInspector
   >,
+  [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
   [CloudSandboxIdentifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
     string,
@@ -68,9 +77,12 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
+  [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
   [NotebookManifest.identifier]: NotebookInspectors as Record<string, BuiltinInspector>,
   [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
-  [LobeToolsManifest.identifier]: LobeToolsInspectors as Record<string, BuiltinInspector>,
+  [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
+  // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
+  ['lobe-tools']: LobeActivatorInspectors as Record<string, BuiltinInspector>,
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,

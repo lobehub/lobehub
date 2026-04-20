@@ -32,15 +32,22 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     return String(get().editor?.getDocument('markdown') || '').trimEnd();
   },
   handleSendButton: () => {
-    if (!get().editor) return;
-
     const editor = get().editor;
+    if (!editor) return;
 
     get().onSend?.({
       clearContent: () => editor?.cleanDocument(),
       editor: editor!,
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
+    });
+    if (get().expand) {
+      set({ _savedEditorState: undefined, expand: false });
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        editor.focus();
+      });
     });
   },
 
@@ -55,7 +62,9 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   setExpand: (expand) => {
-    set({ expand });
+    const editor = get().editor;
+    const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
+    set({ _savedEditorState, expand });
   },
 
   setJSONState: (content) => {

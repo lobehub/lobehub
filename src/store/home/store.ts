@@ -6,7 +6,9 @@ import { type StateCreator } from 'zustand/vanilla';
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type HomeStoreState } from './initialState';
 import { initialState } from './initialState';
 import { type AgentListAction } from './slices/agentList/action';
@@ -29,13 +31,19 @@ export interface HomeStore
     RecentAction,
     HomeInputAction,
     SidebarUIAction,
+    ResetableStore,
     HomeStoreState {}
 
 type HomeStoreAction = AgentListAction &
   GroupAction &
   RecentAction &
   HomeInputAction &
-  SidebarUIAction;
+  SidebarUIAction &
+  ResetableStore;
+
+class HomeStoreResetAction extends ResetableStoreAction<HomeStore> {
+  protected readonly resetActionName = 'resetHomeStore';
+}
 
 const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<HomeStore, [['zustand/devtools', never]]>>
@@ -47,6 +55,7 @@ const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (
     createRecentSlice(...parameters),
     createHomeInputSlice(...parameters),
     createSidebarUISlice(...parameters),
+    new HomeStoreResetAction(...parameters),
   ]),
 });
 
@@ -61,5 +70,7 @@ export const useHomeStore = createWithEqualityFn<HomeStore>()(
   ),
   shallow,
 );
+
+expose('home', useHomeStore);
 
 export const getHomeStoreState = () => useHomeStore.getState();

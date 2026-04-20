@@ -4,7 +4,6 @@ import {
   ILitexmlService,
   IMarkdownShortCutService,
 } from '@lobehub/editor';
-import type { IEditorPlugin } from '@lobehub/editor/es/types/kernel';
 import {
   $createParagraphNode,
   $insertNodes,
@@ -32,13 +31,7 @@ export interface ReferTopicPluginOptions {
   theme?: { referTopic?: string };
 }
 
-/**
- * Editor plugin for ReferTopicNode. Implements {@link IEditorPlugin}.
- * - Constructor: registers node, decorator, theme
- * - onInit: called by kernel after Lexical editor creation; registers markdown/litexml writers & readers
- * - destroy: cleanup
- */
-export class ReferTopicPlugin implements IEditorPlugin<ReferTopicPluginOptions> {
+export class ReferTopicPlugin {
   static pluginName = 'ReferTopicPlugin';
 
   config?: ReferTopicPluginOptions;
@@ -106,15 +99,12 @@ export class ReferTopicPlugin implements IEditorPlugin<ReferTopicPluginOptions> 
     });
 
     xmlService?.registerXMLReader('referTopic', (xmlElement: any) => {
-      try {
-        const { INodeHelper } = require('@lobehub/editor/es/editor-kernel/inode/helper');
-        return INodeHelper.createElementNode(ReferTopicNode.getType(), {
-          topicId: xmlElement.getAttribute('id') || '',
-          topicTitle: xmlElement.getAttribute('name') || '',
-        } satisfies Partial<SerializedReferTopicNode>);
-      } catch {
-        return false;
-      }
+      return {
+        topicId: xmlElement.getAttribute('id') || '',
+        topicTitle: xmlElement.getAttribute('name') || '',
+        type: ReferTopicNode.getType(),
+        version: 1,
+      } satisfies SerializedReferTopicNode;
     });
   }
 

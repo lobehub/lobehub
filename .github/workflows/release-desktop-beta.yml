@@ -7,7 +7,7 @@ name: Release Desktop Beta
 # 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1
 #
 # 注意: Stable 版本 (如 v2.0.0) 由 release-desktop-stable.yml 处理
-# 注意: Nightly 版本 (如 v2.1.0-nightly.xxx) 由 release-desktop-nightly.yml 处理
+# 注意: Nightly 版本已停用，不再参与 Desktop 发布流程
 # ============================================
 
 on:
@@ -41,10 +41,10 @@ jobs:
           version="${version#v}"
           echo "version=${version}" >> $GITHUB_OUTPUT
 
-          # Beta 版本包含 beta/alpha/rc (nightly 由 release-desktop-nightly.yml 处理)
+          # Beta 版本包含 beta/alpha/rc；nightly 标签已停用
           if [[ "$version" == *"nightly"* ]]; then
             echo "is_beta=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Skipping: $version is a nightly release (handled by release-desktop-nightly.yml)"
+            echo "⏭️ Skipping: $version is a disabled nightly release tag"
           elif [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]]; then
             echo "is_beta=true" >> $GITHUB_OUTPUT
             echo "✅ Beta release detected: $version"
@@ -62,19 +62,13 @@ jobs:
       - name: Checkout base
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Install deps
-        run: bun i
+        run: pnpm install
 
       - name: Lint
         run: bun run lint
@@ -168,16 +162,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       # 下载所有平台的构建产物
       - name: Download artifacts
@@ -195,13 +183,11 @@ jobs:
       - name: Install yaml only for merge step
         run: |
           cd scripts/electronWorkflow
-          # 在脚本目录创建最小 package.json，防止 bun 向上寻找根 package.json
           if [ ! -f package.json ]; then
             echo '{"name":"merge-mac-release","private":true}' > package.json
           fi
           bun add --no-save yaml@2.8.1
 
-      # 合并 macOS YAML 文件 (使用 bun 运行 JavaScript)
       - name: Merge latest-mac.yml files
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 

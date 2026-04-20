@@ -98,7 +98,7 @@ export const { POST } = serve<RunThreadTrajectoryPayload>(
     flowControl: {
       key: 'agent-eval-run.run-thread-trajectory',
       parallelism: 500,
-      ratePerSecond: 10,
+      ratePerSecond: 20,
     },
     qstashClient,
   },

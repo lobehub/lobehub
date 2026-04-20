@@ -1,6 +1,5 @@
 {
   "actions.confirmRemoveThread": "Zamierzasz usunąć ten wątek podrzędny. Po usunięciu nie będzie można go odzyskać. Proszę postępuj ostrożnie.",
   "newPortalThread.includeContext": "Dołącz kontekst tematu",
-  "newPortalThread.title": "Rozpocznij nowy wątek podrzędny",
-  "notSupportMultiModals": "Wątki podrzędne nie obsługują obecnie przesyłania plików/obrazów. Jeśli masz jakieś prośby, zostaw wiadomość: <1>💬 Strefa dyskusji</1>"
+  "newPortalThread.title": "Rozpocznij nowy wątek podrzędny"
 }

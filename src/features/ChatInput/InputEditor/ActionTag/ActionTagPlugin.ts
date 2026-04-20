@@ -3,7 +3,6 @@ import {
   ILitexmlService,
   IMarkdownShortCutService,
 } from '@lobehub/editor';
-import type { IEditorPlugin } from '@lobehub/editor/es/types/kernel';
 import type { LexicalEditor, LexicalNode } from 'lexical';
 
 import { $isActionTagNode, ActionTagNode, type SerializedActionTagNode } from './ActionTagNode';
@@ -18,13 +17,7 @@ export interface ActionTagPluginOptions {
   theme?: { actionTag?: string };
 }
 
-/**
- * Editor plugin for ActionTagNode. Implements {@link IEditorPlugin}.
- * - Constructor: registers node, decorator, theme
- * - onInit: called by kernel after Lexical editor creation; registers command, selection observer, markdown/litexml
- * - destroy: cleanup
- */
-export class ActionTagPlugin implements IEditorPlugin<ActionTagPluginOptions> {
+export class ActionTagPlugin {
   static pluginName = 'ActionTagPlugin';
 
   config?: ActionTagPluginOptions;
@@ -60,9 +53,20 @@ export class ActionTagPlugin implements IEditorPlugin<ActionTagPluginOptions> {
     const mdService = this.kernel.requireService(IMarkdownShortCutService);
 
     // Writer: ActionTagNode → markdown
+    // Skills → <skill name="..." label="..." />, Tools → <tool name="..." label="..." />
+    // Commands fall back to <action type="..." category="command" label="..." />
     mdService?.registerMarkdownWriter(ActionTagNode.getType(), (ctx: any, node: any) => {
       if ($isActionTagNode(node)) {
-        ctx.appendLine(`<action type="${node.actionType}" category="${node.actionCategory}" />`);
+        const cat = node.actionCategory;
+        if (cat === 'skill') {
+          ctx.appendLine(`<skill name="${node.actionType}" label="${node.actionLabel}" />`);
+        } else if (cat === 'tool') {
+          ctx.appendLine(`<tool name="${node.actionType}" label="${node.actionLabel}" />`);
+        } else {
+          ctx.appendLine(
+            `<action type="${node.actionType}" category="${cat}" label="${node.actionLabel}" />`,
+          );
+        }
       }
     });
   }
@@ -72,8 +76,15 @@ export class ActionTagPlugin implements IEditorPlugin<ActionTagPluginOptions> {
 
     xmlService?.registerXMLWriter(ActionTagNode.getType(), (node: any, ctx: any) => {
       if ($isActionTagNode(node)) {
+        const cat = node.actionCategory;
+        if (cat === 'skill') {
+          return ctx.createXmlNode('skill', { label: node.actionLabel, name: node.actionType });
+        }
+        if (cat === 'tool') {
+          return ctx.createXmlNode('tool', { label: node.actionLabel, name: node.actionType });
+        }
         return ctx.createXmlNode('action', {
-          category: node.actionCategory,
+          category: cat,
           label: node.actionLabel,
           type: node.actionType,
         });
@@ -81,18 +92,32 @@ export class ActionTagPlugin implements IEditorPlugin<ActionTagPluginOptions> {
       return false;
     });
 
-    xmlService?.registerXMLReader('action', (xmlElement: any) => {
-      try {
-        const { INodeHelper } = require('@lobehub/editor/es/editor-kernel/inode/helper');
-        return INodeHelper.createElementNode(ActionTagNode.getType(), {
-          actionCategory: (xmlElement.getAttribute('category') || 'skill') as ActionTagCategory,
-          actionLabel: xmlElement.getAttribute('label') || '',
-          actionType: (xmlElement.getAttribute('type') || 'translate') as ActionTagType,
-        } satisfies Partial<SerializedActionTagNode>);
-      } catch {
-        return false;
-      }
+    // Read <skill>, <tool>, and legacy <action> tags
+    const readSkill = (xmlElement: any): SerializedActionTagNode => ({
+      actionCategory: 'skill',
+      actionLabel: xmlElement.getAttribute('label') || '',
+      actionType: (xmlElement.getAttribute('name') || '') as ActionTagType,
+      type: ActionTagNode.getType(),
+      version: 1,
     });
+    const readTool = (xmlElement: any): SerializedActionTagNode => ({
+      actionCategory: 'tool',
+      actionLabel: xmlElement.getAttribute('label') || '',
+      actionType: (xmlElement.getAttribute('name') || '') as ActionTagType,
+      type: ActionTagNode.getType(),
+      version: 1,
+    });
+    const readLegacyAction = (xmlElement: any): SerializedActionTagNode => ({
+      actionCategory: (xmlElement.getAttribute('category') || 'skill') as ActionTagCategory,
+      actionLabel: xmlElement.getAttribute('label') || '',
+      actionType: (xmlElement.getAttribute('type') || 'translate') as ActionTagType,
+      type: ActionTagNode.getType(),
+      version: 1,
+    });
+
+    xmlService?.registerXMLReader('skill', readSkill);
+    xmlService?.registerXMLReader('tool', readTool);
+    xmlService?.registerXMLReader('action', readLegacyAction);
   }
 
   destroy(): void {

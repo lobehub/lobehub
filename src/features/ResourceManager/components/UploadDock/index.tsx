@@ -3,12 +3,11 @@ import { ActionIcon, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { UploadIcon, XIcon } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, m } from 'motion/react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { convertAlphaToSolid } from '@/utils/colorUtils';
 
 import Item from './Item';
 
@@ -60,11 +59,25 @@ const UploadDock = memo(() => {
   const setExpand = useFileStore((s) => s.setUploadDockExpanded);
   const totalUploadingProgress = useFileStore(fileManagerSelectors.overviewUploadingProgress);
   const fileList = useFileStore(fileManagerSelectors.dockFileList, isEqual);
+  const cancelUploads = useFileStore((s) => s.cancelUploads);
   const overviewUploadingStatus = useFileStore(
     fileManagerSelectors.overviewUploadingStatus,
     isEqual,
   );
   const isUploading = overviewUploadingStatus === 'uploading';
+
+  const hasCancellableUploads = useMemo(
+    () => fileList.some((item) => item.status === 'uploading' || item.status === 'pending'),
+    [fileList],
+  );
+
+  const cancelAllActiveUploads = useCallback(() => {
+    cancelUploads(
+      fileList
+        .filter((item) => item.status === 'uploading' || item.status === 'pending')
+        .map((item) => item.id),
+    );
+  }, [cancelUploads, fileList]);
 
   const icon = useMemo(() => {
     switch (overviewUploadingStatus) {
@@ -111,35 +124,44 @@ const UploadDock = memo(() => {
         onClick={() => {
           setExpand(!expand);
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = convertAlphaToSolid(
-            cssVar.colorFillTertiary,
-            cssVar.colorBgContainer,
-          );
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = cssVar.colorBgContainer;
-        }}
       >
         <Flexbox horizontal align={'center'} className={styles.title} gap={16}>
           {icon}
           {t(`uploadDock.uploadStatus.${overviewUploadingStatus}`)} ·{' '}
           {t('uploadDock.totalCount', { count })}
         </Flexbox>
-        {!isUploading && (
-          <ActionIcon
-            icon={XIcon}
-            onClick={() => {
-              setShow(false);
-              dispatchDockFileList({ ids: fileList.map((item) => item.id), type: 'removeFiles' });
-            }}
-          />
-        )}
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={12}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          {hasCancellableUploads && (
+            <Text
+              style={{ cursor: 'pointer', flexShrink: 0, fontSize: 13 }}
+              type={'secondary'}
+              onClick={cancelAllActiveUploads}
+            >
+              {t('uploadDock.header.cancelAll')}
+            </Text>
+          )}
+          {!isUploading && (
+            <ActionIcon
+              icon={XIcon}
+              onClick={() => {
+                setShow(false);
+                dispatchDockFileList({ ids: fileList.map((item) => item.id), type: 'removeFiles' });
+              }}
+            />
+          )}
+        </Flexbox>
       </Flexbox>
 
       <AnimatePresence mode="wait">
         {expand ? (
-          <motion.div
+          <m.div
             animate={{ height: 400, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             initial={{ height: 0, opacity: 0 }}
@@ -148,7 +170,6 @@ const UploadDock = memo(() => {
             transition={{ duration: 0.3, ease: 'easeInOut' }}
           >
             <Flexbox
-              justify={'space-between'}
               style={{
                 background: cssVar.colorBgContainer,
                 borderBottomLeftRadius: 8,
@@ -156,27 +177,34 @@ const UploadDock = memo(() => {
                 height: 400,
               }}
             >
-              <Flexbox gap={8} paddingBlock={8} style={{ overflowY: 'scroll' }}>
+              <Flexbox
+                flex={1}
+                gap={8}
+                paddingBlock={8}
+                style={{ minHeight: 0, overflowY: 'scroll' }}
+              >
                 {fileList.map((item) => (
                   <Item key={item.id} {...item} />
                 ))}
               </Flexbox>
-              <Center style={{ height: 40, minHeight: 40 }}>
-                <Text
-                  style={{ cursor: 'pointer' }}
-                  type={'secondary'}
-                  onClick={() => {
-                    setExpand(false);
-                  }}
-                >
-                  {t('uploadDock.body.collapse')}
-                </Text>
-              </Center>
+              {isUploading && (
+                <Center style={{ flexShrink: 0, height: 40, minHeight: 40 }}>
+                  <Text
+                    style={{ cursor: 'pointer' }}
+                    type={'secondary'}
+                    onClick={() => {
+                      setExpand(false);
+                    }}
+                  >
+                    {t('uploadDock.body.collapse')}
+                  </Text>
+                </Center>
+              )}
             </Flexbox>
-          </motion.div>
+          </m.div>
         ) : (
           overviewUploadingStatus !== 'pending' && (
-            <motion.div
+            <m.div
               animate={{ opacity: 1, scaleY: 1 }}
               exit={{ opacity: 0, scaleY: 0 }}
               initial={{ opacity: 0, scaleY: 0 }}
@@ -196,7 +224,7 @@ const UploadDock = memo(() => {
                   insetInlineEnd: `${100 - totalUploadingProgress}%`,
                 }}
               />
-            </motion.div>
+            </m.div>
           )
         )}
       </AnimatePresence>

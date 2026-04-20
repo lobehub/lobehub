@@ -1,23 +1,24 @@
 import type { MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu } from '@lobehub/ui';
-import { MoreHorizontalIcon } from 'lucide-react';
+import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 
 interface ActionsProps {
+  addMenuItems: MenuProps['items'];
   dropdownMenu: MenuProps['items'];
   isLoading?: boolean;
 }
 
-const Actions = memo<ActionsProps>(({ dropdownMenu, isLoading }) => {
+const Actions = memo<ActionsProps>(({ dropdownMenu, addMenuItems, isLoading }) => {
   return (
-    <DropdownMenu items={dropdownMenu} nativeButton={false}>
-      <ActionIcon
-        icon={MoreHorizontalIcon}
-        loading={isLoading}
-        size={'small'}
-        style={{ flex: 'none' }}
-      />
-    </DropdownMenu>
+    <Flexbox horizontal gap={2}>
+      <DropdownMenu items={dropdownMenu} nativeButton={false}>
+        <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
+      </DropdownMenu>
+      <DropdownMenu items={addMenuItems} nativeButton={false}>
+        <ActionIcon icon={PlusIcon} loading={isLoading} size={'small'} style={{ flex: 'none' }} />
+      </DropdownMenu>
+    </Flexbox>
   );
 });
 

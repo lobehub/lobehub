@@ -3,7 +3,7 @@ import type {
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
 import { app, Notification } from 'electron';
-import { macOS, windows } from 'electron-is';
+import { linux, macOS, windows } from 'electron-is';
 
 import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
@@ -131,7 +131,12 @@ export default class NotificationCtr extends ControllerModule {
         silent: params.silent || false,
         timeoutType: 'default',
         title: params.title,
-        urgency: 'normal',
+        // On Linux/GNOME Shell, urgency 'normal' causes notifications to appear as banners.
+        // Clicking the dismiss (X) button on such banners can freeze the system for 30-45 seconds
+        // due to heavy gnome-shell processing. Using 'low' urgency routes notifications to the
+        // message tray instead, preventing the banner's X button from being shown.
+        // The urgency option is ignored on macOS and Windows.
+        urgency: linux() ? 'low' : 'normal',
       });
 
       // Add more event listeners for debugging
@@ -170,6 +175,28 @@ export default class NotificationCtr extends ControllerModule {
         error: error instanceof Error ? error.message : 'Unknown error',
         success: false,
       };
+    }
+  }
+
+  /**
+   * Set the app-level badge count (dock red dot on macOS, Unity counter on Linux,
+   * overlay icon on Windows). Pass 0 to clear.
+   *
+   * On macOS we pair `app.setBadgeCount` with `app.dock.setBadge` — the former
+   * keeps Electron's internal count (cross-platform), the latter is the
+   * reliable Dock repaint trigger. Note: macOS Focus Mode / DND suppresses the
+   * badge visually until the user exits Focus.
+   */
+  @IpcMethod()
+  setBadgeCount(count: number): void {
+    try {
+      const next = Math.max(0, Math.floor(count));
+      app.setBadgeCount(next);
+      if (macOS() && app.dock) {
+        app.dock.setBadge(next > 0 ? String(next) : '');
+      }
+    } catch (error) {
+      logger.error('Failed to set badge count:', error);
     }
   }
 

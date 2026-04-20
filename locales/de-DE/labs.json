@@ -1,7 +1,8 @@
 {
-  "desc": "Hier findest du gelegentliche Updates zu neuen Funktionen, die wir gerade testen – probiere sie gerne aus!",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
+  "features.gatewayMode.desc": "Führt Agentenaufgaben über die Gateway-WebSocket-Verbindung auf dem Server aus, statt sie lokal auszuführen. Ermöglicht eine schnellere Ausführung und verringert die Client-Ressourcennutzung.",
+  "features.gatewayMode.title": "Serverseitige Agentenausführung (Gateway)",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
   "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
   "features.inputMarkdown.desc": "Markdown in Echtzeit im Eingabebereich rendern (fetter Text, Codeblöcke, Tabellen usw.).",

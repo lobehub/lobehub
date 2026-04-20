@@ -34,7 +34,7 @@ const ChatHydration = memo(() => {
       unsubscribeTopic();
       unsubscribeThread();
     };
-  }, [setTopic, setThread]); // ✅ 现在 setValue 是稳定的，可以安全地添加到依赖数组
+  }, [setTopic, setThread]); // ✅ Now setValue is stable and can be safely added to the dependency array
 
   return null;
 });

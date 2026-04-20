@@ -5,10 +5,9 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
+    contextWindowTokens: 1_000_000,
     description: "Claude Sonnet 4.6 is Anthropic's best combination of speed and intelligence.",
     displayName: 'Claude Sonnet 4.6',
     enabled: true,
@@ -32,7 +31,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -58,7 +56,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -90,10 +87,37 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
+    contextWindowTokens: 1_000_000,
+    description:
+      "Claude Opus 4.7 is Anthropic's most capable generally available model for complex reasoning and agentic coding.",
+    displayName: 'Claude Opus 4.7',
+    enabled: true,
+    id: 'claude-opus-4-7',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 6.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-16',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
     description:
       "Claude Opus 4.6 is Anthropic's most intelligent model for building agents and coding.",
     displayName: 'Claude Opus 4.6',
@@ -118,7 +142,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       structuredOutput: true,
       vision: true,
     },
@@ -151,7 +174,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -183,7 +205,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       vision: true,
     },
     contextWindowTokens: 200_000,
@@ -215,7 +236,6 @@ export const anthropicChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       structuredOutput: true,
       vision: true,
     },

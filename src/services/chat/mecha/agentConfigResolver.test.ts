@@ -9,6 +9,7 @@ import * as agentStore from '@/store/agent';
 import * as agentSelectors from '@/store/agent/selectors';
 import * as agentGroupStore from '@/store/agentGroup';
 import * as agentGroupSelectors from '@/store/agentGroup/selectors';
+import * as userSelectors from '@/store/user/selectors';
 
 import { resolveAgentConfig } from './agentConfigResolver';
 
@@ -105,7 +106,10 @@ describe('resolveAgentConfig', () => {
     it('should return agent config and chat config correctly', () => {
       const result = resolveAgentConfig({ agentId: 'test-agent' });
 
-      expect(result.agentConfig).toEqual(mockAgentConfig);
+      // systemRole should have locale appended (currentResponseLanguage falls back to browser locale)
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.model).toBe(mockAgentConfig.model);
+      expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
     });
 
@@ -368,12 +372,16 @@ describe('resolveAgentConfig', () => {
         targetAgentConfig: targetAgentConfig as any,
       });
 
-      expect(getAgentRuntimeConfigSpy).toHaveBeenCalledWith('agent-builder', {
-        documentContent: 'some document content',
-        model: 'gpt-4-turbo',
-        plugins: ['input-plugin'],
-        targetAgentConfig,
-      });
+      expect(getAgentRuntimeConfigSpy).toHaveBeenCalledWith(
+        'agent-builder',
+        expect.objectContaining({
+          documentContent: 'some document content',
+          model: 'gpt-4-turbo',
+          plugins: ['input-plugin'],
+          targetAgentConfig,
+          userLocale: expect.any(String),
+        }),
+      );
     });
 
     it('should merge runtime chatConfig with base chatConfig', () => {
@@ -557,8 +565,9 @@ describe('resolveAgentConfig', () => {
 
       expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.agentConfig.systemRole).toContain('Page agent system prompt');
+      // Locale instruction is injected between custom role and page-agent role
       expect(result.agentConfig.systemRole).toMatch(
-        /You are a helpful assistant\n\nPage agent system prompt/,
+        /You are a helpful assistant[\s\S]*Page agent system prompt/,
       );
     });
 
@@ -576,7 +585,7 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      expect(result.agentConfig.systemRole).toBe(
+      expect(result.agentConfig.systemRole).toContain(
         'Page agent system prompt with XML instructions...',
       );
     });
@@ -672,9 +681,9 @@ describe('resolveAgentConfig', () => {
         scope: 'page',
       });
 
-      // Should still inject PageAgentIdentifier but with empty systemRole
+      // Should still inject PageAgentIdentifier but with no page-agent systemRole
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -690,7 +699,7 @@ describe('resolveAgentConfig', () => {
       });
 
       expect(result.plugins).toContain(PageAgentIdentifier);
-      expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
 
@@ -1165,9 +1174,61 @@ describe('resolveAgentConfig', () => {
 
       // Only plugins should be empty, other config should be preserved
       expect(result.plugins).toEqual([]);
-      expect(result.agentConfig).toEqual(mockAgentConfig);
+      expect(result.agentConfig.systemRole).toContain('You are a helpful assistant');
+      expect(result.agentConfig.model).toBe(mockAgentConfig.model);
+      expect(result.agentConfig.plugins).toEqual(mockAgentConfig.plugins);
       expect(result.chatConfig).toEqual(mockChatConfig);
       expect(result.isBuiltinAgent).toBe(false);
+    });
+  });
+
+  describe('response language injection for regular agents', () => {
+    beforeEach(() => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
+    });
+
+    it('should append response language to systemRole when userLocale is set', () => {
+      vi.spyOn(
+        userSelectors.userGeneralSettingsSelectors,
+        'currentResponseLanguage',
+      ).mockReturnValue('zh-CN');
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.systemRole).toBe(
+        'You are a helpful assistant\n\nPreferred reply language: zh-CN. Use this language unless the user explicitly asks to switch.',
+      );
+    });
+
+    it('should use locale instruction as systemRole when agent has no systemRole', () => {
+      vi.spyOn(
+        userSelectors.userGeneralSettingsSelectors,
+        'currentResponseLanguage',
+      ).mockReturnValue('ja-JP');
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            systemRole: '',
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.systemRole).toBe(
+        'Preferred reply language: ja-JP. Use this language unless the user explicitly asks to switch.',
+      );
+    });
+
+    it('should not modify systemRole when userLocale is falsy', () => {
+      vi.spyOn(
+        userSelectors.userGeneralSettingsSelectors,
+        'currentResponseLanguage',
+      ).mockReturnValue(undefined as any);
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.agentConfig.systemRole).toBe('You are a helpful assistant');
     });
   });
 });

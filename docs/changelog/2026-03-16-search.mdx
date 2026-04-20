@@ -1,0 +1,29 @@
+---
+title: "Search Optimization & Agent Documents \U0001F50D"
+description: >-
+  Introduces BM25 search indexes, agent document storage, and full-text search
+  capabilities.
+tags:
+  - Search
+  - BM25
+  - Agent Documents
+  - Full-Text Search
+---
+
+# Search Optimization & Agent Documents 🔍
+
+This release focuses on one practical goal: making knowledge easier to find and manage. Search now returns results with better speed and relevance, and agent-level documents sit on a clearer storage foundation.
+
+## Search and storage foundation
+
+At the search layer, we added BM25 indexing with the ICU tokenizer and enabled PostgreSQL `pg_search`. Together, these upgrades give full-text retrieval a stronger base for both recall and ranking quality.
+
+For agent knowledge organization, this release introduces the new `agent_documents` table and adds a description field to topic metadata. This makes content structure and retrieval context more explicit.
+
+On security hardening, we added API key hash storage to improve key handling safety.
+
+## Improvements and fixes
+
+- Fixed changelog auto-generation in the release workflow.
+- Corrected stable renderer tar source path.
+- Resolved market M2M token registration for trust-client scenarios.

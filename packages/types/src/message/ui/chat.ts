@@ -41,6 +41,47 @@ export interface ChatFileItem {
   url: string;
 }
 
+/**
+ * A subagent execution embedded inline in the parent assistant block.
+ *
+ * Used for Claude Code's `Task` tool (and equivalent subagent-spawning tools):
+ * the LLM emits a Task tool_use, the executor creates a Thread to run the
+ * subagent, and the rendered block shows a folded header + (on expand) the
+ * Thread's child messages — instead of producing a separate `role: 'task'`
+ * ChatItem bubble.
+ *
+ * Derived view, not persisted: the MessageTransformer reconstructs
+ * `block.tasks[]` by joining Threads (`threads.sourceMessageId = msg.id`,
+ * matched by `metadata.sourceToolCallId === tool_use.id`) onto the parent
+ * message's tool_use entries.
+ */
+export interface TaskBlock {
+  /** Execution duration in milliseconds (`Thread.metadata.duration`) */
+  duration?: number;
+  /** Error details when subagent failed (`Thread.metadata.error`) */
+  error?: any;
+  /** Equals the parent tool_use id that spawned this subagent */
+  id: string;
+  /** Thread execution status */
+  status?: ThreadStatus;
+  /** Subagent type, e.g. CC's `subagent_type` input (Explore, Plan, ...) */
+  subagentType?: string;
+  threadId: string;
+  /**
+   * Short summary rendered in the folded header — sourced from `Thread.title`
+   * (for CC Task spawns, the executor persists the tool_use's `description`
+   * input there at create time, so there is no separate `description` field
+   * on this block).
+   */
+  title?: string;
+  /** Total cost in dollars */
+  totalCost?: number;
+  /** Total tokens consumed */
+  totalTokens?: number;
+  /** Total tool calls made by the subagent */
+  totalToolCalls?: number;
+}
+
 export interface AssistantContentBlock {
   content: string;
   error?: ChatMessageError | null;
@@ -50,6 +91,13 @@ export interface AssistantContentBlock {
   metadata?: Record<string, any>;
   performance?: ModelPerformance;
   reasoning?: ModelReasoning;
+  /**
+   * Subagent executions embedded inline. Disambiguated from regular tools
+   * because each task carries a Thread reference and renders as a folded
+   * panel (showing the Thread's child messages on expand) instead of a
+   * standalone tool result.
+   */
+  tasks?: TaskBlock[];
   tools?: ChatToolPayloadWithResult[];
   usage?: ModelUsage;
 }

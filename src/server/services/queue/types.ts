@@ -8,6 +8,7 @@ export interface QueueMessage {
   payload?: any;
   priority?: 'high' | 'normal' | 'low';
   retries?: number;
+  retryDelay?: string;
   stepIndex: number;
 }
 

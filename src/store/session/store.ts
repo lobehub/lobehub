@@ -6,13 +6,11 @@ import { type StateCreator } from 'zustand/vanilla';
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type SessionStoreState } from './initialState';
 import { initialState } from './initialState';
-import { type HomeInputAction } from './slices/homeInput/action';
-import { createHomeInputSlice } from './slices/homeInput/action';
-import { type RecentAction } from './slices/recent/action';
-import { createRecentSlice } from './slices/recent/action';
 import { type SessionAction } from './slices/session/action';
 import { createSessionSlice } from './slices/session/action';
 import { type SessionGroupAction } from './slices/sessionGroup/action';
@@ -21,9 +19,13 @@ import { createSessionGroupSlice } from './slices/sessionGroup/action';
 //  ===============  Aggregate createStoreFn ============ //
 
 export interface SessionStore
-  extends SessionAction, SessionGroupAction, RecentAction, HomeInputAction, SessionStoreState {}
+  extends SessionAction, SessionGroupAction, ResetableStore, SessionStoreState {}
 
-type SessionStoreAction = SessionAction & SessionGroupAction & RecentAction & HomeInputAction;
+type SessionStoreAction = SessionAction & SessionGroupAction & ResetableStore;
+
+class SessionStoreResetAction extends ResetableStoreAction<SessionStore> {
+  protected readonly resetActionName = 'resetSessionStore';
+}
 
 const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (
   ...parameters: Parameters<StateCreator<SessionStore, [['zustand/devtools', never]]>>
@@ -32,8 +34,7 @@ const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (
   ...flattenActions<SessionStoreAction>([
     createSessionSlice(...parameters),
     createSessionGroupSlice(...parameters),
-    createRecentSlice(...parameters),
-    createHomeInputSlice(...parameters),
+    new SessionStoreResetAction(...parameters),
   ]),
 });
 
@@ -48,5 +49,7 @@ export const useSessionStore = createWithEqualityFn<SessionStore>()(
   ),
   shallow,
 );
+
+expose('session', useSessionStore);
 
 export const getSessionStoreState = () => useSessionStore.getState();

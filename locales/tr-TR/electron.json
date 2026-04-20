@@ -1,4 +1,13 @@
 {
+  "gateway.description": "Açıklama",
+  "gateway.descriptionPlaceholder": "Opsiyonel",
+  "gateway.deviceName": "Cihaz Adı",
+  "gateway.deviceNamePlaceholder": "Cihaz adını girin",
+  "gateway.enableConnection": "Ağ Geçidine Bağlan",
+  "gateway.statusConnected": "Ağ Geçidine Bağlandı",
+  "gateway.statusConnecting": "Ağ Geçidine Bağlanıyor...",
+  "gateway.statusDisconnected": "Ağ Geçidine Bağlı Değil",
+  "gateway.title": "Cihaz Ağ Geçidi",
   "navigation.chat": "Sohbet",
   "navigation.discover": "Keşfet",
   "navigation.discoverAssistants": "Asistanları Keşfet",
@@ -120,5 +129,9 @@
   "waitingOAuth.errorTitle": "Yetkilendirme Bağlantısı Başarısız",
   "waitingOAuth.helpText": "Tarayıcı otomatik olarak açılmadıysa, lütfen iptal edip tekrar deneyin",
   "waitingOAuth.retry": "Tekrar Dene",
-  "waitingOAuth.title": "Yetkilendirme Bağlantısı Bekleniyor"
+  "waitingOAuth.title": "Yetkilendirme Bağlantısı Bekleniyor",
+  "window.close": "Pencereyi kapat",
+  "window.maximize": "Pencereyi büyüt",
+  "window.minimize": "Pencereyi küçült",
+  "window.restore": "Pencereyi geri yükle"
 }

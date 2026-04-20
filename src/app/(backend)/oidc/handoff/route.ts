@@ -9,7 +9,7 @@ const log = debug('lobe-oidc:handoff');
 
 /**
  * GET /oidc/handoff?id=xxx&client=xxx
- * 轮询获取并消费认证凭证
+ * Poll to fetch and consume the authentication credential
  */
 export async function GET(request: NextRequest) {
   log('Received GET request for /oidc/handoff');

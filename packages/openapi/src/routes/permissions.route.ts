@@ -17,14 +17,14 @@ const PermissionsRoutes = new Hono();
 
 /**
  * Get permission list
- * GET /api/v1/permissions 获取权限列表
+ * GET /api/v1/permissions - Get permission list
  */
 PermissionsRoutes.get(
   '/',
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_READ', ['ALL']),
-    '您没有权限查看权限列表',
+    'You do not have permission to view permissions list',
   ),
   zValidator('query', PermissionsListQuerySchema),
   async (c) => {
@@ -36,14 +36,14 @@ PermissionsRoutes.get(
 
 /**
  * Get permission detail by ID
- * GET /api/v1/permissions/:id 获取权限详情
+ * GET /api/v1/permissions/:id - Get permission detail
  */
 PermissionsRoutes.get(
   '/:id',
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_READ', ['ALL']),
-    '您没有权限查看权限详情',
+    'You do not have permission to view permission details',
   ),
   zValidator('param', PermissionIdParamSchema),
   async (c) => {
@@ -55,14 +55,14 @@ PermissionsRoutes.get(
 
 /**
  * Create a new permission
- * POST /api/v1/permissions 创建新的权限
+ * POST /api/v1/permissions - Create a new permission
  */
 PermissionsRoutes.post(
   '/',
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_CREATE', ['ALL']),
-    '您没有权限创建权限',
+    'You do not have permission to create a permission',
   ),
   zValidator('json', CreatePermissionRequestSchema),
   async (c) => {
@@ -74,14 +74,14 @@ PermissionsRoutes.post(
 
 /**
  * Update permission by ID
- * PATCH /api/v1/permissions/:id 更新权限信息
+ * PATCH /api/v1/permissions/:id - Update permission info
  */
 PermissionsRoutes.patch(
   '/:id',
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_UPDATE', ['ALL']),
-    '您没有权限更新权限',
+    'You do not have permission to update a permission',
   ),
   zValidator('param', PermissionIdParamSchema),
   zValidator('json', UpdatePermissionRequestSchema),
@@ -94,14 +94,14 @@ PermissionsRoutes.patch(
 
 /**
  * Delete permission by ID
- * DELETE /api/v1/permissions/:id 删除权限
+ * DELETE /api/v1/permissions/:id - Delete permission
  */
 PermissionsRoutes.delete(
   '/:id',
   requireAuth,
   requireAnyPermission(
     getScopePermissions('RBAC_PERMISSION_DELETE', ['ALL']),
-    '您没有权限删除权限',
+    'You do not have permission to delete a permission',
   ),
   zValidator('param', PermissionIdParamSchema),
   async (c) => {

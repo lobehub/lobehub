@@ -5,7 +5,7 @@ import { type RuntimeStepContext } from '../stepContext';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 
-interface Meta {
+export interface Meta {
   /**
    * avatar
    * @desc Avatar of the plugin
@@ -35,7 +35,7 @@ interface Meta {
   title: string;
 }
 
-const MetaSchema = z.object({
+export const MetaSchema = z.object({
   avatar: z.string().optional(),
   description: z.string().optional(),
   readme: z.string().optional(),
@@ -61,7 +61,7 @@ export const RenderDisplayControlSchema = z.enum(['collapsed', 'expand', 'always
 export type DynamicInterventionResolver = (
   toolArgs: Record<string, any>,
   metadata?: Record<string, any>,
-) => boolean;
+) => Promise<boolean>;
 
 /**
  * Global intervention audit configuration
@@ -178,6 +178,19 @@ export interface BuiltinToolManifest {
   api: LobeChatPluginApi[];
 
   /**
+   * Supported execution environments for this tool.
+   * - `'client'`: dispatched to the client via Agent Gateway WebSocket
+   *   (requires Electron / desktop runtime). For tools that depend on
+   *   local resources (filesystem, EditorRuntime, stdio MCP, etc.).
+   * - `'server'`: executed server-side by ToolExecutionService.
+   *
+   * When both are present, the server picks based on `clientRuntime`:
+   * desktop callers get `'client'` dispatch; web callers get `'server'`.
+   * When omitted, defaults to server-only execution.
+   */
+  executors?: ('client' | 'server')[];
+
+  /**
    * Tool-level default human intervention policy
    * This policy applies to all APIs that don't specify their own policy
    *
@@ -204,6 +217,7 @@ export interface BuiltinToolManifest {
 
 export const BuiltinToolManifestSchema = z.object({
   api: z.array(LobeChatPluginApiSchema),
+  executors: z.array(z.enum(['client', 'server'])).optional(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   identifier: z.string(),
   meta: MetaSchema,
@@ -310,6 +324,7 @@ export interface BuiltinInterventionProps<Arguments = any> {
   apiName?: string;
   args: Arguments;
   identifier?: string;
+  interactionMode?: 'approval' | 'custom';
   messageId: string;
   /**
    * Callback to update the arguments before approval
@@ -317,6 +332,12 @@ export interface BuiltinInterventionProps<Arguments = any> {
    * The approve action will wait for this async callback to complete
    */
   onArgsChange?: (args: Arguments) => void | Promise<void>;
+  onInteractionAction?: (
+    action:
+      | { type: 'submit'; payload: Record<string, unknown> }
+      | { type: 'skip'; reason?: string }
+      | { type: 'cancel' },
+  ) => Promise<void>;
   /**
    * Register a callback to be called before approval
    * Used by intervention components that need to flush pending saves (e.g., debounced saves)

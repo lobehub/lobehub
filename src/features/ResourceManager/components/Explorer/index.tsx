@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerUrlSync } from '@/routes/(main)/resource/features/hooks/useResourceManagerUrlSync';
@@ -9,13 +9,14 @@ import { useResourceManagerStore } from '@/routes/(main)/resource/features/store
 import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
 import { useFetchResources, useResourceStore } from '@/store/file/slices/resource/hooks';
 
+import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import EmptyPlaceholder from './EmptyPlaceholder';
 import Header from './Header';
+import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 import ListView from './ListView';
 import MasonryView from './MasonryView';
 import SearchResultsOverlay from './SearchResultsOverlay';
 import { useCheckTaskStatus } from './useCheckTaskStatus';
-import { useResourceExplorer } from './useResourceExplorer';
 
 /**
  * Explore resource items in a library
@@ -30,18 +31,9 @@ const ResourceExplorer = memo(() => {
   useResourceManagerUrlSync();
 
   // Get state from Resource Manager store
-  const [libraryId, category, viewMode, searchQuery, setSelectedFileIds, sorter, sortType] =
-    useResourceManagerStore((s) => [
-      s.libraryId,
-      s.category,
-      s.viewMode,
-      s.searchQuery,
-      s.setSelectedFileIds,
-      s.sorter,
-      s.sortType,
-    ]);
-
-  // searchQuery is still subscribed above for selection-clearing effect below
+  const [libraryId, category, viewMode, searchQuery, sorter, sortType] = useResourceManagerStore(
+    (s) => [s.libraryId, s.category, s.viewMode, s.searchQuery, s.sorter, s.sortType],
+  );
 
   // Get folder path for empty state check
   const { currentFolderSlug } = useFolderPath();
@@ -87,30 +79,35 @@ const ResourceExplorer = memo(() => {
   // Check task status
   useCheckTaskStatus(data);
 
-  // Initialize folder/file navigation effects (still need hook for complex effects)
-  useResourceExplorer({ category, libraryId });
+  useResetSelectionOnQueryChange({
+    category,
+    currentFolderSlug,
+    libraryId,
+    searchQuery,
+  });
 
-  // Clear selections when category/library/search changes
-  useEffect(() => {
-    setSelectedFileIds([]);
-  }, [category, libraryId, searchQuery, setSelectedFileIds]);
-
-  const showEmptyStatus = !isLoading && !isValidating && data?.length === 0 && !currentFolderSlug;
+  const showEmptyStatus = !isLoading && !isValidating && data?.length === 0;
 
   return (
-    <Flexbox height={'100%'}>
-      <Header />
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {showEmptyStatus ? (
-          <EmptyPlaceholder />
-        ) : viewMode === 'list' ? (
-          <ListView />
-        ) : (
-          <MasonryView />
-        )}
-        <SearchResultsOverlay />
-      </div>
-    </Flexbox>
+    <KnowledgeBaseListProvider>
+      <Flexbox height={'100%'}>
+        <Header />
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+          {showEmptyStatus ? (
+            <EmptyPlaceholder />
+          ) : viewMode === 'list' ? (
+            <ListView isLoading={isLoading} isValidating={isValidating} queryParams={queryParams} />
+          ) : (
+            <MasonryView
+              isLoading={isLoading}
+              isValidating={isValidating}
+              queryParams={queryParams}
+            />
+          )}
+          <SearchResultsOverlay />
+        </div>
+      </Flexbox>
+    </KnowledgeBaseListProvider>
   );
 });
 

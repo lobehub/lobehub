@@ -3,6 +3,7 @@ import debug from 'debug';
 import { appEnv } from '@/envs/app';
 
 import { AgentStateManager } from './AgentStateManager';
+import { GatewayStreamNotifier } from './GatewayStreamNotifier';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
@@ -49,22 +50,36 @@ export const createAgentStateManager = (): IAgentStateManager => {
 /**
  * Create StreamEventManager based on configuration
  *
- * - If enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
- * - If enableQueueAgentRuntime=true: RedisStreamEventManager (requires Redis)
+ * - If Redis is available: RedisStreamEventManager
+ * - If Redis is unavailable and enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
+ * - If Redis is unavailable and enableQueueAgentRuntime=true: throw
  */
 export const createStreamEventManager = (): IStreamEventManager => {
-  // When queue mode is disabled, always use InMemory for simplicity
-  if (!isQueueModeEnabled()) {
-    log('Queue mode disabled, using InMemoryStreamEventManager');
-    return inMemoryStreamEventManager;
-  }
+  let manager: IStreamEventManager;
 
-  // Queue mode enabled, Redis is required
-  if (!isRedisAvailable()) {
+  // Prefer Redis whenever it is available so the runtime worker and SSE route
+  // can communicate through the same stream bus even in local mode.
+  if (isRedisAvailable()) {
+    log('Redis available, using StreamEventManager');
+    manager = new StreamEventManager();
+  } else if (!isQueueModeEnabled()) {
+    log('Redis unavailable and queue mode disabled, using InMemoryStreamEventManager');
+    manager = inMemoryStreamEventManager;
+  } else {
     throw new Error(
       'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
     );
   }
 
-  return new StreamEventManager();
+  // Wrap with Gateway notifier when configured
+  if (appEnv.AGENT_GATEWAY_URL && appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
+    log('Wrapping with GatewayStreamNotifier (%s)', appEnv.AGENT_GATEWAY_URL);
+    return new GatewayStreamNotifier(
+      manager,
+      appEnv.AGENT_GATEWAY_URL,
+      appEnv.AGENT_GATEWAY_SERVICE_TOKEN,
+    );
+  }
+
+  return manager;
 };

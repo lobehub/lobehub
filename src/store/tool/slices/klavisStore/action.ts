@@ -1,3 +1,4 @@
+import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
@@ -18,6 +19,9 @@ import {
 import { KlavisServerStatus } from './types';
 
 const n = setNamespace('klavisStore');
+
+// Set of valid Klavis server identifiers (for cleanup of deprecated servers)
+const VALID_KLAVIS_IDENTIFIERS = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
 
 /**
  * Klavis Store Actions
@@ -338,9 +342,55 @@ export class KlavisStoreActionImpl {
 
         if (klavisPlugins.length === 0) return [];
 
-        // Convert to KlavisServer objects
-        return klavisPlugins
-          .filter((plugin) => plugin.customParams?.klavis)
+        // Filter plugins with klavis params
+        const validPlugins = klavisPlugins.filter((plugin) => plugin.customParams?.klavis);
+
+        // Clean up deprecated Klavis servers (e.g., 'github' moved to LobeHub Skill)
+        const deprecatedPlugins = validPlugins.filter(
+          (plugin) => !VALID_KLAVIS_IDENTIFIERS.has(plugin.identifier),
+        );
+
+        // Silently remove deprecated plugins: revoke remote instance first, then delete local record
+        for (const plugin of deprecatedPlugins) {
+          const instanceId = plugin.customParams?.klavis?.instanceId;
+
+          // Try to delete remote instance first (if exists)
+          if (instanceId) {
+            try {
+              await lambdaClient.klavis.deleteServerInstance.mutate({
+                identifier: plugin.identifier,
+                instanceId,
+              });
+              console.info(`[Klavis] Cleaned up deprecated server: ${plugin.identifier}`);
+              continue; // deleteServerInstance already removes local record
+            } catch (error) {
+              // Remote deletion failed, fall through to remove local record
+              console.warn(
+                `[Klavis] Failed to delete remote instance for ${plugin.identifier}:`,
+                error,
+              );
+            }
+          }
+
+          // Remove local DB record (either no instanceId, or remote deletion failed)
+          try {
+            await lambdaClient.klavis.removeKlavisPlugin.mutate({
+              identifier: plugin.identifier,
+            });
+            console.info(
+              `[Klavis] Removed local record for deprecated server: ${plugin.identifier}`,
+            );
+          } catch (error) {
+            console.error(
+              `[Klavis] Failed to remove local record for ${plugin.identifier}:`,
+              error,
+            );
+          }
+        }
+
+        // Only return valid plugins
+        return validPlugins
+          .filter((plugin) => VALID_KLAVIS_IDENTIFIERS.has(plugin.identifier))
           .map((plugin) => {
             const klavisParams = plugin.customParams!.klavis!;
             const tools: KlavisTool[] = (plugin.manifest?.api || []).map((api) => ({

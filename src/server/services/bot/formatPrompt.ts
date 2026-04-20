@@ -14,12 +14,13 @@ interface MessageLike {
   text: string;
 }
 
-interface BotContext {
-  applicationId?: string;
+interface FormatPromptOptions {
+  /** Strip platform-specific bot mention artifacts from user input. */
+  sanitizeUserInput?: (text: string) => string;
 }
 
 /**
- * Extract referenced (replied-to) message from Discord raw payload
+ * Extract referenced (replied-to) message from raw payload
  * and format it as an XML tag for the agent prompt.
  */
 export const formatReferencedMessage = (
@@ -35,15 +36,15 @@ export const formatReferencedMessage = (
 
 /**
  * Format user message into agent prompt:
- * 1. Strip bot's own @mention (Discord format: <@botId>)
+ * 1. Strip platform-specific bot mentions via sanitizeUserInput
  * 2. Prepend referenced (quoted/replied) message if present
  * 3. Add speaker tag with user identity
  */
-export const formatPrompt = (message: MessageLike, botContext?: BotContext): string => {
+export const formatPrompt = (message: MessageLike, options?: FormatPromptOptions): string => {
   let text = message.text;
 
-  if (botContext?.applicationId) {
-    text = text.replaceAll(new RegExp(`<@!?${botContext.applicationId}>\\s*`, 'g'), '').trim();
+  if (options?.sanitizeUserInput) {
+    text = options.sanitizeUserInput(text);
   }
 
   // Prepend referenced (quoted/replied) message if present

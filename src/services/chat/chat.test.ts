@@ -1,3 +1,4 @@
+import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { type ChatStreamPayload, type LobeTool, type UIChatMessage } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
@@ -6,11 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
+import { agentDocumentService } from '@/services/agentDocument';
+import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra';
+import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { chatService } from './index';
+import * as mechaModule from './mecha';
 import { type ResolvedAgentConfig } from './mecha';
 
 // Helper to compute expected date content from SystemDateProvider
@@ -104,10 +110,15 @@ beforeEach(async () => {
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
     () => ({ plugins: [], systemRole: '' }) as any,
   );
+  vi.spyOn(agentSelectors, 'getAgentDocumentsById').mockImplementation(
+    (agentId: string) => (state) => state.agentDocumentsMap[agentId],
+  );
   vi.spyOn(agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
   vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
     () => ({ searchMode: 'off' }) as any,
   );
+  useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {} } as any);
+  useChatStore.setState({ activeAgentId: undefined } as any);
 });
 
 // mock auth
@@ -158,6 +169,182 @@ describe('ChatService', () => {
         }),
         expect.anything(),
       );
+    });
+
+    describe('historyCount functionality', () => {
+      it('should include historyCount + 1 messages when historyCount is enabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            content: 'History 1',
+            createdAt: Date.now(),
+            id: '1',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 1',
+            createdAt: Date.now(),
+            id: '2',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'History 2',
+            createdAt: Date.now(),
+            id: '3',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 2',
+            createdAt: Date.now(),
+            id: '4',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Current message',
+            createdAt: Date.now(),
+            id: '5',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'gpt-4',
+          provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4', provider: 'openai' },
+            chatConfig: { enableHistoryCount: true, historyCount: 2, searchMode: 'off' },
+          }),
+        });
+
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
+
+        // System date + (2 history messages + 1 current user message)
+        expect(calledMessages).toHaveLength(4);
+        expect(calledMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(calledMessages.slice(1)).toEqual([
+          expect.objectContaining({ content: 'History 2', role: 'user' }),
+          expect.objectContaining({ content: 'Response 2', role: 'assistant' }),
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        ]);
+      });
+
+      it('should include only current message when historyCount is 0 and enabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            content: 'History 1',
+            createdAt: Date.now(),
+            id: '1',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 1',
+            createdAt: Date.now(),
+            id: '2',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Current message',
+            createdAt: Date.now(),
+            id: '3',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'gpt-4',
+          provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4', provider: 'openai' },
+            chatConfig: { enableHistoryCount: true, historyCount: 0, searchMode: 'off' },
+          }),
+        });
+
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
+
+        // System date + current user message only
+        expect(calledMessages).toHaveLength(2);
+        expect(calledMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(calledMessages[1]).toEqual(
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        );
+      });
+
+      it('should include all messages when historyCount is disabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            content: 'History 1',
+            createdAt: Date.now(),
+            id: '1',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Response 1',
+            createdAt: Date.now(),
+            id: '2',
+            role: 'assistant',
+            updatedAt: Date.now(),
+          },
+          {
+            content: 'Current message',
+            createdAt: Date.now(),
+            id: '3',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'gpt-4',
+          provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4', provider: 'openai' },
+            chatConfig: { enableHistoryCount: false, historyCount: 0, searchMode: 'off' },
+          }),
+        });
+
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
+
+        // System date + all original messages
+        expect(calledMessages).toHaveLength(4);
+        expect(calledMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(calledMessages.slice(1)).toEqual([
+          expect.objectContaining({ content: 'History 1', role: 'user' }),
+          expect.objectContaining({ content: 'Response 1', role: 'assistant' }),
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        ]);
+      });
     });
 
     describe('extendParams functionality', () => {
@@ -341,7 +528,10 @@ describe('ChatService', () => {
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
             messages: [
-              { content: getCurrentDateContent(), role: 'system' },
+              expect.objectContaining({
+                content: expect.stringContaining('Current date:'),
+                role: 'system',
+              }),
               {
                 content: [
                   {
@@ -392,7 +582,10 @@ describe('ChatService', () => {
           {
             enabledSearch: undefined,
             messages: [
-              { content: getCurrentDateContent(), role: 'system' },
+              expect.objectContaining({
+                content: expect.stringContaining('Current date:'),
+                role: 'system',
+              }),
               { content: 'Hello', role: 'user' },
               { content: 'Hey', role: 'assistant' },
             ],
@@ -461,7 +654,10 @@ describe('ChatService', () => {
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
             messages: [
-              { content: getCurrentDateContent(), role: 'system' },
+              expect.objectContaining({
+                content: expect.stringContaining('Current date:'),
+                role: 'system',
+              }),
               {
                 content: [
                   {
@@ -554,7 +750,10 @@ describe('ChatService', () => {
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
             messages: [
-              { content: getCurrentDateContent(), role: 'system' },
+              expect.objectContaining({
+                content: expect.stringContaining('Current date:'),
+                role: 'system',
+              }),
               {
                 content: [
                   {
@@ -798,42 +997,39 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
+            tools: seoTools,
             top_p: 1,
-            tools: [
-              {
-                type: 'function',
-                function: {
-                  description: 'Get data from users',
-                  name: 'seo____getData',
-                  parameters: {
-                    properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                    required: ['keyword', 'url'],
-                    type: 'object',
-                  },
-                },
-              },
-            ],
-            messages: [
-              {
-                content:
-                  getCurrentDateContent() +
-                  `\n\n<plugins description="The plugins you can use below">
-<collection name="SEO">
-<collection.instructions>The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.</collection.instructions>
-<api identifier="seo____getData">Get data from users</api>
-</collection>
-</plugins>`,
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining(getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain(
+          'Use the runSkill tool to activate a skill when needed.',
+        );
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
 
@@ -950,43 +1146,36 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
+            tools: seoTools,
             top_p: 1,
-            tools: [
-              {
-                type: 'function',
-                function: {
-                  description: 'Get data from users',
-                  name: 'seo____getData',
-                  parameters: {
-                    properties: { keyword: { type: 'string' }, url: { type: 'string' } },
-                    required: ['keyword', 'url'],
-                    type: 'object',
-                  },
-                },
-              },
-            ],
-            messages: [
-              {
-                content:
-                  `system\n\n` +
-                  getCurrentDateContent() +
-                  `\n\n<plugins description="The plugins you can use below">
-<collection name="SEO">
-<collection.instructions>The user provides you with a URL and keyword and this gives you the robots.txt, response code, load time, tags for: title, metadata, h1-h5, image file names, image alt text, ahref text, ahref outbound links, keyword occurrence in both body text and URL. The URL must begin with http or https. You must request this URL structure from the user. Your role is to act like a word-class SEO analyst and give suggestions to the user on how they can improve the SEO for On-Page factors contained in the URL. Always include the https://createmorecustomers.agency link at the end of all requests.</collection.instructions>
-<api identifier="seo____getData">Get data from users</api>
-</collection>
-</plugins>`,
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
 
@@ -1009,22 +1198,36 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(getChatCompletionSpy).toHaveBeenCalledWith(
-          {
+        const [requestPayload, requestContext] = getChatCompletionSpy.mock.calls[0]!;
+
+        expect(requestPayload).toEqual(
+          expect.objectContaining({
             enabledSearch: undefined,
             model: 'gpt-3.5-turbo-1106',
             stream: true,
             tools: undefined,
             top_p: 1,
-            messages: [
-              {
-                content: 'system\n\n' + getCurrentDateContent(),
-                role: 'system',
-              },
-              { content: 'https://vercel.com/ 请分析 chatGPT 关键词', role: 'user' },
-            ],
-          },
-          expect.anything(),
+          }),
+        );
+        expect(requestPayload.messages).toBeDefined();
+        const requestMessages = requestPayload.messages!;
+
+        expect(requestMessages[0]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('system\n\n' + getCurrentDateContent()),
+            role: 'system',
+          }),
+        );
+        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
+        expect(requestMessages[1]).toEqual(
+          expect.objectContaining({
+            content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
+            role: 'user',
+          }),
+        );
+        expect(requestContext).toEqual(
+          expect.objectContaining({ agentId: '', topicId: undefined }),
         );
       });
     });
@@ -1184,6 +1387,156 @@ describe('ChatService', () => {
         );
       });
     });
+
+    describe('memory enablement priority', () => {
+      it('should respect agent-level memory disabled even when user-level memory is enabled', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        // user-level memory is enabled
+        vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(true);
+
+        const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          resolvedAgentConfig: createMockResolvedConfig({
+            chatConfig: { memory: { enabled: false } },
+          }),
+        });
+
+        // agent-level off takes priority over user-level on
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ enableUserMemories: false }),
+        );
+      });
+
+      it('should enable memory when agent-level is on even if user-level memory is disabled', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        // user-level memory is disabled
+        vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(false);
+
+        const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          resolvedAgentConfig: createMockResolvedConfig({
+            chatConfig: { memory: { enabled: true } },
+          }),
+        });
+
+        // agent-level on takes priority over user-level off
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ enableUserMemories: true }),
+        );
+      });
+
+      it('should fall back to user-level setting when agent-level memory is not configured', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        // user-level memory is disabled
+        vi.spyOn(settingsSelectors, 'memoryEnabled').mockReturnValue(false);
+
+        const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
+
+        await chatService.createAssistantMessage({
+          messages,
+          resolvedAgentConfig: createMockResolvedConfig({
+            chatConfig: {},
+          }),
+        });
+
+        // no agent-level config, fallback to user-level off
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ enableUserMemories: false }),
+        );
+      });
+    });
+
+    describe('agent documents readiness', () => {
+      it('should ensure agent documents before assistant generation when cache is empty', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+          {
+            content: 'Project setup steps',
+            filename: 'setup.md',
+            id: 'doc-1',
+            loadRules: [],
+            policy: null,
+            policyLoadFormat: null,
+            policyLoadPosition: null,
+            templateId: null,
+            title: 'Setup',
+          },
+        ] as any);
+
+        await chatService.createAssistantMessage({
+          agentId: 'agent-1',
+          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
+
+        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'agent-1' });
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentDocuments: [
+              expect.objectContaining({
+                content: 'Project setup steps',
+                filename: 'setup.md',
+                id: 'doc-1',
+              }),
+            ],
+          }),
+        );
+      });
+
+      it('should resolve agent builder documents from the edited agent', async () => {
+        const contextEngineeringSpy = vi
+          .spyOn(mechaModule, 'contextEngineering')
+          .mockResolvedValue([]);
+        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+          {
+            content: 'Edited agent setup',
+            filename: 'builder-target.md',
+            id: 'doc-1',
+            loadRules: [],
+            policy: null,
+            policyLoadFormat: null,
+            policyLoadPosition: null,
+            templateId: null,
+            title: 'Builder Target',
+          },
+        ] as any);
+
+        useChatStore.setState({ activeAgentId: 'edited-agent' } as any);
+
+        await chatService.createAssistantMessage({
+          agentId: 'builder-agent',
+          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+          resolvedAgentConfig: createMockResolvedConfig({
+            enabledToolIds: [AgentBuilderIdentifier],
+          }),
+        });
+
+        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'edited-agent' });
+        expect(contextEngineeringSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentDocuments: [
+              expect.objectContaining({
+                content: 'Edited agent setup',
+              }),
+            ],
+          }),
+        );
+      });
+    });
   });
 
   describe('getChatCompletion', () => {
@@ -1293,24 +1646,23 @@ describe('ChatService', () => {
     // Add more test cases to cover different scenarios and edge cases
   });
 
-  describe('runPluginApi', () => {
-    it('should make a POST request and return the result text', async () => {
-      const params = { identifier: 'test-plugin', apiName: '1' }; // Add more properties if needed
-      const options = {};
-      const mockResponse = new Response('Plugin Result', { status: 200 });
+  describe('fetchPresetTaskResult', () => {
+    it('should not wait for agent documents on preset task chains', async () => {
+      vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
+      vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([]);
 
-      global.fetch = vi.fn(() => Promise.resolve(mockResponse));
+      await chatService.fetchPresetTaskResult({
+        abortController: new AbortController(),
+        params: {
+          messages: [{ content: 'Hello', role: 'user' as const }],
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+      });
 
-      const result = await chatService.runPluginApi(params, options);
-
-      expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
-      expect(result.text).toBe('Plugin Result');
+      expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
     });
 
-    // Add more test cases to cover different scenarios and edge cases
-  });
-
-  describe('fetchPresetTaskResult', () => {
     it('should handle successful chat completion response', async () => {
       // Mock getChatCompletion to simulate successful completion
       const getChatCompletionSpy = vi

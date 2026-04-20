@@ -7,10 +7,10 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
+import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import { EMPTY_EDITOR_STATE } from '../constants';
 import { useMentionOptions } from '../ProfileEditor/MentionList';
 import { useProfileStore } from '../store';
 import TypoBar from './TypoBar';

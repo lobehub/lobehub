@@ -20,7 +20,9 @@ export interface DeviceAttachment {
 
 // Desktop → CF
 export interface AuthMessage {
+  serverUrl?: string;
   token: string;
+  tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   type: 'auth';
 }
 

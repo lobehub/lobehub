@@ -103,7 +103,7 @@ const FileTree = memo(() => {
     const root = createNode('root', '/');
     const entries = Object.entries((resources || {}) as Record<string, unknown>);
 
-    // 至少包含主文件，避免出现空树
+    // Include at least the main file to avoid an empty tree
     if (!entries.some(([path]) => path.toLowerCase() === 'skill.md')) {
       entries.push(['SKILL.md', {}]);
     }

@@ -1,7 +1,7 @@
 ---
 name: pr
 description: "Create a PR for the current branch. Use when the user asks to create a pull request, submit PR, or says 'pr'."
-user_invocable: true
+user-invocable: true
 ---
 
 # Create Pull Request
@@ -69,6 +69,5 @@ Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. Key sections:
 
 ## Notes
 
-- **Release impact**: PR titles with `✨ feat/` or `🐛 fix` trigger releases — use carefully
 - **Language**: All PR content must be in English
 - If a PR already exists for the branch, inform the user instead of creating a duplicate

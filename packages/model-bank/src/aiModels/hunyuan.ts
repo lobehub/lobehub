@@ -1,4 +1,4 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://cloud.tencent.com/document/product/1729/104753
 const hunyuanChatModels: AIChatModelCard[] = [
@@ -513,6 +513,33 @@ const hunyuanChatModels: AIChatModelCard[] = [
   },
 ];
 
-export const allModels = [...hunyuanChatModels];
+const hunyuanImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'Powerful original-image feature extraction and detail preservation capabilities, delivering richer visual texture and producing high-accuracy, well-composed, production-grade visuals.',
+    displayName: 'HY-Image-V3.0',
+    enabled: true,
+    id: 'HY-Image-V3.0',
+    parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      imageUrls: { default: [], maxCount: 3 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-26',
+    type: 'image',
+  },
+];
+
+export const allModels = [...hunyuanChatModels, ...hunyuanImageModels];
 
 export default allModels;

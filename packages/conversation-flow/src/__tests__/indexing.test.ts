@@ -502,6 +502,91 @@ describe('buildHelperMaps', () => {
       expect(result.childrenMap.get('comp-group-1')).toEqual(['msg-new-1']);
       expect(result.childrenMap.get('comp-group-2')).toEqual(['msg-new-2']);
     });
+
+    it('should resolve lastMessageId from compressedMessages recursively', () => {
+      // Data provenance:
+      // - The nested `compressedMessages` shape comes from real frontend chat exports
+      //   after context compression, where the visible compressedGroup keeps hidden
+      //   user/assistant history inside display-only arrays.
+      // - This represents the current synchronous chat path rather than eval tasks.
+      const messages: Message[] = [
+        {
+          compressedMessages: [
+            {
+              id: 'msg-hidden-1',
+              role: 'user',
+            },
+            {
+              id: 'msg-hidden-2',
+              role: 'assistant',
+            },
+          ],
+          content: 'Compressed history',
+          createdAt: 1000,
+          id: 'comp-group-1',
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 1000,
+        } as any,
+        {
+          content: 'Follow-up after compression',
+          createdAt: 2000,
+          id: 'msg-new',
+          parentId: 'msg-hidden-2',
+          role: 'assistant',
+          updatedAt: 2000,
+        },
+      ];
+
+      const result = buildHelperMaps(messages);
+
+      expect(result.childrenMap.get('comp-group-1')).toEqual(['msg-new']);
+      expect(result.childrenMap.get('msg-hidden-2')).toBeUndefined();
+    });
+
+    it('should resolve lastMessageId from assistant children tools result', () => {
+      // Data provenance:
+      // - The nested assistant child with `tools[].result_msg_id` is abstracted from the
+      //   real eval/compression export we inspected through `lh eval message list`.
+      // - In that async eval flow, the compressed history contains assistant/tool chains
+      //   instead of only plain lastMessageId markers.
+      // - This represents the eval side of the system: long-running async task/search chains.
+      const messages: Message[] = [
+        {
+          children: [
+            {
+              content: 'Search for clues',
+              id: 'msg-assistant-1',
+              tools: [
+                {
+                  id: 'tool-call-1',
+                  result_msg_id: 'msg-tool-result-1',
+                },
+              ],
+            },
+          ],
+          content: '',
+          createdAt: 1000,
+          id: 'comp-group-1',
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 1000,
+        } as any,
+        {
+          content: 'Continue searching',
+          createdAt: 2000,
+          id: 'msg-new',
+          parentId: 'msg-tool-result-1',
+          role: 'assistant',
+          updatedAt: 2000,
+        },
+      ];
+
+      const result = buildHelperMaps(messages);
+
+      expect(result.childrenMap.get('comp-group-1')).toEqual(['msg-new']);
+      expect(result.childrenMap.get('msg-tool-result-1')).toBeUndefined();
+    });
   });
 
   describe('integration scenarios', () => {

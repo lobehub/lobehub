@@ -12,10 +12,6 @@ tags:
 
 # 将 LobeHub 连接到 Discord
 
-<Callout type={'info'}>
-  此功能目前正在开发中，可能尚未完全稳定。您可以通过在 **设置** → **高级设置** → **开发者模式** 中启用 **开发者模式** 来使用此功能。
-</Callout>
-
 通过将 Discord 渠道连接到您的 LobeHub 代理，用户可以直接通过 Discord 服务器频道和私信与 AI 助手互动。
 
 ## 前置条件
@@ -28,6 +24,8 @@ tags:
 <Steps>
   ### 访问 Discord 开发者门户
 
+  ![](https://hub-apac-1.lobeobjects.space/docs/83f435317ea2c9c4a2adcbfd74301536.png)
+
   访问 [Discord 开发者门户](https://discord.com/developers/applications)，点击 **新建应用程序**。为您的应用程序命名（例如，“LobeHub 助手”），然后点击 **创建**。
 
   ### 创建机器人
@@ -35,6 +33,8 @@ tags:
   在左侧菜单中，点击 **机器人**。根据需要自定义机器人的用户名和头像。
 
   ### 启用特权网关意图
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/6126baa4154be45eefdad73c576723d0.png)
 
   在机器人设置页面，向下滚动到 **特权网关意图** 并启用以下选项：
 
@@ -46,11 +46,15 @@ tags:
 
   ### 复制机器人令牌
 
+  ![](https://hub-apac-1.lobeobjects.space/docs/e76272de65ad8db8746b1dcafeafdce8.png)
+
   在 **机器人** 页面，点击 **重置令牌** 以生成您的机器人令牌。复制并安全保存该令牌。
 
   > **重要提示：** 请将您的机器人令牌视为密码。切勿公开分享或提交到版本控制系统。
 
   ### 复制应用程序 ID 和公钥
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/d42901c6eb84e3e335d9a8535f317a35.png)
 
   在左侧菜单中，转到 **常规信息**。复制并保存以下内容：
 
@@ -68,6 +72,8 @@ tags:
   在 LobeHub 中，导航到您的代理设置，然后选择 **渠道** 标签。点击平台列表中的 **Discord**。
 
   ### 填写凭据
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/c5ced26ea287ee215a9dc385367c1083.png)
 
   输入以下字段：
 
@@ -87,6 +93,8 @@ tags:
 <Steps>
   ### 生成邀请链接
 
+  ![](https://hub-apac-1.lobeobjects.space/docs/5e8a93f33e085a187deddb87704f0bd3.png)
+
   在 Discord 开发者门户中，转到 **OAuth2** → **URL 生成器**。选择以下范围：
 
   - `bot`
@@ -102,6 +110,8 @@ tags:
   - 添加反应（可选）
 
   ### 授权机器人
+
+  ![](https://hub-apac-1.lobeobjects.space/docs/2e47836fe4ac988e76460534ee57efa4.png)
 
   复制生成的链接，在浏览器中打开，选择您希望添加机器人的服务器，然后点击 **授权**。
 </Steps>

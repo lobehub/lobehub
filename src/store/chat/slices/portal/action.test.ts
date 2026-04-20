@@ -227,6 +227,100 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('openArtifact', () => {
+    it('should push Artifact view and open portal', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'First Artifact',
+          type: 'text/markdown',
+        });
+      });
+
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(result.current.portalStack[0]).toEqual({
+        type: PortalViewType.Artifact,
+        artifact: {
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'First Artifact',
+          type: 'text/markdown',
+        },
+      });
+      expect(result.current.showPortal).toBe(true);
+    });
+
+    it('should replace artifact view when switching to different artifact from same message', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'First Artifact',
+          type: 'text/markdown',
+        });
+      });
+
+      act(() => {
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-2',
+          title: 'Second Artifact',
+          type: 'text/html',
+        });
+      });
+
+      // Should replace, not stack (same view type)
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(result.current.portalStack[0]).toEqual({
+        type: PortalViewType.Artifact,
+        artifact: {
+          id: 'msg-1',
+          identifier: 'artifact-2',
+          title: 'Second Artifact',
+          type: 'text/html',
+        },
+      });
+    });
+
+    it('should replace artifact view when switching to artifact from different message', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'First',
+          type: 'text/markdown',
+        });
+      });
+
+      act(() => {
+        result.current.openArtifact({
+          id: 'msg-2',
+          identifier: 'artifact-x',
+          title: 'Other',
+          type: 'text/html',
+        });
+      });
+
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(result.current.portalStack[0]).toEqual({
+        type: PortalViewType.Artifact,
+        artifact: {
+          id: 'msg-2',
+          identifier: 'artifact-x',
+          title: 'Other',
+          type: 'text/html',
+        },
+      });
+    });
+  });
+
   describe('openToolUI', () => {
     it('should push ToolUI view and open portal', () => {
       const { result } = renderHook(() => useChatStore());

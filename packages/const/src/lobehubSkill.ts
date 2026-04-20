@@ -1,5 +1,5 @@
 import type { IconType } from '@icons-pack/react-simple-icons';
-import { SiLinear, SiX } from '@icons-pack/react-simple-icons';
+import { SiGithub, SiLinear, SiVercel, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**
@@ -50,6 +50,18 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     authorUrl: 'https://lobehub.com',
     defaultVisible: true,
     description:
+      'GitHub is a platform for version control and collaboration, enabling developers to host, review, and manage code repositories.',
+    icon: SiGithub,
+    id: 'github',
+    label: 'GitHub',
+    readme:
+      'Connect to GitHub to access your repositories, create and manage issues, review pull requests, and collaborate on code—all through natural conversation with your AI assistant.',
+  },
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
       'Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster',
     icon: SiLinear,
     id: 'linear',
@@ -80,6 +92,18 @@ export const LOBEHUB_SKILL_PROVIDERS: LobehubSkillProviderType[] = [
     readme:
       'Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
     label: 'X (Twitter)',
+  },
+  {
+    author: 'LobeHub',
+    authorUrl: 'https://lobehub.com',
+    defaultVisible: true,
+    description:
+      'Vercel is a cloud platform for frontend developers, providing hosting and serverless functions to deploy web applications with ease.',
+    icon: SiVercel,
+    id: 'vercel',
+    readme:
+      'Connect to Vercel to manage your deployments, monitor project status, and control your infrastructure. Deploy applications, check build logs, manage environment variables, and scale your projects through conversational AI.',
+    label: 'Vercel',
   },
 ];
 

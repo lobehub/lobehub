@@ -1,8 +1,12 @@
+import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import { type PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import {
+  type SaveUserQuestionInput,
   type SSOProvider,
+  type UserAgentOnboarding,
+  type UserAgentOnboardingContext,
   type UserGuide,
   type UserInitializationState,
   type UserOnboarding,
@@ -27,8 +31,52 @@ export class UserService {
     return lambdaClient.user.getUserSSOProviders.query();
   };
 
+  getOrCreateOnboardingState = async (): Promise<{
+    agentId: string;
+    agentOnboarding: UserAgentOnboarding;
+    context: UserAgentOnboardingContext;
+    feedbackSubmitted: boolean;
+    topicId: string;
+  }> => {
+    return lambdaClient.user.getOrCreateOnboardingState.query();
+  };
+
+  getOnboardingState = async (): Promise<UserAgentOnboardingContext> => {
+    return lambdaClient.user.getOnboardingState.query();
+  };
+
+  saveUserQuestion = async (params: SaveUserQuestionInput) => {
+    return lambdaClient.user.saveUserQuestion.mutate(
+      params as Parameters<typeof lambdaClient.user.saveUserQuestion.mutate>[0],
+    );
+  };
+
+  finishOnboarding = async () => {
+    return lambdaClient.user.finishOnboarding.mutate({});
+  };
+
+  readOnboardingDocument = async (type: 'soul' | 'persona') => {
+    return lambdaClient.user.readOnboardingDocument.query({ type });
+  };
+
+  updateOnboardingDocument = async (type: 'soul' | 'persona', content: string) => {
+    return lambdaClient.user.updateOnboardingDocument.mutate({ content, type });
+  };
+
+  patchOnboardingDocument = async (type: 'soul' | 'persona', hunks: MarkdownPatchHunk[]) => {
+    return lambdaClient.user.patchOnboardingDocument.mutate({ hunks, type });
+  };
+
   makeUserOnboarded = async () => {
     return lambdaClient.user.makeUserOnboarded.mutate();
+  };
+
+  resetAgentOnboarding = async () => {
+    return lambdaClient.user.resetAgentOnboarding.mutate();
+  };
+
+  updateAgentOnboarding = async (agentOnboarding: UserAgentOnboarding) => {
+    return lambdaClient.user.updateAgentOnboarding.mutate(agentOnboarding);
   };
 
   updateOnboarding = async (onboarding: UserOnboarding) => {

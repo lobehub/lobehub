@@ -1,6 +1,25 @@
 import { encode } from 'gpt-tokenizer';
 
 import type { ExecutionSnapshot, SnapshotSummary, StepSnapshot } from '../types';
+import { reconstructMessages } from '../utils/reconstruct';
+
+/**
+ * Resolve messages for a step, supporting both legacy (full) and incremental (delta) formats.
+ */
+function resolveStepMessages(
+  step: StepSnapshot,
+  allSteps?: StepSnapshot[],
+): { messages: any[] | undefined; messagesAfter: any[] | undefined } {
+  // Legacy format: messages stored directly on step
+  if (step.messages) {
+    return { messages: step.messages, messagesAfter: step.messagesAfter };
+  }
+  // Incremental format: reconstruct from baseline + deltas
+  if (step.messagesDelta !== undefined && allSteps) {
+    return reconstructMessages(allSteps, step.stepIndex);
+  }
+  return { messages: undefined, messagesAfter: undefined };
+}
 
 // ANSI color helpers
 const dim = (s: string) => `\x1B[2m${s}\x1B[22m`;
@@ -69,19 +88,21 @@ function padEnd(s: string, len: number): string {
 
 // Application-defined structural XML tags — rendered in blue+bold
 const STRUCTURAL_TAGS = new Set([
-  'plugins',
+  'agent_document',
+  'api',
+  'available_tools',
   'collection',
   'collection.instructions',
-  'available_tools',
-  'api',
-  'user_context',
-  'session_context',
-  'user_memory',
-  'persona',
-  'instruction',
-  'online-devices',
   'device',
+  'discord_context',
+  'instruction',
   'memory_effort_policy',
+  'online-devices',
+  'persona',
+  'plugins',
+  'session_context',
+  'user_context',
+  'user_memory',
 ]);
 
 /**
@@ -328,16 +349,19 @@ export function renderMessageDetail(
   step: StepSnapshot,
   msgIndex: number,
   source: 'input' | 'output' = 'output',
+  allSteps?: StepSnapshot[],
 ): string {
   const ceEvent = step.events?.find((e) => e.type === 'context_engine_result') as any;
   let messages: any[] | undefined;
   let label: string;
 
+  const { messages: resolvedMessages } = resolveStepMessages(step, allSteps);
+
   if (source === 'input') {
-    messages = ceEvent?.input?.messages ?? step.messages;
+    messages = ceEvent?.input?.messages ?? resolvedMessages;
     label = ceEvent ? 'Context Engine Input' : 'Messages (before step)';
   } else {
-    messages = ceEvent?.output ?? step.messages;
+    messages = ceEvent?.output ?? resolvedMessages;
     label = ceEvent ? 'Final LLM Payload' : 'Messages (before step)';
   }
 
@@ -363,7 +387,7 @@ export function renderMessageDetail(
 
   const rawContent =
     typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2);
-  if (rawContent) lines.push(rawContent);
+  if (rawContent) lines.push(formatXmlContent(rawContent));
 
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     lines.push('');
@@ -760,7 +784,13 @@ export function renderDiff(
 
 export function renderStepDetail(
   step: StepSnapshot,
-  options?: { context?: boolean; events?: boolean; messages?: boolean; tools?: boolean },
+  options?: {
+    allSteps?: StepSnapshot[];
+    context?: boolean;
+    events?: boolean;
+    messages?: boolean;
+    tools?: boolean;
+  },
 ): string {
   const lines: string[] = [
     bold(`Step ${step.stepIndex}`) + `  [${step.stepType}]  ${formatMs(step.executionTimeMs)}`,
@@ -787,6 +817,22 @@ export function renderStepDetail(
       lines.push('');
       lines.push(bold('Reasoning:'));
       lines.push(step.reasoning);
+    }
+  }
+
+  // Default view: show tool errors even without -t flag
+  if (!hasSpecificFlag && step.toolsResult) {
+    const failedResults = step.toolsResult.filter((tr) => tr.isSuccess === false);
+    if (failedResults.length > 0) {
+      lines.push('');
+      lines.push(bold(red('Errors:')));
+      for (const tr of failedResults) {
+        lines.push(`  ${red('✗')} ${cyan(tr.identifier || tr.apiName)}`);
+        if (tr.output) {
+          const output = tr.output.length > 500 ? tr.output.slice(0, 500) + '...' : tr.output;
+          lines.push(`    ${red(output)}`);
+        }
+      }
     }
   }
 
@@ -866,12 +912,15 @@ export function renderStepDetail(
         lines.push(dim('─'.repeat(60)));
         renderMessageList(lines, outputMsgs, 300);
       }
-    } else if (step.messages) {
+    } else {
       // Fallback: show raw DB messages if no context engine event
-      lines.push('');
-      lines.push(bold(`Messages (before step): ${step.messages.length} messages`));
-      lines.push(dim('─'.repeat(60)));
-      renderMessageList(lines, step.messages, 200);
+      const { messages: resolvedMsgs } = resolveStepMessages(step, options?.allSteps);
+      if (resolvedMsgs && resolvedMsgs.length > 0) {
+        lines.push('');
+        lines.push(bold(`Messages (before step): ${resolvedMsgs.length} messages`));
+        lines.push(dim('─'.repeat(60)));
+        renderMessageList(lines, resolvedMsgs, 200);
+      }
     }
   }
 

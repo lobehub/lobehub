@@ -68,6 +68,7 @@ const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems
         <Button
           block
           loading={loading}
+          style={{ bottom: 0, position: 'sticky' }}
           type={'primary'}
           onClick={async () => {
             if (!providerId) return;

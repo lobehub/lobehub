@@ -539,7 +539,7 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       ]);
     });
 
-    it('should boost current agent topics in relevance', async () => {
+    it('should only return topics of the current agent when agentId is provided', async () => {
       const results = await searchRepo.search({
         agentId: testAgentId,
         query: 'testing',
@@ -547,46 +547,24 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
 
       const topicResults = results.filter((r) => r.type === 'topic');
 
-      // Current agent's topics should have better relevance (0.5-0.7)
-      const currentAgentTopics = topicResults.filter(
-        (t) => t.type === 'topic' && t.agentId === testAgentId,
-      );
-      const otherTopics = topicResults.filter(
-        (t) => t.type === 'topic' && t.agentId !== testAgentId,
-      );
-
-      expect(currentAgentTopics.length).toBeGreaterThan(0);
-      expect(otherTopics.length).toBeGreaterThan(0);
-
-      // Current agent topics should have lower relevance scores (higher priority)
-      currentAgentTopics.forEach((topic) => {
-        expect(topic.relevance).toBeLessThan(1);
-      });
-
-      otherTopics.forEach((topic) => {
-        expect(topic.relevance).toBeGreaterThanOrEqual(1);
+      expect(topicResults.length).toBeGreaterThan(0);
+      topicResults.forEach((topic) => {
+        if (topic.type === 'topic') {
+          expect(topic.agentId).toBe(testAgentId);
+        }
       });
     });
 
-    it('should show all user topics but rank current agent topics first', async () => {
+    it('should include topics from all agents when agentId is not provided', async () => {
       const results = await searchRepo.search({
-        agentId: testAgentId,
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
-
-      // Should include topics from all agents (current, other, and no agent)
       const agentIds = new Set(topicResults.map((t) => (t.type === 'topic' ? t.agentId : null)));
+
       expect(agentIds.has(testAgentId)).toBe(true);
       expect(agentIds.has(otherAgentId)).toBe(true);
-      expect(agentIds.has(null)).toBe(true);
-
-      // First results should be from current agent
-      expect(topicResults[0].type).toBe('topic');
-      if (topicResults[0].type === 'topic') {
-        expect(topicResults[0].agentId).toBe(testAgentId);
-      }
     });
 
     it('should return 6 topics in agent context', async () => {
@@ -652,14 +630,13 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       expect(topicResults.length).toBeLessThanOrEqual(3);
     });
 
-    it('should not boost topics when agentId is not provided', async () => {
+    it('should return topics with normal relevance range (1-3) when agentId is not provided', async () => {
       const results = await searchRepo.search({
         query: 'testing',
       });
 
       const topicResults = results.filter((r) => r.type === 'topic');
 
-      // All topics should have normal relevance (1-3)
       topicResults.forEach((topic) => {
         expect(topic.relevance).toBeGreaterThanOrEqual(1);
         expect(topic.relevance).toBeLessThanOrEqual(3);

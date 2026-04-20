@@ -5,4 +5,5 @@ export * from './identity';
 export * from './model';
 export * from './persona';
 export * from './preference';
+export * from './query';
 export * from './sources/benchmarkLoCoMo';

@@ -21,6 +21,7 @@ export const config = {
     '/changelog(.*)',
     '/settings(.*)',
     '/image',
+    '/video',
     '/resource',
     '/resource(.*)',
     '/profile(.*)',
@@ -31,6 +32,7 @@ export const config = {
     '/share(.*)',
 
     '/onboarding',
+    '/onboarding(.*)',
 
     '/signup(.*)',
     '/signin(.*)',

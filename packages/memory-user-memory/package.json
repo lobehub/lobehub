@@ -13,13 +13,13 @@
   "scripts": {
     "test": "vitest --run",
     "test:coverage": "vitest --coverage --silent='passed-only'",
-    "build:gen-response-formats": "tsx scripts/generate-response-formats.ts",
     "type-check": "tsgo --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@lobechat/context-engine": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/prompts": "workspace:*",
+    "@lobechat/types": "workspace:*",
     "dayjs": "^1.11.11",
     "dotenv": "^17.2.3",
     "ora": "^9.0.0",
@@ -29,10 +29,9 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
-    "@lobechat/types": "workspace:*",
     "@types/json-schema": "^7.0.15",
     "@types/xast": "^2.0.4",
-    "promptfoo": "^0.120.17",
+    "picospinner": "^3.0.0",
     "tsx": "^4.20.6"
   },
   "peerDependencies": {

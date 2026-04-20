@@ -3,9 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import MainInterfaceTracker from '@/components/Analytics/MainInterfaceTracker';
-
 import Conversation from './features/Conversation';
+import AgentWorkingSidebar from './features/Conversation/WorkingSidebar';
 import PageTitle from './features/PageTitle';
 import Portal from './features/Portal';
 import TelemetryNotification from './features/TelemetryNotification';
@@ -22,8 +21,8 @@ const ChatPage = memo(() => {
       >
         <Conversation />
         <Portal />
+        <AgentWorkingSidebar />
       </Flexbox>
-      <MainInterfaceTracker />
       <TelemetryNotification mobile={false} />
     </>
   );

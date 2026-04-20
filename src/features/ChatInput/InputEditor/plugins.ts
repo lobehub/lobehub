@@ -5,6 +5,7 @@ import {
   ReactLinkHighlightPlugin,
   ReactListPlugin,
   ReactMathPlugin,
+  ReactMentionPlugin,
   ReactVirtualBlockPlugin,
 } from '@lobehub/editor';
 import { type Editor } from '@lobehub/editor/react';
@@ -22,6 +23,7 @@ interface CreateChatInputRichPluginsOptions {
 export const CHAT_INPUT_EMBED_PLUGINS: EditorPlugins = [
   ReactActionTagPlugin,
   ReactReferTopicPlugin,
+  ReactMentionPlugin,
 ];
 
 export const createChatInputRichPlugins = ({

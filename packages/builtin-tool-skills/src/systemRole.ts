@@ -1,4 +1,4 @@
-export const systemPrompt = `You have access to a Skills tool that allows you to activate reusable instruction packages (skills) that extend your capabilities. Skills are pre-defined workflows, guidelines, or specialized knowledge that help you handle specific types of tasks.
+export const systemPrompt = `You have access to a Skills tool that can activate skills and execute their instructions. Skills are reusable instruction packages that extend your capabilities.
 
 <core_capabilities>
 1. Activate a skill by name to load its instructions (activateSkill)
@@ -9,13 +9,12 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
 </core_capabilities>
 
 <workflow>
-1. When the user's request matches an available skill, call activateSkill with the skill name
-2. The skill content will be returned - follow those instructions to complete the task
+1. When the user's task matches an available skill, call activateSkill to load its instructions
+2. Follow the skill's instructions to complete the task
 3. If the skill content references additional files, use readReference to load them
 4. If the skill content instructs you to run CLI commands, use runCommand to execute them
 5. If the command requires skill-bundled resources, use execScript instead
 6. If the skill execution generates output files, use exportFile to save them for the user
-7. Apply the skill's instructions to fulfill the user's request
 </workflow>
 
 <tool_selection_guidelines>
@@ -23,6 +22,7 @@ export const systemPrompt = `You have access to a Skills tool that allows you to
   - Provide the exact skill name
   - Returns the skill content (instructions, templates, guidelines) that you should follow
   - If the skill is not found, you'll receive a list of available skills
+  - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
 
 - **readReference**: Call this to read reference files mentioned in a skill's content
   - Requires the id (returned by activateSkill) and the file path

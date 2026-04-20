@@ -153,6 +153,7 @@ export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
   | 'millionCharacters' // per 1M characters
   | 'image' // per image
+  | 'video' // per video
   | 'megapixel' // per megapixel
   | 'second'; // per second
 
@@ -241,6 +242,8 @@ export type ModelSearchImplementType = 'tool' | 'params' | 'internal';
 
 export type ExtendParamsType =
   | 'reasoningBudgetToken'
+  | 'reasoningBudgetToken32k'
+  | 'reasoningBudgetToken80k'
   | 'enableReasoning'
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
@@ -252,6 +255,7 @@ export type ExtendParamsType =
   | 'gpt5_2ProReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'codexMaxReasoningEffort'
+  | 'opus47Effort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
@@ -266,7 +270,15 @@ export type ExtendParamsType =
   | 'imageResolution2'
   | 'urlContext';
 
+export type DisabledParamType = 'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty';
+
 export interface AiModelSettings {
+  /**
+   * Chat params that should be hidden from the agent config UI and stripped from
+   * outbound requests. Use this for models whose API rejects specific sampling
+   * params (e.g. Claude Opus 4.7 returns 400 on any non-default temperature / top_p).
+   */
+  disabledParams?: DisabledParamType[];
   extendParams?: ExtendParamsType[];
   /**
    * How the model layer implements search
@@ -277,6 +289,8 @@ export interface AiModelSettings {
 
 export const ExtendParamsTypeSchema = z.enum([
   'reasoningBudgetToken',
+  'reasoningBudgetToken32k',
+  'reasoningBudgetToken80k',
   'enableReasoning',
   'enableAdaptiveThinking',
   'disableContextCaching',
@@ -288,6 +302,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ProReasoningEffort',
   'grok4_20ReasoningEffort',
   'codexMaxReasoningEffort',
+  'opus47Effort',
   'textVerbosity',
   'thinking',
   'thinkingBudget',
@@ -305,7 +320,15 @@ export const ExtendParamsTypeSchema = z.enum([
 
 export const ModelSearchImplementTypeSchema = z.enum(['tool', 'params', 'internal']);
 
+export const DisabledParamTypeSchema = z.enum([
+  'temperature',
+  'top_p',
+  'frequency_penalty',
+  'presence_penalty',
+]);
+
 export const AiModelSettingsSchema = z.object({
+  disabledParams: z.array(DisabledParamTypeSchema).optional(),
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),
@@ -467,6 +490,10 @@ export interface AiModelForSelect {
    * Approximate per-image price (USD), used when exact calculation is not possible
    */
   approximatePricePerImage?: number;
+  /**
+   * Approximate per-video price (USD), used when exact calculation is not possible
+   */
+  approximatePricePerVideo?: number;
   contextWindowTokens?: number;
   description?: string;
   displayName?: string;
@@ -476,6 +503,10 @@ export interface AiModelForSelect {
    * Exact per-image price (USD) calculated from pricing units
    */
   pricePerImage?: number;
+  /**
+   * Exact per-video price (USD) when resolved from pricing units
+   */
+  pricePerVideo?: number;
   pricing?: Pricing;
   releasedAt?: string;
 }

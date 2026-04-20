@@ -28,6 +28,7 @@ import ModelDetailPanel from '../ModelDetailPanel';
 interface MultipleProvidersModelItemProps {
   activeKey: string;
   data: ModelWithProviders;
+  defaultProviderId?: string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
   onClose: () => void;
@@ -93,19 +94,17 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
             <DropdownMenuPopup className={cx(styles.detailPopup, styles.dropdownMenu)}>
-              {showInfoTag && (
-                <ModelDetailPanel
-                  model={data.model.id}
-                  provider={(activeProvider ?? data.providers[0]).id}
-                />
-              )}
+              <ModelDetailPanel
+                model={data.model.id}
+                provider={(activeProvider ?? data.providers[0]).id}
+              />
               <DropdownMenuGroup>
                 <DropdownMenuGroupLabel>
                   {t('ModelSwitchPanel.useModelFrom')}
                 </DropdownMenuGroupLabel>
                 {data.providers.map((p) => {
                   const key = menuKey(p.id, data.model.id);
-                  const isProviderActive = activeKey === key;
+                  const isProviderActive = isActive ? activeKey === key : p.id === 'lobehub';
                   const providerRestricted = isModelRestricted?.(data.model.id, p.id);
 
                   return (

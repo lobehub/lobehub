@@ -1,0 +1,8 @@
+{
+  "inbox.archiveAll": "Tümünü arşivle",
+  "inbox.empty": "Henüz bildirim yok",
+  "inbox.emptyUnread": "Okunmamış bildirim yok",
+  "inbox.filterUnread": "Sadece okunmamışları göster",
+  "inbox.markAllRead": "Tümünü okundu olarak işaretle",
+  "inbox.title": "Bildirimler"
+}

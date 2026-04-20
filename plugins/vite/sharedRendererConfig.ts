@@ -4,6 +4,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 import { viteEmotionSpeedy } from './emotionSpeedy';
+import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
 
@@ -123,6 +124,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
   const defaultTsconfigPaths = options.tsconfigPaths ?? true;
   return [
     viteEmotionSpeedy(),
+    viteMarkdownImport(),
     nodePolyfills({ include: ['buffer'] }),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),

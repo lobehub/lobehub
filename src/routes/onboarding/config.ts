@@ -9,6 +9,16 @@ import {
   TargetIcon,
 } from 'lucide-react';
 
+/** Default target when the user opens `/onboarding`. Flip to `'agent'` when agent onboarding is ready to ship as the primary flow. */
+export type DefaultOnboardingEntryVariant = 'agent' | 'classic';
+export const DEFAULT_ONBOARDING_ENTRY_VARIANT: DefaultOnboardingEntryVariant = 'classic';
+
+const resolveDefaultOnboardingPath = (variant: DefaultOnboardingEntryVariant) =>
+  variant === 'agent' ? '/onboarding/agent' : '/onboarding/classic';
+
+export const DEFAULT_ONBOARDING_PATH: '/onboarding/agent' | '/onboarding/classic' =
+  resolveDefaultOnboardingPath(DEFAULT_ONBOARDING_ENTRY_VARIANT);
+
 /**
  * Predefined interest areas with icons and translation keys.
  * Use with `t('interests.area.${key}')` from 'onboarding' namespace.

@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { type FC, type PropsWithChildren } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { isDesktop } from '@/const/version';
 import { useIsDark } from '@/hooks/useIsDark';
@@ -9,13 +9,15 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { getDarwinMajorVersion, isMacOSWithLargeWindowBorders } from '@/utils/platform';
 
+import { LayoutContainerContext } from './DesktopLayoutContainer/LayoutContainerContext';
 import { styles } from './DesktopLayoutContainer/style';
 
 const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
+  const innerContainerRef = useRef<HTMLDivElement>(null);
   const isDarkMode = useIsDark();
   const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
 
-  // CSS 变量用于动态样式
+  // CSS variables for dynamic styling
   const outerCssVariables = useMemo<Record<string, string>>(
     () => ({
       '--container-padding-left': expand ? '0px' : '8px',
@@ -49,10 +51,11 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
       <Flexbox
         className={styles.innerContainer}
         height={'100%'}
+        ref={innerContainerRef}
         style={innerCssVariables}
         width={'100%'}
       >
-        {children}
+        <LayoutContainerContext value={innerContainerRef}>{children}</LayoutContainerContext>
       </Flexbox>
     </Flexbox>
   );

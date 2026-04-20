@@ -3,7 +3,9 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
+import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import { type UserMemoryStoreState } from './initialState';
 import { initialState } from './initialState';
 import { type ActivityAction } from './slices/activity';
@@ -31,7 +33,8 @@ export type UserMemoryStore = UserMemoryStoreState &
   ExperienceAction &
   HomeAction &
   IdentityAction &
-  PreferenceAction;
+  PreferenceAction &
+  ResetableStore;
 
 type UserMemoryStoreAction = ActivityAction &
   AgentMemoryAction &
@@ -40,7 +43,12 @@ type UserMemoryStoreAction = ActivityAction &
   ExperienceAction &
   HomeAction &
   IdentityAction &
-  PreferenceAction;
+  PreferenceAction &
+  ResetableStore;
+
+class UserMemoryStoreResetAction extends ResetableStoreAction<UserMemoryStore> {
+  protected readonly resetActionName = 'resetUserMemoryStore';
+}
 
 const createStore: StateCreator<UserMemoryStore, [['zustand/devtools', never]]> = (
   set: any,
@@ -57,6 +65,7 @@ const createStore: StateCreator<UserMemoryStore, [['zustand/devtools', never]]> 
     createHomeSlice(set, get, store),
     createIdentitySlice(set, get, store),
     createPreferenceSlice(set, get, store),
+    new UserMemoryStoreResetAction(set, get, store),
   ]),
 });
 
@@ -66,5 +75,7 @@ export const useUserMemoryStore = createWithEqualityFn<UserMemoryStore>()(
   devtools(createStore),
   shallow,
 );
+
+expose('userMemory', useUserMemoryStore);
 
 export const getUserMemoryStoreState = () => useUserMemoryStore.getState();

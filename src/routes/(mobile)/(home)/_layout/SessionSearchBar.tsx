@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { SearchBar } from '@lobehub/ui';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -8,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { useSessionStore } from '@/store/session';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyEnum } from '@/types/hotkey';
 
 const SessionSearchBar = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation('chat');

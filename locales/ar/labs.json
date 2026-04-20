@@ -1,7 +1,8 @@
 {
-  "desc": "ستجد هنا تحديثات عرضية حول الميزات الجديدة التي نستكشفها — لا تتردد في تجربتها!",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
+  "features.gatewayMode.desc": "تنفيذ مهام الوكيل على الخادم عبر بوابة WebSocket بدلًا من التشغيل محليًا، مما يتيح تنفيذًا أسرع ويقلل من استهلاك موارد العميل.",
+  "features.gatewayMode.title": "تنفيذ الوكيل من جانب الخادم (البوابة)",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",

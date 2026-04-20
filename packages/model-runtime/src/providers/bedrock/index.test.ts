@@ -477,7 +477,7 @@ describe('LobeBedrockAI', () => {
             accept: 'application/json',
             body: JSON.stringify({
               anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 8192,
+              max_tokens: 64_000,
               messages: [
                 {
                   content: [
@@ -520,7 +520,7 @@ describe('LobeBedrockAI', () => {
             accept: 'application/json',
             body: JSON.stringify({
               anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 8192,
+              max_tokens: 64_000,
               messages: [
                 {
                   content: [
@@ -653,7 +653,7 @@ describe('LobeBedrockAI', () => {
             accept: 'application/json',
             body: JSON.stringify({
               anthropic_version: 'bedrock-2023-05-31',
-              max_tokens: 8192,
+              max_tokens: 64_000,
               messages: [
                 {
                   content: [
@@ -700,6 +700,29 @@ describe('LobeBedrockAI', () => {
             errorType: AgentRuntimeErrorType.ProviderBizError,
             provider: ModelProvider.Bedrock,
             region: 'us-west-2',
+          }),
+        );
+      });
+
+      it('should throw ExceededContextWindow when error message indicates context window exceeded', async () => {
+        const errorMessage =
+          'Too many input tokens. Max input tokens for this model is 200000, but 250000 were provided.';
+        const errorMetadata = { statusCode: 400 };
+        const mockError = new Error(errorMessage);
+        (mockError as any).$metadata = errorMetadata;
+        (instance['client'].send as Mock).mockRejectedValue(mockError);
+
+        await expect(
+          instance.chat({
+            max_tokens: 100,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'anthropic.claude-v2:1',
+            temperature: 0,
+          }),
+        ).rejects.toThrow(
+          expect.objectContaining({
+            errorType: AgentRuntimeErrorType.ExceededContextWindow,
+            provider: ModelProvider.Bedrock,
           }),
         );
       });

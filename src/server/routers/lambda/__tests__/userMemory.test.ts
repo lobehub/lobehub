@@ -11,6 +11,7 @@ const mockUpdate = vi.fn();
 const mockFindById = vi.fn();
 
 const mockCountTopicsForMemoryExtractor = vi.fn();
+const mockDeleteAll = vi.fn();
 const { mockTriggerProcessUsers } = vi.hoisted(() => ({
   mockTriggerProcessUsers: vi.fn(),
 }));
@@ -29,6 +30,17 @@ vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(() => ({
     countTopicsForMemoryExtractor: mockCountTopicsForMemoryExtractor,
   })),
+}));
+
+vi.mock('@/database/models/userMemory', () => ({
+  UserMemoryActivityModel: vi.fn(() => ({})),
+  UserMemoryContextModel: vi.fn(() => ({})),
+  UserMemoryExperienceModel: vi.fn(() => ({})),
+  UserMemoryIdentityModel: vi.fn(() => ({})),
+  UserMemoryModel: vi.fn(() => ({
+    deleteAll: mockDeleteAll,
+  })),
+  UserMemoryPreferenceModel: vi.fn(() => ({})),
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -66,6 +78,7 @@ const createCaller = (ctxOverrides: Partial<any> = {}) => {
 describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTriggerProcessUsers.mockResolvedValue({ workflowRunId: 'workflow-run-1' });
   });
 
   it('dedupes when an active task exists', async () => {
@@ -102,7 +115,10 @@ describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
     expect(mockCreate).toHaveBeenCalledWith({
       metadata: {
         progress: { completedTopics: 0, totalTopics: 2 },
-        range: { from: new Date('2024-01-01').toISOString(), to: new Date('2024-02-01').toISOString() },
+        range: {
+          from: new Date('2024-01-01').toISOString(),
+          to: new Date('2024-02-01').toISOString(),
+        },
         source: 'chat_topic',
       },
       status: AsyncTaskStatus.Pending,
@@ -120,6 +136,15 @@ describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
       }),
       { extraHeaders: { 'x-test': 'ok' } },
     );
+    expect(mockUpdate).toHaveBeenCalledWith('new-task', {
+      metadata: expect.objectContaining({
+        control: {
+          upstash: {
+            workflowRunIds: ['workflow-run-1'],
+          },
+        },
+      }),
+    });
     expect(result).toMatchObject({
       deduped: false,
       id: 'new-task',
@@ -266,5 +291,21 @@ describe('userMemoryRouter.getMemoryExtractionTask', () => {
       },
       status: AsyncTaskStatus.Error,
     });
+  });
+});
+
+describe('userMemoryRouter.deleteAll', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('purges all user memories through the aggregate model', async () => {
+    mockDeleteAll.mockResolvedValue(undefined);
+
+    const caller = createCaller();
+    const result = await caller.deleteAll();
+
+    expect(mockDeleteAll).toHaveBeenCalledOnce();
+    expect(result).toEqual({ success: true });
   });
 });

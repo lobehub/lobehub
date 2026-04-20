@@ -20,32 +20,32 @@ export class TopicService extends BaseService {
   }
 
   /**
-   * 获取话题列表（支持按 agent/group 过滤）
-   * @param request 查询参数
-   * @returns 话题列表
+   * Get topic list (supports filtering by agent/group)
+   * @param request Query parameters
+   * @returns Topic list
    */
   async getTopics(request: TopicListQuery): Promise<TopicListResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('TOPIC_READ');
 
       if (!permissionResult.isPermitted) {
         throw this.createAuthorizationError(permissionResult.message || '没有权限访问话题列表');
       }
 
-      // 构建查询条件
+      // Build query conditions
       const conditions = [];
 
-      // 添加权限相关的查询条件
+      // Add permission-related query conditions
       if (permissionResult?.condition?.userId) {
         conditions.push(eq(topics.userId, permissionResult.condition.userId));
       }
 
-      // 优先按 groupId 过滤
+      // Filter by groupId first
       if (request.groupId) {
         conditions.push(eq(topics.groupId, request.groupId));
       } else if (request.agentId) {
-        // 通过 agentId 反查 sessionId，再按 sessionId 过滤
+        // Reverse-lookup sessionId from agentId, then filter by sessionId
         const [relation] = await this.db
           .select({ sessionId: agentsToSessions.sessionId })
           .from(agentsToSessions)
@@ -55,31 +55,31 @@ export class TopicService extends BaseService {
         if (relation) {
           conditions.push(eq(topics.sessionId, relation.sessionId));
         } else {
-          // agentId 不存在对应 session，直接返回空
+          // No session found for agentId, return empty directly
           return { topics: [], total: 0 };
         }
       } else if (request.isInbox) {
-        // inbox：sessionId 为 null 且 groupId 为 null 且 agentId 为 null
+        // inbox: sessionId is null, groupId is null, and agentId is null
         conditions.push(isNull(topics.sessionId));
         conditions.push(isNull(topics.groupId));
         conditions.push(isNull(topics.agentId));
       }
 
-      // 排除指定触发来源的话题
+      // Exclude topics with specified trigger sources
       if (request.excludeTriggers && request.excludeTriggers.length > 0) {
         conditions.push(notInArray(topics.trigger, request.excludeTriggers));
       }
 
-      // 如果有关键词，添加标题的模糊搜索条件
+      // If keyword is provided, add fuzzy search condition on title
       if (request.keyword) {
         conditions.push(ilike(topics.title, `%${request.keyword}%`));
       }
 
-      // 统一查询路径与并发计数/列表
+      // Unified query path with concurrent count/list
       const { limit, offset } = processPaginationConditions(request);
       const whereExpr = conditions.length ? and(...conditions) : undefined;
 
-      // 构建列表查询基础
+      // Build base list query
       const baseListQuery = this.db
         .select({
           messageCount: count(messages.id),
@@ -93,10 +93,10 @@ export class TopicService extends BaseService {
         .orderBy(desc(topics.favorite), desc(topics.createdAt))
         .where(whereExpr);
 
-      // 分页参数
+      // Pagination parameters
       const listQuery = limit ? baseListQuery.limit(limit).offset(offset!) : baseListQuery;
 
-      // 构建计数查询
+      // Build count query
       const countQuery = this.db.select({ count: count() }).from(topics).where(whereExpr);
 
       const [result, [countResult]] = await Promise.all([listQuery, countQuery]);
@@ -116,7 +116,7 @@ export class TopicService extends BaseService {
 
   async getTopicById(topicId: string): Promise<TopicResponse> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('TOPIC_READ', {
         targetTopicId: topicId,
       });
@@ -125,10 +125,10 @@ export class TopicService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '没有权限访问该话题');
       }
 
-      // 构建查询条件
+      // Build query conditions
       const whereConditions = [eq(topics.id, topicId)];
 
-      // 应用权限条件
+      // Apply permission conditions
       if (permissionResult.condition?.userId) {
         whereConditions.push(eq(topics.userId, permissionResult.condition.userId));
       }
@@ -161,15 +161,15 @@ export class TopicService extends BaseService {
   }
 
   /**
-   * 创建新的话题
-   * @param payload 创建参数
-   * @returns 创建的话题信息
+   * Create a new topic
+   * @param payload Create parameters
+   * @returns Created topic info
    */
   async createTopic(payload: TopicCreateRequest): Promise<TopicResponse> {
     try {
       const { agentId, groupId, title, favorite, clientId } = payload;
 
-      // agentId 时反查 sessionId
+      // When agentId is provided, reverse-lookup sessionId
       let effectiveSessionId: string | null = null;
 
       if (!effectiveSessionId && agentId) {
@@ -212,14 +212,14 @@ export class TopicService extends BaseService {
   }
 
   /**
-   * 更新话题
-   * @param topicId 话题ID
-   * @param title 话题标题
-   * @returns 更新后的话题信息
+   * Update topic
+   * @param topicId Topic ID
+   * @param title Topic title
+   * @returns Updated topic info
    */
   async updateTopic(topicId: string, payload: TopicUpdateRequest): Promise<Partial<TopicResponse>> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('TOPIC_UPDATE', {
         targetTopicId: topicId,
       });
@@ -228,10 +228,10 @@ export class TopicService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '没有权限更新该话题');
       }
 
-      // 构建查询条件检查话题是否存在
+      // Build query conditions to check if topic exists
       const whereConditions = [eq(topics.id, topicId)];
 
-      // 应用权限条件
+      // Apply permission conditions
       if (permissionResult.condition?.userId) {
         whereConditions.push(eq(topics.userId, permissionResult.condition.userId));
       }
@@ -253,12 +253,12 @@ export class TopicService extends BaseService {
   }
 
   /**
-   * 删除话题
-   * @param topicId 话题ID
+   * Delete topic
+   * @param topicId Topic ID
    */
   async deleteTopic(topicId: string): Promise<void> {
     try {
-      // 权限校验
+      // Permission check
       const permissionResult = await this.resolveOperationPermission('TOPIC_DELETE', {
         targetTopicId: topicId,
       });
@@ -267,10 +267,10 @@ export class TopicService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '没有权限删除该话题');
       }
 
-      // 构建查询条件检查话题是否存在
+      // Build query conditions to check if topic exists
       const whereConditions = [eq(topics.id, topicId)];
 
-      // 应用权限条件
+      // Apply permission conditions
       if (permissionResult.condition?.userId) {
         whereConditions.push(eq(topics.userId, permissionResult.condition.userId));
       }
@@ -284,7 +284,7 @@ export class TopicService extends BaseService {
         throw this.createNotFoundError('话题不存在');
       }
 
-      this.log('info', '话题删除成功', { topicId });
+      this.log('info', 'Topic deleted successfully', { topicId });
     } catch (error) {
       return this.handleServiceError(error, '删除话题');
     }

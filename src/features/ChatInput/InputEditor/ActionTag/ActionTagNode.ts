@@ -1,5 +1,6 @@
 import { addClassNamesToElement } from '@lexical/utils';
 import { getKernelFromEditor } from '@lobehub/editor';
+import type { HeadlessRenderableNode, HeadlessRenderContext } from '@lobehub/editor/renderer';
 import {
   $applyNodeReplacement,
   DecoratorNode,
@@ -11,7 +12,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
+import { createElement } from 'react';
 
+import { ActionTagView } from './ActionTagView';
 import type { ActionTagCategory, ActionTagType } from './types';
 
 export type SerializedActionTagNode = Spread<
@@ -23,7 +26,7 @@ export type SerializedActionTagNode = Spread<
   SerializedLexicalNode
 >;
 
-export class ActionTagNode extends DecoratorNode<any> {
+export class ActionTagNode extends DecoratorNode<any> implements HeadlessRenderableNode {
   __actionType: ActionTagType;
   __actionCategory: ActionTagCategory;
   __actionLabel: string;
@@ -120,6 +123,14 @@ export class ActionTagNode extends DecoratorNode<any> {
       queryDOM: decorator.queryDOM,
       render: decorator.render(this, editor),
     };
+  }
+
+  renderHeadless({ key }: HeadlessRenderContext) {
+    return createElement(ActionTagView, {
+      category: this.__actionCategory as ActionTagCategory,
+      key,
+      label: this.__actionLabel,
+    });
   }
 }
 

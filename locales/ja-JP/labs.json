@@ -1,7 +1,8 @@
 {
-  "desc": "ここでは、私たちが現在試している新機能を不定期に更新しています。ぜひお試しください！",
   "features.assistantMessageGroup.desc": "アシスタントのメッセージとそのツール呼び出し結果をグループ化して表示します",
   "features.assistantMessageGroup.title": "アシスタントメッセージのグループ化表示",
+  "features.gatewayMode.desc": "エージェントのタスクをローカルではなく Gateway WebSocket を介してサーバー上で実行します。これにより、より高速な処理が可能になり、クライアント側のリソース消費を削減できます。",
+  "features.gatewayMode.title": "サーバーサイドエージェント実行（Gateway）",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",

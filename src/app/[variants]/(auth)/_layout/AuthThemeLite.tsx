@@ -4,7 +4,7 @@ import 'antd/dist/reset.css';
 
 import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
 import { App } from 'antd';
-import * as motion from 'motion/react-m';
+import * as m from 'motion/react-m';
 import Link from 'next/link';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
@@ -35,7 +35,7 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
       <App style={{ height: '100%' }}>
         <AntdStaticMethods />
         <ConfigProvider
-          motion={motion}
+          motion={m}
           config={{
             aAs: Link,
             imgAs: Image,

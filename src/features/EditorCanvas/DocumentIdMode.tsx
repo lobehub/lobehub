@@ -66,16 +66,20 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     storeUpdater('editor', editor);
 
     // Get document store actions
-    const [onEditorInit, handleContentChangeStore, useFetchDocument, performSave, flushSave] =
+    const [onEditorInit, handleContentChangeStore, useFetchDocument, performSave] =
       useDocumentStore((s) => [
         s.onEditorInit,
         s.handleContentChange,
         s.useFetchDocument,
         s.performSave,
-        s.flushSave,
       ]);
 
-    useSaveDocumentHotkey(flushSave);
+    const handleManualSave = useCallback(async () => {
+      handleContentChangeStore();
+      await performSave(documentId, undefined, { saveSource: 'manual' });
+    }, [documentId, handleContentChangeStore, performSave]);
+
+    useSaveDocumentHotkey(handleManualSave);
 
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
     const { error } = useFetchDocument(documentId, { autoSave, editor, sourceType });
@@ -89,7 +93,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       if (!shouldGuardUnsavedChanges) return true;
 
       handleContentChangeStore();
-      await performSave(documentId);
+      await performSave(documentId, undefined, { saveSource: 'system' });
 
       const latestDocument = useDocumentStore.getState().documents[documentId];
       return latestDocument ? !latestDocument.isDirty : true;
@@ -114,13 +118,13 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     const contentChangeLockRef = useRef(false);
     const initRunIdRef = useRef(0);
 
-    // 追踪已经为哪个 documentId 调用过 onEditorInit
+    // Track which documentId has already had onEditorInit called
     const initializedDocIdRef = useRef<string | null>(null);
 
-    // 关键修复：如果 editor 已经初始化，需要主动调用 onEditorInit
-    // 因为 onInit 回调只在 editor 首次初始化时触发
+    // Critical fix: if the editor is already initialized, we need to manually call onEditorInit
+    // because the onInit callback only fires on the first editor initialization
     useEffect(() => {
-      // 避免重复调用：只在 documentId 变化且 editor 已初始化时调用
+      // Avoid duplicate calls: only invoke when documentId changes and editor is initialized
       if (
         editor &&
         isEditorInitialized &&

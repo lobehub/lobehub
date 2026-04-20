@@ -1,5 +1,6 @@
 import { addClassNamesToElement } from '@lexical/utils';
 import { getKernelFromEditor } from '@lobehub/editor';
+import type { HeadlessRenderableNode, HeadlessRenderContext } from '@lobehub/editor/renderer';
 import {
   $applyNodeReplacement,
   DecoratorNode,
@@ -11,6 +12,9 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
+import { createElement } from 'react';
+
+import { ReferTopicView } from './ReferTopicView';
 
 export type SerializedReferTopicNode = Spread<
   {
@@ -20,7 +24,7 @@ export type SerializedReferTopicNode = Spread<
   SerializedLexicalNode
 >;
 
-export class ReferTopicNode extends DecoratorNode<any> {
+export class ReferTopicNode extends DecoratorNode<any> implements HeadlessRenderableNode {
   __topicId: string;
   __topicTitle: string;
 
@@ -98,6 +102,14 @@ export class ReferTopicNode extends DecoratorNode<any> {
       queryDOM: decorator.queryDOM,
       render: decorator.render(this, editor),
     };
+  }
+
+  renderHeadless({ key }: HeadlessRenderContext) {
+    return createElement(ReferTopicView, {
+      fallbackTitle: this.__topicTitle,
+      key,
+      topicId: this.__topicId,
+    });
   }
 }
 

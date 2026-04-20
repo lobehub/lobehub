@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// 配置项
+// Configuration
 const config: Config = {
-  dirPath: './locales/en-US', // 替换为你的目录路径
-  ignoredFiles: ['models', 'providers', 'auth'], // 需要忽略的文件名
+  dirPath: './locales/en-US', // Replace with your directory path
+  ignoredFiles: ['models', 'providers', 'auth'], // Files to ignore
 };
 
 interface FileCount {
@@ -17,13 +17,13 @@ interface Config {
   ignoredFiles: string[];
 }
 
-// 统计字符串中的字符数量
+// Count the number of characters in a string
 function countChineseChars(str: string): number {
   if (typeof str !== 'string') return 0;
   return str.split(' ').length;
 }
 
-// 递归处理对象中的所有值
+// Recursively process all values in an object
 function processValue(value: any): number {
   let count = 0;
 
@@ -42,7 +42,7 @@ function processValue(value: any): number {
   return count;
 }
 
-// 读取并处理 JSON 文件
+// Read and process JSON file
 function processJsonFile(filePath: string): number {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
@@ -54,7 +54,7 @@ function processJsonFile(filePath: string): number {
   }
 }
 
-// 递归遍历目录
+// Recursively traverse directory
 function traverseDirectory(dirPath: string, ignoredFiles: string[]): FileCount[] {
   const results: FileCount[] = [];
   const files = fs.readdirSync(dirPath);
@@ -64,7 +64,7 @@ function traverseDirectory(dirPath: string, ignoredFiles: string[]): FileCount[]
     const stat = fs.statSync(fullPath);
     const filename = path.parse(file).name;
 
-    // 跳过被忽略的文件
+    // Skip ignored files
     if (ignoredFiles.includes(filename)) {
       return;
     }
@@ -80,7 +80,7 @@ function traverseDirectory(dirPath: string, ignoredFiles: string[]): FileCount[]
   return results;
 }
 
-// 主函数
+// Main function
 function main(config: Config): void {
   const { dirPath, ignoredFiles } = config;
 
@@ -89,13 +89,13 @@ function main(config: Config): void {
 
   const results = traverseDirectory(dirPath, ignoredFiles);
 
-  // 按单词数降序排序
+  // Sort by word count in descending order
   const sortedResults = results.sort((a, b) => b.count - a.count);
 
-  // 计算总数
+  // Calculate total count
   const totalCount = results.reduce((sum, item) => sum + item.count, 0);
 
-  // 输出结果
+  // Output results
   console.log('文件统计结果（按单词数降序）：');
   console.log('----------------------------------------');
   sortedResults.forEach(({ filename, count }) => {

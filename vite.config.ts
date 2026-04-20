@@ -22,9 +22,10 @@ const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
 
 export default defineConfig({
-  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/spa/',
+  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
+    reportCompressedSize: false,
     rollupOptions: {
       input: resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
       output: sharedRollupOutput,
@@ -108,10 +109,10 @@ export default defineConfig({
     port: 9876,
     host: true,
     proxy: {
-      '/api': 'http://localhost:3010',
-      '/oidc': 'http://localhost:3010',
-      '/trpc': 'http://localhost:3010',
-      '/webapi': 'http://localhost:3010',
+      '/api': `http://localhost:${process.env.PORT || 3010}`,
+      '/oidc': `http://localhost:${process.env.PORT || 3010}`,
+      '/trpc': `http://localhost:${process.env.PORT || 3010}`,
+      '/webapi': `http://localhost:${process.env.PORT || 3010}`,
     },
     warmup: {
       clientFiles: [

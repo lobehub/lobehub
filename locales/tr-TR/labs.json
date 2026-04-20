@@ -1,7 +1,8 @@
 {
-  "desc": "Burada, üzerinde çalıştığımız yeni özelliklerle ilgili ara sıra güncellemeler bulabilirsiniz—denemekten çekinmeyin!",
   "features.assistantMessageGroup.desc": "Temsilci mesajlarını ve bunlara ait araç çağrısı sonuçlarını birlikte gruplayarak görüntüleyin",
   "features.assistantMessageGroup.title": "Temsilci Mesaj Gruplama",
+  "features.gatewayMode.desc": "Aracı görevlerini yerel olarak çalıştırmak yerine Gateway WebSocket üzerinden sunucuda yürütün. Daha hızlı yürütme sağlar ve istemci kaynak kullanımını azaltır.",
+  "features.gatewayMode.title": "Sunucu Taraflı Aracı Yürütme (Gateway)",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
   "features.inputMarkdown.desc": "Girdi alanında Markdown biçimlendirmesini (kalın metin, kod blokları, tablolar vb.) gerçek zamanlı olarak görüntüleyin.",
