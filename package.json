@@ -265,7 +265,7 @@
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
-    "@lobehub/analytics": "^1.6.0",
+    "@lobehub/analytics": "^1.6.2",
     "@lobehub/charts": "^5.0.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "^4.8.1",
