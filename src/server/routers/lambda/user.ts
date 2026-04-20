@@ -39,6 +39,30 @@ const usernameSchema = z
   .max(64, { message: 'USERNAME_TOO_LONG' })
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
 
+const AVATAR_WEBAPI_PREFIX = '/webapi/';
+
+// Accept only: base64 data URL, absolute http(s) URL, empty string,
+// or an internal /webapi/user/avatar/<userId>/... path scoped to the caller.
+// Any other value (relative path, file://, s3://, path-traversal, or another
+// user's prefix) is rejected so a later upload can't be tricked into deleting
+// an arbitrary S3 key via the "delete old avatar" step.
+const assertSafeAvatarInput = (input: string, userId: string) => {
+  if (input.length === 0) return;
+  if (input.startsWith('data:image')) return;
+
+  const ownPrefix = `${AVATAR_WEBAPI_PREFIX}user/avatar/${userId}/`;
+  if (input.startsWith(ownPrefix) && !input.includes('..')) return;
+
+  try {
+    const { protocol } = new URL(input);
+    if (protocol === 'http:' || protocol === 'https:') return;
+  } catch {
+    /* not a parseable absolute URL — fall through to reject */
+  }
+
+  throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AVATAR_URL' });
+};
+
 const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   return next({
     ctx: {
@@ -128,6 +152,8 @@ export const userRouter = router({
   }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {
+    assertSafeAvatarInput(input, ctx.userId);
+
     // If it's Base64 data, need to upload to S3
     if (input.startsWith('data:image')) {
       try {
@@ -161,9 +187,15 @@ export const userRouter = router({
 
         await s3.uploadBuffer(filePath, buffer, mimeType);
 
-        // Delete old avatar
-        if (oldAvatarUrl && oldAvatarUrl.startsWith('/webapi/')) {
-          const oldFilePath = oldAvatarUrl.replace('/webapi/', '');
+        // Delete old avatar — defense in depth: only touch keys inside the
+        // caller's own avatar prefix, never external URLs or traversal paths.
+        const ownAvatarWebapiPrefix = `${AVATAR_WEBAPI_PREFIX}user/avatar/${ctx.userId}/`;
+        if (
+          oldAvatarUrl &&
+          oldAvatarUrl.startsWith(ownAvatarWebapiPrefix) &&
+          !oldAvatarUrl.includes('..')
+        ) {
+          const oldFilePath = oldAvatarUrl.slice(AVATAR_WEBAPI_PREFIX.length);
           await s3.deleteFile(oldFilePath);
         }
 
