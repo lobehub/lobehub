@@ -45,6 +45,7 @@ describe('aiModelSelectors', () => {
           functionCall: true,
           vision: true,
           reasoning: true,
+          imageOutput: true,
         },
         contextWindowTokens: 4000,
         settings: {
@@ -207,6 +208,20 @@ describe('aiModelSelectors', () => {
     it('should check reasoning support', () => {
       expect(aiModelSelectors.isModelSupportReasoning('model1', 'provider1')(mockState)).toBe(true);
       expect(aiModelSelectors.isModelSupportReasoning('model4', 'provider2')(mockState)).toBe(
+        false,
+      );
+    });
+
+    it('should check image output support', () => {
+      expect(aiModelSelectors.isModelSupportImageOutput('model1', 'provider1')(mockState)).toBe(
+        true,
+      );
+      // Missing ability defaults to false via `|| false` coercion.
+      expect(aiModelSelectors.isModelSupportImageOutput('model4', 'provider2')(mockState)).toBe(
+        false,
+      );
+      // Unknown model returns false instead of throwing.
+      expect(aiModelSelectors.isModelSupportImageOutput('missing', 'provider1')(mockState)).toBe(
         false,
       );
     });
