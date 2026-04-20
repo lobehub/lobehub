@@ -223,18 +223,27 @@ export class AgentBridgeService {
 
   private async finishStartupFailure(params: {
     error?: unknown;
+    operationId?: string;
     progressMessage?: SentMessage;
     stopped?: boolean;
     thread: Thread<ThreadState>;
     userMessage: Message;
   }): Promise<void> {
-    const { error, progressMessage, stopped, thread, userMessage } = params;
+    const { error, operationId, progressMessage, stopped, thread, userMessage } = params;
     const errorMessage =
       error instanceof Error ? error.message : error ? String(error) : 'Agent execution failed';
 
+    log(
+      'finishStartupFailure: thread=%s, operationId=%s, stopped=%s, error=%s',
+      thread.id,
+      operationId,
+      stopped,
+      errorMessage,
+    );
+
     AgentBridgeService.clearActiveThread(thread.id);
 
-    const errorContent = stopped ? renderStopped(errorMessage) : renderError(errorMessage);
+    const errorContent = stopped ? renderStopped(errorMessage) : renderError(operationId);
 
     if (progressMessage) {
       try {
@@ -332,9 +341,8 @@ export class AgentBridgeService {
         }
       } catch (error) {
         log('handleMention error: %O', error);
-        const msg = error instanceof Error ? error.message : String(error);
         try {
-          await thread.post(`**Agent Execution Failed**\n\`\`\`\n${msg}\n\`\`\``);
+          await thread.post(renderError());
         } catch (postError) {
           log('handleMention: failed to post error message: %O', postError);
         }
@@ -760,6 +768,7 @@ export class AgentBridgeService {
     if (!result.success) {
       await this.finishStartupFailure({
         error: result.error,
+        operationId: result.operationId,
         progressMessage,
         thread,
         userMessage,
@@ -926,8 +935,13 @@ export class AgentBridgeService {
 
                 if (reason === 'error') {
                   const errorMsg = event.errorMessage || 'Agent execution failed';
+                  log(
+                    'onComplete: agent run failed, operationId=%s, errorMessage=%s',
+                    event.operationId,
+                    errorMsg,
+                  );
                   try {
-                    const errorText = renderError(errorMsg);
+                    const errorText = renderError(event.operationId);
                     if (progressMessage) {
                       await progressMessage.edit(errorText);
                     } else {
@@ -1048,11 +1062,15 @@ export class AgentBridgeService {
           if (!result.success) {
             clearTimeout(timeout);
 
+            log(
+              'executeWithCallback[local]: startup failed, operationId=%s, error=%s',
+              result.operationId,
+              result.error,
+            );
+
             if (progressMessage) {
               try {
-                await progressMessage.edit(
-                  renderError(result.error || 'Agent operation failed to start'),
-                );
+                await progressMessage.edit(renderError(result.operationId));
               } catch (error) {
                 log('executeWithCallback[local]: failed to edit startup error: %O', error);
               }
@@ -1100,9 +1118,11 @@ export class AgentBridgeService {
             return;
           }
 
+          log('executeWithCallback[local]: startup error: %s', extractErrorMessage(error));
+
           if (progressMessage) {
             try {
-              await progressMessage.edit(renderError(extractErrorMessage(error)));
+              await progressMessage.edit(renderError());
             } catch (editError) {
               log('executeWithCallback[local]: failed to edit startup error: %O', editError);
             }

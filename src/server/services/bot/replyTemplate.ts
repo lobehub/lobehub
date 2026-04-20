@@ -188,8 +188,11 @@ export function renderFinalReply(content: string): string {
   return content.trimEnd();
 }
 
-export function renderError(errorMessage: string): string {
-  return `**Agent Execution Failed**\n\`\`\`\n${errorMessage}\n\`\`\``;
+export function renderError(operationId?: string): string {
+  if (operationId) {
+    return `**Agent Execution Failed**\nOperation ID: \`${operationId}\``;
+  }
+  return `**Agent Execution Failed**`;
 }
 
 export function renderStopped(message = 'Execution stopped.'): string {

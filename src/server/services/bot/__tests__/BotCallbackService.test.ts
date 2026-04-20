@@ -326,9 +326,10 @@ describe('BotCallbackService', () => {
   // ==================== Completion handling ====================
 
   describe('completion handling', () => {
-    it('should render error message when reason is error', async () => {
+    it('should render operation id when reason is error', async () => {
       const body = makeBody({
         errorMessage: 'Model quota exceeded',
+        operationId: 'op-xyz-1',
         reason: 'error',
         type: 'completion',
       });
@@ -337,11 +338,15 @@ describe('BotCallbackService', () => {
 
       expect(mockEditMessage).toHaveBeenCalledWith(
         'progress-msg-1',
-        expect.stringContaining('Model quota exceeded'),
+        expect.stringContaining('op-xyz-1'),
+      );
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.not.stringContaining('Model quota exceeded'),
       );
     });
 
-    it('should use default error message when errorMessage is not provided', async () => {
+    it('should render generic failure message when operationId is missing', async () => {
       const body = makeBody({
         reason: 'error',
         type: 'completion',
@@ -349,10 +354,7 @@ describe('BotCallbackService', () => {
 
       await service.handleCallback(body);
 
-      expect(mockEditMessage).toHaveBeenCalledWith(
-        'progress-msg-1',
-        expect.stringContaining('Agent execution failed'),
-      );
+      expect(mockEditMessage).toHaveBeenCalledWith('progress-msg-1', '**Agent Execution Failed**');
     });
 
     it('should render stopped message when reason is interrupted', async () => {
@@ -825,6 +827,7 @@ describe('BotCallbackService', () => {
         errorMessage: 'Rate limit exceeded',
         hookId: 'bot-completion',
         hookType: 'onComplete',
+        operationId: 'op-hook-1',
         reason: 'error',
         type: 'completion',
       });
@@ -833,7 +836,11 @@ describe('BotCallbackService', () => {
 
       expect(mockEditMessage).toHaveBeenCalledWith(
         'progress-msg-1',
-        expect.stringContaining('Rate limit exceeded'),
+        expect.stringContaining('op-hook-1'),
+      );
+      expect(mockEditMessage).toHaveBeenCalledWith(
+        'progress-msg-1',
+        expect.not.stringContaining('Rate limit exceeded'),
       );
     });
   });
