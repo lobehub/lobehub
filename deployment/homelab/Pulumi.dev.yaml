@@ -1,7 +1,7 @@
 config:
   lobehub:homelabStack: mrsimpson/homelab/dev
   # Image reference — updated by build-lobehub-image.yml after each successful build on canary or main.
-  lobehub:lobehubImage: ghcr.io/mrsimpson/lobehub:latest
+  lobehub:lobehubImage: ghcr.io/mrsimpson/lobehub:2.1.50-canary.2f7a5ad
   # Optional: persistent volume size for uploads (default 2Gi).
   lobehub:storageSize: 2Gi
   lobehub:databaseStorageSize: 10Gi
