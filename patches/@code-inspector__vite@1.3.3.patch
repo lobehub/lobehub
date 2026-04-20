@@ -1,0 +1,103 @@
+diff --git a/dist/index.js b/dist/index.js
+index 8af93709d555a42d3bee2942771c9f826778b35f..09b4bc2a3baf43abbd1841541bc8a4489fa173f2 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1 +1 @@
+-"use strict";var j=Object.defineProperty,w=Object.defineProperties;var P=Object.getOwnPropertyDescriptors;var h=Object.getOwnPropertySymbols;var W=Object.prototype.hasOwnProperty,q=Object.prototype.propertyIsEnumerable;var k=(e,n,i)=>n in e?j(e,n,{enumerable:!0,configurable:!0,writable:!0,value:i}):e[n]=i,f=(e,n)=>{for(var i in n||(n={}))W.call(n,i)&&k(e,i,n[i]);if(h)for(var i of h(n))q.call(n,i)&&k(e,i,n[i]);return e},m=(e,n)=>w(e,P(n));var v=(e,n,i)=>new Promise((t,a)=>{var c=l=>{try{u(i.next(l))}catch(r){a(r)}},s=l=>{try{u(i.throw(l))}catch(r){a(r)}},u=l=>l.done?t(l.value):Promise.resolve(l.value).then(c,s);u((i=i.apply(e,n)).next())});Object.defineProperty(exports,Symbol.toStringTag,{value:"Module"});const o=require("@code-inspector/core"),d=require("chalk"),y="@code-inspector/vite",C=[{name:"vite:react-babel",package:"@vitejs/plugin-react"},{name:"vite:react-swc",package:"@vitejs/plugin-react-swc"},{name:"vite:react-oxc:config",package:"@vitejs/plugin-react-oxc"},{name:"solid",package:"vite-plugin-solid"},{name:"vite-plugin-qwik",package:"qwikVite"},{name:"vite-plugin-qwik-city",package:"qwikCity"},{name:"vite-plugin-qwik-react",package:"qwikReact"},{name:"vite:preact-jsx",package:"@preact/preset-vite"},{name:"vite-plugin-svelte",package:"@sveltejs/vite-plugin-svelte"}],I=["isJsx","isTsx","lang.jsx","lang.tsx"];function b(e=[]){const n=e.findIndex(i=>i.name===y);C.forEach(i=>{const t=e.findIndex(a=>a.name===i.name);if(t!==-1&&t<n){const a=[d.yellow("[WARNING]"),"You need to put",d.green("code-inspector-plugin"),"before",d.green(i.package),"in the vite config file."];console.log(a.join(" "))}})}function T(e){const n={port:0,entry:"",output:e.output,envDir:""};return m(f({name:y},e.enforcePre===!1?{}:{enforce:"pre"}),{apply(t,{command:a}){return!e.close&&o.isDev(e.dev,a==="serve")},configResolved(t){n.envDir=t.envDir||t.root,n.root=t.root},transform(t,a){return v(this,null,function*(){if(o.isExcludedFile(a,e))return t;t=yield o.getCodeWithWebComponent({options:e,file:a,code:t,record:n});const{escapeTags:c=[],mappings:s}=e,[u,l]=a.split("?",2);let r=o.normalizePath(u);r=o.getMappingFilePath(r,s);const g=new URLSearchParams(l);if(e.match&&!e.match.test(r))return t;let p="";return o.isJsTypeFile(r)||r.endsWith(".vue")&&(I.some(x=>g.get(x)!==null)||g.get("lang")==="tsx"||g.get("lang")==="jsx")?p="jsx":r.endsWith(".html")&&g.get("type")==="template"&&g.has("vue")||r.endsWith(".vue")&&g.get("type")!=="style"&&g.get("raw")===null?p="vue":r.endsWith(".svelte")&&(p="svelte"),p?o.transformCode({content:t,filePath:r,fileType:p,escapeTags:c,pathType:e.pathType}):t})},transformIndexHtml(t){return v(this,null,function*(){var c,s;if((s=(c=e.skipSnippets)==null?void 0:c.includes)!=null&&s.call(c,"htmlScript"))return t;const a=yield o.getCodeWithWebComponent({options:m(f({},e),{importClient:"code"}),file:"main.js",code:"",record:n,inject:!0});return t.replace("<head>",'<head><script type="module">\n'.concat(a,"\n<\/script>"))})},configureServer(t){const a=t.config.logger.info;t.config.logger.info=function(c,s){a.call(this,c,s),b(t.config.plugins),t.config.logger.info=a}}})}exports.ViteCodeInspectorPlugin=T;
++"use strict";var j=Object.defineProperty,w=Object.defineProperties;var P=Object.getOwnPropertyDescriptors;var h=Object.getOwnPropertySymbols;var W=Object.prototype.hasOwnProperty,q=Object.prototype.propertyIsEnumerable;var k=(e,n,i)=>n in e?j(e,n,{enumerable:!0,configurable:!0,writable:!0,value:i}):e[n]=i,f=(e,n)=>{for(var i in n||(n={}))W.call(n,i)&&k(e,i,n[i]);if(h)for(var i of h(n))q.call(n,i)&&k(e,i,n[i]);return e},m=(e,n)=>w(e,P(n));var v=(e,n,i)=>new Promise((t,a)=>{var c=s=>{try{r(i.next(s))}catch(u){a(u)}},l=s=>{try{r(i.throw(s))}catch(u){a(u)}},r=s=>s.done?t(s.value):Promise.resolve(s.value).then(c,l);r((i=i.apply(e,n)).next())});Object.defineProperty(exports,Symbol.toStringTag,{value:"Module"});const o=require("@code-inspector/core"),d=require("chalk"),y="@code-inspector/vite",C=[{name:"vite:react-babel",package:"@vitejs/plugin-react"},{name:"vite:react-swc",package:"@vitejs/plugin-react-swc"},{name:"vite:react-oxc:config",package:"@vitejs/plugin-react-oxc"},{name:"solid",package:"vite-plugin-solid"},{name:"vite-plugin-qwik",package:"qwikVite"},{name:"vite-plugin-qwik-city",package:"qwikCity"},{name:"vite-plugin-qwik-react",package:"qwikReact"},{name:"vite:preact-jsx",package:"@preact/preset-vite"},{name:"vite-plugin-svelte",package:"@sveltejs/vite-plugin-svelte"}],I=["isJsx","isTsx","lang.jsx","lang.tsx"];function b(e=[]){const n=e.findIndex(i=>i.name===y);C.forEach(i=>{const t=e.findIndex(a=>a.name===i.name);if(t!==-1&&t<n){const a=[d.yellow("[WARNING]"),"You need to put",d.green("code-inspector-plugin"),"before",d.green(i.package),"in the vite config file."];console.log(a.join(" "))}})}function T(e){const n={port:0,entry:"",output:e.output,envDir:""};return m(f({name:y},e.enforcePre===!1?{}:{enforce:"pre"}),{apply(t,{command:a}){return!e.close&&o.isDev(e.dev,a==="serve")},configResolved(t){n.envDir=t.envDir||t.root,n.root=t.root},transform(t,a){return v(this,null,function*(){if(o.isExcludedFile(a,e))return t;const[c,l]=a.split("?",2);let r=o.normalizePath(c);if(r.endsWith(".html")&&!l)return t;t=yield o.getCodeWithWebComponent({options:e,file:a,code:t,record:n});const{escapeTags:s=[],mappings:u}=e;r=o.getMappingFilePath(r,u);const g=new URLSearchParams(l);if(e.match&&!e.match.test(r))return t;let p="";return o.isJsTypeFile(r)||r.endsWith(".vue")&&(I.some(x=>g.get(x)!==null)||g.get("lang")==="tsx"||g.get("lang")==="jsx")?p="jsx":r.endsWith(".html")&&g.get("type")==="template"&&g.has("vue")||r.endsWith(".vue")&&g.get("type")!=="style"&&g.get("raw")===null?p="vue":r.endsWith(".svelte")&&(p="svelte"),p?o.transformCode({content:t,filePath:r,fileType:p,escapeTags:s,pathType:e.pathType}):t})},transformIndexHtml(t){return v(this,null,function*(){var c,l;if((l=(c=e.skipSnippets)==null?void 0:c.includes)!=null&&l.call(c,"htmlScript"))return t;const a=yield o.getCodeWithWebComponent({options:m(f({},e),{importClient:"code"}),file:"main.js",code:"",record:n,inject:!0});return t.replace("<head>",'<head><script type="module">\n'.concat(a,"\n<\/script>"))})},configureServer(t){const a=t.config.logger.info;t.config.logger.info=function(c,l){a.call(this,c,l),b(t.config.plugins),t.config.logger.info=a}}})}exports.ViteCodeInspectorPlugin=T;
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 29bb1c1c91d947cac0f3c74906e12a017a6daacf..a37019fbdfab22fbd9e8724e8837116399e32af6 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -11,22 +11,22 @@ var h = (e, n, i) => n in e ? w(e, n, { enumerable: !0, configurable: !0, writab
+   return e;
+ }, f = (e, n) => j(e, P(n));
+ var m = (e, n, i) => new Promise((t, a) => {
+-  var c = (l) => {
++  var l = (s) => {
+     try {
+-      p(i.next(l));
+-    } catch (r) {
+-      a(r);
++      r(i.next(s));
++    } catch (p) {
++      a(p);
+     }
+-  }, s = (l) => {
++  }, c = (s) => {
+     try {
+-      p(i.throw(l));
+-    } catch (r) {
+-      a(r);
++      r(i.throw(s));
++    } catch (p) {
++      a(p);
+     }
+-  }, p = (l) => l.done ? t(l.value) : Promise.resolve(l.value).then(c, s);
+-  p((i = i.apply(e, n)).next());
++  }, r = (s) => s.done ? t(s.value) : Promise.resolve(s.value).then(l, c);
++  r((i = i.apply(e, n)).next());
+ });
+-import { isDev as I, isExcludedFile as C, getCodeWithWebComponent as k, normalizePath as T, getMappingFilePath as b, isJsTypeFile as D, transformCode as R } from "@code-inspector/core";
++import { isDev as I, isExcludedFile as C, normalizePath as T, getCodeWithWebComponent as k, getMappingFilePath as b, isJsTypeFile as D, transformCode as R } from "@code-inspector/core";
+ import v from "chalk";
+ const x = "@code-inspector/vite", S = [
+   {
+@@ -103,24 +103,27 @@ function J(e) {
+       return m(this, null, function* () {
+         if (C(a, e))
+           return t;
++        const [l, c] = a.split("?", 2);
++        let r = T(l);
++        if (r.endsWith(".html") && !c)
++          return t;
+         t = yield k({
+           options: e,
+           file: a,
+           code: t,
+           record: n
+         });
+-        const { escapeTags: c = [], mappings: s } = e, [p, l] = a.split("?", 2);
+-        let r = T(p);
+-        r = b(r, s);
+-        const o = new URLSearchParams(l);
++        const { escapeTags: s = [], mappings: p } = e;
++        r = b(r, p);
++        const g = new URLSearchParams(c);
+         if (e.match && !e.match.test(r))
+           return t;
+-        let g = "";
+-        return D(r) || r.endsWith(".vue") && (F.some((y) => o.get(y) !== null) || o.get("lang") === "tsx" || o.get("lang") === "jsx") ? g = "jsx" : r.endsWith(".html") && o.get("type") === "template" && o.has("vue") || r.endsWith(".vue") && o.get("type") !== "style" && o.get("raw") === null ? g = "vue" : r.endsWith(".svelte") && (g = "svelte"), g ? R({
++        let o = "";
++        return D(r) || r.endsWith(".vue") && (F.some((y) => g.get(y) !== null) || g.get("lang") === "tsx" || g.get("lang") === "jsx") ? o = "jsx" : r.endsWith(".html") && g.get("type") === "template" && g.has("vue") || r.endsWith(".vue") && g.get("type") !== "style" && g.get("raw") === null ? o = "vue" : r.endsWith(".svelte") && (o = "svelte"), o ? R({
+           content: t,
+           filePath: r,
+-          fileType: g,
+-          escapeTags: c,
++          fileType: o,
++          escapeTags: s,
+           pathType: e.pathType
+         }) : t;
+       });
+@@ -128,8 +131,8 @@ function J(e) {
+     // 追加到 html 中，适配 MPA 项目
+     transformIndexHtml(t) {
+       return m(this, null, function* () {
+-        var c, s;
+-        if ((s = (c = e.skipSnippets) == null ? void 0 : c.includes) != null && s.call(c, "htmlScript"))
++        var l, c;
++        if ((c = (l = e.skipSnippets) == null ? void 0 : l.includes) != null && c.call(l, "htmlScript"))
+           return t;
+         const a = yield k({
+           options: f(u({}, e), { importClient: "code" }),
+@@ -146,8 +149,8 @@ function J(e) {
+     },
+     configureServer(t) {
+       const a = t.config.logger.info;
+-      t.config.logger.info = function(c, s) {
+-        a.call(this, c, s), L(t.config.plugins), t.config.logger.info = a;
++      t.config.logger.info = function(l, c) {
++        a.call(this, l, c), L(t.config.plugins), t.config.logger.info = a;
+       };
+     }
+   });

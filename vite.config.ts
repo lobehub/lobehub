@@ -32,7 +32,9 @@ export default defineConfig({
     },
   },
   define: sharedRendererDefine({ isMobile, isElectron: false }),
-
+  experimental: {
+    bundledDev: true,
+  },
   resolve: {
     tsconfigPaths: true,
   },
@@ -52,15 +54,91 @@ export default defineConfig({
           cyan: (s: string) => `\x1B[36m${s}\x1B[0m`,
         };
         const { info } = server.config.logger;
+        const isBundledDev = (server.config.experimental as any)?.bundledDev;
+
+        const printProxyUrl = () => {
+          const urls = server.resolvedUrls;
+          if (!urls?.local?.[0]) return;
+          const localHost = urls.local[0].replace(/\/$/, '');
+          const proxyUrl = `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
+          const colorUrl = (url: string) =>
+            c.cyan(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`));
+          info(`  ${c.green('➜')}  ${c.bold('Debug Proxy')}: ${colorUrl(proxyUrl)}`);
+        };
+
+        if (isBundledDev) {
+          const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+          let spinnerIdx = 0;
+          let spinnerTimer: NodeJS.Timeout | null = null;
+          const formatElapsed = (ms: number) =>
+            ms < 1000 ? `${Math.max(0, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
+
+          const startSpinner = (msg: string, since: number) => {
+            spinnerIdx = 0;
+            spinnerTimer = setInterval(() => {
+              const elapsed = formatElapsed(Date.now() - since);
+              process.stdout.write(`\r${c.cyan(spinnerFrames[spinnerIdx])} ${msg} (${elapsed})`);
+              spinnerIdx = (spinnerIdx + 1) % spinnerFrames.length;
+            }, 80);
+          };
+          const stopSpinner = (clearLine = true) => {
+            if (spinnerTimer) {
+              clearInterval(spinnerTimer);
+              spinnerTimer = null;
+            }
+            if (clearLine) process.stdout.write('\r\x1B[K');
+          };
+
+          server.httpServer?.once('listening', () => {
+            void (async () => {
+              const rootUrl =
+                server.resolvedUrls?.local?.[0] ||
+                `http://localhost:${String(server.config.server.port || 9876)}/`;
+              const startedAt = Date.now();
+              const timeout = 180_000;
+              const interval = 400;
+              let ready = false;
+
+              startSpinner('Vite: compile and bundle...', startedAt);
+
+              try {
+                while (Date.now() - startedAt < timeout) {
+                  try {
+                    const res = await fetch(rootUrl, { signal: AbortSignal.timeout(5_000) });
+                    const text = await res.text();
+                    if (text.includes('Bundling in progress')) {
+                      await new Promise((r) => setTimeout(r, interval));
+                      continue;
+                    }
+                    ready = true;
+                    stopSpinner();
+                    info(
+                      `  ${c.green('✅')}  Vite: compile and bundle finished (${res.status}) ${rootUrl}`,
+                    );
+                    break;
+                  } catch {
+                    await new Promise((r) => setTimeout(r, interval));
+                  }
+                }
+              } catch (e) {
+                stopSpinner();
+                console.warn('⚠️ Vite: could not wait for compile and bundle:', e);
+              }
+
+              if (!ready && spinnerTimer) {
+                stopSpinner();
+                console.warn(`⚠️ Vite: compile and bundle timed out after ${timeout / 1000}s`);
+              }
+
+              printProxyUrl();
+            })();
+          });
+        }
+
         return () => {
           server.printUrls = () => {
-            const urls = server.resolvedUrls;
-            if (!urls?.local?.[0]) return;
-            const localHost = urls.local[0].replace(/\/$/, '');
-            const proxyUrl = `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
-            const colorUrl = (url: string) =>
-              c.cyan(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`));
-            info(`  ${c.green('➜')}  ${c.bold('Debug Proxy')}: ${colorUrl(proxyUrl)}`);
+            if (isBundledDev) return;
+            printProxyUrl();
           };
         };
       },
