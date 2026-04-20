@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, clipboard, Menu, shell } from 'electron';
+import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import NotificationCtr from '@/controllers/NotificationCtr';
@@ -145,7 +145,20 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('file.newPage'),
           },
           { type: 'separator' },
-          { label: t('window.close'), role: 'close' },
+          {
+            accelerator: 'CmdOrCtrl+W',
+            click: () => {
+              const focused = BrowserWindow.getFocusedWindow();
+              if (!focused) return;
+              const mainWindow = this.app.browserManager.getMainWindow();
+              if (focused === mainWindow.browserWindow) {
+                mainWindow.broadcast('closeCurrentTabOrWindow');
+              } else {
+                focused.close();
+              }
+            },
+            label: t('window.close'),
+          },
         ],
       },
       {

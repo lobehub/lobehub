@@ -1,5 +1,11 @@
 export interface NavigationBroadcastEvents {
   /**
+   * Ask renderer to close the active tab, or fall back to closing the window
+   * when only one (or zero) tab is left. Triggered by Cmd/Ctrl+W on the main window.
+   */
+  closeCurrentTabOrWindow: () => void;
+
+  /**
    * Ask renderer to create a new agent.
    * Triggered from the main process File menu.
    */

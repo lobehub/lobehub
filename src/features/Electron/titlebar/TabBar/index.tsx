@@ -1,5 +1,6 @@
 'use client';
 
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, ScrollArea } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { Plus } from 'lucide-react';
@@ -9,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { usePluginContext } from '@/features/Electron/titlebar/RecentlyViewed/hooks/usePluginContext';
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
+import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
 
@@ -133,6 +135,14 @@ const TabBar = () => {
     if (!activeReference) return null;
     return pluginRegistry.getNewTabAction(activeReference, pluginCtx);
   }, [activeReference, pluginCtx]);
+
+  useWatchBroadcast('closeCurrentTabOrWindow', () => {
+    if (tabs.length > 1 && activeTabId) {
+      handleClose(activeTabId);
+    } else {
+      void electronSystemService.closeWindow();
+    }
+  });
 
   const handleNewTab = useCallback(async () => {
     if (!newTabAction) return;
