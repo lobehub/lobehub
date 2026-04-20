@@ -227,6 +227,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
+    // CC tags subagent events (Agent / Task tool spawned flows) with
+    // `parent_tool_use_id` pointing back at the outer tool_use. These are a
+    // side-channel of the main agent's stream — they must not advance the
+    // main step tracker, emit text into the main bubble, or double-count
+    // usage. Route them through a dedicated handler so the main-agent flow
+    // below stays free of subagent special cases.
+    const parentToolUseId: string | undefined = raw.parent_tool_use_id;
+    if (parentToolUseId) return this.handleSubagentAssistant(raw, parentToolUseId);
+
     const events: HeterogeneousAgentEvent[] = [];
     const messageId = raw.message?.id;
 
@@ -257,14 +266,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
-          const toolPayload: ToolCallPayload = {
+          newToolCalls.push({
             apiName: block.name,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          };
-          newToolCalls.push(toolPayload);
+          });
           this.pendingToolCalls.add(block.id);
           if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
@@ -287,22 +295,86 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.makeChunkEvent({ chunkType: 'reasoning', reasoning: reasoningParts.join('') }),
       );
     }
-    if (newToolCalls.length > 0) {
-      const msgKey = messageId ?? '';
-      const existing = this.toolCallsByMessageId.get(msgKey) ?? [];
-      const existingIds = new Set(existing.map((t) => t.id));
-      const freshTools = newToolCalls.filter((t) => !existingIds.has(t.id));
-      const cumulative = [...existing, ...freshTools];
-      this.toolCallsByMessageId.set(msgKey, cumulative);
+    events.push(...this.emitToolChunk(newToolCalls, messageId));
 
-      events.push(this.makeChunkEvent({ chunkType: 'tools_calling', toolsCalling: cumulative }));
-      // tool_start fires only for newly-seen ids so an echoed tool_use does
-      // not re-open a closed lifecycle.
-      for (const t of freshTools) {
-        events.push(this.makeEvent('tool_start', { toolCalling: t }));
+    return events;
+  }
+
+  /**
+   * Handle a subagent assistant event (tagged with `parent_tool_use_id`).
+   *
+   * Subagent events are a side-channel of the main agent's stream and have
+   * three hard constraints:
+   *  - no main-agent step boundary (each subagent turn introduces a new
+   *    `message.id`; flushing that as a newStep would orphan main-agent
+   *    bubbles)
+   *  - no model / usage tracking (CC's `result` event carries the
+   *    authoritative grand total; re-summing per-turn deltas here would
+   *    double-count against the main agent)
+   *  - no text / reasoning emission — the subagent's final answer is
+   *    delivered back to the main agent as the outer tool_use's
+   *    `tool_result`, not inlined into the main assistant content. In
+   *    practice subagent assistant events only carry tool_use blocks
+   *    anyway (verified against a real CC trace where 76 subagent
+   *    assistant events carried zero text / thinking).
+   *
+   * We stamp each tool payload with `parentToolCallId` so downstream
+   * consumers can group subagent inner tools under their spawning parent.
+   */
+  private handleSubagentAssistant(raw: any, parentToolUseId: string): HeterogeneousAgentEvent[] {
+    const content = raw.message?.content;
+    if (!Array.isArray(content)) return [];
+
+    const newToolCalls: ToolCallPayload[] = [];
+    for (const block of content) {
+      if (block.type !== 'tool_use') continue;
+      newToolCalls.push({
+        apiName: block.name,
+        arguments: JSON.stringify(block.input || {}),
+        id: block.id,
+        identifier: 'claude-code',
+        parentToolCallId: parentToolUseId,
+        type: 'default',
+      });
+      this.pendingToolCalls.add(block.id);
+      if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
+        this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
       }
     }
 
+    return this.emitToolChunk(newToolCalls, raw.message?.id);
+  }
+
+  /**
+   * Accumulate new tool_use blocks for a message.id and emit the
+   * `tools_calling` chunk + `tool_start` lifecycle events.
+   *
+   * CC streams each tool_use in its OWN assistant event and the downstream
+   * handler's in-memory `assistant.tools` update uses a REPLACING array
+   * merge — so the chunk must carry every tool seen on this turn, not just
+   * the latest, or prior tools render as orphans until the next
+   * `fetchAndReplaceMessages`. `tool_start` fires only for newly-seen ids
+   * so an echoed tool_use does not re-open a closed lifecycle.
+   */
+  private emitToolChunk(
+    newToolCalls: ToolCallPayload[],
+    messageId: string | undefined,
+  ): HeterogeneousAgentEvent[] {
+    if (newToolCalls.length === 0) return [];
+
+    const msgKey = messageId ?? '';
+    const existing = this.toolCallsByMessageId.get(msgKey) ?? [];
+    const existingIds = new Set(existing.map((t) => t.id));
+    const freshTools = newToolCalls.filter((t) => !existingIds.has(t.id));
+    const cumulative = [...existing, ...freshTools];
+    this.toolCallsByMessageId.set(msgKey, cumulative);
+
+    const events: HeterogeneousAgentEvent[] = [
+      this.makeChunkEvent({ chunkType: 'tools_calling', toolsCalling: cumulative }),
+    ];
+    for (const t of freshTools) {
+      events.push(this.makeEvent('tool_start', { toolCalling: t }));
+    }
     return events;
   }
 
