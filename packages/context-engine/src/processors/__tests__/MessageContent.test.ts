@@ -144,6 +144,40 @@ describe('MessageContentProcessor', () => {
       const content = result.messages[0].content as any[];
       expect(content[1].image_url.url).toBe('data:image/png;base64,base64-data');
     });
+
+    it('should convert private network image URLs to base64 for self-hosted deployments', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      // Private network URLs (common in self-hosted / LAN setups)
+      const privateUrls = [
+        'http://192.168.1.100:9000/bucket/image.jpg',
+        'http://10.0.0.5:3210/files/photo.png',
+      ];
+
+      for (const url of privateUrls) {
+        const messages: UIChatMessage[] = [
+          {
+            id: 'test',
+            role: 'user',
+            content: 'Check this image',
+            imageList: [{ url, alt: '', id: 'test' } as ChatImageItem],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ];
+
+        const result = await processor.process(createContext(messages));
+        const content = result.messages[0].content as any[];
+        expect(content[1].image_url.url).toBe('data:image/png;base64,base64-data');
+      }
+    });
   });
 
   describe('Assistant message with images', () => {

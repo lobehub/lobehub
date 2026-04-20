@@ -2,7 +2,7 @@ import { filesPrompts } from '@lobechat/prompts';
 import type { MessageContentPart } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
-import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
+import { isLocalOrPrivateUrl } from '@lobechat/utils/url';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -392,7 +392,9 @@ export class MessageContentProcessor extends BaseProcessor {
         const { type } = parseDataUri(image.url);
 
         let processedUrl = image.url;
-        if (type === 'url' && isDesktopLocalStaticServerUrl(image.url)) {
+        // For self-hosted deployments, private network images (e.g. MinIO) need base64 conversion.
+        // Server-side: requires SSRF_ALLOW_PRIVATE_IP_ADDRESS=1 for ssrfSafeFetch to allow private URLs.
+        if (type === 'url' && isLocalOrPrivateUrl(image.url)) {
           const { base64, mimeType } = await imageUrlToBase64(image.url);
           processedUrl = `data:${mimeType};base64,${base64}`;
         }

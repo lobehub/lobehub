@@ -1,5 +1,4 @@
 import { type ChatContextContent } from '@lobechat/types';
-import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { t } from 'i18next';
 
 import { notification } from '@/components/AntdStaticMethods';
@@ -109,13 +108,8 @@ export class FileActionImpl {
   uploadChatFiles = async (rawFiles: File[]): Promise<void> => {
     const { dispatchChatUploadFileList } = this.#get();
     // 0. skip file in blacklist
-    const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
-    // 1. compress images and add files with base64
-    const files = await Promise.all(
-      filteredFiles.map((file) =>
-        COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
-      ),
-    );
+    const files = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
+    // 1. add files with base64
 
     const uploadFiles: UploadFileItem[] = await Promise.all(
       files.map(async (file) => {
@@ -167,10 +161,36 @@ export class FileActionImpl {
 
       if (!fileResult) return;
 
+      // After upload, the item id has been replaced from file.name to fileResult.id
+      const itemId = fileResult.id;
+
       // image don't need to be chunked and embedding
       if (isChunkingUnsupported(file.type)) return;
 
-      await ragService.parseFileContent(fileResult.id);
+      dispatchChatUploadFileList({
+        id: itemId,
+        type: 'updateFile',
+        value: { status: 'processing' },
+      });
+
+      try {
+        const data = await ragService.parseFileContent(fileResult.id);
+        console.info('parseFileContent data:', data);
+
+        dispatchChatUploadFileList({
+          id: itemId,
+          type: 'updateFile',
+          value: { status: 'success' },
+        });
+      } catch (error) {
+        console.error('parseFileContent error:', error);
+
+        dispatchChatUploadFileList({
+          id: itemId,
+          type: 'updateFile',
+          value: { status: 'error' },
+        });
+      }
     });
 
     await Promise.all(pools);
