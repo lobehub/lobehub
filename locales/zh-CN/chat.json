@@ -224,6 +224,7 @@
   "messages.tokenDetails.speed.ttft.tooltip": "Time To First Token（TTFT）：从发送消息到接收到首个 Token 的时间。",
   "messages.tokenDetails.title": "生成明细",
   "messages.tokenDetails.total": "总消耗",
+  "minimap.emptyPreview": "(无文本内容)",
   "minimap.jumpToMessage": "跳转到第 {{index}} 条消息",
   "minimap.nextMessage": "下一条消息",
   "minimap.previousMessage": "上一条消息",

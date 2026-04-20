@@ -241,6 +241,7 @@ export default {
     'Time To First Token (TTFT). This refers to the time interval from when you send a message to when the client receives the first Token.',
   'messages.tokenDetails.title': 'Generation Details',
   'messages.tokenDetails.total': 'Total Consumption',
+  'minimap.emptyPreview': '(No text content)',
   'minimap.jumpToMessage': 'Jump to message {{index}}',
   'minimap.nextMessage': 'Next message',
   'minimap.previousMessage': 'Previous message',
