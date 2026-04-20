@@ -398,10 +398,12 @@ describe('WindowsMenu', () => {
       const windowMenu = template.find((item: any) => item.label === 'Window');
 
       const minimizeItem = windowMenu.submenu.find((item: any) => item.role === 'minimize');
-      const closeItem = windowMenu.submenu.find((item: any) => item.role === 'close');
+      const closeItem = windowMenu.submenu.find((item: any) => item.label === 'Close');
 
       expect(minimizeItem).toBeDefined();
       expect(closeItem).toBeDefined();
+      expect(closeItem.accelerator).toBe('CmdOrCtrl+W');
+      expect(typeof closeItem.click).toBe('function');
     });
 
     it('should have zoom controls in view menu', () => {
