@@ -41,6 +41,9 @@ const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
 const activeTaskPeriodicInterval = (s: TaskStoreState) =>
   activeTaskDetail(s)?.heartbeat?.interval ?? 0;
 
+// Automation mode: 'heartbeat' | 'schedule' | null (null = no automation)
+const activeTaskAutomationMode = (s: TaskStoreState) => activeTaskDetail(s)?.automationMode ?? null;
+
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
 const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
@@ -70,6 +73,7 @@ const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
 
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskAutomationMode,
   activeTaskCheckpoint,
   activeTaskModel,
   activeTaskDependencies,

@@ -229,6 +229,7 @@ export class TaskService {
 
     return {
       agentId: task.assigneeAgentId,
+      automationMode: task.automationMode ?? null,
       checkpoint: this.taskModel.getCheckpointConfig(task),
       config: task.config ? (task.config as Record<string, unknown>) : undefined,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
@@ -243,7 +244,7 @@ export class TaskService {
       description: task.description,
       error: task.error,
       heartbeat:
-        task.heartbeatTimeout || task.lastHeartbeatAt
+        task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,

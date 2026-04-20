@@ -1,4 +1,4 @@
-import type { CheckpointConfig } from '@lobechat/types';
+import type { CheckpointConfig, TaskAutomationMode } from '@lobechat/types';
 
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
@@ -106,13 +106,31 @@ export class TaskConfigSliceActionImpl {
   };
 
   // Configure periodic execution interval (heartbeatInterval in seconds).
-  // Sending 0 disables periodic execution while keeping the API shape simple for the UI.
+  // Whether automation runs is decided by automationMode (controlled separately by setAutomationMode).
   updatePeriodicInterval = async (id: string, interval: number | null): Promise<void> => {
     try {
       await taskService.update(id, { heartbeatInterval: interval ?? 0 });
       await this.#get().internal_refreshTaskDetail(id);
     } catch (error) {
       console.error('[TaskStore] Failed to update periodic interval:', error);
+    }
+  };
+
+  // Switch between automation modes; null = disable automation.
+  setAutomationMode = async (id: string, mode: TaskAutomationMode | null): Promise<void> => {
+    // Optimistic update so the Segmented reflects the new tab immediately
+    this.#get().internal_dispatchTaskDetail({
+      id,
+      type: 'updateTaskDetail',
+      value: { automationMode: mode },
+    });
+
+    try {
+      await taskService.update(id, { automationMode: mode });
+      await this.#get().internal_refreshTaskDetail(id);
+    } catch (error) {
+      console.error('[TaskStore] Failed to update automation mode:', error);
+      await this.#get().internal_refreshTaskDetail(id);
     }
   };
 

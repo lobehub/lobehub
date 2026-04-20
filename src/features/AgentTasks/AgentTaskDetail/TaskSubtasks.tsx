@@ -1,16 +1,17 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
 import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
-import { ConfigProvider, Tree } from 'antd';
+import { Button, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
-import { ChevronDown, ListTodoIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { ChevronDown, ListTodoIcon, Plus } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
@@ -114,6 +115,8 @@ const TaskSubtasks = memo(() => {
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
 
+  const [isCreating, setIsCreating] = useState(false);
+
   const handleNavigate = useCallback(
     (identifier: string) => {
       if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
@@ -126,46 +129,72 @@ const TaskSubtasks = memo(() => {
     return toTreeData(buildTree(subtasks));
   }, [subtasks]);
 
-  if (subtasks.length === 0) return null;
-
   return (
-    <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
-      <AccordionItem
-        itemKey="subtasks"
-        paddingBlock={4}
-        paddingInline={8}
-        title={
-          <Flexbox horizontal align="center" gap={8}>
-            <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
-            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('taskDetail.subtasks')}
-            </Text>
-            <TaskSubtaskProgressTag
-              currentIdentifier={taskId}
-              subtasks={subtasks}
-              onSubtaskClick={handleNavigate}
-            />
-          </Flexbox>
-        }
-      >
-        <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
-          <Tree
-            blockNode
-            defaultExpandAll
-            showLine
-            className={styles.subtaskTree}
-            style={{ marginTop: 8 }}
-            switcherIcon={<Icon icon={ChevronDown} size={14} />}
-            treeData={treeData}
-            onSelect={(keys) => {
-              const key = keys[0];
-              if (!key) return;
-              handleNavigate(String(key));
-            }}
+    <Flexbox gap={8}>
+      {subtasks.length > 0 && (
+        <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
+          <AccordionItem
+            itemKey="subtasks"
+            paddingBlock={4}
+            paddingInline={8}
+            title={
+              <Flexbox horizontal align="center" gap={8}>
+                <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
+                <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                  {t('taskDetail.subtasks')}
+                </Text>
+                <TaskSubtaskProgressTag
+                  currentIdentifier={taskId}
+                  subtasks={subtasks}
+                  onSubtaskClick={handleNavigate}
+                />
+              </Flexbox>
+            }
+          >
+            <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
+              <Tree
+                blockNode
+                defaultExpandAll
+                showLine
+                className={styles.subtaskTree}
+                style={{ marginTop: 8 }}
+                switcherIcon={<Icon icon={ChevronDown} size={14} />}
+                treeData={treeData}
+                onSelect={(keys) => {
+                  const key = keys[0];
+                  if (!key) return;
+                  handleNavigate(String(key));
+                }}
+              />
+            </ConfigProvider>
+          </AccordionItem>
+        </Accordion>
+      )}
+
+      {taskId &&
+        (isCreating ? (
+          <CreateTaskInlineEntry
+            autoFocus
+            agentId={agentId ?? undefined}
+            parentTaskId={taskId}
+            placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
+            onCollapse={() => setIsCreating(false)}
+            onCreated={() => setIsCreating(false)}
           />
-        </ConfigProvider>
-      </AccordionItem>
-    </Accordion>
+        ) : (
+          <Flexbox horizontal align="flex-start">
+            <Button
+              icon={<Icon icon={Plus} size={14} />}
+              shape="round"
+              size="small"
+              type="text"
+              onClick={() => setIsCreating(true)}
+            >
+              {t('taskDetail.addSubtask')}
+            </Button>
+          </Flexbox>
+        ))}
+    </Flexbox>
   );
 });
 

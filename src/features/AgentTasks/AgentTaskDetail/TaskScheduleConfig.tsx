@@ -1,3 +1,4 @@
+import type { TaskAutomationMode } from '@lobechat/types';
 import {
   ActionIcon,
   Button,
@@ -8,6 +9,7 @@ import {
   Select,
   Text,
 } from '@lobehub/ui';
+import { Switch } from 'antd';
 import { TimerIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -16,7 +18,6 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-type ScheduleMode = 'interval' | 'scheduler';
 type IntervalUnit = 'hours' | 'minutes' | 'seconds';
 
 interface IntervalTabProps {
@@ -155,25 +156,52 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   const { t } = useTranslation('chat');
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const activeTaskInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
+  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
+  const setAutomationMode = useTaskStore((s) => s.setAutomationMode);
   const finalTaskId = taskId ?? activeTaskId;
   const finalCurrentInterval = currentInterval ?? activeTaskInterval;
-  const [mode, setMode] = useState<ScheduleMode>('interval');
+
+  const enabled = !!automationMode;
+
+  const handleEnableChange = useCallback(
+    (checked: boolean) => {
+      if (!finalTaskId) return;
+      // When enabling, default to heartbeat (the more common mode)
+      setAutomationMode(finalTaskId, checked ? 'heartbeat' : null);
+    },
+    [finalTaskId, setAutomationMode],
+  );
+
+  const handleModeChange = useCallback(
+    (value: string | number) => {
+      if (!finalTaskId) return;
+      setAutomationMode(finalTaskId, value as TaskAutomationMode);
+    },
+    [finalTaskId, setAutomationMode],
+  );
 
   const content = (
-    <Flexbox gap={16} style={{ minWidth: 300, padding: 4 }} onClick={(e) => e.stopPropagation()}>
-      <Segmented
-        block
-        value={mode}
-        options={[
-          { label: t('taskSchedule.intervalTab'), value: 'interval' },
-          { label: t('taskSchedule.schedulerTab'), value: 'scheduler' },
-        ]}
-        onChange={(v) => setMode(String(v) as ScheduleMode)}
-      />
-      {mode === 'interval' ? (
-        <IntervalTab currentInterval={finalCurrentInterval} taskId={finalTaskId} />
-      ) : (
-        <SchedulerTab />
+    <Flexbox gap={12} style={{ minWidth: 240, padding: 4 }} onClick={(e) => e.stopPropagation()}>
+      <Flexbox horizontal align="center" gap={8}>
+        <Text weight={500}>{t('taskSchedule.enable')}</Text>
+        <Switch checked={enabled} size="small" onChange={handleEnableChange} />
+      </Flexbox>
+      {enabled && (
+        <>
+          <Segmented
+            block
+            value={automationMode ?? 'heartbeat'}
+            options={[
+              { label: t('taskSchedule.intervalTab'), value: 'heartbeat' },
+              { label: t('taskSchedule.schedulerTab'), value: 'schedule' },
+            ]}
+            onChange={handleModeChange}
+          />
+          {automationMode === 'heartbeat' && (
+            <IntervalTab currentInterval={finalCurrentInterval} taskId={finalTaskId} />
+          )}
+          {automationMode === 'schedule' && <SchedulerTab />}
+        </>
       )}
     </Flexbox>
   );

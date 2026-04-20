@@ -6,6 +6,9 @@ export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
 export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
 
+// null = no automation
+export type TaskAutomationMode = 'heartbeat' | 'schedule';
+
 // ── Config types ──
 
 export interface CheckpointConfig {
@@ -62,6 +65,7 @@ export interface TaskItem {
   accessedAt: Date;
   assigneeAgentId: string | null;
   assigneeUserId: string | null;
+  automationMode: TaskAutomationMode | null;
   completedAt: Date | null;
   config: unknown;
   context: unknown;
@@ -99,6 +103,7 @@ export interface NewTask {
   accessedAt?: Date;
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
+  automationMode?: TaskAutomationMode | null;
   completedAt?: Date | null;
   config?: unknown;
   context?: unknown;
@@ -193,6 +198,8 @@ export interface TaskDetailActivity {
 export interface TaskDetailData {
   activities?: TaskDetailActivity[];
   agentId?: string | null;
+  // null/undefined = no automation configured
+  automationMode?: TaskAutomationMode | null;
   checkpoint?: CheckpointConfig;
   config?: Record<string, unknown>;
   createdAt?: string;

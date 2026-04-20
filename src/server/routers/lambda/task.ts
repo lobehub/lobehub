@@ -47,6 +47,7 @@ const idInput = z.object({ id: z.string() });
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
   assigneeUserId: z.string().optional(),
+  createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
@@ -58,6 +59,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   assigneeAgentId: z.string().nullable().optional(),
   assigneeUserId: z.string().nullable().optional(),
+  automationMode: z.enum(['heartbeat', 'schedule']).nullable().optional(),
   config: z.record(z.unknown()).optional(),
   context: z.record(z.unknown()).optional(),
   description: z.string().optional(),

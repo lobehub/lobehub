@@ -20,10 +20,15 @@ import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 
 interface CreateTaskInlineEntryProps {
   agentId?: string;
+  autoFocus?: boolean;
+  onCollapse?: () => void;
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
+  parentTaskId?: string;
+  placeholder?: string;
 }
 
-const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>(({ agentId, onCreated }) => {
+const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
+  const { agentId, autoFocus, onCollapse, onCreated, parentTaskId, placeholder } = props;
   const { t } = useTranslation('chat');
 
   const createTask = useTaskStore((s) => s.createTask);
@@ -38,9 +43,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>(({ agentId, onCre
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
+  useEffect(() => {
+    if (autoFocus) editor?.focus?.();
+  }, [autoFocus, editor]);
+
   const handleCollapse = useCallback(() => {
+    if (onCollapse) {
+      onCollapse();
+      return;
+    }
     updateSystemStatus({ taskCreateInlineCollapsed: true }, 'collapseTaskCreateInline');
-  }, [updateSystemStatus]);
+  }, [onCollapse, updateSystemStatus]);
 
   const handleContentChange = useCallback(() => {
     const lexicalEditor = editor?.getLexicalEditor?.();
@@ -57,6 +70,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>(({ agentId, onCre
     const result = await createTask({
       assigneeAgentId,
       instruction: trimmed,
+      parentTaskId,
       priority: priority || undefined,
     });
 
@@ -70,7 +84,16 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>(({ agentId, onCre
         identifier: result.identifier,
       });
     }
-  }, [agentId, assigneeAgentId, createTask, editor, instruction, onCreated, priority]);
+  }, [
+    agentId,
+    assigneeAgentId,
+    createTask,
+    editor,
+    instruction,
+    onCreated,
+    parentTaskId,
+    priority,
+  ]);
 
   const handleSubmitRef = useRef(handleSubmit);
   useEffect(() => {
@@ -102,7 +125,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>(({ agentId, onCre
         <EditorCanvas
           editor={editor}
           floatingToolbar={false}
-          placeholder={t('createTask.instructionPlaceholder')}
+          placeholder={placeholder ?? t('createTask.instructionPlaceholder')}
           style={{ fontSize: 14, paddingBottom: 12 }}
           onContentChange={handleContentChange}
         />

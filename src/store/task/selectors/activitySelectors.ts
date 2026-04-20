@@ -10,7 +10,7 @@ const activeTaskActivities = (s: TaskStoreState): TaskDetailActivity[] => {
   return [...detail.activities].sort((a, b) => {
     const timeA = a.time ? new Date(a.time).getTime() : 0;
     const timeB = b.time ? new Date(b.time).getTime() : 0;
-    return timeB - timeA;
+    return timeA - timeB;
   });
 };
 

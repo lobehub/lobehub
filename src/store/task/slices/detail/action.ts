@@ -111,6 +111,7 @@ export class TaskDetailSliceActionImpl {
 
   createTask = async (params: {
     assigneeAgentId?: string;
+    createdByAgentId?: string;
     description?: string;
     instruction: string;
     name?: string;
@@ -121,6 +122,9 @@ export class TaskDetailSliceActionImpl {
     try {
       const result = await taskService.create(params);
       await this.#get().refreshTaskList();
+      if (params.parentTaskId) {
+        await this.internal_refreshTaskDetail(params.parentTaskId);
+      }
       return result.data ?? null;
     } finally {
       this.#set({ isCreatingTask: false }, false, 'createTask/end');

@@ -1,4 +1,4 @@
-import type { CheckpointConfig, TaskStatus } from '@lobechat/types';
+import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -49,6 +49,7 @@ class TaskService {
   create = async (params: {
     assigneeAgentId?: string;
     assigneeUserId?: string;
+    createdByAgentId?: string;
     description?: string;
     identifierPrefix?: string;
     instruction: string;
@@ -62,6 +63,8 @@ class TaskService {
     data: {
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
+      // Automation mode; null = no automation
+      automationMode?: TaskAutomationMode | null;
       config?: Record<string, unknown>;
       context?: Record<string, unknown>;
       description?: string;

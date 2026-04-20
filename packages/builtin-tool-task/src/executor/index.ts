@@ -40,6 +40,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
 
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: ctx?.agentId,
+        createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
         name: params.name,
         parentTaskId: parentIdentifier,
