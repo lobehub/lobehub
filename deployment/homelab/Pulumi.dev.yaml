@@ -1,0 +1,11 @@
+config:
+  lobehub:homelabStack: mrsimpson/homelab/dev
+  # Image reference — updated by build-lobehub-image.yml after each successful build on main.
+  lobehub:lobehubImage: ghcr.io/mrsimpson/lobehub:latest
+  # Optional: persistent volume size for uploads (default 2Gi).
+  lobehub:storageSize: 2Gi
+  lobehub:databaseStorageSize: 10Gi
+  lobehub:authSecret:
+    secure: AAABADAcrWAOE+16IwkAyT9Z5/tViEYBvqV7gSrm2Hfhn6HJFrVhePMWKaSkQAu56C/U7v6QQvkArsSVTjnL5Kcsqfo7MEwaqtyRDg==
+  lobehub:keyVaultsSecret:
+    secure: AAABALq0pblhWcxsE7wpTPRa7+gKFXTUb1EllykoJ84TDJ1dCFRPn7gQpX1VeFa8A2nQfiy+0MIKyOx0fX7kPicKdPyPpRP94GuwZA==

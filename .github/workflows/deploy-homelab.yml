@@ -1,0 +1,109 @@
+name: Deploy to homelab
+
+# Deploys the lobehub stack to the homelab k3s cluster.
+#
+# Uses the reusable workflow from mrsimpson/homelab which handles:
+#   - Tailscale VPN join (to reach the local cluster API)
+#   - kubeconfig setup
+#   - pulumi up / preview
+#
+# GitOps flow:
+#   1. build-lobehub-image.yml builds an image and commits the new tag
+#      to deployment/homelab/Pulumi.dev.yaml on main
+#   2. That push triggers this workflow via the path trigger below
+#
+# The workflow_run trigger is kept as a fallback for builds that do not
+# update Pulumi.dev.yaml (e.g. build-only manual runs).
+#
+# Pulumi project: "lobehub" (Pulumi.yaml name: lobehub)
+# Stack: mrsimpson/lobehub/dev
+# Base infra read via: StackReference("mrsimpson/homelab/dev")
+#
+# Required secrets (org-level):
+#   TS_OAUTH_CLIENT_ID, TS_OAUTH_CLIENT_SECRET  — Tailscale OAuth client
+#   KUBECONFIG                                   — base64-encoded kubeconfig (Tailscale address)
+#   PULUMI_ACCESS_TOKEN                          — Pulumi Cloud access token
+
+on:
+  # Primary trigger: any commit that updates the Pulumi stack config on main.
+  push:
+    branches:
+      - main
+    paths:
+      - deployment/homelab/**
+
+  # Fallback: run after a successful image build.
+  workflow_run:
+    workflows:
+      - "Build lobehub image"
+    types:
+      - completed
+    branches:
+      - main
+
+  # Also allow manual deploys with explicit image overrides
+  workflow_dispatch:
+    inputs:
+      lobehubImage:
+        description: "lobehub image tag (leave blank to keep current stack config)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # Optional pre-step: update image tag in Pulumi stack config before deploying.
+  # Only runs when an image override is provided via workflow_dispatch (emergency override).
+  # On workflow_run triggers, Pulumi.dev.yaml is already updated by the build workflow.
+  update-image-config:
+    name: Update image config
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' && inputs.lobehubImage != ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: deployment/homelab/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: deployment/homelab
+
+      - name: Update image tag in Pulumi config
+        run: |
+          pulumi config set lobehub:lobehubImage "${{ inputs.lobehubImage }}" \
+            --cwd deployment/homelab
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+  # Main deploy job — calls the reusable workflow from the homelab repo.
+  deploy:
+    name: Deploy
+    needs: [update-image-config]
+    if: >
+      always() && (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        (github.event_name == 'workflow_dispatch' && (
+          needs.update-image-config.result == 'success' ||
+          needs.update-image-config.result == 'skipped'
+        ))
+      )
+    uses: mrsimpson/homelab/.github/workflows/deploy-to-cluster.yml@main
+    with:
+      # Pulumi project "lobehub" (from deployment/homelab/Pulumi.yaml "name: lobehub").
+      # NOT mrsimpson/homelab/dev — that is the base infra stack read via StackReference.
+      pulumi-stack: mrsimpson/lobehub/dev
+      working-directory: deployment/homelab
+      pulumi-command: up
+    secrets: inherit

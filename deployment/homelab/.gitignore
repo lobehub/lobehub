@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Local .npmrc contains auth token — never commit
+.npmrc
+
+# Pulumi stack state is stored in Pulumi Cloud, not locally
+*.pulumi/
+
+# OS
+.DS_Store

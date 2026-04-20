@@ -1,0 +1,80 @@
+name: Build lobehub image
+
+# Builds the fork-customised lobehub image that bakes in defaults on top of the
+# upstream lobehub/lobehub base.
+#
+# Base image tag:
+#   Pinned in deployment/homelab/images/lobehub/.base-version.
+#   Bump this file (and commit) to roll forward.
+#
+# Note: uses plain `docker build` + `docker push` (not buildx) to avoid
+# GHCR cross-owner blob mount 403 errors that occur with buildx on new packages.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - deployment/homelab/images/lobehub/**
+      - .github/workflows/build-lobehub-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/lobehub
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        run: |
+          # GH_PAT must have scopes: repo, workflow, write:packages
+          echo "${{ secrets.GH_PAT }}" | docker login ghcr.io \
+            -u ${{ github.repository_owner }} --password-stdin
+
+      - name: Read versions
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHA_SHORT=${GITHUB_SHA::7}
+          BASE_TAG=$(cat deployment/homelab/images/lobehub/.base-version | tr -d '[:space:]')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${VERSION}-${GITHUB_REF_NAME}.${SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "base=${BASE_TAG}" >> $GITHUB_OUTPUT
+          echo "Building fork image ${VERSION}-${GITHUB_REF_NAME}.${SHA_SHORT} on top of upstream ${BASE_TAG}"
+
+      - name: Build
+        run: |
+          docker build \
+            --build-arg BASE_VERSION=${{ steps.version.outputs.base }} \
+            --pull \
+            -t ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }} \
+            -t ${{ env.IMAGE_NAME }}:latest \
+            deployment/homelab/images/lobehub
+
+      - name: Push
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      - name: Update Pulumi stack config with new image tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for i in 1 2 3; do
+            git pull --rebase origin main
+            yq e '.config["lobehub:lobehubImage"] = "${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}"' \
+              -i deployment/homelab/Pulumi.dev.yaml
+            git add deployment/homelab/Pulumi.dev.yaml
+            git diff --cached --quiet && break
+            git commit -m "chore(deploy): update lobehubImage to ${{ steps.version.outputs.tag }}"
+            git push && break || git reset HEAD~1
+          done

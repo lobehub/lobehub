@@ -1,0 +1,94 @@
+name: Fork validation
+
+# Guards the boundary between fork-owned and upstream-owned paths.
+#
+# Lobehub upstream owns the bulk of this repo (src/, packages/, apps/, etc.)
+# and its own CI. This fork only adds a deployment/ directory plus a handful
+# of workflows. Any PR that touches upstream-owned paths will produce merge
+# conflicts the next time we pull from upstream — this guard blocks that
+# before it lands.
+#
+# Skipped on upstream-merge/* branches where touching upstream paths is the
+# whole point.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - canary
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  compatibility-guard:
+    name: Compatibility guard
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.head_ref, 'upstream-merge/')"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for upstream-owned file modifications
+        id: check
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          # Everything not listed here is considered upstream-owned.
+          # Keep this in sync with README.md in deployment/homelab/.
+          FORK_OWNED_REGEX='^(deployment/|\.github/workflows/(build-lobehub-image|deploy-homelab|fork-validate)\.yml$)'
+
+          git fetch origin "$BASE_REF" --depth=1
+          CHANGED=$(git diff --name-only "origin/$BASE_REF"...HEAD)
+
+          VIOLATIONS=$(echo "$CHANGED" | grep -Ev "$FORK_OWNED_REGEX" || true)
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "violations=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "files<<EOF"
+              echo "$VIOLATIONS"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "violations=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR if upstream files modified
+        if: steps.check.outputs.violations == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = `${{ steps.check.outputs.files }}`.trim()
+            const body = [
+              '## Compatibility violation',
+              '',
+              'This PR modifies upstream-owned files. These changes will cause **merge conflicts** the next time upstream (lobehub/lobehub) is pulled into this fork.',
+              '',
+              'Modified upstream files:',
+              '```',
+              files,
+              '```',
+              '',
+              'Keep fork-specific changes inside fork-owned paths only:',
+              '- `deployment/**`',
+              '- `.github/workflows/build-lobehub-image.yml`',
+              '- `.github/workflows/deploy-homelab.yml`',
+              '- `.github/workflows/fork-validate.yml`',
+              '',
+              'If this PR genuinely needs to change upstream files, rename the branch to `upstream-merge/...` to bypass this guard.',
+            ].join('\n')
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            })
+
+            core.setFailed(`Upstream-owned files modified:\n${files}`)

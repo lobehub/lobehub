@@ -1,0 +1,2 @@
+# Drop custom assets, branding overrides, or bakeable config files here.
+# They will be copied into /app/config-overrides/ in the built image.

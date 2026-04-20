@@ -1,0 +1,30 @@
+name: lobehub
+description: lobehub deployment — self-hosted LobeHub on homelab k8s
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+main: src/
+
+config:
+  # All values use the "lobehub:" namespace prefix (matching pulumi.Config("lobehub") in src/index.ts).
+  # Set with: pulumi config set lobehub:<key> <value>
+
+  # Stack reference to homelab base stack (provides tunnelCname, cloudflareZoneId, domain)
+  lobehub:homelabStack:
+    value: mrsimpson/homelab/dev
+
+  # Image reference — updated automatically by build-lobehub-image.yml on push to main
+  # pulumi config set lobehub:lobehubImage ghcr.io/mrsimpson/lobehub:<tag>
+
+  # Required secrets (set with --secret flag):
+  # pulumi config set lobehub:authSecret       <random-32>     --secret
+  # pulumi config set lobehub:keyVaultsSecret  <random-32>     --secret
+  #
+  # Database: a single-replica paradedb (Postgres 17 + pgvector) is deployed
+  # into the lobehub namespace by default, with an auto-generated password.
+  # To point at an external DB instead, set:
+  # pulumi config set lobehub:databaseUrl <postgres-url> --secret
+  #
+  # Optional provider API keys:
+  # pulumi config set lobehub:openaiApiKey     <sk-...>        --secret
