@@ -2,11 +2,14 @@ import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   titleInput: css`
+    resize: none;
+
     flex: 1;
 
+    padding-block: 0;
     padding-inline: 0;
 
-    font-size: 32px;
+    font-size: 24px;
     font-weight: 600;
     line-height: 1.3;
   `,

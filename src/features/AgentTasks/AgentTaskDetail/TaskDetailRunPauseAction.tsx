@@ -28,7 +28,12 @@ const TaskDetailRunPauseAction = memo(() => {
   const runIcon = isRerun ? RotateCcwIcon : PlayIcon;
 
   return (
-    <Button icon={canRun ? runIcon : CircleStop} type={'primary'} onClick={handleRunOrPause}>
+    <Button
+      icon={canRun ? runIcon : CircleStop}
+      size={'small'}
+      type={'primary'}
+      onClick={handleRunOrPause}
+    >
       {canRun ? runLabel : t('taskDetail.pauseTask')}
     </Button>
   );

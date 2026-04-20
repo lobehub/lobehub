@@ -61,7 +61,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
             <Loading debugId="TaskDetail" />
           ) : (
             <>
-              <Flexbox gap={4} style={{ paddingBlock: 24 }}>
+              <Flexbox gap={4} style={{ paddingBlock: '24px 36px' }}>
                 <TaskDetailTitleInput />
                 <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
                   <Flexbox align={'flex-start'} flex={1} gap={16}>
@@ -75,7 +75,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
                   <TaskProperties />
                 </Flexbox>
               </Flexbox>
-              <Flexbox gap={24}>
+              <Flexbox gap={24} style={{ paddingBottom: 120 }}>
                 <TaskInstruction />
                 <TaskSubtasks />
                 <TaskActivities />

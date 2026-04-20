@@ -30,7 +30,7 @@ const TaskDetailTitleInput = memo(() => {
   );
 
   const handleNameChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       setLocalName(e.target.value);
       debouncedSave(e.target.value);
     },
@@ -38,7 +38,8 @@ const TaskDetailTitleInput = memo(() => {
   );
 
   return (
-    <Input
+    <Input.TextArea
+      autoSize
       className={styles.titleInput}
       placeholder={t('taskDetail.titlePlaceholder')}
       value={localName}
