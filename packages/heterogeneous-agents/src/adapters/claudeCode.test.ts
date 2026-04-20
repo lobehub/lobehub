@@ -183,6 +183,127 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
+  describe('ToolSearch tool_reference content (LOBE-7369)', () => {
+    // CC CLI serializes ToolSearch results as `tool_reference` blocks — no
+    // `text` or `content` field — which the generic array mapper dropped to
+    // empty content, leaving the tool message in DB with `content: ''` and
+    // the UI's StatusIndicator stuck on the spinner.
+    it('joins tool_reference blocks into newline-separated tool names', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'ts1', input: { query: 'linear' }, name: 'ToolSearch', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { tool_name: 'mcp__claude_ai_Linear__create_attachment', type: 'tool_reference' },
+                { tool_name: 'mcp__claude_ai_Linear__create_document', type: 'tool_reference' },
+                { tool_name: 'mcp__claude_ai_Linear__create_issue_label', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('ts1');
+      expect(result!.data.content).toBe(
+        [
+          'mcp__claude_ai_Linear__create_attachment',
+          'mcp__claude_ai_Linear__create_document',
+          'mcp__claude_ai_Linear__create_issue_label',
+        ].join('\n'),
+      );
+      expect(result!.data.isError).toBe(false);
+
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end).toBeDefined();
+      expect(end!.data.toolCallId).toBe('ts1');
+    });
+
+    it('mixes tool_reference with text blocks in a single tool_result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'ts1', input: { query: 'search' }, name: 'ToolSearch', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { text: 'Loaded:', type: 'text' },
+                { tool_name: 'WebSearch', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('Loaded:\nWebSearch');
+    });
+
+    it('skips tool_reference entries with no tool_name', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'ts1', input: { query: 'x' }, name: 'ToolSearch', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { tool_name: 'A', type: 'tool_reference' },
+                { type: 'tool_reference' },
+                { tool_name: 'B', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('A\nB');
+    });
+  });
+
   describe('TodoWrite pluginState synthesis', () => {
     const driveTodoWrite = (adapter: ClaudeCodeAdapter, input: unknown, toolId = 't1') => {
       adapter.adapt({ subtype: 'init', type: 'system' });

@@ -327,7 +327,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           ? block.content
           : Array.isArray(block.content)
             ? block.content
-                .map((c: any) => c.text || c.content || '')
+                .map((c: any) => {
+                  // `ToolSearch` results ship as `{type: 'tool_reference', tool_name}`
+                  // blocks — no `text` / `content` field. Without this branch the
+                  // mapper returns '' for every reference, filter drops them all,
+                  // and the tool message lands in DB with empty content — leaving
+                  // the UI's StatusIndicator stuck on the spinner (LOBE-7369).
+                  if (c?.type === 'tool_reference' && c.tool_name) return c.tool_name;
+                  return c.text || c.content || '';
+                })
                 .filter(Boolean)
                 .join('\n')
             : JSON.stringify(block.content || '');
