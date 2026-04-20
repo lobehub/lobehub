@@ -314,11 +314,7 @@ export class AgentManagerRuntime {
         parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
       if (detail.config.plugins?.length) parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
       if (detail.config.systemRole) {
-        const truncated =
-          detail.config.systemRole.length > 200
-            ? detail.config.systemRole.slice(0, 200) + '...'
-            : detail.config.systemRole;
-        parts.push(`System Prompt: ${truncated}`);
+        parts.push(`System Prompt: ${detail.config.systemRole}`);
       }
 
       return {
