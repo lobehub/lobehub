@@ -9,3 +9,8 @@ dist/
 
 # OS
 .DS_Store
+
+# Root .gitignore ignores package-lock.json (pnpm/bun-based monorepo), but this
+# stack is an npm/Pulumi package — it needs a committed lockfile for reproducible
+# CI installs (actions/setup-node `cache: npm` requires the lockfile to exist).
+!package-lock.json
