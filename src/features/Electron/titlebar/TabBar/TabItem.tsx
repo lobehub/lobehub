@@ -17,6 +17,7 @@ import { type ResolvedPageData } from '@/features/Electron/titlebar/RecentlyView
 import { electronStylish } from '@/styles/electron';
 
 import { useTabRunning } from './hooks/useTabRunning';
+import { useTabUnread } from './hooks/useTabUnread';
 import { useStyles } from './styles';
 
 interface TabItemProps {
@@ -47,6 +48,8 @@ const TabItem = memo<TabItemProps>(
     const { t } = useTranslation('electron');
     const id = item.reference.id;
     const isRunning = useTabRunning(item.reference);
+    const isUnread = useTabUnread(item.reference);
+    const showUnreadDot = !isRunning && isUnread;
 
     const handleClick = useCallback(() => {
       if (!isActive) {
@@ -110,12 +113,16 @@ const TabItem = memo<TabItemProps>(
                 size={16}
               />
               {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
+              {showUnreadDot && <span aria-label={t('tab.unread')} className={styles.unreadDot} />}
             </span>
           ) : (
             item.icon && (
               <span className={styles.avatarWrapper}>
                 <Icon className={styles.tabIcon} icon={item.icon} size="small" />
                 {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
+                {showUnreadDot && (
+                  <span aria-label={t('tab.unread')} className={styles.unreadDot} />
+                )}
               </span>
             )
           )}
