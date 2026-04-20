@@ -50,6 +50,9 @@ export const getServerGlobalConfig = async () => {
         enabledKey: 'ENABLED_GITEE_AI',
         modelListKey: 'GITEE_AI_MODEL_LIST',
       },
+      githubcopilot: {
+        enabledKey: 'ENABLED_GITHUB_COPILOT',
+      },
       lmstudio: {
         fetchOnClient: isDesktop ? false : undefined,
       },

@@ -238,8 +238,10 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
 
     case ModelProvider.GithubCopilot: {
       // Support both traditional PAT (apiKey) and OAuth tokens
+      const { GITHUB_COPILOT_TOKEN } = llmConfig;
+
       return {
-        apiKey: payload.apiKey,
+        apiKey: apiKeyManager.pick(payload?.apiKey || GITHUB_COPILOT_TOKEN),
         bearerToken: payload.bearerToken,
         bearerTokenExpiresAt: payload.bearerTokenExpiresAt,
         oauthAccessToken: payload.oauthAccessToken,

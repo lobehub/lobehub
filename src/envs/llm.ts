@@ -52,7 +52,8 @@ export const getLLMConfig = () => {
 
       ENABLED_GITHUB: z.boolean(),
       GITHUB_TOKEN: z.string().optional(),
-
+    ENABLED_GITHUB_COPILOT: z.boolean(),
+    GITHUB_COPILOT_TOKEN: z.string().optional(),
       ENABLED_OPENROUTER: z.boolean(),
       OPENROUTER_API_KEY: z.string().optional(),
 
@@ -295,7 +296,8 @@ export const getLLMConfig = () => {
 
       ENABLED_GITHUB: !!process.env.GITHUB_TOKEN,
       GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-
+    ENABLED_GITHUB_COPILOT: !!process.env.GITHUB_COPILOT_TOKEN,
+    GITHUB_COPILOT_TOKEN: process.env.GITHUB_COPILOT_TOKEN,
       ENABLED_ZEROONE: !!process.env.ZEROONE_API_KEY,
       ZEROONE_API_KEY: process.env.ZEROONE_API_KEY,
 
