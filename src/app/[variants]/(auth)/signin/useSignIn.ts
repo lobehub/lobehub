@@ -8,6 +8,7 @@ import { type CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/
 import { type ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
+import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 
@@ -125,6 +126,8 @@ export const useSignIn = () => {
 
   const handleCheckUser = async (values: Pick<SignInFormValues, 'email'>) => {
     setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signin.email_step.submit' });
+
     try {
       const resolvedEmail = await resolveEmailFromIdentifier(values.email);
       if (!resolvedEmail) return;
@@ -172,6 +175,8 @@ export const useSignIn = () => {
 
   const handleSignIn = async (values: Pick<SignInFormValues, 'password'>) => {
     setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signin.password_step.submit' });
+
     try {
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const result = await signIn.email(
@@ -203,6 +208,11 @@ export const useSignIn = () => {
   const handleSocialSignIn = async (provider: string) => {
     setSocialLoading(provider);
     const normalizedProvider = normalizeProviderId(provider);
+    await trackLoginOrSignupClicked({
+      provider: normalizedProvider,
+      spm: 'signin.social.click',
+    });
+
     try {
       if (ENABLE_BUSINESS_FEATURES && !(await preSocialSigninCheck())) {
         setSocialLoading(null);
@@ -252,7 +262,9 @@ export const useSignIn = () => {
     const params = new URLSearchParams();
     if (currentEmail) params.set('email', currentEmail);
     params.set('callbackUrl', callbackUrl);
-    router.push(`/signup?${params.toString()}`);
+    void trackLoginOrSignupClicked({ spm: 'signin.go_to_signup.click' }).finally(() => {
+      router.push(`/signup?${params.toString()}`);
+    });
   };
 
   const handleForgotPassword = async () => {

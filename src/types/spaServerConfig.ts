@@ -10,6 +10,11 @@ export interface AnalyticsConfig {
   reactScan?: { apiKey: string };
   umami?: { scriptUrl: string; websiteId: string };
   vercel?: { debug: boolean; enabled: boolean };
+  xAds?: {
+    eventIds?: Record<string, string | undefined>;
+    pixelId: string;
+    purchaseEventId?: string;
+  };
 }
 
 export interface SPAClientEnv {
