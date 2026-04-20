@@ -86,6 +86,12 @@ const TopicCard = memo<TopicCardProps>(({ activity }) => {
         </Flexbox>
       </Flexbox>
 
+      {activity.summary && (
+        <Text fontSize={13} style={{ color: cssVar.colorTextSecondary, whiteSpace: 'pre-wrap' }}>
+          {activity.summary}
+        </Text>
+      )}
+
       {activity.author && (
         <Flexbox horizontal align={'center'} gap={6}>
           {activity.author.avatar && <Avatar avatar={activity.author.avatar} size={20} />}

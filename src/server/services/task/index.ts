@@ -201,15 +201,19 @@ export class TaskService {
 
     const activities: TaskDetailActivity[] = [
       ...(createdActivity ? [createdActivity] : []),
-      ...topics.map((t) => ({
-        author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
-        id: t.topicId ?? undefined,
-        seq: t.seq,
-        status: t.status,
-        time: toISO(t.createdAt),
-        title: (t.handoff as TaskTopicHandoff | null)?.title,
-        type: 'topic' as const,
-      })),
+      ...topics.map((t) => {
+        const handoff = t.handoff as TaskTopicHandoff | null;
+        return {
+          author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
+          id: t.topicId ?? undefined,
+          seq: t.seq,
+          status: t.status,
+          summary: handoff?.summary,
+          time: toISO(t.createdAt),
+          title: handoff?.title,
+          type: 'topic' as const,
+        };
+      }),
       ...enrichedBriefs.map((b) => ({
         actions: b.actions ?? undefined,
         agentId: b.agentId,
