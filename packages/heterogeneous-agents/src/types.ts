@@ -75,6 +75,25 @@ export interface ToolResultData {
   toolCallId: string;
 }
 
+/**
+ * Normalized "this tool spawns a subagent" descriptor. Adapters set this on
+ * the main-agent tool_use that triggers a sub-conversation (e.g. Claude
+ * Code's `Task` tool, Codex's subtask equivalent) so downstream consumers
+ * can allocate a Thread / route the subagent's inner tool_uses without
+ * needing to special-case per-adapter tool identifiers or re-parse
+ * `arguments`.
+ */
+export interface SubagentSpawnInfo {
+  /** Free-form description of the delegated task, sourced from the tool input. */
+  description?: string;
+  /**
+   * Adapter-specific subagent template label (CC's `subagent_type`,
+   * Codex's equivalent, ...). Used purely for UI / metadata — no
+   * executor branching should key off this value.
+   */
+  subagentType?: string;
+}
+
 /** Tool call payload (matches ChatToolPayload shape) */
 export interface ToolCallPayload {
   apiName: string;
@@ -90,6 +109,17 @@ export interface ToolCallPayload {
    * Absent for top-level (main-agent) tool calls.
    */
   parentToolCallId?: string;
+  /**
+   * Present on a tool_use that spawns a subagent. Adapter-level signal that
+   * downstream consumers should create a subagent Thread for this call —
+   * the inner tool_uses from that subagent will arrive on subsequent events
+   * carrying `parentToolCallId = this payload's id`.
+   *
+   * Keeps the executor adapter-agnostic: CC's `Task`, Codex's future
+   * subtask, or any other adapter's equivalent all go through this field
+   * instead of being detected via `identifier + apiName` checks.
+   */
+  subagentSpawn?: SubagentSpawnInfo;
   type: string;
 }
 

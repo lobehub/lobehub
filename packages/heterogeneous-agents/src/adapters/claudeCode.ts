@@ -37,6 +37,7 @@
 import {
   ClaudeCodeApiName,
   type ClaudeCodeTodoItem,
+  type TaskArgs,
   type TodoWriteArgs,
 } from '@lobechat/builtin-tool-claude-code';
 
@@ -266,13 +267,25 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
-          newToolCalls.push({
+          const payload: ToolCallPayload = {
             apiName: block.name,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          });
+          };
+          // CC's `Task` tool_use spawns a subagent — surface that as an
+          // adapter-agnostic signal so the executor doesn't need to know
+          // about CC's tool name or re-parse arguments. Other adapters
+          // (Codex subtask, ...) will populate the same field.
+          if (block.name === ClaudeCodeApiName.Task) {
+            const args = (block.input ?? {}) as TaskArgs;
+            payload.subagentSpawn = {
+              description: args.description,
+              subagentType: args.subagent_type,
+            };
+          }
+          newToolCalls.push(payload);
           this.pendingToolCalls.add(block.id);
           if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);

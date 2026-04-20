@@ -23,6 +23,10 @@ export class ThreadService {
     });
   };
 
+  createThread = async (params: CreateThreadParams): Promise<string> => {
+    return lambdaClient.thread.createThread.mutate(params);
+  };
+
   updateThread = async (id: string, data: Partial<ThreadItem>) => {
     return lambdaClient.thread.updateThread.mutate({ id, value: data });
   };

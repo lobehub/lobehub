@@ -1368,5 +1368,54 @@ describe('ClaudeCodeAdapter', () => {
       expect(result).toBeDefined();
       expect(result!.data.toolCallId).toBe('toolu_child');
     });
+
+    it('stamps subagentSpawn on a `Task` tool_use so the executor stays adapter-agnostic', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+
+      const events = adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_task',
+          input: {
+            description: 'Find failing tests',
+            prompt: 'run the suite and list failures',
+            subagent_type: 'Explore',
+          },
+          name: 'Task',
+          type: 'tool_use',
+        }),
+      );
+
+      const toolsChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(toolsChunk).toBeDefined();
+      const tool = toolsChunk!.data.toolsCalling[0];
+      expect(tool.apiName).toBe('Task');
+      expect(tool.subagentSpawn).toEqual({
+        description: 'Find failing tests',
+        subagentType: 'Explore',
+      });
+    });
+
+    it('does NOT stamp subagentSpawn on non-Task tool_uses', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+
+      const events = adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_read',
+          input: { file_path: '/a.ts' },
+          name: 'Read',
+          type: 'tool_use',
+        }),
+      );
+
+      const toolsChunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      const tool = toolsChunk!.data.toolsCalling[0];
+      expect(tool.subagentSpawn).toBeUndefined();
+    });
   });
 });

@@ -30,6 +30,14 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
+// threadService — subagent Thread creation (CC `Task` tool_use)
+const mockCreateThread = vi.fn();
+vi.mock('@/services/thread', () => ({
+  threadService: {
+    createThread: (...args: any[]) => mockCreateThread(...args),
+  },
+}));
+
 // heterogeneousAgentService — IPC to Electron main
 const mockStartSession = vi.fn();
 const mockSendPrompt = vi.fn();
@@ -142,6 +150,27 @@ const ccAssistant = (msgId: string, content: any[], extra?: { model?: string; us
 const ccToolUse = (msgId: string, toolId: string, name: string, input: any = {}) =>
   ccAssistant(msgId, [{ id: toolId, input, name, type: 'tool_use' }]);
 
+/**
+ * CC subagent assistant event — carries `parent_tool_use_id` pointing back at
+ * the outer `Task` tool_use. The adapter routes these through its subagent
+ * handler which stamps `parentToolCallId` onto each tool payload.
+ */
+const ccSubagentToolUse = (
+  msgId: string,
+  parentToolUseId: string,
+  toolId: string,
+  name: string,
+  input: any = {},
+) => ({
+  message: {
+    content: [{ id: toolId, input, name, type: 'tool_use' }],
+    id: msgId,
+    role: 'assistant',
+  },
+  parent_tool_use_id: parentToolUseId,
+  type: 'assistant',
+});
+
 const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
 
 const ccThinking = (msgId: string, thinking: string) =>
@@ -204,6 +233,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     }));
     mockUpdateMessage.mockResolvedValue(undefined);
     mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockCreateThread.mockImplementation(async (params: any) => params.id || 'thread-generated');
   });
 
   afterEach(() => {
@@ -1212,6 +1242,146 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([, val]: any) => val.content === 'Fixed the bug in app.ts.',
       );
       expect(finalContentWrite).toBeDefined();
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // CC subagent thread routing (LOBE-7392 / LOBE-7319)
+  //
+  // When CC emits a `Task` tool_use, the executor must:
+  //  - allocate a threadId synchronously, call `threadService.createThread`
+  //    with `sourceToolCallId` / `subagentType` metadata
+  //  - route the subagent's inner tool_uses (carrying `parentToolCallId`)
+  //    into the DB with `threadId` set, keeping them out of the main
+  //    assistant's tools[] so the timeline stays clean
+  // ────────────────────────────────────────────────────
+
+  describe('CC subagent thread routing', () => {
+    it('creates a Thread when a CC `Task` tool_use lands', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'Find failing tests',
+          prompt: 'run the suite and list failures',
+          subagent_type: 'Explore',
+        }),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).toHaveBeenCalledTimes(1);
+      expect(mockCreateThread).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expect.stringMatching(/^thd_/),
+          metadata: expect.objectContaining({
+            sourceToolCallId: 'toolu_task',
+            subagentType: 'Explore',
+            startedAt: expect.any(String),
+          }),
+          sourceMessageId: 'ast-initial',
+          title: 'Find failing tests',
+          topicId: 'topic-1',
+          type: 'isolation',
+        }),
+      );
+    });
+
+    it('persists subagent inner tool messages with threadId set', async () => {
+      // capture the generated threadId from the create call so we can assert
+      // it flows onto the tool message write
+      let allocatedThreadId: string | undefined;
+      mockCreateThread.mockImplementation(async (params: any) => {
+        allocatedThreadId = params.id;
+        return params.id;
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', {
+          command: 'ls',
+        }),
+        ccResult(),
+      ]);
+
+      expect(allocatedThreadId).toBeDefined();
+
+      const subagentToolCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_child',
+      );
+      expect(subagentToolCreate).toBeDefined();
+      expect(subagentToolCreate![0]).toMatchObject({
+        role: 'tool',
+        threadId: allocatedThreadId,
+        tool_call_id: 'toolu_child',
+        plugin: expect.objectContaining({ apiName: 'Bash' }),
+      });
+    });
+
+    it('keeps subagent inner tools OUT of main assistant tools[]', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Read'),
+        ccResult(),
+      ]);
+
+      // The assistant tools[] writes should only ever contain `toolu_task`,
+      // never the subagent inner `toolu_child`.
+      const assistantToolWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, val]: any) => id === 'ast-initial' && val.tools?.length > 0,
+      );
+      for (const [, val] of assistantToolWrites) {
+        const ids = val.tools.map((t: any) => t.id);
+        expect(ids).toContain('toolu_task');
+        expect(ids).not.toContain('toolu_child');
+      }
+    });
+
+    it('drops subagent tool when parent Task thread was not registered', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await runWithEvents([
+        ccInit(),
+        // No preceding Task tool_use — subagent event arrives orphaned.
+        ccSubagentToolUse('msg_sub', 'toolu_missing', 'toolu_child', 'Bash'),
+        ccResult(),
+      ]);
+
+      const subagentWrite = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.tool_call_id === 'toolu_child',
+      );
+      expect(subagentWrite).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Subagent tool without registered thread'),
+        'toolu_child',
+        'parent:',
+        'toolu_missing',
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('does NOT create a Thread when topicId is missing (non-CC path or test harness)', async () => {
+      await runWithEvents(
+        [
+          ccInit(),
+          ccToolUse('msg_main', 'toolu_task', 'Task', {
+            description: 'x',
+            subagent_type: 'Plan',
+          }),
+          ccResult(),
+        ],
+        {
+          params: {
+            context: { ...defaultContext, topicId: undefined as any },
+          },
+        },
+      );
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
     });
   });
 });

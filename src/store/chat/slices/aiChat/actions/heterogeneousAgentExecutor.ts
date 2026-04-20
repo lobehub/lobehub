@@ -7,14 +7,20 @@ import type {
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
+import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
+import { threadService } from '@/services/thread';
 import type { ChatStore } from '@/store/chat/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
+
+/** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
+const generateThreadId = () => `thd_${createNanoId(16)()}`;
 
 /**
  * Fire desktop notification + dock badge when a CC/Codex/ACP run finishes.
@@ -146,6 +152,7 @@ const persistNewToolCalls = async (
   assistantMessageId: string,
   context: ConversationContext,
   snapshot: { content: string; reasoning: string },
+  taskThreadMap: Map<string, string>,
 ) => {
   const freshTools = incoming.filter((t) => !state.persistedIds.has(t.id));
   if (freshTools.length === 0) return;
@@ -153,6 +160,13 @@ const persistNewToolCalls = async (
   // Mark all fresh tools as persisted up front, so re-entrant calls (from
   // Claude Code echoing tool_use blocks) are safely deduped.
   for (const tool of freshTools) state.persistedIds.add(tool.id);
+
+  // CC subagent tools (Agent / Task spawned) carry `parentToolCallId`. They
+  // belong to the subagent Thread, not the main assistant's tools[] — so
+  // they skip Phase 1/3 (assistant tools registration) and Phase 2 writes
+  // them with `threadId` set, keeping them out of the main timeline.
+  const subagentTools = freshTools.filter((t) => t.parentToolCallId);
+  const mainTools = freshTools.filter((t) => !t.parentToolCallId);
 
   const buildUpdate = (): Record<string, any> => {
     const update: Record<string, any> = { tools: state.payloads };
@@ -171,20 +185,67 @@ const persistNewToolCalls = async (
   // By writing assistant.tools[] FIRST (with the tool ids but no result_msg_id
   // yet), the match works from the moment tool messages get created in DB.
   // No orphan window.
-  for (const tool of freshTools) state.payloads.push({ ...tool } as ChatToolPayload);
-  try {
-    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
-      agentId: context.agentId,
-      topicId: context.topicId,
-    });
-  } catch (err) {
-    console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
+  if (mainTools.length > 0) {
+    for (const tool of mainTools) state.payloads.push({ ...tool } as ChatToolPayload);
+    try {
+      await messageService.updateMessage(assistantMessageId, buildUpdate(), {
+        agentId: context.agentId,
+        topicId: context.topicId,
+      });
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
+    }
+  }
+
+  // ─── PHASE 1b: For each subagent-spawning tool_use, create the Thread ───
+  //
+  // The adapter translates per-CLI subagent concepts (CC's `Task`, Codex's
+  // subtask, ...) into the adapter-agnostic `subagentSpawn` descriptor on
+  // the ToolCallPayload, so the executor stays oblivious to individual
+  // tool names or identifiers.
+  //
+  // Has to land BEFORE the subagent's inner tool messages persist so they
+  // can look up the threadId from `taskThreadMap`. The adapter's event
+  // order (spawn tool_use first, then subagent inner tool_uses in
+  // subsequent `tools_calling` chunks) combined with the executor's serial
+  // persistQueue guarantees the map is populated by the time subagent
+  // tools hit this fn.
+  //
+  // Without a topicId we can't create a thread (Thread.topicId is required);
+  // fall back to the main-tool flow so the spawning tool_use still renders
+  // as a normal tool call without a subagent group.
+  for (const tool of mainTools) {
+    if (!tool.subagentSpawn || taskThreadMap.has(tool.id) || !context.topicId) continue;
+    try {
+      const { description, subagentType } = tool.subagentSpawn;
+      const threadId = generateThreadId();
+      const title = description?.slice(0, 80) || subagentType || 'Subagent';
+      await threadService.createThread({
+        id: threadId,
+        metadata: {
+          sourceToolCallId: tool.id,
+          startedAt: new Date().toISOString(),
+          subagentType,
+        },
+        sourceMessageId: assistantMessageId,
+        status: ThreadStatus.Processing,
+        title,
+        topicId: context.topicId,
+        type: ThreadType.Isolation,
+      });
+      taskThreadMap.set(tool.id, threadId);
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
+    }
   }
 
   // ─── PHASE 2: Create the tool messages in DB ───
-  // Each tool message's tool_call_id matches an already-registered tool id
-  // in assistant.tools[], so UI never sees orphan state.
-  for (const tool of freshTools) {
+  // Main-agent tool messages attach to the main assistant row. Subagent tool
+  // messages route to their parent Task's thread (looked up via taskThreadMap)
+  // — if the map entry is missing (thread create failed earlier), we warn
+  // and drop the message; writing it without threadId would leak it into the
+  // main timeline as an orphan.
+  for (const tool of mainTools) {
     try {
       const result = await messageService.createMessage({
         agentId: context.agentId,
@@ -209,15 +270,50 @@ const persistNewToolCalls = async (
     }
   }
 
+  for (const tool of subagentTools) {
+    const threadId = tool.parentToolCallId ? taskThreadMap.get(tool.parentToolCallId) : undefined;
+    if (!threadId) {
+      console.warn(
+        '[HeterogeneousAgent] Subagent tool without registered thread, dropping:',
+        tool.id,
+        'parent:',
+        tool.parentToolCallId,
+      );
+      continue;
+    }
+    try {
+      const result = await messageService.createMessage({
+        agentId: context.agentId,
+        content: '',
+        parentId: assistantMessageId,
+        plugin: {
+          apiName: tool.apiName,
+          arguments: tool.arguments,
+          identifier: tool.identifier,
+          type: tool.type as ChatToolPayload['type'],
+        },
+        role: 'tool',
+        threadId,
+        tool_call_id: tool.id,
+        topicId: context.topicId ?? undefined,
+      });
+      state.toolMsgIdByCallId.set(tool.id, result.id);
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to create subagent tool message:', err);
+    }
+  }
+
   // ─── PHASE 3: Re-write assistant.tools[] with the result_msg_ids ───
   // Without this, the UI can't hydrate tool results back into the inspector.
-  try {
-    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
-      agentId: context.agentId,
-      topicId: context.topicId,
-    });
-  } catch (err) {
-    console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
+  if (mainTools.length > 0) {
+    try {
+      await messageService.updateMessage(assistantMessageId, buildUpdate(), {
+        agentId: context.agentId,
+        topicId: context.topicId,
+      });
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
+    }
   }
 };
 
@@ -307,6 +403,19 @@ export const executeHeterogeneousAgent = async (
     persistedIds: new Set(),
     toolMsgIdByCallId: new Map(),
   };
+  /**
+   * CC subagent thread registry for this run. Maps the parent `Task`
+   * tool_use id → the sync-allocated `threadId` we created for it, so
+   * subagent inner tool_uses (which arrive later carrying
+   * `parentToolCallId`) can persist under the right Thread.
+   *
+   * Kept at executor scope (not on ToolPersistenceState) because
+   * ToolPersistenceState resets on every main-agent step boundary,
+   * whereas a subagent's inner tools could technically straddle the
+   * step reset in pathological orderings — losing the mapping there
+   * would route them to the main timeline as orphans.
+   */
+  const taskThreadMap: Map<string, string> = new Map();
   /** Serializes async persist operations so ordering is stable. */
   let persistQueue: Promise<void> = Promise.resolve();
   /** Tracks the current assistant message being written to (switches on new steps) */
@@ -542,6 +651,7 @@ export const executeHeterogeneousAgent = async (
                     currentAssistantMessageId,
                     context,
                     snapshot,
+                    taskThreadMap,
                   ),
                 );
               }
