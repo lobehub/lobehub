@@ -34,14 +34,26 @@ export interface ThreadMetadata {
   clientMode?: boolean;
   /** Task completion time */
   completedAt?: string;
+  /** Description of the task (e.g. CC Task tool's `description` input) */
+  description?: string;
   /** Execution duration in milliseconds */
   duration?: number;
   /** Error details when task failed */
   error?: any;
   /** Operation ID for tracking */
   operationId?: string;
+  /**
+   * The specific tool_use id within `sourceMessageId` that spawned this thread.
+   * Used to position the thread inline as a `task` block within the parent
+   * message's content stream — e.g. CC's `Task` tool_use spawning a subagent.
+   * Multiple threads can share the same `sourceMessageId` (parallel subagents),
+   * disambiguated by this field.
+   */
+  sourceToolCallId?: string;
   /** Task start time, used to calculate duration */
   startedAt?: string;
+  /** Subagent type identifier, e.g. CC's `subagent_type` input (Explore, Plan, ...) */
+  subagentType?: string;
   /** Total cost in dollars */
   totalCost?: number;
   /** Total messages created during execution */
@@ -77,6 +89,14 @@ export interface CreateThreadParams {
   agentId?: string;
   /** Group ID for group chat context */
   groupId?: string;
+  /**
+   * Optional client-provided id. Lets the caller derive the thread id
+   * synchronously (e.g. when wiring CC subagent threads from the stream
+   * adapter, where the id needs to be known before the create call returns
+   * so subagent inner messages can be persisted with the right `threadId`).
+   * Falls back to the schema's `idGenerator` when omitted.
+   */
+  id?: string;
   /** Initial metadata for the thread */
   metadata?: ThreadMetadata;
   parentThreadId?: string;
@@ -91,10 +111,13 @@ export interface CreateThreadParams {
 export const threadMetadataSchema = z.object({
   clientMode: z.boolean().optional(),
   completedAt: z.string().optional(),
+  description: z.string().optional(),
   duration: z.number().optional(),
   error: z.any().optional(),
   operationId: z.string().optional(),
+  sourceToolCallId: z.string().optional(),
   startedAt: z.string().optional(),
+  subagentType: z.string().optional(),
   totalCost: z.number().optional(),
   totalMessages: z.number().optional(),
   totalTokens: z.number().optional(),
@@ -104,6 +127,7 @@ export const threadMetadataSchema = z.object({
 export const createThreadSchema = z.object({
   agentId: z.string().optional(),
   groupId: z.string().optional(),
+  id: z.string().optional(),
   metadata: threadMetadataSchema.optional(),
   parentThreadId: z.string().optional(),
   sourceMessageId: z.string().optional(),

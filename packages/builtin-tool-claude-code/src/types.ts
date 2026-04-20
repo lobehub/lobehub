@@ -17,6 +17,16 @@ export enum ClaudeCodeApiName {
   Grep = 'Grep',
   Read = 'Read',
   Skill = 'Skill',
+  /**
+   * Spawns a subagent. CC emits this as a regular `tool_use`; downstream
+   * events for the subagent's internal turns are tagged with
+   * `parent_tool_use_id` pointing back at this tool_use's id, and the
+   * subagent's final answer arrives as the `tool_result` for this id.
+   * The executor turns this into a Thread (linked via
+   * `metadata.sourceToolCallId = tool_use.id`) instead of a separate
+   * `role: 'task'` message.
+   */
+  Task = 'Task',
   TodoWrite = 'TodoWrite',
   ToolSearch = 'ToolSearch',
   Write = 'Write',
@@ -59,4 +69,16 @@ export interface SkillArgs {
 export interface ToolSearchArgs {
   max_results?: number;
   query?: string;
+}
+
+/**
+ * Arguments for CC's built-in `Task` tool. The model fills these in when it
+ * decides to delegate work to a subagent: the description shows up in the
+ * folded header, the prompt becomes the subagent's initial user message, and
+ * `subagent_type` selects which subagent template handles it.
+ */
+export interface TaskArgs {
+  description?: string;
+  prompt?: string;
+  subagent_type?: string;
 }

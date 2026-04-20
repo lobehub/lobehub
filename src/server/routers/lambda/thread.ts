@@ -22,6 +22,7 @@ const threadProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
 export const threadRouter = router({
   createThread: threadProcedure.input(createThreadSchema).mutation(async ({ input, ctx }) => {
     const thread = await ctx.threadModel.create({
+      id: input.id,
       metadata: input.metadata,
       parentThreadId: input.parentThreadId,
       sourceMessageId: input.sourceMessageId,
@@ -40,6 +41,7 @@ export const threadRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const thread = await ctx.threadModel.create({
+        id: input.id,
         metadata: input.metadata,
         parentThreadId: input.parentThreadId,
         sourceMessageId: input.sourceMessageId,
