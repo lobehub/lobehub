@@ -53,6 +53,14 @@ import {
 } from './mecha';
 import { type FetchOptions } from './types';
 
+const defaultProvider = ModelProvider.OpenAI;
+const providersWithDeploymentName = new Set<string>([
+  ModelProvider.Azure,
+  ModelProvider.AzureAI,
+  ModelProvider.KimiCodingPlan,
+  ModelProvider.Qwen,
+  ModelProvider.Volcengine,
+]);
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
   groupId?: string;

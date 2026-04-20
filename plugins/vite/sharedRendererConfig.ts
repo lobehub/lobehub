@@ -111,9 +111,13 @@ export const sharedRollupOutput = {
   manualChunks: sharedManualChunks,
 };
 
-export const sharedRolldownOutput = {
+interface SharedRolldownOutputOptions {
+  strictExecutionOrder?: boolean;
+}
+
+export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => ({
   chunkFileNames: sharedChunkFileNames,
-  strictExecutionOrder: true,
+  strictExecutionOrder: options.strictExecutionOrder ?? true,
   codeSplitting: {
     groups: [
       {
@@ -121,7 +125,7 @@ export const sharedRolldownOutput = {
       },
     ],
   },
-};
+});
 
 type Platform = 'web' | 'mobile' | 'desktop';
 

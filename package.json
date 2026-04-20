@@ -162,7 +162,6 @@
     "fast-xml-parser": "5.4.2",
     "lexical": "0.42.0",
     "pdfjs-dist": "5.4.530",
-    "rolldown": "https://pkg.pr.new/rolldown@772b9d9",
     "stylelint-config-clean-order": "7.0.0"
   },
   "dependencies": {
@@ -528,7 +527,7 @@
     "typescript": "^5.9.3",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
-    "vite": "^8.0.8",
+    "vite": "^8.0.9",
     "vite-plugin-pwa": "^1.2.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^3.2.4"
@@ -552,7 +551,6 @@
       "fast-xml-parser": "5.4.2",
       "lexical": "0.42.0",
       "pdfjs-dist": "5.4.530",
-      "rolldown": "https://pkg.pr.new/rolldown@772b9d9",
       "stylelint-config-clean-order": "7.0.0"
     },
     "patchedDependencies": {

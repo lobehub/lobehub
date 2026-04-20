@@ -115,7 +115,7 @@ export const convertOpenAIMessages = async (
 
 export const convertOpenAIResponseInputs = async (
   messages: OpenAIChatMessage[],
-  _options?: ConvertMessageContentOptions,
+  options?: ConvertMessageContentOptions,
 ) => {
   const strictToolPairing = options?.strictToolPairing === true;
   // OpenAI Responses API rejects inputs that keep a function_call without its matching

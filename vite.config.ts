@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { PluginOption, ViteDevServer } from 'vite';
@@ -6,10 +8,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
 import {
+  createSharedRolldownOutput,
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRolldownOutput,
 } from './plugins/vite/sharedRendererConfig';
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
 
@@ -21,6 +23,60 @@ Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isMobile ? 'mobile' : 'web';
 
+const resolveCommandExecutable = (cmd: string) => {
+  const pathValue = process.env.PATH;
+  if (!pathValue) return;
+
+  if (process.platform === 'win32') {
+    const pathExt = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
+      .split(';')
+      .filter(Boolean)
+      .map((ext) => ext.toLowerCase());
+    const candidateNames = cmd.includes('.') ? [cmd] : pathExt.map((ext) => `${cmd}${ext}`);
+
+    for (const entry of pathValue.split(path.delimiter).filter(Boolean)) {
+      for (const candidate of candidateNames) {
+        const resolved = path.win32.join(entry, candidate);
+        if (fs.existsSync(resolved)) return resolved;
+      }
+    }
+
+    return;
+  }
+
+  for (const entry of pathValue.split(path.delimiter).filter(Boolean)) {
+    const resolved = path.join(entry, cmd);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+};
+
+const openExternalBrowser = async (url: string) => {
+  const command =
+    process.platform === 'win32'
+      ? {
+          args: ['url.dll,FileProtocolHandler', url],
+          cmd: 'rundll32',
+        }
+      : {
+          args: [url],
+          cmd: process.platform === 'darwin' ? 'open' : 'xdg-open',
+        };
+
+  return new Promise<boolean>((resolve) => {
+    const executable = resolveCommandExecutable(command.cmd);
+    if (!executable) {
+      resolve(false);
+      return;
+    }
+
+    try {
+      execFile(executable, command.args, (error) => resolve(!error));
+    } catch {
+      resolve(false);
+    }
+  });
+};
+
 export default defineConfig({
   base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
   build: {
@@ -28,7 +84,7 @@ export default defineConfig({
     reportCompressedSize: false,
     rolldownOptions: {
       input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
-      output: sharedRolldownOutput,
+      output: createSharedRolldownOutput({ strictExecutionOrder: isDev }),
     },
   },
   define: sharedRendererDefine({ isMobile, isElectron: false }),
@@ -56,17 +112,35 @@ export default defineConfig({
         const { info } = server.config.logger;
         const isBundledDev = (server.config.experimental as any)?.bundledDev;
 
-        const printProxyUrl = () => {
+        const getProxyUrl = () => {
           const urls = server.resolvedUrls;
           if (!urls?.local?.[0]) return;
           const localHost = urls.local[0].replace(/\/$/, '');
-          const proxyUrl = `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
+          return `${ONLINE_HOST}/_dangerous_local_dev_proxy?debug-host=${encodeURIComponent(localHost)}`;
+        };
+        const printProxyUrl = () => {
+          const proxyUrl = getProxyUrl();
+          if (!proxyUrl) return;
           const colorUrl = (url: string) =>
             c.cyan(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`));
           info(`  ${c.green('➜')}  ${c.bold('Debug Proxy')}: ${colorUrl(proxyUrl)}`);
         };
+        const openProxyUrl = async () => {
+          const proxyUrl = getProxyUrl();
+          if (!proxyUrl) return;
+
+          const opened = await openExternalBrowser(proxyUrl);
+
+          if (!opened) {
+            server.config.logger.warn(`Failed to open Debug Proxy automatically: ${proxyUrl}`);
+          }
+        };
 
         if (isBundledDev) {
+          // Disable Vite's built-in browser opening. We always open the debug
+          // proxy URL after the first bundled compile finishes instead.
+          server.openBrowser = () => {};
+
           const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
           let spinnerIdx = 0;
           let spinnerTimer: NodeJS.Timeout | null = null;
@@ -115,6 +189,7 @@ export default defineConfig({
                     info(
                       `  ${c.green('✅')}  Vite: compile and bundle finished (${res.status}) ${rootUrl}`,
                     );
+                    void openProxyUrl();
                     break;
                   } catch {
                     await new Promise((r) => setTimeout(r, interval));
@@ -188,8 +263,8 @@ export default defineConfig({
 
   server: {
     cors: true,
-    port: 9876,
     host: true,
+    port: 9876,
     proxy: {
       '/api': `http://localhost:${process.env.PORT || 3010}`,
       '/oidc': `http://localhost:${process.env.PORT || 3010}`,
