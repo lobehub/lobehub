@@ -12,8 +12,8 @@ import { ProxyUrlBuilder } from './urlBuilder';
  * Returns `{}` when proxy is disabled, so callers can unconditionally spread
  * the result into the spawn env.
  */
-export const buildProxyEnv = (config: NetworkProxySettings): Record<string, string> => {
-  if (!config.enableProxy || !config.proxyServer || !config.proxyPort) {
+export const buildProxyEnv = (config?: NetworkProxySettings): Record<string, string> => {
+  if (!config?.enableProxy || !config.proxyServer || !config.proxyPort) {
     return {};
   }
 

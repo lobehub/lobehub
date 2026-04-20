@@ -5,11 +5,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 
-import type { NetworkProxySettings } from '@lobechat/electron-client-ipc';
 import { app as electronApp, BrowserWindow } from 'electron';
 
-import { defaultProxySettings } from '@/const/store';
-import { buildProxyEnv } from '@/modules/networkProxy';
+import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -311,11 +309,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // taskkill /T /F there; no detached flag needed.
       // Forward the user's proxy settings to the CLI. The main-process undici
       // dispatcher doesn't reach child processes — they need env vars.
-      const proxyConfig = this.app.storeManager.get(
-        'networkProxy',
-        defaultProxySettings,
-      ) as NetworkProxySettings;
-      const proxyEnv = buildProxyEnv(proxyConfig);
+      const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
 
       const proc = spawn(session.command, cliArgs, {
         cwd,
