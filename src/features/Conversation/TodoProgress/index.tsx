@@ -21,7 +21,10 @@ const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 const styles = createStaticStyles(({ css, cssVar }) => ({
   collapsed: css`
     max-height: 0;
+    margin-block-start: 0 !important;
     padding-block: 0 !important;
+    border-block-start: none !important;
+
     opacity: 0;
   `,
   container: css`
@@ -30,7 +33,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin-block-end: 8px;
     margin-inline: 10px;
-    padding-block: 8px;
+    padding-block: 8px 10px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-start-start-radius: 12px;
