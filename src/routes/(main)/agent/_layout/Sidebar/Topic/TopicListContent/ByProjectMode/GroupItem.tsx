@@ -61,7 +61,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
               size={{ size: 15, strokeWidth: 1.5 }}
             />
           </Center>
-          <Text ellipsis fontSize={14} style={{ flex: 1 }}>
+          <Text ellipsis fontSize={14} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
             {title}
           </Text>
         </Flexbox>
