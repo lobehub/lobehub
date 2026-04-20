@@ -56,12 +56,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
         <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
           <Center flex={'none'} height={24} width={28}>
             <Icon
-              color={cssVar.colorTextSecondary}
+              color={cssVar.colorTextTertiary}
               icon={FolderClosedIcon}
               size={{ size: 15, strokeWidth: 1.5 }}
             />
           </Center>
-          <Text ellipsis fontSize={14} style={{ flex: 1 }} type={'secondary'}>
+          <Text ellipsis fontSize={14} style={{ flex: 1 }}>
             {title}
           </Text>
         </Flexbox>
