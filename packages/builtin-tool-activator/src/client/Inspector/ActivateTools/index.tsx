@@ -28,6 +28,7 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     padding-block: 2px;
     padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 999px;
 
     font-size: 12px;
