@@ -9,8 +9,11 @@ name: Deploy to homelab
 #
 # GitOps flow:
 #   1. build-lobehub-image.yml builds an image and commits the new tag
-#      to deployment/homelab/Pulumi.dev.yaml on main
+#      to deployment/homelab/Pulumi.dev.yaml on canary
 #   2. That push triggers this workflow via the path trigger below
+#
+# Note: this fork uses canary (not main) as the default/deployable branch,
+# matching upstream lobehub's convention.
 #
 # The workflow_run trigger is kept as a fallback for builds that do not
 # update Pulumi.dev.yaml (e.g. build-only manual runs).
@@ -25,10 +28,10 @@ name: Deploy to homelab
 #   PULUMI_ACCESS_TOKEN                          — Pulumi Cloud access token
 
 on:
-  # Primary trigger: any commit that updates the Pulumi stack config on main.
+  # Primary trigger: any commit that updates the Pulumi stack config on canary.
   push:
     branches:
-      - main
+      - canary
     paths:
       - deployment/homelab/**
 
@@ -39,7 +42,7 @@ on:
     types:
       - completed
     branches:
-      - main
+      - canary
 
   # Also allow manual deploys with explicit image overrides
   workflow_dispatch:

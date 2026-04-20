@@ -144,7 +144,7 @@ echo "2.1.50" > deployment/homelab/images/lobehub/.base-version
 git commit -am "deploy: bump upstream lobehub base to 2.1.50"
 ```
 
-Pushing to `main` triggers the image build, which in turn triggers the deploy.
+Pushing to `canary` (this fork's default branch, matching upstream lobehub's convention) triggers the image build, which in turn triggers the deploy.
 
 ## Related
 
