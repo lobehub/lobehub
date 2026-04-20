@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer/';
 import { z } from 'zod';
 
 const unstableCacheFileSchema = z.object({

@@ -25,6 +25,11 @@ async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
 }
 
 function resolveLazyModule<P>(module: { default: ComponentType<P> } | ComponentType<P>) {
+  if (module == null) {
+    throw new Error(
+      'Dynamic import resolved to undefined. This usually means a chunk failed to load.',
+    );
+  }
   if (typeof module === 'function') {
     return { default: module };
   }

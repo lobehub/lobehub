@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 import type { PluginOption, ViteDevServer } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
@@ -9,7 +9,7 @@ import {
   sharedOptimizeDeps,
   sharedRendererDefine,
   sharedRendererPlugins,
-  sharedRollupOutput,
+  sharedRolldownOutput,
 } from './plugins/vite/sharedRendererConfig';
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
 
@@ -26,12 +26,16 @@ export default defineConfig({
   build: {
     outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
-    rollupOptions: {
-      input: resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
-      output: sharedRollupOutput,
+    rolldownOptions: {
+      input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
+      output: sharedRolldownOutput,
     },
   },
   define: sharedRendererDefine({ isMobile, isElectron: false }),
+
+  resolve: {
+    tsconfigPaths: true,
+  },
   optimizeDeps: sharedOptimizeDeps,
   plugins: [
     vercelSkewProtection(),

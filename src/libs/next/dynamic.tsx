@@ -24,6 +24,11 @@ function dynamic<P = NonNullable<unknown>>(
 ): ComponentType<P> {
   const LazyComponent = lazy(async () => {
     const mod = await loader();
+    if (mod == null) {
+      throw new Error(
+        'Dynamic import resolved to undefined. This usually means a chunk failed to load.',
+      );
+    }
     if (typeof mod === 'function') {
       return { default: mod as ComponentType<P> };
     }
