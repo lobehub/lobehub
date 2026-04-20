@@ -1,6 +1,5 @@
 'use client';
 
-import { highlightTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Checkbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -34,6 +33,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  headerDetail: css`
+    overflow: hidden;
+    min-width: 0;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
   `,
   headerCount: css`
     flex-shrink: 0;
@@ -146,7 +151,7 @@ const TodoHeader = memo<TodoHeaderProps>(({ completed, total, inProgress }) => {
         {detail && (
           <>
             <span>: </span>
-            <span className={highlightTextStyles.primary}>{detail}</span>
+            <span className={styles.headerDetail}>{detail}</span>
           </>
         )}
       </div>
