@@ -190,6 +190,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
         <>
           <Segmented
             block
+            size="small"
             value={automationMode ?? 'heartbeat'}
             options={[
               { label: t('taskSchedule.intervalTab'), value: 'heartbeat' },
