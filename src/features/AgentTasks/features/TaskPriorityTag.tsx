@@ -44,6 +44,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  triggerUrgent: css`
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    color: ${cssVar.orange};
+  `,
 }));
 
 interface TaskPriorityTagProps {
@@ -85,8 +91,14 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
         Object.entries(PRIORITY_META).map(([key, value]) => {
           const level = Number(key);
           const IconRender = value.icon;
+          const isUrgentLevel = value.level === 1;
           return {
-            icon: <IconRender color={cssVar.colorTextDescription} size={16} />,
+            icon: (
+              <IconRender
+                color={isUrgentLevel ? cssVar.orange : cssVar.colorTextDescription}
+                size={16}
+              />
+            ),
             key,
             label: t(`taskDetail.${value.labelKey}`, { defaultValue: '' }),
             onClick: ({ domEvent }) => {
@@ -99,6 +111,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     );
 
     const IconRender = meta.icon;
+    const isUrgent = priority === 1;
 
     const triggerNode = children ? (
       children
@@ -106,7 +119,10 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
       <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
     ) : (
       <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: '' })}>
-        <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>
+        <span
+          className={isUrgent ? styles.triggerUrgent : styles.trigger}
+          onClick={(e) => e.stopPropagation()}
+        >
           <IconRender size={size} />
         </span>
       </Tooltip>

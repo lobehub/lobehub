@@ -1,5 +1,6 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Block, Text } from '@lobehub/ui';
+import { useThemeMode } from 'antd-style';
 import { memo } from 'react';
 
 import { useTaskStore } from '@/store/task';
@@ -14,6 +15,7 @@ const TaskDetailAssignee = memo(() => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
+  const { isDarkMode } = useThemeMode();
 
   if (!taskId || !assigneeAgentId) return null;
 
@@ -29,8 +31,9 @@ const TaskDetailAssignee = memo(() => {
         align="center"
         gap={8}
         paddingBlock={4}
-        paddingInline={'6px 10px'}
-        variant={'outlined'}
+        paddingInline={11}
+        style={{ minHeight: 32 }}
+        variant={isDarkMode ? 'filled' : 'outlined'}
       >
         <AssigneeAvatar agentId={assigneeAgentId} size={20} />
         <Text weight={500}>{assigneeMeta?.title}</Text>
