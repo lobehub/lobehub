@@ -281,6 +281,26 @@ describe('applyMarkdownPatch - structured ops', () => {
     if (!result.ok) expect(result.error.code).toBe('LINE_OVERLAP');
   });
 
+  it('reports invalid line range before overlap when a hunk has startLine < 1', () => {
+    const source = 'a\nb\nc\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 1, mode: 'deleteLines', startLine: 0 },
+      { content: 'X', line: 1, mode: 'insertAt' },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('LINE_OUT_OF_RANGE');
+  });
+
+  it('reports invalid line range before overlap when endLine < startLine', () => {
+    const source = 'a\nb\nc\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 1, mode: 'deleteLines', startLine: 3 },
+      { content: 'X', line: 2, mode: 'insertAt' },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('INVALID_LINE_RANGE');
+  });
+
   it('defaults mode to replace when omitted (backward compat)', () => {
     const source = 'hello';
     const result = applyMarkdownPatch(source, [{ replace: 'world', search: 'hello' }]);

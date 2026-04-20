@@ -216,8 +216,21 @@ export const applyMarkdownPatch = (
     return { applied, content: current, ok: true };
   }
 
-  // Validate against current content and reject overlapping line hunks.
   const sorted = lineHunks.slice().sort((a, b) => getAnchor(b) - getAnchor(a));
+
+  const preserveTrailingNewline = current.endsWith('\n');
+  let lines = splitLines(current);
+  const baselineTotalLines = lines.length;
+
+  // Validate each hunk against the baseline first, so invalid ranges surface
+  // as LINE_OUT_OF_RANGE / INVALID_LINE_RANGE instead of being misreported as
+  // LINE_OVERLAP by the overlap check below.
+  for (const { hunk, index } of sorted) {
+    const error = validateLineHunk(hunk, baselineTotalLines, index);
+    if (error) {
+      return { error, ok: false };
+    }
+  }
 
   for (let i = 0; i < sorted.length - 1; i += 1) {
     for (let j = i + 1; j < sorted.length; j += 1) {
@@ -227,15 +240,7 @@ export const applyMarkdownPatch = (
     }
   }
 
-  const preserveTrailingNewline = current.endsWith('\n');
-  let lines = splitLines(current);
-
-  for (const { hunk, index } of sorted) {
-    const totalLines = lines.length;
-    const error = validateLineHunk(hunk, totalLines, index);
-    if (error) {
-      return { error, ok: false };
-    }
+  for (const { hunk } of sorted) {
     lines = applyLineHunk(lines, hunk);
     applied += 1;
   }
