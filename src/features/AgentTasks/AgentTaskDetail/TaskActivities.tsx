@@ -1,10 +1,9 @@
 import type { BriefType, TaskDetailActivity } from '@lobechat/types';
 import { Accordion, AccordionItem, Avatar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
-import { BotMessageSquare, MessageCircle, MessagesSquare } from 'lucide-react';
+import { BotMessageSquare, CirclePlus, MessageCircle, MessagesSquare } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,10 +13,13 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import { styles } from '../shared/style';
+import CommentCard from './CommentCard';
+import CommentInput from './CommentInput';
 import TopicCard from './TopicCard';
 
 const ROW_TYPE_ICON = {
   comment: MessageCircle,
+  created: CirclePlus,
   topic: MessagesSquare,
 } as const;
 
@@ -54,6 +56,7 @@ const toBriefItem = (act: TaskDetailActivity): BriefItem | null => {
 const getRowText = (act: TaskDetailActivity, t: TFunction<'chat'>): string => {
   if (act.type === 'comment') return act.content || t('taskDetail.activities.fallback.comment');
   if (act.type === 'topic') return act.title || t('taskDetail.activities.fallback.topic');
+  if (act.type === 'created') return t('taskDetail.activities.fallback.created');
   return '';
 };
 
@@ -107,42 +110,42 @@ const TaskActivities = memo(() => {
   );
 
   return (
-    <>
-      <Divider dashed />
-      <Accordion defaultExpandedKeys={['activities']} gap={0}>
-        <AccordionItem
-          itemKey="activities"
-          paddingBlock={4}
-          paddingInline={8}
-          title={
-            <Flexbox horizontal align="center" gap={8}>
-              <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
-              <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-                {t('taskDetail.activities')}
-              </Text>
-            </Flexbox>
-          }
-        >
+    <Accordion defaultExpandedKeys={['activities']} gap={0}>
+      <AccordionItem
+        itemKey="activities"
+        paddingBlock={4}
+        paddingInline={8}
+        title={
+          <Flexbox horizontal align="center" gap={8}>
+            <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
+            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+              {t('taskDetail.activities')}
+            </Text>
+          </Flexbox>
+        }
+      >
+        <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
           {items.length > 0 ? (
-            <Flexbox gap={12} paddingBlock={8}>
-              {items.map(({ activity, brief, key }) => {
-                if (brief) {
-                  return (
-                    <BriefCard
-                      brief={brief}
-                      enableNavigation={false}
-                      key={key}
-                      onAfterAddComment={refreshActiveTask}
-                      onAfterResolve={refreshActiveTask}
-                    />
-                  );
-                }
-                if (activity.type === 'topic') {
-                  return <TopicCard activity={activity} key={key} />;
-                }
-                return <ActivityRow activity={activity} key={key} />;
-              })}
-            </Flexbox>
+            items.map(({ activity, brief, key }) => {
+              if (brief) {
+                return (
+                  <BriefCard
+                    brief={brief}
+                    enableNavigation={false}
+                    key={key}
+                    onAfterAddComment={refreshActiveTask}
+                    onAfterResolve={refreshActiveTask}
+                  />
+                );
+              }
+              if (activity.type === 'topic') {
+                return <TopicCard activity={activity} key={key} />;
+              }
+              if (activity.type === 'comment') {
+                return <CommentCard activity={activity} key={key} />;
+              }
+              return <ActivityRow activity={activity} key={key} />;
+            })
           ) : (
             <Empty
               description={t('taskDetail.activitiesEmpty')}
@@ -150,9 +153,10 @@ const TaskActivities = memo(() => {
               style={{ marginTop: 8 }}
             />
           )}
-        </AccordionItem>
-      </Accordion>
-    </>
+          {activeTaskId && <CommentInput taskId={activeTaskId} />}
+        </Flexbox>
+      </AccordionItem>
+    </Accordion>
   );
 });
 

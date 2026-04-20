@@ -52,7 +52,7 @@ const TaskParentBar = memo(() => {
       });
   }, [parent?.identifier]);
 
-  if (!parent) return <Flexbox height={8} />;
+  if (!parent) return null;
 
   return (
     <Flexbox horizontal align="center" gap={8}>

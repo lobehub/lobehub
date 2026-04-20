@@ -2,10 +2,10 @@
 
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { cssVar } from 'antd-style';
-import { Minimize2, UserCircle2, X } from 'lucide-react';
+import { $getRoot } from 'lexical';
+import { ChevronUp, UserCircle2 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,57 +18,59 @@ import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 
-export interface CreateTaskContentProps {
+interface CreateTaskInlineEntryProps {
   agentId?: string;
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
 }
 
-const CreateTaskContent = memo<CreateTaskContentProps>(({ agentId, onCreated }) => {
+const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>(({ agentId, onCreated }) => {
   const { t } = useTranslation('chat');
-  const { close } = useModalContext();
 
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const [title, setTitle] = useState('');
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
+  const [instruction, setInstruction] = useState('');
 
   const editor = useEditor();
-  const instructionRef = useRef('');
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
-  const handleInline = useCallback(() => {
-    updateSystemStatus({ taskCreateInlineCollapsed: false }, 'expandTaskCreateInline');
-    close();
-  }, [close, updateSystemStatus]);
+  const handleCollapse = useCallback(() => {
+    updateSystemStatus({ taskCreateInlineCollapsed: true }, 'collapseTaskCreateInline');
+  }, [updateSystemStatus]);
 
   const handleContentChange = useCallback(() => {
-    if (!editor) return;
-    instructionRef.current = String(editor.getDocument('markdown') ?? '');
+    const lexicalEditor = editor?.getLexicalEditor?.();
+    if (!lexicalEditor) return;
+    lexicalEditor.getEditorState().read(() => {
+      setInstruction($getRoot().getTextContent());
+    });
   }, [editor]);
 
   const handleSubmit = useCallback(async () => {
-    const instruction = instructionRef.current.trim();
-    if (!instruction && !title.trim()) return;
+    const trimmed = instruction.trim();
+    if (!trimmed) return;
 
     const result = await createTask({
       assigneeAgentId,
-      instruction: instruction || title.trim(),
-      name: title.trim() || undefined,
+      instruction: trimmed,
       priority: priority || undefined,
     });
 
     if (result) {
-      close();
+      setPriority(0);
+      setAssigneeAgentId(agentId);
+      setInstruction('');
+      editor?.cleanDocument?.();
       onCreated?.({
         agentId: result.assigneeAgentId ?? undefined,
         identifier: result.identifier,
       });
     }
-  }, [assigneeAgentId, close, createTask, onCreated, priority, title]);
+  }, [agentId, assigneeAgentId, createTask, editor, instruction, onCreated, priority]);
 
   const handleSubmitRef = useRef(handleSubmit);
   useEffect(() => {
@@ -84,45 +86,27 @@ const CreateTaskContent = memo<CreateTaskContentProps>(({ agentId, onCreated }) 
   }, []);
 
   return (
-    <Flexbox onKeyDown={handleKeyDown}>
-      <Flexbox horizontal style={{ padding: '16px 24px 0' }}>
-        <Flexbox flex={1} style={{ minHeight: 180 }}>
-          <input
-            autoFocus
-            placeholder={t('createTask.titlePlaceholder')}
-            value={title}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'inherit',
-              fontFamily: 'inherit',
-              fontSize: 20,
-              fontWeight: 600,
-              lineHeight: 1.4,
-              outline: 'none',
-              padding: '4px 0',
-              width: '100%',
-            }}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <EditorCanvas
-            editor={editor}
-            floatingToolbar={false}
-            placeholder={t('createTask.instructionPlaceholder')}
-            style={{ fontSize: 14, paddingBottom: 16 }}
-            onContentChange={handleContentChange}
-          />
-        </Flexbox>
-        <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
-          <ActionIcon
-            icon={Minimize2}
-            title={t('createTask.expandToInline')}
-            onClick={handleInline}
-          />
-          <ActionIcon icon={X} onClick={close} />
-        </Flexbox>
+    <Block
+      style={{ overflow: 'hidden', position: 'relative' }}
+      variant={'outlined'}
+      onKeyDown={handleKeyDown}
+    >
+      <ActionIcon
+        icon={ChevronUp}
+        size={'small'}
+        style={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
+        title={t('createTask.collapse')}
+        onClick={handleCollapse}
+      />
+      <Flexbox style={{ fontSize: 14, minHeight: 120, padding: '12px 40px 0 16px' }}>
+        <EditorCanvas
+          editor={editor}
+          floatingToolbar={false}
+          placeholder={t('createTask.instructionPlaceholder')}
+          style={{ fontSize: 14, paddingBottom: 12 }}
+          onContentChange={handleContentChange}
+        />
       </Flexbox>
-
       <Flexbox
         horizontal
         align={'center'}
@@ -179,7 +163,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(({ agentId, onCreated }) 
         </Flexbox>
 
         <Button
-          disabled={isCreating}
+          disabled={isCreating || !instruction.trim()}
           loading={isCreating}
           shape={'round'}
           size={'small'}
@@ -189,8 +173,8 @@ const CreateTaskContent = memo<CreateTaskContentProps>(({ agentId, onCreated }) 
           {t('createTask.submit')}
         </Button>
       </Flexbox>
-    </Flexbox>
+    </Block>
   );
 });
 
-export default CreateTaskContent;
+export default CreateTaskInlineEntry;

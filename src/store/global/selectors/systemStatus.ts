@@ -26,6 +26,9 @@ const taskListViewOptions = (s: GlobalState) =>
     subGroupBy: 'none',
   };
 
+const taskCreateInlineCollapsed = (s: GlobalState): boolean =>
+  s.status.taskCreateInlineCollapsed ?? false;
+
 export const DEFAULT_HIDDEN_SECTIONS: string[] = ['memory'];
 
 const hiddenSidebarSections = (s: GlobalState): string[] =>
@@ -243,6 +246,7 @@ export const systemStatusSelectors = {
   pagePageSize,
   portalWidth,
   recentPageSize,
+  taskCreateInlineCollapsed,
   taskListViewOptions,
   sidebarItems,
   sessionGroupKeys,

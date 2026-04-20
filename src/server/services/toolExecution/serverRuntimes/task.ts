@@ -17,7 +17,7 @@ import { TaskService } from '@/server/services/task';
 
 import { type ServerRuntimeRegistration } from './types';
 
-const createTaskRuntime = ({
+export const createTaskRuntime = ({
   agentId,
   taskId,
   taskCaller,
@@ -50,6 +50,7 @@ const createTaskRuntime = ({
 
     const task = await taskModel.create({
       assigneeAgentId: agentId,
+      createdByAgentId: agentId,
       instruction: args.instruction,
       name: args.name,
       parentTaskId,

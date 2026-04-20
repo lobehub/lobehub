@@ -12,6 +12,7 @@ import { useTaskStore } from '@/store/task';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
+import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
 import TaskList from './TaskList';
@@ -30,6 +31,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   useFetchTaskList({ agentId, allAgents: !agentId });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const setViewOptions = useCallback(
     (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => {
@@ -57,7 +59,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
         left={<Breadcrumb agentId={agentId} />}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
+            {inlineCollapsed && (
+              <ActionIcon icon={Plus} size={DESKTOP_HEADER_ICON_SIZE} onClick={handleCreateTask} />
+            )}
             <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
           </Flexbox>
         }
@@ -68,7 +72,8 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           },
         }}
       />
-      <WideScreenContainer wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+        {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} />}
         <TaskList options={viewOptions} />
       </WideScreenContainer>
     </Flexbox>

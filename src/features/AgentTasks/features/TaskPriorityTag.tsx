@@ -1,7 +1,7 @@
 import type { IconType } from '@lobehub/icons';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { Dropdown, type MenuProps } from 'antd';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -29,6 +29,23 @@ const PRIORITY_META: Record<number, PriorityMeta> = {
   4: { icon: PriorityLowIcon, labelKey: 'priority.low', level: 4 },
 };
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  trigger: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    align-items: center;
+
+    color: ${cssVar.colorTextDescription};
+
+    transition: color ${cssVar.motionDurationMid};
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+}));
+
 interface TaskPriorityTagProps {
   children?: ReactNode;
   disableDropdown?: boolean;
@@ -41,7 +58,6 @@ interface TaskPriorityTagProps {
 const TaskPriorityTag = memo<TaskPriorityTagProps>(
   ({ children, disableDropdown, onChange, size = 16, priority, taskIdentifier }) => {
     const [loading, setLoading] = useState(false);
-    const isUrgent = priority === 1;
     const { t } = useTranslation('chat');
     const updateTask = useTaskStore((s) => s.updateTask);
     const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
@@ -69,16 +85,9 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
         Object.entries(PRIORITY_META).map(([key, value]) => {
           const level = Number(key);
           const IconRender = value.icon;
-          const isUrgentLevel = value.level === 1;
           return {
-            icon: (
-              <IconRender
-                color={isUrgentLevel ? cssVar.orange : cssVar.colorTextDescription}
-                size={16}
-              />
-            ),
+            icon: <IconRender color={cssVar.colorTextDescription} size={16} />,
             key,
-            extra: value.level,
             label: t(`taskDetail.${value.labelKey}`, { defaultValue: '' }),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
@@ -97,11 +106,9 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
       <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
     ) : (
       <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: '' })}>
-        <IconRender
-          color={isUrgent ? cssVar.orange : cssVar.colorTextDescription}
-          size={size}
-          onClick={(e) => e.stopPropagation()}
-        />
+        <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>
+          <IconRender size={size} />
+        </span>
       </Tooltip>
     );
 

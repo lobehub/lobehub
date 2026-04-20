@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
-import { MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
+import { ListTodoIcon, MessageSquarePlusIcon, RadioTowerIcon, SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -26,6 +26,7 @@ const Nav = memo(() => {
   const pathname = usePathname();
   const isProfileActive = pathname.includes('/profile');
   const isChannelActive = pathname.includes('/channel');
+  const isTasksActive = pathname.includes('/tasks');
   const router = useQueryRoute();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
@@ -38,7 +39,7 @@ const Nav = memo(() => {
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
     // If in agent sub-route, navigate back to agent chat first
-    if ((isProfileActive || isChannelActive) && agentId) {
+    if ((isProfileActive || isChannelActive || isTasksActive) && agentId) {
       router.push(urlJoin('/agent', agentId));
     }
     mutate();
@@ -50,6 +51,13 @@ const Nav = memo(() => {
         icon={MessageSquarePlusIcon}
         title={tTopic('actions.addNewTopic')}
         onClick={handleNewTopic}
+      />
+      <NavItem
+        icon={SearchIcon}
+        title={t('tab.search')}
+        onClick={() => {
+          toggleCommandMenu(true);
+        }}
       />
       {!hideProfile && (
         <NavItem
@@ -74,10 +82,12 @@ const Nav = memo(() => {
         />
       )}
       <NavItem
-        icon={SearchIcon}
-        title={t('tab.search')}
+        active={isTasksActive}
+        icon={ListTodoIcon}
+        title={t('tab.tasks')}
         onClick={() => {
-          toggleCommandMenu(true);
+          switchTopic(null, { skipRefreshMessage: true });
+          router.push(urlJoin('/agent', agentId!, 'tasks'));
         }}
       />
     </Flexbox>

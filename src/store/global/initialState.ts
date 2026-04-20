@@ -194,6 +194,11 @@ export interface SystemStatus {
    */
   sidebarSectionOrder?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
+  /**
+   * Whether the inline task create entry on the tasks page is collapsed (hidden).
+   * When true, the tasks page shows a "+" button in the header that opens the create modal.
+   */
+  taskCreateInlineCollapsed?: boolean;
   taskListViewOptions?: {
     groupBy: 'assignee' | 'none' | 'priority' | 'status';
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';

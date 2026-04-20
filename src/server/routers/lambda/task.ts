@@ -365,6 +365,46 @@ export const taskRouter = router({
       }
     }),
 
+  deleteComment: taskProcedure
+    .input(z.object({ commentId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const deleted = await ctx.taskModel.deleteComment(input.commentId);
+        if (!deleted) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        return { message: 'Comment deleted', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:deleteComment]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete comment',
+        });
+      }
+    }),
+
+  updateComment: taskProcedure
+    .input(z.object({ commentId: z.string(), content: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const comment = await ctx.taskModel.updateComment(input.commentId, input.content);
+        if (!comment) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        return { data: comment, message: 'Comment updated', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateComment]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update comment',
+        });
+      }
+    }),
+
   addDependency: taskProcedure
     .input(
       z.object({
@@ -472,10 +512,11 @@ export const taskRouter = router({
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:create]', error);
+      const causeMessage = error instanceof Error ? error.message : String(error);
       throw new TRPCError({
         cause: error,
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to create task',
+        message: causeMessage ? `Failed to create task: ${causeMessage}` : 'Failed to create task',
       });
     }
   }),

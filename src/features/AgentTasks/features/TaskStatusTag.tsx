@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
 import { Dropdown, type MenuProps } from 'antd';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import {
   CircleCheck,
@@ -66,6 +66,19 @@ const STATUS_META: Record<TaskStatus, StatusMeta> = {
 
 const USER_SELECTABLE_STATUSES: TaskStatus[] = ['backlog', 'completed', 'canceled'];
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  trigger: css`
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    transition: filter ${cssVar.motionDurationMid};
+
+    &:hover {
+      filter: brightness(0.85);
+    }
+  `,
+}));
+
 interface TaskStatusTagProps {
   children?: ReactNode;
   disableDropdown?: boolean;
@@ -126,12 +139,9 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
         <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
       ) : (
         <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: meta.label })}>
-          <Icon
-            color={meta.color}
-            icon={meta.icon}
-            size={size}
-            onClick={(e) => e.stopPropagation()}
-          />
+          <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>
+            <Icon color={meta.color} icon={meta.icon} size={size} />
+          </span>
         </Tooltip>
       ));
 

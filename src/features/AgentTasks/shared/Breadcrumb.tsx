@@ -13,6 +13,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
 import { isInboxAgentId } from './isInboxAgent';
+import { styles } from './style';
 
 interface BreadcrumbProps {
   /**
@@ -31,6 +32,9 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
     agentId ? agentSelectors.getAgentMetaById(agentId)(s) : undefined,
   );
   const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
+  const taskIdentifier = useTaskStore((s) =>
+    taskId ? s.taskDetailMap[taskId]?.identifier : undefined,
+  );
   const ancestors = useTaskStore(
     useShallow((s) => {
       if (!taskId) return [];
@@ -70,14 +74,22 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
 
   return (
     <AntBreadcrumb
+      className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} />}
       items={[
         {
           title: (
             <Link to={`/agent/${agentId}`}>
-              <Flexbox horizontal align={'center'} gap={6}>
-                <Avatar avatar={agentAvatar} background={agentMeta?.backgroundColor} size={18} />
-                <Text color={'inherit'} weight={500}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={6}
+                style={{ minWidth: 0, overflow: 'hidden' }}
+              >
+                <Flexbox style={{ flexShrink: 0 }}>
+                  <Avatar avatar={agentAvatar} background={agentMeta?.backgroundColor} size={18} />
+                </Flexbox>
+                <Text ellipsis color={'inherit'} weight={500}>
                   {agentName}
                 </Text>
               </Flexbox>
@@ -107,9 +119,30 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
           ? [
               {
                 title: (
-                  <Text color={'inherit'} weight={500}>
-                    {taskTitle || taskId}
-                  </Text>
+                  <span
+                    style={{
+                      alignItems: 'center',
+                      display: 'inline-flex',
+                      gap: 6,
+                      lineHeight: 1,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {taskIdentifier && (
+                      <Text
+                        color={'inherit'}
+                        style={{ flexShrink: 0 }}
+                        type={'secondary'}
+                        weight={500}
+                      >
+                        {taskIdentifier}
+                      </Text>
+                    )}
+                    <Text ellipsis color={'inherit'} weight={500}>
+                      {taskTitle || taskId}
+                    </Text>
+                  </span>
                 ),
               },
             ]

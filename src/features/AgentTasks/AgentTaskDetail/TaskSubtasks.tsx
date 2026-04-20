@@ -1,6 +1,6 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
 import { Accordion, AccordionItem, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Divider, Tree } from 'antd';
+import { ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
 import { ChevronDown, ListTodoIcon } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
 import { styles } from '../shared/style';
@@ -69,18 +70,39 @@ const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
 
 const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
   return tree.map((node) => {
-    const isCompleted = node.task.status === 'completed';
     const status = toTaskStatus(node.task.status);
 
     return {
       children: toTreeData(node.children),
-      icon: (
-        <div onClick={(e) => e.stopPropagation()}>
-          <TaskStatusTag size={16} status={status} taskIdentifier={node.task.identifier} />
-        </div>
-      ),
       key: node.task.identifier,
-      title: node.task.name || node.task.identifier,
+      title: (
+        <Flexbox
+          horizontal
+          align="center"
+          gap={8}
+          style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+        >
+          <span
+            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TaskPriorityTag
+              priority={node.task.priority}
+              size={14}
+              taskIdentifier={node.task.identifier}
+            />
+          </span>
+          <span
+            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TaskStatusTag size={14} status={status} taskIdentifier={node.task.identifier} />
+          </span>
+          <Text ellipsis fontSize={13}>
+            {node.task.name || node.task.identifier}
+          </Text>
+        </Flexbox>
+      ),
     };
   });
 };
@@ -107,31 +129,29 @@ const TaskSubtasks = memo(() => {
   if (subtasks.length === 0) return null;
 
   return (
-    <>
-      <Divider dashed />
-      <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
-        <AccordionItem
-          itemKey="subtasks"
-          paddingBlock={4}
-          paddingInline={8}
-          title={
-            <Flexbox horizontal align="center" gap={8}>
-              <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
-              <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-                {t('taskDetail.subtasks')}
-              </Text>
-              <TaskSubtaskProgressTag
-                currentIdentifier={taskId}
-                subtasks={subtasks}
-                onSubtaskClick={handleNavigate}
-              />
-            </Flexbox>
-          }
-        >
+    <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
+      <AccordionItem
+        itemKey="subtasks"
+        paddingBlock={4}
+        paddingInline={8}
+        title={
+          <Flexbox horizontal align="center" gap={8}>
+            <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
+            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+              {t('taskDetail.subtasks')}
+            </Text>
+            <TaskSubtaskProgressTag
+              currentIdentifier={taskId}
+              subtasks={subtasks}
+              onSubtaskClick={handleNavigate}
+            />
+          </Flexbox>
+        }
+      >
+        <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
           <Tree
             blockNode
             defaultExpandAll
-            showIcon
             showLine
             className={styles.subtaskTree}
             style={{ marginTop: 8 }}
@@ -143,9 +163,9 @@ const TaskSubtasks = memo(() => {
               handleNavigate(String(key));
             }}
           />
-        </AccordionItem>
-      </Accordion>
-    </>
+        </ConfigProvider>
+      </AccordionItem>
+    </Accordion>
   );
 });
 

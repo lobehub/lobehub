@@ -155,6 +155,9 @@ export class TaskService {
       if (c.authorAgentId) agentIds.add(c.authorAgentId);
       if (c.authorUserId) userIds.add(c.authorUserId);
     }
+    // Creator of the task itself (agent takes precedence over user)
+    if (task.createdByAgentId) agentIds.add(task.createdByAgentId);
+    else if (task.createdByUserId) userIds.add(task.createdByUserId);
 
     const [authorMap, enrichedBriefs] = await Promise.all([
       this.resolveAuthors(agentIds, userIds),
@@ -163,7 +166,17 @@ export class TaskService {
         .catch(() => briefs.map((b) => ({ ...b, agents: [] }))),
     ]);
 
+    const creatorId = task.createdByAgentId ?? task.createdByUserId;
+    const createdActivity: TaskDetailActivity | null = task.createdAt
+      ? {
+          author: creatorId ? authorMap.get(creatorId) : undefined,
+          time: toISO(task.createdAt),
+          type: 'created' as const,
+        }
+      : null;
+
     const activities: TaskDetailActivity[] = [
+      ...(createdActivity ? [createdActivity] : []),
       ...topics.map((t) => ({
         author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
         id: t.topicId ?? undefined,
@@ -204,6 +217,7 @@ export class TaskService {
             ? authorMap.get(c.authorUserId)
             : undefined,
         content: c.content,
+        id: c.id,
         time: toISO(c.createdAt),
         type: 'comment' as const,
       })),

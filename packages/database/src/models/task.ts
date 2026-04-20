@@ -692,4 +692,13 @@ export class TaskModel {
       .returning();
     return result.length > 0;
   }
+
+  async updateComment(id: string, content: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .update(taskComments)
+      .set({ content, updatedAt: new Date() })
+      .where(and(eq(taskComments.id, id), eq(taskComments.userId, this.userId)))
+      .returning();
+    return comment;
+  }
 }

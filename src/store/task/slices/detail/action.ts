@@ -55,6 +55,18 @@ export class TaskDetailSliceActionImpl {
     await this.internal_refreshTaskDetail(taskId);
   };
 
+  deleteComment = async (commentId: string, taskId?: string): Promise<void> => {
+    await taskService.deleteComment(commentId);
+    const id = taskId ?? this.#get().activeTaskId;
+    if (id) await this.internal_refreshTaskDetail(id);
+  };
+
+  updateComment = async (commentId: string, content: string, taskId?: string): Promise<void> => {
+    await taskService.updateComment(commentId, content);
+    const id = taskId ?? this.#get().activeTaskId;
+    if (id) await this.internal_refreshTaskDetail(id);
+  };
+
   addDependency = async (
     taskId: string,
     dependsOnId: string,

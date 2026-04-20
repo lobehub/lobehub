@@ -119,6 +119,26 @@ describe('TaskModel', () => {
       expect(task2.seq).toBe(1);
     });
 
+    it('should persist createdByAgentId when provided', async () => {
+      const model = new TaskModel(serverDB, userId);
+      await createAgent('agent-creator');
+      const result = await model.create({
+        createdByAgentId: 'agent-creator',
+        instruction: 'Created via agent tool',
+      });
+
+      expect(result.createdByAgentId).toBe('agent-creator');
+      expect(result.createdByUserId).toBe(userId);
+    });
+
+    it('should default createdByAgentId to null when omitted', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const result = await model.create({ instruction: 'Created via UI' });
+
+      expect(result.createdByAgentId).toBeNull();
+      expect(result.createdByUserId).toBe(userId);
+    });
+
     it('should handle concurrent creates without seq collision', async () => {
       const model = new TaskModel(serverDB, userId);
 

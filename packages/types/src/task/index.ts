@@ -4,7 +4,7 @@ export type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paus
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
-export type TaskActivityType = 'brief' | 'comment' | 'topic';
+export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
 
 // ── Config types ──
 

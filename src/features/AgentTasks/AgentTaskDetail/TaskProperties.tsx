@@ -6,12 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-import AssigneeAgentSelector from '../features/AssigneeAgentSelector';
-import AssigneeAvatar from '../features/AssigneeAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
-import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import TaskScheduleConfig from './TaskScheduleConfig';
 
 interface StatusMeta {
@@ -46,8 +43,6 @@ const TaskProperties = memo(() => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
-  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
   if (!taskId) return null;
 
@@ -99,27 +94,6 @@ const TaskProperties = memo(() => {
           <TaskTriggerTag heartbeatInterval={heartbeatInterval} mode="inline" />
         </Block>
       </TaskScheduleConfig>
-
-      {assigneeAgentId && (
-        <AssigneeAgentSelector
-          currentAgentId={assigneeAgentId}
-          disabled={status === 'running'}
-          taskIdentifier={taskId!}
-        >
-          <Block
-            clickable
-            horizontal
-            align="center"
-            gap={8}
-            paddingBlock={4}
-            paddingInline={'6px 8px'}
-            variant={'borderless'}
-          >
-            <AssigneeAvatar agentId={assigneeAgentId} size={20} />
-            <Text weight={500}>{assigneeMeta?.title}</Text>
-          </Block>
-        </AssigneeAgentSelector>
-      )}
     </Block>
   );
 });

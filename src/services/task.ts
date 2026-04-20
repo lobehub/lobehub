@@ -91,6 +91,12 @@ class TaskService {
   addComment = async (id: string, content: string, opts?: { briefId?: string; topicId?: string }) =>
     lambdaClient.task.addComment.mutate({ content, id, ...opts });
 
+  deleteComment = async (commentId: string) =>
+    lambdaClient.task.deleteComment.mutate({ commentId });
+
+  updateComment = async (commentId: string, content: string) =>
+    lambdaClient.task.updateComment.mutate({ commentId, content });
+
   addDependency = async (
     taskId: string,
     dependsOnId: string,

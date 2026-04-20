@@ -407,6 +407,7 @@
   "taskDetail.activities": "Activities",
   "taskDetail.activities.fallback.brief": "posted a brief",
   "taskDetail.activities.fallback.comment": "left a comment",
+  "taskDetail.activities.fallback.created": "created the task",
   "taskDetail.activities.fallback.topic": "started a topic",
   "taskDetail.activitiesEmpty": "No activity yet",
   "taskDetail.blockedBy": "Blocked by {{id}}",

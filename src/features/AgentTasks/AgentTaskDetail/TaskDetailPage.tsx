@@ -1,5 +1,4 @@
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
 import { memo, useEffect } from 'react';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
@@ -10,9 +9,9 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
-import CommentInput from './CommentInput';
 import TaskActivities from './TaskActivities';
-import TaskDetailDeleteAction from './TaskDetailDeleteAction';
+import TaskDetailAssignee from './TaskDetailAssignee';
+import TaskDetailHeaderActions from './TaskDetailHeaderActions';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
 import TaskInstruction from './TaskInstruction';
@@ -42,10 +41,10 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
       <NavHeader
-        right={<TaskDetailDeleteAction />}
         left={
           <>
             <Breadcrumb agentId={agentId} taskId={taskId} />
+            <TaskDetailHeaderActions />
             {saveStatus !== 'idle' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
           </>
         }
@@ -62,34 +61,29 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
             <Loading debugId="TaskDetail" />
           ) : (
             <>
-              <Flexbox
-                horizontal
-                align={'flex-start'}
-                gap={16}
-                justify={'space-between'}
-                style={{ paddingTop: 24 }}
-              >
-                <Flexbox flex={1}>
-                  <TaskDetailTitleInput />
-                  <Flexbox align={'flex-start'} gap={16}>
+              <Flexbox gap={4} style={{ paddingBlock: 24 }}>
+                <TaskDetailTitleInput />
+                <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
+                  <Flexbox align={'flex-start'} flex={1} gap={16}>
                     <TaskParentBar />
-                    <TaskModelConfig />
+                    <Flexbox horizontal align={'center'} gap={8}>
+                      <TaskDetailAssignee />
+                      <TaskModelConfig />
+                    </Flexbox>
                     <TaskDetailRunPauseAction />
                   </Flexbox>
+                  <TaskProperties />
                 </Flexbox>
-                <TaskProperties />
               </Flexbox>
-              <Divider />
-              <TaskInstruction />
-              <TaskSubtasks />
-              <TaskActivities />
+              <Flexbox gap={24}>
+                <TaskInstruction />
+                <TaskSubtasks />
+                <TaskActivities />
+              </Flexbox>
             </>
           )}
         </WideScreenContainer>
       </Flexbox>
-      <WideScreenContainer style={{ flexShrink: 0, paddingBottom: 8 }}>
-        <CommentInput taskId={taskId} />
-      </WideScreenContainer>
     </Flexbox>
   );
 });

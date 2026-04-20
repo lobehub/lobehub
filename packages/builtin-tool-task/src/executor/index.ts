@@ -68,9 +68,12 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
     } catch (error) {
       log('[TaskExecutor] createTask - error:', error);
-      const message = error instanceof Error ? error.message : 'Failed to create task';
+      const message = error instanceof Error ? error.message : String(error) || 'Unknown error';
+      const content = message.startsWith('Failed to create task')
+        ? message
+        : `Failed to create task: ${message}`;
       return {
-        content: `Failed to create task: ${message}`,
+        content,
         error: { message, type: 'CreateTaskFailed' },
         success: false,
       };
