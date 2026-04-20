@@ -90,12 +90,15 @@ const Tool = memo<GroupToolProps>(
     );
 
     const hasError = !!result?.error;
-    const looksLikeWaitingForToolResult =
-      !hasError &&
-      !isArgumentsStreaming &&
-      (!result || result.content === LOADING_FLAT || !result.content);
+    // This tool's own result is the source of truth for completion. The
+    // message-level toolCalling flag stays true while sibling tools are still
+    // running, so without this guard a finished tool flips back into "loading".
+    const hasFinishedResult =
+      hasError || (!!result && result.content !== LOADING_FLAT && !!result.content);
+    const looksLikeWaitingForToolResult = !hasError && !isArgumentsStreaming && !hasFinishedResult;
     const isToolCallingFallback = looksLikeWaitingForToolResult && isAssistantMessageBusy;
-    const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
+    const isToolCalling =
+      !hasFinishedResult && (isToolCallingFromOperation || isToolCallingFallback);
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
     // Only allow toggle when has custom render and not in pending/reject/abort state
