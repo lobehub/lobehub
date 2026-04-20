@@ -110,31 +110,102 @@ export const WebOnboardingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Update an existing document by applying byte-exact SEARCH/REPLACE hunks. This is the preferred way to persist new information incrementally — it is cheaper, safer, and less error-prone than rewriting the full document with writeDocument. Each hunk's search must match the current document exactly (whitespace, punctuation, casing). If the search appears multiple times, add surrounding context to make it unique or set replaceAll=true. On failure (HUNK_NOT_FOUND / HUNK_AMBIGUOUS), adjust the search string and retry; do not fall back to writeDocument unless most of the document must change.",
+        'Update an existing document by applying structured hunks. Preferred over writeDocument for every incremental edit — cheaper, safer, less error-prone. Each hunk picks ONE mode:\n' +
+        '- `replace` (default): byte-exact SEARCH → REPLACE. For small textual tweaks.\n' +
+        '- `delete`: remove the byte-exact SEARCH region.\n' +
+        '- `deleteLines`: drop lines [startLine, endLine] (1-based, inclusive). Use the line numbers shown in <current_*_document>.\n' +
+        '- `insertAt`: insert `content` before `line`. Use `line = totalLines + 1` to append to the end; `line = 1` to prepend.\n' +
+        '- `replaceLines`: replace lines [startLine, endLine] with `content`.\n' +
+        'Line-based hunks REQUIRE the line numbers from the injected <current_soul_document> / <current_user_persona> view. On failure (HUNK_NOT_FOUND / HUNK_AMBIGUOUS / LINE_OUT_OF_RANGE / LINE_OVERLAP), re-check the injected document and retry with corrected hunks; do NOT fall back to writeDocument unless most of the document must change.',
       name: WebOnboardingApiName.updateDocument,
       parameters: {
         properties: {
           hunks: {
-            description: 'Ordered list of SEARCH/REPLACE hunks applied sequentially.',
+            description:
+              'Ordered list of hunks. Content-based hunks (replace/delete) run first in order; line-based hunks (deleteLines/insertAt/replaceLines) run afterward, highest line first.',
             items: {
-              additionalProperties: false,
-              properties: {
-                replace: {
-                  description: 'Replacement text; may be empty to delete the matched region.',
-                  type: 'string',
+              oneOf: [
+                {
+                  additionalProperties: false,
+                  properties: {
+                    mode: { const: 'replace', type: 'string' },
+                    replace: {
+                      description: 'Replacement text; may be empty to delete the matched region.',
+                      type: 'string',
+                    },
+                    replaceAll: {
+                      description: 'Replace every occurrence of search. Defaults to false.',
+                      type: 'boolean',
+                    },
+                    search: {
+                      description: 'Byte-exact substring to locate in the current document.',
+                      type: 'string',
+                    },
+                  },
+                  required: ['search', 'replace'],
+                  type: 'object',
                 },
-                replaceAll: {
-                  description:
-                    'Replace every occurrence of search. Defaults to false; leave unset unless you explicitly want a global replace.',
-                  type: 'boolean',
+                {
+                  additionalProperties: false,
+                  properties: {
+                    mode: { const: 'delete', type: 'string' },
+                    replaceAll: { type: 'boolean' },
+                    search: {
+                      description: 'Byte-exact substring to remove.',
+                      type: 'string',
+                    },
+                  },
+                  required: ['mode', 'search'],
+                  type: 'object',
                 },
-                search: {
-                  description: 'Byte-exact substring to locate in the current document.',
-                  type: 'string',
+                {
+                  additionalProperties: false,
+                  properties: {
+                    endLine: {
+                      description: 'Inclusive 1-based end line.',
+                      type: 'integer',
+                    },
+                    mode: { const: 'deleteLines', type: 'string' },
+                    startLine: {
+                      description: 'Inclusive 1-based start line.',
+                      type: 'integer',
+                    },
+                  },
+                  required: ['mode', 'startLine', 'endLine'],
+                  type: 'object',
                 },
-              },
-              required: ['search', 'replace'],
-              type: 'object',
+                {
+                  additionalProperties: false,
+                  properties: {
+                    content: {
+                      description: 'Text to insert; may span multiple lines (use \\n).',
+                      type: 'string',
+                    },
+                    line: {
+                      description:
+                        '1-based line to insert before. Use `totalLines + 1` to append to the end.',
+                      type: 'integer',
+                    },
+                    mode: { const: 'insertAt', type: 'string' },
+                  },
+                  required: ['mode', 'line', 'content'],
+                  type: 'object',
+                },
+                {
+                  additionalProperties: false,
+                  properties: {
+                    content: {
+                      description: 'Replacement text; may be empty to delete the range.',
+                      type: 'string',
+                    },
+                    endLine: { type: 'integer' },
+                    mode: { const: 'replaceLines', type: 'string' },
+                    startLine: { type: 'integer' },
+                  },
+                  required: ['mode', 'startLine', 'endLine', 'content'],
+                  type: 'object',
+                },
+              ],
             },
             minItems: 1,
             type: 'array',

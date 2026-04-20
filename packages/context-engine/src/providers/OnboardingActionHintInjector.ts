@@ -52,18 +52,18 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     // Phase-specific persistence reminders
     if (phase.includes('Agent Identity')) {
       hints.push(
-        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then persist SOUL.md. If SOUL.md is already non-empty, call updateDocument(type="soul", hunks=[{search, replace}]) to amend only the changed lines; if empty, use writeDocument(type="soul") for the initial write.',
+        'When the user settles on a name and emoji: call saveUserQuestion with agentName and agentEmoji, then persist SOUL.md. If SOUL.md is already non-empty, call updateDocument(type="soul") with the hunk mode that matches your edit — `insertAt`/`replaceLines`/`deleteLines` when you can read the line numbers from <current_soul_document>, or `replace` for a textual tweak. If empty, use writeDocument(type="soul") for the initial write.',
       );
     } else if (phase.includes('User Identity')) {
       hints.push(
         'THIS TURN, as soon as the user tells you their name, call saveUserQuestion with fullName — do NOT wait until you also know their role. Persist the name immediately.',
       );
       hints.push(
-        'Seed the persona document the moment you have ANY useful fact about the user (just a name, just a role, or both). If empty, call writeDocument(type="persona") with a short initial draft containing whatever you know so far (even one line). If already non-empty, call updateDocument(type="persona", hunks=[{search, replace}]) to add the new lines. Do NOT defer persistence until more facts arrive.',
+        'Seed the persona document the moment you have ANY useful fact about the user (just a name, just a role, or both). If empty, call writeDocument(type="persona") with a short initial draft containing whatever you know so far (even one line). If already non-empty, call updateDocument(type="persona") with `insertAt` at the end of the right section (use `line = totalLines + 1` to append) or `replace` for a textual tweak. Do NOT defer persistence until more facts arrive.',
       );
     } else if (phase.includes('Discovery')) {
       hints.push(
-        'Each turn where you learn a new fact (pain point, goal, preference, workflow detail, interest), call updateDocument(type="persona", hunks=[{search, replace}]) to append that fact to User Persona BEFORE replying. This is the default every turn — not an end-of-phase action. Do NOT save facts only in memory waiting for a final full write. After sufficient discovery (5-6 exchanges), also call saveUserQuestion with interests and responseLanguage. Use writeDocument(type="persona") only if the document is still empty.',
+        'Each turn where you learn a new fact (pain point, goal, preference, workflow detail, interest), call updateDocument(type="persona") BEFORE replying. Preferred shape: `{ mode: "insertAt", line: <line shown in <current_user_persona>>, content: "- new fact" }`. This is the default every turn — not an end-of-phase action. Do NOT save facts only in memory waiting for a final full write. After sufficient discovery (5-6 exchanges), also call saveUserQuestion with interests and responseLanguage. Use writeDocument(type="persona") only if the document is still empty.',
       );
       hints.push(
         'EARLY EXIT: If the user signals they want to finish (e.g., "好了", "谢谢", "行", "Done", asking for summary, or any completion signal), STOP exploring immediately. Save whatever fields you have (call saveUserQuestion with interests even if partial), present a brief summary, then call finishOnboarding. Do NOT continue asking questions after a completion signal.',
@@ -75,7 +75,7 @@ export class OnboardingActionHintInjector extends BaseVirtualLastUserContentProv
     }
 
     hints.push(
-      'PERSISTENCE RULE: Call the persistence tools (saveUserQuestion, writeDocument, updateDocument) to save information as you collect it — simply acknowledging in conversation is NOT enough. For document writes: use writeDocument only for the first write when the document is empty; for every subsequent edit use updateDocument with SEARCH/REPLACE hunks.',
+      'PERSISTENCE RULE: Call the persistence tools (saveUserQuestion, writeDocument, updateDocument) to save information as you collect it — simply acknowledging in conversation is NOT enough. For document writes: use writeDocument only for the first write when the document is empty; for every subsequent edit use updateDocument with the appropriate hunk mode (`insertAt` / `replaceLines` / `deleteLines` for line-based edits, `replace` / `delete` for byte-exact textual edits). The injected <current_*_document> view shows each line prefixed with its 1-based number and `→` — use those numbers for line-based hunks.',
     );
     hints.push(
       'REMINDER: If the user says "好了", "谢谢", "行", "Done", "Thanks", or gives any completion signal at ANY phase, you MUST wrap up immediately and call finishOnboarding. This overrides all other phase rules.',
