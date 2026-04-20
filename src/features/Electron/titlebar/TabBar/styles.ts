@@ -70,10 +70,10 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   tabActive: css`
-    background-color: ${cssVar.colorBgContainer};
+    background-color: ${cssVar.colorBgElevated};
 
     &:hover {
-      background-color: ${cssVar.colorBgContainer};
+      background-color: ${cssVar.colorBgElevated};
     }
   `,
   tabIcon: css`
