@@ -37,9 +37,8 @@ jobs:
 
       - name: Login to GHCR
         run: |
-          # GH_PAT must have scopes: repo, workflow, write:packages
-          echo "${{ secrets.GH_PAT }}" | docker login ghcr.io \
-            -u ${{ github.repository_owner }} --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u ${{ github.actor }} --password-stdin
 
       - name: Read versions
         id: version

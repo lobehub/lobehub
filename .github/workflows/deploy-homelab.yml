@@ -7,16 +7,17 @@ name: Deploy to homelab
 #   - kubeconfig setup
 #   - pulumi up / preview
 #
-# GitOps flow:
-#   1. build-lobehub-image.yml builds an image and commits the new tag
-#      to deployment/homelab/Pulumi.dev.yaml on canary
-#   2. That push triggers this workflow via the path trigger below
+# Triggers:
+#   1. workflow_run — fires after every successful "Build lobehub image" run.
+#      This is the primary deploy path: the build also commits the new tag
+#      to Pulumi.dev.yaml, but that commit uses GITHUB_TOKEN and therefore
+#      does not itself trigger downstream workflows (GitHub's anti-recursion).
+#   2. push — direct edits to deployment/homelab/** by a human (config,
+#      secrets, Pulumi code) still deploy via this path.
+#   3. workflow_dispatch — manual override with a pinned image tag.
 #
 # Note: this fork uses canary (not main) as the default/deployable branch,
 # matching upstream lobehub's convention.
-#
-# The workflow_run trigger is kept as a fallback for builds that do not
-# update Pulumi.dev.yaml (e.g. build-only manual runs).
 #
 # Pulumi project: "lobehub" (Pulumi.yaml name: lobehub)
 # Stack: mrsimpson/lobehub/dev
