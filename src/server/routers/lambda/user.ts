@@ -282,11 +282,35 @@ export const userRouter = router({
       z.object({
         hunks: z
           .array(
-            z.object({
-              replace: z.string(),
-              replaceAll: z.boolean().optional(),
-              search: z.string(),
-            }),
+            z.union([
+              z.object({
+                mode: z.literal('replace').optional(),
+                replace: z.string(),
+                replaceAll: z.boolean().optional(),
+                search: z.string(),
+              }),
+              z.object({
+                mode: z.literal('delete'),
+                replaceAll: z.boolean().optional(),
+                search: z.string(),
+              }),
+              z.object({
+                endLine: z.number().int(),
+                mode: z.literal('deleteLines'),
+                startLine: z.number().int(),
+              }),
+              z.object({
+                content: z.string(),
+                line: z.number().int(),
+                mode: z.literal('insertAt'),
+              }),
+              z.object({
+                content: z.string(),
+                endLine: z.number().int(),
+                mode: z.literal('replaceLines'),
+                startLine: z.number().int(),
+              }),
+            ]),
           )
           .min(1),
         type: z.enum(['soul', 'persona']),
