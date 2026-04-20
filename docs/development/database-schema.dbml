@@ -516,8 +516,9 @@ table document_histories {
   saved_at "timestamp with time zone" [not null]
 
   indexes {
-    (document_id, saved_at) [name: 'document_histories_document_id_saved_at_idx']
-    (user_id, saved_at) [name: 'document_histories_user_id_saved_at_idx']
+    document_id [name: 'document_histories_document_id_idx']
+    user_id [name: 'document_histories_user_id_idx']
+    saved_at [name: 'document_histories_saved_at_idx']
   }
 }
 
@@ -1523,7 +1524,8 @@ table tasks {
   status text [not null, default: 'backlog']
   priority integer [default: 0]
   sort_order integer [default: 0]
-  heartbeat_interval integer [default: 300]
+  automation_mode text
+  heartbeat_interval integer
   heartbeat_timeout integer
   last_heartbeat_at "timestamp with time zone"
   schedule_pattern text
@@ -1550,6 +1552,7 @@ table tasks {
     parent_task_id [name: 'tasks_parent_task_id_idx']
     status [name: 'tasks_status_idx']
     priority [name: 'tasks_priority_idx']
+    automation_mode [name: 'tasks_automation_mode_idx']
     (status, last_heartbeat_at) [name: 'tasks_heartbeat_idx']
   }
 }
@@ -1631,6 +1634,8 @@ table topics {
   metadata jsonb
   trigger text
   mode text
+  status text
+  completed_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1643,6 +1648,8 @@ table topics {
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
     trigger [name: 'topics_trigger_idx']
+    status [name: 'topics_status_idx']
+    (user_id, completed_at) [name: 'topics_user_id_completed_at_idx']
     () [name: 'topics_extract_status_gin_idx']
   }
 }
