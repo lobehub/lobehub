@@ -1,4 +1,4 @@
-import { Plans } from '@lobechat/types';
+import type { Plans } from '@lobechat/types';
 import { Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
@@ -32,13 +32,11 @@ const PlanTag = memo<PlanTagProps>(({ type = PlanType.Preview }) => {
     );
   }
 
-  const isFree = type === Plans.Free;
-
   return (
     <Link
       style={{ cursor: 'pointer' }}
       target={isDesktop ? '_blank' : undefined}
-      to={urlJoin(isDesktop ? OFFICIAL_URL : '/', isFree ? '/settings/plans' : '/settings/usage')}
+      to={urlJoin(isDesktop ? OFFICIAL_URL : '/', '/settings/plans')}
     >
       <PlanIcon plan={type} size={22} type={'tag'} />
     </Link>
