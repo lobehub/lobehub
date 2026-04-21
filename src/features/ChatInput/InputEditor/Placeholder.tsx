@@ -6,50 +6,62 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
+export type PlaceholderVariant = 'default' | 'followUp';
+
 interface PlaceholderProps {
   showAgentAssignmentHint?: boolean;
+  variant?: PlaceholderVariant;
 }
 
-const Placeholder = memo<PlaceholderProps>(({ showAgentAssignmentHint = false }) => {
-  const useCmdEnterToSend = useUserStore(preferenceSelectors.useCmdEnterToSend);
-  const wrapperShortcut = useCmdEnterToSend
-    ? KeyEnum.Enter
-    : combineKeys([KeyEnum.Mod, KeyEnum.Enter]);
-  const i18nKey = showAgentAssignmentHint
-    ? 'sendPlaceholderWithAgentAssignment'
-    : 'sendPlaceholder';
+const Placeholder = memo<PlaceholderProps>(
+  ({ showAgentAssignmentHint = false, variant = 'default' }) => {
+    const useCmdEnterToSend = useUserStore(preferenceSelectors.useCmdEnterToSend);
+    const wrapperShortcut = useCmdEnterToSend
+      ? KeyEnum.Enter
+      : combineKeys([KeyEnum.Mod, KeyEnum.Enter]);
+    const { t } = useTranslation('chat');
 
-  // Don't remove this line for i18n reactivity
-  void useTranslation('chat');
+    if (variant === 'followUp') {
+      const i18nKey = showAgentAssignmentHint
+        ? 'followUpPlaceholderWithAgentAssignment'
+        : 'followUpPlaceholder';
 
-  return (
-    <Flexbox horizontal align={'center'} as={'span'} gap={4} wrap={'wrap'}>
-      <Trans
-        i18nKey={i18nKey}
-        ns={'chat'}
-        components={{
-          hotkey: (
-            <Trans
-              i18nKey={'input.warpWithKey'}
-              ns={'chat'}
-              components={{
-                key: (
-                  <Hotkey
-                    as={'span'}
-                    keys={wrapperShortcut}
-                    style={{ color: 'inherit' }}
-                    styles={{ kbdStyle: { color: 'inhert' } }}
-                    variant={'borderless'}
-                  />
-                ),
-              }}
-            />
-          ),
-        }}
-      />
-      {!showAgentAssignmentHint && '...'}
-    </Flexbox>
-  );
-});
+      return <span>{t(i18nKey)}</span>;
+    }
+
+    const i18nKey = showAgentAssignmentHint
+      ? 'sendPlaceholderWithAgentAssignment'
+      : 'sendPlaceholder';
+
+    return (
+      <Flexbox horizontal align={'center'} as={'span'} gap={4} wrap={'wrap'}>
+        <Trans
+          i18nKey={i18nKey}
+          ns={'chat'}
+          components={{
+            hotkey: (
+              <Trans
+                i18nKey={'input.warpWithKey'}
+                ns={'chat'}
+                components={{
+                  key: (
+                    <Hotkey
+                      as={'span'}
+                      keys={wrapperShortcut}
+                      style={{ color: 'inherit' }}
+                      styles={{ kbdStyle: { color: 'inhert' } }}
+                      variant={'borderless'}
+                    />
+                  ),
+                }}
+              />
+            ),
+          }}
+        />
+        {!showAgentAssignmentHint && '...'}
+      </Flexbox>
+    );
+  },
+);
 
 export default Placeholder;

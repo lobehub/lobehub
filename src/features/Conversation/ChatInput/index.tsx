@@ -27,6 +27,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import QueueTray from './QueueTray';
+import { getConversationChatInputUiState } from './utils';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -184,6 +185,10 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
+    const { placeholderVariant, showStopButton } = getConversationChatInputUiState({
+      isInputEmpty,
+      isInputLoading,
+    });
     // Input stays enabled during agent execution — messages are queued
     const disabled = isInputEmpty || isUploadingFiles;
 
@@ -227,7 +232,7 @@ const ChatInput = memo<ChatInputProps>(
 
     const sendButtonProps: SendButtonProps = {
       disabled,
-      generating: isInputLoading,
+      generating: showStopButton,
       onStop: stopGenerating,
       ...customSendButtonProps,
     };
@@ -269,6 +274,7 @@ const ChatInput = memo<ChatInputProps>(
               borderRadius={12}
               extraActionItems={extraActionItems}
               leftContent={leftContent}
+              placeholderVariant={placeholderVariant}
               runtimeConfigSlot={runtimeConfigSlot}
               sendAreaPrefix={sendAreaPrefix}
               showRuntimeConfig={showRuntimeConfig}
