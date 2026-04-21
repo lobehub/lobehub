@@ -1,5 +1,5 @@
 import { parse } from '@lobechat/conversation-flow';
-import { type MessageMapScope, type TraceEventPayloads } from '@lobechat/types';
+import { type TraceEventPayloads } from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 
@@ -34,19 +34,10 @@ export class MessageInternalsActionImpl {
 
   internal_dispatchMessage = (
     payload: MessageDispatch,
-    context?: { operationId?: string; threadId?: string | null },
+    context?: { operationId?: string },
   ): void => {
     // Get full conversation context (including scope) from operation or global state
-    const baseCtx = this.#get().internal_getConversationContext(context);
-    // Callers that stream into a subagent Thread pass an explicit `threadId`
-    // alongside the main `operationId`. Override the operation-derived
-    // threadId so the dispatch lands in the thread's messagesMap bucket
-    // instead of the main topic's. Scope snaps to `thread` so messageMapKey
-    // doesn't fall through the groupId/main branches.
-    const ctx =
-      context?.threadId !== undefined && context.threadId !== null
-        ? { ...baseCtx, threadId: context.threadId, scope: 'thread' as MessageMapScope }
-        : baseCtx;
+    const ctx = this.#get().internal_getConversationContext(context);
     log(
       '[internal_dispatchMessage] context: agentId=%s, topicId=%s, threadId=%s, scope=%s',
       ctx.agentId,

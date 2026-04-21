@@ -98,6 +98,10 @@ function setupIpcCapture() {
 }
 
 function createMockStore(overrides: Record<string, any> = {}) {
+  // Hand out a fresh AbortController + monotonically increasing sub-op id
+  // for each subagent run, mirroring `startOperation`'s contract just
+  // enough that the executor can build dispatchers + completion calls.
+  let subOpCounter = 0;
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
@@ -105,6 +109,13 @@ function createMockStore(overrides: Record<string, any> = {}) {
     internal_toggleToolCallingStreaming: vi.fn(),
     refreshThreads: vi.fn(async () => {}),
     replaceMessages: vi.fn(),
+    startOperation: vi.fn(() => {
+      subOpCounter += 1;
+      return {
+        abortController: new AbortController(),
+        operationId: `sub-op-${subOpCounter}`,
+      };
+    }),
     ...overrides,
   } as any;
 }
@@ -1632,11 +1643,22 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      const threadId = mockCreateThread.mock.calls[0][0].id;
+      // The thread-scoped sub-op opened by `beginSubagentRun` is the
+      // dispatchCtx.operationId for every Thread bucket dispatch — so
+      // we identify it via the `startOperation` call with type
+      // 'subagentThread' and filter dispatches against that id, instead
+      // of inspecting threadId directly (the threadId override at the
+      // dispatch boundary is gone — context flows through the standard
+      // operation registry path now).
+      const startOpCalls = (store.startOperation as ReturnType<typeof vi.fn>).mock;
+      const subOpIdx = startOpCalls.calls.findIndex(([p]: any) => p?.type === 'subagentThread');
+      expect(subOpIdx).toBeGreaterThanOrEqual(0);
+      const subOperationId = startOpCalls.results[subOpIdx].value.operationId;
+
       const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
       const terminalDispatch = dispatches.find(
         ([payload, ctx]: any) =>
-          ctx?.threadId === threadId &&
+          ctx?.operationId === subOperationId &&
           payload.type === 'createMessage' &&
           payload.value.role === 'assistant' &&
           payload.value.content === spawnResult,
@@ -1701,15 +1723,17 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
 
     /**
-     * Thread-scoped in-memory streaming: the Thread view must receive
-     * create + update dispatches carrying the spawn's `threadId` so
-     * subagent text / tools / tool results show up as they stream
-     * (matching the main bubble's UX). `fetchAndReplaceMessages` only
-     * refreshes the MAIN topic bucket, so without these dispatches the
-     * Thread stays empty until the user re-opens the Thread and SWR
-     * hits DB.
+     * Thread-scoped in-memory streaming. Per-spawn sub-operation is
+     * opened via `startOperation({ type: 'subagentThread',
+     * parentOperationId, context: { ..., threadId, scope: 'thread' } })`,
+     * and every Thread bucket dispatch carries that sub-op's id —
+     * `internal_getConversationContext` resolves the Thread context
+     * through the standard operation registry path (no threadId-override
+     * hack at the dispatch boundary). Without these dispatches the
+     * Thread view would stay empty until SWR re-fetches on next open
+     * (`fetchAndReplaceMessages` is main-topic scoped).
      */
-    it('streams subagent create/update dispatches into the thread messagesMap bucket', async () => {
+    it('streams subagent create/update dispatches via a thread-scoped sub-operation', async () => {
       const { store } = await runWithEvents([
         ccInit(),
         ccToolUse('msg_main', 'toolu_task', 'Task', {
@@ -1724,11 +1748,29 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
       const threadId = mockCreateThread.mock.calls[0][0].id;
+      const startOpMock = store.startOperation as ReturnType<typeof vi.fn>;
 
-      // Filter to calls that target the subagent Thread's bucket.
-      const threadDispatches = dispatches.filter(([, ctx]: any) => ctx?.threadId === threadId);
+      // Sub-op opened with `subagentThread` type, parented to the main op,
+      // carrying the Thread's ConversationContext (threadId + thread scope)
+      // so dispatches resolve into the Thread bucket via the standard
+      // `internal_getConversationContext` path.
+      const subOpCallIdx = startOpMock.mock.calls.findIndex(
+        ([p]: any) => p?.type === 'subagentThread',
+      );
+      expect(subOpCallIdx).toBeGreaterThanOrEqual(0);
+      const subOpCallArg = startOpMock.mock.calls[subOpCallIdx][0];
+      expect(subOpCallArg).toMatchObject({
+        type: 'subagentThread',
+        parentOperationId: 'op-1',
+        context: { threadId, scope: 'thread' },
+      });
+      const subOperationId = startOpMock.mock.results[subOpCallIdx].value.operationId;
+
+      const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const threadDispatches = dispatches.filter(
+        ([, ctx]: any) => ctx?.operationId === subOperationId,
+      );
 
       // Seed: user + first in-thread assistant + tool message must each
       // get a createMessage dispatch so the Thread renders the moment
@@ -1772,12 +1814,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(toolResultUpdate).toBeDefined();
 
       // Main bucket must NOT receive updates targeting the in-thread tool
-      // message id — keep main stream clean of subagent bleed.
+      // message id — keep the main bubble clean of subagent bleed.
       const mainLeaks = dispatches.filter(
         ([payload, ctx]: any) =>
-          !ctx?.threadId && payload.type === 'updateMessage' && payload.id === toolMsgId,
+          ctx?.operationId !== subOperationId &&
+          payload.type === 'updateMessage' &&
+          payload.id === toolMsgId,
       );
       expect(mainLeaks).toHaveLength(0);
+
+      // Sub-op is marked completed once the spawn's tool_result lands +
+      // `finalizeSubagentRun` writes the terminal assistant. Cancel /
+      // cleanup cascade then flow through the existing parent/child
+      // operation linkage instead of any subagent-specific bookkeeping.
+      expect(store.completeOperation).toHaveBeenCalledWith(subOperationId);
     });
 
     /**

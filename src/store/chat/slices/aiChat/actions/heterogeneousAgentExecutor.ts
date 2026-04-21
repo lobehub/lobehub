@@ -10,6 +10,7 @@ import type {
   ChatToolPayload,
   ConversationContext,
   HeterogeneousProviderConfig,
+  MessageMapScope,
   UIChatMessage,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
@@ -138,10 +139,13 @@ interface ToolPersistenceState {
 }
 
 /**
- * Thread-scoped in-memory dispatcher for a single subagent run. Wraps
- * `internal_dispatchMessage` with the subagent Thread's `threadId`
- * override so every create/update lands in the thread's `messagesMap`
- * bucket (scope=thread) instead of the main topic's.
+ * Thread-scoped in-memory dispatcher for a single subagent run. The
+ * caller binds it to a per-spawn sub-operation whose
+ * `OperationContext.threadId` + `scope: 'thread'` cause
+ * `internal_dispatchMessage` to route every create/update into the
+ * Thread's `messagesMap` bucket through the SAME context-resolution
+ * path the main agent uses — no special-cased threadId override on the
+ * dispatch boundary.
  *
  * Subagent streaming mirrors the main agent's gateway-handler flow:
  * DB writes are authoritative (see `persistSubagent*Chunk` +
@@ -323,9 +327,18 @@ interface SubagentRunState {
    * Thread-scoped store dispatcher — mutates the thread's messagesMap
    * bucket in sync with the DB writes so the UI streams subagent text /
    * tools / results token-by-token (same UX as the main bubble). Created
-   * once per spawn alongside the Thread row.
+   * once per spawn alongside the Thread row + the per-spawn sub-op.
    */
   stream: SubagentStoreDispatcher;
+  /**
+   * Per-spawn sub-operation id. Created via `startOperation` with
+   * `parentOperationId` = the main run's op + `context.threadId` set, so
+   * `internal_getConversationContext` resolves dispatches to the Thread
+   * bucket without any threadId-override hack at the dispatch boundary.
+   * Cancellation and cleanup cascade automatically via the existing
+   * parent/child operation linkage.
+   */
+  subOperationId: string;
   /** The subagent Thread this spawn's messages belong to. */
   threadId: string;
 }
@@ -371,13 +384,18 @@ const ensureSubagentRun = async (
   context: ConversationContext,
   subagentRuns: Map<string, SubagentRunState>,
   /**
-   * Builds a thread-scoped store dispatcher for the given threadId.
-   * Closed over `get` + `operationId` in the caller so the helper here
-   * doesn't need to know about the store or operation registry. Called
-   * exactly once per spawn (on lazy-create) — subsequent turn boundaries
-   * reuse `run.stream`.
+   * Starts the per-spawn sub-operation (so `internal_dispatchMessage`
+   * resolves into the Thread bucket via the standard operation context
+   * path) and returns its id + a thread-scoped dispatcher bound to it.
+   * Closed over `get` + parent `operationId` + `context` in the caller
+   * so this helper doesn't need to know about the store / operation
+   * registry. Called exactly once per spawn (on lazy-create) —
+   * subsequent turn boundaries reuse `run.stream` + `run.subOperationId`.
    */
-  makeStream: (threadId: string) => SubagentStoreDispatcher,
+  beginSubagentRun: (threadId: string) => {
+    stream: SubagentStoreDispatcher;
+    subOperationId: string;
+  },
   /**
    * Invoked once per Thread creation (the lazy-create path) so the
    * caller can invalidate SWR caches / push the new thread into any
@@ -453,7 +471,7 @@ const ensureSubagentRun = async (
       return undefined;
     }
 
-    const stream = makeStream(threadId);
+    const { stream, subOperationId } = beginSubagentRun(threadId);
     // Seed the thread bucket with user + first assistant so the UI
     // renders the Thread body the moment it opens — without this the
     // thread's messagesMap entry stays empty until something triggers a
@@ -487,6 +505,7 @@ const ensureSubagentRun = async (
       lastChainParentId: firstAssistantId,
       state: { payloads: [], persistedIds: new Set() },
       stream,
+      subOperationId,
       threadId,
     };
     subagentRuns.set(subagentCtx.parentToolCallId, run);
@@ -564,7 +583,10 @@ const persistSubagentToolChunk = async (
   context: ConversationContext,
   subagentRuns: Map<string, SubagentRunState>,
   toolMsgIdByCallId: Map<string, string>,
-  makeStream: (threadId: string) => SubagentStoreDispatcher,
+  beginSubagentRun: (threadId: string) => {
+    stream: SubagentStoreDispatcher;
+    subOperationId: string;
+  },
   onThreadCreated?: (threadId: string) => void,
 ) => {
   const run = await ensureSubagentRun(
@@ -572,7 +594,7 @@ const persistSubagentToolChunk = async (
     mainAssistantMessageId,
     context,
     subagentRuns,
-    makeStream,
+    beginSubagentRun,
     onThreadCreated,
   );
   if (!run) return;
@@ -649,7 +671,10 @@ const persistSubagentTextChunk = async (
   mainAssistantMessageId: string,
   context: ConversationContext,
   subagentRuns: Map<string, SubagentRunState>,
-  makeStream: (threadId: string) => SubagentStoreDispatcher,
+  beginSubagentRun: (threadId: string) => {
+    stream: SubagentStoreDispatcher;
+    subOperationId: string;
+  },
   onThreadCreated?: (threadId: string) => void,
 ) => {
   const run = await ensureSubagentRun(
@@ -657,7 +682,7 @@ const persistSubagentTextChunk = async (
     mainAssistantMessageId,
     context,
     subagentRuns,
-    makeStream,
+    beginSubagentRun,
     onThreadCreated,
   );
   if (!run) return;
@@ -706,7 +731,15 @@ const finalizeSubagentRun = async ({
   context,
   subagentRuns,
   resultContent,
+  completeSubOp,
 }: {
+  /**
+   * Marks the run's sub-operation as completed once the terminal
+   * persistence steps land. Closed over `get().completeOperation` in
+   * the caller so this helper stays free of store coupling. Idempotent
+   * — `completeOperation` no-ops on already-completed ops.
+   */
+  completeSubOp: (subOperationId: string) => void;
   context: ConversationContext;
   parentToolCallId: string;
   resultContent?: string;
@@ -757,6 +790,8 @@ const finalizeSubagentRun = async ({
       console.error('[HeterogeneousAgent] Failed to create subagent terminal assistant:', err);
     }
   }
+
+  completeSubOp(run.subOperationId);
 };
 
 /**
@@ -914,29 +949,55 @@ export const executeHeterogeneousAgent = async (
   };
 
   /**
-   * Build a thread-scoped dispatcher bound to this executor's operation.
-   * `internal_dispatchMessage`'s `threadId` override (with scope=thread)
-   * snaps every create/update into the thread's `messagesMap` bucket,
-   * so the subagent run's UI updates don't bleed into the main topic.
-   * Reuses the main `operationId` so failure / completion state still
-   * hangs off the same operation the user started.
+   * Open the per-spawn sub-operation that carries the subagent Thread's
+   * `ConversationContext` (threadId + scope='thread'), then build a
+   * dispatcher bound to that sub-op's id. This routes every create /
+   * update through the standard `internal_getConversationContext` ->
+   * `messageMapKey` resolution path the main agent already uses, so no
+   * per-dispatch threadId override is needed at the store boundary.
+   *
+   * Lifecycle: the sub-op is a child of the main `operationId` (so
+   * cancellation cascades + cleanup are free). It's marked completed
+   * inside `finalizeSubagentRun` once the spawn's tool_result arrives
+   * on main, and again as a fallback in `onComplete` for any spawn
+   * whose tool_result never landed (CLI crash, abort).
    */
-  const makeSubagentStream = (threadId: string): SubagentStoreDispatcher => {
-    const dispatchCtx = { operationId, threadId };
+  const beginSubagentRun = (
+    threadId: string,
+  ): { stream: SubagentStoreDispatcher; subOperationId: string } => {
+    const subOp = get().startOperation({
+      context: { ...context, scope: 'thread' as MessageMapScope, threadId },
+      parentOperationId: operationId,
+      type: 'subagentThread',
+    });
+    const dispatchCtx = { operationId: subOp.operationId };
     return {
-      create(msg) {
-        get().internal_dispatchMessage(
-          { id: msg.id, type: 'createMessage', value: msg as any },
-          dispatchCtx,
-        );
+      stream: {
+        create(msg) {
+          get().internal_dispatchMessage(
+            { id: msg.id, type: 'createMessage', value: msg as any },
+            dispatchCtx,
+          );
+        },
+        update(id, value) {
+          get().internal_dispatchMessage(
+            { id, type: 'updateMessage', value: value as any },
+            dispatchCtx,
+          );
+        },
       },
-      update(id, value) {
-        get().internal_dispatchMessage(
-          { id, type: 'updateMessage', value: value as any },
-          dispatchCtx,
-        );
-      },
+      subOperationId: subOp.operationId,
     };
+  };
+
+  /**
+   * Mark a per-spawn sub-operation completed. Wrapper around
+   * `completeOperation` so module-level helpers (`finalizeSubagentRun`)
+   * stay free of store coupling. Idempotent: `completeOperation` on an
+   * already-completed op is a no-op.
+   */
+  const completeSubagentOp = (subOperationId: string) => {
+    get().completeOperation(subOperationId);
   };
 
   /** Look up a subagent run by the tool_call_id of ANY tool inside it. */
@@ -1047,6 +1108,7 @@ export const executeHeterogeneousAgent = async (
             persistQueue = persistQueue.then(() => {
               if (!subagentRuns.has(toolCallId)) return;
               return finalizeSubagentRun({
+                completeSubOp: completeSubagentOp,
                 context,
                 parentToolCallId: toolCallId,
                 resultContent: content,
@@ -1199,7 +1261,7 @@ export const executeHeterogeneousAgent = async (
                     mainAsstId,
                     context,
                     subagentRuns,
-                    makeSubagentStream,
+                    beginSubagentRun,
                     onSubagentThreadCreated,
                   ),
                 );
@@ -1218,7 +1280,7 @@ export const executeHeterogeneousAgent = async (
                     mainAsstId,
                     context,
                     subagentRuns,
-                    makeSubagentStream,
+                    beginSubagentRun,
                     onSubagentThreadCreated,
                   ),
                 );
@@ -1243,7 +1305,7 @@ export const executeHeterogeneousAgent = async (
                       context,
                       subagentRuns,
                       toolMsgIdByCallId,
-                      makeSubagentStream,
+                      beginSubagentRun,
                       onSubagentThreadCreated,
                     ),
                   );
@@ -1327,6 +1389,7 @@ export const executeHeterogeneousAgent = async (
         // in-thread assistant has its final text before fetchAndReplace.
         for (const parentId of subagentRuns.keys()) {
           await finalizeSubagentRun({
+            completeSubOp: completeSubagentOp,
             context,
             parentToolCallId: parentId,
             subagentRuns,
