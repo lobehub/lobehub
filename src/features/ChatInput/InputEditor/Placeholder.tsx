@@ -22,11 +22,7 @@ const Placeholder = memo<PlaceholderProps>(
     const { t } = useTranslation('chat');
 
     if (variant === 'followUp') {
-      const i18nKey = showAgentAssignmentHint
-        ? 'followUpPlaceholderWithAgentAssignment'
-        : 'followUpPlaceholder';
-
-      return <span>{t(i18nKey)}</span>;
+      return <span>{t('followUpPlaceholder')}</span>;
     }
 
     const i18nKey = showAgentAssignmentHint
