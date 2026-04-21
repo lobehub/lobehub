@@ -4,25 +4,11 @@ import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/s
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { GroupBotIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cx } from 'antd-style';
-import { Compass, type LucideIcon, Search, Settings } from 'lucide-react';
-import { type ComponentType, memo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AgentArgs, ClaudeCodeApiName } from '../../types';
-
-type IconComponent = LucideIcon | ComponentType<{ className?: string; size?: number }>;
-
-/**
- * Known subagent templates shipped with CC. `subagent_type` on the tool call
- * is matched against this map; unknown values fall back to `GroupBotIcon` and
- * the raw type string, so user-defined subagents still render sensibly.
- */
-const SUBAGENT_TYPES: Record<string, { icon: IconComponent; label: string }> = {
-  'Explore': { icon: Search, label: 'Explore' },
-  'Plan': { icon: Compass, label: 'Plan' },
-  'general-purpose': { icon: GroupBotIcon, label: 'General purpose' },
-  'statusline-setup': { icon: Settings, label: 'Statusline setup' },
-};
+import { resolveCCSubagentType } from '../subagentTypes';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -78,9 +64,9 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
 
     const isShiny = isArgumentsStreaming || isLoading;
 
-    const known = subagentType ? SUBAGENT_TYPES[subagentType] : undefined;
-    const Icon = known?.icon ?? GroupBotIcon;
-    const labelText = known?.label ?? subagentType ?? fallbackLabel;
+    const resolved = resolveCCSubagentType(subagentType);
+    const Icon = resolved?.icon ?? GroupBotIcon;
+    const labelText = resolved?.label ?? fallbackLabel;
 
     return (
       <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
