@@ -152,7 +152,6 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
         options={[
           { icon: <Icon icon={LayoutList} />, label: t('taskList.view.list'), value: 'list' },
           {
-            disabled: true,
             icon: <Icon icon={LayoutGrid} />,
             label: t('taskList.view.board'),
             value: 'kanban',
@@ -160,16 +159,18 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
         ]}
         onChange={(value) => setViewMode(value as 'kanban' | 'list')}
       />
-      <Form
-        className={styles.form}
-        items={formItems}
-        itemsType={'flat'}
-        size={'small'}
-        variant={'borderless'}
-        styles={{
-          item: { padding: 0 },
-        }}
-      />
+      {viewMode === 'list' && (
+        <Form
+          className={styles.form}
+          items={formItems}
+          itemsType={'flat'}
+          size={'small'}
+          variant={'borderless'}
+          styles={{
+            item: { padding: 0 },
+          }}
+        />
+      )}
     </Flexbox>
   );
 

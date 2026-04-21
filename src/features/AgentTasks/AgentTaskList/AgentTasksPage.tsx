@@ -3,16 +3,19 @@ import { Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors, taskListSelectors } from '@/store/task/selectors';
 
 import { createTaskModal } from '../CreateTaskModal';
 import Breadcrumb from '../shared/Breadcrumb';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
+import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import { normalizeTaskListViewOptions } from './listViewOptions';
 import TaskList from './TaskList';
@@ -27,6 +30,8 @@ interface AgentTasksPageProps {
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   const navigate = useNavigate();
+  const viewMode = useTaskStore(taskListSelectors.viewMode);
+  const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ agentId, allAgents: !agentId });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
@@ -56,7 +61,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        left={<Breadcrumb agentId={agentId} />}
+        left={
+          <>
+            <Breadcrumb agentId={agentId} />
+            {saveStatus !== 'idle' && <AutoSaveHint saveStatus={saveStatus} />}
+          </>
+        }
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {inlineCollapsed && (
@@ -72,10 +82,16 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
           },
         }}
       />
-      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
-        {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} />}
-        <TaskList options={viewOptions} />
-      </WideScreenContainer>
+      {viewMode === 'kanban' ? (
+        <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+          <KanbanBoard agentId={agentId} />
+        </Flexbox>
+      ) : (
+        <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+          {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} />}
+          <TaskList options={viewOptions} />
+        </WideScreenContainer>
+      )}
     </Flexbox>
   );
 });
