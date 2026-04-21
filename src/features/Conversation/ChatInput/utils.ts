@@ -2,6 +2,7 @@ import { type PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeh
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;
+  showSendMenu: boolean;
   showStopButton: boolean;
 }
 
@@ -18,6 +19,7 @@ export const getConversationChatInputUiState = ({
 
   return {
     placeholderVariant: showFollowUpComposer ? 'followUp' : 'default',
+    showSendMenu: !isInputLoading,
     showStopButton: showFollowUpComposer,
   };
 };

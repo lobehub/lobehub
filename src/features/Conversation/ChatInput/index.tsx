@@ -185,12 +185,13 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const { placeholderVariant, showStopButton } = getConversationChatInputUiState({
+    const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
       isInputEmpty,
       isInputLoading,
     });
     // Input stays enabled during agent execution — messages are queued
     const disabled = isInputEmpty || isUploadingFiles;
+    const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
@@ -235,6 +236,9 @@ const ChatInput = memo<ChatInputProps>(
       generating: showStopButton,
       onStop: stopGenerating,
       ...customSendButtonProps,
+      ...(shouldUsePlainSendButton
+        ? { shape: customSendButtonProps?.shape ?? 'round' }
+        : undefined),
     };
 
     const defaultContent = (
@@ -293,7 +297,7 @@ const ChatInput = memo<ChatInputProps>(
         mentionItems={mentionItems}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
-        sendMenu={sendMenu}
+        sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
         chatInputEditorRef={(instance) => {
           if (instance) {
