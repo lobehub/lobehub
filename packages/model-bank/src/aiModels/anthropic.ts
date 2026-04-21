@@ -272,36 +272,6 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
-    displayName: 'Claude 3 Haiku',
-    id: 'claude-3-haiku-20240307',
-    maxOutput: 4096,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 0.5, '5m': 0.3 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2024-03-07',
-    settings: {
-      extendParams: ['disableContextCaching'],
-    },
-    type: 'chat',
-  },
 ];
 
 export const allModels = [...anthropicChatModels];

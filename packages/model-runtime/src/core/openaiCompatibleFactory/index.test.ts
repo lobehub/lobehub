@@ -2845,7 +2845,7 @@ describe('LobeOpenAICompatibleFactory', () => {
       vi.spyOn(instance['client'].models, 'list').mockResolvedValue({
         data: [
           { created: 1_698_218_177, id: 'gpt-4o', object: 'model' },
-          { id: 'claude-3-haiku-20240307', object: 'model' },
+          { id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', object: 'model' },
           { created: 1_698_318_177 * 1000, id: 'gpt-4o-mini', object: 'model' },
           { created: 1_736_499_509_125, id: 'gemini', object: 'model' },
         ],
@@ -2899,53 +2899,37 @@ describe('LobeOpenAICompatibleFactory', () => {
         {
           abilities: {
             functionCall: true,
+            reasoning: true,
+            structuredOutput: true,
             vision: true,
           },
           contextWindowTokens: 200_000,
           description:
-            'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
-          displayName: 'Claude 3 Haiku',
+            "Claude 3.7 Sonnet is Anthropic's fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous flagship Claude 3 Opus on many intelligence benchmarks.",
+          displayName: 'Claude 3.7 Sonnet',
           enabled: false,
-          id: 'claude-3-haiku-20240307',
-          maxOutput: 4096,
+          id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+          maxOutput: 64_000,
           pricing: {
             units: [
               {
-                name: 'textInput_cacheRead',
-                rate: 0.03,
-                strategy: 'fixed',
-                unit: 'millionTokens',
-              },
-              {
                 name: 'textInput',
-                rate: 0.25,
+                rate: 3,
                 strategy: 'fixed',
                 unit: 'millionTokens',
               },
               {
                 name: 'textOutput',
-                rate: 1.25,
+                rate: 15,
                 strategy: 'fixed',
-                unit: 'millionTokens',
-              },
-              {
-                lookup: {
-                  prices: {
-                    '1h': 0.5,
-                    '5m': 0.3,
-                  },
-                  pricingParams: ['ttl'],
-                },
-                name: 'textInput_cacheWrite',
-                strategy: 'lookup',
                 unit: 'millionTokens',
               },
             ],
           },
-          providerId: 'anthropic',
-          releasedAt: '2024-03-07',
+          providerId: 'bedrock',
+          releasedAt: '2025-02-24',
           settings: {
-            extendParams: ['disableContextCaching'],
+            extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
           },
           source: 'builtin',
           type: 'chat',
