@@ -81,14 +81,6 @@ export const useTopicItemDropdownMenu = ({
 
     return [
       {
-        icon: <Icon icon={Star} />,
-        key: 'favorite',
-        label: fav ? t('actions.unfavorite') : t('actions.favorite'),
-        onClick: () => {
-          favoriteTopic(id, !fav);
-        },
-      },
-      {
         icon: <Icon icon={isCompleted ? Circle : CheckCircle2} />,
         key: 'markCompleted',
         label: isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted'),
@@ -98,6 +90,17 @@ export const useTopicItemDropdownMenu = ({
           } else {
             markTopicCompleted(id);
           }
+        },
+      },
+      {
+        type: 'divider' as const,
+      },
+      {
+        icon: <Icon icon={Star} />,
+        key: 'favorite',
+        label: fav ? t('actions.unfavorite') : t('actions.favorite'),
+        onClick: () => {
+          favoriteTopic(id, !fav);
         },
       },
       {
