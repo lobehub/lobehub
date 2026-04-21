@@ -1,3 +1,4 @@
+import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
@@ -14,7 +15,6 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
-import type { ChatTopicMetadata, ChatTopicStatus } from '@/types/topic';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';

@@ -1,3 +1,4 @@
+import type { ChatTopicStatus } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
@@ -27,7 +28,6 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
-import type { ChatTopicStatus } from '@/types/topic';
 
 interface TopicItemDropdownMenuProps {
   fav?: boolean;

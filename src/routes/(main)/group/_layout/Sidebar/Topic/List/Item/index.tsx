@@ -1,3 +1,4 @@
+import type { ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
@@ -15,7 +16,6 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
-import type { ChatTopicStatus } from '@/types/topic';
 
 import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';

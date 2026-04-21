@@ -19,11 +19,7 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import {
-  preferenceSelectors,
-  systemAgentSelectors,
-  userGeneralSettingsSelectors,
-} from '@/store/user/selectors';
+import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
@@ -321,12 +317,14 @@ export class ChatTopicActionImpl {
     enable: boolean,
     {
       agentId,
+      excludeStatuses,
       excludeTriggers,
       groupId,
       pageSize: customPageSize,
       isInbox,
     }: {
       agentId?: string;
+      excludeStatuses?: string[];
       excludeTriggers?: string[];
       groupId?: string;
       isInbox?: boolean;
@@ -336,8 +334,8 @@ export class ChatTopicActionImpl {
     const pageSize = customPageSize || 20;
     const effectiveExcludeTriggers =
       excludeTriggers && excludeTriggers.length > 0 ? excludeTriggers : undefined;
-    const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
-    const effectiveExcludeStatuses = includeCompleted ? undefined : ['completed'];
+    const effectiveExcludeStatuses =
+      excludeStatuses && excludeStatuses.length > 0 ? excludeStatuses : undefined;
     // Use topicMapKey to generate the container key for topic data map
     const containerKey = topicMapKey({ agentId, groupId });
     const hasValidContainer = !!(groupId || agentId);
