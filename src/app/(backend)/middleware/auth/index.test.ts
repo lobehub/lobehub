@@ -22,6 +22,9 @@ vi.mock('@lobechat/types', () => ({
   },
 }));
 
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
 vi.mock('@/utils/errorResponse', () => ({
   createErrorResponse: vi.fn(),
 }));
@@ -101,6 +104,47 @@ describe('checkAuth', () => {
 
     expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
       error: oidcError,
+      provider: 'mock',
+    });
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should return SystemTimeNotMatchError when jose ERR_JWT_EXPIRED is preserved via cause', async () => {
+    const oidcRequest = new Request('https://example.com', {
+      headers: { 'Oidc-Auth': 'expired-token' },
+    });
+    const joseCause = Object.assign(new Error('"exp" claim timestamp check failed'), {
+      code: 'ERR_JWT_EXPIRED',
+    });
+    const oidcError = Object.assign(new Error('JWT token validation failed'), {
+      cause: joseCause,
+      code: 'UNAUTHORIZED',
+    });
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(oidcError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(createErrorResponse).toHaveBeenCalledWith(
+      ChatErrorType.SystemTimeNotMatchError,
+      oidcError,
+    );
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should return 500 when OIDC JWKS infrastructure fails (plain Error, no UNAUTHORIZED code)', async () => {
+    const oidcRequest = new Request('https://example.com', {
+      headers: { 'Oidc-Auth': 'any-token' },
+    });
+    // Simulates getVerificationKey() throwing due to misconfigured JWKS_KEY —
+    // a plain Error without `code: 'UNAUTHORIZED'` must bubble up as 500,
+    // not 401, so ops gets paged instead of the client being asked to re-auth.
+    const infraError = new Error('JWKS_KEY public key retrieval failed: invalid JWK');
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(infraError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.InternalServerError, {
+      error: infraError,
       provider: 'mock',
     });
     expect(mockHandler).not.toHaveBeenCalled();
