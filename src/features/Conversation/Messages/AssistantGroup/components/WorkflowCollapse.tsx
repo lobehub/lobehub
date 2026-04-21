@@ -1,5 +1,5 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
@@ -317,8 +317,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     const expandToggleIcon = expandLevel === 'semi' ? Maximize2 : Minimize2;
 
-    const handleToggleExpand = (e: React.MouseEvent | React.KeyboardEvent) => {
-      e.stopPropagation();
+    const handleToggleExpand = () => {
       if (expandLevel === 'semi') {
         setExpandLevel('full');
         userOpenedRef.current = true;
@@ -327,51 +326,22 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
     };
 
-    const handleToggleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleToggleExpand(e);
-      }
-    };
-
     const expandToggleNode = (
       <AnimatePresence initial={false}>
         {showExpandToggle && (
           <motion.div
             animate={{ opacity: 1, scale: 1 }}
-            aria-label={expandToggleLabel}
             exit={{ opacity: 0, scale: 0.9 }}
             initial={{ opacity: 0, scale: 0.9 }}
-            role="button"
-            tabIndex={0}
-            title={expandToggleLabel}
+            style={{ display: 'flex' }}
             transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
-            style={{
-              cursor: 'pointer',
-              display: 'flex',
-              flex: 'none',
-              outline: 'none',
-              padding: 2,
-            }}
-            onClick={handleToggleExpand}
-            onKeyDown={handleToggleKeyDown}
           >
-            <AnimatePresence initial={false} mode="wait">
-              <motion.span
-                animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                exit={{ opacity: 0, rotate: 60, scale: 0.85 }}
-                initial={{ opacity: 0, rotate: -60, scale: 0.85 }}
-                key={expandLevel}
-                style={{ display: 'flex' }}
-                transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
-              >
-                <Icon
-                  color={cssVar.colorTextSecondary}
-                  icon={expandToggleIcon}
-                  size={WORKFLOW_EXPAND_TOGGLE_ICON_SIZE}
-                />
-              </motion.span>
-            </AnimatePresence>
+            <ActionIcon
+              icon={expandToggleIcon}
+              size={{ blockSize: 24, size: WORKFLOW_EXPAND_TOGGLE_ICON_SIZE }}
+              title={expandToggleLabel}
+              onClick={handleToggleExpand}
+            />
           </motion.div>
         )}
       </AnimatePresence>
