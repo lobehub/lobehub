@@ -5,7 +5,6 @@ export const moonshotChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      search: true,
       structuredOutput: true,
       video: true,
       vision: true,
@@ -27,7 +26,6 @@ export const moonshotChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-20',
     settings: {
       extendParams: ['enableReasoning'],
-      searchImpl: 'params',
     },
     type: 'chat',
   },
