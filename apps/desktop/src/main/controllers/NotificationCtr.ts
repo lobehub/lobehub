@@ -179,6 +179,28 @@ export default class NotificationCtr extends ControllerModule {
   }
 
   /**
+   * Set the app-level badge count (dock red dot on macOS, Unity counter on Linux,
+   * overlay icon on Windows). Pass 0 to clear.
+   *
+   * On macOS we pair `app.setBadgeCount` with `app.dock.setBadge` — the former
+   * keeps Electron's internal count (cross-platform), the latter is the
+   * reliable Dock repaint trigger. Note: macOS Focus Mode / DND suppresses the
+   * badge visually until the user exits Focus.
+   */
+  @IpcMethod()
+  setBadgeCount(count: number): void {
+    try {
+      const next = Math.max(0, Math.floor(count));
+      app.setBadgeCount(next);
+      if (macOS() && app.dock) {
+        app.dock.setBadge(next > 0 ? String(next) : '');
+      }
+    } catch (error) {
+      logger.error('Failed to set badge count:', error);
+    }
+  }
+
+  /**
    * Check if the main window is hidden
    */
   @IpcMethod()

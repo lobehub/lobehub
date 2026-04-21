@@ -22,6 +22,8 @@ export const FORM_STYLE: FormProps = {
 };
 export const MOBILE_HEADER_ICON_SIZE: ActionIconProps['size'] = { blockSize: 36, size: 22 };
 export const DESKTOP_HEADER_ICON_SIZE: ActionIconProps['size'] = { blockSize: 32, size: 20 };
+export const DESKTOP_HEADER_ICON_SMALL_SIZE: ActionIconProps['size'] = { blockSize: 28, size: 16 };
+
 export const HEADER_ICON_SIZE = (mobile?: boolean) =>
   mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE;
 export const PWA_INSTALL_ID = 'pwa-install';

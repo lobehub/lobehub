@@ -12,6 +12,7 @@ import {
 } from './agentEvals';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
+import { documentHistories } from './documentHistory';
 import { documents, files, knowledgeBases } from './file';
 import { generationBatches, generations, generationTopics } from './generation';
 import { messageGroups, messages, messagesFiles, messageTranslates } from './message';
@@ -246,6 +247,18 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   }),
   topics: many(topicDocuments),
   chunks: many(documentChunks),
+  histories: many(documentHistories),
+}));
+
+export const documentHistoriesRelations = relations(documentHistories, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentHistories.documentId],
+    references: [documents.id],
+  }),
+  user: one(users, {
+    fields: [documentHistories.userId],
+    references: [users.id],
+  }),
 }));
 
 export const topicDocumentsRelations = relations(topicDocuments, ({ one }) => ({

@@ -60,6 +60,7 @@
   "response.520": "Ci scusiamo, il server ha riscontrato un problema imprevisto che ha impedito il completamento della richiesta. Riprova più tardi.",
   "response.522": "Ci scusiamo, la connessione al server è scaduta. Potrebbe trattarsi di una rete instabile o di un server temporaneamente non disponibile. Riprova più tardi.",
   "response.524": "Ci scusiamo, il server ha impiegato troppo tempo in attesa di una risposta. Riprova più tardi.",
+  "response.AccountDeactivated": "Il tuo account è stato disattivato o sospeso. Ciò potrebbe essere dovuto a motivi di policy, sicurezza o revise dell'account. Ti preghiamo di contattare l'assistenza del fornitore per ricevere supporto.",
   "response.AgentRuntimeError": "Errore di esecuzione del modello linguistico Lobe. Risolvi il problema o riprova utilizzando le informazioni seguenti.",
   "response.ComfyUIBizError": "Si è verificato un errore durante la richiesta al servizio ComfyUI. Risolvi il problema o riprova utilizzando le informazioni seguenti.",
   "response.ComfyUIEmptyResult": "Nessuna immagine generata da ComfyUI. Controlla la configurazione del modello o riprova.",

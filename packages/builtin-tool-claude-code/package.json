@@ -1,0 +1,23 @@
+{
+  "name": "@lobechat/builtin-tool-claude-code",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/shared-tool-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^5",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "path-browserify-esm": "*",
+    "react": "*"
+  }
+}

@@ -10,6 +10,7 @@ import useSWR from 'swr';
 
 import NotFound from '@/components/404';
 import Loading from '@/components/Loading/BrandTextLoading';
+import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import ActionBar from './features/ActionBar';
@@ -59,7 +60,18 @@ const ShareTopicPage = memo(() => {
             status={''}
             title={t('sharePage.error.unauthorized.title')}
             extra={
-              <Button href="/signin" type="primary">
+              <Button
+                href="/signin"
+                type="primary"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void trackLoginOrSignupClicked({
+                    spm: 'share.unauthorized.signin.click',
+                  }).finally(() => {
+                    window.location.href = '/signin';
+                  });
+                }}
+              >
                 {t('sharePage.error.unauthorized.action')}
               </Button>
             }

@@ -1,17 +1,9 @@
+import { DEFAULT_ELECTRON_DESKTOP_SHORTCUTS } from '@lobechat/const/desktopGlobalShortcuts';
 import { globalShortcut } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_SHORTCUTS_CONFIG } from '@/shortcuts';
-
 import type { App } from '../../App';
 import { ShortcutManager } from '../ShortcutManager';
-
-const { mockDoubleOptionMonitorStart, mockDoubleOptionMonitorStop, mockMonitorConstructor } =
-  vi.hoisted(() => ({
-    mockDoubleOptionMonitorStart: vi.fn(),
-    mockDoubleOptionMonitorStop: vi.fn(),
-    mockMonitorConstructor: vi.fn(),
-  }));
 
 // Mock electron
 vi.mock('electron', () => ({
@@ -33,21 +25,13 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-// Mock DEFAULT_SHORTCUTS_CONFIG
-vi.mock('@/shortcuts', () => ({
-  DEFAULT_SHORTCUTS_CONFIG: {
-    quickComposer: 'doubleOption',
-    showApp: 'Control+E',
+// Mock desktop global shortcut defaults
+vi.mock('@lobechat/const/desktopGlobalShortcuts', () => ({
+  DEFAULT_ELECTRON_DESKTOP_SHORTCUTS: {
+    quickComposer: 'Alt+Shift+Space',
+    showApp: '',
     openSettings: 'CommandOrControl+,',
   },
-}));
-
-vi.mock('../MacOSDoubleOptionMonitor', () => ({
-  MACOS_DOUBLE_OPTION_SHORTCUT: 'doubleOption',
-  MacOSDoubleOptionMonitor: mockMonitorConstructor.mockImplementation(() => ({
-    start: mockDoubleOptionMonitorStart,
-    stop: mockDoubleOptionMonitorStop,
-  })),
 }));
 
 describe('ShortcutManager', () => {
@@ -64,9 +48,6 @@ describe('ShortcutManager', () => {
     vi.mocked(globalShortcut.unregister).mockReturnValue(undefined);
     vi.mocked(globalShortcut.unregisterAll).mockReturnValue(undefined);
     vi.mocked(globalShortcut.isRegistered).mockReturnValue(false);
-    mockDoubleOptionMonitorStart.mockReset();
-    mockDoubleOptionMonitorStop.mockReset();
-    mockMonitorConstructor.mockClear();
 
     // Mock store manager
     mockStoreManager = {
@@ -137,13 +118,12 @@ describe('ShortcutManager', () => {
 
       expect(mockStoreManager.get).toHaveBeenCalledWith('shortcuts');
       expect(globalShortcut.unregisterAll).toHaveBeenCalled();
-      expect(globalShortcut.register).toHaveBeenCalledWith('Control+E', expect.any(Function));
+      expect(globalShortcut.register).toHaveBeenCalledWith('Alt+Shift+Space', expect.any(Function));
       expect(globalShortcut.register).toHaveBeenCalledWith(
         'CommandOrControl+,',
         expect.any(Function),
       );
-      expect(mockMonitorConstructor).toHaveBeenCalledTimes(1);
-      expect(mockDoubleOptionMonitorStart).toHaveBeenCalledTimes(1);
+      expect(globalShortcut.register).not.toHaveBeenCalledWith('', expect.any(Function));
     });
 
     it('should handle stored config with filtering', () => {
@@ -171,7 +151,7 @@ describe('ShortcutManager', () => {
       shortcutManager.initialize();
 
       const config = shortcutManager.getShortcutsConfig();
-      expect(config).toEqual(DEFAULT_SHORTCUTS_CONFIG);
+      expect(config).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
     });
   });
 
@@ -192,27 +172,6 @@ describe('ShortcutManager', () => {
           showApp: 'Alt+E',
         }),
       );
-    });
-
-    it('should accept the macOS double Option shortcut token for quick composer', () => {
-      const result = shortcutManager.updateShortcutConfig('quickComposer', 'doubleOption');
-
-      expect(result.success).toBe(true);
-      expect(result.errorType).toBeUndefined();
-      expect(mockStoreManager.set).toHaveBeenCalledWith(
-        'shortcuts',
-        expect.objectContaining({
-          quickComposer: 'doubleOption',
-        }),
-      );
-      expect(mockDoubleOptionMonitorStart).toHaveBeenCalled();
-    });
-
-    it('should reject the macOS double Option shortcut token for the main window action', () => {
-      const result = shortcutManager.updateShortcutConfig('showApp', 'doubleOption');
-
-      expect(result.success).toBe(false);
-      expect(result.errorType).toBe('INVALID_FORMAT');
     });
 
     it('should reject invalid shortcut ID', () => {
@@ -382,7 +341,7 @@ describe('ShortcutManager', () => {
   describe('unregisterAll', () => {
     it('should unregister all shortcuts', () => {
       shortcutManager['shortcutsConfig'] = {
-        quickComposer: 'doubleOption',
+        quickComposer: 'Alt+Shift+Space',
         showApp: 'Alt+E',
         openSettings: 'Ctrl+P',
       };
@@ -390,7 +349,6 @@ describe('ShortcutManager', () => {
 
       shortcutManager.unregisterAll();
 
-      expect(mockDoubleOptionMonitorStop).toHaveBeenCalled();
       expect(globalShortcut.unregisterAll).toHaveBeenCalled();
     });
   });
@@ -401,8 +359,11 @@ describe('ShortcutManager', () => {
 
       shortcutManager['loadShortcutsConfig']();
 
-      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_SHORTCUTS_CONFIG);
-      expect(mockStoreManager.set).toHaveBeenCalledWith('shortcuts', DEFAULT_SHORTCUTS_CONFIG);
+      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
+      expect(mockStoreManager.set).toHaveBeenCalledWith(
+        'shortcuts',
+        DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
+      );
     });
 
     it('should use defaults when config is empty', () => {
@@ -410,7 +371,7 @@ describe('ShortcutManager', () => {
 
       shortcutManager['loadShortcutsConfig']();
 
-      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_SHORTCUTS_CONFIG);
+      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
     });
 
     it('should filter invalid keys from stored config', () => {
@@ -446,7 +407,7 @@ describe('ShortcutManager', () => {
       shortcutManager['loadShortcutsConfig']();
 
       const config = shortcutManager['shortcutsConfig'];
-      expect(config.quickComposer).toBe('doubleOption');
+      expect(config.quickComposer).toBe('Alt+Shift+Space');
       expect(config.showApp).toBe('Alt+E');
       expect(config.openSettings).toBe('CommandOrControl+,'); // Default value
     });
@@ -465,26 +426,6 @@ describe('ShortcutManager', () => {
       expect(mockStoreManager.set).not.toHaveBeenCalled();
     });
 
-    it('should migrate legacy double Option binding from showApp to quickComposer', () => {
-      mockStoreManager.get.mockReturnValue({
-        showApp: 'doubleOption',
-        openSettings: 'Ctrl+P',
-      });
-
-      shortcutManager['loadShortcutsConfig']();
-
-      expect(shortcutManager['shortcutsConfig']).toEqual({
-        quickComposer: 'doubleOption',
-        showApp: 'Control+E',
-        openSettings: 'Ctrl+P',
-      });
-      expect(mockStoreManager.set).toHaveBeenCalledWith('shortcuts', {
-        quickComposer: 'doubleOption',
-        showApp: 'Control+E',
-        openSettings: 'Ctrl+P',
-      });
-    });
-
     it('should handle store errors gracefully', () => {
       mockStoreManager.get.mockImplementation(() => {
         throw new Error('Store error');
@@ -492,8 +433,11 @@ describe('ShortcutManager', () => {
 
       shortcutManager['loadShortcutsConfig']();
 
-      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_SHORTCUTS_CONFIG);
-      expect(mockStoreManager.set).toHaveBeenCalledWith('shortcuts', DEFAULT_SHORTCUTS_CONFIG);
+      expect(shortcutManager['shortcutsConfig']).toEqual(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS);
+      expect(mockStoreManager.set).toHaveBeenCalledWith(
+        'shortcuts',
+        DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
+      );
     });
   });
 
@@ -544,26 +488,7 @@ describe('ShortcutManager', () => {
       expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+P', expect.any(Function));
     });
 
-    it('should use the macOS double Option monitor for the special shortcut token', () => {
-      shortcutManager['shortcutsConfig'] = {
-        quickComposer: 'doubleOption',
-        showApp: 'Alt+E',
-        openSettings: 'Ctrl+P',
-      };
-
-      shortcutManager['registerConfiguredShortcuts']();
-
-      expect(mockMonitorConstructor).toHaveBeenCalledTimes(1);
-      expect(mockDoubleOptionMonitorStart).toHaveBeenCalledTimes(1);
-      expect(globalShortcut.register).toHaveBeenCalledWith('Alt+E', expect.any(Function));
-      expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+P', expect.any(Function));
-      expect(globalShortcut.register).not.toHaveBeenCalledWith(
-        'doubleOption',
-        expect.any(Function),
-      );
-    });
-
-    it('should skip shortcuts not in DEFAULT_SHORTCUTS_CONFIG', () => {
+    it('should skip shortcuts not defined in default electron desktop shortcuts', () => {
       shortcutManager['shortcutsConfig'] = {
         quickComposer: 'Alt+Shift+Q',
         showApp: 'Alt+E',
@@ -652,16 +577,6 @@ describe('ShortcutManager', () => {
         'CommandOrControl+alt+E',
         expect.any(Function),
       );
-    });
-
-    it('should re-register the macOS double Option monitor after resetting to default', () => {
-      mockStoreManager.get.mockReturnValue({});
-      shortcutManager.initialize();
-
-      const result = shortcutManager.updateShortcutConfig('quickComposer', 'doubleOption');
-
-      expect(result.success).toBe(true);
-      expect(mockDoubleOptionMonitorStart).toHaveBeenCalledTimes(2);
     });
   });
 });

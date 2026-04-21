@@ -8,7 +8,6 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { NavigatorRegistrar } from '@/utils/router';
 
 import NavBar from './NavBar';
 
@@ -31,7 +30,6 @@ const MobileMainLayout: FC = () => {
   const showNav = MOBILE_NAV_ROUTES.has(pathname);
   return (
     <>
-      <NavigatorRegistrar />
       <Suspense fallback={null}>{showCloudPromotion && <CloudBanner mobile />}</Suspense>
       <MarketAuthProvider isDesktop={false}>
         <Suspense fallback={<Loading debugId="MobileMainLayout > Outlet" />}>

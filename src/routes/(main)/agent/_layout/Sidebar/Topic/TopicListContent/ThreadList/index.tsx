@@ -18,7 +18,13 @@ const ThreadList = memo(() => {
   return (
     <Flexbox gap={1} paddingBlock={1}>
       {threads?.map((item, index) => (
-        <ThreadItem id={item.id} index={index} key={item.id} title={item.title} />
+        <ThreadItem
+          id={item.id}
+          index={index}
+          isSubagent={!!item.metadata?.subagentType}
+          key={item.id}
+          title={item.title}
+        />
       ))}
     </Flexbox>
   );

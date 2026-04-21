@@ -2,7 +2,6 @@
 
 import { memo } from 'react';
 
-import MainInterfaceTracker from '@/components/Analytics/MainInterfaceTracker';
 import ConversationArea from '@/routes/(main)/agent/features/Conversation/ConversationArea';
 import PageTitle from '@/routes/(main)/agent/features/PageTitle';
 import PortalPanel from '@/routes/(main)/agent/features/Portal/features/PortalPanel';
@@ -17,7 +16,6 @@ const MobileChatPage = memo(() => {
       <ConversationArea />
       <Topic />
       <PortalPanel mobile />
-      <MainInterfaceTracker />
       <TelemetryNotification mobile />
     </>
   );

@@ -1,6 +1,9 @@
 {
   "about": "Giới thiệu",
   "advanceSettings": "Cài đặt nâng cao",
+  "agentOnboardingPromo.actionLabel": "Dùng thử ngay",
+  "agentOnboardingPromo.description": "Thiết lập các nhóm trợ lý của bạn qua một cuộc trò chuyện nhanh với Lobe AI. Các trợ lý hiện có của bạn sẽ không thay đổi.",
+  "agentOnboardingPromo.title": "Trình hướng dẫn nhanh",
   "alert.cloud.action": "Dùng thử ngay",
   "alert.cloud.desc": "Tất cả người dùng đã đăng ký nhận được {{credit}} tín dụng điện toán miễn phí mỗi tháng—không cần cài đặt. Bao gồm đồng bộ đám mây toàn cầu và tìm kiếm web nâng cao.",
   "alert.cloud.descOnMobile": "Tất cả người dùng đã đăng ký nhận được {{credit}} tín dụng điện toán miễn phí mỗi tháng—không cần cài đặt.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Di chuyển xuống",
   "navPanel.moveUp": "Di chuyển lên",
   "navPanel.pinned": "Đã ghim",
+  "navPanel.resetDefault": "Đặt lại về mặc định",
   "navPanel.searchAgent": "Tìm kiếm tác nhân...",
   "navPanel.searchRecent": "Tìm kiếm gần đây...",
   "navPanel.searchResultEmpty": "Không tìm thấy kết quả",

@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "Sunucu Taraflı Aracı Yürütme (Gateway)",
   "features.groupChat.desc": "Çoklu temsilci grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Temsilci)",
+  "features.heterogeneousAgent.desc": "Claude Code, Codex CLI ve diğer harici ajan CLI’leri ile heterojen ajan yürütmeyi etkinleştirir. Kenar çubuğu ajan menüsünde bir \"Claude Code Ajanı\" seçeneği oluşturur.",
+  "features.heterogeneousAgent.title": "Heterojen Ajan (Claude Code)",
   "features.inputMarkdown.desc": "Girdi alanında Markdown biçimlendirmesini (kalın metin, kod blokları, tablolar vb.) gerçek zamanlı olarak görüntüleyin.",
   "features.inputMarkdown.title": "Girdi Markdown Görüntüleme",
   "title": "Deneysel Özellikler"

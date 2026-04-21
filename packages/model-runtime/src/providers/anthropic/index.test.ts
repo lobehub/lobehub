@@ -60,7 +60,7 @@ describe('LobeAnthropicAI', () => {
     it('should return a StreamingTextResponse on successful API call', async () => {
       const result = await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-3-5-haiku-20241022',
         temperature: 0,
       });
 
@@ -82,7 +82,7 @@ describe('LobeAnthropicAI', () => {
       // Act
       const result = await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-3-5-haiku-20241022',
         temperature: 0,
         top_p: 1,
       });
@@ -90,14 +90,14 @@ describe('LobeAnthropicAI', () => {
       // Assert
       expect(instance['client'].messages.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          max_tokens: 4096,
+          max_tokens: 64000,
           messages: [
             {
               content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           stream: true,
           temperature: 0,
           top_p: 1,
@@ -172,7 +172,7 @@ describe('LobeAnthropicAI', () => {
       const result = await instance.chat({
         max_tokens: 2048,
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-3-5-haiku-20241022',
         temperature: 0.5,
         top_p: 1,
       });
@@ -187,7 +187,7 @@ describe('LobeAnthropicAI', () => {
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           stream: true,
           temperature: 0.25,
           top_p: 1,
@@ -213,7 +213,7 @@ describe('LobeAnthropicAI', () => {
         frequency_penalty: 0.5, // Unsupported option
         max_tokens: 2048,
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-3-5-haiku-20241022',
         presence_penalty: 0.5,
         temperature: 0.5,
         top_p: 1,
@@ -229,7 +229,7 @@ describe('LobeAnthropicAI', () => {
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           stream: true,
           temperature: 0.25,
           top_p: 1,
@@ -267,7 +267,7 @@ describe('LobeAnthropicAI', () => {
       // Act
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-3-5-haiku-20241022',
         temperature: 0,
       });
 
@@ -289,7 +289,7 @@ describe('LobeAnthropicAI', () => {
         // Act
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 1,
           tools,
         });
@@ -315,7 +315,7 @@ describe('LobeAnthropicAI', () => {
 
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Search and get info', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.5,
           tools,
           enabledSearch: true,
@@ -341,7 +341,7 @@ describe('LobeAnthropicAI', () => {
 
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Search for information', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.5,
           enabledSearch: true,
         };
@@ -380,7 +380,7 @@ describe('LobeAnthropicAI', () => {
           // Act
           await instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0,
           });
         } catch (e) {
@@ -411,7 +411,7 @@ describe('LobeAnthropicAI', () => {
           // Act
           await instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0,
           });
         } catch (e) {
@@ -445,7 +445,7 @@ describe('LobeAnthropicAI', () => {
         await expect(
           instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 1,
           }),
         ).rejects.toEqual({
@@ -465,7 +465,7 @@ describe('LobeAnthropicAI', () => {
         await expect(
           instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 1,
           }),
         ).rejects.toEqual({
@@ -489,7 +489,7 @@ describe('LobeAnthropicAI', () => {
         await expect(
           customInstance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0,
           }),
         ).rejects.toEqual({
@@ -510,7 +510,7 @@ describe('LobeAnthropicAI', () => {
         await instance.chat(
           {
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 1,
           },
           { signal: controller.signal },
@@ -531,7 +531,7 @@ describe('LobeAnthropicAI', () => {
         await instance.chat(
           {
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0,
           },
           {
@@ -551,7 +551,7 @@ describe('LobeAnthropicAI', () => {
         const result = await instance.chat(
           {
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 1,
           },
           { headers },
@@ -568,7 +568,7 @@ describe('LobeAnthropicAI', () => {
         await expect(
           instance.chat({
             messages: [],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 1,
           }),
         ).resolves.toBeInstanceOf(Response);
@@ -579,7 +579,7 @@ describe('LobeAnthropicAI', () => {
       it('should correctly build payload with user messages only', async () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.5,
         };
 
@@ -587,14 +587,14 @@ describe('LobeAnthropicAI', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
-            max_tokens: 4096,
+            max_tokens: 64000,
             messages: [
               {
                 content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
                 role: 'user',
               },
             ],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0.25,
           }),
         );
@@ -606,7 +606,7 @@ describe('LobeAnthropicAI', () => {
             { content: 'You are a helpful assistant', role: 'system' },
             { content: 'Hello', role: 'user' },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
         };
 
@@ -614,14 +614,14 @@ describe('LobeAnthropicAI', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
-            max_tokens: 4096,
+            max_tokens: 64000,
             messages: [
               {
                 content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
                 role: 'user',
               },
             ],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             system: [
               {
                 cache_control: { type: 'ephemeral' },
@@ -677,7 +677,7 @@ describe('LobeAnthropicAI', () => {
             { content: '   \n\t  ', role: 'system' },
             { content: 'Hello', role: 'user' },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
         };
 
@@ -710,7 +710,7 @@ describe('LobeAnthropicAI', () => {
 
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Use a tool', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.8,
           tools,
         };
@@ -719,7 +719,7 @@ describe('LobeAnthropicAI', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
-            max_tokens: 4096,
+            max_tokens: 64000,
             messages: [
               {
                 content: [
@@ -728,7 +728,7 @@ describe('LobeAnthropicAI', () => {
                 role: 'user',
               },
             ],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0.4,
             tools: [{ name: 'tool1', description: 'desc1' }],
           }),
@@ -742,7 +742,7 @@ describe('LobeAnthropicAI', () => {
       it('should correctly build payload with thinking mode enabled', async () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Solve this problem', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.9,
           thinking: { type: 'enabled', budget_tokens: 0 },
         };
@@ -750,7 +750,7 @@ describe('LobeAnthropicAI', () => {
         const result = await buildDefaultAnthropicPayload(payload);
 
         expect(result).toEqual({
-          max_tokens: 4096,
+          max_tokens: 32000,
           messages: [
             {
               content: [
@@ -759,7 +759,7 @@ describe('LobeAnthropicAI', () => {
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           system: undefined,
           thinking: { type: 'enabled', budget_tokens: 1024 },
           tools: undefined,
@@ -795,11 +795,40 @@ describe('LobeAnthropicAI', () => {
         });
       });
 
+      it('should correctly build payload for Claude Opus 4.7 with xhigh effort', async () => {
+        const payload: ChatStreamPayload = {
+          max_tokens: 16000,
+          messages: [{ content: 'Solve this problem', role: 'user' }],
+          model: 'claude-opus-4-7',
+          effort: 'xhigh',
+          thinking: { type: 'adaptive', budget_tokens: 0 },
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result).toEqual({
+          max_tokens: 16000,
+          messages: [
+            {
+              content: [
+                { cache_control: { type: 'ephemeral' }, text: 'Solve this problem', type: 'text' },
+              ],
+              role: 'user',
+            },
+          ],
+          model: 'claude-opus-4-7',
+          output_config: { effort: 'xhigh' },
+          system: undefined,
+          thinking: { type: 'adaptive' },
+          tools: undefined,
+        });
+      });
+
       it('should respect max_tokens in thinking mode when provided', async () => {
         const payload: ChatStreamPayload = {
           max_tokens: 1000,
           messages: [{ content: 'Solve this problem', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
           thinking: { type: 'enabled', budget_tokens: 0 },
         };
@@ -816,7 +845,7 @@ describe('LobeAnthropicAI', () => {
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           system: undefined,
           thinking: { type: 'enabled', budget_tokens: 999 },
           tools: undefined,
@@ -827,7 +856,7 @@ describe('LobeAnthropicAI', () => {
         const payload: ChatStreamPayload = {
           max_tokens: 1000,
           messages: [{ content: 'Solve this problem', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.5,
           thinking: { type: 'enabled', budget_tokens: 2000 },
         };
@@ -844,7 +873,7 @@ describe('LobeAnthropicAI', () => {
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           system: undefined,
           thinking: { type: 'enabled', budget_tokens: 999 },
           tools: undefined,
@@ -855,7 +884,7 @@ describe('LobeAnthropicAI', () => {
         const payload: ChatStreamPayload = {
           max_tokens: 10000,
           messages: [{ content: 'Solve this problem', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.6,
           thinking: { type: 'enabled', budget_tokens: 60000 },
         };
@@ -872,30 +901,18 @@ describe('LobeAnthropicAI', () => {
               role: 'user',
             },
           ],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           system: undefined,
           thinking: { type: 'enabled', budget_tokens: 9999 },
           tools: undefined,
         });
       });
 
-      it('should set correct max_tokens based on model for claude-3 models', async () => {
-        const payload: ChatStreamPayload = {
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
-          temperature: 0.7,
-        };
-
-        const result = await buildDefaultAnthropicPayload(payload);
-
-        expect(result.max_tokens).toBe(4096);
-      });
-
       it('should respect max_tokens when explicitly provided', async () => {
         const payload: ChatStreamPayload = {
           max_tokens: 2000,
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
         };
 
@@ -907,7 +924,7 @@ describe('LobeAnthropicAI', () => {
       it('should correctly handle temperature scaling', async () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 1,
         };
 
@@ -921,7 +938,7 @@ describe('LobeAnthropicAI', () => {
         // but since the type requires it, we'll use type assertion
         const partialPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
         } as ChatStreamPayload;
 
         // Delete the temperature property to simulate it not being provided
@@ -935,7 +952,7 @@ describe('LobeAnthropicAI', () => {
       it('should not include top_p when thinking is enabled', async () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
           thinking: { type: 'enabled', budget_tokens: 0 },
           top_p: 0.9,
@@ -949,7 +966,7 @@ describe('LobeAnthropicAI', () => {
       it('should include top_p when thinking is not enabled', async () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
           top_p: 0.9,
         };
@@ -962,7 +979,7 @@ describe('LobeAnthropicAI', () => {
       it('should handle thinking with type disabled', async () => {
         const payload: ChatStreamPayload = {
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           temperature: 0.7,
           thinking: { type: 'disabled', budget_tokens: 0 },
         };
@@ -972,14 +989,14 @@ describe('LobeAnthropicAI', () => {
         // When thinking is disabled, it should be treated as if thinking wasn't provided
         expect(result).toEqual(
           expect.objectContaining({
-            max_tokens: 4096,
+            max_tokens: 64000,
             messages: [
               {
                 content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
                 role: 'user',
               },
             ],
-            model: 'claude-3-haiku-20240307',
+            model: 'claude-3-5-haiku-20241022',
             temperature: 0.35,
           }),
         );

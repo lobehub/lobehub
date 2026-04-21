@@ -1,6 +1,9 @@
 {
   "about": "O nas",
   "advanceSettings": "Ustawienia zaawansowane",
+  "agentOnboardingPromo.actionLabel": "Wypróbuj teraz",
+  "agentOnboardingPromo.description": "Skonfiguruj swoje zespoły agentów w krótkiej rozmowie z Lobe AI. Twoi obecni agenci pozostaną bez zmian.",
+  "agentOnboardingPromo.title": "Szybki kreator",
   "alert.cloud.action": "Wypróbuj teraz",
   "alert.cloud.desc": "Wszyscy zarejestrowani użytkownicy otrzymują {{credit}} darmowych kredytów obliczeniowych miesięcznie — bez potrzeby konfiguracji. Zawiera globalną synchronizację w chmurze i zaawansowane wyszukiwanie w sieci.",
   "alert.cloud.descOnMobile": "Wszyscy zarejestrowani użytkownicy otrzymują {{credit}} darmowych kredytów obliczeniowych miesięcznie — bez potrzeby konfiguracji.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Przenieś w dół",
   "navPanel.moveUp": "Przenieś w górę",
   "navPanel.pinned": "Przypięte",
+  "navPanel.resetDefault": "Przywróć ustawienia domyślne",
   "navPanel.searchAgent": "Szukaj agenta...",
   "navPanel.searchRecent": "Szukaj w ostatnich...",
   "navPanel.searchResultEmpty": "Brak wyników wyszukiwania",

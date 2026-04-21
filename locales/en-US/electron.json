@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "Close Tabs to the Left",
   "tab.closeOtherTabs": "Close Other Tabs",
   "tab.closeRightTabs": "Close Tabs to the Right",
+  "tab.newTab": "New Tab",
+  "tab.running": "Agent is running",
+  "tab.unread": "New message",
   "updater.checkingUpdate": "Checking for updates",
   "updater.checkingUpdateDesc": "Retrieving version information...",
   "updater.downloadNewVersion": "Download new version",
@@ -133,5 +136,7 @@
   "window.close": "Close window",
   "window.maximize": "Maximize window",
   "window.minimize": "Minimize window",
-  "window.restore": "Restore window"
+  "window.pinToTop": "Pin on top",
+  "window.restore": "Restore window",
+  "window.unpinFromTop": "Unpin from top"
 }

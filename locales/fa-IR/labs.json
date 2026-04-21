@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "اجرای ایجنت در سمت سرور (Gateway)",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
+  "features.heterogeneousAgent.desc": "اجرای ناهمگون عامل‌ها را با Claude Code، Codex CLI و سایر رابط‌های خط فرمان عامل‌های خارجی فعال می‌کند. یک گزینهٔ «عامل Claude Code» در منوی کناری عامل‌ها ایجاد می‌کند.",
+  "features.heterogeneousAgent.title": "عامل ناهمگون (Claude Code)",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
   "title": "آزمایشگاه‌ها"

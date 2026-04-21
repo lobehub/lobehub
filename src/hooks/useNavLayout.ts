@@ -78,6 +78,12 @@ export const useNavLayout = (): NavLayout => {
           title: t('tab.resource'),
           url: '/resource',
         },
+        {
+          icon: getRouteById('memory')!.icon,
+          key: SidebarTabKey.Memory,
+          title: t('tab.memory'),
+          url: '/memory',
+        },
       ] as NavItem[],
     [t, showMarket],
   );

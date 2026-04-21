@@ -2,6 +2,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { checkAuth, type RequestHandler } from './index';
@@ -14,8 +15,14 @@ vi.mock('@lobechat/model-runtime', () => ({
 }));
 
 vi.mock('@lobechat/types', () => ({
-  ChatErrorType: { Unauthorized: 'Unauthorized', InternalServerError: 'InternalServerError' },
+  ChatErrorType: {
+    InternalServerError: 'InternalServerError',
+    Unauthorized: 'Unauthorized',
+  },
 }));
+
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 
 vi.mock('@/utils/errorResponse', () => ({
   createErrorResponse: vi.fn(),
@@ -81,6 +88,86 @@ describe('checkAuth', () => {
       provider: 'mock',
     });
     expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should return unauthorized when OIDC JWT validation throws UNAUTHORIZED', async () => {
+    const oidcRequest = new Request('https://example.com', {
+      headers: { 'Oidc-Auth': 'expired-token' },
+    });
+    const oidcError = Object.assign(new Error('JWT token validation failed'), {
+      code: 'UNAUTHORIZED',
+    });
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(oidcError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
+      error: oidcError,
+      provider: 'mock',
+    });
+    expect(consoleInfoSpy).toHaveBeenCalledWith('[auth] OIDC authentication failed', {
+      clientId: undefined,
+      code: 'UNAUTHORIZED',
+      path: '/',
+      provider: 'mock',
+      userAgent: null,
+      xClientType: null,
+    });
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should return 500 when OIDC JWKS infrastructure fails (plain Error, no UNAUTHORIZED code)', async () => {
+    const oidcRequest = new Request('https://example.com', {
+      headers: { 'Oidc-Auth': 'any-token' },
+    });
+    // Simulates getVerificationKey() throwing due to misconfigured JWKS_KEY —
+    // a plain Error without `code: 'UNAUTHORIZED'` must bubble up as 500,
+    // not 401, so ops gets paged instead of the client being asked to re-auth.
+    const infraError = new Error('JWKS_KEY public key retrieval failed: invalid JWK');
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(infraError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.InternalServerError, {
+      error: infraError,
+      provider: 'mock',
+    });
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should log decoded OIDC client info when auth fails with OIDC header', async () => {
+    const payload = Buffer.from(
+      JSON.stringify({ client_id: 'lobehub-desktop', sub: 'user-123' }),
+      'utf8',
+    ).toString('base64url');
+    const oidcRequest = new Request('https://example.com/webapi/chat/lobehub', {
+      headers: {
+        'Oidc-Auth': `header.${payload}.signature`,
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        'x-client-type': 'desktop',
+      },
+    });
+    const oidcError = Object.assign(new Error('JWT token validation failed'), {
+      code: 'UNAUTHORIZED',
+    });
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(oidcError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(consoleInfoSpy).toHaveBeenCalledWith('[auth] OIDC authentication failed', {
+      clientId: 'lobehub-desktop',
+      code: 'UNAUTHORIZED',
+      path: '/webapi/chat/lobehub',
+      provider: 'mock',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      xClientType: 'desktop',
+    });
+  });
+
+  it('should not log OIDC auth info for better-auth session failures', async () => {
+    await checkAuth(mockHandler)(mockRequest, mockOptions);
+
+    expect(consoleInfoSpy).not.toHaveBeenCalled();
   });
 
   describe('mock dev user', () => {

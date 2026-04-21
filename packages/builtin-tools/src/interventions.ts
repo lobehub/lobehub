@@ -21,6 +21,10 @@ import {
   UserInteractionIdentifier,
   UserInteractionInterventions,
 } from '@lobechat/builtin-tool-user-interaction/client';
+import {
+  WebOnboardingInterventions,
+  WebOnboardingManifest,
+} from '@lobechat/builtin-tool-web-onboarding/client';
 import { type BuiltinIntervention } from '@lobechat/types';
 
 /**
@@ -38,6 +42,7 @@ export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [MessageManifest.identifier]: MessageInterventions,
   [NotebookManifest.identifier]: NotebookInterventions,
   [UserInteractionIdentifier]: UserInteractionInterventions,
+  [WebOnboardingManifest.identifier]: WebOnboardingInterventions,
 };
 
 /**

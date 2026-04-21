@@ -48,6 +48,7 @@ import { type FileResult, type SearchOptions } from '@/modules/fileSearch';
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
 import { createLogger } from '@/utils/logger';
+import { netFetch } from '@/utils/net-fetch';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -341,7 +342,7 @@ export default class LocalFileCtr extends ControllerModule {
     }
 
     try {
-      const response = await fetch(url);
+      const response = await netFetch(url);
       if (!response.ok) {
         throw new Error(
           `Failed to download skill package: ${response.status} ${response.statusText}`,

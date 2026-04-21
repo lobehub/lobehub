@@ -1,6 +1,9 @@
 {
   "about": "Acerca de",
   "advanceSettings": "Configuración avanzada",
+  "agentOnboardingPromo.actionLabel": "Probar ahora",
+  "agentOnboardingPromo.description": "Configura tus equipos de agentes en un chat breve con Lobe AI. Tus agentes actuales no se modificarán.",
+  "agentOnboardingPromo.title": "Asistente rápido",
   "alert.cloud.action": "Probar ahora",
   "alert.cloud.desc": "Todos los usuarios registrados reciben {{credit}} créditos de computación gratuitos al mes, sin necesidad de configuración. Incluye sincronización en la nube global y búsqueda web avanzada.",
   "alert.cloud.descOnMobile": "Todos los usuarios registrados reciben {{credit}} créditos de computación gratuitos al mes, sin necesidad de configuración.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Mover hacia abajo",
   "navPanel.moveUp": "Mover hacia arriba",
   "navPanel.pinned": "Fijado",
+  "navPanel.resetDefault": "Restablecer valores predeterminados",
   "navPanel.searchAgent": "Buscar agente...",
   "navPanel.searchRecent": "Buscar recientes...",
   "navPanel.searchResultEmpty": "No se encontraron resultados",

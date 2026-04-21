@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 
-import { agents, documents, tasks, topics } from '../schemas';
+import { agents, DOCUMENT_FOLDER_TYPE, documents, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export interface RecentDbItem {
@@ -56,7 +56,7 @@ export class RecentModel {
         WHERE ${documents.userId} = ${this.userId}
           AND ${documents.sourceType} != 'file'
           AND ${documents.knowledgeBaseId} IS NULL
-          AND ${documents.fileType} != 'custom/folder'
+          AND ${documents.fileType} != ${DOCUMENT_FOLDER_TYPE}
 
         UNION ALL
 

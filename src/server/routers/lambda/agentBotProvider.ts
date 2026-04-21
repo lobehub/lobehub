@@ -91,6 +91,21 @@ export const agentBotProviderRouter = router({
       return getBotRuntimeStatus(input.platform, input.applicationId);
     }),
 
+  refreshRuntimeStatus: authedProcedure
+    .input(z.object({ applicationId: z.string(), platform: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const service = new GatewayService();
+      return service.refreshBotRuntimeStatus(input.platform, input.applicationId, ctx.userId);
+    }),
+
+  refreshRuntimeStatusesByAgent: authedProcedure
+    .input(z.object({ agentId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const service = new GatewayService();
+      await service.refreshBotRuntimeStatusesByAgent(input.agentId, ctx.userId);
+      return { ok: true as const };
+    }),
+
   list: agentBotProviderProcedure
     .input(
       z

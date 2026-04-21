@@ -9,7 +9,6 @@ import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
-import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 
 export const useRecentItemDropdownMenu = (
@@ -18,10 +17,8 @@ export const useRecentItemDropdownMenu = (
 ) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
   const { modal } = App.useApp();
-  const removeTopic = useChatStore((s) => s.removeTopic);
-  const [updateRecentTitle, removeRecent, refreshRecents] = useHomeStore((s) => [
+  const [updateRecentTitle, refreshRecents] = useHomeStore((s) => [
     s.updateRecentTitle,
-    s.removeRecent,
     s.refreshRecents,
   ]);
 
@@ -59,13 +56,10 @@ export const useRecentItemDropdownMenu = (
       centered: true,
       okButtonProps: { danger: true },
       onOk: async () => {
-        // Optimistic remove
-        removeRecent(item.id);
-
-        // Persist to server
         switch (item.type) {
           case 'topic': {
-            await removeTopic(item.id);
+            // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly
+            await topicService.removeTopic(item.id);
             break;
           }
           case 'document': {
@@ -77,12 +71,11 @@ export const useRecentItemDropdownMenu = (
             break;
           }
         }
-        // Refresh to get accurate data from server
         await refreshRecents();
       },
       title: confirmMessages[item.type] || t('delete', { ns: 'common' }),
     });
-  }, [item, modal, t, removeTopic, removeRecent, refreshRecents]);
+  }, [item, modal, t, refreshRecents]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
     const canRename = true;

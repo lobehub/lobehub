@@ -1,6 +1,9 @@
 {
   "about": "Hakkında",
   "advanceSettings": "Gelişmiş Ayarlar",
+  "agentOnboardingPromo.actionLabel": "Şimdi dene",
+  "agentOnboardingPromo.description": "Aracı ekiplerinizi Lobe AI ile kısa bir sohbet üzerinden kurun. Mevcut aracılarınız değişmeden kalır.",
+  "agentOnboardingPromo.title": "Hızlı sihirbaz",
   "alert.cloud.action": "Şimdi dene",
   "alert.cloud.desc": "Tüm kayıtlı kullanıcılar her ay {{credit}} ücretsiz işlem kredisi alır—kurulum gerekmez. Küresel bulut senkronizasyonu ve gelişmiş web araması dahildir.",
   "alert.cloud.descOnMobile": "Tüm kayıtlı kullanıcılar her ay {{credit}} ücretsiz işlem kredisi alır—kurulum gerekmez.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Aşağı taşı",
   "navPanel.moveUp": "Yukarı taşı",
   "navPanel.pinned": "Sabitlendi",
+  "navPanel.resetDefault": "Varsayılan Ayarlara Sıfırla",
   "navPanel.searchAgent": "Temsilci Ara...",
   "navPanel.searchRecent": "Son Arananlar...",
   "navPanel.searchResultEmpty": "Arama sonucu bulunamadı",

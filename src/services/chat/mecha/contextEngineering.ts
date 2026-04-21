@@ -2,6 +2,11 @@ import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
+import {
+  CronIdentifier,
+  type CronJobSummaryForContext,
+  generateCronJobsList,
+} from '@lobechat/builtin-tool-cron';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
@@ -377,6 +382,42 @@ export const contextEngineering = async ({
     }
   }
 
+  // Resolve cron jobs context for cron tool
+  // Only inject a small preview (up to 4) to save context window;
+  // the model can call listCronJobs API for the full list.
+  const isCronEnabled = tools?.includes(CronIdentifier) ?? false;
+  let cronJobsList: CronJobSummaryForContext[] | undefined;
+  let cronJobsTotal = 0;
+
+  if (isCronEnabled && agentId) {
+    try {
+      const cronResult = await lambdaClient.agentCronJob.list.query({ agentId, limit: 4 });
+      const jobs = (cronResult as any)?.data ?? [];
+      cronJobsTotal = (cronResult as any)?.pagination?.total ?? jobs.length;
+      cronJobsList = jobs.map(
+        (job: any): CronJobSummaryForContext => ({
+          cronPattern: job.cronPattern,
+          description: job.description,
+          enabled: job.enabled,
+          id: job.id,
+          lastExecutedAt: job.lastExecutedAt,
+          name: job.name,
+          remainingExecutions: job.remainingExecutions,
+          timezone: job.timezone ?? 'UTC',
+          totalExecutions: job.totalExecutions ?? 0,
+        }),
+      );
+      log(
+        'Cron jobs context resolved: count=%d, total=%d',
+        cronJobsList?.length ?? 0,
+        cronJobsTotal,
+      );
+    } catch (error) {
+      // Silently fail - cron context is optional
+      log('Failed to resolve cron jobs context:', error);
+    }
+  }
+
   const userMemoryConfig =
     enableUserMemories && userMemoryData
       ? {
@@ -440,6 +481,12 @@ export const contextEngineering = async ({
       agentManagementContext = {
         availableAgents,
         availableAgentsHasMore: hasMoreAgents,
+        ...(agentId && {
+          currentAgent: {
+            id: agentId,
+            title: agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? undefined,
+          },
+        }),
       };
       log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
     } catch (error) {
@@ -655,9 +702,20 @@ export const contextEngineering = async ({
     selectedSkills: initialContext?.selectedSkills,
     selectedTools: initialContext?.selectedTools,
 
-    // Skills configuration — expose all installed skills so the AI can discover and activate them
+    // Skills configuration
+    // In auto mode: expose all installed skills so the AI can discover and activate them
+    // In manual mode: only expose user-selected skills (filtered by pluginIds)
     skillsConfig: {
-      enabledSkills: plugins ? resolveClientSkills(plugins).skills : undefined,
+      enabledSkills: plugins
+        ? (() => {
+            const skillSet = resolveClientSkills(plugins);
+            if (!isInAutoSkillMode) {
+              const selectedIds = new Set(plugins);
+              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+            }
+            return skillSet.skills;
+          })()
+        : undefined,
     },
 
     // Tool Discovery configuration
@@ -677,6 +735,8 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
+      // NOTICE: required by builtin-tool-cron/src/systemRole.ts
+      CRON_JOBS_LIST: () => (cronJobsList ? generateCronJobsList(cronJobsList, cronJobsTotal) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin

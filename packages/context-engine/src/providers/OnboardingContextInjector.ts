@@ -55,16 +55,29 @@ export class OnboardingContextInjector extends BaseFirstUserContentProvider {
 
     if (onboardingContext.soulContent) {
       parts.push(
-        `<current_soul_document>\n${onboardingContext.soulContent}\n</current_soul_document>`,
+        `<current_soul_document>\n${numberLines(onboardingContext.soulContent)}\n</current_soul_document>`,
       );
     }
 
     if (onboardingContext.personaContent) {
       parts.push(
-        `<current_user_persona>\n${onboardingContext.personaContent}\n</current_user_persona>`,
+        `<current_user_persona>\n${numberLines(onboardingContext.personaContent)}\n</current_user_persona>`,
       );
     }
 
     return `<onboarding_context>\n${parts.join('\n\n')}\n</onboarding_context>`;
   }
 }
+
+/**
+ * Prefix each line with a 1-based line number and `→` separator, mirroring the
+ * format the updateDocument tool's line-based hunks (`deleteLines`, `insertAt`,
+ * `replaceLines`) expect. A trailing newline is treated as a terminator, not as
+ * a phantom empty line.
+ */
+const numberLines = (source: string): string => {
+  const normalized = source.endsWith('\n') ? source.slice(0, -1) : source;
+  const lines = normalized === '' ? [''] : normalized.split('\n');
+  const width = Math.max(String(lines.length).length, 2);
+  return lines.map((line, i) => `${String(i + 1).padStart(width, ' ')}→${line}`).join('\n');
+};

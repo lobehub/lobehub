@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Nano Banana 2용; 생성된 이미지의 가로세로 비율을 제어합니다 (초광폭 1:4, 4:1, 1:8, 8:1 지원).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Gemini 3 이미지 생성 모델용; 생성된 이미지의 해상도를 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Gemini 3.1 Flash Image 모델용; 생성된 이미지의 해상도를 제어합니다 (512px 지원).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "Claude Opus 4.7용; 노력 수준을 조절합니다 (low/medium/high/xhigh/max).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Claude, Qwen3 등과 유사한 모델용; 추론에 사용할 토큰 예산을 제어합니다.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5 및 GLM-4.7용; 추론을 위한 토큰 예산을 제어합니다(최대 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3 시리즈용; 추론을 위한 토큰 예산을 제어합니다(최대 80k).",

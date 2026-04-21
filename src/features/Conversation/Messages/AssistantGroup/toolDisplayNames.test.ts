@@ -6,6 +6,7 @@ import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from './constants';
 import {
   getPostToolAnswerSplitIndex,
   getWorkflowStreamingHeadlineState,
+  scoreBlockContentAsAnswerLike,
   scorePostToolBlockAsFinalAnswer,
   shapeProseForWorkflowHeadline,
 } from './toolDisplayNames';
@@ -33,6 +34,19 @@ describe('shapeProseForWorkflowHeadline', () => {
 });
 
 describe('post-tool final answer split', () => {
+  it('scores long structured content as answer-like even when tools share the block', () => {
+    const score = scoreBlockContentAsAnswerLike(
+      blk({
+        id: 'mixed',
+        content:
+          '先总结当前结论。\n\n## 下一步\n\n- 对比方案 A\n- 对比方案 B\n- 给出推荐与风险说明。',
+        tools: [{ apiName: 'search', id: 't1' } as any],
+      }),
+    );
+
+    expect(score).toBeGreaterThanOrEqual(POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD);
+  });
+
   it('returns split index for long structured prose-only block after last tool', () => {
     const long =
       'Direct summary - Node.js 24 (released May 6, 2025) is a major platform update that upgrades V8 to a newer track, ships notable HTTP and fetch-related changes, and introduces practical migration items for native addons and tooling.\n\n## Checklist\n\n- Rebuild native modules';

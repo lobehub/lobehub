@@ -259,6 +259,13 @@ export default class Browser {
     browserWindow.on('focus', () => {
       logger.debug(`[${this.identifier}] Window 'focus' event fired.`);
       this.broadcast('windowFocused');
+      // Clear any completion badge once the user returns to the app.
+      try {
+        app.setBadgeCount(0);
+        if (process.platform === 'darwin' && app.dock) app.dock.setBadge('');
+      } catch {
+        /* noop — some platforms may not support badge counts */
+      }
     });
   }
 

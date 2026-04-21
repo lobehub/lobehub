@@ -9,6 +9,13 @@ export interface ChatAIChatState {
   inputFiles: File[];
   inputMessage: string;
   mainInputEditor: ChatInputEditor | null;
+  /**
+   * Tool calls currently being executed locally on this client in response to
+   * a Gateway `tool_execute` event. Key is the toolCallId; value is `true` while
+   * pending. Kept separate from `toolCallingStreamIds` (LLM-side streaming) so
+   * UI can render a distinct "running on device" state.
+   */
+  pendingClientToolExecutions: Record<string, boolean>;
   searchWorkflowLoadingIds: string[];
   threadInputEditor: ChatInputEditor | null;
   /**
@@ -22,6 +29,7 @@ export const initialAiChatState: ChatAIChatState = {
   inputFiles: [],
   inputMessage: '',
   mainInputEditor: null,
+  pendingClientToolExecutions: {},
   searchWorkflowLoadingIds: [],
   threadInputEditor: null,
   toolCallingStreamIds: {},

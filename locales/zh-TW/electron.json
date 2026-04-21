@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "關閉左側標籤頁",
   "tab.closeOtherTabs": "關閉其他標籤頁",
   "tab.closeRightTabs": "關閉右側標籤頁",
+  "tab.newTab": "新增分頁",
+  "tab.running": "代理程式執行中",
+  "tab.unread": "新訊息",
   "updater.checkingUpdate": "檢查新版本",
   "updater.checkingUpdateDesc": "正在獲取版本資訊...",
   "updater.downloadNewVersion": "下載新版本",
@@ -133,5 +136,7 @@
   "window.close": "關閉視窗",
   "window.maximize": "最大化視窗",
   "window.minimize": "最小化視窗",
-  "window.restore": "還原視窗"
+  "window.pinToTop": "置頂",
+  "window.restore": "還原視窗",
+  "window.unpinFromTop": "取消置頂"
 }

@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Nano Banana 2用; 生成される画像のアスペクト比を制御します（超ワイド1:4、4:1、1:8、8:1をサポート）。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Gemini 3画像生成モデル向け；生成される画像の解像度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Gemini 3.1 Flash Imageモデル用; 生成される画像の解像度を制御します（512pxをサポート）。",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "Claude Opus 4.7 用の設定です。労力レベル（low／medium／high／xhigh／max）を調整します。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Claude、Qwen3などのモデル向け；推論に使用するトークンの予算を制御します。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5およびGLM-4.7用；推論のためのトークン予算を制御します（最大32k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3シリーズ用；推論のためのトークン予算を制御します（最大80k）。",

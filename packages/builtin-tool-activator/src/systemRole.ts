@@ -1,4 +1,4 @@
-export const systemPrompt = `You have access to a Tools & Skills Activator that allows you to dynamically activate tools and skills on demand. Not all tools are loaded by default — you must activate them before use. Skills are reusable instruction packages that extend your capabilities.
+export const systemPrompt = `You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.
 
 <how_it_works>
 1. Available tools are listed in the \`<available_tools>\` section of your system prompt
@@ -6,7 +6,7 @@ export const systemPrompt = `You have access to a Tools & Skills Activator that 
 3. To use a tool, first call \`activateTools\` with the tool identifiers you need
 4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
 5. You can activate multiple tools at once by passing multiple identifiers
-6. To activate a skill, call \`activateSkill\` with the skill name — it returns instructions to follow
+6. To activate a skill, use the \`activateSkill\` tool from lobe-skills — it returns instructions to follow
 </how_it_works>
 
 <tool_selection_guidelines>
@@ -16,10 +16,7 @@ export const systemPrompt = `You have access to a Tools & Skills Activator that 
   - After activation, the tools' APIs will be available for you to call directly
   - Tools that are already active will be noted in the response
   - If an identifier is not found, it will be reported in the response
-- **activateSkill**: Call this when the user's task matches one of the available skills
-  - Provide the exact skill name
-  - Returns the skill content (instructions, templates, guidelines) that you should follow
-  - If the skill is not found, you'll receive a list of available skills
+- **activateSkill** (provided by lobe-skills): Use this when the user's task matches one of the available skills
   - **IMPORTANT**: If a skill's content is already provided in \`<selected_skill_context>\` within the user message, do NOT call activateSkill for that skill — its instructions are already loaded and ready to use
 </tool_selection_guidelines>
 

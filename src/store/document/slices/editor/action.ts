@@ -5,6 +5,7 @@ import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
+import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { documentService } from '@/services/document';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -21,6 +22,11 @@ const n = setNamespace('document/editor');
 export interface SaveMetadata {
   emoji?: string;
   title?: string;
+}
+
+export interface SaveExecutionOptions {
+  restoreFromHistoryId?: string;
+  saveSource?: 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 }
 
 type Setter = StoreSetter<DocumentStore>;
@@ -143,7 +149,11 @@ export class EditorActionImpl {
     this.#set({ editor });
   };
 
-  performSave = async (documentId?: string, metadata?: SaveMetadata): Promise<void> => {
+  performSave = async (
+    documentId?: string,
+    metadata?: SaveMetadata,
+    options?: SaveExecutionOptions,
+  ): Promise<void> => {
     const id = documentId || this.#get().activeDocumentId;
 
     if (!id) return;
@@ -152,8 +162,10 @@ export class EditorActionImpl {
     const doc = documents[id];
     if (!doc || !editor) return;
 
-    // Skip save if no changes
-    if (!doc.isDirty) return;
+    const hasMetadataChanges = metadata?.emoji !== undefined || metadata?.title !== undefined;
+
+    // Skip save if neither document content nor metadata changed
+    if (!doc.isDirty && !hasMetadataChanges) return;
 
     // Update save status
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
@@ -162,12 +174,20 @@ export class EditorActionImpl {
       const currentContent = (editor.getDocument('markdown') as unknown as string) || '';
       const currentEditorData = editor.getDocument('json');
 
+      if (!isValidEditorData(currentEditorData)) {
+        console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
+        internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
+        return;
+      }
+
       // Save document
-      await documentService.updateDocument({
+      const result = await documentService.updateDocument({
         content: currentContent,
         editorData: JSON.stringify(currentEditorData),
         id,
         metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
+        restoreFromHistoryId: options?.restoreFromHistoryId,
+        saveSource: options?.saveSource,
         title: metadata?.title,
       });
 
@@ -177,10 +197,11 @@ export class EditorActionImpl {
         type: 'updateDocument',
         value: {
           editorData: structuredClone(currentEditorData),
+
           isDirty: false,
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
-          lastUpdatedTime: new Date(),
+          lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
           saveStatus: 'saved',
         },
       });

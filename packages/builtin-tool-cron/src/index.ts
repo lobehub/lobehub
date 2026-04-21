@@ -1,4 +1,5 @@
 export { CronExecutionRuntime, type ICronService } from './ExecutionRuntime';
+export { generateCronJobsList } from './helpers';
 export { CronIdentifier, CronManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {

@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 
 import { appEnv } from '@/envs/app';
+import AnalyticsRSCProvider from '@/layout/AnalyticsRSCProvider';
 import AuthProvider from '@/layout/AuthProvider';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import StyleRegistry from '@/layout/GlobalProvider/StyleRegistry';
@@ -30,7 +31,9 @@ const AuthGlobalProvider = async ({ children, variants }: AuthGlobalProviderProp
               segmentVariants={variants}
               serverConfig={serverConfig}
             >
-              <AuthProvider>{children}</AuthProvider>
+              <AnalyticsRSCProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </AnalyticsRSCProvider>
             </AuthServerConfigProvider>
           </AuthThemeLite>
         </NextThemeProvider>

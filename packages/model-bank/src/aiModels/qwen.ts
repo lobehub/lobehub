@@ -800,6 +800,33 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      'The Qwen3.6 35B-A3B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse Mixture-of-Experts (MoE) design, achieving higher inference efficiency. Compared to the 3.5-35B-A3B model, it delivers significant improvements in agentic coding capabilities, mathematical reasoning, code reasoning, spatial intelligence, as well as object localization and target detection.',
+    displayName: 'Qwen3.6-35B-A3B',
+    id: 'qwen3.6-35b-a3b',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       'Supports text, image, and video inputs. For text-only tasks, its performance is comparable to Qwen3 Max, offering higher efficiency and lower cost. In multimodal capabilities, it delivers significant improvements over the Qwen3 VL series.',
     displayName: 'Qwen3.5-397B-A17B',
     id: 'qwen3.5-397b-a17b',
@@ -836,7 +863,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-16',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -885,7 +912,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-24',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -934,7 +961,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-24',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -983,7 +1010,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-24',
     settings: {
-      extendParams: ['reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },
@@ -1363,12 +1390,91 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'qwen3.6-flash', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.6 native vision-language Flash model delivers significantly improved performance compared to the 3.5-Flash version. This model focuses on enhancing agentic coding capabilities (substantially outperforming its predecessor across multiple code-agent benchmarks), as well as improving mathematical reasoning and code reasoning abilities. On the vision side, it shows notable gains in spatial intelligence, with particularly strong improvements in object localization and target detection.',
+    displayName: 'Qwen3.6 Flash',
+    enabled: true,
+    id: 'qwen3.6-flash',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 1.2 * 0.1,
+              '[0.256, infinity]': 4.8 * 0.1,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 1.2 * 1.25,
+              '[0.256, infinity]': 4.8 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 1.2,
+              '[0.256, infinity]': 4.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 7.2,
+              '[0.256, infinity]': 28.8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-16',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'qwen3.5-flash', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
-    description: 'Fastest and lowest-cost Qwen model, ideal for simple tasks.',
+    description:
+      'The Qwen3.5 native vision-language Flash model is built on a hybrid architecture that combines a linear attention mechanism with a sparse Mixture-of-Experts (MoE) design, achieving higher inference efficiency. Compared to the 3 series, it delivers substantial improvements in both pure text and multimodal performance. It also offers fast response times, balancing inference speed and overall capability.',
     displayName: 'Qwen3.5 Flash',
-    enabled: true,
     id: 'qwen3.5-flash',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -1511,13 +1617,91 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'qwen3.6-plus', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen 3.6-Plus introduces major upgrades in coding capabilities, with a focus on Agentic Coding and front-end development, significantly enhancing the Vibe Coding experience. Its reasoning ability across general scenarios has been further improved. In terms of multimodality, capabilities such as universal recognition, OCR, and object localization have been substantially enhanced. It also fixes known issues from the Qwen 3.5-Plus release. Usage remains the same as Qwen 3.5-Plus.',
+    displayName: 'Qwen3.6 Plus',
+    enabled: true,
+    id: 'qwen3.6-plus',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2 * 0.1,
+              '[0.256, infinity]': 8 * 0.1,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2 * 1.25,
+              '[0.256, infinity]': 8 * 1.25,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2,
+              '[0.256, infinity]': 8,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 12,
+              '[0.256, infinity]': 48,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-02',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'qwen3.5-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
       'Qwen3.5 Plus supports text, image, and video input. Its performance on pure text tasks is comparable to Qwen3 Max, with better performance and lower cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.5 Plus',
-    enabled: true,
     id: 'qwen3.5-plus',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -1648,6 +1832,70 @@ const qwenChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'qwen3.6-max-preview', // Supports context caching
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'The largest closed-source model in the Qwen3.6 series. It delivers stronger world knowledge, instruction following, and agentic coding performance for complex tasks. It is text-only, supports thinking mode by default, explicit caching, and function calling.',
+    displayName: 'Qwen3.6 Max Preview',
+    id: 'qwen3.6-max-preview',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9 * 0.2,
+              '[0.128, infinity]': 15 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9,
+              '[0.128, infinity]': 15,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 54,
+              '[0.128, infinity]': 90,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-18',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',
@@ -4520,6 +4768,63 @@ const qwenVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its t2v (text-to-video) capability enables precise control over video generation through prompts, accurately reproducing various cinematic language techniques such as push, pull, pan, tilt, and tracking shots, with smooth camera movements and well-controlled perspective transitions. The model supports up to 15-second video generation, includes music with direct video output, and supports multiple languages.',
+    displayName: 'PixVerse C1 T2V',
+    enabled: true,
+    id: 'pixverse/pixverse-c1-t2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '640x432',
+          '432x640',
+          '640x288',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1024x688',
+          '688x1024',
+          '1024x448',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1200x800',
+          '800x1200',
+          '1280x560',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+          '1776x1184',
+          '1184x1776',
+          '1920x832',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
       'V6 is PixVerse’s new model launched at the end of March 2026. Its t2v (text-to-video) model allows precise control of video visuals through prompts, accurately reproducing various cinematic techniques. Camera movements such as push, pull, pan, tilt, tracking, and follow are smooth and natural, with precise and controllable perspective switching. It supports up to 15-second videos, direct output of music and video, and multiple languages.',
     displayName: 'PixVerse V6 T2V',
     enabled: true,
@@ -4570,8 +4875,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
     },
+    releasedAt: '2026-03-30',
     type: 'video',
   },
   {
@@ -4619,6 +4925,33 @@ const qwenVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its it2v (image-to-video) capability not only provides prompt controllability similar to t2v (text-to-video), but also preserves the color, saturation, scenes, and character features of reference images with high fidelity. Compared to V6, it offers enhanced prompt interpretation, stronger creativity, and delivers fight choreography and visual effects (such as spells) closer to professional cinematic standards. The model supports up to 15-second video generation, includes music with direct video output, and supports multiple languages. It is particularly well-suited for short-duration shots such as single-person close-ups, monologues, freeze-frame or slow-motion sequences, and transitional establishing shots.',
+    displayName: 'PixVerse C1 IT2V',
+    enabled: true,
+    id: 'pixverse/pixverse-c1-it2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
       'V6 is PixVerse’s new model launched at the end of March 2026. Its it2v (image-to-video) model ranks second globally. In addition to the prompt-control capabilities of t2v (text-to-video), it2v can accurately reproduce the colors, saturation, scenes, and character features of reference images, delivering stronger character emotions and high-speed motion performance. It supports up to 15-second videos, direct output of music and video, and multiple languages. Ideal for scenarios such as e-commerce product close-ups, advertising promos, and simulated C4D modeling to showcase product structures, with one-click direct output.',
     displayName: 'PixVerse V6 IT2V',
     enabled: true,
@@ -4639,8 +4972,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
     },
+    releasedAt: '2026-03-30',
     type: 'video',
   },
   {
@@ -4670,6 +5004,36 @@ const qwenVideoModels: AIVideoModelCard[] = [
   },
   {
     description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its kf2v (keyframe-to-video) capability enables smooth and natural transitions between any two input images. The model supports up to 15-second video generation, includes music with direct video output, and supports multiple languages.',
+    displayName: 'PixVerse C1 KF2V',
+    enabled: true,
+    id: 'pixverse/pixverse-c1-kf2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      generateAudio: { default: true },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720P',
+        enum: ['360P', '540P', '720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
+    type: 'video',
+  },
+  {
+    description:
       'V6 is PixVerse’s new model launched at the end of March 2026. Its kf2v (keyframe-to-video) model can seamlessly connect any two images, producing smoother and more natural video transitions. It supports up to 15-second videos, direct output of music and video, and multiple languages.',
     displayName: 'PixVerse V6 KF2V',
     enabled: true,
@@ -4693,8 +5057,9 @@ const qwenVideoModels: AIVideoModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
+      units: [{ name: 'videoGeneration', rate: 0.36, strategy: 'fixed', unit: 'second' }],
     },
+    releasedAt: '2026-03-30',
     type: 'video',
   },
   {
@@ -4723,6 +5088,66 @@ const qwenVideoModels: AIVideoModelCard[] = [
       currency: 'CNY',
       units: [{ name: 'videoGeneration', rate: 0.53, strategy: 'fixed', unit: 'second' }],
     },
+    type: 'video',
+  },
+  {
+    description:
+      'C1 is a large-scale model for the film and television industry launched by PixVerse in late March 2026. Its r2v (reference-to-video) capability supports inputting 2–7 images, intelligently blending multiple subjects while retaining prompt controllability similar to t2v (text-to-video), as well as the consistency and creativity of it2v (image-to-video). It delivers fight choreography and visual effects (e.g., spells and action sequences) closer to professional cinematic standards. The model supports up to 15-second video generation, includes music with direct video output, and handles multiple languages. It is well-suited for complex scenes such as multi-character group shots, dialogues, and interactions, particularly in medium and wide shots. If a single multi-panel storyboard image is provided (supporting up to a 9-panel grid), it can generate a continuous multi-shot video sequence in one click.',
+    displayName: 'PixVerse C1 R2V',
+    id: 'pixverse/pixverse-c1-r2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 1 },
+      generateAudio: { default: true },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      seed: { default: null },
+      size: {
+        default: '1280x720',
+        enum: [
+          '640x360',
+          '640x480',
+          '640x640',
+          '480x640',
+          '360x640',
+          '640x432',
+          '432x640',
+          '640x288',
+          '1024x576',
+          '1024x768',
+          '1024x1024',
+          '768x1024',
+          '576x1024',
+          '1024x688',
+          '688x1024',
+          '1024x448',
+          '1280x720',
+          '1280x960',
+          '1280x1280',
+          '960x1280',
+          '720x1280',
+          '1200x800',
+          '800x1200',
+          '1280x560',
+          '1920x1080',
+          '1920x1440',
+          '1808x1808',
+          '1440x1920',
+          '1080x1920',
+          '1776x1184',
+          '1184x1776',
+          '1920x832',
+        ],
+      },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 0.39, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-07',
     type: 'video',
   },
   {

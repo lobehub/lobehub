@@ -12,9 +12,10 @@ import { RendererProtocolManager } from './RendererProtocolManager';
 const logger = createLogger('core:RendererUrlManager');
 
 // Vite build with root=monorepo preserves input path structure,
-// so index.html ends up at apps/desktop/index.html in outDir.
+// so index.html / overlay.html / popup.html end up under apps/desktop/ in outDir.
 const SPA_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'index.html');
 const OVERLAY_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'overlay.html');
+const POPUP_ENTRY_HTML = path.join(rendererDir, 'apps', 'desktop', 'popup.html');
 
 export class RendererUrlManager {
   private readonly rendererProtocolManager: RendererProtocolManager;
@@ -70,7 +71,7 @@ export class RendererUrlManager {
   /**
    * Resolve renderer file path in production.
    * Static assets map directly; /overlay routes fall back to overlay.html;
-   * all other routes fall back to index.html (SPA).
+   * popup routes go to popup.html; all other routes fall back to index.html (SPA).
    */
   resolveRendererFilePath = async (url: URL): Promise<string | null> => {
     const pathname = url.pathname;
@@ -84,6 +85,11 @@ export class RendererUrlManager {
     // Overlay entry (separate MPA page)
     if (pathname === '/overlay' || pathname === '/overlay.html') {
       return OVERLAY_ENTRY_HTML;
+    }
+
+    // Topic popup window has its own SPA bundle.
+    if (pathname === '/popup' || pathname.startsWith('/popup/')) {
+      return POPUP_ENTRY_HTML;
     }
 
     // All other routes fallback to index.html (SPA)

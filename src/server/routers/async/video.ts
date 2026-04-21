@@ -1,5 +1,9 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -133,6 +137,8 @@ export const videoRouter = router({
       provider,
     });
 
+    const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+
     const abortController = new AbortController();
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -208,10 +214,14 @@ export const videoRouter = router({
               metadata: {
                 asyncTaskId,
                 generationBatchId,
-                modelId: model,
                 topicId: generationTopicId,
+                ...buildMappedBusinessModelFields({
+                  provider,
+                  requestedModelId: resolvedModelId === model ? undefined : model,
+                  resolvedModelId,
+                }),
               },
-              model,
+              model: resolvedModelId,
               prechargeResult,
               provider,
               usage: undefined,
@@ -270,10 +280,14 @@ export const videoRouter = router({
             metadata: {
               asyncTaskId,
               generationBatchId,
-              modelId: model,
               topicId: generationTopicId,
+              ...buildMappedBusinessModelFields({
+                provider,
+                requestedModelId: resolvedModelId === model ? undefined : model,
+                resolvedModelId,
+              }),
             },
-            model,
+            model: resolvedModelId,
             prechargeResult,
             provider,
             userId: ctx.userId,

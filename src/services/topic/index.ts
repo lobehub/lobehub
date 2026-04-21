@@ -37,10 +37,12 @@ export class TopicService {
     return lambdaClient.topic.getTopics.query({
       agentId: params.agentId,
       current: params.current,
+      excludeStatuses: params.excludeStatuses,
       excludeTriggers: params.excludeTriggers,
       groupId: params.groupId,
       isInbox: params.isInbox,
       pageSize: params.pageSize,
+      triggers: params.triggers,
     }) as any;
   };
 
@@ -83,6 +85,22 @@ export class TopicService {
     metadata: {
       boundDeviceId?: string;
       model?: string;
+      onboardingFeedback?: {
+        comment?: string;
+        rating: 'good' | 'bad';
+        submittedAt: string;
+      };
+      onboardingSession?: {
+        agentIdentityCompletedAt?: string;
+        discoveryCompletedAt?: string;
+        finalAgentNames?: string[];
+        finishedAt?: string;
+        lastActiveAt: string;
+        phase: 'agent_identity' | 'user_identity' | 'discovery' | 'summary';
+        startedAt: string;
+        userIdentityCompletedAt?: string;
+        version: number;
+      };
       provider?: string;
       runningOperation?: { assistantMessageId: string; operationId: string } | null;
       workingDirectory?: string;

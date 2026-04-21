@@ -1,6 +1,9 @@
 {
   "about": "حول",
   "advanceSettings": "الإعدادات المتقدمة",
+  "agentOnboardingPromo.actionLabel": "جرّب الآن",
+  "agentOnboardingPromo.description": "قم بإعداد فرق الوكلاء لديك عبر محادثة سريعة مع Lobe AI. ستبقى وكلاؤك الحاليون دون تغيير.",
+  "agentOnboardingPromo.title": "المعالج السريع",
   "alert.cloud.action": "جرّب الآن",
   "alert.cloud.desc": "جميع المستخدمين المسجلين يحصلون على {{credit}} من أرصدة الحوسبة المجانية شهريًا — دون الحاجة إلى إعداد. يشمل المزامنة السحابية العالمية والبحث المتقدم على الويب.",
   "alert.cloud.descOnMobile": "جميع المستخدمين المسجلين يحصلون على {{credit}} من أرصدة الحوسبة المجانية شهريًا — دون الحاجة إلى إعداد.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "نقل لأسفل",
   "navPanel.moveUp": "نقل لأعلى",
   "navPanel.pinned": "مثبّت",
+  "navPanel.resetDefault": "إعادة التعيين إلى الإعدادات الافتراضية",
   "navPanel.searchAgent": "بحث عن وكيل...",
   "navPanel.searchRecent": "البحث في الأخير...",
   "navPanel.searchResultEmpty": "لم يتم العثور على نتائج",

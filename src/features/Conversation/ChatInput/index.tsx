@@ -27,6 +27,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import QueueTray from './QueueTray';
+import { getConversationChatInputUiState } from './utils';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -86,6 +87,11 @@ export interface ChatInputProps {
    */
   rightActions?: ActionKeys[];
   /**
+   * Custom node to render in place of the default RuntimeConfig bar
+   * (Local/Cloud/Approval). When provided, replaces the default bar.
+   */
+  runtimeConfigSlot?: ReactNode;
+  /**
    * Custom content to render before the SendArea (right side of action bar)
    */
   sendAreaPrefix?: ReactNode;
@@ -119,10 +125,11 @@ const ChatInput = memo<ChatInputProps>(
     allowExpand,
     leftActions = [],
     leftContent,
-    rightActions = ['promptTransform'],
+    rightActions = [],
     children,
     extraActionItems,
     mentionItems,
+    runtimeConfigSlot,
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
@@ -178,8 +185,13 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
+    const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
+      isInputEmpty,
+      isInputLoading,
+    });
     // Input stays enabled during agent execution — messages are queued
     const disabled = isInputEmpty || isUploadingFiles;
+    const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
@@ -221,9 +233,12 @@ const ChatInput = memo<ChatInputProps>(
 
     const sendButtonProps: SendButtonProps = {
       disabled,
-      generating: isInputLoading,
+      generating: showStopButton,
       onStop: stopGenerating,
       ...customSendButtonProps,
+      ...(shouldUsePlainSendButton
+        ? { shape: customSendButtonProps?.shape ?? 'round' }
+        : undefined),
     };
 
     const defaultContent = (
@@ -263,6 +278,8 @@ const ChatInput = memo<ChatInputProps>(
               borderRadius={12}
               extraActionItems={extraActionItems}
               leftContent={leftContent}
+              placeholderVariant={placeholderVariant}
+              runtimeConfigSlot={runtimeConfigSlot}
               sendAreaPrefix={sendAreaPrefix}
               showRuntimeConfig={showRuntimeConfig}
             />
@@ -280,7 +297,7 @@ const ChatInput = memo<ChatInputProps>(
         mentionItems={mentionItems}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
-        sendMenu={sendMenu}
+        sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
         chatInputEditorRef={(instance) => {
           if (instance) {

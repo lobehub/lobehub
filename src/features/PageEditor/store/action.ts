@@ -6,7 +6,7 @@ import { type StateCreator } from 'zustand';
 import { useDocumentStore } from '@/store/document';
 import { useFileStore } from '@/store/file';
 
-import { type State } from './initialState';
+import { type RightPanelMode, type State } from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
@@ -24,6 +24,7 @@ export interface Action {
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setEmoji: (emoji: string | undefined) => void;
+  setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
 }
@@ -134,10 +135,14 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
 
         try {
           // Trigger save via DocumentStore with metadata
-          await useDocumentStore.getState().performSave(documentId, {
-            emoji,
-            title,
-          });
+          await useDocumentStore.getState().performSave(
+            documentId,
+            {
+              emoji,
+              title,
+            },
+            { saveSource: 'autosave' },
+          );
 
           // Notify parent after successful save
           if (title !== lastSavedTitle) {
@@ -168,6 +173,10 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (isDirty) {
           triggerDebouncedMetaSave();
         }
+      },
+
+      setRightPanelMode: (rightPanelMode) => {
+        set({ rightPanelMode });
       },
 
       setTitle: (title: string) => {

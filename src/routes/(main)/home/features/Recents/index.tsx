@@ -26,6 +26,7 @@ import { useInitRecents } from '@/hooks/useInitRecents';
 import { openCustomizeSidebarModal } from '@/routes/(main)/home/_layout/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
@@ -44,30 +45,27 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const { isRevalidating } = useInitRecents();
 
-  const [recentPageSize, sidebarSectionOrder, hiddenSections, updateSystemStatus] = useGlobalStore(
-    (s) => [
-      systemStatusSelectors.recentPageSize(s),
-      systemStatusSelectors.sidebarSectionOrder(s),
-      systemStatusSelectors.hiddenSidebarSections(s),
-      s.updateSystemStatus,
-    ],
-  );
+  const [recentPageSize, sidebarItems, hiddenSections, updateSystemStatus] = useGlobalStore((s) => [
+    systemStatusSelectors.recentPageSize(s),
+    systemStatusSelectors.sidebarItems(s),
+    systemStatusSelectors.hiddenSidebarSections(s),
+    s.updateSystemStatus,
+  ]);
 
-  const visibleOrder = sidebarSectionOrder.filter((k) => !hiddenSections.includes(k));
-  const visibleIndex = visibleOrder.indexOf('recents');
+  const visibleItems = sidebarItems.filter((k) => !hiddenSections.includes(k));
+  const visibleIndex = visibleItems.indexOf('recents');
   const isFirst = visibleIndex === 0;
-  const isLast = visibleIndex === visibleOrder.length - 1;
+  const isLast = visibleIndex === visibleItems.length - 1;
 
   const moveSection = useCallback(
     (direction: 'up' | 'down') => {
-      const newOrder = [...sidebarSectionOrder];
-      const idx = newOrder.indexOf('recents');
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= newOrder.length) return;
-      [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
-      updateSystemStatus({ sidebarSectionOrder: newOrder });
+      const idx = sidebarItems.indexOf('recents');
+      if (idx === -1) return;
+      const next = reorderSidebarItems(sidebarItems, idx, direction === 'up' ? idx - 1 : idx + 1);
+      if (next === sidebarItems) return;
+      updateSystemStatus({ sidebarItems: next });
     },
-    [sidebarSectionOrder, updateSystemStatus],
+    [sidebarItems, updateSystemStatus],
   );
 
   const hideSection = useCallback(() => {
@@ -130,7 +128,7 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
     isLast,
     moveSection,
     hideSection,
-    visibleOrder.length,
+    visibleItems.length,
   ]);
 
   if (!isLogin) return null;

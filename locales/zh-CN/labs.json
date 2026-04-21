@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "服务端代理执行（Gateway）",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
+  "features.heterogeneousAgent.desc": "启用与 Claude Code、Codex CLI 及其他外部代理 CLI 的异构代理协同执行。在侧边栏的代理菜单中创建“Claude Code 代理”选项。",
+  "features.heterogeneousAgent.title": "异构代理（Claude Code）",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
   "title": "实验室"

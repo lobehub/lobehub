@@ -60,6 +60,7 @@
   "response.520": "Onze excuses, de server ondervond een onverwacht probleem en kon je verzoek niet voltooien. Probeer het later opnieuw; we werken aan een oplossing.",
   "response.522": "Onze excuses, de serververbinding is verlopen en kon niet tijdig reageren. Dit kan komen door een instabiel netwerk of tijdelijke onbeschikbaarheid. Probeer het later opnieuw.",
   "response.524": "Onze excuses, de server heeft te lang gewacht op een antwoord. Probeer het later opnieuw.",
+  "response.AccountDeactivated": "Uw account is gedeactiveerd of opgeschort. Dit kan te maken hebben met beleidsregels, beveiligingsredenen of een accountbeoordeling. Neem contact op met de ondersteuning van de aanbieder voor hulp.",
   "response.AgentRuntimeError": "Fout bij uitvoeren van Lobe-taalmodel. Los het probleem op of probeer opnieuw met onderstaande informatie.",
   "response.ComfyUIBizError": "Er is een fout opgetreden bij het aanvragen van de ComfyUI-service. Los het probleem op met onderstaande informatie of probeer opnieuw.",
   "response.ComfyUIEmptyResult": "Er is geen afbeelding gegenereerd door ComfyUI. Controleer de modelconfiguratie of probeer opnieuw.",

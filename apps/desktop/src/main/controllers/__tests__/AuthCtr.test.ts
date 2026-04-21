@@ -29,6 +29,11 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: ipcMainHandleMock,
   },
+  net: {
+    fetch: vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+      global.fetch(input as any, init as any),
+    ),
+  },
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
   },

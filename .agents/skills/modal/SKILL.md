@@ -1,64 +1,76 @@
 ---
 name: modal
-description: Modal imperative API guide. Use when creating modal dialogs using createModal from @lobehub/ui. Triggers on modal component implementation or dialog creation tasks.
+description: MUST use when creating, editing, or writing modal dialogs or imperative modals. Prefer createModal / useModalContext / confirmModal from @lobehub/ui/base-ui; root @lobehub/ui is legacy (antd Modal). Covers patterns, ModalHost, and migration notes.
 user-invocable: false
 ---
 
 # Modal Imperative API Guide
 
-Use `createModal` from `@lobehub/ui` for imperative modal dialogs.
+## Recommended: `@lobehub/ui/base-ui`
 
-## Why Imperative?
+New code should use the **base-ui** modal stack (headless primitives, not antd `Modal`):
 
-| Mode        | Characteristics                       | Recommended |
-| ----------- | ------------------------------------- | ----------- |
-| Declarative | Need `open` state, render `<Modal />` | ❌          |
-| Imperative  | Call function directly, no state      | ✅          |
+- `createModal`, `confirmModal`, `ModalHost` from `@lobehub/ui/base-ui`
+- `useModalContext` from `@lobehub/ui/base-ui` inside modal **content**
 
-## File Structure
+Body slot: pass **`content`** (or `children`; runtime uses `content ?? children`).
+
+### Global `ModalHost` (required)
+
+Base-ui `createModal` renders through a **separate** host from the root package. The app must mount **`ModalHost`** from `@lobehub/ui/base-ui` once near the root (e.g. next to other global hosts). Without it, `createModal` calls will not appear.
+
+If the project only mounts `ModalHost` from `@lobehub/ui`, add a second lazy `ModalHost` from `@lobehub/ui/base-ui` until all imperative modals are migrated.
+
+### Why imperative?
+
+| Mode        | Characteristics                      | Recommended |
+| ----------- | ------------------------------------ | ----------- |
+| Declarative | `open` state + `<Modal />`           | ❌          |
+| Imperative  | Call `createModal()`, no local state | ✅          |
+
+### File structure
 
 ```
 features/
 └── MyFeatureModal/
-    ├── index.tsx           # Export createXxxModal
-    └── MyFeatureContent.tsx # Modal content
+    ├── index.tsx            # export createXxxModal
+    └── MyFeatureContent.tsx # modal body
 ```
 
-## Implementation
-
-### 1. Content Component (`MyFeatureContent.tsx`)
+### 1. Content (`MyFeatureContent.tsx`)
 
 ```tsx
 'use client';
 
-import { useModalContext } from '@lobehub/ui';
+import { useModalContext } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
 
 export const MyFeatureContent = () => {
   const { t } = useTranslation('namespace');
-  const { close } = useModalContext(); // Optional: get close method
+  const { close } = useModalContext();
 
-  return <div>{/* Modal content */}</div>;
+  return <div>{/* ... */}</div>;
 };
 ```
 
-### 2. Export createModal (`index.tsx`)
+### 2. `createModal` (`index.tsx`)
 
 ```tsx
 'use client';
 
-import { createModal } from '@lobehub/ui';
-import { t } from 'i18next'; // Note: use i18next, not react-i18next
+import { createModal } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 
 import { MyFeatureContent } from './MyFeatureContent';
 
 export const createMyFeatureModal = () =>
   createModal({
-    allowFullscreen: true,
-    children: <MyFeatureContent />,
-    destroyOnHidden: false,
+    content: <MyFeatureContent />,
     footer: null,
-    styles: { body: { overflow: 'hidden', padding: 0 } },
+    maskClosable: true,
+    styles: {
+      content: { overflow: 'hidden', padding: 0 },
+    },
     title: t('myFeature.title', { ns: 'setting' }),
     width: 'min(80%, 800px)',
   });
@@ -76,27 +88,52 @@ const handleOpen = useCallback(() => {
 return <Button onClick={handleOpen}>Open</Button>;
 ```
 
-## i18n Handling
+### i18n
 
-- **Content component**: `useTranslation` hook (React context)
-- **createModal params**: `import { t } from 'i18next'` (non-hook, imperative)
+- **Content**: `useTranslation` in components.
+- **`createModal` options**: `import { t } from 'i18next'` where hooks are unavailable.
 
-## useModalContext Hook
+### `useModalContext`
 
 ```tsx
 const { close, setCanDismissByClickOutside } = useModalContext();
 ```
 
-## Common Config
+### Common options (base-ui)
 
-| Property          | Type                | Description              |
-| ----------------- | ------------------- | ------------------------ |
-| `allowFullscreen` | `boolean`           | Allow fullscreen mode    |
-| `destroyOnHidden` | `boolean`           | Destroy content on close |
-| `footer`          | `ReactNode \| null` | Footer content           |
-| `width`           | `string \| number`  | Modal width              |
+`ImperativeModalProps` builds on `BaseModalProps`: `title`, `width`, `maskClosable`, `open`, `onOpenChange`, `footer`, `styles` / `classNames` (keys: `backdrop`, `popup`, `header`, `title`, `close`, `content`, …).
+
+| Property       | Notes                                    |
+| -------------- | ---------------------------------------- |
+| `content`      | Main body (preferred name vs `children`) |
+| `maskClosable` | Click outside to dismiss                 |
+| `styles.*`     | Semantic regions, not antd `styles.body` |
+
+### Confirm
+
+```tsx
+import { confirmModal } from '@lobehub/ui/base-ui';
+
+confirmModal({
+  title: '…',
+  content: '…',
+  okText: '…',
+  cancelText: '…',
+  onOk: async () => {},
+});
+```
+
+---
+
+## Legacy: `@lobehub/ui` (root)
+
+Older call sites use **`createModal` from `@lobehub/ui`**, which is typed as **antd `Modal` props** (`children`, `allowFullscreen`, `getContainer`, `destroyOnHidden`, `styles.body`, etc.). Prefer migrating new work to **`@lobehub/ui/base-ui`**.
+
+Examples (legacy): `src/features/SkillStore/index.tsx`, `src/features/LibraryModal/CreateNew/index.tsx`.
+
+---
 
 ## Examples
 
-- `src/features/SkillStore/index.tsx`
-- `src/features/LibraryModal/CreateNew/index.tsx`
+- Base-ui (preferred): follow sections above; ensure **base-ui `ModalHost`** is mounted.
+- Legacy: `src/features/SkillStore/index.tsx`, `src/features/LibraryModal/CreateNew/index.tsx`

@@ -4,11 +4,25 @@ export const systemPrompt = `You have access to a LobeHub Scheduled Tasks Tool. 
 Current user: {{username}}
 Session date: {{date}}
 Current agent: {{agent_id}}
+User timezone: {{timezone}}
 </session_context>
 
 <existing_scheduled_tasks>
 {{CRON_JOBS_LIST}}
 </existing_scheduled_tasks>
+
+<when_to_use>
+**Use this tool (lobe-cron) when the user wants tasks to run automatically and repeatedly.** Common trigger phrases include:
+- "daily task", "set as daily task", "make it a daily routine"
+- "every day", "every morning", "every week", "every hour"
+- "recurring", "routine", "regular", "periodic", "scheduled"
+- "automatically do X at Y time"
+- "remind me every day to..."
+
+**Do NOT confuse with lobe-gtd.** GTD is for one-time planning and manual todo tracking. If the user says "daily task" or "routine task", they almost always mean automated repetition (lobe-cron), NOT a one-time todo item (lobe-gtd).
+
+**Do NOT confuse with lobe-user-memory.** Memory is for saving user preferences and long-term knowledge. "Set as daily task" means schedule it to run repeatedly, NOT save it as a memory.
+</when_to_use>
 
 <core_capabilities>
 1. **Create Tasks**: Set up recurring tasks with custom schedules (daily, hourly, weekly patterns)

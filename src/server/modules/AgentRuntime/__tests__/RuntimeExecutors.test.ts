@@ -63,8 +63,12 @@ describe('RuntimeExecutors', () => {
 
     mockMessageModel = {
       create: vi.fn().mockResolvedValue({ id: 'msg-123' }),
+      // call_llm does a parent existence preflight; return a truthy row by
+      // default so existing tests don't have to stub it.
+      findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
       query: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
+      updateToolMessage: vi.fn().mockResolvedValue({ success: true }),
     };
 
     mockStreamManager = {
@@ -236,6 +240,36 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('should throw ConversationParentMissing if parent preflight misses (LOBE-7158)', async () => {
+      // parent existence preflight — if the parent row was deleted between
+      // operation kickoff and call_llm, fail fast before spending LLM tokens
+      // on a chain that would hit a FK violation anyway.
+      mockMessageModel.findById.mockResolvedValueOnce(null);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          parentId: 'gone-msg',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await expect(executors.call_llm!(instruction, state)).rejects.toMatchObject({
+        errorType: 'ConversationParentMissing',
+        parentId: 'gone-msg',
+      });
+      // LLM never got invoked
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+      // No assistant message got created either
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+    });
+
     it('should pass undefined parentId when neither parentId nor parentMessageId is provided', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -327,11 +361,58 @@ describe('RuntimeExecutors', () => {
 
       expect(result.newState.messages.at(-1)).toEqual(
         expect.objectContaining({
+          id: 'msg-123',
           reasoning: { content: 'Need to inspect the search results first.' },
           role: 'assistant',
           tool_calls: [expect.objectContaining({ id: 'call_1' })],
         }),
       );
+    });
+
+    it('should push assistant message with persisted DB id so request_human_approve can find parent', async () => {
+      const toolCallPayload = [
+        {
+          function: { arguments: '{}', name: 'search' },
+          id: 'call_sensitive',
+          type: 'function',
+        },
+      ];
+
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onToolsCalling?.({ toolsCalling: toolCallPayload });
+        await options?.callback?.onCompletion?.({
+          usage: { totalInputTokens: 1, totalOutputTokens: 2, totalTokens: 3 },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      mockMessageModel.create.mockResolvedValueOnce({ id: 'persisted-assistant-id' });
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      const lastAssistant = result.newState.messages.at(-1);
+      expect(lastAssistant).toMatchObject({
+        id: 'persisted-assistant-id',
+        role: 'assistant',
+      });
+      // The id must match the same message that nextContext exposes as
+      // parentMessageId, so request_human_approve sees a single source of truth.
+      expect((result.nextContext?.payload as any).parentMessageId).toBe('persisted-assistant-id');
     });
 
     it('should execute compress_context and return compression_result', async () => {
@@ -1382,8 +1463,11 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tool_result');
     });
 
-    it('should return undefined parentMessageId if messageModel.create fails', async () => {
-      // Setup: mock messageModel.create to throw an error
+    it('should re-throw when messageModel.create fails (LOBE-7158: no silent swallow)', async () => {
+      // Before LOBE-7158 we silently swallowed this error and returned
+      // `parentMessageId: undefined`, which let the operation continue into
+      // the next step and re-hit the same failure without context. The fix
+      // requires the executor to propagate so the whole step fails.
       mockMessageModel.create.mockRejectedValue(new Error('Database error'));
 
       const executors = createRuntimeExecutors(ctx);
@@ -1403,11 +1487,53 @@ describe('RuntimeExecutors', () => {
         type: 'call_tool' as const,
       };
 
-      const result = await executors.call_tool!(instruction, state);
+      await expect(executors.call_tool!(instruction, state)).rejects.toThrow('Database error');
+    });
 
-      // parentMessageId should be undefined when message creation fails
-      const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBeUndefined();
+    it('should throw ConversationParentMissing on a parent_id FK violation (LOBE-7158)', async () => {
+      // Simulate the drizzle + postgres-js wrapped error shape.
+      const fkError: any = new Error(
+        'Failed query: insert into "messages" ... violates foreign key constraint',
+      );
+      fkError.cause = {
+        code: '23503',
+        constraint: 'messages_parent_id_messages_id_fk',
+      };
+      mockMessageModel.create.mockRejectedValue(fkError);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'deleted-parent',
+          toolCalling: {
+            apiName: 'search',
+            arguments: '{}',
+            id: 'tool-call-1',
+            identifier: 'web-search',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      await expect(executors.call_tool!(instruction, state)).rejects.toMatchObject({
+        errorType: 'ConversationParentMissing',
+        parentId: 'deleted-parent',
+      });
+
+      // Stream event must carry the normalized error, not raw SQL text —
+      // clients treat `error` events as terminal and surface data.error
+      // directly, so leaking driver output here would show up to users.
+      const errorEventPublishes = mockStreamManager.publishStreamEvent.mock.calls.filter(
+        ([, event]: [string, any]) => event.type === 'error',
+      );
+      expect(errorEventPublishes.length).toBeGreaterThan(0);
+      for (const [, event] of errorEventPublishes) {
+        expect(event.data.errorType).toBe('ConversationParentMissing');
+        expect(event.data.error).not.toMatch(/Failed query/);
+      }
     });
 
     it('should retry tool execution when kind is retry and eventually succeed', async () => {
@@ -1578,6 +1704,294 @@ describe('RuntimeExecutors', () => {
       await executors.call_tool!(stopInstruction, state);
 
       expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
+    });
+
+    describe('skipCreateToolMessage (resumption after human approval)', () => {
+      it('should update existing tool message instead of creating a new one', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'pending-tool-msg-1',
+            skipCreateToolMessage: true,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        await executors.call_tool!(instruction, state);
+
+        expect(mockMessageModel.create).not.toHaveBeenCalled();
+        expect(mockMessageModel.updateToolMessage).toHaveBeenCalledWith(
+          'pending-tool-msg-1',
+          expect.objectContaining({
+            content: 'Tool result',
+            metadata: { toolExecutionTimeMs: 100 },
+          }),
+        );
+      });
+
+      it('should return the existing toolMessageId as parentMessageId for the next LLM step', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'pending-tool-msg-42',
+            skipCreateToolMessage: true,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-42',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        const result = await executors.call_tool!(instruction, state);
+
+        const nextPayload = result.nextContext?.payload as { parentMessageId?: string } | undefined;
+        expect(nextPayload?.parentMessageId).toBe('pending-tool-msg-42');
+      });
+
+      it('should fall back to creating a new tool message when skipCreateToolMessage is false', async () => {
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            parentMessageId: 'assistant-msg-7',
+            skipCreateToolMessage: false,
+            toolCalling: {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-7',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          },
+          type: 'call_tool' as const,
+        };
+
+        await executors.call_tool!(instruction, state);
+
+        expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
+        expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('request_human_approve executor', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [
+        {
+          content: 'assistant response',
+          id: 'assistant-msg-1',
+          role: 'assistant',
+        } as any,
+      ],
+      metadata: {
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: 'topic-123',
+      },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    const makePendingTools = () => [
+      {
+        apiName: 'search',
+        arguments: '{"q":"test"}',
+        id: 'tool-call-1',
+        identifier: 'web-search',
+        type: 'default' as const,
+      },
+      {
+        apiName: 'write',
+        arguments: '{"file":"a.md"}',
+        id: 'tool-call-2',
+        identifier: 'local-system',
+        type: 'default' as const,
+      },
+    ];
+
+    it('should create a pending tool message for each pendingToolsCalling', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const instruction = {
+        pendingToolsCalling: makePendingTools(),
+        type: 'request_human_approve' as const,
+      };
+
+      await executors.request_human_approve!(instruction, state);
+
+      expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentId: 'agent-123',
+          content: '',
+          parentId: 'assistant-msg-1',
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          parentId: 'assistant-msg-1',
+          pluginIntervention: { status: 'pending' },
+          tool_call_id: 'tool-call-2',
+        }),
+      );
+    });
+
+    it('should set state to waiting_for_human and copy pendingToolsCalling', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+      const pending = makePendingTools();
+
+      const result = await executors.request_human_approve!(
+        { pendingToolsCalling: pending, type: 'request_human_approve' as const },
+        state,
+      );
+
+      expect(result.newState.status).toBe('waiting_for_human');
+      expect(result.newState.pendingToolsCalling).toEqual(pending);
+    });
+
+    it('should publish tools_calling chunk with toolMessageIds mapping', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
+        (call: any[]) => call[2]?.chunkType === 'tools_calling',
+      );
+      expect(chunkCall).toBeTruthy();
+      expect(chunkCall![2].toolMessageIds).toEqual({
+        'tool-call-1': 'tool-msg-1',
+        'tool-call-2': 'tool-msg-2',
+      });
+    });
+
+    it('should skip message creation when skipCreateToolMessage is true', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.query.mockResolvedValueOnce([
+        { id: 'existing-tool-1', role: 'tool', tool_call_id: 'tool-call-1' },
+        { id: 'existing-tool-2', role: 'tool', tool_call_id: 'tool-call-2' },
+      ]);
+
+      await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          skipCreateToolMessage: true,
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+      const chunkCall = mockStreamManager.publishStreamChunk.mock.calls.find(
+        (call: any[]) => call[2]?.chunkType === 'tools_calling',
+      );
+      expect(chunkCall![2].toolMessageIds).toEqual({
+        'tool-call-1': 'existing-tool-1',
+        'tool-call-2': 'existing-tool-2',
+      });
+    });
+
+    it('should throw if no parent assistant message can be found', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({ messages: [] });
+      mockMessageModel.query.mockResolvedValueOnce([]);
+
+      await expect(
+        executors.request_human_approve!(
+          {
+            pendingToolsCalling: makePendingTools(),
+            type: 'request_human_approve' as const,
+          },
+          state,
+        ),
+      ).rejects.toThrow(/No assistant message found/);
+    });
+
+    it('should emit human_approve_required and tool_pending events', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const result = await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(result.events).toContainEqual(
+        expect.objectContaining({ type: 'human_approve_required' }),
+      );
+      expect(result.events).toContainEqual(expect.objectContaining({ type: 'tool_pending' }));
+    });
+
+    it('should NOT return a nextContext (operation pauses)', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      mockMessageModel.create
+        .mockResolvedValueOnce({ id: 'tool-msg-1' })
+        .mockResolvedValueOnce({ id: 'tool-msg-2' });
+
+      const result = await executors.request_human_approve!(
+        {
+          pendingToolsCalling: makePendingTools(),
+          type: 'request_human_approve' as const,
+        },
+        state,
+      );
+
+      expect(result.nextContext).toBeUndefined();
     });
   });
 
@@ -1771,11 +2185,14 @@ describe('RuntimeExecutors', () => {
       const result = await executors.call_tools_batch!(instruction, state);
 
       // Should query messages from database with agentId, threadId, and topicId
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-123',
-        threadId: 'thread-123',
-        topicId: 'topic-123',
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: 'topic-123',
+        },
+        expect.any(Object),
+      );
 
       // Messages should be refreshed from database (4 messages from mock)
       expect(result.newState.messages).toHaveLength(4);
@@ -1855,8 +2272,11 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
-    it('should fallback to original parentMessageId if no tool messages created', async () => {
-      // All tool message creations fail
+    it('should propagate persist failures instead of silently falling back (LOBE-7158)', async () => {
+      // Before LOBE-7158 we fell back to the original parentMessageId here,
+      // which was itself the deleted parent that caused the failure — so the
+      // next step would hit the same FK violation with no context. The fix
+      // requires the batch to short-circuit on persist failure.
       mockMessageModel.create.mockRejectedValue(new Error('Database error'));
 
       const executors = createRuntimeExecutors(ctx);
@@ -1878,11 +2298,44 @@ describe('RuntimeExecutors', () => {
         type: 'call_tools_batch' as const,
       };
 
-      const result = await executors.call_tools_batch!(instruction, state);
+      await expect(executors.call_tools_batch!(instruction, state)).rejects.toThrow(
+        'Database error',
+      );
+    });
 
-      // Should fallback to original parentMessageId
-      const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBe('original-parent-123');
+    it('should throw ConversationParentMissing on a parent_id FK violation (LOBE-7158)', async () => {
+      const fkError: any = new Error(
+        'Failed query: insert into "messages" ... violates foreign key constraint',
+      );
+      fkError.cause = {
+        code: '23503',
+        constraint: 'messages_parent_id_messages_id_fk',
+      };
+      mockMessageModel.create.mockRejectedValue(fkError);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'deleted-parent',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await expect(executors.call_tools_batch!(instruction, state)).rejects.toMatchObject({
+        errorType: 'ConversationParentMissing',
+        parentId: 'deleted-parent',
+      });
     });
 
     it('should continue processing other tools if one tool execution fails', async () => {
@@ -1936,8 +2389,10 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext!.phase).toBe('tools_batch_result');
     });
 
-    it('should continue if tool message creation fails for one tool', async () => {
-      // First message creation succeeds, second fails
+    it('should fail the batch if tool message creation fails for any tool (LOBE-7158)', async () => {
+      // Before LOBE-7158 we swallowed per-tool persist failures and kept
+      // going. The fix requires the batch to abort — a FK violation on one
+      // tool means every concurrent tool has the same doomed parent.
       mockMessageModel.create
         .mockResolvedValueOnce({ id: 'tool-msg-1' })
         .mockRejectedValueOnce(new Error('Database error'));
@@ -1968,17 +2423,9 @@ describe('RuntimeExecutors', () => {
         type: 'call_tools_batch' as const,
       };
 
-      const result = await executors.call_tools_batch!(instruction, state);
-
-      // Both tools should be executed
-      expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(2);
-
-      // Should still return result
-      expect(result.nextContext).toBeDefined();
-
-      // parentMessageId should be the first successful tool message
-      const payload = result.nextContext!.payload as { parentMessageId?: string };
-      expect(payload.parentMessageId).toBe('tool-msg-1');
+      await expect(executors.call_tools_batch!(instruction, state)).rejects.toThrow(
+        'Database error',
+      );
     });
 
     it('should publish tool_start and tool_end events for each tool', async () => {
@@ -2099,11 +2546,14 @@ describe('RuntimeExecutors', () => {
       await executors.call_tools_batch!(instruction, state);
 
       // Should query messages with agentId, threadId, and topicId from state.metadata
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-abc',
-        threadId: 'thread-xyz',
-        topicId: 'topic-abc-123',
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-abc',
+          threadId: 'thread-xyz',
+          topicId: 'topic-abc-123',
+        },
+        expect.any(Object),
+      );
     });
 
     // LOBE-5143: After DB refresh, state.messages stores raw UIChatMessage[]
@@ -2235,11 +2685,14 @@ describe('RuntimeExecutors', () => {
       const result = await executors.call_tools_batch!(instruction, state);
 
       // Verify agentId is passed in the query
-      expect(mockMessageModel.query).toHaveBeenCalledWith({
-        agentId: 'agent-123',
-        threadId: 'thread-123',
-        topicId: undefined,
-      });
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: undefined,
+        },
+        expect.any(Object),
+      );
 
       // Expected: newState.messages should NOT be empty
       // The next call_llm step needs messages to work properly
@@ -2678,8 +3131,10 @@ describe('RuntimeExecutors', () => {
       });
     });
 
-    it('should continue processing remaining tools if one fails to create', async () => {
-      // Mock: first call succeeds, second call fails
+    it('should propagate persist failures instead of silently swallowing (LOBE-7158)', async () => {
+      // The pre-LOBE-7158 behavior logged the error and kept walking the
+      // aborted-tool list. That left a half-persisted state and hid the real
+      // cause from ops. Now we fail fast.
       mockMessageModel.create
         .mockResolvedValueOnce({ id: 'tool-msg-1' })
         .mockRejectedValueOnce(new Error('Database error'));
@@ -2710,18 +3165,9 @@ describe('RuntimeExecutors', () => {
         type: 'resolve_aborted_tools' as const,
       };
 
-      const result = await executors.resolve_aborted_tools!(instruction, state);
-
-      // Should still complete and emit done event
-      expect(result.newState.status).toBe('done');
-      expect(result.events).toContainEqual(
-        expect.objectContaining({
-          type: 'done',
-        }),
+      await expect(executors.resolve_aborted_tools!(instruction, state)).rejects.toThrow(
+        'Database error',
       );
-
-      // Only the first tool message should be added to state
-      expect(result.newState.messages).toHaveLength(1);
     });
   });
 

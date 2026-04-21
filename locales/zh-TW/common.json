@@ -1,6 +1,9 @@
 {
   "about": "關於",
   "advanceSettings": "進階設定",
+  "agentOnboardingPromo.actionLabel": "立即試用",
+  "agentOnboardingPromo.description": "和 Lobe AI 快速聊幾句，即可設定你的助理團隊。你現有的助理不會受到影響。",
+  "agentOnboardingPromo.title": "快速嚮導",
   "alert.cloud.action": "免費體驗",
   "alert.cloud.desc": "所有註冊用戶每月可獲得 {{credit}} 免費運算點數—無需設定。包含全球雲端同步與進階網頁搜尋功能。",
   "alert.cloud.descOnMobile": "所有註冊用戶每月可獲得 {{credit}} 免費運算點數—無需設定。",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "下移",
   "navPanel.moveUp": "上移",
   "navPanel.pinned": "已釘選",
+  "navPanel.resetDefault": "重設為預設值",
   "navPanel.searchAgent": "搜尋助手...",
   "navPanel.searchRecent": "搜尋最近項目...",
   "navPanel.searchResultEmpty": "暫無搜尋結果",

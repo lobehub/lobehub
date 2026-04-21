@@ -1,7 +1,8 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -21,6 +22,57 @@ import Actions from '../Item/Actions';
 import Avatar from './Avatar';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  badge: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 14px;
+    height: 14px;
+    padding-inline: 3px;
+    border: 1.5px solid ${cssVar.colorBgContainer};
+    border-radius: 999px;
+
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+    color: #fff;
+
+    background: ${cssVar.colorError};
+  `,
+  runningBadge: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid ${cssVar.colorBgContainer};
+    border-radius: 999px;
+
+    color: ${cssVar.colorWarning};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  wrapper: css`
+    position: relative;
+    display: inline-flex;
+  `,
+}));
+
 interface AgentItemProps {
   className?: string;
   item: SidebarAgentItem;
@@ -28,7 +80,7 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
-  const { id, avatar, backgroundColor, title, pinned } = item;
+  const { id, avatar, backgroundColor, title, pinned, heterogeneousType } = item;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -39,9 +91,29 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
 
   // Separate loading state from chat store - only show loading for this specific agent
   const isLoading = useChatStore(operationSelectors.isAgentRunning(id));
+  const unreadCount = useChatStore(operationSelectors.agentUnreadCount(id));
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');
+
+  // Heterogeneous agents (Claude Code, Codex, …) show their runtime as a tag
+  // so they stand out from built-in agents in the sidebar.
+  const heterogeneousLabel = heterogeneousType
+    ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+    : null;
+
+  const titleNode = heterogeneousLabel ? (
+    <Flexbox horizontal align="center" gap={4}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayTitle}
+      </span>
+      <Tag size="small" style={{ flexShrink: 0 }}>
+        {heterogeneousLabel}
+      </Tag>
+    </Flexbox>
+  ) : (
+    displayTitle
+  );
 
   // Get URL for this agent
   const agentUrl = SESSION_CHAT_URL(id, false);
@@ -85,19 +157,41 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     [pinned],
   );
 
-  // Memoize avatar icon (show loader when updating)
+  // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
       return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
     }
 
-    return (
+    const avatarNode = (
       <Avatar
         avatar={typeof avatar === 'string' ? avatar : undefined}
         avatarBackground={backgroundColor || undefined}
       />
     );
-  }, [isUpdating, avatar, backgroundColor]);
+
+    if (isLoading) {
+      return (
+        <span className={styles.wrapper}>
+          {avatarNode}
+          <span className={styles.runningBadge}>
+            <Icon spin icon={Loader2} size={9} />
+          </span>
+        </span>
+      );
+    }
+
+    if (unreadCount > 0) {
+      return (
+        <span className={styles.wrapper}>
+          {avatarNode}
+          <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+        </span>
+      );
+    }
+
+    return avatarNode;
+  }, [isUpdating, isLoading, avatar, backgroundColor, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
     anchor,
@@ -120,9 +214,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
         extra={pinIcon}
         icon={avatarIcon}
         key={id}
-        loading={isLoading}
         style={style}
-        title={displayTitle}
+        title={titleNode}
         onDoubleClick={handleDoubleClick}
         onDragEnd={handleDragEnd}
         onDragStart={handleDragStart}

@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "伺服器端代理執行（Gateway）",
   "features.groupChat.desc": "啟用多智能體群組聊天編排功能。",
   "features.groupChat.title": "群組聊天（多智能體）",
+  "features.heterogeneousAgent.desc": "啟用異質代理執行，支援 Claude Code、Codex CLI 及其他外部代理 CLI。將在側邊欄的代理選單中建立「Claude Code 代理」選項。",
+  "features.heterogeneousAgent.title": "異質代理（Claude Code）",
   "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
   "title": "實驗室"

@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, FormItem } from '@lobehub/ui';
+import { Alert, Flexbox, FormItem } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -77,6 +77,12 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
             />
           )}
         </div>
+        <Alert
+          showIcon
+          message={t('channel.wechatIdleNotice')}
+          style={{ marginBlockEnd: 16 }}
+          type="info"
+        />
         {shouldShowApplicationId && (
           <ReadOnlyField
             description={t('channel.applicationIdHint')}

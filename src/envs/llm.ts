@@ -32,6 +32,9 @@ export const getLLMConfig = () => {
       ENABLED_MOONSHOT: z.boolean(),
       MOONSHOT_API_KEY: z.string().optional(),
 
+      ENABLED_KIMICODINGPLAN: z.boolean(),
+      KIMICODINGPLAN_API_KEY: z.string().optional(),
+
       ENABLED_PERPLEXITY: z.boolean(),
       PERPLEXITY_API_KEY: z.string().optional(),
 
@@ -283,6 +286,9 @@ export const getLLMConfig = () => {
 
       ENABLED_MOONSHOT: !!process.env.MOONSHOT_API_KEY,
       MOONSHOT_API_KEY: process.env.MOONSHOT_API_KEY,
+
+      ENABLED_KIMICODINGPLAN: !!process.env.KIMICODINGPLAN_API_KEY,
+      KIMICODINGPLAN_API_KEY: process.env.KIMICODINGPLAN_API_KEY,
 
       ENABLED_GROQ: !!process.env.GROQ_API_KEY,
       GROQ_API_KEY: process.env.GROQ_API_KEY,

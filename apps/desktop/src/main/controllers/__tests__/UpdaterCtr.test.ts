@@ -4,7 +4,7 @@ import type { App } from '@/core/App';
 
 import UpdaterCtr from '../UpdaterCtr';
 
-// 模拟 logger
+// Mock logger
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-// 模拟 App 及其依赖项
+// Mock App and its dependencies
 const mockCheckForUpdates = vi.fn();
 const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
@@ -120,13 +120,13 @@ describe('UpdaterCtr', () => {
     });
   });
 
-  // 测试错误处理
+  // Test error handling
   describe('error handling', () => {
     it('should handle errors when checking for updates', async () => {
       const error = new Error('Network error');
       mockCheckForUpdates.mockRejectedValueOnce(error);
 
-      // 由于控制器并未明确处理并返回错误，这里我们只验证调用发生且错误正确冒泡
+      // Since the controller does not explicitly handle and return errors, we only verify that the call occurs and the error propagates correctly
       await expect(updaterCtr.checkForUpdates()).rejects.toThrow(error);
     });
 

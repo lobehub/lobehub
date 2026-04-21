@@ -1,5 +1,6 @@
 'use client';
 
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { ActionIcon } from '@lobehub/ui';
 import { AlignJustify } from 'lucide-react';
 import { memo } from 'react';
@@ -11,7 +12,6 @@ import dynamic from '@/libs/next/dynamic';
 import { useSessionStore } from '@/store/session';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { HotkeyEnum } from '@/types/hotkey';
 
 const AgentSettingsEditor = dynamic(() => import('@/routes/(main)/agent/profile'), {
   ssr: false,

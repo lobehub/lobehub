@@ -9,6 +9,7 @@ export * from './screenCapture';
 export * from './shortcut';
 export * from './system';
 export * from './toolDetector';
+export * from './topicPopup';
 export * from './tray';
 export * from './update';
 export * from './upload';

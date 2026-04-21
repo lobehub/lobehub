@@ -1,6 +1,9 @@
 {
   "about": "Über",
   "advanceSettings": "Erweiterte Einstellungen",
+  "agentOnboardingPromo.actionLabel": "Jetzt ausprobieren",
+  "agentOnboardingPromo.description": "Richte deine Agent-Teams in einem kurzen Chat mit Lobe AI ein. Deine vorhandenen Agenten bleiben unverändert.",
+  "agentOnboardingPromo.title": "Schnellassistent",
   "alert.cloud.action": "Jetzt ausprobieren",
   "alert.cloud.desc": "Alle registrierten Nutzer erhalten monatlich {{credit}} kostenlose Rechen-Credits – keine Einrichtung erforderlich. Inklusive globaler Cloud-Synchronisierung und erweiterter Websuche.",
   "alert.cloud.descOnMobile": "Alle registrierten Nutzer erhalten monatlich {{credit}} kostenlose Rechen-Credits – keine Einrichtung erforderlich.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Nach unten verschieben",
   "navPanel.moveUp": "Nach oben verschieben",
   "navPanel.pinned": "Angeheftet",
+  "navPanel.resetDefault": "Auf Standard zurücksetzen",
   "navPanel.searchAgent": "Agent suchen...",
   "navPanel.searchRecent": "Zuletzt gesucht...",
   "navPanel.searchResultEmpty": "Keine Suchergebnisse gefunden",

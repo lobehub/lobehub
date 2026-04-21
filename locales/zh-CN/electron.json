@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "关闭左侧标签页",
   "tab.closeOtherTabs": "关闭其他标签页",
   "tab.closeRightTabs": "关闭右侧标签页",
+  "tab.newTab": "新建标签页",
+  "tab.running": "智能体运行中",
+  "tab.unread": "新消息",
   "updater.checkingUpdate": "检查新版本",
   "updater.checkingUpdateDesc": "正在获取版本信息…",
   "updater.downloadNewVersion": "下载新版本",
@@ -133,5 +136,7 @@
   "window.close": "关闭窗口",
   "window.maximize": "最大化窗口",
   "window.minimize": "最小化窗口",
-  "window.restore": "恢复窗口"
+  "window.pinToTop": "窗口置顶",
+  "window.restore": "恢复窗口",
+  "window.unpinFromTop": "取消置顶"
 }

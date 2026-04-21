@@ -29,6 +29,10 @@ interface QueryTopicParams {
   containerId?: string | null;
   current?: number;
   /**
+   * Exclude topics by status (e.g. ['completed'])
+   */
+  excludeStatuses?: string[];
+  /**
    * Exclude topics by trigger types (e.g. ['cron'])
    */
   excludeTriggers?: string[];
@@ -42,6 +46,10 @@ interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+  /**
+   * Include only topics matching the given trigger types (positive filter)
+   */
+  triggers?: string[];
 }
 
 export interface ListTopicsForMemoryExtractorCursor {
@@ -63,15 +71,26 @@ export class TopicModel {
     agentId,
     containerId,
     current = 0,
+    excludeStatuses,
     excludeTriggers,
     pageSize = 9999,
     groupId,
     isInbox,
+    triggers,
   }: QueryTopicParams = {}) => {
     const offset = current * pageSize;
     const excludeTriggerCondition =
       excludeTriggers && excludeTriggers.length > 0
         ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
+        : undefined;
+    const triggerCondition =
+      triggers && triggers.length > 0 ? inArray(topics.trigger, triggers) : undefined;
+    const excludeStatusCondition =
+      excludeStatuses && excludeStatuses.length > 0
+        ? or(
+            isNull(topics.status),
+            not(inArray(topics.status, excludeStatuses as ('active' | 'completed' | 'archived')[])),
+          )
         : undefined;
 
     // If groupId is provided, query topics by groupId directly
@@ -80,16 +99,20 @@ export class TopicModel {
         eq(topics.userId, this.userId),
         eq(topics.groupId, groupId),
         excludeTriggerCondition,
+        triggerCondition,
+        excludeStatusCondition,
       );
 
       const [items, totalResult] = await Promise.all([
         this.db
           .select({
+            completedAt: topics.completedAt,
             createdAt: topics.createdAt,
             favorite: topics.favorite,
             historySummary: topics.historySummary,
             id: topics.id,
             metadata: topics.metadata,
+            status: topics.status,
             title: topics.title,
             updatedAt: topics.updatedAt,
           })
@@ -145,26 +168,36 @@ export class TopicModel {
 
       // Fetch items and total count in parallel
       // Include sessionId and agentId for migration detection
+      const agentWhere = and(
+        eq(topics.userId, this.userId),
+        agentCondition,
+        excludeTriggerCondition,
+        triggerCondition,
+        excludeStatusCondition,
+      );
+
       const [items, totalResult] = await Promise.all([
         this.db
           .select({
+            completedAt: topics.completedAt,
             createdAt: topics.createdAt,
             favorite: topics.favorite,
             historySummary: topics.historySummary,
             id: topics.id,
             metadata: topics.metadata,
+            status: topics.status,
             title: topics.title,
             updatedAt: topics.updatedAt,
           })
           .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition))
+          .where(agentWhere)
           .orderBy(desc(topics.favorite), desc(topics.updatedAt))
           .limit(pageSize)
           .offset(offset),
         this.db
           .select({ count: count(topics.id) })
           .from(topics)
-          .where(and(eq(topics.userId, this.userId), agentCondition, excludeTriggerCondition)),
+          .where(agentWhere),
       ]);
 
       return { items, total: totalResult[0].count };
@@ -175,18 +208,22 @@ export class TopicModel {
       eq(topics.userId, this.userId),
       this.matchContainer(containerId),
       excludeTriggerCondition,
+      triggerCondition,
+      excludeStatusCondition,
     );
 
     const [items, totalResult] = await Promise.all([
       this.db
         .select({
           agentId: topics.agentId,
+          completedAt: topics.completedAt,
           createdAt: topics.createdAt,
           favorite: topics.favorite,
           historySummary: topics.historySummary,
           id: topics.id,
           metadata: topics.metadata,
           sessionId: topics.sessionId,
+          status: topics.status,
           title: topics.title,
           updatedAt: topics.updatedAt,
         })

@@ -1,66 +1,50 @@
 'use client';
 
-import { App } from 'antd';
-import { Split } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useMemo } from 'react';
 
-import {
-  type ActionsBarConfig,
-  type MessageActionFactory,
-  type MessageActionItem,
-} from '@/features/Conversation/types';
-import { useChatStore } from '@/store/chat';
+import { type ActionsBarConfig, type MessageActionSlot } from '@/features/Conversation/types';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 /**
- * Hook to create a branching action factory function.
- * The factory function takes a message id and returns the branching action
- * with proper ChatStore integration.
+ * Hetero-agent (ACP) sessions only support copy + delete — edit / regenerate /
+ * branching / translate / tts / share don't apply because the external
+ * runtime owns message lifecycle.
  */
-export const useBranchingActionFactory = (): MessageActionFactory => {
-  const { t } = useTranslation('common');
-  const { message } = App.useApp();
-
-  const [topic, openThreadCreator] = useChatStore((s) => [s.activeTopicId, s.openThreadCreator]);
-
-  return useCallback(
-    (id: string): MessageActionItem | null => {
-      return {
-        handleClick: () => {
-          if (!topic) {
-            message.warning(t('branchingRequiresSavedTopic'));
-            return;
-          }
-          openThreadCreator(id);
-        },
-        icon: Split,
-        key: 'branching',
-        label: t('branching'),
-      };
-    },
-    [topic, openThreadCreator],
-  );
+const HETERO_USER: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } = {
+  bar: ['copy'],
+  menu: ['copy', 'divider', 'del'],
 };
 
-/**
- * Hook to generate actionsBar configuration with branching support.
- * This creates the complete actionsBar config to be passed to ChatList.
- */
-export const useActionsBarConfig = (): ActionsBarConfig => {
-  const branchingFactory = useBranchingActionFactory();
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+const HETERO_ASSISTANT: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } = {
+  bar: ['copy'],
+  menu: ['copy', 'divider', 'del'],
+};
 
-  return useMemo(
-    () => ({
-      assistant: {
-        extraBarActions: isDevMode ? [branchingFactory] : [],
-      },
-      user: {
-        extraBarActions: isDevMode ? [branchingFactory] : [],
-      },
-    }),
-    [branchingFactory, isDevMode],
-  );
+export const useActionsBarConfig = (): ActionsBarConfig => {
+  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  const hasACPProvider = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+
+  return useMemo<ActionsBarConfig>(() => {
+    if (hasACPProvider) {
+      return {
+        assistant: HETERO_ASSISTANT,
+        assistantGroup: HETERO_ASSISTANT,
+        user: HETERO_USER,
+      };
+    }
+
+    // Dev mode adds `branching` to the default bars. Everything else falls
+    // back to each role's component-level defaults.
+    if (isDevMode) {
+      return {
+        assistant: { bar: ['edit', 'copy', 'branching'] },
+        user: { bar: ['regenerate', 'edit', 'copy', 'branching'] },
+      };
+    }
+
+    return {};
+  }, [hasACPProvider, isDevMode]);
 };

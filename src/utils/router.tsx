@@ -2,7 +2,7 @@
 
 import { ThemeProvider } from '@lobehub/ui';
 import { type ComponentType, type ReactElement } from 'react';
-import { lazy, memo, Suspense, useCallback, useEffect } from 'react';
+import { lazy, memo, Suspense, useLayoutEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import {
   createBrowserRouter,
@@ -17,6 +17,7 @@ import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { useGlobalStore } from '@/store/global';
+import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 async function importModule<T>(importFn: () => Promise<T>): Promise<T> {
@@ -85,29 +86,13 @@ export function dynamicLayout<P = NonNullable<unknown>>(
   );
 }
 
-/**
- * Error boundary component for React Router
- * Displays an error page and provides a reset function to navigate to a specific path
- *
- * @example
- * import { ErrorBoundary } from '@/utils/dynamicPage';
- *
- * // In router config:
- * {
- *   path: 'chat',
- *   errorElement: <ErrorBoundary resetPath="/chat" />
- * }
- */
 export interface ErrorBoundaryProps {
-  resetPath: string;
+  /** Base path for "back home" on the error screen (defaults to `/`). */
+  resetPath?: string;
 }
 
 export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const error = useRouteError() as Error;
-  const navigate = useNavigate();
-  const reset = useCallback(() => {
-    navigate(resetPath);
-  }, [navigate, resetPath]);
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
     notifyChunkError();
@@ -115,33 +100,22 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
 
   return (
     <ThemeProvider theme={{ cssVar: { key: 'lobe-vars' } }}>
-      <ErrorCapture error={error} reset={reset} />
+      <ErrorCapture error={error} resetPath={resetPath} />
     </ThemeProvider>
   );
 };
 
 /**
- * Component to register navigate function in global store
- * This allows navigation to be triggered from anywhere in the app, including stores
- *
- * @example
- * import { NavigatorRegistrar } from '@/utils/dynamicPage';
- *
- * // In router root layout:
- * const RootLayout = () => (
- *   <>
- *     <NavigatorRegistrar />
- *     <YourMainLayout />
- *   </>
- * );
+ * Syncs React Router's `navigate` into `navigationRef` (see `getStableNavigate` / `useStableNavigate`).
+ * Mounted once on {@link RouterRoot} so imperative navigation works app-wide (desktop + mobile).
  */
 export const NavigatorRegistrar = memo(() => {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    useGlobalStore.setState({ navigate });
+  useLayoutEffect(() => {
+    useGlobalStore.setState({ navigationRef: { current: navigate } });
     return () => {
-      useGlobalStore.setState({ navigate: undefined });
+      useGlobalStore.setState({ navigationRef: createNavigationRef() });
     };
   }, [navigate]);
 
@@ -155,6 +129,7 @@ export interface CreateAppRouterOptions {
 const RouterRoot = memo(() => (
   <SPAGlobalProvider>
     <BusinessGlobalProvider>
+      <NavigatorRegistrar />
       <Outlet />
     </BusinessGlobalProvider>
   </SPAGlobalProvider>
@@ -178,7 +153,7 @@ export function createAppRouter(routes: RouteObject[], options?: CreateAppRouter
       {
         children: routes,
         element: <RouterRoot />,
-        errorElement: <ErrorBoundary resetPath="/" />,
+        errorElement: <ErrorBoundary />,
         path: '/',
       },
     ],

@@ -1,6 +1,9 @@
 {
   "about": "정보",
   "advanceSettings": "고급 설정",
+  "agentOnboardingPromo.actionLabel": "지금 사용해 보기",
+  "agentOnboardingPromo.description": "Lobe AI와 짧게 대화하며 에이전트 팀을 설정하세요. 기존 에이전트는 그대로 유지됩니다.",
+  "agentOnboardingPromo.title": "빠른 설정",
   "alert.cloud.action": "지금 체험하기",
   "alert.cloud.desc": "모든 등록된 사용자는 매월 {{credit}}의 무료 컴퓨팅 크레딧을 받을 수 있습니다—설정이 필요하지 않습니다. 전 세계 클라우드 동기화 및 고급 웹 검색 기능이 포함되어 있습니다.",
   "alert.cloud.descOnMobile": "모든 등록된 사용자는 매월 {{credit}}의 무료 컴퓨팅 크레딧을 받을 수 있습니다—설정이 필요하지 않습니다.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "아래로 이동",
   "navPanel.moveUp": "위로 이동",
   "navPanel.pinned": "고정됨",
+  "navPanel.resetDefault": "기본값으로 재설정",
   "navPanel.searchAgent": "도우미 검색…",
   "navPanel.searchRecent": "최근 검색...",
   "navPanel.searchResultEmpty": "검색 결과가 없습니다",

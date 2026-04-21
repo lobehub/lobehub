@@ -1,6 +1,9 @@
 {
   "about": "Относно",
   "advanceSettings": "Разширени настройки",
+  "agentOnboardingPromo.actionLabel": "Опитайте сега",
+  "agentOnboardingPromo.description": "Настройте своите екипи от агенти в кратък чат с Lobe AI. Съществуващите ви агенти ще останат непроменени.",
+  "agentOnboardingPromo.title": "Бърз съветник",
   "alert.cloud.action": "Опитайте сега",
   "alert.cloud.desc": "Всички регистрирани потребители получават {{credit}} безплатни изчислителни кредити на месец — без нужда от настройка. Включва глобална синхронизация в облака и разширено търсене в мрежата.",
   "alert.cloud.descOnMobile": "Всички регистрирани потребители получават {{credit}} безплатни изчислителни кредити на месец — без нужда от настройка.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Преместване надолу",
   "navPanel.moveUp": "Преместване нагоре",
   "navPanel.pinned": "Закачено",
+  "navPanel.resetDefault": "Възстановяване на настройките по подразбиране",
   "navPanel.searchAgent": "Търсене на агент...",
   "navPanel.searchRecent": "Търсене в скорошни...",
   "navPanel.searchResultEmpty": "Няма намерени резултати",

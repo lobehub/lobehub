@@ -40,6 +40,14 @@ class ElectronSystemService {
     return this.ipc.windows.minimizeWindow();
   }
 
+  async setWindowAlwaysOnTop(flag: boolean): Promise<void> {
+    return this.ipc.windows.setWindowAlwaysOnTop(flag);
+  }
+
+  async isWindowAlwaysOnTop(): Promise<boolean> {
+    return this.ipc.windows.isWindowAlwaysOnTop();
+  }
+
   async setWindowSize(params: WindowSizeParams): Promise<void> {
     return this.ipc.windows.setWindowSize(params);
   }

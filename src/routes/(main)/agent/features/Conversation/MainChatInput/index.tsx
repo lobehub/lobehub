@@ -4,13 +4,17 @@ import { memo, useMemo } from 'react';
 
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
+import { useModelSupportImageOutput } from '@/hooks/useModelSupportImageOutput';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useSendMenuItems } from './useSendMenuItems';
 
-const rightActions: ActionKeys[] = ['promptTransform'];
+const emptyRightActions: ActionKeys[] = [];
+const promptTransformRightActions: ActionKeys[] = ['promptTransform'];
 
 /**
  * MainChatInput
@@ -23,6 +27,11 @@ const rightActions: ActionKeys[] = ['promptTransform'];
 const MainChatInput = memo(() => {
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const sendMenuItems = useSendMenuItems();
+
+  const model = useAgentStore(agentSelectors.currentAgentModel);
+  const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  const supportsImageOutput = useModelSupportImageOutput(model, provider);
+  const rightActions = supportsImageOutput ? promptTransformRightActions : emptyRightActions;
 
   const leftActions: ActionKeys[] = useMemo(
     () => [

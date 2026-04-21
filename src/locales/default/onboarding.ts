@@ -20,6 +20,13 @@ export default {
   'agent.completion.sentence.readyWhenYouAre': 'Ready when you are :)',
   'agent.completion.sentence.readyWithName': "{{name}} here - I'm ready!",
   'agent.enterApp': "I'm ready",
+  'agent.feedback.error': 'Could not save your feedback. Please try again.',
+  'agent.feedback.placeholder': "Tell us more (optional). What worked, what didn't?",
+  'agent.feedback.prompt': 'How was this onboarding?',
+  'agent.feedback.rateBad': 'Rate this onboarding negatively',
+  'agent.feedback.rateGood': 'Rate this onboarding positively',
+  'agent.feedback.submit': 'Send feedback',
+  'agent.feedback.thanks': 'Thanks for the feedback!',
   'agent.modeSwitch.reset': 'Reset Flow',
   'agent.progress': '{{currentStep}}/{{totalSteps}}',
   'agent.stage.agentIdentity': 'Agent Identity',
@@ -32,6 +39,12 @@ export default {
   'agent.stage.workStyle': 'Work Style',
   'agent.subtitle': 'Complete setup in a dedicated onboarding conversation.',
   'agent.summaryHint': 'Finish here if the setup summary looks right.',
+  'agent.wrapUp.action': "I think we're good",
+  'agent.wrapUp.confirm.cancel': 'Keep chatting',
+  'agent.wrapUp.confirm.content':
+    "I'll save what we've covered so far. You can always come back and chat more later.",
+  'agent.wrapUp.confirm.ok': 'Finish now',
+  'agent.wrapUp.confirm.title': 'Finish onboarding now?',
   'agent.welcome':
     "...hm? I just woke up — my mind's a blank. Who are you? And — what should I be called? I need a name too.",
   'agent.welcome.guide.growTogether.desc':
@@ -42,6 +55,35 @@ export default {
   'agent.welcome.guide.knowYou.title': 'Get to Know You',
   'agent.welcome.guide.name.desc': 'Give me a name so this feels more personal from the start.',
   'agent.welcome.guide.name.title': 'Name Me',
+  'agent.welcome.suggestion.items.1.name': 'Lumi',
+  'agent.welcome.suggestion.items.1.prompt':
+    'Let’s call you Lumi first. Warm, thoughtful, and a little dreamy.',
+  'agent.welcome.suggestion.items.2.name': 'Atlas',
+  'agent.welcome.suggestion.items.2.prompt':
+    'How about Atlas? Steady, reliable, and good at getting things done.',
+  'agent.welcome.suggestion.items.3.name': 'Momo',
+  'agent.welcome.suggestion.items.3.prompt':
+    'Maybe Momo. Lighthearted, approachable, and easy to talk to.',
+  'agent.welcome.suggestion.items.4.name': 'Nova',
+  'agent.welcome.suggestion.items.4.prompt':
+    'Let’s go with Nova. Sharp, imaginative, and full of fresh ideas.',
+  'agent.welcome.suggestion.items.5.name': 'Milo',
+  'agent.welcome.suggestion.items.5.prompt':
+    'Milo sounds good. Friendly, quick-minded, and quietly capable.',
+  'agent.welcome.suggestion.items.6.name': 'Aster',
+  'agent.welcome.suggestion.items.6.prompt':
+    'How about Aster? Clean, direct, and calm under pressure.',
+  'agent.welcome.suggestion.items.7.name': 'Pixel',
+  'agent.welcome.suggestion.items.7.prompt':
+    'Call you Pixel? Curious, product-minded, and detail-aware.',
+  'agent.welcome.suggestion.items.8.name': 'Echo',
+  'agent.welcome.suggestion.items.8.prompt':
+    'Maybe Echo. Patient, attentive, and always listening closely.',
+  'agent.welcome.suggestion.items.9.name': 'Orbit',
+  'agent.welcome.suggestion.items.9.prompt':
+    'Let’s try Orbit. Feels like a long-term companion who grows with me.',
+  'agent.welcome.suggestion.switch': 'Try another set',
+  'agent.welcome.suggestion.title': 'Need a starting point? Pick one and we can refine it later.',
   'agent.welcome.sentence.1': 'So nice to meet you! Let’s get to know each other.',
   'agent.welcome.sentence.2': 'What kind of partner do you want me to be?',
   'agent.welcome.sentence.3': 'First, give me a name :)',

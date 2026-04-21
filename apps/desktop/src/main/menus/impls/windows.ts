@@ -1,5 +1,5 @@
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, clipboard, Menu, shell } from 'electron';
+import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 
@@ -62,6 +62,15 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
               mainWindow.broadcast('createNewTopic');
             },
             label: t('file.newTopic'),
+          },
+          {
+            accelerator: 'Ctrl+T',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('createNewTab');
+            },
+            label: t('file.newTab'),
           },
           { type: 'separator' },
           {
@@ -167,7 +176,20 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('window.title'),
         submenu: [
           { label: t('window.minimize'), role: 'minimize' },
-          { label: t('window.close'), role: 'close' },
+          {
+            accelerator: 'CmdOrCtrl+W',
+            click: () => {
+              const focused = BrowserWindow.getFocusedWindow();
+              if (!focused) return;
+              const mainWindow = this.app.browserManager.getMainWindow();
+              if (focused === mainWindow.browserWindow) {
+                mainWindow.broadcast('closeCurrentTabOrWindow');
+              } else {
+                focused.close();
+              }
+            },
+            label: t('window.close'),
+          },
         ],
       },
       {

@@ -1,7 +1,7 @@
 'use client';
 
 import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { memo,Suspense } from 'react';
+import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -9,8 +9,11 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
 
 import Actions from './Actions';
+import Filter from './Filter';
 import List from './List';
 import { useTopicActionsDropdownMenu } from './useDropdownMenu';
 
@@ -21,15 +24,23 @@ interface TopicProps {
 const Topic = memo<TopicProps>(({ itemKey }) => {
   const { t } = useTranslation(['topic', 'common']);
   const [topicCount] = useChatStore((s) => [topicSelectors.currentTopicCount(s)]);
+  const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const dropdownMenu = useTopicActionsDropdownMenu();
-  const { isRevalidating } = useFetchTopics();
+  const { isRevalidating } = useFetchTopics({
+    excludeStatuses: includeCompleted ? undefined : ['completed'],
+  });
 
   return (
     <AccordionItem
-      action={<Actions />}
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
+      action={
+        <Flexbox horizontal align="center" gap={2}>
+          <Filter />
+          <Actions />
+        </Flexbox>
+      }
       headerWrapper={(header) => (
         <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
       )}

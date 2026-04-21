@@ -128,6 +128,13 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
         return { fullContent: params.fullContent, loc, path: params.path };
       }
 
+      case 'globLocalFiles': {
+        return {
+          pattern: params.pattern,
+          scope: params.directory,
+        };
+      }
+
       default: {
         return params;
       }

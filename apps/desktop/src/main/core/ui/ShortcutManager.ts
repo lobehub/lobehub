@@ -1,17 +1,12 @@
+import { DEFAULT_ELECTRON_DESKTOP_SHORTCUTS } from '@lobechat/const/desktopGlobalShortcuts';
 import { globalShortcut } from 'electron';
 
-import { DEFAULT_SHORTCUTS_CONFIG } from '@/shortcuts';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
-import { MACOS_DOUBLE_OPTION_SHORTCUT, MacOSDoubleOptionMonitor } from './MacOSDoubleOptionMonitor';
 
 // Create logger
 const logger = createLogger('core:ShortcutManager');
-
-const QUICK_COMPOSER_SHORTCUT_ID = 'quickComposer';
-
-const normalizeShortcutToken = (accelerator: string) => accelerator.trim().toLowerCase();
 
 export interface ShortcutUpdateResult {
   errorType?:
@@ -26,7 +21,6 @@ export interface ShortcutUpdateResult {
 
 export class ShortcutManager {
   private app: App;
-  private macOSDoubleOptionMonitor: MacOSDoubleOptionMonitor | null = null;
   private shortcuts: Map<string, () => void> = new Map();
   private shortcutsConfig: Record<string, string> = {};
 
@@ -83,8 +77,8 @@ export class ShortcutManager {
     try {
       logger.debug(`Updating shortcut ${id} to ${accelerator}`);
 
-      // 1. Check if ID is valid
-      if (!(id in DEFAULT_SHORTCUTS_CONFIG)) {
+      // 1. Check if ID is valid (value may be empty string when disabled by default)
+      if (!(id in DEFAULT_ELECTRON_DESKTOP_SHORTCUTS)) {
         logger.error(`Invalid shortcut ID: ${id}`);
         return { errorType: 'INVALID_ID', success: false };
       }
@@ -103,37 +97,6 @@ export class ShortcutManager {
         this.saveShortcutsConfig();
         this.registerConfiguredShortcuts();
         return { success: true };
-      }
-
-      if (this.isMacOSDoubleOptionShortcut(id, trimmedAccelerator)) {
-        for (const [existingId, existingAccelerator] of Object.entries(this.shortcutsConfig)) {
-          if (
-            existingId !== id &&
-            typeof existingAccelerator === 'string' &&
-            normalizeShortcutToken(existingAccelerator) ===
-              normalizeShortcutToken(MACOS_DOUBLE_OPTION_SHORTCUT)
-          ) {
-            logger.error(
-              `Shortcut conflict: ${MACOS_DOUBLE_OPTION_SHORTCUT} already used by ${existingId}`,
-            );
-            return { errorType: 'CONFLICT', success: false };
-          }
-        }
-
-        this.shortcutsConfig[id] = MACOS_DOUBLE_OPTION_SHORTCUT;
-        this.saveShortcutsConfig();
-        this.registerConfiguredShortcuts();
-        return { success: true };
-      }
-
-      if (
-        normalizeShortcutToken(trimmedAccelerator) ===
-        normalizeShortcutToken(MACOS_DOUBLE_OPTION_SHORTCUT)
-      ) {
-        logger.error(
-          `Invalid accelerator format: ${trimmedAccelerator}. ${MACOS_DOUBLE_OPTION_SHORTCUT} is only available for ${QUICK_COMPOSER_SHORTCUT_ID} on macOS`,
-        );
-        return { errorType: 'INVALID_FORMAT', success: false };
       }
 
       // Convert frontend format to Electron format
@@ -253,8 +216,6 @@ export class ShortcutManager {
    * Unregister all shortcuts
    */
   unregisterAll(): void {
-    this.macOSDoubleOptionMonitor?.stop();
-    this.macOSDoubleOptionMonitor = null;
     globalShortcut.unregisterAll();
     logger.info('Unregistered all shortcuts');
   }
@@ -270,15 +231,15 @@ export class ShortcutManager {
       // If no configuration, use default configuration
       if (!config || Object.keys(config).length === 0) {
         logger.debug('No shortcuts config found, using defaults');
-        this.shortcutsConfig = { ...DEFAULT_SHORTCUTS_CONFIG };
+        this.shortcutsConfig = { ...DEFAULT_ELECTRON_DESKTOP_SHORTCUTS };
         this.saveShortcutsConfig();
       } else {
-        // Filter out invalid shortcuts that are not in DEFAULT_SHORTCUTS_CONFIG
+        // Filter out invalid shortcuts that are not in DEFAULT_ELECTRON_DESKTOP_SHORTCUTS
         const filteredConfig: Record<string, string> = {};
         let hasInvalidKeys = false;
 
         Object.entries(config).forEach(([id, accelerator]) => {
-          if (id in DEFAULT_SHORTCUTS_CONFIG) {
+          if (id in DEFAULT_ELECTRON_DESKTOP_SHORTCUTS) {
             filteredConfig[id] = accelerator;
           } else {
             hasInvalidKeys = true;
@@ -287,30 +248,12 @@ export class ShortcutManager {
         });
 
         // Ensure all default shortcuts are present
-        Object.entries(DEFAULT_SHORTCUTS_CONFIG).forEach(([id, defaultAccelerator]) => {
+        Object.entries(DEFAULT_ELECTRON_DESKTOP_SHORTCUTS).forEach(([id, defaultAccelerator]) => {
           if (!(id in filteredConfig)) {
             filteredConfig[id] = defaultAccelerator;
             logger.debug(`Adding missing default shortcut: ${id} = ${defaultAccelerator}`);
           }
         });
-
-        const hasLegacyQuickComposerBinding =
-          normalizeShortcutToken(filteredConfig.showApp || '') ===
-          normalizeShortcutToken(MACOS_DOUBLE_OPTION_SHORTCUT);
-
-        if (hasLegacyQuickComposerBinding) {
-          filteredConfig.showApp = DEFAULT_SHORTCUTS_CONFIG.showApp;
-
-          if (
-            normalizeShortcutToken(filteredConfig.quickComposer || '') !==
-            normalizeShortcutToken(MACOS_DOUBLE_OPTION_SHORTCUT)
-          ) {
-            filteredConfig.quickComposer = DEFAULT_SHORTCUTS_CONFIG.quickComposer;
-          }
-
-          hasInvalidKeys = true;
-          logger.debug('Migrated legacy double Option binding from showApp to quickComposer');
-        }
 
         this.shortcutsConfig = filteredConfig;
 
@@ -324,7 +267,7 @@ export class ShortcutManager {
       logger.debug('Loaded shortcuts config:', this.shortcutsConfig);
     } catch (error) {
       logger.error('Error loading shortcuts config:', error);
-      this.shortcutsConfig = { ...DEFAULT_SHORTCUTS_CONFIG };
+      this.shortcutsConfig = { ...DEFAULT_ELECTRON_DESKTOP_SHORTCUTS };
       this.saveShortcutsConfig();
     }
   }
@@ -352,40 +295,16 @@ export class ShortcutManager {
     Object.entries(this.shortcutsConfig).forEach(([id, accelerator]) => {
       logger.debug(`Registering shortcut '${id}' with ${accelerator}`);
 
-      // Only register shortcuts that exist in DEFAULT_SHORTCUTS_CONFIG
-      if (!(id in DEFAULT_SHORTCUTS_CONFIG)) {
-        logger.debug(`Skipping shortcut '${id}' - not found in DEFAULT_SHORTCUTS_CONFIG`);
+      // Only register shortcuts that exist in DEFAULT_ELECTRON_DESKTOP_SHORTCUTS
+      if (!(id in DEFAULT_ELECTRON_DESKTOP_SHORTCUTS)) {
+        logger.debug(`Skipping shortcut '${id}' - not found in DEFAULT_ELECTRON_DESKTOP_SHORTCUTS`);
         return;
       }
 
       const method = this.shortcuts.get(id);
       if (accelerator && method) {
-        if (this.isMacOSDoubleOptionShortcut(id, accelerator)) {
-          this.macOSDoubleOptionMonitor = new MacOSDoubleOptionMonitor(method);
-          this.macOSDoubleOptionMonitor.start();
-          return;
-        }
-
-        if (
-          normalizeShortcutToken(accelerator) ===
-          normalizeShortcutToken(MACOS_DOUBLE_OPTION_SHORTCUT)
-        ) {
-          logger.warn(
-            `Skipping shortcut '${id}' - ${MACOS_DOUBLE_OPTION_SHORTCUT} is only supported for ${QUICK_COMPOSER_SHORTCUT_ID} on macOS`,
-          );
-          return;
-        }
-
         this.registerShortcut(accelerator, method);
       }
     });
-  }
-
-  private isMacOSDoubleOptionShortcut(id: string, accelerator: string) {
-    return (
-      process.platform === 'darwin' &&
-      id === QUICK_COMPOSER_SHORTCUT_ID &&
-      normalizeShortcutToken(accelerator) === normalizeShortcutToken(MACOS_DOUBLE_OPTION_SHORTCUT)
-    );
   }
 }

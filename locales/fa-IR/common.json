@@ -1,6 +1,9 @@
 {
   "about": "درباره",
   "advanceSettings": "تنظیمات پیشرفته",
+  "agentOnboardingPromo.actionLabel": "همین حالا امتحان کنید",
+  "agentOnboardingPromo.description": "تیم‌های عامل خود را با یک گفت‌وگوی کوتاه با Lobe AI تنظیم کنید. عامل‌های فعلی شما بدون تغییر باقی می‌مانند.",
+  "agentOnboardingPromo.title": "راهنمای سریع",
   "alert.cloud.action": "هم‌اکنون امتحان کنید",
   "alert.cloud.desc": "تمام کاربران ثبت‌نام‌شده هر ماه {{credit}} اعتبار رایگان محاسباتی دریافت می‌کنند — بدون نیاز به تنظیمات. شامل همگام‌سازی ابری جهانی و جستجوی پیشرفته وب.",
   "alert.cloud.descOnMobile": "تمام کاربران ثبت‌نام‌شده هر ماه {{credit}} اعتبار رایگان محاسباتی دریافت می‌کنند — بدون نیاز به تنظیمات.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "انتقال به پایین",
   "navPanel.moveUp": "انتقال به بالا",
   "navPanel.pinned": "سن‌شده",
+  "navPanel.resetDefault": "بازنشانی به حالت پیش‌فرض",
   "navPanel.searchAgent": "جستجوی نماینده...",
   "navPanel.searchRecent": "جست‌وجوی موارد اخیر...",
   "navPanel.searchResultEmpty": "نتیجه‌ای یافت نشد",

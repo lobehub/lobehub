@@ -1,6 +1,9 @@
 {
   "about": "情報",
   "advanceSettings": "詳細設定",
+  "agentOnboardingPromo.actionLabel": "今すぐ試す",
+  "agentOnboardingPromo.description": "Lobe AI と短く会話するだけで、エージェントチームを設定できます。既存のエージェントは変更されません。",
+  "agentOnboardingPromo.title": "かんたん設定",
   "alert.cloud.action": "今すぐ試す",
   "alert.cloud.desc": "すべての登録ユーザーは毎月{{credit}}の無料コンピューティングクレジットを受け取れます—設定は不要です。グローバルクラウド同期と高度なウェブ検索が含まれます。",
   "alert.cloud.descOnMobile": "すべての登録ユーザーは毎月{{credit}}の無料コンピューティングクレジットを受け取れます—設定は不要です。",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "下へ移動",
   "navPanel.moveUp": "上へ移動",
   "navPanel.pinned": "固定",
+  "navPanel.resetDefault": "デフォルトにリセット",
   "navPanel.searchAgent": "アシスタントを検索…",
   "navPanel.searchRecent": "最近の検索...",
   "navPanel.searchResultEmpty": "検索結果がありません",

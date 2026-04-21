@@ -9,6 +9,7 @@ import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
+import { netFetch } from '@/utils/net-fetch';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -485,7 +486,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(headers);
-      const response = await fetch(tokenUrl.toString(), { body, headers, method: 'POST' });
+      const response = await netFetch(tokenUrl.toString(), { body, headers, method: 'POST' });
 
       if (!response.ok) {
         // Try to parse error response

@@ -7,12 +7,27 @@ import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '../../styles';
+import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  baseline: css`
+    align-items: baseline;
+  `,
   statusIcon: css`
-    margin-block-end: -2px;
+    align-self: center;
     margin-inline-start: 4px;
+  `,
+  tag: css`
+    margin-inline-start: 6px;
+    padding-block: 1px;
+    padding-inline: 6px;
+    border-radius: 4px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillTertiary};
   `,
 }));
 
@@ -37,9 +52,9 @@ export const createGlobLocalFilesInspector = (translationKey: string) => {
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey as any)}: </span>
-            <span className={highlightTextStyles.primary}>{pattern}</span>
+          <div className={cx(inspectorTextStyles.root, styles.baseline, shinyTextStyles.shinyText)}>
+            <span>{t(translationKey as any)}:</span>
+            <span className={styles.tag}>{pattern}</span>
           </div>
         );
       }
@@ -47,18 +62,22 @@ export const createGlobLocalFilesInspector = (translationKey: string) => {
       const hasFiles = (pluginState?.totalCount ?? 0) > 0;
 
       return (
-        <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineStart: 2 }}>
-            <span>{t(translationKey as any)}: </span>
-            {pattern && <span className={highlightTextStyles.primary}>{pattern}</span>}
-            {isLoading ? null : pluginState ? (
-              hasFiles ? (
-                <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
-              ) : (
-                <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
-              )
-            ) : null}
-          </span>
+        <div
+          className={cx(
+            inspectorTextStyles.root,
+            styles.baseline,
+            isLoading && shinyTextStyles.shinyText,
+          )}
+        >
+          <span>{t(translationKey as any)}:</span>
+          {pattern && <span className={styles.tag}>{pattern}</span>}
+          {isLoading ? null : pluginState ? (
+            hasFiles ? (
+              <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+            ) : (
+              <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+            )
+          ) : null}
         </div>
       );
     },

@@ -1,6 +1,9 @@
 {
   "about": "Over",
   "advanceSettings": "Geavanceerde instellingen",
+  "agentOnboardingPromo.actionLabel": "Nu proberen",
+  "agentOnboardingPromo.description": "Stel je agentteams in via een korte chat met Lobe AI. Je bestaande agenten blijven ongewijzigd.",
+  "agentOnboardingPromo.title": "Snelle wizard",
   "alert.cloud.action": "Probeer nu",
   "alert.cloud.desc": "Alle geregistreerde gebruikers ontvangen {{credit}} gratis computertegoed per maand—geen installatie nodig. Inclusief wereldwijde cloud-synchronisatie en geavanceerd webzoeken.",
   "alert.cloud.descOnMobile": "Alle geregistreerde gebruikers ontvangen {{credit}} gratis computertegoed per maand—geen installatie nodig.",
@@ -351,6 +354,7 @@
   "navPanel.moveDown": "Omlaag verplaatsen",
   "navPanel.moveUp": "Omhoog verplaatsen",
   "navPanel.pinned": "Vastgemaakt",
+  "navPanel.resetDefault": "Herstellen naar standaardinstellingen",
   "navPanel.searchAgent": "Zoek agent...",
   "navPanel.searchRecent": "Recente items zoeken...",
   "navPanel.searchResultEmpty": "Geen zoekresultaten gevonden",
