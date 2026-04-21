@@ -102,6 +102,7 @@ export interface GeneralAgentConfig {
       model: string;
       provider: string;
     };
+    contextWindowTokens?: number;
     model: string;
     provider: string;
   };

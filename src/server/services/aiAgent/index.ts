@@ -1430,6 +1430,18 @@ export class AiAgentService {
 
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
+    let contextWindowTokens: number | undefined;
+    try {
+      contextWindowTokens =
+        (await new AiModelModel(this.db, this.userId).getModelListByProviderId(provider))
+          .find((item) => item.id === model)?.contextWindowTokens;
+    } catch {
+      // DB lookup is non-critical, fall through to builtin fallback
+    }
+    contextWindowTokens ??= LOBE_DEFAULT_MODEL_LIST.find(
+      (item) => item.id === model && item.providerId === provider,
+    )?.contextWindowTokens;
+
     try {
       const result = await this.agentRuntimeService.createOperation({
         activeDeviceId,
@@ -1452,7 +1464,11 @@ export class AiAgentService {
         initialMessages: allMessages,
         initialStepCount,
         maxSteps,
-        modelRuntimeConfig: { model, provider },
+        modelRuntimeConfig: {
+          contextWindowTokens,
+          model,
+          provider,
+        },
         hooks,
         operationId,
         signal,
