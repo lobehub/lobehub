@@ -10,10 +10,16 @@ const formatCronJob = (job: CronJobSummaryForContext): string => {
   return `  - ${job.name || 'Unnamed'} (id: ${job.id}): ${job.cronPattern} [${job.timezone}] [${status}, ${execInfo}, ${job.totalExecutions} completed, last run: ${lastRun}]${desc}`;
 };
 
-export const generateCronJobsList = (jobs: CronJobSummaryForContext[]): string => {
+export const generateCronJobsList = (jobs: CronJobSummaryForContext[], total?: number): string => {
   if (jobs.length === 0) {
     return 'No scheduled tasks configured for this agent.';
   }
 
-  return jobs.map(formatCronJob).join('\n');
+  const lines = jobs.map(formatCronJob);
+
+  if (total && total > jobs.length) {
+    lines.push(`  (showing ${jobs.length} of ${total} tasks — use listCronJobs to see all)`);
+  }
+
+  return lines.join('\n');
 };

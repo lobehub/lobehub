@@ -383,13 +383,17 @@ export const contextEngineering = async ({
   }
 
   // Resolve cron jobs context for cron tool
+  // Only inject a small preview (up to 4) to save context window;
+  // the model can call listCronJobs API for the full list.
   const isCronEnabled = tools?.includes(CronIdentifier) ?? false;
   let cronJobsList: CronJobSummaryForContext[] | undefined;
+  let cronJobsTotal = 0;
 
   if (isCronEnabled && agentId) {
     try {
-      const cronResult = await lambdaClient.agentCronJob.list.query({ agentId });
+      const cronResult = await lambdaClient.agentCronJob.list.query({ agentId, limit: 4 });
       const jobs = (cronResult as any)?.data ?? [];
+      cronJobsTotal = (cronResult as any)?.pagination?.total ?? jobs.length;
       cronJobsList = jobs.map(
         (job: any): CronJobSummaryForContext => ({
           cronPattern: job.cronPattern,
@@ -403,7 +407,11 @@ export const contextEngineering = async ({
           totalExecutions: job.totalExecutions ?? 0,
         }),
       );
-      log('Cron jobs context resolved: count=%d', cronJobsList?.length ?? 0);
+      log(
+        'Cron jobs context resolved: count=%d, total=%d',
+        cronJobsList?.length ?? 0,
+        cronJobsTotal,
+      );
     } catch (error) {
       // Silently fail - cron context is optional
       log('Failed to resolve cron jobs context:', error);
@@ -728,7 +736,7 @@ export const contextEngineering = async ({
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE: required by builtin-tool-cron/src/systemRole.ts
-      CRON_JOBS_LIST: () => (cronJobsList ? generateCronJobsList(cronJobsList) : ''),
+      CRON_JOBS_LIST: () => (cronJobsList ? generateCronJobsList(cronJobsList, cronJobsTotal) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin
