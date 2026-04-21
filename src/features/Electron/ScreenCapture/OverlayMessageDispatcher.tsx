@@ -1,11 +1,11 @@
 'use client';
 
 import { SESSION_CHAT_URL } from '@lobechat/const';
-import { nanoid } from '@lobechat/utils';
 import {
   type OverlayDispatchMessagePayload,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
+import { nanoid } from '@lobechat/utils';
 import { memo, useCallback } from 'react';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -30,10 +30,11 @@ const dataUrlToFile = async ({
 };
 
 /**
- * Receives screen-capture overlay submissions forwarded by the main process and
- * forwards them through the main renderer's normal navigation path. The actual
- * `sendMessage` call is deferred until the target agent conversation has fully
- * mounted and loaded its configuration.
+ * Receives screen-capture overlay submissions forwarded by the main process.
+ * Route navigation and screenshot upload run in parallel; the target
+ * conversation waits on `pendingDispatch.uploadStatus` before calling
+ * `sendMessage`, so the user sees the chat page load while the upload
+ * finishes in the background.
  */
 const OverlayMessageDispatcher = memo(() => {
   const router = useQueryRoute();
@@ -48,29 +49,14 @@ const OverlayMessageDispatcher = memo(() => {
       const screenshotFileNames = payload.captures.map((_, index) =>
         createOverlayDispatchScreenshotFilename(dispatchId, index),
       );
-
-      try {
-        const files = await Promise.all(
-          payload.captures.map((capture, index) =>
-            dataUrlToFile({
-              dataUrl: capture.dataUrl,
-              filename: screenshotFileNames[index]!,
-            }),
-          ),
-        );
-
-        if (files.length > 0) {
-          await useFileStore.getState().uploadChatFiles(files);
-        }
-      } catch (error) {
-        console.warn('[OverlayMessageDispatcher] upload screenshot(s) failed:', error);
-      }
+      const hasCaptures = payload.captures.length > 0;
 
       getOverlayDispatchStoreState().setPendingDispatch({
         agentId,
         dispatchId,
         prompt: payload.prompt,
         screenshotFileNames,
+        uploadStatus: hasCaptures ? 'uploading' : 'ready',
       });
 
       const { activeAgentId, activeTopicId, switchTopic } = useChatStore.getState();
@@ -78,7 +64,30 @@ const OverlayMessageDispatcher = memo(() => {
         await switchTopic(null, { skipRefreshMessage: true });
       }
 
-      router.push(SESSION_CHAT_URL(agentId, false));
+      // replace: true drops prev search params (e.g. a stale `message=`) so
+      // MessageFromUrl's message-param effect cannot double-fire alongside
+      // the overlay dispatch path.
+      router.push(SESSION_CHAT_URL(agentId, false), { query: {}, replace: true });
+
+      if (!hasCaptures) return;
+
+      void (async () => {
+        try {
+          const files = await Promise.all(
+            payload.captures.map((capture, index) =>
+              dataUrlToFile({
+                dataUrl: capture.dataUrl,
+                filename: screenshotFileNames[index]!,
+              }),
+            ),
+          );
+          await useFileStore.getState().uploadChatFiles(files);
+          getOverlayDispatchStoreState().markDispatchUploadComplete(dispatchId, 'ready');
+        } catch (error) {
+          console.warn('[OverlayMessageDispatcher] upload screenshot(s) failed:', error);
+          getOverlayDispatchStoreState().markDispatchUploadComplete(dispatchId, 'failed');
+        }
+      })();
     },
     [router],
   );

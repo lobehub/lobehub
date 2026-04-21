@@ -1,10 +1,13 @@
 import { type UploadFileItem } from '@/types/files/upload';
 
+export type OverlayUploadStatus = 'uploading' | 'ready' | 'failed';
+
 export interface PendingOverlayDispatch {
   agentId: string;
   dispatchId: string;
   prompt: string;
   screenshotFileNames: string[];
+  uploadStatus: OverlayUploadStatus;
 }
 
 interface CanConsumePendingOverlayDispatchParams {
@@ -37,6 +40,7 @@ export const canConsumePendingOverlayDispatch = ({
   if (!pendingDispatch || !agentId) return false;
   if (pendingDispatch.agentId !== agentId) return false;
   if (routeAgentId && routeAgentId !== agentId) return false;
+  if (pendingDispatch.uploadStatus === 'uploading') return false;
 
   const isNewConversation = !topicId;
 

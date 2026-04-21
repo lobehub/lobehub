@@ -21,6 +21,7 @@ describe('overlayDispatch', () => {
             dispatchId: 'dispatch-1',
             prompt: 'hello',
             screenshotFileNames: ['screen-capture-dispatch-1-1.png'],
+            uploadStatus: 'ready',
           },
           routeAgentId: 'agent-1',
           topicId: null,
@@ -39,6 +40,7 @@ describe('overlayDispatch', () => {
             dispatchId: 'dispatch-1',
             prompt: 'hello',
             screenshotFileNames: ['screen-capture-dispatch-1-1.png'],
+            uploadStatus: 'ready',
           },
           routeAgentId: 'agent-1',
           topicId: 'topic-1',
@@ -57,11 +59,50 @@ describe('overlayDispatch', () => {
             dispatchId: 'dispatch-1',
             prompt: 'hello',
             screenshotFileNames: ['screen-capture-dispatch-1-1.png'],
+            uploadStatus: 'ready',
           },
           routeAgentId: 'agent-2',
           topicId: null,
         }),
       ).toBe(false);
+    });
+
+    it('waits while screenshot upload is still in flight', () => {
+      expect(
+        canConsumePendingOverlayDispatch({
+          agentId: 'agent-1',
+          isAgentConfigLoading: false,
+          messagesInit: true,
+          pendingDispatch: {
+            agentId: 'agent-1',
+            dispatchId: 'dispatch-1',
+            prompt: 'hello',
+            screenshotFileNames: ['screen-capture-dispatch-1-1.png'],
+            uploadStatus: 'uploading',
+          },
+          routeAgentId: 'agent-1',
+          topicId: null,
+        }),
+      ).toBe(false);
+    });
+
+    it('allows consumption after upload fails so the prompt still delivers', () => {
+      expect(
+        canConsumePendingOverlayDispatch({
+          agentId: 'agent-1',
+          isAgentConfigLoading: false,
+          messagesInit: true,
+          pendingDispatch: {
+            agentId: 'agent-1',
+            dispatchId: 'dispatch-1',
+            prompt: 'hello',
+            screenshotFileNames: [],
+            uploadStatus: 'failed',
+          },
+          routeAgentId: 'agent-1',
+          topicId: null,
+        }),
+      ).toBe(true);
     });
   });
 
@@ -93,6 +134,7 @@ describe('overlayDispatch', () => {
             dispatchId: 'dispatch-1',
             prompt: 'hello',
             screenshotFileNames: [firstFileName, secondFileName],
+            uploadStatus: 'ready',
           },
         }),
       ).toEqual([fileList[2], fileList[0]]);
