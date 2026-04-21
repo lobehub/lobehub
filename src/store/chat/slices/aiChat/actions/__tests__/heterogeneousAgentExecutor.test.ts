@@ -9,7 +9,6 @@
  *   - Content/reasoning/model/usage final writes
  *   - Sync snapshot + reset to prevent cross-step content contamination
  */
-import { ChatToolPayloadSchema, UpdateMessageParamsSchema } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeHeterogeneousAgent } from '../heterogeneousAgentExecutor';
@@ -1383,76 +1382,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
 
       expect(mockCreateThread).not.toHaveBeenCalled();
-    });
-
-    // ─── Schema roundtrip (LOBE-7319 review fix) ───────────────
-    //
-    // Before these fields were added to ChatToolPayloadSchema, zod's
-    // default strip behavior silently dropped `subagentSpawn` and
-    // `parentToolCallId` on every TRPC `update-message` call — so the
-    // spawn marker and child-lineage pointer only lived in transient
-    // stream state and vanished after the first `tool_end →
-    // fetchAndReplaceMessages`, breaking any downstream consumer that
-    // wanted to reconstruct parent-child tool relationships from DB.
-    //
-    // These asserts are regression guards against that stripping.
-
-    it('SCHEMA: preserves subagentSpawn on ChatToolPayloadSchema roundtrip', () => {
-      const parsed = ChatToolPayloadSchema.parse({
-        apiName: 'Task',
-        arguments: '{}',
-        id: 'toolu_task',
-        identifier: 'claude-code',
-        subagentSpawn: { description: 'inspect', subagentType: 'Explore' },
-        type: 'default',
-      });
-
-      expect(parsed.subagentSpawn).toEqual({
-        description: 'inspect',
-        subagentType: 'Explore',
-      });
-    });
-
-    it('SCHEMA: preserves parentToolCallId on ChatToolPayloadSchema roundtrip', () => {
-      const parsed = ChatToolPayloadSchema.parse({
-        apiName: 'Bash',
-        arguments: '{}',
-        id: 'toolu_child',
-        identifier: 'claude-code',
-        parentToolCallId: 'toolu_task',
-        type: 'default',
-      });
-
-      expect(parsed.parentToolCallId).toBe('toolu_task');
-    });
-
-    it('SCHEMA: preserves both fields through the UpdateMessageParams path (TRPC gate)', () => {
-      const parsed = UpdateMessageParamsSchema.parse({
-        tools: [
-          {
-            apiName: 'Task',
-            arguments: '{}',
-            id: 'toolu_task',
-            identifier: 'claude-code',
-            subagentSpawn: { description: 'inspect', subagentType: 'Explore' },
-            type: 'default',
-          },
-          {
-            apiName: 'Bash',
-            arguments: '{}',
-            id: 'toolu_child',
-            identifier: 'claude-code',
-            parentToolCallId: 'toolu_task',
-            type: 'default',
-          },
-        ],
-      });
-
-      expect(parsed.tools?.[0].subagentSpawn).toEqual({
-        description: 'inspect',
-        subagentType: 'Explore',
-      });
-      expect(parsed.tools?.[1].parentToolCallId).toBe('toolu_task');
     });
   });
 });

@@ -33,24 +33,6 @@ export type ToolSource = 'builtin' | 'client' | 'mcp' | 'klavis' | 'lobehubSkill
  */
 export type ToolExecutor = 'client' | 'server';
 
-/**
- * Normalized "this tool spawns a subagent" descriptor. Adapters set this on
- * the main-agent tool_use that triggers a sub-conversation (e.g. Claude
- * Code's `Task` tool, Codex's subtask equivalent) so downstream consumers
- * can allocate a Thread / route the subagent's inner tool_uses without
- * needing to special-case per-adapter tool identifiers or re-parse
- * `arguments`. Paired with `parentToolCallId` on the inner tool_uses.
- */
-export interface SubagentSpawnInfo {
-  /** Free-form description of the delegated task, sourced from the tool input. */
-  description?: string;
-  /**
-   * Adapter-specific subagent template label (CC's `subagent_type`,
-   * Codex's equivalent, ...). Used purely for UI / metadata.
-   */
-  subagentType?: string;
-}
-
 export interface ChatToolPayload {
   apiName: string;
   arguments: string;
@@ -61,30 +43,11 @@ export interface ChatToolPayload {
   id: string;
   identifier: string;
   intervention?: ToolIntervention;
-  /**
-   * When this tool_use was spawned BY a subagent (e.g. a tool call
-   * happening inside a CC `Task` subagent), this carries the id of the
-   * outer tool_use that spawned the subagent. Lets the renderer
-   * reconstruct parent-child tool relationships without joining Threads
-   * on every read, and lets adapters that don't route subagent tools
-   * into a separate Thread still carry the lineage.
-   *
-   * Absent for top-level (main-agent) tool calls.
-   */
-  parentToolCallId?: string;
   result_msg_id?: string;
   /**
    * Tool source indicates where the tool comes from
    */
   source?: ToolSource;
-  /**
-   * Present on a tool_use that spawns a subagent. Adapter-agnostic
-   * marker paired with `parentToolCallId` on the subagent's inner tools.
-   * The executor creates a subagent Thread when it sees this, but any
-   * renderer can also key off it directly (no Thread lookup needed
-   * to show "this tool_use is a subagent spawn").
-   */
-  subagentSpawn?: SubagentSpawnInfo;
   thoughtSignature?: string;
   type: LobeToolRenderType;
 }
@@ -158,20 +121,13 @@ export const MessageToolCallSchema = z.object({
   type: z.string(),
 });
 
-export const SubagentSpawnInfoSchema = z.object({
-  description: z.string().optional(),
-  subagentType: z.string().optional(),
-});
-
 export const ChatToolPayloadSchema = z.object({
   apiName: z.string(),
   arguments: z.string(),
   id: z.string(),
   identifier: z.string(),
   intervention: ToolInterventionSchema.optional(),
-  parentToolCallId: z.string().optional(),
   result_msg_id: z.string().optional(),
-  subagentSpawn: SubagentSpawnInfoSchema.optional(),
   thoughtSignature: z.string().optional(),
   type: z.string(),
 });
