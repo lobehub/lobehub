@@ -58,8 +58,11 @@ export const tasks = pgTable(
     priority: integer('priority').default(0), // 'no' | 'urgent' | 'high' | 'normal' | 'low'
     sortOrder: integer('sort_order').default(0), // manual sort within parent, lower = higher
 
+    // Automation mode (mutually exclusive with each other; null = no automation)
+    automationMode: text('automation_mode').$type<'heartbeat' | 'schedule'>(),
+
     // Heartbeat
-    heartbeatInterval: integer('heartbeat_interval').default(300), // seconds
+    heartbeatInterval: integer('heartbeat_interval'), // seconds, null = no heartbeat configured
     heartbeatTimeout: integer('heartbeat_timeout'), // seconds, null = disabled (default off)
     lastHeartbeatAt: timestamptz('last_heartbeat_at'),
 
@@ -97,6 +100,7 @@ export const tasks = pgTable(
     index('tasks_parent_task_id_idx').on(t.parentTaskId),
     index('tasks_status_idx').on(t.status),
     index('tasks_priority_idx').on(t.priority),
+    index('tasks_automation_mode_idx').on(t.automationMode),
     index('tasks_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
   ],
 );

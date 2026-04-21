@@ -5,6 +5,7 @@ import BrowserWindowsCtr from './BrowserWindowsCtr';
 import CliCtr from './CliCtr';
 import DevtoolsCtr from './DevtoolsCtr';
 import GatewayConnectionCtr from './GatewayConnectionCtr';
+import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
@@ -29,6 +30,7 @@ export const controllerIpcConstructors = [
   CliCtr,
   DevtoolsCtr,
   GatewayConnectionCtr,
+  GitCtr,
   LocalFileCtr,
   McpCtr,
   McpInstallCtr,

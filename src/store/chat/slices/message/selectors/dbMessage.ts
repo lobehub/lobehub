@@ -1,5 +1,4 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
-import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
   type StepActivatedSkill,
@@ -234,8 +233,13 @@ export const selectActivatedSkillsFromMessages = (
 /**
  * Select the latest todos state from messages array
  *
- * Searches messages in reverse order to find the most recent GTD tool message
- * that contains todos state.
+ * Searches messages in reverse order to find the most recent tool message
+ * that carries a `pluginState.todos` payload — regardless of which tool
+ * produced it. `pluginState.todos` is treated as a shared contract: GTD
+ * writes it via its client state mutation, and heterogeneous agent adapters
+ * (Claude Code TodoWrite, future ACP/Codex equivalents) synthesize it onto
+ * the tool_result event. Any new producer that honors the shape gets picked
+ * up automatically.
  *
  * This is a pure function that can be used for both:
  * - UI display (showing current todos)
@@ -251,8 +255,7 @@ export const selectTodosFromMessages = (
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
 
-    // Check if this is a GTD tool message with todos state
-    if (msg.role === 'tool' && msg.plugin?.identifier === GTDIdentifier && msg.pluginState?.todos) {
+    if (msg.role === 'tool' && msg.pluginState?.todos) {
       const todos = msg.pluginState.todos as { items?: unknown[]; updatedAt?: string };
 
       // Handle the todos structure: { items: TodoItem[], updatedAt: string }
@@ -274,6 +277,29 @@ export const selectTodosFromMessages = (
   }
 
   return undefined;
+};
+
+/**
+ * Select todos from the current agent turn only — messages after the last
+ * user message. Intended for UI surfaces that should drop a stale/completed
+ * todos snapshot the moment a new user turn begins. If no user message exists
+ * yet (e.g. initial agent greeting), falls back to the full history.
+ *
+ * Do NOT use this for agent runtime step context — the runtime must see todos
+ * across turns so the agent remembers its plan between user messages.
+ */
+export const selectCurrentTurnTodosFromMessages = (
+  messages: UIChatMessage[],
+): StepContextTodos | undefined => {
+  let lastUserIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      lastUserIndex = i;
+      break;
+    }
+  }
+  const scope = lastUserIndex >= 0 ? messages.slice(lastUserIndex + 1) : messages;
+  return selectTodosFromMessages(scope);
 };
 
 /**
@@ -302,5 +328,6 @@ export const dbMessageSelectors = {
   latestUserMessage,
   selectActivatedSkillsFromMessages,
   selectActivatedToolIdsFromMessages,
+  selectCurrentTurnTodosFromMessages,
   selectTodosFromMessages,
 };

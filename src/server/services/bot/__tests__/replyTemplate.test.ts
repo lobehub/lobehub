@@ -327,10 +327,14 @@ describe('replyTemplate', () => {
   // ==================== renderError ====================
 
   describe('renderError', () => {
-    it('should wrap error in markdown code block', () => {
-      expect(renderError('Something went wrong')).toBe(
-        '**Agent Execution Failed**\n```\nSomething went wrong\n```',
+    it('should include the operation id when provided', () => {
+      expect(renderError('op-abc-123')).toBe(
+        '**Agent Execution Failed**\nOperation ID: `op-abc-123`',
       );
+    });
+
+    it('should fall back to a generic header when no operation id is provided', () => {
+      expect(renderError()).toBe('**Agent Execution Failed**');
     });
   });
 

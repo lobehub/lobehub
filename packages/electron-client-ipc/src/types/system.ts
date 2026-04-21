@@ -58,12 +58,38 @@ export interface GitBranchListItem {
 }
 
 export interface GitWorkingTreeStatus {
+  /** Untracked + staged-as-added files */
+  added: number;
   clean: boolean;
-  /** Count of modified / staged / untracked files (each file counted once) */
+  /** Files marked deleted in either index or working tree */
+  deleted: number;
+  /** Modified / renamed / copied / type-changed / unmerged files */
   modified: number;
+  /** Total dirty files (each file counted once) — sum of added + modified + deleted */
+  total: number;
+}
+
+export interface GitWorkingTreeFiles {
+  /** Repo-relative paths for untracked + staged-as-added files */
+  added: string[];
+  /** Repo-relative paths for files marked deleted in either index or working tree */
+  deleted: string[];
+  /** Repo-relative paths for modified / renamed / copied / type-changed / unmerged files */
+  modified: string[];
 }
 
 export interface GitCheckoutResult {
   error?: string;
   success: boolean;
+}
+
+export interface GitAheadBehind {
+  /** Commits in HEAD not in upstream — push count */
+  ahead: number;
+  /** Commits in upstream not in HEAD — pull count */
+  behind: number;
+  /** True when the branch has an upstream tracking ref configured */
+  hasUpstream: boolean;
+  /** Upstream ref short name (e.g. `origin/main`), when available */
+  upstream?: string;
 }

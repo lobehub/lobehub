@@ -82,7 +82,10 @@ describe('HeterogeneousAgentCtr', () => {
 
   describe('resolveImage', () => {
     it('stores traversal-looking ids inside the cache root via a stable hash key', async () => {
-      const ctr = new HeterogeneousAgentCtr({ appStoragePath } as any);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
       const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
       const escapedTargetName = `${path.basename(appStoragePath)}-outside-storage`;
       const escapePath = path.join(cacheDir, `../../../${escapedTargetName}`);
@@ -112,7 +115,10 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('does not trust pre-seeded out-of-root traversal cache files as cache hits', async () => {
-      const ctr = new HeterogeneousAgentCtr({ appStoragePath } as any);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
       const cacheDir = path.join(appStoragePath, 'heteroAgent/files');
       const traversalId = '../../preexisting-secret';
       const outOfRootDataPath = path.join(cacheDir, traversalId);
@@ -144,7 +150,10 @@ describe('HeterogeneousAgentCtr', () => {
       const { proc, writes } = createFakeProc();
       nextFakeProc = proc;
 
-      const ctr = new HeterogeneousAgentCtr({ appStoragePath } as any);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
         command: 'claude',

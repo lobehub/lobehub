@@ -14,6 +14,7 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
+import ByProjectMode from '../TopicListContent/ByProjectMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
@@ -48,7 +49,13 @@ const TopicList = memo(() => {
           }}
         />
       )}
-      {topicGroupMode === 'flat' ? <FlatMode /> : <ByTimeMode />}
+      {topicGroupMode === 'flat' ? (
+        <FlatMode />
+      ) : topicGroupMode === 'byProject' ? (
+        <ByProjectMode />
+      ) : (
+        <ByTimeMode />
+      )}
       <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
     </>
   );

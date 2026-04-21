@@ -42,6 +42,8 @@ export const topics = pgTable(
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
     trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
+    status: text('status', { enum: ['active', 'completed', 'archived'] }),
+    completedAt: timestamptz('completed_at'),
     ...timestamps,
   },
   (t) => [
@@ -52,6 +54,8 @@ export const topics = pgTable(
     index('topics_group_id_idx').on(t.groupId),
     index('topics_agent_id_idx').on(t.agentId),
     index('topics_trigger_idx').on(t.trigger),
+    index('topics_status_idx').on(t.status),
+    index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
     index('topics_extract_status_gin_idx').using(
       'gin',
       sql`(metadata->'userMemoryExtractStatus') jsonb_path_ops`,

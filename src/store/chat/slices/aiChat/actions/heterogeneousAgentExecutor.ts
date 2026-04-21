@@ -223,6 +223,11 @@ const persistNewToolCalls = async (
 
 /**
  * Update a tool message's content in DB when tool_result arrives.
+ *
+ * `pluginState` (when provided by the adapter) is written in the same request
+ * as `content` so downstream consumers observe a single atomic update —
+ * critical for `selectTodosFromMessages` which reads both role=tool and
+ * `pluginState.todos` in one pass.
  */
 const persistToolResult = async (
   toolCallId: string,
@@ -230,6 +235,7 @@ const persistToolResult = async (
   isError: boolean,
   state: ToolPersistenceState,
   context: ConversationContext,
+  pluginState?: Record<string, any>,
 ) => {
   const toolMsgId = state.toolMsgIdByCallId.get(toolCallId);
   if (!toolMsgId) {
@@ -243,6 +249,7 @@ const persistToolResult = async (
       {
         content,
         pluginError: isError ? { message: content } : undefined,
+        pluginState,
       },
       {
         agentId: context.agentId,
@@ -377,13 +384,14 @@ export const executeHeterogeneousAgent = async (
         for (const event of events) {
           // ─── tool_result: update tool message content in DB (ACP-only) ───
           if (event.type === 'tool_result') {
-            const { content, isError, toolCallId } = event.data as {
+            const { content, isError, pluginState, toolCallId } = event.data as {
               content: string;
               isError?: boolean;
+              pluginState?: Record<string, any>;
               toolCallId: string;
             };
             persistQueue = persistQueue.then(() =>
-              persistToolResult(toolCallId, content, !!isError, toolState, context),
+              persistToolResult(toolCallId, content, !!isError, toolState, context, pluginState),
             );
             // Don't forward — the tool_end that follows triggers fetchAndReplaceMessages
             // which reads the updated content from DB.

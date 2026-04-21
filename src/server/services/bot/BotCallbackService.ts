@@ -39,6 +39,7 @@ export interface BotCallbackBody {
   lastLLMContent?: string;
   lastToolsCalling?: any;
   llmCalls?: number;
+  operationId?: string;
   platformThreadId: string;
   progressMessageId?: string;
   reason?: string;
@@ -227,10 +228,15 @@ export class BotCallbackService {
     charLimit?: number,
     canEdit = true,
   ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage } = body;
+    const { reason, lastAssistantContent, errorMessage, operationId } = body;
 
     if (reason === 'error') {
-      const errorText = renderError(errorMessage || 'Agent execution failed');
+      log(
+        'handleCompletion: agent run failed, operationId=%s, errorMessage=%s',
+        operationId,
+        errorMessage,
+      );
+      const errorText = renderError(operationId);
       try {
         if (canEdit && progressMessageId) {
           await messenger.editMessage(progressMessageId, errorText);

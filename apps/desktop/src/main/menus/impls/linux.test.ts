@@ -309,14 +309,16 @@ describe('LinuxMenu', () => {
       expect(copyItem.role).toBe('copy');
     });
 
-    it('should use role for close (accelerator handled by Electron)', () => {
+    it('should bind CmdOrCtrl+W to a smart close handler (tab first, then window)', () => {
       linuxMenu.buildAndSetAppMenu();
 
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const fileMenu = template.find((item: any) => item.label === 'File');
       const closeItem = fileMenu.submenu.find((item: any) => item.label === 'Close');
 
-      expect(closeItem.role).toBe('close');
+      expect(closeItem.accelerator).toBe('CmdOrCtrl+W');
+      expect(typeof closeItem.click).toBe('function');
+      expect(closeItem.role).toBeUndefined();
     });
 
     it('should use role for minimize (accelerator handled by Electron)', () => {

@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  highlightTextStyles,
-  inspectorTextStyles,
-  shinyTextStyles,
-} from '@lobechat/shared-tool-ui/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
@@ -30,6 +26,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transition:
       stroke-dashoffset 240ms ease,
       stroke 240ms ease;
+  `,
+  chip: css`
+    overflow: hidden;
+    flex-shrink: 1;
+
+    min-width: 0;
+    margin-inline-start: 4px;
+    padding-block: 1px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    background: ${cssVar.colorFillSecondary};
   `,
 }));
 
@@ -120,8 +132,8 @@ export const TodoWriteInspector = memo<BuiltinInspectorProps<TodoWriteArgs>>(
         <span>{label}</span>
         {detail && (
           <>
-            <span>: </span>
-            <span className={highlightTextStyles.primary}>{detail}</span>
+            <span>:</span>
+            <span className={styles.chip}>{detail}</span>
           </>
         )}
       </div>

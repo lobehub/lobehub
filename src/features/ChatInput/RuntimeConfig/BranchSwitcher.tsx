@@ -22,7 +22,9 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
-import { electronSystemService } from '@/services/electron/system';
+import { electronGitService } from '@/services/electron/git';
+
+import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
@@ -173,14 +175,10 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       mutate: mutateBranches,
     } = useSWR(
       open ? ['git-branches', path] : null,
-      () => electronSystemService.listGitBranches(path),
+      () => electronGitService.listGitBranches(path),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
-    const { data: workingStatus, mutate: mutateWorkingStatus } = useSWR(
-      open ? ['git-status', path] : null,
-      () => electronSystemService.getGitWorkingTreeStatus(path),
-      { revalidateOnFocus: false },
-    );
+    const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {
@@ -226,7 +224,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         }
         setBusyBranch(branch);
         try {
-          const result = await electronSystemService.checkoutGitBranch({
+          const result = await electronGitService.checkoutGitBranch({
             branch,
             create,
             path,
@@ -324,7 +322,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           {isCurrent && workingStatus && !workingStatus.clean && (
                             <div className={styles.itemMeta}>
                               {t('localSystem.workingDirectory.uncommittedChanges', {
-                                count: workingStatus.modified,
+                                count: workingStatus.total,
                               })}
                             </div>
                           )}

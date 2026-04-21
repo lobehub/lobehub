@@ -12,7 +12,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
     overflow-y: auto;
     flex: 1;
-
     min-height: 0;
     padding-block: 8px 12px;
   `,

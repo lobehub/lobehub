@@ -453,7 +453,18 @@ export default {
   'localSystem.workingDirectory.createBranchAction': 'Checkout new branch…',
   'localSystem.workingDirectory.current': 'Current working directory',
   'localSystem.workingDirectory.chooseDifferentFolder': 'Choose a different folder',
+  'localSystem.workingDirectory.aheadBehindTooltip':
+    '{{ahead}} to push · {{behind}} to pull ({{upstream}})',
+  'localSystem.workingDirectory.aheadTooltip': '{{count}} commit(s) to push to {{upstream}}',
+  'localSystem.workingDirectory.behindTooltip': '{{count}} commit(s) to pull from {{upstream}}',
   'localSystem.workingDirectory.detachedHead': 'Detached HEAD at {{sha}}',
+  'localSystem.workingDirectory.diffStatTooltip':
+    'Added {{added}} · Modified {{modified}} · Deleted {{deleted}}',
+  'localSystem.workingDirectory.filesAdded': 'Added',
+  'localSystem.workingDirectory.filesDeleted': 'Deleted',
+  'localSystem.workingDirectory.filesEmpty': 'No uncommitted changes',
+  'localSystem.workingDirectory.filesLoading': 'Loading changes…',
+  'localSystem.workingDirectory.filesModified': 'Modified',
   'localSystem.workingDirectory.ghMissing':
     'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
   'localSystem.workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',

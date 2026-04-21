@@ -12,13 +12,19 @@ const PromptTransform = memo(() => {
   const onPromptChange = useCallback(
     (prompt: string) => {
       if (!editor) return;
-      editor.setDocument('markdown', prompt);
+      // `keepHistory` prevents setDocument from wiping the undo/redo stacks.
+      editor.setDocument('markdown', prompt, { keepHistory: true });
     },
     [editor],
   );
 
+  // Image mode expands vague inputs; text mode forbids expansion.
   return (
-    <PromptTransformAction mode={'text'} prompt={markdownContent} onPromptChange={onPromptChange} />
+    <PromptTransformAction
+      mode={'image'}
+      prompt={markdownContent}
+      onPromptChange={onPromptChange}
+    />
   );
 });
 

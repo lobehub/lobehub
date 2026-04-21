@@ -26,7 +26,7 @@ const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
 
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
-const isKimiK25Model = (model: string) => model === 'kimi-k2.5';
+const isKimiK25Model = (model: string) => model.startsWith('kimi-k2.');
 const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;

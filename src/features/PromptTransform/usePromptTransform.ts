@@ -23,8 +23,12 @@ export const usePromptTransform = ({ mode, prompt, onPromptChange }: UsePromptTr
   const isRewriteActionEnabled = rewriteConfig?.enabled ?? false;
 
   const getConfigByAction = useCallback(
-    (action: PromptTransformAction) =>
-      action === 'rewrite' ? (rewriteConfig ?? {}) : (translateConfig ?? {}),
+    (action: PromptTransformAction) => {
+      // Strip config-only fields (enabled, customPrompt); strict upstreams reject unknown OpenAI params.
+      const config = action === 'rewrite' ? rewriteConfig : translateConfig;
+      if (!config) return {};
+      return { model: config.model, provider: config.provider };
+    },
     [rewriteConfig, translateConfig],
   );
 

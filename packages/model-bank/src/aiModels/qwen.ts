@@ -1845,6 +1845,70 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
+      deploymentName: 'qwen3.6-max-preview', // Supports context caching
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'The largest closed-source model in the Qwen3.6 series. It delivers stronger world knowledge, instruction following, and agentic coding performance for complex tasks. It is text-only, supports thinking mode by default, explicit caching, and function calling.',
+    displayName: 'Qwen3.6 Max Preview',
+    id: 'qwen3.6-max-preview',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9 * 0.2,
+              '[0.128, infinity]': 15 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 9,
+              '[0.128, infinity]': 15,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.128]': 54,
+              '[0.128, infinity]': 90,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-18',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
       deploymentName: 'qwen3-max', // Supports context caching
     },
     contextWindowTokens: 262_144,

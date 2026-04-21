@@ -124,7 +124,7 @@ const ChatInput = memo<ChatInputProps>(
     allowExpand,
     leftActions = [],
     leftContent,
-    rightActions = ['promptTransform'],
+    rightActions = [],
     children,
     extraActionItems,
     mentionItems,

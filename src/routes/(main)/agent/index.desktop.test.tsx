@@ -42,10 +42,6 @@ vi.mock('@lobehub/ui', () => ({
   ShikiLobeTheme: {},
 }));
 
-vi.mock('@/components/Analytics/MainInterfaceTracker', () => ({
-  default: () => <div data-testid="main-interface-tracker" />,
-}));
-
 vi.mock('@/features/TopicPopupGuard', () => ({
   default: () => <div data-testid="topic-popup-guard" />,
 }));

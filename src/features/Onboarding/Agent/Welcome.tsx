@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 
+import NameSuggestions from './NameSuggestions';
 import { staticStyle } from './staticStyle';
 
 interface WelcomeProps {
@@ -82,6 +83,7 @@ const Welcome = memo<WelcomeProps>(({ content }) => {
         <Markdown fontSize={16} variant={'chat'}>
           {content}
         </Markdown>
+        <NameSuggestions />
       </Flexbox>
     </>
   );

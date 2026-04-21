@@ -183,6 +183,309 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
+  describe('ToolSearch tool_reference content (LOBE-7369)', () => {
+    // CC CLI serializes ToolSearch results as `tool_reference` blocks — no
+    // `text` or `content` field — which the generic array mapper dropped to
+    // empty content, leaving the tool message in DB with `content: ''` and
+    // the UI's StatusIndicator stuck on the spinner.
+    it('joins tool_reference blocks into newline-separated tool names', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'ts1', input: { query: 'linear' }, name: 'ToolSearch', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { tool_name: 'mcp__claude_ai_Linear__create_attachment', type: 'tool_reference' },
+                { tool_name: 'mcp__claude_ai_Linear__create_document', type: 'tool_reference' },
+                { tool_name: 'mcp__claude_ai_Linear__create_issue_label', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('ts1');
+      expect(result!.data.content).toBe(
+        [
+          'mcp__claude_ai_Linear__create_attachment',
+          'mcp__claude_ai_Linear__create_document',
+          'mcp__claude_ai_Linear__create_issue_label',
+        ].join('\n'),
+      );
+      expect(result!.data.isError).toBe(false);
+
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end).toBeDefined();
+      expect(end!.data.toolCallId).toBe('ts1');
+    });
+
+    it('mixes tool_reference with text blocks in a single tool_result', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'ts1', input: { query: 'search' }, name: 'ToolSearch', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { text: 'Loaded:', type: 'text' },
+                { tool_name: 'WebSearch', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('Loaded:\nWebSearch');
+    });
+
+    it('skips tool_reference entries with no tool_name', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'ts1', input: { query: 'x' }, name: 'ToolSearch', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                { tool_name: 'A', type: 'tool_reference' },
+                { type: 'tool_reference' },
+                { tool_name: 'B', type: 'tool_reference' },
+              ],
+              tool_use_id: 'ts1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('A\nB');
+    });
+  });
+
+  describe('TodoWrite pluginState synthesis', () => {
+    const driveTodoWrite = (adapter: ClaudeCodeAdapter, input: unknown, toolId = 't1') => {
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: toolId, input, name: 'TodoWrite', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Todos have been modified successfully',
+              tool_use_id: toolId,
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      return result!.data.pluginState as
+        | { todos: { items: Array<{ status: string; text: string }>; updatedAt: string } }
+        | undefined;
+    };
+
+    it('maps pending/in_progress/completed to todo/processing/completed', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const pluginState = driveTodoWrite(adapter, {
+        todos: [
+          { activeForm: 'Doing A', content: 'Do A', status: 'in_progress' },
+          { activeForm: 'Doing B', content: 'Do B', status: 'pending' },
+          { activeForm: 'Doing C', content: 'Do C', status: 'completed' },
+        ],
+      });
+
+      expect(pluginState).toBeDefined();
+      expect(pluginState!.todos.items).toEqual([
+        { status: 'processing', text: 'Doing A' },
+        { status: 'todo', text: 'Do B' },
+        { status: 'completed', text: 'Do C' },
+      ]);
+      expect(new Date(pluginState!.todos.updatedAt).toISOString()).toBe(
+        pluginState!.todos.updatedAt,
+      );
+    });
+
+    it('falls back to content when activeForm is missing on in_progress item', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const pluginState = driveTodoWrite(adapter, {
+        todos: [{ activeForm: '', content: 'Do the thing', status: 'in_progress' }],
+      });
+      expect(pluginState!.todos.items[0]).toEqual({
+        status: 'processing',
+        text: 'Do the thing',
+      });
+    });
+
+    it('does not set pluginState for non-TodoWrite tools', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't1', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.pluginState).toBeUndefined();
+    });
+
+    it('does NOT synthesize pluginState when tool_result is marked is_error', () => {
+      // Guard: a failed TodoWrite was never applied on CC's side; persisting
+      // a derived snapshot would let `selectTodosFromMessages` overwrite the
+      // live todo UI with changes that never actually happened.
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            {
+              id: 't1',
+              input: { todos: [{ activeForm: 'A', content: 'a', status: 'pending' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: 'Invalid todos payload',
+              is_error: true,
+              tool_use_id: 't1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.isError).toBe(true);
+      expect(result!.data.pluginState).toBeUndefined();
+
+      // Cache must still be drained — a later TodoWrite on a new id should
+      // synthesize only from its own args, not inherit the failed one.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            {
+              id: 't2',
+              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const next = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const nextState = next.find((e) => e.type === 'tool_result')!.data.pluginState;
+      expect(nextState.todos.items).toEqual([{ status: 'completed', text: 'b' }]);
+    });
+
+    it('drains the cached input so a repeat tool_use id gets a fresh synthesis', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const first = driveTodoWrite(adapter, {
+        todos: [{ activeForm: 'A', content: 'a', status: 'pending' }],
+      });
+      expect(first!.todos.items).toHaveLength(1);
+
+      // Second TodoWrite on a new tool_use id — should resynthesize from its
+      // own args, not leak from the prior cache.
+      adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [
+            {
+              id: 't2',
+              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
+              name: 'TodoWrite',
+              type: 'tool_use',
+            },
+          ],
+        },
+        type: 'assistant',
+      });
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
+          role: 'user',
+        },
+        type: 'user',
+      });
+      const second = events.find((e) => e.type === 'tool_result')!.data.pluginState;
+      expect(second.todos.items).toEqual([{ status: 'completed', text: 'b' }]);
+    });
+  });
+
   describe('multi-step execution (message.id boundary)', () => {
     it('does NOT emit step boundary for the first assistant after init', () => {
       const adapter = new ClaudeCodeAdapter();

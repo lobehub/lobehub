@@ -16,6 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { type ResolvedPageData } from '@/features/Electron/titlebar/RecentlyViewed/types';
 import { electronStylish } from '@/styles/electron';
 
+import { useTabRunning } from './hooks/useTabRunning';
+import { useTabUnread } from './hooks/useTabUnread';
 import { useStyles } from './styles';
 
 interface TabItemProps {
@@ -45,6 +47,9 @@ const TabItem = memo<TabItemProps>(
     const styles = useStyles;
     const { t } = useTranslation('electron');
     const id = item.reference.id;
+    const isRunning = useTabRunning(item.reference);
+    const isUnread = useTabUnread(item.reference);
+    const showUnreadDot = !isRunning && isUnread;
 
     const handleClick = useCallback(() => {
       if (!isActive) {
@@ -99,23 +104,30 @@ const TabItem = memo<TabItemProps>(
           onClick={handleClick}
         >
           {item.avatar ? (
-            <Avatar
-              emojiScaleWithBackground
-              avatar={item.avatar}
-              background={item.backgroundColor}
-              shape="square"
-              size={16}
-            />
+            <span className={styles.avatarWrapper}>
+              <Avatar
+                emojiScaleWithBackground
+                avatar={item.avatar}
+                background={item.backgroundColor}
+                shape="square"
+                size={16}
+              />
+              {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
+              {showUnreadDot && <span aria-label={t('tab.unread')} className={styles.unreadDot} />}
+            </span>
           ) : (
-            item.icon && <Icon className={styles.tabIcon} icon={item.icon} size="small" />
+            item.icon && (
+              <span className={styles.avatarWrapper}>
+                <Icon className={styles.tabIcon} icon={item.icon} size="small" />
+                {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
+                {showUnreadDot && (
+                  <span aria-label={t('tab.unread')} className={styles.unreadDot} />
+                )}
+              </span>
+            )
           )}
           <span className={styles.tabTitle}>{item.title}</span>
-          <ActionIcon
-            className={cx('closeIcon', styles.closeIcon)}
-            icon={X}
-            size="small"
-            onClick={handleClose}
-          />
+          <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
         </Flexbox>
       </ContextMenuTrigger>
     );

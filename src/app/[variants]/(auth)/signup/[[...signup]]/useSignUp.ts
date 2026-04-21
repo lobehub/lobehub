@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { type BusinessSignupFomData } from '@/business/client/hooks/useBusinessSignup';
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import { message } from '@/components/AntdStaticMethods';
+import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
 
 import { useAuthServerConfigStore } from '../../_layout/AuthServerConfigProvider';
@@ -26,6 +27,8 @@ export const useSignUp = () => {
 
   const handleSignUp = async (values: SignUpFormValues) => {
     setLoading(true);
+    await trackLoginOrSignupClicked({ spm: 'signup.submit.click' });
+
     try {
       if (ENABLE_BUSINESS_FEATURES && !(await preSocialSignupCheck(values))) {
         setLoading(false);

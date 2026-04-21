@@ -141,4 +141,170 @@ describe('formatMarkdownPatchError', () => {
     const msg = formatMarkdownPatchError({ code: 'EMPTY_HUNKS', hunkIndex: -1 });
     expect(msg).toMatch(/No hunks/);
   });
+
+  it('formats INVALID_LINE_RANGE', () => {
+    const msg = formatMarkdownPatchError({ code: 'INVALID_LINE_RANGE', hunkIndex: 0 });
+    expect(msg).toMatch(/endLine < startLine/);
+  });
+
+  it('formats LINE_OUT_OF_RANGE', () => {
+    const msg = formatMarkdownPatchError({
+      code: 'LINE_OUT_OF_RANGE',
+      hunkIndex: 1,
+      totalLines: 4,
+    });
+    expect(msg).toMatch(/\[1, 4\]/);
+    expect(msg).toMatch(/line 5/);
+  });
+
+  it('formats LINE_OVERLAP', () => {
+    const msg = formatMarkdownPatchError({ code: 'LINE_OVERLAP', hunkIndex: 2 });
+    expect(msg).toMatch(/Hunk #2/);
+    expect(msg).toMatch(/overlaps/);
+  });
+});
+
+describe('applyMarkdownPatch - structured ops', () => {
+  it('delete mode removes matched region', () => {
+    const source = 'one\ntwo\nthree\n';
+    const result = applyMarkdownPatch(source, [{ mode: 'delete', search: 'two\n' }]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.content).toBe('one\nthree\n');
+      expect(result.applied).toBe(1);
+    }
+  });
+
+  it('delete mode rejects ambiguous without replaceAll', () => {
+    const result = applyMarkdownPatch('x\nx\n', [{ mode: 'delete', search: 'x\n' }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('HUNK_AMBIGUOUS');
+  });
+
+  it('deleteLines removes inclusive range', () => {
+    const source = 'a\nb\nc\nd\n';
+    const result = applyMarkdownPatch(source, [{ endLine: 3, mode: 'deleteLines', startLine: 2 }]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('a\nd\n');
+  });
+
+  it('deleteLines rejects endLine < startLine', () => {
+    const source = 'a\nb\n';
+    const result = applyMarkdownPatch(source, [{ endLine: 1, mode: 'deleteLines', startLine: 2 }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('INVALID_LINE_RANGE');
+  });
+
+  it('deleteLines rejects out-of-range', () => {
+    const source = 'a\nb\n';
+    const result = applyMarkdownPatch(source, [{ endLine: 5, mode: 'deleteLines', startLine: 1 }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('LINE_OUT_OF_RANGE');
+  });
+
+  it('insertAt inserts before given line (1-based)', () => {
+    const source = 'a\nb\nc\n';
+    const result = applyMarkdownPatch(source, [{ content: 'X', line: 2, mode: 'insertAt' }]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('a\nX\nb\nc\n');
+  });
+
+  it('insertAt at totalLines + 1 appends to end', () => {
+    const source = 'a\nb\nc';
+    const result = applyMarkdownPatch(source, [{ content: 'Z', line: 4, mode: 'insertAt' }]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('a\nb\nc\nZ');
+  });
+
+  it('insertAt at line 1 prepends', () => {
+    const source = 'a\nb\n';
+    const result = applyMarkdownPatch(source, [{ content: 'HEAD', line: 1, mode: 'insertAt' }]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('HEAD\na\nb\n');
+  });
+
+  it('insertAt rejects line out of range', () => {
+    const source = 'a\nb\n';
+    const result = applyMarkdownPatch(source, [{ content: 'X', line: 5, mode: 'insertAt' }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('LINE_OUT_OF_RANGE');
+  });
+
+  it('replaceLines swaps inclusive range', () => {
+    const source = 'one\ntwo\nthree\nfour\n';
+    const result = applyMarkdownPatch(source, [
+      { content: 'TWO\nTHREE', endLine: 3, mode: 'replaceLines', startLine: 2 },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('one\nTWO\nTHREE\nfour\n');
+  });
+
+  it('applies content-based hunks before line-based hunks', () => {
+    const source = 'header\nbody\nfoot\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 2, mode: 'deleteLines', startLine: 2 },
+      { mode: 'replace', replace: 'HEADER', search: 'header' },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('HEADER\nfoot\n');
+  });
+
+  it('applies multiple line hunks in descending order so lower-line hunks stay correct', () => {
+    const source = 'L1\nL2\nL3\nL4\nL5\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 2, mode: 'deleteLines', startLine: 2 },
+      { content: 'INS', line: 4, mode: 'insertAt' },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // insertAt 4 applied against original (before deleteLines) -> between L3 and L4
+      // deleteLines [2,2] applied after -> removes L2
+      expect(result.content).toBe('L1\nL3\nINS\nL4\nL5\n');
+    }
+  });
+
+  it('rejects overlapping line hunks', () => {
+    const source = 'a\nb\nc\nd\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 3, mode: 'deleteLines', startLine: 2 },
+      { content: 'X', line: 3, mode: 'insertAt' },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('LINE_OVERLAP');
+  });
+
+  it('reports invalid line range before overlap when a hunk has startLine < 1', () => {
+    const source = 'a\nb\nc\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 1, mode: 'deleteLines', startLine: 0 },
+      { content: 'X', line: 1, mode: 'insertAt' },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('LINE_OUT_OF_RANGE');
+  });
+
+  it('reports invalid line range before overlap when endLine < startLine', () => {
+    const source = 'a\nb\nc\n';
+    const result = applyMarkdownPatch(source, [
+      { endLine: 1, mode: 'deleteLines', startLine: 3 },
+      { content: 'X', line: 2, mode: 'insertAt' },
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('INVALID_LINE_RANGE');
+  });
+
+  it('defaults mode to replace when omitted (backward compat)', () => {
+    const source = 'hello';
+    const result = applyMarkdownPatch(source, [{ replace: 'world', search: 'hello' }]);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('world');
+  });
 });

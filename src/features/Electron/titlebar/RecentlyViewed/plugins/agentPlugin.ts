@@ -3,7 +3,8 @@ import { MessageSquare } from 'lucide-react';
 import { useChatStore } from '@/store/chat';
 
 import { type AgentParams, type PageReference, type ResolvedPageData } from '../types';
-import { type PluginContext, type RecentlyViewedPlugin } from './types';
+import { buildAgentNewTopicAction } from './newTabHelpers';
+import { type NewTabAction, type PluginContext, type RecentlyViewedPlugin } from './types';
 import { createPageReference } from './types';
 
 const AGENT_PATH_REGEX = /^\/agent\/([^/?]+)$/;
@@ -13,6 +14,11 @@ export const agentPlugin: RecentlyViewedPlugin<'agent'> = {
     const meta = ctx.getAgentMeta(reference.params.agentId);
     return meta !== undefined && Object.keys(meta).length > 0;
   },
+
+  createNewTabAction(reference: PageReference<'agent'>, ctx: PluginContext): NewTabAction | null {
+    return buildAgentNewTopicAction(reference.params.agentId, ctx);
+  },
+
   generateId(reference: PageReference<'agent'>): string {
     return `agent:${reference.params.agentId}`;
   },
