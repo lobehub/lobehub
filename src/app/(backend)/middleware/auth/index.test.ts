@@ -2,6 +2,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { checkAuth, type RequestHandler } from './index';
@@ -14,7 +15,11 @@ vi.mock('@lobechat/model-runtime', () => ({
 }));
 
 vi.mock('@lobechat/types', () => ({
-  ChatErrorType: { Unauthorized: 'Unauthorized', InternalServerError: 'InternalServerError' },
+  ChatErrorType: {
+    InternalServerError: 'InternalServerError',
+    SystemTimeNotMatchError: 'SystemTimeNotMatchError',
+    Unauthorized: 'Unauthorized',
+  },
 }));
 
 vi.mock('@/utils/errorResponse', () => ({
@@ -78,6 +83,24 @@ describe('checkAuth', () => {
 
     expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
       error: mockError,
+      provider: 'mock',
+    });
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should return unauthorized when OIDC JWT validation throws UNAUTHORIZED', async () => {
+    const oidcRequest = new Request('https://example.com', {
+      headers: { 'Oidc-Auth': 'expired-token' },
+    });
+    const oidcError = Object.assign(new Error('JWT token validation failed'), {
+      code: 'UNAUTHORIZED',
+    });
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(oidcError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(createErrorResponse).toHaveBeenCalledWith(ChatErrorType.Unauthorized, {
+      error: oidcError,
       provider: 'mock',
     });
     expect(mockHandler).not.toHaveBeenCalled();
