@@ -1577,6 +1577,75 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(finalizeWrite).toBeDefined();
     });
 
+    it('retains subagent buffers + pinned target when the finalize flush fails', async () => {
+      // Transient DB failures on the finalize-time flush used to silently
+      // wipe the accumulators (buffer clear was outside the try/catch), so
+      // the onComplete fallback had nothing left to retry. With buffers
+      // preserved AND the flush target pinned, the retry writes the
+      // leftover stream text to the ORIGINAL in-thread assistant — not to
+      // the terminal message `resultContent` already advanced
+      // `currentAssistantMsgId` onto.
+      const idCounter = { tool: 0, assistant: 0, user: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        if (params.role === 'user') {
+          idCounter.user++;
+          return { id: `thread-user-${idCounter.user}` };
+        }
+        idCounter.assistant++;
+        return { id: `thread-ast-${idCounter.assistant}` };
+      });
+
+      // Make the FIRST write targeting the in-thread streaming assistant
+      // fail. The `content === 'streamed text'` check pins the rejection
+      // to the finalize-time flush; the onComplete retry uses the same
+      // update shape and must succeed.
+      let failed = false;
+      mockUpdateMessage.mockImplementation(async (_id: string, val: any) => {
+        if (!failed && val.content === 'streamed text') {
+          failed = true;
+          throw new Error('transient DB failure');
+        }
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentText('msg_sub', 'toolu_task', 'streamed text'),
+        ccSubagentSpawnResult('toolu_task', 'terminal result'),
+        ccResult(),
+      ]);
+
+      // Streamed content landed on the FIRST in-thread assistant
+      // (`thread-ast-1`) across the failure+retry — NOT on the terminal
+      // assistant created by the resultContent branch.
+      const streamedWrites = mockUpdateMessage.mock.calls.filter(
+        ([, val]: any) => val.content === 'streamed text',
+      );
+      // At least the retry must have landed after the original failure.
+      expect(streamedWrites.length).toBeGreaterThanOrEqual(2);
+      // Every attempt — including the retry — must target the streaming
+      // turn's assistant, so the terminal row's content never gets
+      // clobbered by the leftover buffer.
+      for (const [id] of streamedWrites) {
+        expect(id).toBe('thread-ast-1');
+      }
+
+      // Terminal assistant carrying the authoritative `resultContent`
+      // was still created as a fresh row (not overwritten by the retry).
+      const terminalCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
+      );
+      expect(terminalCreate).toBeDefined();
+    });
+
     it('creates a terminal in-thread assistant with the main tool_result content', async () => {
       // CC never emits the subagent's final summary as a
       // `parent_tool_use_id`-tagged assistant event — the summary only

@@ -318,6 +318,15 @@ interface SubagentRunState {
    */
   lastChainParentId: string;
   /**
+   * Assistant message id that a deferred buffer flush is still owed to.
+   * Set when `finalizeSubagentRun` captures the flush target but the DB
+   * write fails; the next retry (typically the `onComplete` fallback)
+   * reads this instead of the live `currentAssistantMsgId` — which the
+   * subsequent terminal-message branch may have advanced to the spawn
+   * result row, i.e. the WRONG target for a leftover streamed buffer.
+   */
+  pendingFlushTarget?: string;
+  /**
    * Per-subagent-assistant persistence state (tools[] payloads +
    * dedupe). Reset on every turn boundary so each in-thread assistant
    * has its own tools[].
@@ -749,20 +758,36 @@ const finalizeSubagentRun = async ({
   if (!run) return;
 
   if (run.accumulatedContent || run.accumulatedReasoning) {
+    // Pin the flush target BEFORE the DB attempt — the subsequent
+    // `resultContent` branch advances `currentAssistantMsgId` to the
+    // terminal message, so a retry (onComplete fallback) that read
+    // `currentAssistantMsgId` after the fact would overwrite the
+    // authoritative terminal content with leftover streamed buffer.
+    // `pendingFlushTarget` carries the correct target forward across
+    // retries; clearing it is part of the success path so a fresh
+    // finalize after a successful flush falls back to
+    // `currentAssistantMsgId` for the next turn's content.
+    const flushTarget = run.pendingFlushTarget ?? run.currentAssistantMsgId;
     const update: Record<string, any> = {};
     if (run.accumulatedContent) update.content = run.accumulatedContent;
     if (run.accumulatedReasoning) update.reasoning = { content: run.accumulatedReasoning };
     try {
-      await messageService.updateMessage(run.currentAssistantMsgId, update, {
+      await messageService.updateMessage(flushTarget, update, {
         agentId: context.agentId,
         topicId: context.topicId,
       });
-      run.stream.update(run.currentAssistantMsgId, update);
+      run.stream.update(flushTarget, update);
+      // Only drain the in-memory buffers after DB confirms the flush —
+      // otherwise a transient updateMessage failure would swallow the
+      // streamed text/reasoning, and the `onComplete` fallback couldn't
+      // retry because the accumulators are already empty.
+      run.accumulatedContent = '';
+      run.accumulatedReasoning = '';
+      run.pendingFlushTarget = undefined;
     } catch (err) {
+      run.pendingFlushTarget = flushTarget;
       console.error('[HeterogeneousAgent] Failed to flush subagent streaming content:', err);
     }
-    run.accumulatedContent = '';
-    run.accumulatedReasoning = '';
   }
 
   if (resultContent) {
