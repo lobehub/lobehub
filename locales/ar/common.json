@@ -354,6 +354,7 @@
   "navPanel.moveDown": "نقل لأسفل",
   "navPanel.moveUp": "نقل لأعلى",
   "navPanel.pinned": "مثبّت",
+  "navPanel.resetDefault": "إعادة التعيين إلى الإعدادات الافتراضية",
   "navPanel.searchAgent": "بحث عن وكيل...",
   "navPanel.searchRecent": "البحث في الأخير...",
   "navPanel.searchResultEmpty": "لم يتم العثور على نتائج",

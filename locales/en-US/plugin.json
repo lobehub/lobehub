@@ -264,6 +264,7 @@
   "builtins.lobe-web-onboarding.apiName.readDocument": "Read document",
   "builtins.lobe-web-onboarding.apiName.saveUserQuestion": "Save user question",
   "builtins.lobe-web-onboarding.apiName.updateDocument": "Update document",
+  "builtins.lobe-web-onboarding.apiName.writeDocument": "Write document",
   "builtins.lobe-web-onboarding.title": "User Onboarding",
   "confirm": "Confirm",
   "debug.arguments": "Arguments",

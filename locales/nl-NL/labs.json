@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "Server-side uitvoering van agenten (Gateway)",
   "features.groupChat.desc": "Schakel coördinatie van groepschats met meerdere agenten in.",
   "features.groupChat.title": "Groepschat (Meerdere Agenten)",
+  "features.heterogeneousAgent.desc": "Heterogene agentuitvoering inschakelen met Claude Code, Codex CLI en andere externe agent-CLI’s. Maakt een optie \"Claude Code-agent\" aan in het zijbalkmenu voor agents.",
+  "features.heterogeneousAgent.title": "Heterogene agent (Claude Code)",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
   "title": "Labs"

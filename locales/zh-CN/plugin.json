@@ -264,6 +264,7 @@
   "builtins.lobe-web-onboarding.apiName.readDocument": "读取文档",
   "builtins.lobe-web-onboarding.apiName.saveUserQuestion": "保存用户问题",
   "builtins.lobe-web-onboarding.apiName.updateDocument": "更新文档",
+  "builtins.lobe-web-onboarding.apiName.writeDocument": "撰写文档",
   "builtins.lobe-web-onboarding.title": "用户入门",
   "confirm": "确认",
   "debug.arguments": "调用参数",

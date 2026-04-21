@@ -354,6 +354,7 @@
   "navPanel.moveDown": "انتقال به پایین",
   "navPanel.moveUp": "انتقال به بالا",
   "navPanel.pinned": "سن‌شده",
+  "navPanel.resetDefault": "بازنشانی به حالت پیش‌فرض",
   "navPanel.searchAgent": "جستجوی نماینده...",
   "navPanel.searchRecent": "جست‌وجوی موارد اخیر...",
   "navPanel.searchResultEmpty": "نتیجه‌ای یافت نشد",

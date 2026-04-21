@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "Đóng Các Tab Bên Trái",
   "tab.closeOtherTabs": "Đóng Các Tab Khác",
   "tab.closeRightTabs": "Đóng Các Tab Bên Phải",
+  "tab.newTab": "Tab mới",
+  "tab.running": "Tác tử đang chạy",
+  "tab.unread": "Tin nhắn mới",
   "updater.checkingUpdate": "Đang kiểm tra cập nhật",
   "updater.checkingUpdateDesc": "Đang lấy thông tin phiên bản...",
   "updater.downloadNewVersion": "Tải phiên bản mới",
@@ -133,5 +136,7 @@
   "window.close": "Đóng cửa sổ",
   "window.maximize": "Phóng to cửa sổ",
   "window.minimize": "Thu nhỏ cửa sổ",
-  "window.restore": "Khôi phục cửa sổ"
+  "window.pinToTop": "Ghim lên đầu",
+  "window.restore": "Khôi phục cửa sổ",
+  "window.unpinFromTop": "Bỏ ghim khỏi đầu"
 }

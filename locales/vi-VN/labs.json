@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "Thực thi tác nhân phía máy chủ (Gateway)",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
   "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
+  "features.heterogeneousAgent.desc": "Kích hoạt thực thi tác nhân không đồng nhất với Claude Code, Codex CLI và các CLI tác nhân bên ngoài khác. Tạo tùy chọn \"Tác nhân Claude Code\" trong menu tác nhân ở thanh bên.",
+  "features.heterogeneousAgent.title": "Tác nhân không đồng nhất (Claude Code)",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
   "title": "Phòng Thí Nghiệm"

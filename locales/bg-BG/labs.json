@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "Изпълнение на агента от страна на сървъра (Gateway)",
   "features.groupChat.desc": "Активиране на координация в групов чат с множество агенти.",
   "features.groupChat.title": "Групов чат (многоагентен)",
+  "features.heterogeneousAgent.desc": "Активира изпълнение с хетерогенни агенти чрез Claude Code, Codex CLI и други външни агентски CLI инструменти. Създава опция „Claude Code Agent“ в менюто за агенти в страничната лента.",
+  "features.heterogeneousAgent.title": "Хетерогенен агент (Claude Code)",
   "features.inputMarkdown.desc": "Реално време визуализация на Markdown в полето за въвеждане (удебелен текст, кодови блокове, таблици и др.).",
   "features.inputMarkdown.title": "Визуализация на Markdown при въвеждане",
   "title": "Лаборатория"

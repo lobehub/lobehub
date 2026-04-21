@@ -108,6 +108,7 @@
   "tab.closeRightTabs": "Close Tabs to the Right",
   "tab.newTab": "New Tab",
   "tab.running": "Agent is running",
+  "tab.unread": "New message",
   "updater.checkingUpdate": "Checking for updates",
   "updater.checkingUpdateDesc": "Retrieving version information...",
   "updater.downloadNewVersion": "Download new version",

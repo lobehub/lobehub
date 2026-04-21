@@ -354,6 +354,7 @@
   "navPanel.moveDown": "Nach unten verschieben",
   "navPanel.moveUp": "Nach oben verschieben",
   "navPanel.pinned": "Angeheftet",
+  "navPanel.resetDefault": "Auf Standard zurücksetzen",
   "navPanel.searchAgent": "Agent suchen...",
   "navPanel.searchRecent": "Zuletzt gesucht...",
   "navPanel.searchResultEmpty": "Keine Suchergebnisse gefunden",

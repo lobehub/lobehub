@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "تنفيذ الوكيل من جانب الخادم (البوابة)",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
+  "features.heterogeneousAgent.desc": "تمكين تنفيذ الوكلاء المتغايرين باستخدام Claude Code وCodex CLI وواجهات سطر الأوامر الأخرى الخاصة بالوكلاء الخارجيين. يقوم بإنشاء خيار \"وكيل Claude Code\" في قائمة الوكلاء بالشريط الجانبي.",
+  "features.heterogeneousAgent.title": "وكيل متغاير (Claude Code)",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
   "title": "المختبرات"
