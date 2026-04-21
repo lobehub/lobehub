@@ -82,6 +82,11 @@ jobs:
           packageJson.main = './dist/index.mjs';
           packageJson.types = './dist/index.d.mts';
           packageJson.files = ['dist'];
+          packageJson.repository = {
+            type: 'git',
+            url: 'https://github.com/lobehub/lobehub',
+            directory: 'packages/model-bank',
+          };
           packageJson.exports = Object.fromEntries(
             Object.entries(packageJson.exports).map(([key, value]) => {
               if (typeof value !== 'string') return [key, value];
