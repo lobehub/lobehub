@@ -17,11 +17,36 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </div>
   ),
-  AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) => (
+  AccordionItem: ({
+    action,
+    children,
+    title,
+  }: {
+    action?: ReactNode;
+    children?: ReactNode;
+    title?: ReactNode;
+  }) => (
     <div>
       <div>{title}</div>
+      <div>{action}</div>
       <div>{children}</div>
     </div>
+  ),
+  // Needs to resolve to a `button` with an accessible name that matches the
+  // `title` prop so the tests' `getByRole('button', { name: 'Expand fully' })`
+  // assertions can find the expand toggle.
+  ActionIcon: ({
+    icon: IconComponent,
+    onClick,
+    title,
+  }: {
+    icon?: ComponentType;
+    onClick?: (e: unknown) => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} type="button" onClick={onClick}>
+      {IconComponent ? <IconComponent /> : null}
+    </button>
   ),
   Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
