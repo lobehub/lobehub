@@ -1,3 +1,4 @@
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,10 +50,20 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
     setStartTime(Date.now());
   }, [operationType, id]);
 
-  // Get localized label based on operation type
-  const operationLabel = operationType
-    ? (t(`operation.${operationType}` as any) as string)
-    : undefined;
+  // Heterogeneous agents interpolate their display name (e.g. "Claude Code is running")
+  // so the user can tell which external agent is working.
+  const getOperationLabel = () => {
+    if (!operationType) return undefined;
+    if (operationType !== 'execHeterogeneousAgent') {
+      return t(`operation.${operationType}` as any) as string;
+    }
+    const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
+    const name = heterogeneousType
+      ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+      : t('operation.heterogeneousAgentFallback');
+    return t('operation.execHeterogeneousAgent', { name });
+  };
+  const operationLabel = getOperationLabel();
 
   const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
 
