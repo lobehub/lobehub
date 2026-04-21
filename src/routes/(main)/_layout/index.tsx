@@ -15,6 +15,7 @@ import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopFileMenuBridge from '@/features/DesktopFileMenuBridge';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
+import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
 import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
@@ -55,6 +56,7 @@ const Layout: FC = () => {
         {isDesktop && <DesktopNavigationBridge />}
         {isDesktop && <DesktopFileMenuBridge />}
         {isDesktop && <OverlaySnapshotPublisher />}
+        {isDesktop && <OverlayCaptureUploader />}
         {isDesktop && <OverlayMessageDispatcher />}
         {showCloudPromotion && <CloudBanner />}
       </Suspense>

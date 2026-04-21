@@ -1,6 +1,10 @@
+import { randomUUID } from 'node:crypto';
+
 import type {
   CapturePreviewResult,
   CaptureRectParams,
+  OverlayCaptureUploadStatus,
+  OverlayCaptureUploadStatusPayload,
   ScreenCaptureAgentOption,
   ScreenCaptureModelOption,
   ScreenCaptureOverlayTheme,
@@ -9,6 +13,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, screen } from 'electron';
 
+import { BrowsersIdentifiers } from '@/appBrowsers';
 import { preloadDir } from '@/const/dir';
 import { isMac } from '@/const/env';
 import type { App } from '@/core/App';
@@ -30,6 +35,12 @@ export interface OverlaySnapshotPayload {
   theme?: ScreenCaptureOverlayTheme;
 }
 
+interface CaptureUploadEntry {
+  fileId?: string;
+  filename: string;
+  status: OverlayCaptureUploadStatus;
+}
+
 export class ScreenCaptureManager {
   private overlayWindow: BrowserWindow | null = null;
   private session: ScreenCaptureSession | null = null;
@@ -40,6 +51,12 @@ export class ScreenCaptureManager {
    * pushed yet.
    */
   private snapshot: OverlaySnapshotPayload = {};
+  /**
+   * Per-capture upload state used to drive the overlay send button and to
+   * resolve captureIds back to uploaded fileIds on submit. Cleared when the
+   * session closes.
+   */
+  private captureUploads = new Map<string, CaptureUploadEntry>();
 
   constructor(private readonly app: App) {}
 
@@ -101,7 +118,12 @@ export class ScreenCaptureManager {
       return { error: 'capture failed', success: false };
     }
 
+    const captureId = randomUUID();
+    const filename = `screen-capture-${captureId}.png`;
+    this.dispatchUpload(captureId, filename, pngBuffer);
+
     return {
+      captureId,
       dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`,
       rect: {
         height: winInfo.overlayBounds.height,
@@ -139,16 +161,42 @@ export class ScreenCaptureManager {
       return { error: 'capture failed', success: false };
     }
 
+    const captureId = randomUUID();
+    const filename = `screen-capture-${captureId}.png`;
+    this.dispatchUpload(captureId, filename, pngBuffer);
+
     return {
+      captureId,
       dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`,
       rect: params,
       success: true,
     };
   }
 
+  /**
+   * Record an upload status update from the main renderer and forward it to
+   * the overlay so the send button can reflect live progress.
+   */
+  reportUploadStatus(payload: OverlayCaptureUploadStatusPayload): void {
+    const entry = this.captureUploads.get(payload.captureId);
+    if (!entry) {
+      logger.warn(`reportUploadStatus for unknown captureId=${payload.captureId}`);
+      return;
+    }
+    entry.status = payload.status;
+    if (payload.fileId) entry.fileId = payload.fileId;
+    logger.debug(
+      `upload status captureId=${payload.captureId} status=${payload.status} fileId=${payload.fileId ?? '-'}`,
+    );
+
+    if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      this.overlayWindow.webContents.send('overlayCaptureUploadStatus', payload);
+    }
+  }
+
   async handleSubmit(params: ScreenCaptureSubmitParams): Promise<void> {
     logger.info(
-      `Submit capture — promptLen=${params.prompt.length} captures=${params.captures.length} agentId=${params.agentId ?? '-'} modelId=${params.modelId ?? '-'}`,
+      `Submit capture — promptLen=${params.prompt.length} captureIds=${params.captureIds.length} agentId=${params.agentId ?? '-'} modelId=${params.modelId ?? '-'}`,
     );
 
     // Close the overlay first so focus transfers cleanly to the main window.
@@ -169,6 +217,7 @@ export class ScreenCaptureManager {
     }
     this.overlayWindow = null;
     this.session = null;
+    this.captureUploads.clear();
     logger.info('Capture session closed');
   }
 
@@ -192,6 +241,30 @@ export class ScreenCaptureManager {
         win.setOpacity(1);
       }
     }
+  }
+
+  /**
+   * Hand the PNG buffer to the main renderer so the upload pipeline (TRPC +
+   * hash dedup + S3) runs there; keep a local entry so the overlay can
+   * observe status transitions via reportUploadStatus.
+   *
+   * The main renderer receives an `ArrayBuffer` via Electron's structured
+   * clone, avoiding the ~33% base64 overhead of a dataUrl round-trip.
+   */
+  private dispatchUpload(captureId: string, filename: string, pngBuffer: Buffer): void {
+    this.captureUploads.set(captureId, { filename, status: 'uploading' });
+
+    // Copy into a fresh ArrayBuffer so the IPC structured-clone layer owns
+    // the memory outright (Node's Buffer pool can otherwise alias bytes).
+    const bytes = new ArrayBuffer(pngBuffer.byteLength);
+    new Uint8Array(bytes).set(pngBuffer);
+
+    this.app.browserManager.broadcastToWindow(BrowsersIdentifiers.app, 'overlayUploadRequest', {
+      bytes,
+      captureId,
+      filename,
+      mimeType: 'image/png',
+    });
   }
 
   private async createOverlayWindow(bounds: Electron.Rectangle): Promise<void> {

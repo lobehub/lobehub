@@ -1,10 +1,11 @@
 import type {
+  OverlayCaptureUploadStatus,
   ScreenCaptureAgentOption,
   ScreenCaptureModelOption,
   ScreenCaptureOverlayTheme,
 } from '@lobechat/electron-client-ipc';
 import { ModelIcon } from '@lobehub/icons';
-import { ChevronDownIcon, XIcon } from 'lucide-react';
+import { AlertCircleIcon, ChevronDownIcon, Loader2Icon, XIcon } from 'lucide-react';
 import type {
   ChangeEvent as ReactChangeEvent,
   CSSProperties,
@@ -26,18 +27,19 @@ import {
 import { computeDockPosition, connectorPoint, type DockResult, type Rect } from './useDockPosition';
 
 export interface ChatPanelSelection {
+  captureId: string;
   dataUrl: string;
-  id: string;
   label: string;
   rect: Rect;
+  uploadStatus: OverlayCaptureUploadStatus;
 }
 
 export interface ChatPanelSubmitPayload {
   agentId?: string;
+  captureIds: string[];
   modelId?: string;
   prompt: string;
   provider?: string;
-  selections: ChatPanelSelection[];
 }
 
 export interface ChatPanelProps {
@@ -73,6 +75,36 @@ const SendIcon = () => (
     <path d="M.743 3.773c-.818-.555-.422-1.834.567-1.828l11.496.074a1 1 0 01.837 1.538l-6.189 9.689c-.532.833-1.822.47-1.842-.518L5.525 8.51a1 1 0 01.522-.9l1.263-.686a.808.808 0 00-.772-1.42l-1.263.686a1 1 0 01-1.039-.051L.743 3.773z" />
   </svg>
 );
+
+const UploadStatusIndicator = ({
+  iconSize = 16,
+  status,
+}: {
+  iconSize?: number;
+  status: OverlayCaptureUploadStatus;
+}) => {
+  if (status === 'uploading') {
+    return (
+      <div
+        aria-label={OVERLAY_COPY.uploadingLabel}
+        className={cn(styles.uploadOverlay, styles.uploadOverlayUploading)}
+      >
+        <Loader2Icon className={styles.uploadSpinnerIcon} size={iconSize} strokeWidth={2.2} />
+      </div>
+    );
+  }
+  if (status === 'failed') {
+    return (
+      <div
+        aria-label={OVERLAY_COPY.uploadFailedLabel}
+        className={cn(styles.uploadOverlay, styles.uploadOverlayFailed)}
+      >
+        <AlertCircleIcon size={iconSize} strokeWidth={2.2} />
+      </div>
+    );
+  }
+  return null;
+};
 
 const ChatPanel = memo<ChatPanelProps>(
   ({
@@ -229,16 +261,29 @@ const ChatPanel = memo<ChatPanelProps>(
       if (!selected) setPrompt('');
     }, [selected]);
 
+    const allUploadsReady = useMemo(
+      () => selections.every((item) => item.uploadStatus === 'ready'),
+      [selections],
+    );
+    const hasUploading = useMemo(
+      () => selections.some((item) => item.uploadStatus === 'uploading'),
+      [selections],
+    );
+    const hasFailed = useMemo(
+      () => selections.some((item) => item.uploadStatus === 'failed'),
+      [selections],
+    );
+
     const submit = useCallback(() => {
-      if (selections.length === 0 || !prompt.trim()) return;
+      if (selections.length === 0 || !prompt.trim() || !allUploadsReady) return;
       onSubmit({
         agentId,
+        captureIds: selections.map((item) => item.captureId),
         modelId,
         prompt: prompt.trim(),
         provider: currentModel?.provider,
-        selections,
       });
-    }, [selections, prompt, agentId, modelId, currentModel, onSubmit]);
+    }, [selections, prompt, agentId, modelId, currentModel, onSubmit, allUploadsReady]);
 
     const handleKeyDown = useCallback(
       (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -250,7 +295,7 @@ const ChatPanel = memo<ChatPanelProps>(
       [submit],
     );
 
-    const canSend = selected && prompt.trim().length > 0;
+    const canSend = selected && prompt.trim().length > 0 && allUploadsReady;
 
     const handleAgentChange = useCallback((e: ReactChangeEvent<HTMLSelectElement>) => {
       setAgentId(e.target.value || undefined);
@@ -299,7 +344,9 @@ const ChatPanel = memo<ChatPanelProps>(
                 aria-label="screenshot thumbnail"
                 className={styles.thumb}
                 style={{ backgroundImage: `url(${activeSelection.dataUrl})` }}
-              />
+              >
+                <UploadStatusIndicator iconSize={16} status={activeSelection.uploadStatus} />
+              </div>
               <div className={styles.summaryText}>
                 <div className={styles.summaryTitle}>
                   {OVERLAY_COPY.screenshotLabel} · {activeSelection.label}
@@ -310,7 +357,7 @@ const ChatPanel = memo<ChatPanelProps>(
                 aria-label={OVERLAY_COPY.removeSelectionLabel}
                 className={styles.iconBtn}
                 type="button"
-                onClick={() => onRemoveSelection(activeSelection.id)}
+                onClick={() => onRemoveSelection(activeSelection.captureId)}
               >
                 <XIcon size={14} strokeWidth={2} />
               </button>
@@ -330,11 +377,11 @@ const ChatPanel = memo<ChatPanelProps>(
 
               <div className={styles.multiSelectionRail}>
                 {selections.map((item) => {
-                  const isActive = item.id === activeSelection.id;
+                  const isActive = item.captureId === activeSelection.captureId;
 
                   return (
                     <div
-                      key={item.id}
+                      key={item.captureId}
                       className={cn(
                         styles.multiSelectionItem,
                         isActive && styles.multiSelectionItemActive,
@@ -346,11 +393,12 @@ const ChatPanel = memo<ChatPanelProps>(
                           className={styles.multiSelectionThumb}
                           style={{ backgroundImage: `url(${item.dataUrl})` }}
                         />
+                        <UploadStatusIndicator iconSize={18} status={item.uploadStatus} />
                         <button
                           aria-label={OVERLAY_COPY.removeSelectionLabel}
                           className={styles.multiSelectionRemoveBtn}
                           type="button"
-                          onClick={() => onRemoveSelection(item.id)}
+                          onClick={() => onRemoveSelection(item.captureId)}
                         >
                           <XIcon size={12} strokeWidth={2} />
                         </button>
@@ -455,8 +503,14 @@ const ChatPanel = memo<ChatPanelProps>(
                 aria-label={OVERLAY_COPY.sendAriaLabel}
                 className={styles.sendBtn}
                 disabled={!canSend}
-                title={`${OVERLAY_COPY.sendAriaLabel} · ${OVERLAY_SHORTCUTS.send}\n${OVERLAY_COPY.newlineHint} · ${OVERLAY_SHORTCUTS.newline}\n${OVERLAY_COPY.closeLabel} · ${OVERLAY_SHORTCUTS.close}`}
                 type="button"
+                title={
+                  hasUploading
+                    ? OVERLAY_COPY.uploadingLabel
+                    : hasFailed
+                      ? OVERLAY_COPY.uploadFailedLabel
+                      : `${OVERLAY_COPY.sendAriaLabel} · ${OVERLAY_SHORTCUTS.send}\n${OVERLAY_COPY.newlineHint} · ${OVERLAY_SHORTCUTS.newline}\n${OVERLAY_COPY.closeLabel} · ${OVERLAY_SHORTCUTS.close}`
+                }
                 onClick={submit}
               >
                 <SendIcon />

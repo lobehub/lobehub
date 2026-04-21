@@ -74,6 +74,13 @@ export interface CaptureRectParams {
 }
 
 export interface CapturePreviewResult {
+  /**
+   * Unique identifier assigned by the main process for this capture. The
+   * main process immediately dispatches the PNG bytes to the main renderer
+   * for upload; the overlay uses this id to track upload status and to
+   * reference the uploaded file on submit.
+   */
+  captureId?: string;
   dataUrl?: string;
   error?: string;
   /** Overlay-local DIP rect. */
@@ -81,16 +88,40 @@ export interface CapturePreviewResult {
   success: boolean;
 }
 
-export interface ScreenCaptureSubmitCapture {
-  dataUrl: string;
-  /** Overlay-local DIP rect bound to the preview dataUrl. */
-  rect: CaptureRectParams;
-}
-
 export interface ScreenCaptureSubmitParams {
   agentId?: string;
-  captures: ScreenCaptureSubmitCapture[];
+  /**
+   * Identifiers of captures that were pre-uploaded during preview. The main
+   * renderer looks them up against its `captureId → UploadFileItem` map and
+   * dispatches `sendMessage` with the resolved files.
+   */
+  captureIds: string[];
   modelId?: string;
   prompt: string;
   provider?: string;
+}
+
+export type OverlayCaptureUploadStatus = 'uploading' | 'ready' | 'failed';
+
+/**
+ * Sent by the main process to the main renderer whenever a new capture is
+ * ready. The renderer should upload the bytes through the normal file
+ * pipeline and keep the mapping `captureId → UploadFileItem` so that a later
+ * `overlayDispatchMessage` (submit) can send without re-uploading.
+ */
+export interface OverlayUploadRequestPayload {
+  bytes: ArrayBuffer;
+  captureId: string;
+  filename: string;
+  mimeType: string;
+}
+
+/**
+ * Sent by the main process to the overlay whenever a capture's upload
+ * status transitions. The overlay uses this to toggle the send button.
+ */
+export interface OverlayCaptureUploadStatusPayload {
+  captureId: string;
+  fileId?: string;
+  status: OverlayCaptureUploadStatus;
 }

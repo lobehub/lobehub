@@ -1,4 +1,9 @@
-import type { ScreenCaptureSession, ScreenCaptureSubmitParams } from '../types/screenCapture';
+import type {
+  OverlayCaptureUploadStatusPayload,
+  OverlayUploadRequestPayload,
+  ScreenCaptureSession,
+  ScreenCaptureSubmitParams,
+} from '../types/screenCapture';
 
 /**
  * Payload broadcast to the main renderer when the overlay submits a screenshot
@@ -8,6 +13,8 @@ import type { ScreenCaptureSession, ScreenCaptureSubmitParams } from '../types/s
 export interface OverlayDispatchMessagePayload extends ScreenCaptureSubmitParams {}
 
 export interface ScreenCaptureBroadcastEvents {
+  overlayCaptureUploadStatus: (payload: OverlayCaptureUploadStatusPayload) => void;
   overlayDispatchMessage: (payload: OverlayDispatchMessagePayload) => void;
+  overlayUploadRequest: (payload: OverlayUploadRequestPayload) => void;
   screenCaptureSession: (data: ScreenCaptureSession) => void;
 }

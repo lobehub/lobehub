@@ -88,6 +88,7 @@ describe('ScreenCaptureManager', () => {
     ({
       browserManager: {
         broadcastToAllWindows: vi.fn(),
+        broadcastToWindow: vi.fn(),
         showMainWindow: vi.fn(),
       },
       buildRendererUrl: vi.fn().mockResolvedValue('http://localhost:5173/overlay'),
@@ -123,7 +124,8 @@ describe('ScreenCaptureManager', () => {
 
   describe('preview handlers', () => {
     it('hides overlay via opacity while capturing rect and restores after', async () => {
-      const manager = new ScreenCaptureManager(createApp());
+      const app = createApp();
+      const manager = new ScreenCaptureManager(app);
       await manager.startSession();
 
       const pngBuffer = Buffer.from([1, 2, 3, 4]);
@@ -132,6 +134,7 @@ describe('ScreenCaptureManager', () => {
       const result = await manager.handlePreviewRect({ height: 50, width: 100, x: 10, y: 20 });
 
       expect(result.success).toBe(true);
+      expect(result.captureId).toEqual(expect.any(String));
       expect(result.dataUrl).toBe(`data:image/png;base64,${pngBuffer.toString('base64')}`);
       expect(mockBrowserWindow.setOpacity).toHaveBeenCalledWith(0);
       expect(mockBrowserWindow.setOpacity).toHaveBeenLastCalledWith(1);
@@ -141,6 +144,15 @@ describe('ScreenCaptureManager', () => {
         x: 0,
         y: 0,
       });
+      expect(app.browserManager.broadcastToWindow).toHaveBeenCalledWith(
+        'app',
+        'overlayUploadRequest',
+        expect.objectContaining({
+          captureId: result.captureId,
+          filename: `screen-capture-${result.captureId}.png`,
+          mimeType: 'image/png',
+        }),
+      );
     });
 
     it('returns failure when previewRect has no session', async () => {
@@ -163,7 +175,8 @@ describe('ScreenCaptureManager', () => {
           windowId: 42,
         },
       ]);
-      const manager = new ScreenCaptureManager(createApp());
+      const app = createApp();
+      const manager = new ScreenCaptureManager(app);
       await manager.startSession();
 
       const pngBuffer = Buffer.from([9, 9, 9]);
@@ -172,9 +185,15 @@ describe('ScreenCaptureManager', () => {
       const result = await manager.handlePreviewWindow(42);
 
       expect(result.success).toBe(true);
+      expect(result.captureId).toEqual(expect.any(String));
       expect(result.dataUrl).toBe(`data:image/png;base64,${pngBuffer.toString('base64')}`);
       expect(result.rect).toEqual({ height: 200, width: 300, x: 5, y: 6 });
       expect(mockCaptureWindow).toHaveBeenCalledWith(42);
+      expect(app.browserManager.broadcastToWindow).toHaveBeenCalledWith(
+        'app',
+        'overlayUploadRequest',
+        expect.objectContaining({ captureId: result.captureId }),
+      );
     });
 
     it('restores opacity even when capture fails', async () => {
@@ -196,16 +215,48 @@ describe('ScreenCaptureManager', () => {
       await manager.startSession();
 
       await manager.handleSubmit({
-        captures: [
-          {
-            dataUrl: 'data:image/png;base64,AAAA',
-            rect: { height: 10, width: 20, x: 0, y: 0 },
-          },
-        ],
+        captureIds: ['capture-1'],
         prompt: 'hello',
       });
 
       expect(mockBrowserWindow.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe('reportUploadStatus', () => {
+    it('forwards status updates to the overlay after a preview', async () => {
+      const manager = new ScreenCaptureManager(createApp());
+      await manager.startSession();
+
+      const pngBuffer = Buffer.from([1, 2, 3]);
+      mockCaptureRect.mockResolvedValue(pngBuffer);
+      const result = await manager.handlePreviewRect({ height: 50, width: 100, x: 0, y: 0 });
+      expect(result.captureId).toBeTruthy();
+
+      mockBrowserWindow.webContents.send.mockClear();
+      manager.reportUploadStatus({
+        captureId: result.captureId!,
+        fileId: 'file-1',
+        status: 'ready',
+      });
+
+      expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith(
+        'overlayCaptureUploadStatus',
+        { captureId: result.captureId, fileId: 'file-1', status: 'ready' },
+      );
+    });
+
+    it('ignores status updates for unknown captureIds', async () => {
+      const manager = new ScreenCaptureManager(createApp());
+      await manager.startSession();
+
+      mockBrowserWindow.webContents.send.mockClear();
+      manager.reportUploadStatus({ captureId: 'unknown', status: 'ready' });
+
+      expect(mockBrowserWindow.webContents.send).not.toHaveBeenCalledWith(
+        'overlayCaptureUploadStatus',
+        expect.anything(),
+      );
     });
   });
 });

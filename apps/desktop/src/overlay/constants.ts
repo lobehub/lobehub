@@ -17,6 +17,8 @@ export const OVERLAY_COPY = {
   selectionFormatLabel: 'PNG',
   sendAriaLabel: 'Send',
   sendHint: 'Send',
+  uploadFailedLabel: 'Upload failed',
+  uploadingLabel: 'Uploading screenshot…',
 } as const;
 
 export const OVERLAY_SHORTCUTS = {

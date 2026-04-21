@@ -1,6 +1,7 @@
 import type {
   CapturePreviewResult,
   CaptureRectParams,
+  OverlayCaptureUploadStatusPayload,
   ScreenCaptureSubmitParams,
 } from '@lobechat/electron-client-ipc';
 
@@ -35,6 +36,19 @@ export default class ScreenCaptureCtr extends ControllerModule {
   async submit(params: ScreenCaptureSubmitParams): Promise<void> {
     logger.debug(`submit request: prompt-len=${params.prompt.length}`);
     await this.app.screenCaptureManager.handleSubmit(params);
+  }
+
+  /**
+   * Status update reported by the main renderer after it finishes (or fails)
+   * uploading a capture's bytes. Forwarded to the overlay to drive the send
+   * button's enabled state.
+   */
+  @IpcMethod()
+  async reportUploadStatus(payload: OverlayCaptureUploadStatusPayload): Promise<void> {
+    logger.debug(
+      `reportUploadStatus captureId=${payload.captureId} status=${payload.status} fileId=${payload.fileId ?? '-'}`,
+    );
+    this.app.screenCaptureManager.reportUploadStatus(payload);
   }
 
   @IpcMethod()

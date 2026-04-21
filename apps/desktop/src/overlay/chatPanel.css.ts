@@ -488,6 +488,35 @@ const fadeIn = keyframes({
   to: { opacity: 1, transform: 'translate(-50%, 0)' },
 });
 
+const spin = keyframes({
+  from: { transform: 'rotate(0deg)' },
+  to: { transform: 'rotate(360deg)' },
+});
+
+export const uploadOverlay = style({
+  alignItems: 'center',
+  backdropFilter: 'blur(2px)',
+  borderRadius: 'inherit',
+  color: v(vars.colorTextLightSolid),
+  display: 'flex',
+  inset: 0,
+  justifyContent: 'center',
+  pointerEvents: 'none',
+  position: 'absolute',
+});
+
+export const uploadOverlayUploading = style({
+  background: 'color-mix(in srgb, #000 36%, transparent)',
+});
+
+export const uploadOverlayFailed = style({
+  background: 'color-mix(in srgb, #e53935 55%, transparent)',
+});
+
+export const uploadSpinnerIcon = style({
+  animation: `${spin} 0.9s linear infinite`,
+});
+
 export const initialEnter = style({
   animation: `${fadeIn} 280ms ${motion.enter}`,
 });

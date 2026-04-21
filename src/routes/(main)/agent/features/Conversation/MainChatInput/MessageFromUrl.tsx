@@ -4,14 +4,12 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { useConversationStore } from '@/features/Conversation';
-import {
-  canConsumePendingOverlayDispatch,
-  selectPendingOverlayDispatchFiles,
-} from '@/features/Electron/ScreenCapture/overlayDispatch';
+import { overlayCaptureUploadPool } from '@/features/Electron/ScreenCapture/overlayCaptureUploadPool';
+import { canConsumePendingOverlayDispatch } from '@/features/Electron/ScreenCapture/overlayDispatch';
 import { useOverlayDispatchStore } from '@/features/Electron/ScreenCapture/overlayDispatchStore';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { fileChatSelectors, useFileStore } from '@/store/file';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import type { UploadFileItem } from '@/types/files/upload';
 
 /**
  * MessageFromUrl
@@ -108,26 +106,32 @@ const MessageFromUrl = () => {
     if (lastProcessedOverlayDispatchIdRef.current === pendingDispatch.dispatchId) return;
     lastProcessedOverlayDispatchIdRef.current = pendingDispatch.dispatchId;
 
-    const fileStore = useFileStore.getState();
-    const fileList = fileChatSelectors.chatUploadFileList(fileStore);
-    const overlayFiles = selectPendingOverlayDispatchFiles({ fileList, pendingDispatch });
-
-    if (!pendingDispatch.prompt && overlayFiles.length === 0) {
-      clearPendingDispatch(pendingDispatch.dispatchId);
-      return;
-    }
+    const { captureIds, modelId, prompt, provider } = pendingDispatch;
+    const captureEntries = captureIds
+      .map((id) => ({ entry: overlayCaptureUploadPool.get(id), id }))
+      .filter((x): x is { entry: NonNullable<typeof x.entry>; id: string } => !!x.entry);
 
     void (async () => {
       try {
-        await sendMessage({ files: overlayFiles, message: pendingDispatch.prompt });
-      } finally {
-        if (overlayFiles.length > 0) {
-          fileStore.dispatchChatUploadFileList({
-            ids: overlayFiles.map((file) => file.id),
-            type: 'removeFiles',
-          });
+        if (modelId && provider) {
+          const agentState = useAgentStore.getState();
+          const currentModel = agentByIdSelectors.getAgentModelById(agentId!)(agentState);
+          const currentProvider = agentByIdSelectors.getAgentModelProviderById(agentId!)(
+            agentState,
+          );
+          if (currentModel !== modelId || currentProvider !== provider) {
+            await agentState.updateAgentConfigById(agentId!, { model: modelId, provider });
+          }
         }
 
+        const resolved = await Promise.all(captureEntries.map(({ entry }) => entry.promise));
+        const overlayFiles = resolved.filter((item): item is UploadFileItem => !!item);
+
+        if (!prompt && overlayFiles.length === 0) return;
+
+        await sendMessage({ files: overlayFiles, message: prompt });
+      } finally {
+        for (const { id } of captureEntries) overlayCaptureUploadPool.remove(id);
         clearPendingDispatch(pendingDispatch.dispatchId);
       }
     })();

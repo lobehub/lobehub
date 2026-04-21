@@ -1,4 +1,8 @@
-import type { CapturePreviewResult, ScreenCaptureSession } from '@lobechat/electron-client-ipc';
+import type {
+  CapturePreviewResult,
+  OverlayCaptureUploadStatusPayload,
+  ScreenCaptureSession,
+} from '@lobechat/electron-client-ipc';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -12,11 +16,6 @@ import WindowTag from './WindowTag';
 
 const clipLabel = (text: string, max = OVERLAY_LAYOUT.labelClipLength): string =>
   text.length > max ? `${text.slice(0, max)}…` : text;
-
-const createSelectionId = () =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const ScreenCaptureOverlay = memo(() => {
   const [isPanelHidden, setIsPanelHidden] = useState(false);
@@ -79,14 +78,14 @@ const ScreenCaptureOverlay = memo(() => {
   }, [traceOverlayEvent]);
 
   const removeSelection = useCallback(
-    (selectionId: string) => {
-      const nextSelections = selections.filter((item) => item.id !== selectionId);
+    (captureId: string) => {
+      const nextSelections = selections.filter((item) => item.captureId !== captureId);
       if (nextSelections.length === selections.length) return;
 
       traceOverlayEvent(nextSelections.length === 0 ? 'selection.clear' : 'selection.remove', {
         pendingSelectionRect,
         remainingSelectionCount: nextSelections.length,
-        removedSelectionId: selectionId,
+        removedCaptureId: captureId,
         selectionRect: activeSelection?.rect ?? null,
       });
 
@@ -105,10 +104,7 @@ const ScreenCaptureOverlay = memo(() => {
   const handleSubmit = useCallback((payload: ChatPanelSubmitPayload) => {
     window.electronAPI?.invoke?.('screenCapture.submit', {
       agentId: payload.agentId,
-      captures: payload.selections.map((selection) => ({
-        dataUrl: selection.dataUrl,
-        rect: selection.rect,
-      })),
+      captureIds: payload.captureIds,
       modelId: payload.modelId,
       prompt: payload.prompt,
       provider: payload.provider,
@@ -124,6 +120,25 @@ const ScreenCaptureOverlay = memo(() => {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleClose]);
+
+  /**
+   * Upload status comes from the main process via
+   * `overlayCaptureUploadStatus`. We merge it into the matching selection so
+   * ChatPanel can grey the send button while anything is still uploading.
+   */
+  useEffect(() => {
+    const listener = (_event: unknown, payload: OverlayCaptureUploadStatusPayload) => {
+      setSelections((current) =>
+        current.map((item) =>
+          item.captureId === payload.captureId ? { ...item, uploadStatus: payload.status } : item,
+        ),
+      );
+    };
+    window.electron?.ipcRenderer?.on?.('overlayCaptureUploadStatus', listener);
+    return () => {
+      window.electron?.ipcRenderer?.removeListener?.('overlayCaptureUploadStatus', listener);
+    };
+  }, []);
 
   const previewWindow = useCallback(
     async (win: ScreenCaptureSession['windows'][number]) => {
@@ -143,13 +158,14 @@ const ScreenCaptureOverlay = memo(() => {
           success: !!result?.success,
           windowId: win.windowId,
         });
-        if (result?.success && result.dataUrl) {
+        if (result?.success && result.dataUrl && result.captureId) {
+          const captureId = result.captureId;
           setPendingSelectionRect(null);
           setSelections((current) => [
             ...current,
             {
-              dataUrl: result.dataUrl,
-              id: createSelectionId(),
+              captureId,
+              dataUrl: result.dataUrl!,
               label: clipLabel(`${win.appName} — ${win.title}`),
               rect: result.rect ?? {
                 height: win.overlayBounds.height,
@@ -157,6 +173,7 @@ const ScreenCaptureOverlay = memo(() => {
                 x: win.overlayBounds.x,
                 y: win.overlayBounds.y,
               },
+              uploadStatus: 'uploading',
             },
           ]);
         } else {
@@ -187,15 +204,17 @@ const ScreenCaptureOverlay = memo(() => {
           returnedRect: result?.rect ?? null,
           success: !!result?.success,
         });
-        if (result?.success && result.dataUrl) {
+        if (result?.success && result.dataUrl && result.captureId) {
+          const captureId = result.captureId;
           setPendingSelectionRect(null);
           setSelections((current) => [
             ...current,
             {
-              dataUrl: result.dataUrl,
-              id: createSelectionId(),
+              captureId,
+              dataUrl: result.dataUrl!,
               label: OVERLAY_COPY.customRegionLabel,
               rect: overlayLocalRect,
+              uploadStatus: 'uploading',
             },
           ]);
         } else {
