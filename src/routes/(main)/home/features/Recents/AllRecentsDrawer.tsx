@@ -13,6 +13,7 @@ import { recentService } from '@/services/recent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { ALL_RECENTS_DRAWER_SWR_PREFIX } from '@/store/home/slices/recent/action';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import RecentListItem from './Item';
 
@@ -27,6 +28,8 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
+
   const { data: recents, isLoading } = useClientDataSWR(
     open ? [ALL_RECENTS_DRAWER_SWR_PREFIX, open] : null,
     () => recentService.getAll(50),
@@ -34,10 +37,11 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
 
   const filteredRecents = useMemo(() => {
     if (!recents) return [];
+    const baseRecents = enableAgentTask ? recents : recents.filter((item) => item.type !== 'task');
     const keyword = searchKeyword.trim().toLowerCase();
-    if (!keyword) return recents;
-    return recents.filter((item) => item.title.toLowerCase().includes(keyword));
-  }, [recents, searchKeyword]);
+    if (!keyword) return baseRecents;
+    return baseRecents.filter((item) => item.title.toLowerCase().includes(keyword));
+  }, [recents, searchKeyword, enableAgentTask]);
 
   const fallbackAgentId = activeAgentId || inboxAgentId;
   const getRecentRoute = useCallback(

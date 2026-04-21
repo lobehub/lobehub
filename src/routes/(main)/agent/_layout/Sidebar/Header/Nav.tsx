@@ -28,7 +28,7 @@ const Nav = memo(() => {
   const isChannelActive = pathname.includes('/channel');
   const isTasksActive = pathname.includes('/tasks');
   const router = useQueryRoute();
-  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+  const { isAgentEditable, enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const isHeterogeneousAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const hideProfile = !isAgentEditable;
@@ -81,15 +81,17 @@ const Nav = memo(() => {
           }}
         />
       )}
-      <NavItem
-        active={isTasksActive}
-        icon={ListTodoIcon}
-        title={t('tab.tasks')}
-        onClick={() => {
-          switchTopic(null, { skipRefreshMessage: true });
-          router.push(urlJoin('/agent', agentId!, 'tasks'));
-        }}
-      />
+      {enableAgentTask && (
+        <NavItem
+          active={isTasksActive}
+          icon={ListTodoIcon}
+          title={t('tab.tasks')}
+          onClick={() => {
+            switchTopic(null, { skipRefreshMessage: true });
+            router.push(urlJoin('/agent', agentId!, 'tasks'));
+          }}
+        />
+      )}
     </Flexbox>
   );
 });

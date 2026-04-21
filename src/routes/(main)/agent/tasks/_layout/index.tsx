@@ -3,10 +3,12 @@
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useParams } from 'react-router-dom';
+import urlJoin from 'url-join';
 
 import AgentTaskManager from '@/features/AgentTaskManager';
 import { useScenarioEnabledTools } from '@/hooks/useScenarioEnabledTools';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 /**
  * Tasks pages layout.
@@ -20,6 +22,14 @@ import { useScenarioEnabledTools } from '@/hooks/useScenarioEnabledTools';
  */
 const TasksLayout = memo(() => {
   useScenarioEnabledTools(TaskIdentifier);
+  const params = useParams();
+  const agentId = params.aid;
+  const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
+
+  if (serverConfigInit && !enableAgentTask) {
+    return <Navigate replace to={agentId ? urlJoin('/agent', agentId) : '/'} />;
+  }
 
   return (
     <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>

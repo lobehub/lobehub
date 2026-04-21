@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import GroupBlock from '@/routes/(main)/home/features/components/GroupBlock';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -16,12 +17,14 @@ const DailyBrief = memo(() => {
   const { t } = useTranslation('home');
   const navigate = useNavigate();
   const isLogin = useUserStore(authSelectors.isLogin);
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  useFetchBriefs(isLogin);
+  useFetchBriefs(isLogin && !!enableAgentTask);
 
   const briefs = useBriefStore(briefListSelectors.briefs);
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
 
+  if (!enableAgentTask) return null;
   if (!isInit || briefs.length === 0) return null;
 
   return (
