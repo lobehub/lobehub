@@ -96,13 +96,15 @@ function setupIpcCapture() {
   };
 }
 
-function createMockStore() {
+function createMockStore(overrides: Record<string, any> = {}) {
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
+    refreshThreads: vi.fn(async () => {}),
     replaceMessages: vi.fn(),
+    ...overrides,
   } as any;
 }
 
@@ -1561,6 +1563,36 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id !== 'ast-initial' && val.content === 'final summary text',
       );
       expect(finalizeWrite).toBeDefined();
+    });
+
+    it('invokes store.refreshThreads on lazy Thread creation (sidebar auto-refresh)', async () => {
+      // Without this hook the new subagent Thread is only visible in the
+      // sidebar after the user navigates topics / refreshes — an earlier
+      // Electron E2E repro had the Thread land in DB but stay invisible
+      // in the list until manual `refreshThreads()` call.
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash'),
+        ccResult(),
+      ]);
+
+      expect(store.refreshThreads).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call refreshThreads when no subagent events land', async () => {
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_1', 'Read', { file_path: '/a.ts' }),
+        ccToolResult('toolu_1', 'content'),
+        ccResult(),
+      ]);
+
+      expect(store.refreshThreads).not.toHaveBeenCalled();
     });
   });
 });

@@ -328,6 +328,13 @@ const ensureSubagentRun = async (
   mainAssistantMessageId: string,
   context: ConversationContext,
   subagentRuns: Map<string, SubagentRunState>,
+  /**
+   * Invoked once per Thread creation (the lazy-create path) so the
+   * caller can invalidate SWR caches / push the new thread into any
+   * in-memory list the UI is rendering. Fire-and-forget; the executor
+   * shouldn't block persistence on UI-side cache refresh.
+   */
+  onThreadCreated?: (threadId: string) => void,
 ): Promise<SubagentRunState | undefined> => {
   if (!context.topicId) {
     // Without a topicId we can't create a Thread — drop silently (same
@@ -358,6 +365,7 @@ const ensureSubagentRun = async (
         topicId: context.topicId,
         type: ThreadType.Isolation,
       });
+      onThreadCreated?.(threadId);
     } catch (err) {
       console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
       return undefined;
@@ -470,8 +478,15 @@ const persistSubagentToolChunk = async (
   context: ConversationContext,
   subagentRuns: Map<string, SubagentRunState>,
   toolMsgIdByCallId: Map<string, string>,
+  onThreadCreated?: (threadId: string) => void,
 ) => {
-  const run = await ensureSubagentRun(subagentCtx, mainAssistantMessageId, context, subagentRuns);
+  const run = await ensureSubagentRun(
+    subagentCtx,
+    mainAssistantMessageId,
+    context,
+    subagentRuns,
+    onThreadCreated,
+  );
   if (!run) return;
 
   // Snapshot the tool id set BEFORE the batch so we can compute which
@@ -515,8 +530,15 @@ const persistSubagentTextChunk = async (
   mainAssistantMessageId: string,
   context: ConversationContext,
   subagentRuns: Map<string, SubagentRunState>,
+  onThreadCreated?: (threadId: string) => void,
 ) => {
-  const run = await ensureSubagentRun(subagentCtx, mainAssistantMessageId, context, subagentRuns);
+  const run = await ensureSubagentRun(
+    subagentCtx,
+    mainAssistantMessageId,
+    context,
+    subagentRuns,
+    onThreadCreated,
+  );
   if (!run) return;
   if (kind === 'text') run.accumulatedContent += chunk;
   else run.accumulatedReasoning += chunk;
@@ -689,6 +711,23 @@ export const executeHeterogeneousAgent = async (
   // (cleaned up already) or missing in a test stub, treat as not-aborted.
   const abortSignal = get().operations?.[operationId]?.abortController?.signal;
   const isAborted = () => !!abortSignal?.aborted;
+
+  /**
+   * Invoked by `ensureSubagentRun` once per lazy Thread creation so the
+   * UI's thread-list SWR cache refreshes mid-stream. Without this, a new
+   * subagent Thread born during an in-flight CC run stays invisible in
+   * the sidebar until the user navigates topics / refreshes — they see
+   * the main-agent Agent tool_use but no Thread entry linking to the
+   * subagent conversation.
+   *
+   * Fire-and-forget: `refreshThreads` is a no-op when the user has
+   * navigated away from the topic, so there's no need to block persist
+   * on this call.
+   */
+  const onSubagentThreadCreated = () => {
+    const refresh = get().refreshThreads;
+    if (typeof refresh === 'function') refresh().catch(console.error);
+  };
 
   try {
     // Start session (pass resumeSessionId for multi-turn --resume)
@@ -910,6 +949,7 @@ export const executeHeterogeneousAgent = async (
                     mainAsstId,
                     context,
                     subagentRuns,
+                    onSubagentThreadCreated,
                   ),
                 );
               } else {
@@ -927,6 +967,7 @@ export const executeHeterogeneousAgent = async (
                     mainAsstId,
                     context,
                     subagentRuns,
+                    onSubagentThreadCreated,
                   ),
                 );
               } else {
@@ -950,6 +991,7 @@ export const executeHeterogeneousAgent = async (
                       context,
                       subagentRuns,
                       toolMsgIdByCallId,
+                      onSubagentThreadCreated,
                     ),
                   );
                 } else {
