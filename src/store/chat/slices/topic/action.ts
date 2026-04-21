@@ -19,7 +19,11 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import {
+  preferenceSelectors,
+  systemAgentSelectors,
+  userGeneralSettingsSelectors,
+} from '@/store/user/selectors';
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
@@ -234,6 +238,20 @@ export class ChatTopicActionImpl {
     });
   };
 
+  markTopicCompleted = async (id: string): Promise<void> => {
+    await this.#get().internal_updateTopic(id, {
+      completedAt: new Date(),
+      status: 'completed',
+    });
+  };
+
+  unmarkTopicCompleted = async (id: string): Promise<void> => {
+    await this.#get().internal_updateTopic(id, {
+      completedAt: null,
+      status: 'active',
+    });
+  };
+
   favoriteTopic = async (id: string, favorite: boolean): Promise<void> => {
     const { activeAgentId } = this.#get();
     await this.#get().internal_updateTopic(id, { favorite });
@@ -318,6 +336,8 @@ export class ChatTopicActionImpl {
     const pageSize = customPageSize || 20;
     const effectiveExcludeTriggers =
       excludeTriggers && excludeTriggers.length > 0 ? excludeTriggers : undefined;
+    const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
+    const effectiveExcludeStatuses = includeCompleted ? undefined : ['completed'];
     // Use topicMapKey to generate the container key for topic data map
     const containerKey = topicMapKey({ agentId, groupId });
     const hasValidContainer = !!(groupId || agentId);
@@ -331,6 +351,7 @@ export class ChatTopicActionImpl {
               isInbox,
               pageSize,
               ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
+              ...(effectiveExcludeStatuses ? { excludeStatuses: effectiveExcludeStatuses } : {}),
             },
           ]
         : null,
@@ -353,6 +374,7 @@ export class ChatTopicActionImpl {
         const result = await topicService.getTopics({
           agentId,
           current: 0,
+          excludeStatuses: effectiveExcludeStatuses,
           excludeTriggers: effectiveExcludeTriggers,
           groupId,
           isInbox,
@@ -385,6 +407,7 @@ export class ChatTopicActionImpl {
                 ...this.#get().topicDataMap,
                 [containerKey]: {
                   currentPage: 0,
+                  excludeStatuses: effectiveExcludeStatuses,
                   excludeTriggers: effectiveExcludeTriggers,
                   hasMore,
                   isExpandingPageSize: false,
@@ -426,9 +449,11 @@ export class ChatTopicActionImpl {
     try {
       const pageSize = useGlobalStore.getState().status.topicPageSize || 20;
       const excludeTriggers = currentData?.excludeTriggers;
+      const excludeStatuses = currentData?.excludeStatuses;
       const result = await topicService.getTopics({
         agentId: activeAgentId,
         current: nextPage,
+        excludeStatuses,
         excludeTriggers,
         groupId: activeGroupId,
         pageSize,
@@ -443,6 +468,7 @@ export class ChatTopicActionImpl {
             ...this.#get().topicDataMap,
             [key]: {
               currentPage: nextPage,
+              excludeStatuses,
               excludeTriggers,
               hasMore,
               isLoadingMore: false,

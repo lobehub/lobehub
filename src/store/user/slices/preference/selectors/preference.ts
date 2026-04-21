@@ -6,6 +6,8 @@ const useCmdEnterToSend = (s: UserStore): boolean => s.preference.useCmdEnterToS
 const topicGroupMode = (s: UserStore) =>
   s.preference.topicGroupMode || DEFAULT_PREFERENCE.topicGroupMode!;
 const topicSortBy = (s: UserStore) => s.preference.topicSortBy || DEFAULT_PREFERENCE.topicSortBy!;
+const topicIncludeCompleted = (s: UserStore): boolean =>
+  s.preference.topicIncludeCompleted ?? false;
 
 const hideSyncAlert = (s: UserStore) => s.preference.hideSyncAlert;
 
@@ -26,6 +28,7 @@ export const preferenceSelectors = {
   shouldTriggerFileInKnowledgeBaseTip,
   showUploadFileInKnowledgeBaseTip,
   topicGroupMode,
+  topicIncludeCompleted,
   topicSortBy,
   useCmdEnterToSend,
 };

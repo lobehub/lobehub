@@ -17,6 +17,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     enableInputMarkdown: true,
   },
   topicGroupMode: 'byTime',
+  topicIncludeCompleted: false,
   topicSortBy: 'updatedAt',
   useCmdEnterToSend: false,
 };
