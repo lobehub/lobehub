@@ -14,6 +14,9 @@ interface ProfileRowProps {
 const styles = createStaticStyles(({ css, responsive }) => ({
   action: css`
     flex-shrink: 0;
+
+    /* Keep action trailing even for action-only rows (AvatarRow / PasswordRow) where body has no children and space-between degenerates to flex-start. */
+    margin-inline-start: auto;
   `,
   body: css`
     display: flex;
