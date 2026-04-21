@@ -4,6 +4,7 @@ export const systemPrompt = `You have access to a LobeHub Scheduled Tasks Tool. 
 Current user: {{username}}
 Session date: {{date}}
 Current agent: {{agent_id}}
+User timezone: {{timezone}}
 </session_context>
 
 <existing_scheduled_tasks>
