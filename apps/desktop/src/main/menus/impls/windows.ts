@@ -466,6 +466,10 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         click: () => this.app.screenCaptureManager.startSession(),
         label: t('tray.openMiniToolbar'),
       },
+      {
+        click: () => this.app.browserManager.openQuickChatPopup(),
+        label: t('tray.quickChat'),
+      },
       { type: 'separator' },
       {
         click: () => this.app.browserManager.retrieveByIdentifier('settings').show(),

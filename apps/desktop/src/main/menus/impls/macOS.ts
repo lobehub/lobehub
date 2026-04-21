@@ -685,6 +685,10 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('tray.openMiniToolbar'),
       },
       {
+        click: () => this.app.browserManager.openQuickChatPopup(),
+        label: t('tray.quickChat'),
+      },
+      {
         click: async () => {
           const mainWindow = this.app.browserManager.getMainWindow();
           mainWindow.show();

@@ -73,6 +73,7 @@ const menu = {
   'macOS.unhide': 'Show All',
   'tray.openMiniToolbar': 'Quick Composer',
   'tray.open': 'Open {{appName}}',
+  'tray.quickChat': 'Quick Chat',
   'tray.quit': 'Quit',
   'tray.show': 'Show {{appName}}',
   'view.forceReload': 'Force Reload',
