@@ -1246,18 +1246,39 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // CC subagent thread routing (LOBE-7392 / LOBE-7319)
+  // CC subagent thread-container model (LOBE-7392 / LOBE-7319)
   //
-  // When CC emits a `Task` tool_use, the executor must:
-  //  - allocate a threadId synchronously, call `threadService.createThread`
-  //    with `sourceToolCallId` / `subagentType` metadata
-  //  - route the subagent's inner tool_uses (carrying `parentToolCallId`)
-  //    into the DB with `threadId` set, keeping them out of the main
-  //    assistant's tools[] so the timeline stays clean
+  // A subagent Thread is shaped as a nested conversation:
+  //   user (prompt) → assistant#1 (tools[]) → tool → assistant#2 (tools[]) → tool → ...
+  //
+  // The executor creates the Thread lazily on the FIRST subagent event
+  // (the adapter announces spawn metadata on that chunk), seeds it with
+  // a `role:'user'` message from the Task prompt, then appends an
+  // `assistant` message per subagent turn boundary (new `subagentMessageId`).
+  //
+  // Main assistant.tools[] only ever carries the outer Task tool_use —
+  // subagent inner tools live on the in-thread assistants' tools[].
   // ────────────────────────────────────────────────────
 
-  describe('CC subagent thread routing', () => {
-    it('creates a Thread when a CC `Task` tool_use lands', async () => {
+  describe('CC subagent thread-container', () => {
+    it('does NOT create a Thread on Task tool_use alone (lazy creation)', async () => {
+      // Task tool_use without any subagent events should NOT trigger
+      // Thread creation — we only know the spawn is real once the
+      // adapter starts announcing subagent events.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'Find failing tests',
+          prompt: 'run the suite',
+          subagent_type: 'Explore',
+        }),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+    });
+
+    it('creates Thread + user + assistant messages on FIRST subagent event', async () => {
       await runWithEvents([
         ccInit(),
         ccToolUse('msg_main', 'toolu_task', 'Task', {
@@ -1265,9 +1286,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           prompt: 'run the suite and list failures',
           subagent_type: 'Explore',
         }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash'),
         ccResult(),
       ]);
 
+      // Thread row seeded with adapter-supplied metadata.
       expect(mockCreateThread).toHaveBeenCalledTimes(1);
       expect(mockCreateThread).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1283,44 +1306,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           type: 'isolation',
         }),
       );
-    });
+      const threadId = mockCreateThread.mock.calls[0][0].id;
 
-    it('persists subagent inner tool messages with threadId set', async () => {
-      // capture the generated threadId from the create call so we can assert
-      // it flows onto the tool message write
-      let allocatedThreadId: string | undefined;
-      mockCreateThread.mockImplementation(async (params: any) => {
-        allocatedThreadId = params.id;
-        return params.id;
+      // Thread gets a `role:'user'` message seeded with the Task prompt.
+      const userMsg = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'user' && p.threadId === threadId,
+      );
+      expect(userMsg).toBeDefined();
+      expect(userMsg![0]).toMatchObject({
+        content: 'run the suite and list failures',
+        parentId: 'ast-initial',
+        threadId,
       });
 
+      // Thread gets at least one `role:'assistant'` message scoped to
+      // the subagent's first turn.
+      const subAssistant = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      expect(subAssistant).toBeDefined();
+    });
+
+    it('chains subagent inner tool messages to the in-thread assistant', async () => {
       await runWithEvents([
         ccInit(),
         ccToolUse('msg_main', 'toolu_task', 'Task', {
           description: 'inspect',
           subagent_type: 'Explore',
         }),
-        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', {
-          command: 'ls',
-        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
         ccResult(),
       ]);
 
-      expect(allocatedThreadId).toBeDefined();
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const subAssistantMsg = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      const subAssistantId = subAssistantMsg?.[0];
 
-      const subagentToolCreate = mockCreateMessage.mock.calls.find(
+      const subToolCreate = mockCreateMessage.mock.calls.find(
         ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_child',
       );
-      expect(subagentToolCreate).toBeDefined();
-      expect(subagentToolCreate![0]).toMatchObject({
+      expect(subToolCreate).toBeDefined();
+      expect(subToolCreate![0]).toMatchObject({
         role: 'tool',
-        threadId: allocatedThreadId,
+        threadId,
         tool_call_id: 'toolu_child',
         plugin: expect.objectContaining({ apiName: 'Bash' }),
       });
+      // Tool messages chain under the in-thread assistant (not the main one).
+      expect(subToolCreate![0].parentId).not.toBe('ast-initial');
+      // The in-thread assistant + tool messages share the same threadId.
+      expect(subAssistantMsg![0]).toMatchObject({ threadId });
     });
 
-    it('keeps subagent inner tools OUT of main assistant tools[]', async () => {
+    it('opens a NEW in-thread assistant when subagentMessageId changes (turn boundary)', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        // Turn 1
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child_1', 'Read'),
+        // Turn 2 — new message.id for subagent
+        ccSubagentToolUse('msg_sub_2', 'toolu_task', 'toolu_child_2', 'Write'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const threadAssistants = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      // One assistant per subagent turn — same shape as the main topic.
+      expect(threadAssistants.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('records subagent tool_uses on IN-THREAD assistant tools[], not on main', async () => {
       await runWithEvents([
         ccInit(),
         ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
@@ -1328,43 +1387,40 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      // The assistant tools[] writes should only ever contain `toolu_task`,
-      // never the subagent inner `toolu_child`.
-      const assistantToolWrites = mockUpdateMessage.mock.calls.filter(
+      // Main assistant.tools[] only ever carries the outer Task tool_use.
+      const mainAssistantToolWrites = mockUpdateMessage.mock.calls.filter(
         ([id, val]: any) => id === 'ast-initial' && val.tools?.length > 0,
       );
-      for (const [, val] of assistantToolWrites) {
+      for (const [, val] of mainAssistantToolWrites) {
         const ids = val.tools.map((t: any) => t.id);
         expect(ids).toContain('toolu_task');
         expect(ids).not.toContain('toolu_child');
       }
+
+      // In-thread assistant should receive an updateMessage whose tools[]
+      // includes the subagent's inner tool_use.
+      const threadAssistantIds = new Set(
+        mockCreateMessage.mock.calls
+          .filter(
+            ([p]: any) =>
+              p.role === 'assistant' &&
+              typeof p.threadId === 'string' &&
+              p.threadId.startsWith('thd_'),
+          )
+          .map(([, returnValue]: any) => returnValue?.id),
+      );
+      // The mock returns a generated id — we can't match exactly, but we
+      // can assert SOME update carried toolu_child on a non-main assistant.
+      const subToolUpdateLanded = mockUpdateMessage.mock.calls.some(
+        ([id, val]: any) =>
+          id !== 'ast-initial' && val.tools?.some((t: any) => t.id === 'toolu_child'),
+      );
+      expect(subToolUpdateLanded).toBe(true);
+      // (threadAssistantIds unused here but kept to document the intent.)
+      expect(threadAssistantIds.size).toBeGreaterThan(0);
     });
 
-    it('drops subagent tool when parent Task thread was not registered', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await runWithEvents([
-        ccInit(),
-        // No preceding Task tool_use — subagent event arrives orphaned.
-        ccSubagentToolUse('msg_sub', 'toolu_missing', 'toolu_child', 'Bash'),
-        ccResult(),
-      ]);
-
-      const subagentWrite = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.tool_call_id === 'toolu_child',
-      );
-      expect(subagentWrite).toBeUndefined();
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Subagent tool without registered thread'),
-        'toolu_child',
-        'parent:',
-        'toolu_missing',
-      );
-
-      warnSpy.mockRestore();
-    });
-
-    it('does NOT create a Thread when topicId is missing (non-CC path or test harness)', async () => {
+    it('does NOT create a Thread when topicId is missing (non-topic-scoped run)', async () => {
       await runWithEvents(
         [
           ccInit(),
@@ -1372,6 +1428,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             description: 'x',
             subagent_type: 'Plan',
           }),
+          ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Read'),
           ccResult(),
         ],
         {

@@ -1,6 +1,10 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
-import type { HeterogeneousAgentEvent, ToolCallPayload } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousAgentEvent,
+  SubagentEventContext,
+  ToolCallPayload,
+} from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type {
   ChatToolPayload,
@@ -118,41 +122,60 @@ const subscribeBroadcasts = (
 };
 
 /**
- * Persisted tool-call registry for a single ACP execution.
- *
- * Tracks which tool_use ids have been persisted to avoid duplicates,
- * and holds the enriched payload (with result_msg_id) that gets written
- * back to the assistant message's tools JSONB.
+ * Per-assistant-message persistence state — covers ONE assistant row's
+ * `tools[]` JSONB and the de-dupe set for its tool_uses. Main-agent
+ * and subagent-thread assistants each have their own instance; the
+ * `tool_use.id → tool message DB id` lookup is SHARED globally across
+ * all scopes (see `toolMsgIdByCallId` in `executeHeterogeneousAgent`)
+ * because `tool_result` events identify the target by id alone.
  */
 interface ToolPersistenceState {
-  /** Ordered list of ChatToolPayload[] written to assistant.tools */
+  /** Ordered list of ChatToolPayload[] written to this assistant's tools JSONB */
   payloads: ChatToolPayload[];
   /** Set of tool_use.id that have been persisted (de-dupe guard) */
   persistedIds: Set<string>;
-  /** Map tool_use.id → tool message DB id (for later content update on tool_result) */
-  toolMsgIdByCallId: Map<string, string>;
 }
 
 /**
- * Persist any newly-seen tool calls and update the assistant message's tools JSONB.
+ * Runs the 3-phase tool persistence flow for ONE assistant message —
+ * either the main-agent assistant or a subagent-thread-scoped assistant.
+ * Same ordering guarantee in both scopes:
  *
- * Guarantees:
- * - One tool message per unique tool_use.id (idempotent against re-processing)
- * - assistant.tools[].result_msg_id is set to the created tool message id, so
- *   the UI's parse() step can link tool messages back to the assistant turn
- *   (otherwise they render as orphan warnings).
- * - Carries the latest accumulated text/reasoning into the same UPDATE, so DB
- *   stays in sync with what's been streamed. Without this, gateway handler's
- *   `tool_end → fetchAndReplaceMessages` would read a tools-only/no-content
- *   row and clobber the in-memory streamed text in the UI.
+ *   1. Pre-register tools[] on the assistant (no result_msg_id yet), so
+ *      LobeHub's conversation-flow parser finds matching ids the moment
+ *      tool messages land in DB — no orphan window.
+ *   2. Create `role:'tool'` messages, one per fresh tool_use. `threadId`
+ *      is only set for subagent scope (so the tool messages stay inside
+ *      the subagent Thread and don't leak into the main topic).
+ *   3. Re-write assistant.tools[] with the backfilled `result_msg_id`
+ *      so the UI can hydrate tool results.
+ *
+ * Carries the latest accumulated text/reasoning into Phases 1+3 so DB
+ * stays in sync with streamed content. Without this, the gateway
+ * handler's `tool_end → fetchAndReplaceMessages` would read a
+ * tools-only row and clobber in-memory streamed text in the UI.
+ *
+ * Idempotent against re-processing: tool_use ids already in
+ * `state.persistedIds` are skipped.
  */
-const persistNewToolCalls = async (
+const persistToolBatch = async (
   incoming: ToolCallPayload[],
   state: ToolPersistenceState,
   assistantMessageId: string,
   context: ConversationContext,
   snapshot: { content: string; reasoning: string },
-  taskThreadMap: Map<string, string>,
+  /**
+   * Global `tool_use.id → tool message DB id` map, populated by every
+   * call (main + every subagent run) so a later `tool_result` lookup
+   * finds its row without needing to know which scope created it.
+   */
+  toolMsgIdByCallId: Map<string, string>,
+  /**
+   * When set, tool messages are scoped to this thread (subagent mode) and
+   * Phase 1 / 3 target the subagent-thread assistant. Undefined = main
+   * agent scope (tools live under the main topic, threadId stays null).
+   */
+  threadId?: string,
 ) => {
   const freshTools = incoming.filter((t) => !state.persistedIds.has(t.id));
   if (freshTools.length === 0) return;
@@ -161,13 +184,6 @@ const persistNewToolCalls = async (
   // Claude Code echoing tool_use blocks) are safely deduped.
   for (const tool of freshTools) state.persistedIds.add(tool.id);
 
-  // CC subagent tools (Agent / Task spawned) carry `parentToolCallId`. They
-  // belong to the subagent Thread, not the main assistant's tools[] — so
-  // they skip Phase 1/3 (assistant tools registration) and Phase 2 writes
-  // them with `threadId` set, keeping them out of the main timeline.
-  const subagentTools = freshTools.filter((t) => t.parentToolCallId);
-  const mainTools = freshTools.filter((t) => !t.parentToolCallId);
-
   const buildUpdate = (): Record<string, any> => {
     const update: Record<string, any> = { tools: state.payloads };
     if (snapshot.content) update.content = snapshot.content;
@@ -175,112 +191,19 @@ const persistNewToolCalls = async (
     return update;
   };
 
-  // ─── PHASE 1: Write tools[] to assistant FIRST, WITHOUT result_msg_id ───
-  //
-  // LobeHub's conversation-flow parser filters tool messages by matching
-  // `tool.tool_call_id` against `assistant.tools[].id`. If a tool message
-  // exists in DB but no matching entry exists in assistant.tools[], the UI
-  // renders an "orphan" warning telling the user to delete it.
-  //
-  // By writing assistant.tools[] FIRST (with the tool ids but no result_msg_id
-  // yet), the match works from the moment tool messages get created in DB.
-  // No orphan window.
-  if (mainTools.length > 0) {
-    for (const tool of mainTools) state.payloads.push({ ...tool } as ChatToolPayload);
-    try {
-      await messageService.updateMessage(assistantMessageId, buildUpdate(), {
-        agentId: context.agentId,
-        topicId: context.topicId,
-      });
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
-    }
+  // ─── PHASE 1: pre-register tools[] on the assistant row ───
+  for (const tool of freshTools) state.payloads.push({ ...tool } as ChatToolPayload);
+  try {
+    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
+      agentId: context.agentId,
+      topicId: context.topicId,
+    });
+  } catch (err) {
+    console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
   }
 
-  // ─── PHASE 1b: For each subagent-spawning tool_use, create the Thread ───
-  //
-  // The adapter translates per-CLI subagent concepts (CC's `Task`, Codex's
-  // subtask, ...) into the adapter-agnostic `subagentSpawn` descriptor on
-  // the ToolCallPayload, so the executor stays oblivious to individual
-  // tool names or identifiers.
-  //
-  // Has to land BEFORE the subagent's inner tool messages persist so they
-  // can look up the threadId from `taskThreadMap`. The adapter's event
-  // order (spawn tool_use first, then subagent inner tool_uses in
-  // subsequent `tools_calling` chunks) combined with the executor's serial
-  // persistQueue guarantees the map is populated by the time subagent
-  // tools hit this fn.
-  //
-  // Without a topicId we can't create a thread (Thread.topicId is required);
-  // fall back to the main-tool flow so the spawning tool_use still renders
-  // as a normal tool call without a subagent group.
-  for (const tool of mainTools) {
-    if (!tool.subagentSpawn || taskThreadMap.has(tool.id) || !context.topicId) continue;
-    try {
-      const { description, subagentType } = tool.subagentSpawn;
-      const threadId = generateThreadId();
-      const title = description?.slice(0, 80) || subagentType || 'Subagent';
-      await threadService.createThread({
-        id: threadId,
-        metadata: {
-          sourceToolCallId: tool.id,
-          startedAt: new Date().toISOString(),
-          subagentType,
-        },
-        sourceMessageId: assistantMessageId,
-        status: ThreadStatus.Processing,
-        title,
-        topicId: context.topicId,
-        type: ThreadType.Isolation,
-      });
-      taskThreadMap.set(tool.id, threadId);
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
-    }
-  }
-
-  // ─── PHASE 2: Create the tool messages in DB ───
-  // Main-agent tool messages attach to the main assistant row. Subagent tool
-  // messages route to their parent Task's thread (looked up via taskThreadMap)
-  // — if the map entry is missing (thread create failed earlier), we warn
-  // and drop the message; writing it without threadId would leak it into the
-  // main timeline as an orphan.
-  for (const tool of mainTools) {
-    try {
-      const result = await messageService.createMessage({
-        agentId: context.agentId,
-        content: '',
-        parentId: assistantMessageId,
-        plugin: {
-          apiName: tool.apiName,
-          arguments: tool.arguments,
-          identifier: tool.identifier,
-          type: tool.type as ChatToolPayload['type'],
-        },
-        role: 'tool',
-        tool_call_id: tool.id,
-        topicId: context.topicId ?? undefined,
-      });
-      state.toolMsgIdByCallId.set(tool.id, result.id);
-      // Back-fill result_msg_id onto the payload we pushed in PHASE 1
-      const entry = state.payloads.find((p) => p.id === tool.id);
-      if (entry) entry.result_msg_id = result.id;
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create tool message:', err);
-    }
-  }
-
-  for (const tool of subagentTools) {
-    const threadId = tool.parentToolCallId ? taskThreadMap.get(tool.parentToolCallId) : undefined;
-    if (!threadId) {
-      console.warn(
-        '[HeterogeneousAgent] Subagent tool without registered thread, dropping:',
-        tool.id,
-        'parent:',
-        tool.parentToolCallId,
-      );
-      continue;
-    }
+  // ─── PHASE 2: create the tool messages ───
+  for (const tool of freshTools) {
     try {
       const result = await messageService.createMessage({
         agentId: context.agentId,
@@ -297,24 +220,220 @@ const persistNewToolCalls = async (
         tool_call_id: tool.id,
         topicId: context.topicId ?? undefined,
       });
-      state.toolMsgIdByCallId.set(tool.id, result.id);
+      toolMsgIdByCallId.set(tool.id, result.id);
+      const entry = state.payloads.find((p) => p.id === tool.id);
+      if (entry) entry.result_msg_id = result.id;
     } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent tool message:', err);
+      console.error('[HeterogeneousAgent] Failed to create tool message:', err);
     }
   }
 
-  // ─── PHASE 3: Re-write assistant.tools[] with the result_msg_ids ───
-  // Without this, the UI can't hydrate tool results back into the inspector.
-  if (mainTools.length > 0) {
+  // ─── PHASE 3: backfill result_msg_id on assistant.tools[] ───
+  try {
+    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
+      agentId: context.agentId,
+      topicId: context.topicId,
+    });
+  } catch (err) {
+    console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
+  }
+};
+
+/**
+ * Per-subagent-spawn state tracking the current Thread + current
+ * subagent assistant message for a given parent Task tool_use. One entry
+ * per `parentToolCallId`, created lazily on the first subagent event.
+ *
+ * `subagentMessageId` mirrors main-agent turn tracking: when the
+ * adapter-reported subagent message.id changes, the executor cuts a new
+ * subagent assistant message inside the Thread (same-shaped recursion
+ * as the main agent's step boundary — `user → assistant → tool → assistant`).
+ */
+interface SubagentRunState {
+  /** The in-thread assistant message currently being appended to. */
+  currentAssistantMsgId: string;
+  /** Adapter's `subagentMessageId` for the current turn (change = new assistant). */
+  currentSubagentMessageId: string;
+  /**
+   * Tools created in the most recent persist batch, keyed by tool_use.id
+   * → tool message DB id. Used to chain the NEXT turn's assistant off the
+   * last tool message (mirrors main agent's step-boundary parentId logic).
+   * Populated after each persist from the caller-provided global map.
+   */
+  lastBatchToolMsgIds: string[];
+  /**
+   * Most recent parentId in the thread's chain. Flows like the main
+   * topic: `user → assistant#1 → tool → assistant#2 → tool → ...`.
+   * Updated as new tool messages / assistant messages are created so
+   * the next write lands on the end of the chain.
+   */
+  lastChainParentId: string;
+  /**
+   * Per-subagent-assistant persistence state (tools[] payloads +
+   * dedupe). Reset on every turn boundary so each in-thread assistant
+   * has its own tools[].
+   */
+  state: ToolPersistenceState;
+  /** The subagent Thread this spawn's messages belong to. */
+  threadId: string;
+}
+
+/**
+ * Handle a subagent `tools_calling` chunk: ensure Thread + current
+ * subagent assistant exist, then run the shared 3-phase persist
+ * targeting the in-thread assistant.
+ *
+ * Lazy Thread creation: the FIRST subagent chunk for a given parent
+ * carries `spawnMetadata` (title / prompt / subagentType) on the
+ * event's `subagent` peer. That's when we create the Thread row + the
+ * `role:'user'` seed message. Subsequent chunks omit `spawnMetadata`
+ * and just append to the existing Thread.
+ *
+ * Turn tracking: when `subagent.subagentMessageId` differs from the
+ * stored `currentSubagentMessageId`, we cut a new in-thread assistant
+ * and reset per-turn state. Chain parenting mirrors main-agent step
+ * handling: `user → asst#1 → tool → asst#2 → tool → ...`.
+ */
+const persistSubagentToolChunk = async (
+  tools: ToolCallPayload[],
+  subagentCtx: SubagentEventContext,
+  mainAssistantMessageId: string,
+  context: ConversationContext,
+  subagentRuns: Map<string, SubagentRunState>,
+  toolMsgIdByCallId: Map<string, string>,
+) => {
+  if (!context.topicId) {
+    // Without a topicId we can't create a Thread — drop silently (same
+    // fallback as the main path; a non-topic-scoped test harness).
+    return;
+  }
+
+  let run = subagentRuns.get(subagentCtx.parentToolCallId);
+
+  // ─── First subagent event for this parent → lazy-create Thread ───
+  if (!run) {
+    const { spawnMetadata } = subagentCtx;
+    const threadId = generateThreadId();
+    const title =
+      spawnMetadata?.description?.slice(0, 80) || spawnMetadata?.subagentType || 'Subagent';
+
     try {
-      await messageService.updateMessage(assistantMessageId, buildUpdate(), {
-        agentId: context.agentId,
+      await threadService.createThread({
+        id: threadId,
+        metadata: {
+          sourceToolCallId: subagentCtx.parentToolCallId,
+          startedAt: new Date().toISOString(),
+          subagentType: spawnMetadata?.subagentType,
+        },
+        sourceMessageId: mainAssistantMessageId,
+        status: ThreadStatus.Processing,
+        title,
         topicId: context.topicId,
+        type: ThreadType.Isolation,
       });
     } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
+      console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
+      return;
+    }
+
+    // Seed the Thread with a `role:'user'` message — carries the
+    // subagent's initial prompt so the Thread reads as a standalone
+    // conversation (user → assistant → tool → ...).
+    let userMsgId: string | undefined;
+    try {
+      const userMsg = await messageService.createMessage({
+        agentId: context.agentId,
+        content: spawnMetadata?.prompt ?? '',
+        parentId: mainAssistantMessageId,
+        role: 'user',
+        threadId,
+        topicId: context.topicId,
+      });
+      userMsgId = userMsg.id;
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to create subagent user message:', err);
+      return;
+    }
+
+    // Create the first in-thread assistant message — the one whose
+    // tools[] we'll persist this chunk's tool_uses into.
+    let firstAssistantId: string;
+    try {
+      const firstAssistant = await messageService.createMessage({
+        agentId: context.agentId,
+        content: '',
+        parentId: userMsgId,
+        role: 'assistant',
+        threadId,
+        topicId: context.topicId,
+      });
+      firstAssistantId = firstAssistant.id;
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to create subagent assistant message:', err);
+      return;
+    }
+
+    run = {
+      currentAssistantMsgId: firstAssistantId,
+      currentSubagentMessageId: subagentCtx.subagentMessageId ?? '',
+      lastBatchToolMsgIds: [],
+      lastChainParentId: firstAssistantId,
+      state: { payloads: [], persistedIds: new Set() },
+      threadId,
+    };
+    subagentRuns.set(subagentCtx.parentToolCallId, run);
+  } else if (
+    subagentCtx.subagentMessageId &&
+    subagentCtx.subagentMessageId !== run.currentSubagentMessageId
+  ) {
+    // ─── New subagent turn → cut a new in-thread assistant ───
+    // Chain the new assistant off the LAST tool message from the prior
+    // turn, mirroring main-agent step behavior: assistant→tool→assistant.
+    try {
+      const nextAssistant = await messageService.createMessage({
+        agentId: context.agentId,
+        content: '',
+        parentId: run.lastChainParentId,
+        role: 'assistant',
+        threadId: run.threadId,
+        topicId: context.topicId,
+      });
+      run.currentAssistantMsgId = nextAssistant.id;
+      run.currentSubagentMessageId = subagentCtx.subagentMessageId;
+      run.lastChainParentId = nextAssistant.id;
+      run.state = { payloads: [], persistedIds: new Set() };
+      run.lastBatchToolMsgIds = [];
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Failed to create subagent turn assistant:', err);
+      return;
     }
   }
+
+  // Snapshot the tool id set BEFORE the batch so we can compute which
+  // ids this call added (for chain-parent advancement below).
+  const preBatchIds = new Set(toolMsgIdByCallId.keys());
+
+  // Run the shared 3-phase persist targeting the current in-thread
+  // assistant. Subagent assistants have no text/reasoning (the adapter
+  // drops those), so snapshot is empty.
+  await persistToolBatch(
+    tools,
+    run.state,
+    run.currentAssistantMsgId,
+    context,
+    { content: '', reasoning: '' },
+    toolMsgIdByCallId,
+    run.threadId,
+  );
+
+  // Update chain parent to the last tool message THIS batch created so
+  // the NEXT turn's assistant chains off a tool (same shape as main).
+  const newIds = [...toolMsgIdByCallId.entries()]
+    .filter(([id]) => !preBatchIds.has(id))
+    .map(([, msgId]) => msgId);
+  run.lastBatchToolMsgIds.push(...newIds);
+  const lastToolMsgId = newIds.at(-1);
+  if (lastToolMsgId) run.lastChainParentId = lastToolMsgId;
 };
 
 /**
@@ -329,11 +448,11 @@ const persistToolResult = async (
   toolCallId: string,
   content: string,
   isError: boolean,
-  state: ToolPersistenceState,
+  toolMsgIdByCallId: Map<string, string>,
   context: ConversationContext,
   pluginState?: Record<string, any>,
 ) => {
-  const toolMsgId = state.toolMsgIdByCallId.get(toolCallId);
+  const toolMsgId = toolMsgIdByCallId.get(toolCallId);
   if (!toolMsgId) {
     console.warn('[HeterogeneousAgent] tool_result for unknown toolCallId:', toolCallId);
     return;
@@ -397,25 +516,31 @@ export const executeHeterogeneousAgent = async (
   let unsubscribe: (() => void) | undefined;
   let completed = false;
 
-  // Track state for DB persistence
+  // Track state for DB persistence (main-agent scope)
   const toolState: ToolPersistenceState = {
     payloads: [],
     persistedIds: new Set(),
-    toolMsgIdByCallId: new Map(),
   };
   /**
-   * CC subagent thread registry for this run. Maps the parent `Task`
-   * tool_use id → the sync-allocated `threadId` we created for it, so
-   * subagent inner tool_uses (which arrive later carrying
-   * `parentToolCallId`) can persist under the right Thread.
-   *
-   * Kept at executor scope (not on ToolPersistenceState) because
-   * ToolPersistenceState resets on every main-agent step boundary,
-   * whereas a subagent's inner tools could technically straddle the
-   * step reset in pathological orderings — losing the mapping there
-   * would route them to the main timeline as orphans.
+   * Global `tool_use.id → tool message DB id` lookup, shared across the
+   * main agent and every subagent run. `tool_result` events identify
+   * the target row by `toolCallId` alone (no scope context needed), so
+   * one flat map keeps the lookup trivial. Populated by every
+   * `persistToolBatch` call.
    */
-  const taskThreadMap: Map<string, string> = new Map();
+  const toolMsgIdByCallId: Map<string, string> = new Map();
+  /**
+   * Per-subagent-spawn runtime state, keyed by the main-agent Task
+   * tool_use id (`SubagentEventContext.parentToolCallId`). One entry per
+   * spawn, carrying the Thread id + current in-thread assistant + that
+   * assistant's per-turn `ToolPersistenceState`. Lazy-created on the
+   * first subagent event from `persistSubagentToolChunk`.
+   *
+   * Lives at executor scope (not on main `toolState`) because
+   * `toolState` resets on every main-agent step boundary, whereas a
+   * subagent spawn can emit events before and after a step cut.
+   */
+  const subagentRuns: Map<string, SubagentRunState> = new Map();
   /** Serializes async persist operations so ordering is stable. */
   let persistQueue: Promise<void> = Promise.resolve();
   /** Tracks the current assistant message being written to (switches on new steps) */
@@ -499,8 +624,17 @@ export const executeHeterogeneousAgent = async (
               pluginState?: Record<string, any>;
               toolCallId: string;
             };
+            // Subagent vs main lookup is transparent — one global
+            // `toolMsgIdByCallId` map spans both scopes.
             persistQueue = persistQueue.then(() =>
-              persistToolResult(toolCallId, content, !!isError, toolState, context, pluginState),
+              persistToolResult(
+                toolCallId,
+                content,
+                !!isError,
+                toolMsgIdByCallId,
+                context,
+                pluginState,
+              ),
             );
             // Don't forward — the tool_end that follows triggers fetchAndReplaceMessages
             // which reads the updated content from DB.
@@ -579,8 +713,14 @@ export const executeHeterogeneousAgent = async (
               // parentId should point to the last tool message from the previous step
               // (if any), forming the chain: assistant → tool → assistant → tool → ...
               // If no tool was used, fall back to the previous assistant message.
-              // Read toolMsgIdByCallId HERE (async) because it's populated by prior persists.
-              const lastToolMsgId = [...toolState.toolMsgIdByCallId.values()].pop();
+              //
+              // Read from `toolState.payloads` (not the global
+              // `toolMsgIdByCallId`) so we only pick up MAIN-agent tools —
+              // the global map also holds subagent tool msg ids which
+              // would break the main-agent step chain.
+              const lastToolMsgId = [...toolState.payloads]
+                .reverse()
+                .find((p) => !!p.result_msg_id)?.result_msg_id;
               const stepParentId = lastToolMsgId || currentAssistantMessageId;
 
               const newMsg = await messageService.createMessage({
@@ -601,7 +741,9 @@ export const executeHeterogeneousAgent = async (
               // AFTER this handler, so they'll write to the clean state.
               toolState.payloads = [];
               toolState.persistedIds.clear();
-              toolState.toolMsgIdByCallId.clear();
+              // toolMsgIdByCallId is NOT cleared — it's the global
+              // id→row lookup and subagent tool_results from a previous
+              // step may still land after the step boundary.
             });
 
             // Update the stream_start event to carry the new message ID
@@ -634,26 +776,46 @@ export const executeHeterogeneousAgent = async (
             }
             if (chunk?.chunkType === 'tools_calling') {
               const tools = chunk.toolsCalling as ToolCallPayload[];
+              const subagentCtx = chunk.subagent as SubagentEventContext | undefined;
               if (tools?.length) {
-                // Snapshot accumulators sync — must travel with the same step's
-                // assistantMessageId. A late-bound getter would read NEW step's
-                // content if a step transition lands between scheduling and
-                // execution, while assistantMessageId would still be the OLD
-                // one (also captured sync) → cross-step contamination.
-                const snapshot = {
-                  content: accumulatedContent,
-                  reasoning: accumulatedReasoning,
-                };
-                persistQueue = persistQueue.then(() =>
-                  persistNewToolCalls(
-                    tools,
-                    toolState,
-                    currentAssistantMessageId,
-                    context,
-                    snapshot,
-                    taskThreadMap,
-                  ),
-                );
+                if (subagentCtx) {
+                  // Subagent chunk → lazy-create Thread + in-thread
+                  // assistant, then persist into that scope. Kept off the
+                  // main path so main-agent snapshot logic stays untouched.
+                  const mainAsstId = currentAssistantMessageId;
+                  persistQueue = persistQueue.then(() =>
+                    persistSubagentToolChunk(
+                      tools,
+                      subagentCtx,
+                      mainAsstId,
+                      context,
+                      subagentRuns,
+                      toolMsgIdByCallId,
+                    ),
+                  );
+                } else {
+                  // Main-agent chunk — existing path.
+                  // Snapshot accumulators sync — must travel with the
+                  // same step's assistantMessageId. A late-bound getter
+                  // would read NEW step's content if a step transition
+                  // lands between scheduling and execution, while
+                  // assistantMessageId would still be the OLD one (also
+                  // captured sync) → cross-step contamination.
+                  const snapshot = {
+                    content: accumulatedContent,
+                    reasoning: accumulatedReasoning,
+                  };
+                  persistQueue = persistQueue.then(() =>
+                    persistToolBatch(
+                      tools,
+                      toolState,
+                      currentAssistantMessageId,
+                      context,
+                      snapshot,
+                      toolMsgIdByCallId,
+                    ),
+                  );
+                }
               }
             }
           }
