@@ -1,4 +1,5 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
+import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -20,11 +21,6 @@ import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
 import Avatar from './Avatar';
 import { useAgentDropdownMenu } from './useDropdownMenu';
-
-const HETEROGENEOUS_TYPE_LABELS: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  'codex': 'Codex',
-};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   badge: css`

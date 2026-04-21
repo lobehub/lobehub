@@ -7,16 +7,10 @@ export const ClaudeCodeIdentifier = 'claude-code';
 
 /**
  * Canonical Claude Code tool names (the `name` field on `tool_use` blocks).
- * Kept as string literals so future additions (WebSearch, Task, etc.) can be
+ * Kept as string literals so future additions (WebSearch, etc.) can be
  * wired in without downstream enum migrations.
  */
 export enum ClaudeCodeApiName {
-  Bash = 'Bash',
-  Edit = 'Edit',
-  Glob = 'Glob',
-  Grep = 'Grep',
-  Read = 'Read',
-  Skill = 'Skill',
   /**
    * Spawns a subagent. CC emits this as a regular `tool_use`; downstream
    * events for the subagent's internal turns are tagged with
@@ -24,9 +18,17 @@ export enum ClaudeCodeApiName {
    * subagent's final answer arrives as the `tool_result` for this id.
    * The executor turns this into a Thread (linked via
    * `metadata.sourceToolCallId = tool_use.id`) instead of a separate
-   * `role: 'task'` message.
+   * `role: 'task'` message. We keep CC's own name (`Agent`) rather than
+   * remapping to our internal "task" vocabulary, which is reserved for a
+   * different concept.
    */
-  Task = 'Task',
+  Agent = 'Agent',
+  Bash = 'Bash',
+  Edit = 'Edit',
+  Glob = 'Glob',
+  Grep = 'Grep',
+  Read = 'Read',
+  Skill = 'Skill',
   TodoWrite = 'TodoWrite',
   ToolSearch = 'ToolSearch',
   Write = 'Write',
@@ -72,12 +74,12 @@ export interface ToolSearchArgs {
 }
 
 /**
- * Arguments for CC's built-in `Task` tool. The model fills these in when it
+ * Arguments for CC's built-in `Agent` tool. The model fills these in when it
  * decides to delegate work to a subagent: the description shows up in the
  * folded header, the prompt becomes the subagent's initial user message, and
  * `subagent_type` selects which subagent template handles it.
  */
-export interface TaskArgs {
+export interface AgentArgs {
   description?: string;
   prompt?: string;
   subagent_type?: string;

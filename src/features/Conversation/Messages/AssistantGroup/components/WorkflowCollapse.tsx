@@ -1,5 +1,5 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
@@ -317,8 +317,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     const expandToggleIcon = expandLevel === 'semi' ? Maximize2 : Minimize2;
 
-    const handleToggleExpand = (e: React.MouseEvent | React.KeyboardEvent) => {
-      e.stopPropagation();
+    const handleToggleExpand = () => {
       if (expandLevel === 'semi') {
         setExpandLevel('full');
         userOpenedRef.current = true;
@@ -327,15 +326,29 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
     };
 
-    const handleToggleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleToggleExpand(e);
-      }
-    };
+    const expandToggleNode = (
+      <AnimatePresence initial={false}>
+        {showExpandToggle && (
+          <motion.div
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            style={{ display: 'flex' }}
+            transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
+          >
+            <ActionIcon
+              icon={expandToggleIcon}
+              size={{ blockSize: 24, size: WORKFLOW_EXPAND_TOGGLE_ICON_SIZE }}
+              title={expandToggleLabel}
+              onClick={handleToggleExpand}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
 
     const title = (
-      <Flexbox horizontal align="center" gap={6} width="100%">
+      <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
         <Block
           horizontal
           align="center"
@@ -352,9 +365,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           <Flexbox
             horizontal
             align="center"
-            flex={1}
             gap={6}
-            style={{ minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX, minWidth: 0 }}
+            style={{
+              minHeight: WORKFLOW_STREAMING_TITLE_MIN_HEIGHT_PX,
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
           >
             <div style={{ minWidth: 0, overflow: 'hidden' }}>
               <AnimatePresence initial={false} mode="wait">
@@ -392,13 +408,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             )}
           </Flexbox>
         ) : (
-          <Flexbox
-            horizontal
-            align="center"
-            flex={1}
-            gap={6}
-            style={{ minWidth: 0, overflow: 'hidden' }}
-          >
+          <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0, overflow: 'hidden' }}>
             <Text
               type="secondary"
               style={{
@@ -417,46 +427,6 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
             )}
           </Flexbox>
         )}
-        <AnimatePresence initial={false}>
-          {showExpandToggle && (
-            <motion.div
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              aria-label={expandToggleLabel}
-              exit={{ opacity: 0, scale: 0.9, x: 4 }}
-              initial={{ opacity: 0, scale: 0.9, x: 4 }}
-              role="button"
-              tabIndex={0}
-              title={expandToggleLabel}
-              transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
-              style={{
-                cursor: 'pointer',
-                flex: 'none',
-                marginInlineStart: 8,
-                outline: 'none',
-                padding: 2,
-              }}
-              onClick={handleToggleExpand}
-              onKeyDown={handleToggleKeyDown}
-            >
-              <AnimatePresence initial={false} mode="wait">
-                <motion.span
-                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                  exit={{ opacity: 0, rotate: 60, scale: 0.85 }}
-                  initial={{ opacity: 0, rotate: -60, scale: 0.85 }}
-                  key={expandLevel}
-                  style={{ display: 'flex' }}
-                  transition={WORKFLOW_EXPAND_TOGGLE_TRANSITION}
-                >
-                  <Icon
-                    color={cssVar.colorTextSecondary}
-                    icon={expandToggleIcon}
-                    size={WORKFLOW_EXPAND_TOGGLE_ICON_SIZE}
-                  />
-                </motion.span>
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </Flexbox>
     );
 
@@ -466,7 +436,14 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
         variant="borderless"
         onExpandedChange={handleExpandedChange}
       >
-        <AccordionItem itemKey="workflow" paddingBlock={4} paddingInline={4} title={title}>
+        <AccordionItem
+          alwaysShowAction
+          action={expandToggleNode}
+          itemKey="workflow"
+          paddingBlock={4}
+          paddingInline={4}
+          title={title}
+        >
           <WorkflowExpandedList
             assistantId={assistantMessageId}
             blocks={blocks}

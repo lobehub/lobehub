@@ -47,17 +47,85 @@ export interface StreamStartData {
   provider?: string;
 }
 
+/**
+ * Adapter-extracted spawn metadata, attached to the FIRST event the
+ * adapter emits for a new subagent run (keyed by `parentToolCallId`).
+ * Lets the executor lazy-create the subagent Thread on first sight
+ * without needing to know about adapter-specific tool names (CC `Task`,
+ * Codex subtask, ...) or parse `tool_use.input`.
+ *
+ * Absent on subsequent events for the same parent.
+ */
+export interface SubagentSpawnMetadata {
+  /** Short label / title for the spawn (CC Task's `description`). */
+  description?: string;
+  /**
+   * Initial user-message content for the subagent Thread (CC Task's
+   * `prompt`). The executor writes this as the Thread's `role:'user'`
+   * message so the subagent's conversation is reconstructable as a
+   * standalone chat.
+   */
+  prompt?: string;
+  /** Subagent template label (CC Task's `subagent_type`). */
+  subagentType?: string;
+}
+
+/**
+ * Subagent-origination context, carried as a peer field on event `data`
+ * (NOT on `ToolCallPayload`). A stream event originating from a subagent
+ * turn — CC `Task` spawn, Codex subtask, ... — stamps this on the chunk
+ * so the executor can route the batch of tools / the tool_result into the
+ * right Thread + subagent assistant message. Per-event scope: all tools
+ * in the same chunk share the same parent / turn ids, so the info
+ * describes the containing chunk, not individual payloads.
+ *
+ * Main-agent events leave `subagent` undefined.
+ */
+export interface SubagentEventContext {
+  /**
+   * The main-agent tool_use id that spawned this subagent (CC Task's
+   * tool_use.id). Persistent across the entire subagent run; used by the
+   * executor to look up the Thread for this spawn.
+   */
+  parentToolCallId: string;
+  /**
+   * Spawn metadata — present only on the FIRST event the adapter emits
+   * for a given `parentToolCallId`, absent on subsequent events. The
+   * executor uses this to create the subagent Thread + seed its
+   * `role:'user'` message the moment it first sees subagent activity,
+   * without re-parsing the Task tool_use input or knowing CC-specific
+   * argument shapes.
+   */
+  spawnMetadata?: SubagentSpawnMetadata;
+  /**
+   * The subagent CLI's message.id for THIS turn. Set on `tools_calling`
+   * / `tool_start` chunks where the executor needs to detect turn
+   * boundaries (change triggers a new assistant message inside the
+   * Thread). Omitted on `tool_result` / `tool_end` where the turn is
+   * already established by the corresponding tool_use.
+   */
+  subagentMessageId?: string;
+}
+
 /** Data shape for stream_chunk events */
 export interface StreamChunkData {
   chunkType: StreamChunkType;
   content?: string;
   reasoning?: string;
+  /**
+   * Subagent context for the entire chunk — peer to `toolsCalling`,
+   * `content`, and `reasoning`. Stream-state info (parent spawn id,
+   * subagent turn id) belongs on the event, not inside the payloads.
+   */
+  subagent?: SubagentEventContext;
   toolsCalling?: ToolCallPayload[];
 }
 
 /** Data shape for tool_end events */
 export interface ToolEndData {
   isSuccess: boolean;
+  /** Subagent context if this tool_end belongs to a subagent inner tool. */
+  subagent?: SubagentEventContext;
   toolCallId: string;
 }
 
@@ -72,10 +140,19 @@ export interface ToolResultData {
    * without each consumer re-parsing tool args.
    */
   pluginState?: Record<string, any>;
+  /** Subagent context if this tool_result belongs to a subagent inner tool. */
+  subagent?: SubagentEventContext;
   toolCallId: string;
 }
 
-/** Tool call payload (matches ChatToolPayload shape) */
+/**
+ * Tool call payload (matches ChatToolPayload shape).
+ *
+ * Kept minimal and stream/persistence-agnostic: no subagent lineage,
+ * no turn ids, no spawn markers. Those live on the containing event's
+ * `subagent` peer field ({@link SubagentEventContext}) because they
+ * describe the chunk's origin, not the tool call itself.
+ */
 export interface ToolCallPayload {
   apiName: string;
   arguments: string;

@@ -1,6 +1,7 @@
+import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { HashIcon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, HashIcon, MessageSquareDashed } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +15,6 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
-import type { ChatTopicMetadata } from '@/types/topic';
 
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
@@ -75,11 +75,12 @@ interface TopicItemProps {
   fav?: boolean;
   id?: string;
   metadata?: ChatTopicMetadata;
+  status?: ChatTopicStatus | null;
   threadId?: string;
   title: string;
 }
 
-const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, metadata }) => {
+const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, metadata, status }) => {
   const { t } = useTranslation('topic');
   const { isDarkMode } = useTheme();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -147,8 +148,11 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   const { dropdownMenu } = useTopicItemDropdownMenu({
     fav,
     id,
+    status,
     title,
   });
+
+  const isCompleted = status === 'completed';
 
   const hasUnread = id && isUnreadCompleted;
   const unreadIcon = (
@@ -209,6 +213,15 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
                 ringColor={loadingRingColor}
                 size={14}
                 style={{ color: cssVar.colorWarning }}
+              />
+            );
+          }
+          if (isCompleted) {
+            return (
+              <Icon
+                icon={CheckCircle2}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
               />
             );
           }

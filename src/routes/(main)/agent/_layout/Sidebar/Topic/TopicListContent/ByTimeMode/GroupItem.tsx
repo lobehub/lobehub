@@ -36,6 +36,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
             id={topic.id}
             key={topic.id}
             metadata={topic.metadata}
+            status={topic.status}
             threadId={activeThreadId}
             title={topic.title}
           />

@@ -1,6 +1,7 @@
+import type { ChatTopicStatus } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -61,11 +62,12 @@ interface TopicItemProps {
   active?: boolean;
   fav?: boolean;
   id?: string;
+  status?: ChatTopicStatus | null;
   threadId?: string;
   title: string;
 }
 
-const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) => {
+const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, status }) => {
   const { t } = useTranslation('topic');
   const toggleMobileTopic = useGlobalStore((s) => s.toggleMobileTopic);
   const [activeGroupId, switchTopic] = useAgentGroupStore((s) => [s.activeGroupId, s.switchTopic]);
@@ -137,8 +139,11 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
 
   const dropdownMenu = useTopicItemDropdownMenu({
     id,
+    status,
     toggleEditing,
   });
+
+  const isCompleted = status === 'completed';
 
   const hasUnread = id && isUnreadCompleted;
   const infoColor = cssVar.colorInfo;
@@ -222,13 +227,25 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         disabled={editing}
         href={!editing ? href : undefined}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
-        icon={
-          isLoading ? (
-            <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
-          ) : (
+        icon={(() => {
+          if (isLoading) {
+            return (
+              <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
+            );
+          }
+          if (isCompleted) {
+            return (
+              <Icon
+                icon={CheckCircle2}
+                size={'small'}
+                style={{ color: cssVar.colorTextDescription }}
+              />
+            );
+          }
+          return (
             <Icon icon={HashIcon} size={'small'} style={{ color: cssVar.colorTextDescription }} />
-          )
-        }
+          );
+        })()}
         slots={{
           iconPostfix: unreadNode,
         }}

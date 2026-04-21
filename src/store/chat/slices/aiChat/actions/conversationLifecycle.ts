@@ -453,6 +453,7 @@ export class ConversationLifecycleActionImpl {
       const { operationId: heteroOpId } = this.#get().startOperation({
         context: heteroContext,
         label: 'Heterogeneous Agent Execution',
+        metadata: { heterogeneousType: heterogeneousProvider.type },
         parentOperationId: operationId,
         type: 'execHeterogeneousAgent',
       });

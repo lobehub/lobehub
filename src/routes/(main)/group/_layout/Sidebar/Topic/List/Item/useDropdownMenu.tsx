@@ -1,7 +1,18 @@
+import type { ChatTopicStatus } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { ExternalLink, Link2, LucideCopy, PanelTop, PencilLine, Trash, Wand2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Circle,
+  ExternalLink,
+  Link2,
+  LucideCopy,
+  PanelTop,
+  PencilLine,
+  Trash,
+  Wand2,
+} from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -16,11 +27,13 @@ import { useGlobalStore } from '@/store/global';
 
 interface TopicItemDropdownMenuProps {
   id?: string;
+  status?: ChatTopicStatus | null;
   toggleEditing: (visible?: boolean) => void;
 }
 
 export const useTopicItemDropdownMenu = ({
   id,
+  status,
   toggleEditing,
 }: TopicItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['topic', 'common']);
@@ -32,16 +45,41 @@ export const useTopicItemDropdownMenu = ({
   const addTab = useElectronStore((s) => s.addTab);
   const appOrigin = useAppOrigin();
 
-  const [autoRenameTopicTitle, duplicateTopic, removeTopic] = useChatStore((s) => [
+  const [
+    autoRenameTopicTitle,
+    duplicateTopic,
+    removeTopic,
+    markTopicCompleted,
+    unmarkTopicCompleted,
+  ] = useChatStore((s) => [
     s.autoRenameTopicTitle,
     s.duplicateTopic,
     s.removeTopic,
+    s.markTopicCompleted,
+    s.unmarkTopicCompleted,
   ]);
+
+  const isCompleted = status === 'completed';
 
   return useCallback(() => {
     if (!id) return [];
 
     return [
+      {
+        icon: <Icon icon={isCompleted ? Circle : CheckCircle2} />,
+        key: 'markCompleted',
+        label: isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted'),
+        onClick: () => {
+          if (isCompleted) {
+            unmarkTopicCompleted(id);
+          } else {
+            markTopicCompleted(id);
+          }
+        },
+      },
+      {
+        type: 'divider' as const,
+      },
       {
         icon: <Icon icon={Wand2} />,
         key: 'autoRename',
@@ -131,10 +169,13 @@ export const useTopicItemDropdownMenu = ({
     ].filter(Boolean) as MenuProps['items'];
   }, [
     id,
+    isCompleted,
     activeGroupId,
     appOrigin,
     autoRenameTopicTitle,
     duplicateTopic,
+    markTopicCompleted,
+    unmarkTopicCompleted,
     removeTopic,
     openGroupTopicInNewWindow,
     addTab,

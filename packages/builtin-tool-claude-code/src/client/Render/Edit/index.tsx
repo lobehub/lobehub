@@ -20,7 +20,7 @@ const Edit = memo<BuiltinRenderProps<EditArgs>>(({ args }) => {
   const ext = filePath ? path.extname(filePath).slice(1).toLowerCase() : '';
 
   return (
-    <Flexbox gap={12}>
+    <Flexbox gap={12} paddingInline={8}>
       <CodeDiff
         fileName={fileName || filePath}
         language={ext || undefined}
