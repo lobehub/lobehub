@@ -118,7 +118,7 @@ jobs:
           echo "Prepared model-bank@${MODEL_BANK_VERSION}"
 
       - name: Publish to npm
-        run: npm publish --provenance
+        run: npm publish --provenance --access public
         working-directory: packages/model-bank
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
