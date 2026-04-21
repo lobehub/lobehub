@@ -37,7 +37,6 @@
 import {
   ClaudeCodeApiName,
   type ClaudeCodeTodoItem,
-  type TaskArgs,
   type TodoWriteArgs,
 } from '@lobechat/builtin-tool-claude-code';
 
@@ -177,14 +176,18 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private todoWriteInputs = new Map<string, TodoWriteArgs>();
   /**
-   * Cached `Task` tool_use inputs keyed by the main-agent tool_use.id.
-   * Populated when the Task tool_use is seen in `handleAssistant` so the
-   * adapter can extract `description` / `prompt` / `subagent_type` and
-   * stamp them as `spawnMetadata` on the FIRST subagent event for that
-   * parent (see `announcedSpawns`). Kept adapter-internal — the executor
-   * never reads this map; it only sees the normalized `SubagentSpawnMetadata`.
+   * Cached inputs for main-agent tool_uses keyed by their tool_use.id.
+   * Populated for every main-agent tool_use (not just `Task`) because
+   * CC uses multiple tool names for subagent delegation — real traces
+   * emit `Agent` for general-purpose subagents while the spec documents
+   * `Task`. Keying on "any main-agent tool" and looking up by
+   * `parent_tool_use_id` on the FIRST subagent event lets us extract
+   * `description` / `prompt` / `subagent_type` regardless of which
+   * spawn-tool variant the model used. Kept adapter-internal — the
+   * executor never reads this map; it only sees the normalized
+   * `SubagentSpawnMetadata`.
    */
-  private taskArgsById = new Map<string, TaskArgs>();
+  private mainToolInputsById = new Map<string, Record<string, any>>();
   /**
    * Set of parent tool_use ids whose spawn metadata has already been
    * announced on a subagent event. Guarantees `spawnMetadata` appears
@@ -293,13 +296,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
             type: 'default',
           });
           this.pendingToolCalls.add(block.id);
-          if (block.name === ClaudeCodeApiName.Task && block.input) {
-            // Cache the Task args for the executor to read when it needs
-            // to create the subagent Thread (title / prompt / subagentType).
-            // Stamped here so the executor never needs to re-parse
-            // `ToolCallPayload.arguments` or know about CC-specific fields.
-            this.taskArgsById.set(block.id, block.input as TaskArgs);
-          }
+          // Cache EVERY main-agent tool_use input so the subagent-spawn
+          // handler (`emitToolChunk`) can look up the parent's args on
+          // first subagent event regardless of which spawn-tool name CC
+          // used (`Task`, `Agent`, etc.). Non-spawn tools occupy a tiny
+          // amount of memory and get pruned naturally when the run ends.
+          if (block.input) this.mainToolInputsById.set(block.id, block.input);
           if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
@@ -330,21 +332,22 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * Handle a subagent assistant event (tagged with `parent_tool_use_id`).
    *
    * Subagent events are a side-channel of the main agent's stream and have
-   * three hard constraints:
+   * two hard constraints:
    *  - no main-agent step boundary (each subagent turn introduces a new
    *    `message.id`; flushing that as a newStep would orphan main-agent
    *    bubbles)
-   *  - no model / usage tracking (CC's `result` event carries the
-   *    authoritative grand total; re-summing per-turn deltas here would
-   *    double-count against the main agent)
-   *  - no text / reasoning emission — the subagent's final answer is
-   *    delivered back to the main agent as the outer tool_use's
-   *    `tool_result`, not inlined into the main assistant content. In
-   *    practice subagent assistant events only carry tool_use blocks
-   *    anyway (verified against a real CC trace where 76 subagent
-   *    assistant events carried zero text / thinking).
+   *  - no model / usage tracking on the main agent (CC's `result` event
+   *    carries the authoritative grand total; re-summing per-turn deltas
+   *    here would double-count against the main agent)
    *
-   * Emits subagent lineage as event-level **peer fields** on the chunk
+   * Text / reasoning from subagent events ARE emitted — as `stream_chunk`
+   * events tagged with the `subagent` peer field — so the executor can
+   * accumulate them into the in-thread assistant's content, giving the
+   * Thread view a readable subagent conversation (user → assistant text
+   * → tools → assistant text → ...). Without this the thread only ever
+   * shows tool calls with no closing reasoning / summary.
+   *
+   * Subagent lineage lives as event-level **peer fields** on each chunk
    * (`subagent.parentToolCallId` + `subagent.subagentMessageId`), not on
    * individual `ToolCallPayload` items — tool payloads stay minimal and
    * persistence-safe.
@@ -353,26 +356,68 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
+    const messageId: string | undefined = raw.message?.id;
+    const subagentCtx = {
+      parentToolCallId: parentToolUseId,
+      subagentMessageId: messageId ?? '',
+    };
+
+    const textParts: string[] = [];
+    const reasoningParts: string[] = [];
     const newToolCalls: ToolCallPayload[] = [];
     for (const block of content) {
-      if (block.type !== 'tool_use') continue;
-      newToolCalls.push({
-        apiName: block.name,
-        arguments: JSON.stringify(block.input || {}),
-        id: block.id,
-        identifier: 'claude-code',
-        type: 'default',
-      });
-      this.pendingToolCalls.add(block.id);
-      if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
-        this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
+      switch (block.type) {
+        case 'text': {
+          if (block.text) textParts.push(block.text);
+          break;
+        }
+        case 'thinking': {
+          if (block.thinking) reasoningParts.push(block.thinking);
+          break;
+        }
+        case 'tool_use': {
+          newToolCalls.push({
+            apiName: block.name,
+            arguments: JSON.stringify(block.input || {}),
+            id: block.id,
+            identifier: 'claude-code',
+            type: 'default',
+          });
+          this.pendingToolCalls.add(block.id);
+          if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
+            this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
+          }
+          break;
+        }
       }
     }
 
-    return this.emitToolChunk(newToolCalls, raw.message?.id, {
-      parentToolCallId: parentToolUseId,
-      subagentMessageId: raw.message?.id,
-    });
+    const events: HeterogeneousAgentEvent[] = [];
+
+    // Subagent text / reasoning chunks — NOT deduped against
+    // `messagesWithStreamedText` (unlike the main-agent path) because
+    // subagent events don't arrive via `stream_event` partial-messages
+    // deltas; the full block IS the only emission.
+    if (textParts.length > 0) {
+      events.push(
+        this.makeChunkEvent({
+          chunkType: 'text',
+          content: textParts.join(''),
+          subagent: subagentCtx,
+        }),
+      );
+    }
+    if (reasoningParts.length > 0) {
+      events.push(
+        this.makeChunkEvent({
+          chunkType: 'reasoning',
+          reasoning: reasoningParts.join(''),
+          subagent: subagentCtx,
+        }),
+      );
+    }
+    events.push(...this.emitToolChunk(newToolCalls, messageId, subagentCtx));
+    return events;
   }
 
   /**
@@ -416,12 +461,16 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         }
       : undefined;
     if (subagent && !this.announcedSpawns.has(subagent.parentToolCallId)) {
-      const args = this.taskArgsById.get(subagent.parentToolCallId);
+      const args = this.mainToolInputsById.get(subagent.parentToolCallId);
       if (args) {
+        // CC's subagent-spawn tools (Task, Agent, ...) share the same
+        // input shape (`description`, `prompt`, `subagent_type`). We pull
+        // the fields defensively — any unknown spawn-tool variant that
+        // happens to match this shape benefits automatically.
         subagent.spawnMetadata = {
-          description: args.description,
-          prompt: args.prompt,
-          subagentType: args.subagent_type,
+          description: typeof args.description === 'string' ? args.description : undefined,
+          prompt: typeof args.prompt === 'string' ? args.prompt : undefined,
+          subagentType: typeof args.subagent_type === 'string' ? args.subagent_type : undefined,
         };
       }
       this.announcedSpawns.add(subagent.parentToolCallId);

@@ -171,6 +171,26 @@ const ccSubagentToolUse = (
   type: 'assistant',
 });
 
+/** Subagent assistant event with text content (closing summary-style turn). */
+const ccSubagentText = (msgId: string, parentToolUseId: string, text: string) => ({
+  message: {
+    content: [{ text, type: 'text' }],
+    id: msgId,
+    role: 'assistant',
+  },
+  parent_tool_use_id: parentToolUseId,
+  type: 'assistant',
+});
+
+/** The main-agent tool_result for a spawn tool_use (end of a subagent run). */
+const ccSubagentSpawnResult = (spawnToolUseId: string, finalText: string) => ({
+  message: {
+    content: [{ content: finalText, tool_use_id: spawnToolUseId, type: 'tool_result' }],
+    role: 'user',
+  },
+  type: 'user',
+});
+
 const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
 
 const ccThinking = (msgId: string, thinking: string) =>
@@ -1439,6 +1459,108 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
 
       expect(mockCreateThread).not.toHaveBeenCalled();
+    });
+
+    it('persists the subagent Thread user message content from spawnMetadata.prompt', async () => {
+      // Real CC uses `Agent` for general-purpose subagents — the adapter
+      // should still extract `prompt` from the input and seed the user
+      // message content with it (earlier bug: user msg content empty).
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Agent', {
+          description: 'lookup pwd',
+          prompt: 'run pwd and summarize',
+          subagent_type: 'general-purpose',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const threadUser = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'user' && p.threadId === threadId,
+      );
+      expect(threadUser).toBeDefined();
+      expect(threadUser![0].content).toBe('run pwd and summarize');
+    });
+
+    it('accumulates subagent text into the in-thread assistant content', async () => {
+      // Subagent emits a closing summary text turn after its tool work.
+      // The thread should reflect it as the assistant's content so the
+      // Thread view reads as a complete conversation.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash'),
+        ccSubagentText('msg_sub_2', 'toolu_task', 'Here is the summary.'),
+        ccSubagentSpawnResult('toolu_task', 'Final answer to main.'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      // At least one updateMessage on a subagent-thread assistant with
+      // content = "Here is the summary." should have landed.
+      const threadAssistantContentWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, val]: any) => id !== 'ast-initial' && val.content === 'Here is the summary.',
+      );
+      expect(threadAssistantContentWrites.length).toBeGreaterThan(0);
+      expect(threadAssistantContentWrites[0][2]).toMatchObject({ topicId: 'topic-1' });
+      // Sanity — the in-thread assistants exist under the right thread.
+      const threadAssistants = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      expect(threadAssistants.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('does NOT leak subagent text into main assistant accumulatedContent', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccText('msg_main_pre', 'I will delegate.'),
+        ccToolUse('msg_main_pre', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentText('msg_sub', 'toolu_task', 'Subagent saying things'),
+        ccSubagentSpawnResult('toolu_task', 'done'),
+        ccResult(),
+      ]);
+
+      // Main assistant content writes should contain "I will delegate."
+      // but NEVER "Subagent saying things".
+      const mainContentWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, val]: any) => id === 'ast-initial' && typeof val.content === 'string',
+      );
+      for (const [, val] of mainContentWrites) {
+        expect(val.content).not.toContain('Subagent saying things');
+      }
+    });
+
+    it('finalizes subagent content when the spawn tool_result lands on main', async () => {
+      // Subagent emits text but no subsequent event — normally content
+      // only hits DB on the next persist or at onComplete. The spawn
+      // tool_result arriving on main should trigger an explicit flush
+      // so the final text lands in DB before fetchAndReplace.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentText('msg_sub', 'toolu_task', 'final summary text'),
+        ccSubagentSpawnResult('toolu_task', 'returned to main'),
+        ccResult(),
+      ]);
+
+      const finalizeWrite = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) => id !== 'ast-initial' && val.content === 'final summary text',
+      );
+      expect(finalizeWrite).toBeDefined();
     });
   });
 });
