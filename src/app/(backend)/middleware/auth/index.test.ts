@@ -17,7 +17,6 @@ vi.mock('@lobechat/model-runtime', () => ({
 vi.mock('@lobechat/types', () => ({
   ChatErrorType: {
     InternalServerError: 'InternalServerError',
-    SystemTimeNotMatchError: 'SystemTimeNotMatchError',
     Unauthorized: 'Unauthorized',
   },
 }));
@@ -106,28 +105,6 @@ describe('checkAuth', () => {
       error: oidcError,
       provider: 'mock',
     });
-    expect(mockHandler).not.toHaveBeenCalled();
-  });
-
-  it('should return SystemTimeNotMatchError when jose ERR_JWT_EXPIRED is preserved via cause', async () => {
-    const oidcRequest = new Request('https://example.com', {
-      headers: { 'Oidc-Auth': 'expired-token' },
-    });
-    const joseCause = Object.assign(new Error('"exp" claim timestamp check failed'), {
-      code: 'ERR_JWT_EXPIRED',
-    });
-    const oidcError = Object.assign(new Error('JWT token validation failed'), {
-      cause: joseCause,
-      code: 'UNAUTHORIZED',
-    });
-    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(oidcError);
-
-    await checkAuth(mockHandler)(oidcRequest, mockOptions);
-
-    expect(createErrorResponse).toHaveBeenCalledWith(
-      ChatErrorType.SystemTimeNotMatchError,
-      oidcError,
-    );
     expect(mockHandler).not.toHaveBeenCalled();
   });
 

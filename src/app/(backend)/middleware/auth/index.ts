@@ -33,23 +33,6 @@ const isUnauthorizedAuthError = (error: unknown) => {
 };
 
 /**
- * The original jose error (e.g. `ERR_JWT_EXPIRED`) is preserved as `cause`
- * when `validateOIDCJWT` wraps it into a TRPCError. Walk one level of cause
- * to recover it so we can still distinguish "clock skew" from generic auth
- * failures.
- */
-const getJoseErrorCode = (error: unknown): string | undefined => {
-  if (!error || typeof error !== 'object') return undefined;
-  if ('code' in error && typeof error.code === 'string' && error.code.startsWith('ERR_')) {
-    return error.code;
-  }
-  if ('cause' in error) {
-    return getJoseErrorCode(error.cause);
-  }
-  return undefined;
-};
-
-/**
  * Decode JWT payload for debugging only.
  * The decoded payload must never be trusted for authorization decisions.
  */
@@ -139,13 +122,6 @@ export const checkAuth =
       // if the error is not a ChatCompletionErrorPayload, it means the application error
       if (!(e as ChatCompletionErrorPayload).errorType) {
         if (isUnauthorizedAuthError(e)) {
-          // Expired JWT usually means client clock skew, not a real auth
-          // failure — surface it as SystemTimeNotMatchError so the client
-          // prompts a time-sync fix instead of a re-login loop.
-          if (getJoseErrorCode(e) === 'ERR_JWT_EXPIRED') {
-            return createErrorResponse(ChatErrorType.SystemTimeNotMatchError, e);
-          }
-
           return createErrorResponse(ChatErrorType.Unauthorized, {
             error: e,
             provider: params?.provider,
