@@ -23,8 +23,6 @@
   "openChatSettings.title": "打开会话设置",
   "openHotkeyHelper.desc": "查看所有快捷键的使用说明",
   "openHotkeyHelper.title": "打开快捷键帮助",
-  "quickComposer.desc": "快速唤起 Quick Composer",
-  "quickComposer.title": "Quick Composer",
   "regenerateMessage.desc": "重新生成最后一条消息",
   "regenerateMessage.title": "重新生成消息",
   "saveDocument.desc": "立即保存当前文档的所有更改",
