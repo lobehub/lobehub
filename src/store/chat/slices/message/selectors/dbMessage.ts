@@ -208,20 +208,43 @@ export const selectActivatedSkillsFromMessages = (
 
   for (const msg of messages) {
     if (
-      msg.role === 'tool' &&
-      (msg.plugin?.identifier === SkillsIdentifier ||
+      msg.role !== 'tool' ||
+      !(
+        msg.plugin?.identifier === SkillsIdentifier ||
         msg.plugin?.identifier === LobeActivatorIdentifier ||
-        msg.plugin?.identifier === 'lobe-tools') &&
-      msg.plugin?.apiName === 'activateSkill' &&
-      msg.pluginState?.id &&
-      msg.pluginState?.name
-    ) {
+        msg.plugin?.identifier === 'lobe-tools'
+      )
+    )
+      continue;
+
+    // Direct activateSkill calls — state has top-level id/name
+    if (msg.plugin?.apiName === 'activateSkill' && msg.pluginState?.id && msg.pluginState?.name) {
       const id = msg.pluginState.id as string;
       skillsMap.set(id, {
         description: msg.pluginState.description as string | undefined,
         id,
         name: msg.pluginState.name as string,
       });
+    }
+
+    // activateTools fallback — skills nested in pluginState.activatedSkills[]
+    if (
+      msg.plugin?.apiName === 'activateTools' &&
+      Array.isArray(msg.pluginState?.activatedSkills)
+    ) {
+      for (const skill of msg.pluginState.activatedSkills as Array<{
+        description?: string;
+        id?: string;
+        name?: string;
+      }>) {
+        if (skill.id && skill.name) {
+          skillsMap.set(skill.id, {
+            description: skill.description,
+            id: skill.id,
+            name: skill.name,
+          });
+        }
+      }
     }
   }
 
