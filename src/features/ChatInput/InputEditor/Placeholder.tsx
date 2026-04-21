@@ -6,11 +6,18 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
-const Placeholder = memo(() => {
+interface PlaceholderProps {
+  showAgentAssignmentHint?: boolean;
+}
+
+const Placeholder = memo<PlaceholderProps>(({ showAgentAssignmentHint = false }) => {
   const useCmdEnterToSend = useUserStore(preferenceSelectors.useCmdEnterToSend);
   const wrapperShortcut = useCmdEnterToSend
     ? KeyEnum.Enter
     : combineKeys([KeyEnum.Mod, KeyEnum.Enter]);
+  const i18nKey = showAgentAssignmentHint
+    ? 'sendPlaceholderWithAgentAssignment'
+    : 'sendPlaceholder';
 
   // Don't remove this line for i18n reactivity
   void useTranslation('chat');
@@ -18,7 +25,7 @@ const Placeholder = memo(() => {
   return (
     <Flexbox horizontal align={'center'} as={'span'} gap={4} wrap={'wrap'}>
       <Trans
-        i18nKey={'sendPlaceholder'}
+        i18nKey={i18nKey}
         ns={'chat'}
         components={{
           hotkey: (
@@ -40,7 +47,7 @@ const Placeholder = memo(() => {
           ),
         }}
       />
-      {'...'}
+      {!showAgentAssignmentHint && '...'}
     </Flexbox>
   );
 });

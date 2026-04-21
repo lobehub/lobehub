@@ -99,6 +99,7 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
     const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
 
     const enableMention = allMentionItems.length > 0;
+    const showAgentAssignmentHint = categories.some((category) => category.id === 'agent');
 
     // Get agent's model info for vision support check and handle paste upload
     const agentId = useAgentId();
@@ -201,7 +202,7 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
 
         return result.trimEnd() || null;
       },
-      [],
+      [isComposingRef],
     );
 
     const autoCompletePlugin = useMemo(
@@ -293,10 +294,12 @@ const InputEditor = memo<{ defaultRows?: number; placeholder?: ReactNode }>(
         {...{ slashPlacement }}
         {...richRenderProps}
         mentionOption={mentionOption}
-        placeholder={placeholder ?? <Placeholder />}
         slashOption={slashOption}
         type={'text'}
         variant={'chat'}
+        placeholder={
+          placeholder ?? <Placeholder showAgentAssignmentHint={showAgentAssignmentHint} />
+        }
         style={{
           minHeight: defaultRows > 1 ? defaultRows * 23 : undefined,
         }}
