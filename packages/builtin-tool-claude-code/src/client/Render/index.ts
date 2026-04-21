@@ -2,6 +2,7 @@ import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import type { RenderDisplayControl } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
+import Agent from './Agent';
 import Edit from './Edit';
 import Glob from './Glob';
 import Grep from './Grep';
@@ -17,6 +18,7 @@ import Write from './Write';
  * visualizations, keyed so `getBuiltinRender('claude-code', apiName)` resolves.
  */
 export const ClaudeCodeRenders = {
+  [ClaudeCodeApiName.Agent]: Agent,
   // RunCommand already renders `args.command` + combined output the way CC emits —
   // use the shared component directly instead of wrapping it in a re-export file.
   [ClaudeCodeApiName.Bash]: RunCommandRender,

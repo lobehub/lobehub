@@ -65,6 +65,8 @@
   "builtins.lobe-agent-management.render.installPlugin.plugin": "插件",
   "builtins.lobe-agent-management.render.installPlugin.success": "安装成功",
   "builtins.lobe-agent-management.title": "代理管理器",
+  "builtins.lobe-claude-code.agent.instruction": "指令",
+  "builtins.lobe-claude-code.agent.result": "结果",
   "builtins.lobe-claude-code.todoWrite.allDone": "全部任务已完成",
   "builtins.lobe-claude-code.todoWrite.currentStep": "当前步骤",
   "builtins.lobe-claude-code.todoWrite.todos": "待办",
