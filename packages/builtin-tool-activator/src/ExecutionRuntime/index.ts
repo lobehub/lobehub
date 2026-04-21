@@ -66,7 +66,28 @@ export class ActivatorExecutionRuntime {
       const manifests = await this.service.getToolManifests(toActivate);
 
       const foundIdentifiers = new Set(manifests.map((m) => m.identifier));
-      const notFound = toActivate.filter((id) => !foundIdentifiers.has(id));
+      const notFoundAsTools = toActivate.filter((id) => !foundIdentifiers.has(id));
+
+      // Fallback: try activating not-found identifiers as skills
+      const activatedSkillResults: BuiltinServerRuntimeOutput[] = [];
+      const notFound: string[] = [];
+
+      if (notFoundAsTools.length > 0 && this.service.activateSkill) {
+        for (const id of notFoundAsTools) {
+          try {
+            const skillResult = await this.service.activateSkill({ name: id });
+            if (skillResult.success) {
+              activatedSkillResults.push(skillResult);
+            } else {
+              notFound.push(id);
+            }
+          } catch {
+            notFound.push(id);
+          }
+        }
+      } else {
+        notFound.push(...notFoundAsTools);
+      }
 
       const activatedTools: ActivatedToolInfo[] = manifests.map((m) => ({
         apiCount: m.apiDescriptions.length,
@@ -99,6 +120,12 @@ export class ActivatorExecutionRuntime {
         }
       }
 
+      if (activatedSkillResults.length > 0) {
+        for (const skillResult of activatedSkillResults) {
+          parts.push(skillResult.content);
+        }
+      }
+
       if (alreadyActiveList.length > 0) {
         parts.push(`\nAlready active: ${alreadyActiveList.join(', ')}`);
       }
@@ -110,6 +137,7 @@ export class ActivatorExecutionRuntime {
       return {
         content: parts.join('\n'),
         state: {
+          activatedSkills: activatedSkillResults.map((r) => r.state),
           activatedTools,
           alreadyActive: alreadyActiveList,
           notFound,
