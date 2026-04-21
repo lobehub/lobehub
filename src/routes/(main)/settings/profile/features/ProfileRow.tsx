@@ -7,7 +7,8 @@ import { type ReactNode } from 'react';
 interface ProfileRowProps {
   action?: ReactNode;
   children?: ReactNode;
-  label: ReactNode;
+  label?: string;
+  labelSlot?: ReactNode;
 }
 
 const styles = createStaticStyles(({ css, responsive }) => ({
@@ -46,12 +47,10 @@ const styles = createStaticStyles(({ css, responsive }) => ({
   `,
 }));
 
-const ProfileRow = ({ label, children, action }: ProfileRowProps) => {
+const ProfileRow = ({ label, labelSlot, children, action }: ProfileRowProps) => {
   return (
     <div className={styles.row}>
-      <div className={styles.label}>
-        {typeof label === 'string' ? <Text strong>{label}</Text> : label}
-      </div>
+      <div className={styles.label}>{labelSlot ?? (label && <Text strong>{label}</Text>)}</div>
       <div className={styles.body}>
         {children}
         {action && <div className={styles.action}>{action}</div>}

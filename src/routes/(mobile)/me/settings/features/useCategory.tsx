@@ -112,7 +112,7 @@ export const useCategory = (): CategoryGroup[] => {
       makeItem({ icon: KeyRound, key: SettingsTabs.Creds, label: t('setting:tab.creds') }),
       showApiKeyManage &&
         makeItem({ icon: KeyIcon, key: SettingsTabs.APIKey, label: t('auth:tab.apikey') }),
-    ].filter(Boolean) as CategoryItem[];
+    ].filter((item): item is CategoryItem => Boolean(item));
 
     const system: CategoryItem[] = [
       makeItem({ icon: Database, key: SettingsTabs.Storage, label: t('setting:tab.storage') }),
@@ -124,21 +124,17 @@ export const useCategory = (): CategoryGroup[] => {
         label: t('setting:tab.advanced'),
       }),
       !hideDocs && makeItem({ icon: Info, key: SettingsTabs.About, label: t('setting:tab.about') }),
-    ].filter(Boolean) as CategoryItem[];
+    ].filter((item): item is CategoryItem => Boolean(item));
 
     return [
       { items: general, key: SettingsGroupKey.General, title: t('setting:group.common') },
-      ...(subscription.length > 0
-        ? [
-            {
-              items: subscription,
-              key: SettingsGroupKey.Subscription,
-              title: t('setting:group.subscription'),
-            },
-          ]
-        : []),
+      {
+        items: subscription,
+        key: SettingsGroupKey.Subscription,
+        title: t('setting:group.subscription'),
+      },
       { items: agent, key: SettingsGroupKey.Agent, title: t('setting:group.aiConfig') },
       { items: system, key: SettingsGroupKey.System, title: t('setting:group.system') },
-    ];
+    ].filter((group) => group.items.length > 0);
   }, [t, enableBusinessFeatures, hideDocs, showApiKeyManage, isDevMode, navigate]);
 };

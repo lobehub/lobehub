@@ -27,7 +27,7 @@ import UsernameRow from './features/UsernameRow';
 const SkeletonRow = () => (
   <ProfileRow
     action={<Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />}
-    label={<Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />}
+    labelSlot={<Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />}
   >
     <Skeleton.Button active size="small" style={{ height: 22, width: 160 }} />
   </ProfileRow>

@@ -11,20 +11,21 @@ import { SettingsTabs } from '@/store/global/initialState';
 import { useSessionStore } from '@/store/session';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
-type TabNamespace = 'setting' | 'subscription' | 'auth';
-
-// Tabs whose title key lives outside the default `setting` namespace.
-const TAB_NAMESPACE: Partial<Record<SettingsTabs, TabNamespace>> = {
-  [SettingsTabs.Billing]: 'subscription',
-  [SettingsTabs.Credits]: 'subscription',
-  [SettingsTabs.Plans]: 'subscription',
-  [SettingsTabs.Referral]: 'subscription',
-  [SettingsTabs.Stats]: 'auth',
-};
-
-// Prefer shorter "Profile" (`auth:profile.title`) over "My Account" (`auth:tab.profile`) on mobile.
+// Explicit tab → i18n key map. Covers:
+// - Cross-namespace entries (subscription / auth).
+// - Kebab-case SettingsTabs (e.g. 'service-model') whose URL slug doesn't match the camelCase locale key.
+//   Without an explicit entry, `setting:tab.${tab}` would resolve to a missing key and render the raw string.
+// - Profile: prefer shorter "Profile" (`auth:profile.title`) over "My Account" (`auth:tab.profile`) on mobile.
 const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
+  [SettingsTabs.Billing]: 'subscription:tab.billing',
+  [SettingsTabs.ChatAppearance]: 'setting:tab.chatAppearance',
+  [SettingsTabs.Credits]: 'subscription:tab.credits',
+  [SettingsTabs.Plans]: 'subscription:tab.plans',
   [SettingsTabs.Profile]: 'auth:profile.title',
+  [SettingsTabs.Referral]: 'subscription:tab.referral',
+  [SettingsTabs.ServiceModel]: 'setting:tab.serviceModel',
+  [SettingsTabs.Stats]: 'auth:tab.stats',
+  [SettingsTabs.SystemTools]: 'setting:tab.systemTools',
 };
 
 const Header = memo(() => {
@@ -47,10 +48,9 @@ const Header = memo(() => {
   };
 
   const tab = params.tab as SettingsTabs | undefined;
-  const tabTitleKey = tab
-    ? (TAB_TITLE_KEY[tab] ?? `${TAB_NAMESPACE[tab] ?? 'setting'}:tab.${tab}`)
-    : 'setting:tab.all';
-  const tabTitle = t(tabTitleKey as any);
+  const tabTitleKey = tab ? (TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`) : 'setting:tab.all';
+  // i18next's typed key union rejects dynamic strings; unknown keys surface visibly as raw text.
+  const tabTitle = t(tabTitleKey as Parameters<typeof t>[0]);
 
   return (
     <ChatHeader
