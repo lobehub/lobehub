@@ -9,6 +9,8 @@ export type {
   StreamChunkData,
   StreamChunkType,
   StreamStartData,
+  SubagentEventContext,
+  SubagentSpawnMetadata,
   ToolCallPayload,
   ToolEndData,
   ToolResultData,

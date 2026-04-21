@@ -1186,14 +1186,14 @@ describe('ClaudeCodeAdapter', () => {
       type: 'assistant',
     });
 
-    it('propagates parent_tool_use_id onto subagent tool_use payloads', () => {
+    it('emits subagent context as peer field on the chunk (NOT on ToolCallPayload)', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
       adapter.adapt(
         mainAssistant('msg_main', {
           id: 'toolu_parent',
           input: {},
-          name: 'Agent',
+          name: 'Task',
           type: 'tool_use',
         }),
       );
@@ -1211,9 +1211,16 @@ describe('ClaudeCodeAdapter', () => {
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
       expect(toolsChunk).toBeDefined();
+      // Peer field on chunk data — describes the whole chunk's origin
+      expect(toolsChunk!.data.subagent).toMatchObject({
+        parentToolCallId: 'toolu_parent',
+        subagentMessageId: 'msg_sub_1',
+      });
+      // Payload stays minimal — no lineage inside the tool call
       const tool = toolsChunk!.data.toolsCalling[0];
       expect(tool.id).toBe('toolu_child');
-      expect(tool.parentToolCallId).toBe('toolu_parent');
+      expect(tool).not.toHaveProperty('parentToolCallId');
+      expect(tool).not.toHaveProperty('subagentSpawn');
     });
 
     it('does NOT emit stream_end / newStep when subagent introduces new message.id', () => {
@@ -1369,11 +1376,12 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.toolCallId).toBe('toolu_child');
     });
 
-    it('stamps subagentSpawn on a `Task` tool_use so the executor stays adapter-agnostic', () => {
+    it('stamps spawnMetadata on the FIRST subagent event only (lazy Thread create)', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
-
-      const events = adapter.adapt(
+      // Main agent emits the Task tool_use — adapter caches its args
+      // for the upcoming subagent announcement.
+      adapter.adapt(
         mainAssistant('msg_main', {
           id: 'toolu_task',
           input: {
@@ -1386,19 +1394,42 @@ describe('ClaudeCodeAdapter', () => {
         }),
       );
 
-      const toolsChunk = events.find(
+      // First subagent event — carries spawnMetadata
+      const first = adapter.adapt(
+        subAgent('msg_sub_1', 'toolu_task', {
+          id: 'toolu_child_1',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+      const firstChunk = first.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
-      expect(toolsChunk).toBeDefined();
-      const tool = toolsChunk!.data.toolsCalling[0];
-      expect(tool.apiName).toBe('Task');
-      expect(tool.subagentSpawn).toEqual({
+      expect(firstChunk!.data.subagent.spawnMetadata).toEqual({
         description: 'Find failing tests',
+        prompt: 'run the suite and list failures',
         subagentType: 'Explore',
       });
+
+      // Second subagent event for same parent — lineage preserved, but
+      // spawnMetadata is absent (executor already created the Thread).
+      const second = adapter.adapt(
+        subAgent('msg_sub_2', 'toolu_task', {
+          id: 'toolu_child_2',
+          input: {},
+          name: 'Read',
+          type: 'tool_use',
+        }),
+      );
+      const secondChunk = second.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      expect(secondChunk!.data.subagent.parentToolCallId).toBe('toolu_task');
+      expect(secondChunk!.data.subagent.spawnMetadata).toBeUndefined();
     });
 
-    it('does NOT stamp subagentSpawn on non-Task tool_uses', () => {
+    it('does NOT stamp subagent context on non-subagent (main-agent) tool_uses', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
 
@@ -1414,8 +1445,42 @@ describe('ClaudeCodeAdapter', () => {
       const toolsChunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
-      const tool = toolsChunk!.data.toolsCalling[0];
-      expect(tool.subagentSpawn).toBeUndefined();
+      expect(toolsChunk!.data.subagent).toBeUndefined();
+    });
+
+    it('stamps subagent context on tool_result for subagent inner tools', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_task',
+          input: { description: 'x' },
+          name: 'Task',
+          type: 'tool_use',
+        }),
+      );
+      adapter.adapt(
+        subAgent('msg_sub', 'toolu_task', {
+          id: 'toolu_child',
+          input: {},
+          name: 'Bash',
+          type: 'tool_use',
+        }),
+      );
+
+      // Subagent's tool_result arrives in a `user` event with parent_tool_use_id.
+      const events = adapter.adapt({
+        message: {
+          content: [{ content: 'ok', tool_use_id: 'toolu_child', type: 'tool_result' }],
+        },
+        parent_tool_use_id: 'toolu_task',
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
     });
   });
 });

@@ -46,6 +46,7 @@ import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   StreamChunkData,
+  SubagentEventContext,
   ToolCallPayload,
   ToolResultData,
   UsageData,
@@ -175,6 +176,23 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * bounded.
    */
   private todoWriteInputs = new Map<string, TodoWriteArgs>();
+  /**
+   * Cached `Task` tool_use inputs keyed by the main-agent tool_use.id.
+   * Populated when the Task tool_use is seen in `handleAssistant` so the
+   * adapter can extract `description` / `prompt` / `subagent_type` and
+   * stamp them as `spawnMetadata` on the FIRST subagent event for that
+   * parent (see `announcedSpawns`). Kept adapter-internal — the executor
+   * never reads this map; it only sees the normalized `SubagentSpawnMetadata`.
+   */
+  private taskArgsById = new Map<string, TaskArgs>();
+  /**
+   * Set of parent tool_use ids whose spawn metadata has already been
+   * announced on a subagent event. Guarantees `spawnMetadata` appears
+   * exactly once per subagent run — on the first subagent chunk for that
+   * parent — so the executor's lazy-create logic isn't tempted to
+   * recreate the Thread on every chunk.
+   */
+  private announcedSpawns = new Set<string>();
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -267,26 +285,21 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           break;
         }
         case 'tool_use': {
-          const payload: ToolCallPayload = {
+          newToolCalls.push({
             apiName: block.name,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
             identifier: 'claude-code',
             type: 'default',
-          };
-          // CC's `Task` tool_use spawns a subagent — surface that as an
-          // adapter-agnostic signal so the executor doesn't need to know
-          // about CC's tool name or re-parse arguments. Other adapters
-          // (Codex subtask, ...) will populate the same field.
-          if (block.name === ClaudeCodeApiName.Task) {
-            const args = (block.input ?? {}) as TaskArgs;
-            payload.subagentSpawn = {
-              description: args.description,
-              subagentType: args.subagent_type,
-            };
-          }
-          newToolCalls.push(payload);
+          });
           this.pendingToolCalls.add(block.id);
+          if (block.name === ClaudeCodeApiName.Task && block.input) {
+            // Cache the Task args for the executor to read when it needs
+            // to create the subagent Thread (title / prompt / subagentType).
+            // Stamped here so the executor never needs to re-parse
+            // `ToolCallPayload.arguments` or know about CC-specific fields.
+            this.taskArgsById.set(block.id, block.input as TaskArgs);
+          }
           if (block.name === ClaudeCodeApiName.TodoWrite && block.input) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
@@ -331,8 +344,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    *    anyway (verified against a real CC trace where 76 subagent
    *    assistant events carried zero text / thinking).
    *
-   * We stamp each tool payload with `parentToolCallId` so downstream
-   * consumers can group subagent inner tools under their spawning parent.
+   * Emits subagent lineage as event-level **peer fields** on the chunk
+   * (`subagent.parentToolCallId` + `subagent.subagentMessageId`), not on
+   * individual `ToolCallPayload` items — tool payloads stay minimal and
+   * persistence-safe.
    */
   private handleSubagentAssistant(raw: any, parentToolUseId: string): HeterogeneousAgentEvent[] {
     const content = raw.message?.content;
@@ -346,7 +361,6 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         arguments: JSON.stringify(block.input || {}),
         id: block.id,
         identifier: 'claude-code',
-        parentToolCallId: parentToolUseId,
         type: 'default',
       });
       this.pendingToolCalls.add(block.id);
@@ -355,7 +369,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
     }
 
-    return this.emitToolChunk(newToolCalls, raw.message?.id);
+    return this.emitToolChunk(newToolCalls, raw.message?.id, {
+      parentToolCallId: parentToolUseId,
+      subagentMessageId: raw.message?.id,
+    });
   }
 
   /**
@@ -368,10 +385,17 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * the latest, or prior tools render as orphans until the next
    * `fetchAndReplaceMessages`. `tool_start` fires only for newly-seen ids
    * so an echoed tool_use does not re-open a closed lifecycle.
+   *
+   * When `subagentCtx` is provided, the chunk + each tool_start event
+   * gets the context stamped as a peer field. The FIRST chunk for a new
+   * parent (tracked via `announcedSpawns`) also carries `spawnMetadata`
+   * built from the cached Task args, so the executor can lazy-create
+   * the Thread without knowing about CC-specific argument shapes.
    */
   private emitToolChunk(
     newToolCalls: ToolCallPayload[],
     messageId: string | undefined,
+    subagentCtx?: { parentToolCallId: string; subagentMessageId: string },
   ): HeterogeneousAgentEvent[] {
     if (newToolCalls.length === 0) return [];
 
@@ -382,11 +406,38 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const cumulative = [...existing, ...freshTools];
     this.toolCallsByMessageId.set(msgKey, cumulative);
 
-    const events: HeterogeneousAgentEvent[] = [
-      this.makeChunkEvent({ chunkType: 'tools_calling', toolsCalling: cumulative }),
-    ];
+    // Build the `subagent` peer field — stamped on the chunk + each
+    // tool_start. Only the first emission for a new parent carries
+    // spawnMetadata; subsequent ones carry just the lineage ids.
+    const subagent: SubagentEventContext | undefined = subagentCtx
+      ? {
+          parentToolCallId: subagentCtx.parentToolCallId,
+          subagentMessageId: subagentCtx.subagentMessageId,
+        }
+      : undefined;
+    if (subagent && !this.announcedSpawns.has(subagent.parentToolCallId)) {
+      const args = this.taskArgsById.get(subagent.parentToolCallId);
+      if (args) {
+        subagent.spawnMetadata = {
+          description: args.description,
+          prompt: args.prompt,
+          subagentType: args.subagent_type,
+        };
+      }
+      this.announcedSpawns.add(subagent.parentToolCallId);
+    }
+
+    const chunkData: StreamChunkData = {
+      chunkType: 'tools_calling',
+      toolsCalling: cumulative,
+    };
+    if (subagent) chunkData.subagent = subagent;
+
+    const events: HeterogeneousAgentEvent[] = [this.makeChunkEvent(chunkData)];
     for (const t of freshTools) {
-      events.push(this.makeEvent('tool_start', { toolCalling: t }));
+      const startData: Record<string, any> = { toolCalling: t };
+      if (subagent) startData.subagent = subagent;
+      events.push(this.makeEvent('tool_start', startData));
     }
     return events;
   }
@@ -395,10 +446,20 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * Handle user events — these contain tool_result blocks.
    * NOTE: In Claude Code, tool results are emitted as `type: 'user'` events
    * (representing the synthetic user turn that feeds results back to the LLM).
+   *
+   * When the user event carries `parent_tool_use_id`, the tool_result is
+   * for a SUBAGENT inner tool. We stamp that as the `subagent` peer field
+   * on both the `tool_result` and `tool_end` events so the executor routes
+   * the update to the right Thread / tool message (subagent-turn-scoped,
+   * not main-agent-scoped).
    */
   private handleUser(raw: any): HeterogeneousAgentEvent[] {
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
+
+    const subagentCtx: SubagentEventContext | undefined = raw.parent_tool_use_id
+      ? { parentToolCallId: raw.parent_tool_use_id }
+      : undefined;
 
     const events: HeterogeneousAgentEvent[] = [];
 
@@ -448,6 +509,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           content: resultContent,
           isError: !!block.is_error,
           pluginState,
+          subagent: subagentCtx,
           toolCallId,
         } satisfies ToolResultData),
       );
@@ -455,7 +517,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // Then emit tool_end (signals handler to refresh tool result UI)
       if (this.pendingToolCalls.has(toolCallId)) {
         this.pendingToolCalls.delete(toolCallId);
-        events.push(this.makeEvent('tool_end', { isSuccess: !block.is_error, toolCallId }));
+        events.push(
+          this.makeEvent('tool_end', {
+            isSuccess: !block.is_error,
+            subagent: subagentCtx,
+            toolCallId,
+          }),
+        );
       }
     }
 
