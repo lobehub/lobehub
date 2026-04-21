@@ -450,7 +450,7 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
     });
 
-    describe('kimi-k2.5 thinking support', () => {
+    describe('kimi-k2.x family thinking toggle', () => {
       it('should add thinking params for kimi-k2.5 model', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -529,7 +529,7 @@ describe('LobeMoonshotAnthropicAI', () => {
         expect(payload.temperature).toBe(0.6);
       });
 
-      it('should not add thinking params for non-kimi-k2.5 models', async () => {
+      it('should not add thinking params for non-K2-toggle models', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'moonshot-v1-8k',
