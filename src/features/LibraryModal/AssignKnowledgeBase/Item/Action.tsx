@@ -1,6 +1,6 @@
-import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Icon, LOBE_THEME_APP_ID } from '@lobehub/ui';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
@@ -12,6 +12,12 @@ interface ActionsProps {
   id: string;
   type: KnowledgeType;
 }
+
+const getAppOverlayContainer = () => {
+  if (typeof document === 'undefined') return undefined;
+
+  return document.getElementById(LOBE_THEME_APP_ID) || document.body;
+};
 
 const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   const { t } = useTranslation('chat');
@@ -30,6 +36,13 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   ]);
 
   const [loading, setLoading] = useState(false);
+  const dropdownPortalProps = useMemo(() => {
+    const container = getAppOverlayContainer();
+
+    if (!container) return undefined;
+
+    return { container };
+  }, []);
 
   const assignKnowledge = async () => {
     setLoading(true);
@@ -56,6 +69,7 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
       {enabled ? (
         <DropdownMenu
           placement="bottomRight"
+          portalProps={dropdownPortalProps}
           items={[
             {
               icon: <Icon icon={InfoIcon} />,

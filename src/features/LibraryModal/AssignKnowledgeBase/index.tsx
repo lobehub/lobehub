@@ -1,10 +1,12 @@
-import { Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox, LOBE_THEME_APP_ID, Modal } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import List from './List';
+
+const getAppOverlayContainer = () => document.getElementById(LOBE_THEME_APP_ID) || document.body;
 
 interface AttachKnowledgeModalProps {
   open?: boolean;
@@ -19,6 +21,7 @@ export const AttachKnowledgeModal = memo<AttachKnowledgeModalProps>(({ setOpen, 
     <Modal
       allowFullscreen
       footer={null}
+      getContainer={getAppOverlayContainer}
       open={open}
       styles={{ body: { overflow: 'hidden' } }}
       title={t('knowledgeBase.library.title')}
