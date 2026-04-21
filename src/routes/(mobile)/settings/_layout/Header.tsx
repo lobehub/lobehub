@@ -18,7 +18,6 @@ import { mobileHeaderSticky } from '@/styles/mobileHeader';
 // - Profile: prefer shorter "Profile" (`auth:profile.title`) over "My Account" (`auth:tab.profile`) on mobile.
 const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.Billing]: 'subscription:tab.billing',
-  [SettingsTabs.ChatAppearance]: 'setting:tab.chatAppearance',
   [SettingsTabs.Credits]: 'subscription:tab.credits',
   [SettingsTabs.Plans]: 'subscription:tab.plans',
   [SettingsTabs.Profile]: 'auth:profile.title',
@@ -49,8 +48,10 @@ const Header = memo(() => {
 
   const tab = params.tab as SettingsTabs | undefined;
   const tabTitleKey = tab ? (TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`) : 'setting:tab.all';
-  // i18next's typed key union rejects dynamic strings; unknown keys surface visibly as raw text.
-  const tabTitle = t(tabTitleKey as Parameters<typeof t>[0]);
+  // i18next's strict key union rejects dynamic strings. `Parameters<typeof t>[0]` would push TS
+  // onto the wrong overload and infer the return as `unknown`, so we fall back to `as any`.
+  // Unknown keys surface visibly as raw text, which is acceptable.
+  const tabTitle = t(tabTitleKey as any);
 
   return (
     <ChatHeader
