@@ -26,13 +26,13 @@ const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic';
 
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
-const isKimiK25Model = (model: string) => model.startsWith('kimi-k2.');
+const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
 const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
 
-const getK25Params = (isThinkingEnabled: boolean) => ({
+const getK2FamilyParams = (isThinkingEnabled: boolean) => ({
   temperature: isThinkingEnabled ? 1 : 0.6,
   top_p: 0.95,
 });
@@ -51,7 +51,7 @@ const toContentArray = (content: any) =>
 
 /**
  * Normalize assistant messages for Anthropic format.
- * When forceThinking is true (kimi-k2.5 with thinking enabled), every assistant
+ * When forceThinking is true (kimi-k2.5/kimi-k2.6 with thinking enabled), every assistant
  * message must carry a thinking block, otherwise Moonshot rejects with:
  * "thinking is enabled but reasoning_content is missing in assistant tool call message"
  */
@@ -78,7 +78,7 @@ const normalizeMessagesForAnthropic = (
 
 /**
  * Normalize assistant messages for OpenAI format.
- * When forceReasoning is true (kimi-k2.5 with thinking enabled), every assistant
+ * When forceReasoning is true (kimi-k2.5/kimi-k2.6 with thinking enabled), every assistant
  * message must carry reasoning_content (even as empty string), similar to DeepSeek.
  */
 const normalizeMessagesForOpenAI = (
@@ -102,7 +102,7 @@ const normalizeMessagesForOpenAI = (
   });
 
 /**
- * Build Moonshot Anthropic format payload with special handling for kimi-k2.5 thinking
+ * Build Moonshot Anthropic format payload with special handling for Kimi K2.5/K2.6 thinking
  */
 const buildMoonshotAnthropicPayload = async (
   payload: ChatStreamPayload,
@@ -116,9 +116,10 @@ const buildMoonshotAnthropicPayload = async (
     )) ??
     8192;
 
-  const isK25 = isKimiK25Model(payload.model);
+  const isK2Family = isKimiThinkingToggleModel(payload.model);
   const isNativeThinking = isKimiNativeThinkingModel(payload.model);
-  const isThinkingEnabled = isNativeThinking || (isK25 && payload.thinking?.type !== 'disabled');
+  const isThinkingEnabled =
+    isNativeThinking || (isK2Family && payload.thinking?.type !== 'disabled');
 
   const basePayload = await buildDefaultAnthropicPayload({
     ...payload,
@@ -130,7 +131,7 @@ const buildMoonshotAnthropicPayload = async (
   const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
   const basePayloadWithSearch = { ...basePayload, tools };
 
-  if (!isK25 && !isNativeThinking) return basePayloadWithSearch;
+  if (!isK2Family && !isNativeThinking) return basePayloadWithSearch;
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
     ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
@@ -142,7 +143,7 @@ const buildMoonshotAnthropicPayload = async (
 
   return {
     ...basePayloadWithSearch,
-    ...getK25Params(thinkingParam.type === 'enabled'),
+    ...getK2FamilyParams(thinkingParam.type === 'enabled'),
     thinking: thinkingParam,
   };
 };
@@ -155,13 +156,13 @@ const buildMoonshotOpenAIPayload = (
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
-  const isK25 = isKimiK25Model(model);
+  const isK2Family = isKimiThinkingToggleModel(model);
   const isNativeThinking = isKimiNativeThinkingModel(model);
-  const isThinkingEnabled = isNativeThinking || (isK25 && thinking?.type !== 'disabled');
+  const isThinkingEnabled = isNativeThinking || (isK2Family && thinking?.type !== 'disabled');
   const normalizedMessages = normalizeMessagesForOpenAI(messages, isThinkingEnabled);
   const moonshotTools = appendSearchTool(tools, enabledSearch);
 
-  if (isK25 || isNativeThinking) {
+  if (isK2Family || isNativeThinking) {
     const thinkingParam =
       isNativeThinking || thinking?.type !== 'disabled'
         ? { type: 'enabled' }
@@ -169,7 +170,7 @@ const buildMoonshotOpenAIPayload = (
 
     return {
       ...rest,
-      ...getK25Params(thinkingParam.type === 'enabled'),
+      ...getK2FamilyParams(thinkingParam.type === 'enabled'),
       frequency_penalty: 0,
       messages: normalizedMessages,
       model,

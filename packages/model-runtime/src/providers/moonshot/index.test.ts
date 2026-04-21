@@ -247,6 +247,34 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.temperature).toBe(0.6);
         expect(payload.thinking).toEqual({ type: 'disabled' });
       });
+
+      it('should handle kimi-k2.6 model with thinking enabled by default', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          temperature: 0.5,
+          top_p: 0.8,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.frequency_penalty).toBe(0);
+        expect(payload.presence_penalty).toBe(0);
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should handle kimi-k2.6 model with thinking disabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(0.6);
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
     });
 
     describe('kimi-k2-thinking native thinking models', () => {
@@ -468,6 +496,37 @@ describe('LobeMoonshotAnthropicAI', () => {
           budget_tokens: 2048,
           type: 'enabled',
         });
+      });
+
+      it('should add thinking params for kimi-k2.6 model', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
+      it('should disable thinking for kimi-k2.6 when type is disabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+          temperature: 0.5,
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+        expect(payload.temperature).toBe(0.6);
       });
 
       it('should not add thinking params for non-kimi-k2.5 models', async () => {
