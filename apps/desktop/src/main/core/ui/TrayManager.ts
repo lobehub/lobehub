@@ -1,5 +1,4 @@
 import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
-import { nativeTheme } from 'electron';
 
 import { name } from '@/../../package.json';
 import { isMac } from '@/const/env';
@@ -41,7 +40,15 @@ export class TrayManager {
     logger.debug('Initialize application tray');
 
     // Initialize main tray
-    this.initializeMainTray();
+    const mainTray = this.initializeMainTray();
+
+    // Attach the platform-specific context menu built by MenuManager so the
+    // tray right-click entries stay in sync with the app menu i18n.
+    try {
+      mainTray.setMenu(this.app.menuManager.buildTrayMenu());
+    } catch (error) {
+      logger.error('Failed to attach tray context menu:', error);
+    }
   }
 
   /**
@@ -52,18 +59,16 @@ export class TrayManager {
   }
 
   /**
-   * Initialize main tray
+   * Initialize main tray. On macOS we ship a template image (black + alpha)
+   * so the system recolors it automatically for light / dark menu bars.
    */
   initializeMainTray() {
     logger.debug('Initialize main tray');
     return this.retrieveOrInitialize({
-      iconPath: isMac
-        ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
-          ? 'tray-dark.png'
-          : 'tray-light.png'
-        : 'tray.png',
-      identifier: 'main', // Use app icon, ensure this file exists in resources directory
-      tooltip: name, // Can use app.getName() or localized string
+      iconPath: isMac ? 'trayTemplate.png' : 'tray.png',
+      identifier: 'main',
+      isTemplateImage: isMac,
+      tooltip: name,
     });
   }
 

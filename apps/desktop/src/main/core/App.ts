@@ -249,10 +249,8 @@ export class App {
 
     await this.browserManager.initializeBrowsers();
 
-    // Initialize tray manager
-    if (process.platform === 'win32') {
-      this.trayManager.initializeTrays();
-    }
+    // Initialize tray manager on all platforms (macOS menu bar, Windows / Linux tray).
+    this.trayManager.initializeTrays();
 
     // Initialize updater manager
     await this.updaterManager.initialize();
