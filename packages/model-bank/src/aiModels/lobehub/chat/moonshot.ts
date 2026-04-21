@@ -68,7 +68,6 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active). Based on kimi-k2-0711-preview, with enhanced agentic coding abilities and better context understanding.',
     displayName: 'Kimi K2',
-    enabled: true,
     id: 'kimi-k2-0905-preview',
     pricing: {
       units: [
@@ -92,7 +91,6 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'High-speed version of kimi-k2, always aligned with the latest kimi-k2. Same model parameters, output speed up to 60–100 tokens/sec.',
     displayName: 'Kimi K2 Turbo',
-    enabled: true,
     id: 'kimi-k2-turbo-preview',
     pricing: {
       units: [
@@ -117,7 +115,6 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'K2 thinking model with general agentic and reasoning capabilities, specializing in deep reasoning tasks via multi-step tool use.',
     displayName: 'Kimi K2 Thinking',
-    enabled: true,
     id: 'kimi-k2-thinking',
     pricing: {
       units: [
@@ -142,7 +139,6 @@ export const moonshotChatModels: AIChatModelCard[] = [
     description:
       'High-speed version of kimi-k2-thinking, suitable for scenarios requiring both deep reasoning and extremely fast responses.',
     displayName: 'Kimi K2 Thinking Turbo',
-    enabled: true,
     id: 'kimi-k2-thinking-turbo',
     pricing: {
       units: [
