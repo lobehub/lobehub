@@ -105,6 +105,14 @@ describe('checkAuth', () => {
       error: oidcError,
       provider: 'mock',
     });
+    expect(consoleInfoSpy).toHaveBeenCalledWith('[auth] OIDC authentication failed', {
+      clientId: undefined,
+      code: 'UNAUTHORIZED',
+      path: '/',
+      provider: 'mock',
+      userAgent: null,
+      xClientType: null,
+    });
     expect(mockHandler).not.toHaveBeenCalled();
   });
 
@@ -125,6 +133,41 @@ describe('checkAuth', () => {
       provider: 'mock',
     });
     expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it('should log decoded OIDC client info when auth fails with OIDC header', async () => {
+    const payload = Buffer.from(
+      JSON.stringify({ client_id: 'lobehub-desktop', sub: 'user-123' }),
+      'utf8',
+    ).toString('base64url');
+    const oidcRequest = new Request('https://example.com/webapi/chat/lobehub', {
+      headers: {
+        'Oidc-Auth': `header.${payload}.signature`,
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        'x-client-type': 'desktop',
+      },
+    });
+    const oidcError = Object.assign(new Error('JWT token validation failed'), {
+      code: 'UNAUTHORIZED',
+    });
+    vi.mocked(validateOIDCJWT).mockRejectedValueOnce(oidcError);
+
+    await checkAuth(mockHandler)(oidcRequest, mockOptions);
+
+    expect(consoleInfoSpy).toHaveBeenCalledWith('[auth] OIDC authentication failed', {
+      clientId: 'lobehub-desktop',
+      code: 'UNAUTHORIZED',
+      path: '/webapi/chat/lobehub',
+      provider: 'mock',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      xClientType: 'desktop',
+    });
+  });
+
+  it('should not log OIDC auth info for better-auth session failures', async () => {
+    await checkAuth(mockHandler)(mockRequest, mockOptions);
+
+    expect(consoleInfoSpy).not.toHaveBeenCalled();
   });
 
   describe('mock dev user', () => {
