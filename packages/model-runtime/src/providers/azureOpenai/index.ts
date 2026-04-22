@@ -302,29 +302,4 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
     return error;
   }
-
-  // Keep these helpers for compatibility with existing tests and local debugging.
-  private camelCaseKeys = (obj: any): any => {
-    if (typeof obj !== 'object' || !obj) return obj;
-    if (Array.isArray(obj)) {
-      return obj.map((v) => this.camelCaseKeys(v));
-    }
-
-    for (const key of Object.keys(obj)) {
-      const value = obj[key];
-      const newKey = this.tocamelCase(key);
-      if (newKey !== key) {
-        delete obj[key];
-      }
-      obj[newKey] = typeof obj[newKey] === 'object' ? this.camelCaseKeys(value) : value;
-    }
-
-    return obj;
-  };
-
-  private tocamelCase = (str: string) => {
-    return str
-      .toLowerCase()
-      .replaceAll(/(_[a-z])/g, (group) => group.toUpperCase().replace('_', ''));
-  };
 }
