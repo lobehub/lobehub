@@ -248,7 +248,7 @@ describe('ModelRuntime', () => {
 
       const result = await mockModelRuntime.createImage(payload);
 
-      expect(LobeOpenAI.prototype.createImage).toHaveBeenCalledWith(payload);
+      expect(LobeOpenAI.prototype.createImage).toHaveBeenCalledWith(payload, undefined);
       expect(result).toBe(mockResponse);
     });
 
