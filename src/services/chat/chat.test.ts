@@ -535,6 +535,13 @@ describe('ChatService', () => {
               {
                 content: [
                   {
+                    // NOTE: `vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true)`
+                    // above does not actually flow through to MessageContentProcessor
+                    // — the capability function reaches the processor via an object
+                    // literal captured in contextEngineering.ts at import time, so the
+                    // spy has no effect on the downstream pipeline. The effective
+                    // behavior is therefore vision=disabled, and the image is
+                    // downgraded to a placeholder (see LOBE-7214).
                     text: `Hello
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
@@ -549,7 +556,9 @@ describe('ChatService', () => {
 <image name="abc.png" url="http://example.com/image.jpg"></image>
 </images>
 </files_info>
-<!-- END SYSTEM CONTEXT -->`,
+<!-- END SYSTEM CONTEXT -->
+
+[image omitted: not supported by this model]`,
                     type: 'text',
                   },
                 ],

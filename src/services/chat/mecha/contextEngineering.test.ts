@@ -216,6 +216,9 @@ describe('contextEngineering', () => {
         {
           content: [
             {
+              // Vision disabled: the image is surfaced in the file-context
+              // block AND appended as a textual placeholder so the target
+              // model still sees that an image was sent (see LOBE-7214).
               text: `Hello
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
@@ -230,7 +233,9 @@ describe('contextEngineering', () => {
 <image name="abc.png" url="http://example.com/image.jpg"></image>
 </images>
 </files_info>
-<!-- END SYSTEM CONTEXT -->`,
+<!-- END SYSTEM CONTEXT -->
+
+[image omitted: not supported by this model]`,
               type: 'text',
             },
           ],
