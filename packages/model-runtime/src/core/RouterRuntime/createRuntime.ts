@@ -15,8 +15,10 @@ import type {
   ChatMethodOptions,
   ChatStreamCallbacks,
   ChatStreamPayload,
+  CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResponse,
   EmbeddingsOptions,
@@ -482,12 +484,20 @@ export const createRouterRuntime = ({
       }
     }
 
-    async createImage(payload: CreateImagePayload) {
-      return this.runWithFallback(payload.model, (runtime) => runtime.createImage!(payload));
+    async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.createImage!(payload),
+        options?.metadata,
+      );
     }
 
-    async createVideo(payload: CreateVideoPayload) {
-      return this.runWithFallback(payload.model, (runtime) => runtime.createVideo!(payload));
+    async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
+      return this.runWithFallback(
+        payload.model,
+        (runtime) => runtime.createVideo!(payload),
+        options?.metadata,
+      );
     }
 
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {

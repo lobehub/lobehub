@@ -5,9 +5,11 @@ export enum RequestTrigger {
   Cron = 'cron',
   Eval = 'eval',
   FileEmbedding = 'file_embedding',
+  Image = 'image',
   Memory = 'memory',
   SemanticSearch = 'semantic_search',
   Topic = 'topic',
+  Video = 'video',
 }
 
 // ******* Runtime Biz Error ******* //
