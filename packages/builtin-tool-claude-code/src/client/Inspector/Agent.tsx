@@ -18,7 +18,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 60%;
     margin-inline-start: 6px;
     padding-block: 2px;
     padding-inline: 10px;
@@ -42,16 +41,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   label: css`
+    flex-shrink: 0;
     color: ${cssVar.colorText};
   `,
 }));
 
 /**
- * CC's subagent-spawn tool. `subagent_type` is the template ("Explore",
- * "general-purpose", ...) and becomes the primary label — saying "Agent"
- * is redundant once we're already rendering inside the Agent inspector.
- * `description` is the 3-5 word title the model writes ("Run pwd command")
- * and goes in the chip; the full `prompt` is too long for a collapsed header.
+ * CC's subagent-spawn tool. `subagent_type` ("Explore", "general-purpose", ...)
+ * is the variant; we prefix it with "Agent:" so the row visibly reads as a
+ * subagent dispatch rather than a regular tool — the icon alone isn't enough
+ * signal. `description` is the 3-5 word title the model writes and goes in the
+ * chip; the full `prompt` is too long for a collapsed header.
  */
 export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
@@ -71,7 +71,7 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
     return (
       <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
         <Icon className={styles.icon} size={14} />
-        <span className={styles.label}>{labelText}</span>
+        <span className={styles.label}>Agent: {labelText}</span>
         {description && (
           <span className={styles.chip}>
             <span className={styles.chipText}>{description}</span>
