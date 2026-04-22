@@ -351,18 +351,22 @@ export default class GitController extends ControllerModule {
   }
 
   /**
-   * Push the current branch to its upstream.
+   * Push the current branch to its same-named remote on `origin`.
    *
-   * Plain `git push` — no `--force` — so non-fast-forward pushes are rejected
-   * by git itself. Requires an upstream to already be configured; callers
-   * should only surface this action when `hasUpstream && ahead > 0`.
+   * Uses `git push -u origin HEAD` instead of plain `git push` so the action
+   * works even when local branch name differs from the configured upstream
+   * (e.g. a branch created via `git checkout -b feat/x origin/canary` — plain
+   * `git push` refuses under `push.default=simple`). Same-named existing case
+   * is a no-op for the upstream binding, branch-not-yet-pushed case creates
+   * `origin/<local-name>` and rebinds tracking. No `--force`, so
+   * non-fast-forward pushes are still rejected by git itself.
    */
   @IpcMethod()
   async pushGitBranch(payload: { path: string }): Promise<GitPushResult> {
     const { path: dirPath } = payload;
     const execFileAsync = promisify(execFile);
     try {
-      const { stderr } = await execFileAsync('git', ['push'], {
+      const { stderr } = await execFileAsync('git', ['push', '-u', 'origin', 'HEAD'], {
         cwd: dirPath,
         timeout: 60_000,
       });
