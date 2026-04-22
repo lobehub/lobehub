@@ -304,6 +304,83 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
+  describe('Read tool image content (LOBE-7338)', () => {
+    // CC's `Read` on images returns a `tool_result` whose `content` is an
+    // `image` block (base64). The generic mapper had no branch for it so
+    // resultContent collapsed to '' and the UI's StatusIndicator stuck on the
+    // spinner. Minimal fix: emit a placeholder so the tool ends in completed
+    // state. Image echo (thumbnails) is deferred.
+    it('renders image blocks as a non-empty placeholder', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'r1', input: { file_path: 'x.png' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [
+                {
+                  source: { data: 'AAAA', media_type: 'image/png', type: 'base64' },
+                  type: 'image',
+                },
+              ],
+              tool_use_id: 'r1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result).toBeDefined();
+      expect(result!.data.toolCallId).toBe('r1');
+      expect(result!.data.content).toBe('[Image: image/png]');
+      expect(result!.data.isError).toBe(false);
+
+      const end = events.find((e) => e.type === 'tool_end');
+      expect(end).toBeDefined();
+      expect(end!.data.toolCallId).toBe('r1');
+    });
+
+    it('falls back to generic label when media_type is missing', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 'r1', input: { file_path: 'x' }, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          content: [
+            {
+              content: [{ source: { data: 'AAAA', type: 'base64' }, type: 'image' }],
+              tool_use_id: 'r1',
+              type: 'tool_result',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+
+      const result = events.find((e) => e.type === 'tool_result');
+      expect(result!.data.content).toBe('[Image: image]');
+    });
+  });
+
   describe('TodoWrite pluginState synthesis', () => {
     const driveTodoWrite = (adapter: ClaudeCodeAdapter, input: unknown, toolId = 't1') => {
       adapter.adapt({ subtype: 'init', type: 'system' });
