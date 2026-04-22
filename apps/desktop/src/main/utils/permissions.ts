@@ -6,18 +6,10 @@
  * It must be dynamically imported to prevent loading errors on Windows/Linux.
  */
 import { shell } from 'electron';
-import { macOS } from 'electron-is';
+import * as electronIs from 'electron-is';
+import type * as MacPermissions from 'node-mac-permissions';
 
 import { createLogger } from './logger';
-
-interface NodeMacPermissionsModule {
-  askForAccessibilityAccess: () => void;
-  askForCameraAccess: () => Promise<'authorized' | 'denied' | 'not determined' | 'restricted'>;
-  askForFullDiskAccess: () => void;
-  askForMicrophoneAccess: () => Promise<'authorized' | 'denied' | 'not determined' | 'restricted'>;
-  askForScreenCaptureAccess: (openPreferences?: boolean) => void;
-  getAuthStatus: (type: AuthType) => PermissionType;
-}
 
 // Type definitions - use module types when available, fallback to local definition
 // Note: We don't import the module statically, so we need local type definitions
@@ -36,33 +28,31 @@ type AuthType =
 
 type PermissionType = 'authorized' | 'denied' | 'not determined' | 'restricted';
 
+type MacPermissionsModule = typeof MacPermissions;
+
 // Lazy-loaded module cache
-// @ts-ignore - node-mac-permissions is optional and only available on macOS
-let macPermissionsModule: NodeMacPermissionsModule | null = null;
+let macPermissionsModule: MacPermissionsModule | null = null;
 
 // Test injection override (set via __setMacPermissionsModule for testing)
-// @ts-ignore - node-mac-permissions is optional and only available on macOS
-let testModuleOverride: NodeMacPermissionsModule | null = null;
+let testModuleOverride: MacPermissionsModule | null = null;
 
 /**
  * Lazily load the node-mac-permissions module (macOS only)
  * Returns null on non-macOS platforms
  */
-// @ts-ignore - node-mac-permissions is optional and only available on macOS
-function getMacPermissionsModule(): NodeMacPermissionsModule | null {
+function getMacPermissionsModule(): MacPermissionsModule | null {
   // Allow test injection to override the module
   if (testModuleOverride) {
     return testModuleOverride;
   }
 
-  if (!macOS()) {
+  if (!electronIs.macOS()) {
     return null;
   }
 
   if (!macPermissionsModule) {
     // Dynamic require to prevent module loading on non-macOS platforms
-
-    macPermissionsModule = require('node-mac-permissions');
+    macPermissionsModule = require('node-mac-permissions') as MacPermissionsModule;
   }
 
   return macPermissionsModule;
@@ -81,10 +71,7 @@ export function __resetMacPermissionsModuleCache(): void {
  * Set the mac permissions module (for testing purposes)
  * @internal
  */
-export function __setMacPermissionsModule(
-  // @ts-ignore - node-mac-permissions is optional and only available on macOS
-  module: NodeMacPermissionsModule | null,
-): void {
+export function __setMacPermissionsModule(module: MacPermissionsModule | null): void {
   testModuleOverride = module;
 }
 
@@ -309,7 +296,7 @@ export function requestFullDiskAccess(): void {
  * Alternative method using shell.openExternal
  */
 export async function openFullDiskAccessSettings(): Promise<void> {
-  if (!macOS()) {
+  if (!electronIs.macOS()) {
     logger.info('[FullDiskAccess] Not macOS, skipping');
     return;
   }
@@ -359,7 +346,7 @@ export function getInputMonitoringStatus(): PermissionStatus {
  * Maps 'microphone' and 'screen' to corresponding permission checks
  */
 export function getMediaAccessStatus(mediaType: 'microphone' | 'screen'): string {
-  if (!macOS()) return 'granted';
+  if (!electronIs.macOS()) return 'granted';
 
   const status = getPermissionStatus(mediaType === 'microphone' ? 'microphone' : 'screen');
 

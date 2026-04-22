@@ -84,6 +84,10 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  scrollContainer: css`
+    overflow-y: auto;
+    max-height: 360px;
+  `,
   sectionTitle: css`
     padding-block: 6px 2px;
     padding-inline: 8px;
@@ -213,50 +217,52 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
   return (
     <Flexbox gap={4} style={{ minWidth: 280 }}>
       <div className={styles.sectionTitle}>{t('localSystem.workingDirectory.recent')}</div>
-      {displayDirs.length === 0 ? (
-        <Flexbox
-          align={'center'}
-          justify={'center'}
-          style={{ color: cssVar.colorTextQuaternary, fontSize: 12, padding: '12px 8px' }}
-        >
-          {t('localSystem.workingDirectory.noRecent')}
-        </Flexbox>
-      ) : (
-        displayDirs.map((entry) => {
-          const isActive = entry.path === effectiveDir;
-          return (
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={`${styles.dirItem} ${isActive ? styles.dirItemActive : ''}`}
-              gap={8}
-              key={entry.path}
-              onClick={() => selectDir(entry)}
-            >
-              <RecentDirIcon entry={entry} />
-              <Flexbox flex={1} style={{ minWidth: 0 }}>
-                <div className={styles.dirName}>{getDirName(entry.path)}</div>
-                <div className={styles.dirPath}>{entry.path}</div>
+      <div className={styles.scrollContainer}>
+        {displayDirs.length === 0 ? (
+          <Flexbox
+            align={'center'}
+            justify={'center'}
+            style={{ color: cssVar.colorTextQuaternary, fontSize: 12, padding: '12px 8px' }}
+          >
+            {t('localSystem.workingDirectory.noRecent')}
+          </Flexbox>
+        ) : (
+          displayDirs.map((entry) => {
+            const isActive = entry.path === effectiveDir;
+            return (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={`${styles.dirItem} ${isActive ? styles.dirItemActive : ''}`}
+                gap={8}
+                key={entry.path}
+                onClick={() => selectDir(entry)}
+              >
+                <RecentDirIcon entry={entry} />
+                <Flexbox flex={1} style={{ minWidth: 0 }}>
+                  <div className={styles.dirName}>{getDirName(entry.path)}</div>
+                  <div className={styles.dirPath}>{entry.path}</div>
+                </Flexbox>
+                {isActive ? (
+                  <Icon
+                    icon={CheckIcon}
+                    size={16}
+                    style={{ color: cssVar.colorSuccess, flex: 'none' }}
+                  />
+                ) : (
+                  <div
+                    className={styles.removeBtn}
+                    title={t('localSystem.workingDirectory.removeRecent')}
+                    onClick={(e) => handleRemoveRecent(e, entry.path)}
+                  >
+                    <Icon icon={XIcon} size={12} />
+                  </div>
+                )}
               </Flexbox>
-              {isActive ? (
-                <Icon
-                  icon={CheckIcon}
-                  size={16}
-                  style={{ color: cssVar.colorSuccess, flex: 'none' }}
-                />
-              ) : (
-                <div
-                  className={styles.removeBtn}
-                  title={t('localSystem.workingDirectory.removeRecent')}
-                  onClick={(e) => handleRemoveRecent(e, entry.path)}
-                >
-                  <Icon icon={XIcon} size={12} />
-                </div>
-              )}
-            </Flexbox>
-          );
-        })
-      )}
+            );
+          })
+        )}
+      </div>
 
       {isDesktop && (
         <Flexbox

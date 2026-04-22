@@ -318,6 +318,19 @@ interface SubagentRunState {
    */
   lastChainParentId: string;
   /**
+   * Run-lifetime set of every inner tool_call_id this subagent has ever
+   * persisted into its thread. Unlike `state.persistedIds`, which is
+   * turn-scoped and wiped when `currentSubagentMessageId` advances, this
+   * set only grows — so a delayed `tool_result` that lands after the
+   * owning turn has rolled over still resolves back to the right run via
+   * `findRunByInnerToolCallId`. Without this, the thread-bucket
+   * `updateMessage` path is skipped and the in-thread tool bubble stays
+   * stuck on the loading spinner until the user re-opens the Thread
+   * (main-topic `fetchAndReplaceMessages` does not rehydrate thread
+   * buckets).
+   */
+  lifetimeToolCallIds: Set<string>;
+  /**
    * Assistant message id that a deferred buffer flush is still owed to.
    * Set when `finalizeSubagentRun` captures the flush target but the DB
    * write fails; the next retry (typically the `onComplete` fallback)
@@ -512,6 +525,7 @@ const ensureSubagentRun = async (
       currentSubagentMessageId: subagentCtx.subagentMessageId ?? '',
       lastBatchToolMsgIds: [],
       lastChainParentId: firstAssistantId,
+      lifetimeToolCallIds: new Set(),
       state: { payloads: [], persistedIds: new Set() },
       stream,
       subOperationId,
@@ -607,6 +621,13 @@ const persistSubagentToolChunk = async (
     onThreadCreated,
   );
   if (!run) return;
+
+  // Record every incoming tool_use id in the run-lifetime lookup set
+  // before persisting, so a `tool_result` that arrives after this turn
+  // has rolled over still finds its owning run via
+  // `findRunByInnerToolCallId` (which can't rely on `state.persistedIds`
+  // alone — that one is wiped on turn advance).
+  for (const tool of tools) run.lifetimeToolCallIds.add(tool.id);
 
   // Snapshot the tool id set BEFORE the batch so we can compute which
   // ids this call added (for chain-parent advancement below).
@@ -1025,10 +1046,19 @@ export const executeHeterogeneousAgent = async (
     get().completeOperation(subOperationId);
   };
 
-  /** Look up a subagent run by the tool_call_id of ANY tool inside it. */
+  /**
+   * Look up a subagent run by the tool_call_id of ANY tool inside it —
+   * across ALL turns of the run, not just the current one. Uses
+   * `lifetimeToolCallIds` (run-scoped, append-only) rather than
+   * `state.persistedIds` (turn-scoped, wiped by `ensureSubagentRun` when
+   * the subagent advances to a new `subagentMessageId`), so a delayed
+   * `tool_result` arriving after the owning turn has rolled over still
+   * routes to the right run and clears the in-thread tool bubble's
+   * loading state.
+   */
   const findRunByInnerToolCallId = (toolCallId: string): SubagentRunState | undefined => {
     for (const run of subagentRuns.values()) {
-      if (run.state.persistedIds.has(toolCallId)) return run;
+      if (run.lifetimeToolCallIds.has(toolCallId)) return run;
     }
     return undefined;
   };

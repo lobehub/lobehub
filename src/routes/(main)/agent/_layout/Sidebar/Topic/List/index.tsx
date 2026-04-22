@@ -6,7 +6,7 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -17,8 +17,6 @@ import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByProjectMode from '../TopicListContent/ByProjectMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
-
-const fetchParams = { excludeTriggers: ['cron', 'eval'] };
 
 const TopicList = memo(() => {
   const { t } = useTranslation('topic');
@@ -34,7 +32,7 @@ const TopicList = memo(() => {
 
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
-  useFetchTopics(fetchParams);
+  useFetchChatTopics();
 
   // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;

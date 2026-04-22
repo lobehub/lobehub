@@ -10,7 +10,10 @@ import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
 import { EditInspector } from './Edit';
 import { ReadInspector } from './Read';
+import { ScheduleWakeupInspector } from './ScheduleWakeup';
 import { SkillInspector } from './Skill';
+import { TaskOutputInspector } from './TaskOutput';
+import { TaskStopInspector } from './TaskStop';
 import { TodoWriteInspector } from './TodoWrite';
 import { ToolSearchInspector } from './ToolSearch';
 import { WriteInspector } from './Write';
@@ -33,7 +36,10 @@ export const ClaudeCodeInspectors = {
     translationKey: ClaudeCodeApiName.Grep,
   }),
   [ClaudeCodeApiName.Read]: ReadInspector,
+  [ClaudeCodeApiName.ScheduleWakeup]: ScheduleWakeupInspector,
   [ClaudeCodeApiName.Skill]: SkillInspector,
+  [ClaudeCodeApiName.TaskOutput]: TaskOutputInspector,
+  [ClaudeCodeApiName.TaskStop]: TaskStopInspector,
   [ClaudeCodeApiName.TodoWrite]: TodoWriteInspector,
   [ClaudeCodeApiName.ToolSearch]: ToolSearchInspector,
   [ClaudeCodeApiName.Write]: WriteInspector,

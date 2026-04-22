@@ -535,7 +535,16 @@ describe('ChatService', () => {
               {
                 content: [
                   {
+                    // NOTE: `vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true)`
+                    // above does not actually flow through to MessageContentProcessor
+                    // — the capability function reaches the processor via an object
+                    // literal captured in contextEngineering.ts at import time, so the
+                    // spy has no effect on the downstream pipeline. The effective
+                    // behavior is therefore vision=disabled, and the image is
+                    // downgraded to a placeholder (see LOBE-7214).
                     text: `Hello
+
+[image omitted: not supported by this model]
 
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:

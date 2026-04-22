@@ -529,6 +529,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                   // and the tool message lands in DB with empty content — leaving
                   // the UI's StatusIndicator stuck on the spinner (LOBE-7369).
                   if (c?.type === 'tool_reference' && c.tool_name) return c.tool_name;
+                  // `Read` on images yields `{type: 'image', source: {...}}` blocks
+                  // with no text. Drop a minimal placeholder so the tool message
+                  // has non-empty content (LOBE-7338); richer image echo is a
+                  // follow-up that needs structured ToolResultData.
+                  if (c?.type === 'image') {
+                    const mediaType = c.source?.media_type || 'image';
+                    return `[Image: ${mediaType}]`;
+                  }
                   return c.text || c.content || '';
                 })
                 .filter(Boolean)

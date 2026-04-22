@@ -322,6 +322,7 @@ export default {
   'selectedAgents': 'Selected agents',
   'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
+  'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task...',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sessionGroup.config': 'Category Management',
@@ -540,7 +541,7 @@ export default {
   'viewMode.wideScreen': 'Widescreen',
   'workflow.failedSuffix': '(failed)',
   'workflow.summaryFailed': '{{count}} failed',
-  'workflow.summaryMoreTools': '+{{count}} more',
+  'workflow.summaryMoreTools': '{{count}} tool kinds',
   'workflow.summaryTotalCalls': '{{count}} calls total',
   'workflow.thoughtForDuration': 'Thought for {{duration}}',
   'workflow.toolDisplayName.activateDevice': 'Activated device',

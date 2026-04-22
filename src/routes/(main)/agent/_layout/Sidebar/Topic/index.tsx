@@ -6,11 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
 
 import Actions from './Actions';
 import Filter from './Filter';
@@ -24,12 +22,8 @@ interface TopicProps {
 const Topic = memo<TopicProps>(({ itemKey }) => {
   const { t } = useTranslation(['topic', 'common']);
   const [topicCount] = useChatStore((s) => [topicSelectors.currentTopicCount(s)]);
-  const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const dropdownMenu = useTopicActionsDropdownMenu();
-  const { isRevalidating } = useFetchTopics({
-    excludeStatuses: includeCompleted ? undefined : ['completed'],
-    excludeTriggers: ['cron', 'eval'],
-  });
+  const { isRevalidating } = useFetchChatTopics();
 
   return (
     <AccordionItem

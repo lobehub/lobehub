@@ -102,12 +102,18 @@ const InputEditor = memo<{
   const MentionMenuComp = useMemo(() => createMentionMenu(stateRef, categoriesRef), []);
 
   const enableMention = allMentionItems.length > 0;
-  const showAgentAssignmentHint = categories.some((category) => category.id === 'agent');
 
   // Get agent's model info for vision support check and handle paste upload
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
+  const heterogeneousType = useAgentStore(
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider?.type,
+  );
+  const heterogeneousName = heterogeneousType === 'claude-code' ? 'Claude Code' : undefined;
+  // Heterogeneous agents (e.g. Claude Code) don't yet support @-assigning to other agents
+  const showAgentAssignmentHint =
+    !heterogeneousName && categories.some((category) => category.id === 'agent');
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   // Listen to editor's paste event for file uploads
@@ -298,6 +304,7 @@ const InputEditor = memo<{
       placeholder={
         placeholder ?? (
           <Placeholder
+            heterogeneousName={heterogeneousName}
             showAgentAssignmentHint={showAgentAssignmentHint}
             variant={placeholderVariant}
           />

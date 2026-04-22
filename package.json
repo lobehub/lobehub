@@ -313,6 +313,7 @@
     "better-auth-harmony": "^1.2.5",
     "better-call": "1.1.8",
     "brotli-wasm": "^3.0.1",
+    "buffer": "^6.0.3",
     "chat": "^4.23.0",
     "chroma-js": "^3.2.0",
     "class-variance-authority": "^0.7.1",
@@ -527,8 +528,7 @@
     "typescript": "^5.9.3",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
-    "vite": "^7.3.1",
-    "vite-plugin-node-polyfills": "^0.25.0",
+    "vite": "^8.0.9",
     "vite-plugin-pwa": "^1.2.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^3.2.4"
@@ -553,6 +553,9 @@
       "lexical": "0.42.0",
       "pdfjs-dist": "5.4.530",
       "stylelint-config-clean-order": "7.0.0"
+    },
+    "patchedDependencies": {
+      "@upstash/qstash": "patches/@upstash__qstash.patch"
     }
   }
 }

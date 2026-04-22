@@ -36,29 +36,33 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     flex-direction: column;
 
-    width: 320px;
-    height: 380px;
+    width: 300px;
+    height: 360px;
 
     /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
     margin: -4px;
   `,
   createFooter: css`
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
 
-    padding: 8px;
+    padding-block: 6px;
+    padding-inline: 8px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
   createItemWrapper: css`
     padding: 4px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
+  createItem: css`
+    border-radius: calc(${cssVar.borderRadius} - 4px);
+  `,
   createInput: css`
     flex: 1;
   `,
   emptyState: css`
-    padding-block: 16px;
+    padding-block: 12px;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
     text-align: center;
@@ -66,13 +70,14 @@ const styles = createStaticStyles(({ css }) => ({
   item: css`
     display: flex;
     gap: 8px;
-    align-items: flex-start;
+    align-items: center;
 
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: 6px;
+    padding-block: 2px;
+    padding-inline: 8px;
+    border-radius: 4px;
 
     font-size: 13px;
+    line-height: 1.3;
     color: ${cssVar.colorText};
   `,
   itemCheck: css`
@@ -81,7 +86,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   itemIcon: css`
     flex: none;
-    margin-block-start: 2px;
     color: ${cssVar.colorTextSecondary};
   `,
   itemMain: css`
@@ -90,17 +94,28 @@ const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
   `,
   itemMeta: css`
-    margin-block-start: 2px;
-    font-size: 12px;
+    margin-block-start: 1px;
+    font-size: 11px;
     color: ${cssVar.colorTextTertiary};
   `,
   list: css`
     overflow-y: auto;
     flex: 1;
-    padding: 4px;
+    padding-block: 2px;
+    padding-inline: 4px;
   `,
   searchBar: css`
-    padding: 8px;
+    padding-block: 4px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorSplit};
+
+    .ant-input-affix-wrapper {
+      padding-inline: 0;
+    }
+
+    .ant-input-prefix {
+      margin-inline-end: 8px;
+    }
   `,
   refreshButton: css`
     cursor: pointer;
@@ -135,8 +150,8 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 4px;
     align-items: center;
 
-    padding-block: 6px 2px;
-    padding-inline: 10px;
+    padding-block: 4px 2px;
+    padding-inline: 8px;
   `,
   spinning: css`
     animation: branch-switcher-spin 0.8s linear infinite;
@@ -262,8 +277,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     prefix={<Icon icon={SearchIcon} size={14} />}
                     size="small"
                     value={search}
-                    variant="filled"
+                    variant="borderless"
                     onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
                   />
                 </div>
 
@@ -345,6 +361,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                       value={newBranch}
                       variant="filled"
                       onChange={(e) => setNewBranch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
                       onPressEnter={handleCreateSubmit}
                     />
                     <Button
@@ -370,7 +387,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                 ) : (
                   <div className={styles.createItemWrapper}>
                     <DropdownMenuItem
-                      className={styles.item}
+                      className={cx(styles.item, styles.createItem)}
                       closeOnClick={false}
                       onClick={() => setIsCreating(true)}
                     >
