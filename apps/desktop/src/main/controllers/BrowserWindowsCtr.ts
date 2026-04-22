@@ -26,6 +26,11 @@ export default class BrowserWindowsCtr extends ControllerModule {
     await this.app.screenCaptureManager.startSession();
   }
 
+  @shortcut('quickChat')
+  openQuickChat() {
+    this.app.browserManager.openQuickChatPopup();
+  }
+
   @IpcMethod()
   async openSettingsWindow(options?: string | OpenSettingsWindowOptions) {
     const normalizedOptions: OpenSettingsWindowOptions =

@@ -16,7 +16,9 @@ const shortcutDecorator = (name: string) => (target: any, methodName: string, de
 /**
  *  shortcut inject decorator
  */
-export const shortcut = (method: DesktopHotkeyId) => shortcutDecorator(method);
+type DesktopHotkeyIdCompatible = DesktopHotkeyId | 'quickComposer';
+
+export const shortcut = (method: DesktopHotkeyIdCompatible) => shortcutDecorator(method);
 
 const protocolDecorator =
   (urlType: string, action: string) => (target: any, methodName: string, descriptor?: any) => {

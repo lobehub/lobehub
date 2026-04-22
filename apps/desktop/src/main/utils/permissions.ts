@@ -7,24 +7,16 @@
  */
 import { shell } from 'electron';
 import { macOS } from 'electron-is';
-import type {
-  askForAccessibilityAccess,
-  askForCameraAccess,
-  askForFullDiskAccess,
-  askForMicrophoneAccess,
-  askForScreenCaptureAccess,
-  getAuthStatus,
-} from 'node-mac-permissions';
 
 import { createLogger } from './logger';
 
 interface NodeMacPermissionsModule {
-  askForAccessibilityAccess: typeof askForAccessibilityAccess;
-  askForCameraAccess: typeof askForCameraAccess;
-  askForFullDiskAccess: typeof askForFullDiskAccess;
-  askForMicrophoneAccess: typeof askForMicrophoneAccess;
-  askForScreenCaptureAccess: typeof askForScreenCaptureAccess;
-  getAuthStatus: typeof getAuthStatus;
+  askForAccessibilityAccess: () => void;
+  askForCameraAccess: () => Promise<'authorized' | 'denied' | 'not determined' | 'restricted'>;
+  askForFullDiskAccess: () => void;
+  askForMicrophoneAccess: () => Promise<'authorized' | 'denied' | 'not determined' | 'restricted'>;
+  askForScreenCaptureAccess: (openPreferences?: boolean) => void;
+  getAuthStatus: (type: AuthType) => PermissionType;
 }
 
 // Type definitions - use module types when available, fallback to local definition
