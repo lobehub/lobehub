@@ -248,7 +248,6 @@ export const createRouterRuntime = ({
     private async createRuntimeFromOption(
       router: RouterInstance,
       optionItem: RouterOptionItem,
-      model: string,
     ): Promise<{
       channelId?: string;
       id: ApiType;
@@ -333,7 +332,7 @@ export const createRouterRuntime = ({
           id: resolvedApiType,
           remark,
           runtime,
-        } = await this.createRuntimeFromOption(matchedRouter, optionItem, model);
+        } = await this.createRuntimeFromOption(matchedRouter, optionItem);
 
         try {
           const result = await requestHandler(runtime);
@@ -440,11 +439,9 @@ export const createRouterRuntime = ({
       const runtimes = await Promise.all(
         resolvedRouters.map(async (router) => {
           const routerOptions = this.normalizeRouterOptions(router);
-          const runtimeModel = router.models?.[0] ?? '';
           const { id: resolvedApiType, runtime } = await this.createRuntimeFromOption(
             router,
             routerOptions[0],
-            runtimeModel,
           );
 
           return {
@@ -511,11 +508,7 @@ export const createRouterRuntime = ({
       const model = (payload.body as any)?.model;
       const resolvedRouters = await this.resolveRouters(model);
       const routerOptions = this.normalizeRouterOptions(resolvedRouters[0]);
-      const { runtime } = await this.createRuntimeFromOption(
-        resolvedRouters[0],
-        routerOptions[0],
-        model,
-      );
+      const { runtime } = await this.createRuntimeFromOption(resolvedRouters[0], routerOptions[0]);
       return runtime.handleCreateVideoWebhook!(payload);
     }
 
