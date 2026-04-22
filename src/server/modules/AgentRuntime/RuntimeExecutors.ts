@@ -29,7 +29,7 @@ import { parse } from '@lobechat/conversation-flow';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import { chainCompressContext } from '@lobechat/prompts';
 import { type ChatToolPayload, type MessageToolCall, type UIChatMessage } from '@lobechat/types';
-import { serializePartsForStorage } from '@lobechat/utils';
+import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
 
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
@@ -819,9 +819,13 @@ export const createRuntimeExecutors = (
               },
               onToolsCalling: async ({ toolsCalling: raw }) => {
                 const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
-                // Attach source (origin) and executor (dispatch target) for routing
+                // Attach source (origin) and executor (dispatch target) for routing.
+                // Sanitize `arguments` so malformed JSON (e.g. Qwen emitting `{, ...}`)
+                // never makes it into `messages.tools` and thus never poisons later
+                // requests to strict providers like NVIDIA NIM. See LOBE-7761.
                 const payload = resolvedCalls.map((p) => ({
                   ...p,
+                  arguments: sanitizeToolCallArguments(p.arguments),
                   executor: resolved.executorMap?.[p.identifier],
                   source: resolved.sourceMap[p.identifier],
                 }));

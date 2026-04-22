@@ -1,4 +1,5 @@
 import type { ChatToolPayload } from '@lobechat/types';
+import { sanitizeToolCallArguments } from '@lobechat/utils';
 import pMap from 'p-map';
 
 import type {
@@ -137,7 +138,9 @@ export class AgentRuntime {
         ) {
           const toolsCalling = instruction.payload.map((tc: ToolsCalling) => ({
             apiName: tc.function.name,
-            arguments: tc.function.arguments,
+            // Sanitize malformed JSON so history replay doesn't trip strict
+            // providers like NVIDIA NIM on later turns. See LOBE-7761.
+            arguments: sanitizeToolCallArguments(tc.function.arguments),
             id: tc.id,
             identifier: tc.function.name,
             type: 'default' as any,
