@@ -83,6 +83,20 @@ export interface GitCheckoutResult {
   success: boolean;
 }
 
+export interface GitPullResult {
+  error?: string;
+  /** True when `git pull` reported the branch was already up-to-date */
+  noop?: boolean;
+  success: boolean;
+}
+
+export interface GitPushResult {
+  error?: string;
+  /** True when `git push` reported everything is already up-to-date */
+  noop?: boolean;
+  success: boolean;
+}
+
 export interface GitAheadBehind {
   /** Commits in HEAD not in upstream — push count */
   ahead: number;

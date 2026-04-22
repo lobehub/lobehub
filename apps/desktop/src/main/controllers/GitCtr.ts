@@ -9,6 +9,8 @@ import type {
   GitBranchListItem,
   GitCheckoutResult,
   GitLinkedPullRequestResult,
+  GitPullResult,
+  GitPushResult,
   GitWorkingTreeFiles,
   GitWorkingTreeStatus,
 } from '@lobechat/electron-client-ipc';
@@ -320,6 +322,57 @@ export default class GitController extends ControllerModule {
       const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
       logger.debug('[checkoutGitBranch] failed', { args, stderr });
       return { error: stderr || 'git checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Pull the current branch's upstream via fast-forward only.
+   *
+   * `--ff-only` avoids creating accidental merge commits when the local branch
+   * has diverged — in that case the user should resolve merge/rebase in their
+   * own terminal. For the common "just behind" case this is a safe one-click.
+   */
+  @IpcMethod()
+  async pullGitBranch(payload: { path: string }): Promise<GitPullResult> {
+    const { path: dirPath } = payload;
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout } = await execFileAsync('git', ['pull', '--ff-only'], {
+        cwd: dirPath,
+        timeout: 60_000,
+      });
+      const noop = /Already up to date/i.test(stdout);
+      return { noop, success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[pullGitBranch] failed', { stderr });
+      return { error: stderr || 'git pull failed', success: false };
+    }
+  }
+
+  /**
+   * Push the current branch to its upstream.
+   *
+   * Plain `git push` — no `--force` — so non-fast-forward pushes are rejected
+   * by git itself. Requires an upstream to already be configured; callers
+   * should only surface this action when `hasUpstream && ahead > 0`.
+   */
+  @IpcMethod()
+  async pushGitBranch(payload: { path: string }): Promise<GitPushResult> {
+    const { path: dirPath } = payload;
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stderr } = await execFileAsync('git', ['push'], {
+        cwd: dirPath,
+        timeout: 60_000,
+      });
+      // git push writes progress/status to stderr even on success
+      const noop = /Everything up-to-date/i.test(stderr);
+      return { noop, success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[pushGitBranch] failed', { stderr });
+      return { error: stderr || 'git push failed', success: false };
     }
   }
 }
