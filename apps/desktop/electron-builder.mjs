@@ -255,6 +255,7 @@ const config = {
   generateUpdatesFilesForAllChannels: true,
   linux: {
     category: 'Utility',
+    icon: 'build/icon.png',
     maintainer: 'electronjs.org',
     target: ['AppImage', 'snap', 'deb', 'rpm', 'tar.gz'],
   },
