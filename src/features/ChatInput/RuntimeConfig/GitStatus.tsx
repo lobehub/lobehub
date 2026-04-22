@@ -242,6 +242,8 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const showAhead = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.ahead > 0;
   const showBehind = !!aheadBehind && aheadBehind.hasUpstream && aheadBehind.behind > 0;
   const upstreamName = aheadBehind?.upstream ?? '';
+  const pushTargetName = aheadBehind?.pushTarget ?? '';
+  const pushTargetExists = !!aheadBehind?.pushTargetExists;
 
   const branchTrigger = (
     <div className={styles.trigger}>
@@ -278,10 +280,15 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
 
   const pushTooltip = pushing
     ? t('localSystem.workingDirectory.pushInProgress')
-    : t('localSystem.workingDirectory.pushAction', {
-        count: aheadBehind?.ahead ?? 0,
-        upstream: upstreamName,
-      });
+    : t(
+        pushTargetExists
+          ? 'localSystem.workingDirectory.pushAction'
+          : 'localSystem.workingDirectory.pushActionNew',
+        {
+          count: aheadBehind?.ahead ?? 0,
+          target: pushTargetName || upstreamName,
+        },
+      );
 
   const pullNode = showBehind && (
     <Tooltip title={pullTooltip}>

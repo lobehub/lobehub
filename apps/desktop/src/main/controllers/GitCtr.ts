@@ -286,7 +286,36 @@ export default class GitController extends ControllerModule {
       const [behindStr, aheadStr] = stdout.trim().split(/\s+/);
       const behind = Number.parseInt(behindStr ?? '0', 10) || 0;
       const ahead = Number.parseInt(aheadStr ?? '0', 10) || 0;
-      return { ahead, behind, hasUpstream: true, upstream };
+
+      // `git push -u origin HEAD` always targets origin/<current-branch-name>,
+      // which may differ from upstream (the branched-off-canary case).
+      let pushTarget: string | undefined;
+      let pushTargetExists = false;
+      try {
+        const { stdout: branchOut } = await execFileAsync(
+          'git',
+          ['symbolic-ref', '--short', 'HEAD'],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        const branch = branchOut.trim();
+        if (branch) {
+          pushTarget = `origin/${branch}`;
+          try {
+            await execFileAsync(
+              'git',
+              ['rev-parse', '--verify', '--quiet', `refs/remotes/${pushTarget}`],
+              { cwd: dirPath, timeout: 5000 },
+            );
+            pushTargetExists = true;
+          } catch {
+            pushTargetExists = false;
+          }
+        }
+      } catch {
+        // detached HEAD — leave pushTarget undefined
+      }
+
+      return { ahead, behind, hasUpstream: true, pushTarget, pushTargetExists, upstream };
     } catch {
       // No upstream configured, detached HEAD, or git error — all treated as "no upstream"
       return { ahead: 0, behind: 0, hasUpstream: false };

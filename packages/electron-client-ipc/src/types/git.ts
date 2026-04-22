@@ -74,6 +74,18 @@ export interface GitAheadBehind {
   behind: number;
   /** True when the branch has an upstream tracking ref configured */
   hasUpstream: boolean;
+  /**
+   * Ref the one-click push action would actually target — always
+   * `origin/<current-branch-name>`, because we use `git push -u origin HEAD`.
+   * May differ from `upstream` (e.g. branch created via
+   * `git checkout -b feat/x origin/canary`). Undefined when detached.
+   */
+  pushTarget?: string;
+  /**
+   * True when `pushTarget` already exists as a remote-tracking ref. False
+   * means clicking push would create a new remote branch.
+   */
+  pushTargetExists?: boolean;
   /** Upstream ref short name (e.g. `origin/main`), when available */
   upstream?: string;
 }
