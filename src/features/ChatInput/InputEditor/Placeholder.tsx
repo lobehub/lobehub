@@ -9,12 +9,13 @@ import { preferenceSelectors } from '@/store/user/selectors';
 export type PlaceholderVariant = 'default' | 'followUp';
 
 interface PlaceholderProps {
+  heterogeneousName?: string;
   showAgentAssignmentHint?: boolean;
   variant?: PlaceholderVariant;
 }
 
 const Placeholder = memo<PlaceholderProps>(
-  ({ showAgentAssignmentHint = false, variant = 'default' }) => {
+  ({ heterogeneousName, showAgentAssignmentHint = false, variant = 'default' }) => {
     const useCmdEnterToSend = useUserStore(preferenceSelectors.useCmdEnterToSend);
     const wrapperShortcut = useCmdEnterToSend
       ? KeyEnum.Enter
@@ -25,15 +26,19 @@ const Placeholder = memo<PlaceholderProps>(
       return <span>{t('followUpPlaceholder')}</span>;
     }
 
-    const i18nKey = showAgentAssignmentHint
-      ? 'sendPlaceholderWithAgentAssignment'
-      : 'sendPlaceholder';
+    const isHeterogeneous = !!heterogeneousName;
+    const i18nKey = isHeterogeneous
+      ? 'sendPlaceholderHeterogeneous'
+      : showAgentAssignmentHint
+        ? 'sendPlaceholderWithAgentAssignment'
+        : 'sendPlaceholder';
 
     return (
       <Flexbox horizontal align={'center'} as={'span'} gap={4} wrap={'wrap'}>
         <Trans
           i18nKey={i18nKey}
           ns={'chat'}
+          values={isHeterogeneous ? { name: heterogeneousName } : undefined}
           components={{
             hotkey: (
               <Trans
@@ -54,7 +59,7 @@ const Placeholder = memo<PlaceholderProps>(
             ),
           }}
         />
-        {!showAgentAssignmentHint && '...'}
+        {!showAgentAssignmentHint && !isHeterogeneous && '...'}
       </Flexbox>
     );
   },
