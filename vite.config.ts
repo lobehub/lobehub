@@ -84,7 +84,7 @@ export default defineConfig({
     reportCompressedSize: false,
     rolldownOptions: {
       input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
-      output: createSharedRolldownOutput({ strictExecutionOrder: isDev }),
+      output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
   },
   define: sharedRendererDefine({ isMobile, isElectron: false }),
