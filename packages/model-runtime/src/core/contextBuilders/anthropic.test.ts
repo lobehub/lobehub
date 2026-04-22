@@ -272,6 +272,42 @@ describe('anthropicHelpers', () => {
       ]);
     });
 
+    it('logs and falls back to empty input when tool_call arguments are invalid JSON', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_bad',
+            type: 'function',
+            function: {
+              name: 'search',
+              // LOBE-7761 Qwen shape — upstream sanitize should catch this, but
+              // if it doesn't we want noise in the logs rather than a silent drop.
+              arguments: '{, "query": "anthropic"}',
+            },
+          },
+        ],
+      };
+
+      const result = await buildAnthropicMessage(message);
+
+      expect(result!.content).toEqual([
+        { id: 'call_bad', input: {}, name: 'search', type: 'tool_use' },
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'parse tool call arguments error:',
+        expect.objectContaining({
+          id: 'call_bad',
+          name: 'search',
+          arguments: '{, "query": "anthropic"}',
+        }),
+        expect.any(Error),
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
     it('should correctly convert function message', async () => {
       const message: OpenAIChatMessage = {
         content: 'def hello(name):\n  return f"Hello {name}"',

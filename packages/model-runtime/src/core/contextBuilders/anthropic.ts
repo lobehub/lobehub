@@ -179,7 +179,18 @@ export const buildAnthropicMessage = async (
               let input: Record<string, unknown> = {};
               try {
                 input = JSON.parse(tool.function.arguments);
-              } catch {}
+              } catch (error) {
+                // Surface the failure instead of silently falling back to `{}`.
+                // Bad arguments should be sanitized upstream (context-engine
+                // ToolCallProcessor); if we reach here it means the defense
+                // was bypassed and the Anthropic call will proceed with empty
+                // input — worth knowing about.
+                console.error(
+                  'parse tool call arguments error:',
+                  { id: tool.id, name: tool.function.name, arguments: tool.function.arguments },
+                  error,
+                );
+              }
               return {
                 id: tool.id,
                 input,
