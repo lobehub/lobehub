@@ -246,8 +246,16 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { sessionId, isInbox, groupId, excludeStatuses, excludeTriggers, triggers, ...rest } =
-        input;
+      const {
+        sessionId,
+        isInbox,
+        groupId,
+        excludeStatuses,
+        excludeTriggers,
+        includeTriggers,
+        triggers,
+        ...rest
+      } = input;
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
@@ -255,6 +263,7 @@ export const topicRouter = router({
           excludeStatuses,
           excludeTriggers,
           groupId,
+          includeTriggers,
           triggers,
           ...rest,
         });

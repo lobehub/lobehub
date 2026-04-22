@@ -34,6 +34,7 @@ interface QueryTopicParams {
   excludeStatuses?: string[];
   /**
    * Exclude topics by trigger types (e.g. ['cron'])
+   * Ignored when includeTriggers is provided.
    */
   excludeTriggers?: string[];
   /**
@@ -42,7 +43,7 @@ interface QueryTopicParams {
   groupId?: string | null;
   /**
    * Include only topics whose trigger matches one of these values.
-   * Mutually complementary with excludeTriggers.
+   * Takes precedence over excludeTriggers when provided.
    */
   includeTriggers?: string[];
   /**
@@ -85,8 +86,13 @@ export class TopicModel {
     triggers,
   }: QueryTopicParams = {}) => {
     const offset = current * pageSize;
-    const excludeTriggerCondition =
-      excludeTriggers && excludeTriggers.length > 0
+    const includeTriggerCondition =
+      includeTriggers && includeTriggers.length > 0
+        ? inArray(topics.trigger, includeTriggers)
+        : undefined;
+    const excludeTriggerCondition = includeTriggerCondition
+      ? undefined
+      : excludeTriggers && excludeTriggers.length > 0
         ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
         : undefined;
     const triggerCondition =
@@ -104,6 +110,7 @@ export class TopicModel {
       const whereCondition = and(
         eq(topics.userId, this.userId),
         eq(topics.groupId, groupId),
+        includeTriggerCondition,
         excludeTriggerCondition,
         triggerCondition,
         excludeStatusCondition,
@@ -177,6 +184,7 @@ export class TopicModel {
       const agentWhere = and(
         eq(topics.userId, this.userId),
         agentCondition,
+        includeTriggerCondition,
         excludeTriggerCondition,
         triggerCondition,
         excludeStatusCondition,
@@ -213,6 +221,7 @@ export class TopicModel {
     const whereCondition = and(
       eq(topics.userId, this.userId),
       this.matchContainer(containerId),
+      includeTriggerCondition,
       excludeTriggerCondition,
       triggerCondition,
       excludeStatusCondition,

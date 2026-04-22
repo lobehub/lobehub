@@ -208,6 +208,38 @@ describe('TopicModel - Query', () => {
       expect(ids).not.toContain('cron-topic');
     });
 
+    it('should include only topics with specified triggers via includeTriggers', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'normal-topic', sessionId, userId, title: 'Normal' },
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'eval-topic', sessionId, userId, title: 'Eval', trigger: 'eval' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        includeTriggers: ['cron'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('cron-topic');
+    });
+
+    it('should prioritize includeTriggers over excludeTriggers when both are provided', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'cron-topic', sessionId, userId, title: 'Cron', trigger: 'cron' },
+        { id: 'eval-topic', sessionId, userId, title: 'Eval', trigger: 'eval' },
+      ]);
+
+      const result = await topicModel.query({
+        containerId: sessionId,
+        excludeTriggers: ['cron'],
+        includeTriggers: ['cron'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('cron-topic');
+    });
+
     it('should only return topics with matching triggers when triggers is set', async () => {
       await serverDB.insert(topics).values([
         { id: 'normal-topic', sessionId, userId, title: 'Normal' },

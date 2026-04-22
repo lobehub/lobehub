@@ -171,6 +171,7 @@ export interface QueryTopicParams {
   excludeStatuses?: string[];
   /**
    * Exclude topics by trigger types (e.g. ['cron'])
+   * Ignored when includeTriggers is provided.
    */
   excludeTriggers?: string[];
   /**
@@ -179,6 +180,7 @@ export interface QueryTopicParams {
   groupId?: string | null;
   /**
    * Include only topics whose trigger matches one of these values.
+   * Takes precedence over excludeTriggers when provided.
    */
   includeTriggers?: string[];
   /**
