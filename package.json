@@ -555,7 +555,6 @@
       "stylelint-config-clean-order": "7.0.0"
     },
     "patchedDependencies": {
-      "@code-inspector/vite@1.3.3": "patches/@code-inspector__vite@1.3.3.patch",
       "@upstash/qstash": "patches/@upstash__qstash.patch"
     }
   }
