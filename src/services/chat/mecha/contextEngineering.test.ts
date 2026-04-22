@@ -221,6 +221,8 @@ describe('contextEngineering', () => {
               // model still sees that an image was sent (see LOBE-7214).
               text: `Hello
 
+[image omitted: not supported by this model]
+
 <!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
 <context.instruction>following part contains context information injected by the system. Please follow these instructions:
 
@@ -233,9 +235,7 @@ describe('contextEngineering', () => {
 <image name="abc.png" url="http://example.com/image.jpg"></image>
 </images>
 </files_info>
-<!-- END SYSTEM CONTEXT -->
-
-[image omitted: not supported by this model]`,
+<!-- END SYSTEM CONTEXT -->`,
               type: 'text',
             },
           ],

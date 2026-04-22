@@ -189,6 +189,26 @@ export class MessageContentProcessor extends BaseProcessor {
         .join('\n\n');
     }
 
+    // Count images that need to be replaced by a placeholder. Both legacy
+    // `imageList` attachments and `image_url` parts already inside `content`
+    // are downgraded when the target model has no vision capability.
+    //
+    // The placeholder is injected immediately after the user's own text and
+    // before the SYSTEM CONTEXT block, because it stands in for an image the
+    // user actually sent — keeping it adjacent to the user text preserves the
+    // conversational flow rather than stranding it after system metadata.
+    const imageDowngradeCount =
+      (!canUseVision && hasImages ? message.imageList.length : 0) +
+      (!canUseVision ? arrayImageUrlCount : 0);
+
+    if (imageDowngradeCount > 0) {
+      const placeholders = Array.from(
+        { length: imageDowngradeCount },
+        () => VISION_DOWNGRADE_PLACEHOLDER,
+      ).join('\n');
+      textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
+    }
+
     // Add file context (if file context is enabled and has files, images or videos)
     if ((hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled) {
       const filesContext = filesPrompts({
@@ -201,21 +221,6 @@ export class MessageContentProcessor extends BaseProcessor {
       if (filesContext) {
         textContent = (textContent + '\n\n' + filesContext).trim();
       }
-    }
-
-    // Count images that need to be replaced by a placeholder. Both legacy
-    // `imageList` attachments and `image_url` parts already inside `content`
-    // are downgraded when the target model has no vision capability.
-    const imageDowngradeCount =
-      (!canUseVision && hasImages ? message.imageList.length : 0) +
-      (!canUseVision ? arrayImageUrlCount : 0);
-
-    if (imageDowngradeCount > 0) {
-      const placeholders = Array.from(
-        { length: imageDowngradeCount },
-        () => VISION_DOWNGRADE_PLACEHOLDER,
-      ).join('\n');
-      textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
     }
 
     // Add text part
