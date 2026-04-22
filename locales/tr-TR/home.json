@@ -15,6 +15,7 @@
   "brief.feedbackSent": "Geri bildirim paylaşıldı",
   "brief.resolved": "Çözüldü olarak işaretlendi",
   "brief.title": "Günlük özet",
+  "brief.viewAllTasks": "Tüm görevleri görüntüle",
   "project.create": "Yeni proje",
   "project.deleteConfirm": "Bu proje silinecek ve geri alınamaz. Devam etmek için onaylayın.",
   "starter.createAgent": "Ajan Oluştur",

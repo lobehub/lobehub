@@ -65,6 +65,8 @@
   "builtins.lobe-agent-management.render.installPlugin.plugin": "Plugin",
   "builtins.lobe-agent-management.render.installPlugin.success": "Instalado com sucesso",
   "builtins.lobe-agent-management.title": "Gerenciador de Agentes",
+  "builtins.lobe-claude-code.agent.instruction": "Instrução",
+  "builtins.lobe-claude-code.agent.result": "Resultado",
   "builtins.lobe-claude-code.todoWrite.allDone": "Todas as tarefas concluídas",
   "builtins.lobe-claude-code.todoWrite.currentStep": "Etapa atual",
   "builtins.lobe-claude-code.todoWrite.todos": "Tarefas",

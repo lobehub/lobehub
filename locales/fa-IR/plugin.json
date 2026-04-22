@@ -65,6 +65,8 @@
   "builtins.lobe-agent-management.render.installPlugin.plugin": "افزونه",
   "builtins.lobe-agent-management.render.installPlugin.success": "با موفقیت نصب شد",
   "builtins.lobe-agent-management.title": "مدیریت نمایندگان",
+  "builtins.lobe-claude-code.agent.instruction": "دستورالعمل",
+  "builtins.lobe-claude-code.agent.result": "نتیجه",
   "builtins.lobe-claude-code.todoWrite.allDone": "همه کارها انجام شدند",
   "builtins.lobe-claude-code.todoWrite.currentStep": "مرحله‌ی فعلی",
   "builtins.lobe-claude-code.todoWrite.todos": "کارها",

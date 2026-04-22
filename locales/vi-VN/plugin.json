@@ -65,6 +65,8 @@
   "builtins.lobe-agent-management.render.installPlugin.plugin": "Plugin",
   "builtins.lobe-agent-management.render.installPlugin.success": "Cài đặt thành công",
   "builtins.lobe-agent-management.title": "Quản lý Đại lý",
+  "builtins.lobe-claude-code.agent.instruction": "Hướng dẫn",
+  "builtins.lobe-claude-code.agent.result": "Kết quả",
   "builtins.lobe-claude-code.todoWrite.allDone": "Tất cả nhiệm vụ đã hoàn thành",
   "builtins.lobe-claude-code.todoWrite.currentStep": "Bước hiện tại",
   "builtins.lobe-claude-code.todoWrite.todos": "Công việc cần làm",

@@ -65,6 +65,8 @@
   "builtins.lobe-agent-management.render.installPlugin.plugin": "プラグイン",
   "builtins.lobe-agent-management.render.installPlugin.success": "インストールが完了しました",
   "builtins.lobe-agent-management.title": "エージェントマネージャー",
+  "builtins.lobe-claude-code.agent.instruction": "指示",
+  "builtins.lobe-claude-code.agent.result": "結果",
   "builtins.lobe-claude-code.todoWrite.allDone": "すべてのタスクが完了しました",
   "builtins.lobe-claude-code.todoWrite.currentStep": "現在のステップ",
   "builtins.lobe-claude-code.todoWrite.todos": "ToDo",

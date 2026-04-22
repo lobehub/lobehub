@@ -15,6 +15,7 @@
   "brief.feedbackSent": "Отзыв отправлен",
   "brief.resolved": "Отмечено как решённое",
   "brief.title": "Ежедневная сводка",
+  "brief.viewAllTasks": "Просмотреть все задачи",
   "project.create": "Новый проект",
   "project.deleteConfirm": "Этот проект будет удален и не может быть восстановлен. Подтвердите, чтобы продолжить.",
   "starter.createAgent": "Создать агента",

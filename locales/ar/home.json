@@ -15,6 +15,7 @@
   "brief.feedbackSent": "تمت مشاركة الملاحظات",
   "brief.resolved": "تم وضع علامة كمُعالَج",
   "brief.title": "الموجز اليومي",
+  "brief.viewAllTasks": "عرض جميع المهام",
   "project.create": "مشروع جديد",
   "project.deleteConfirm": "سيتم حذف هذا المشروع ولن يمكن استعادته. أكد للمتابعة.",
   "starter.createAgent": "إنشاء وكيل",
