@@ -1,9 +1,11 @@
-import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
+import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT, isDesktop } from '@lobechat/const';
 import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
 import { useDocumentStore } from '@/store/document';
+import { getElectronStoreState } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
 import { type RightPanelMode, type State } from './initialState';
@@ -64,7 +66,10 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       handleCopyLink: (t, message) => {
         const { documentId } = get();
         if (documentId) {
-          const url = `${window.location.origin}${window.location.pathname}`;
+          const appOrigin = isDesktop
+            ? electronSyncSelectors.remoteServerUrl(getElectronStoreState())
+            : window.location.origin;
+          const url = `${appOrigin}${window.location.pathname}`;
           navigator.clipboard.writeText(url);
           message.success(t('pageEditor.linkCopied'));
         }
