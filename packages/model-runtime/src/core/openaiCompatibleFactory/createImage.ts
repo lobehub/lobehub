@@ -66,8 +66,10 @@ async function generateByImageMode(
 
   // gpt-image-2 dropped input_fidelity ("output is already high fidelity by default").
   // https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
-  const supportsInputFidelity =
-    isImageEdit && (model === 'gpt-image-1' || model === 'gpt-image-1.5');
+  // Match the gpt-image-1 family (including dated snapshots like
+  // `gpt-image-1-2025-04-15` and the `.5` variant), but exclude the mini tier.
+  const isGptImage1Family = /^gpt-image-1(?:$|[-.])/.test(model);
+  const supportsInputFidelity = isImageEdit && isGptImage1Family && !model.includes('mini');
 
   const defaultInput = {
     n: 1,

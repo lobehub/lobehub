@@ -1558,6 +1558,33 @@ describe('LobeOpenAICompatibleFactory', () => {
           n: 1,
         });
       });
+
+      it.each([
+        ['gpt-image-1.5', true],
+        ['gpt-image-1-2026-01-15', true], // dated snapshot alias
+        ['gpt-image-1.5-2026-03-01', true], // dated snapshot alias for the .5 variant
+        ['gpt-image-1-mini', false], // mini tier explicitly excluded
+        ['gpt-image-2', false], // gpt-image-2 dropped the param
+        ['gpt-image-2-2026-04-21', false], // gpt-image-2 snapshot alias
+      ])('should %s include input_fidelity for %s', async (model, shouldInclude) => {
+        const mockResponse = { data: [{ b64_json: 'edited' }] };
+        const mockFile = new File(['content'], 'test.jpg', { type: 'image/jpeg' });
+
+        vi.mocked(openaiHelpers.convertImageUrlToFile).mockResolvedValue(mockFile);
+        vi.spyOn(instance['client'].images, 'edit').mockResolvedValue(mockResponse as any);
+
+        await (instance as any).createImage({
+          model,
+          params: { imageUrl: 'https://example.com/image.jpg', prompt: 'Edit' },
+        });
+
+        const editArgs = vi.mocked(instance['client'].images.edit).mock.calls[0][0];
+        if (shouldInclude) {
+          expect(editArgs).toMatchObject({ input_fidelity: 'high' });
+        } else {
+          expect(editArgs).not.toHaveProperty('input_fidelity');
+        }
+      });
     });
 
     describe('error handling', () => {
