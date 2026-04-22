@@ -227,3 +227,4 @@ LobeHub 支持两种 Slack 连接模式：
 - **测试连接失败：** 仔细检查应用 ID 和 Bot Token 是否正确。确保应用已安装到工作区。
 - **Webhook 验证失败（Webhook 模式）：** 确保签名密钥匹配且 Webhook URL 正确。
 - **Socket Mode 无法连接：** 验证应用级别 Token 具有 `connections:write` 权限。检查 Slack 应用设置中的 **Socket Mode** 是否已启用。
+- **日志中出现 `missing_scope` 错误（例如 `needed: 'users:read'`）：** 说明应用缺少所需的 OAuth scope，或者添加了 scope 但没有重新安装应用。`users:read` 用于解析消息中的 `@username` 提及，是必需的。进入 **OAuth & Permissions** → **Bot Token Scopes**，确认 manifest 中列出的所有 scope 都已添加，然后点击页面顶部的 **Reinstall to Workspace** 重新授权。如果 **Bot User OAuth Token** 发生变化，请同步更新到 LobeHub 中。
