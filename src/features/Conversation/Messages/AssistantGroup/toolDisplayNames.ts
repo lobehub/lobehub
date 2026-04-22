@@ -416,13 +416,20 @@ export const getWorkflowSummaryText = (blocks: AssistantContentBlock[]): string 
 
   const segments: string[] = [displayedEntries.map(formatToolPart).join(', ')];
 
-  if (totalKinds > 1) {
+  // Only show "N tool kinds" when the list is truncated — otherwise it duplicates the visible list.
+  if (displayedEntries.length < totalKinds) {
     segments.push(
       t('workflow.summaryMoreTools', {
         count: totalKinds,
         defaultValue: '{{count}} tool kinds',
         ns: 'chat',
       }),
+    );
+  }
+  // Only show total calls when a tool was called more than once — otherwise totalCalls
+  // equals totalKinds and the suffix duplicates info already in the list.
+  if (totalKinds > 1 && totalCalls > totalKinds) {
+    segments.push(
       t('workflow.summaryTotalCalls', {
         count: totalCalls,
         defaultValue: '{{count}} calls total',
