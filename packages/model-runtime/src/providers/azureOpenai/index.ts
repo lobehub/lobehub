@@ -50,12 +50,11 @@ const normalizeAzureBaseURL = (value?: string) => {
 
   const url = new URL(value);
   const normalizedPathname = url.pathname.replace(/\/+$/, '');
-  const openaiIndex = normalizedPathname.indexOf('/openai');
+  const hasOpenAISegment = normalizedPathname.split('/').includes('openai');
 
-  url.pathname =
-    openaiIndex === -1
-      ? `${normalizedPathname === '/' ? '' : normalizedPathname}/openai/v1`
-      : '/openai/v1';
+  url.pathname = hasOpenAISegment
+    ? '/openai/v1'
+    : `${normalizedPathname === '/' ? '' : normalizedPathname}/openai/v1`;
   url.search = '';
   url.hash = '';
 
@@ -81,35 +80,37 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
       const azureChatParams = rest as typeof rest & { logit_bias?: Record<string, number> };
 
       const {
-        frequency_penalty: _frequency_penalty,
-        logit_bias: _logit_bias,
-        logprobs: _logprobs,
-        max_tokens: _max_tokens,
-        presence_penalty: _presence_penalty,
+        frequency_penalty,
+        logit_bias,
+        logprobs,
+        max_tokens,
+        presence_penalty,
         reasoning_effort,
-        temperature: _temperature,
-        top_logprobs: _top_logprobs,
-        top_p: _top_p,
+        temperature,
+        top_logprobs,
+        top_p,
         ...otherParams
       } = azureChatParams;
 
       const compatibleReasoningEffort = reasoning_effort === 'minimal' ? 'low' : reasoning_effort;
-      const unsupportedReasoningParams = isAzureReasoningModel(model)
+      // Azure GPT-5 / o1 / o3 reasoning models reject sampling/penalty params, so we drop
+      // them entirely for reasoning models and only pass them through for regular chat.
+      const supportedSamplingParams = isAzureReasoningModel(model)
         ? {}
         : {
-            frequency_penalty: _frequency_penalty,
-            logit_bias: _logit_bias,
-            logprobs: _logprobs,
-            max_tokens: _max_tokens,
-            presence_penalty: _presence_penalty,
-            temperature: _temperature,
-            top_logprobs: _top_logprobs,
-            top_p: _top_p,
+            frequency_penalty,
+            logit_bias,
+            logprobs,
+            max_tokens,
+            presence_penalty,
+            temperature,
+            top_logprobs,
+            top_p,
           };
 
       return {
         ...otherParams,
-        ...unsupportedReasoningParams,
+        ...supportedSamplingParams,
         messages: updatedMessages as OpenAI.Chat.ChatCompletionMessageParam[],
         model,
         reasoning_effort: compatibleReasoningEffort as 'low' | 'medium' | 'high' | undefined,
@@ -181,18 +182,21 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
     try {
       const userInput: Record<string, any> = { ...params };
+      const hasImageUrlsInput =
+        Array.isArray(userInput.imageUrls) && userInput.imageUrls.length > 0;
+      const hasSingleImageUrlInput = userInput.imageUrl && !userInput.image;
 
-      if (Array.isArray(userInput.imageUrls) && userInput.imageUrls.length > 0) {
+      if (hasImageUrlsInput || hasSingleImageUrlInput) {
         const { convertImageUrlToFile } = await import('../../core/contextBuilders/openai');
-        const imageFiles = await Promise.all(
-          userInput.imageUrls.map((url: string) => convertImageUrlToFile(url)),
-        );
-        userInput.image = imageFiles.length === 1 ? imageFiles[0] : imageFiles;
-      }
 
-      if (userInput.imageUrl && !userInput.image) {
-        const { convertImageUrlToFile } = await import('../../core/contextBuilders/openai');
-        userInput.image = await convertImageUrlToFile(userInput.imageUrl);
+        if (hasImageUrlsInput) {
+          const imageFiles = await Promise.all(
+            userInput.imageUrls.map((url: string) => convertImageUrlToFile(url)),
+          );
+          userInput.image = imageFiles.length === 1 ? imageFiles[0] : imageFiles;
+        } else if (hasSingleImageUrlInput) {
+          userInput.image = await convertImageUrlToFile(userInput.imageUrl);
+        }
       }
 
       delete userInput.imageUrls;

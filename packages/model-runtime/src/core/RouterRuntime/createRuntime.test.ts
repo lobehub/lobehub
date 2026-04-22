@@ -119,23 +119,22 @@ describe('createRouterRuntime', () => {
       await runtime.chat({ model: 'gpt-5.4', messages: [], temperature: 0.7 });
       await runtime.chat({ model: 'gpt-4o', messages: [], temperature: 0.7 });
 
-      expect(constructorCalls[0]).toEqual(
-        expect.objectContaining({
-          apiKey: 'test-key',
-          apiVersion: '2024-01-01',
-          apiVersionMapping: {
-            'gpt-5.4': '2025-04-01-preview',
-          },
-          id: 'test-runtime',
-        }),
-      );
-      expect(constructorCalls[1]).toEqual(
-        expect.objectContaining({
-          apiKey: 'test-key',
-          apiVersion: '2024-01-01',
-          id: 'test-runtime',
-        }),
-      );
+      // Both calls should receive the full options object including apiVersionMapping
+      // — the router does not resolve apiVersion per-model; the downstream runtime is
+      // responsible for applying apiVersionMapping based on the model it received.
+      const expectedOptions = {
+        apiKey: 'test-key',
+        apiVersion: '2024-01-01',
+        apiVersionMapping: {
+          'gpt-5.4': '2025-04-01-preview',
+        },
+        id: 'test-runtime',
+      };
+      expect(constructorCalls[0]).toEqual(expect.objectContaining(expectedOptions));
+      expect(constructorCalls[1]).toEqual(expect.objectContaining(expectedOptions));
+      expect(constructorCalls[1].apiVersionMapping).toEqual({
+        'gpt-5.4': '2025-04-01-preview',
+      });
     });
   });
 
