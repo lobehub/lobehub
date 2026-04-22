@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { useMount, usePrevious, useUnmount } from 'ahooks';
 import { useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -18,6 +18,7 @@ const AgentIdSync = () => {
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Resolve builtin agent slug to real agent ID
   const isBuiltinSlug = !!params.aid && BUILTIN_SLUG_SET.has(params.aid);
@@ -25,17 +26,18 @@ const AgentIdSync = () => {
     builtinAgentSelectors.getBuiltinAgentId(isBuiltinSlug ? params.aid! : ''),
   );
 
-  // Redirect slug URL to real agent ID URL
+  // Redirect slug URL to real agent ID URL, preserving child path and query string
   useEffect(() => {
     if (isBuiltinSlug && resolvedId) {
+      const suffix = location.pathname.replace(`/agent/${params.aid}`, '');
       const qs = searchParams.toString();
-      navigate(`/agent/${resolvedId}${qs ? `?${qs}` : ''}`, { replace: true });
+      navigate(`/agent/${resolvedId}${suffix}${qs ? `?${qs}` : ''}`, { replace: true });
     }
-  }, [isBuiltinSlug, resolvedId, navigate, searchParams]);
+  }, [isBuiltinSlug, resolvedId, navigate, searchParams, location.pathname, params.aid]);
 
-  // Use resolved ID when available, otherwise use URL param directly
+  // Use resolved ID when available, fall back to URL param (e.g. anonymous mode)
   const activeId = useMemo(
-    () => (isBuiltinSlug ? resolvedId : params.aid),
+    () => (isBuiltinSlug ? resolvedId || params.aid : params.aid),
     [isBuiltinSlug, resolvedId, params.aid],
   );
 
