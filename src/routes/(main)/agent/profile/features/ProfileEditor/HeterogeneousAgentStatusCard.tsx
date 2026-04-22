@@ -2,6 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type ClaudeAuthStatus, type ToolStatus } from '@lobechat/electron-client-ipc';
+import { getHeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
+import type { HeterogeneousProviderConfig } from '@lobechat/types';
 import { ActionIcon, CopyButton, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
@@ -31,39 +33,56 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-const CCStatusCard = memo(() => {
+interface HeterogeneousAgentStatusCardProps {
+  provider: HeterogeneousProviderConfig;
+}
+
+const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(({ provider }) => {
   const { t } = useTranslation('setting');
   const { styles } = useStyles();
+  const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
   const [status, setStatus] = useState<ToolStatus | undefined>();
   const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
   const [detecting, setDetecting] = useState(true);
 
+  const detectorName = providerConfig?.command || provider.command;
+  const displayName = providerConfig?.title || provider.type;
+  const AgentIcon = providerConfig?.icon;
+
   // Fetched independently of `detectTool`: an auth-fetch failure must not
   // flip the CLI status card to unavailable.
   const fetchAuth = useCallback(async () => {
+    if (provider.type !== 'claude-code') {
+      setAuth(null);
+      return;
+    }
+
     try {
       const result = await toolDetectorService.getClaudeAuthStatus();
       setAuth(result);
     } catch (error) {
-      console.warn('[CCStatusCard] Failed to get claude auth status:', error);
+      console.warn('[HeterogeneousAgentStatusCard] Failed to get Claude auth status:', error);
       setAuth(null);
     }
-  }, []);
+  }, [provider.type]);
 
   const detect = useCallback(async () => {
-    if (!isDesktop) return;
+    if (!isDesktop || !detectorName) {
+      setDetecting(false);
+      return;
+    }
     setDetecting(true);
     try {
-      const result = await toolDetectorService.detectTool('claude', true);
+      const result = await toolDetectorService.detectTool(detectorName, true);
       setStatus(result);
     } catch (error) {
-      console.error('[CCStatusCard] Failed to detect claude CLI:', error);
+      console.error('[HeterogeneousAgentStatusCard] Failed to detect CLI:', error);
       setStatus({ available: false, error: (error as Error).message });
     } finally {
       setDetecting(false);
     }
     void fetchAuth();
-  }, [fetchAuth]);
+  }, [detectorName, fetchAuth]);
 
   useEffect(() => {
     void detect();
@@ -74,7 +93,7 @@ const CCStatusCard = memo(() => {
       return (
         <Flexbox horizontal align="center" gap={8}>
           <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.6 }} />
-          <Text type="secondary">{t('ccStatus.detecting')}</Text>
+          <Text type="secondary">{t('heterogeneousStatus.detecting', { name: displayName })}</Text>
         </Flexbox>
       );
     }
@@ -83,7 +102,9 @@ const CCStatusCard = memo(() => {
       return (
         <Flexbox horizontal align="center" gap={8}>
           <Icon color="var(--ant-color-error)" icon={XCircle} size={16} />
-          <Text type="secondary">{t('ccStatus.unavailable')}</Text>
+          <Text type="secondary">
+            {t('heterogeneousStatus.unavailable', { name: displayName })}
+          </Text>
         </Flexbox>
       );
     }
@@ -112,11 +133,12 @@ const CCStatusCard = memo(() => {
   };
 
   const renderAuth = () => {
-    if (detecting || !status?.available || !auth?.loggedIn) return null;
+    if (provider.type !== 'claude-code' || detecting || !status?.available || !auth?.loggedIn)
+      return null;
 
     return (
       <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
-        <Text className={styles.label}>{t('ccStatus.account.label')}</Text>
+        <Text className={styles.label}>{t('heterogeneousStatus.account.label')}</Text>
         {auth.email && <Text ellipsis>{auth.email}</Text>}
         {auth.subscriptionType && (
           <Tag color="gold" style={{ marginInlineEnd: 0 }}>
@@ -130,8 +152,11 @@ const CCStatusCard = memo(() => {
   return (
     <Flexbox className={styles.card} gap={8} style={{ marginBottom: 12 }}>
       <Flexbox horizontal align="center" gap={8} justify="space-between">
-        <Text strong>{t('ccStatus.title')}</Text>
-        <Tooltip title={t('ccStatus.redetect')}>
+        <Flexbox horizontal align="center" gap={8}>
+          {AgentIcon && <AgentIcon size={16} />}
+          <Text strong>{`${displayName} CLI`}</Text>
+        </Flexbox>
+        <Tooltip title={t('heterogeneousStatus.redetect')}>
           <ActionIcon
             disabled={detecting}
             icon={RefreshCw}
@@ -147,6 +172,6 @@ const CCStatusCard = memo(() => {
   );
 });
 
-CCStatusCard.displayName = 'CCStatusCard';
+HeterogeneousAgentStatusCard.displayName = 'HeterogeneousAgentStatusCard';
 
-export default CCStatusCard;
+export default HeterogeneousAgentStatusCard;

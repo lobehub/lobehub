@@ -207,12 +207,11 @@ export default {
   'analytics.telemetry.title': 'Send Anonymous Usage Data',
   'analytics.title': 'Analytics',
 
-  // Claude Code CLI status (shown on agent profile page in CC integration mode)
-  'ccStatus.account.label': 'Account',
-  'ccStatus.detecting': 'Detecting Claude Code CLI...',
-  'ccStatus.redetect': 'Re-detect',
-  'ccStatus.title': 'Claude Code CLI',
-  'ccStatus.unavailable': 'Claude Code CLI not found. Please install or configure it.',
+  // Heterogeneous agent CLI status (shown on agent profile page in integration mode)
+  'heterogeneousStatus.account.label': 'Account',
+  'heterogeneousStatus.detecting': 'Detecting {{name}} CLI...',
+  'heterogeneousStatus.redetect': 'Re-detect',
+  'heterogeneousStatus.unavailable': '{{name}} CLI not found. Please install or configure it.',
   'checking': 'Checking...',
 
   // Credentials Management

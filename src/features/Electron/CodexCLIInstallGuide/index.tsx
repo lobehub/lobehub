@@ -6,7 +6,9 @@ import {
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
 } from '@lobechat/electron-client-ipc';
-import { Alert, Button, Flexbox, Snippet, Text } from '@lobehub/ui';
+import { Codex } from '@lobehub/icons';
+import { Avatar, Block, Button, Flexbox, Snippet, Text } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { ExternalLink, Settings2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +32,20 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
 
     const content = (
       <Flexbox gap={12}>
-        <Text type="secondary">{t('codexInstallGuide.desc')}</Text>
+        <Flexbox horizontal align="center" gap={12}>
+          <Avatar
+            avatar={<Codex size={24} />}
+            background={cssVar.colorFillQuaternary}
+            gap={12}
+            shape={'square'}
+            size={48}
+          />
+          <Flexbox gap={4}>
+            <Text style={{ fontSize: 16, fontWeight: 600 }}>{t('codexInstallGuide.title')}</Text>
+            <Text type="secondary">{t('codexInstallGuide.desc')}</Text>
+          </Flexbox>
+        </Flexbox>
+
         {error?.message && (
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('codexInstallGuide.reason', { message: error.message })}
@@ -86,13 +101,18 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
     if (variant === 'compact') return content;
 
     return (
-      <Alert
-        extraDefaultExpand
-        showIcon
-        description={content}
-        title={t('codexInstallGuide.title')}
-        type={'warning'}
-      />
+      <Block
+        gap={16}
+        padding={16}
+        variant={'outlined'}
+        style={{
+          background: cssVar.colorBgElevated,
+          overflow: 'hidden',
+          width: '100%',
+        }}
+      >
+        {content}
+      </Block>
     );
   },
 );

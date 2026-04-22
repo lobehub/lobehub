@@ -15,13 +15,14 @@ import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
-import CCStatusCard from './CCStatusCard';
+import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 
 const ProfileEditor = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
 
   return (
     <>
@@ -33,9 +34,9 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {isHeterogeneous ? (
-          // CC integration mode: show CLI version + path instead of model/skills pickers
-          <CCStatusCard />
+        {isHeterogeneous && heterogeneousProvider ? (
+          // Heterogeneous integration mode: show provider CLI status instead of model/skills pickers
+          <HeterogeneousAgentStatusCard provider={heterogeneousProvider} />
         ) : (
           <>
             {/* Config Bar: Model Selector */}
