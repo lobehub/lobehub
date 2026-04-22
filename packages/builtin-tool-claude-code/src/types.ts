@@ -28,7 +28,10 @@ export enum ClaudeCodeApiName {
   Glob = 'Glob',
   Grep = 'Grep',
   Read = 'Read',
+  ScheduleWakeup = 'ScheduleWakeup',
   Skill = 'Skill',
+  TaskOutput = 'TaskOutput',
+  TaskStop = 'TaskStop',
   TodoWrite = 'TodoWrite',
   ToolSearch = 'ToolSearch',
   Write = 'Write',
@@ -83,4 +86,34 @@ export interface AgentArgs {
   description?: string;
   prompt?: string;
   subagent_type?: string;
+}
+
+/**
+ * Arguments for CC's built-in `ScheduleWakeup` tool — self-paced /loop mode.
+ * `delaySeconds` is clamped to [60, 3600] by the runtime; `reason` is a
+ * short human sentence shown back to the user in telemetry.
+ */
+export interface ScheduleWakeupArgs {
+  delaySeconds?: number;
+  prompt?: string;
+  reason?: string;
+}
+
+/**
+ * Arguments for CC's built-in `TaskOutput` tool. Retrieves output from a
+ * running or completed background task (bash, agent, remote session) by id.
+ */
+export interface TaskOutputArgs {
+  block?: boolean;
+  task_id?: string;
+  timeout?: number;
+}
+
+/**
+ * Arguments for CC's built-in `TaskStop` tool. `shell_id` is the legacy
+ * field name — CC still emits it occasionally, so we accept both.
+ */
+export interface TaskStopArgs {
+  shell_id?: string;
+  task_id?: string;
 }
