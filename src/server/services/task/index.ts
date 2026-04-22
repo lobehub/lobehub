@@ -18,6 +18,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { BriefService } from '../brief';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
+const UNTITLED_TOPIC_TITLE = 'Untitled';
 
 export class TaskService {
   private agentModel: AgentModel;
@@ -106,14 +107,16 @@ export class TaskService {
       return children.map((s) => {
         const agent = s.assigneeAgentId ? subtaskAgentMap.get(s.assigneeAgentId) : undefined;
         return {
-          assignee: agent
+          ...(agent
             ? {
-                avatar: agent.avatar,
-                backgroundColor: agent.backgroundColor,
-                id: agent.id,
-                title: agent.title,
+                assignee: {
+                  avatar: agent.avatar,
+                  backgroundColor: agent.backgroundColor,
+                  id: agent.id,
+                  title: agent.title,
+                },
               }
-            : null,
+            : {}),
           blockedBy: depMap.get(s.id),
           children: buildSubtaskTree(s.id),
           identifier: s.identifier,
@@ -191,13 +194,14 @@ export class TaskService {
     ]);
 
     const creatorId = task.createdByAgentId ?? task.createdByUserId;
-    const createdActivity: TaskDetailActivity | null = task.createdAt
-      ? {
-          author: creatorId ? authorMap.get(creatorId) : undefined,
-          time: toISO(task.createdAt),
-          type: 'created' as const,
-        }
-      : null;
+    const createdActivity: TaskDetailActivity | null =
+      task.createdAt && creatorId
+        ? {
+            author: authorMap.get(creatorId),
+            time: toISO(task.createdAt),
+            type: 'created' as const,
+          }
+        : null;
 
     const activities: TaskDetailActivity[] = [
       ...(createdActivity ? [createdActivity] : []),
@@ -210,7 +214,7 @@ export class TaskService {
           status: t.status,
           summary: handoff?.summary,
           time: toISO(t.createdAt),
-          title: handoff?.title,
+          title: handoff?.title || UNTITLED_TOPIC_TITLE,
           type: 'topic' as const,
         };
       }),
