@@ -55,6 +55,7 @@ import {
   isPersistFatal,
   markPersistFatal,
 } from './messagePersistErrors';
+import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
 import { type IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:streaming-executors');
@@ -230,6 +231,19 @@ const formatErrorEventData = (error: unknown, phase: string) => {
 
   if (!errorType && error instanceof Error && error.name) {
     errorType = error.name;
+  }
+
+  // When nothing typed was identified (i.e. this is a raw driver error rather
+  // than a business-typed one like ConversationParentMissing), try to pull the
+  // underlying PG diagnostic out of the cause chain. Drizzle otherwise hands
+  // us only "Failed query: insert into ..." which the dashboard can't
+  // classify (LOBE-7158).
+  if (!errorType || errorType === 'Error') {
+    const pg = unwrapPgError(error);
+    if (pg) {
+      errorMessage = formatPgError(pg);
+      errorType = pgErrorType(pg);
+    }
   }
 
   return {
