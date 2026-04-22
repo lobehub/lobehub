@@ -36,12 +36,38 @@ interface PreparedWindow {
   z: number;
 }
 
+interface WindowWithOptionalScaleFactor {
+  scaleFactor?: () => number;
+}
+
 function intersects(a: DisplayBounds, b: DisplayBounds): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
+function normalizeWindowBounds(
+  bounds: DisplayBounds,
+  scaleFactor: number | undefined,
+): DisplayBounds {
+  if (process.platform !== 'win32') return bounds;
+
+  const normalizedScaleFactor =
+    typeof scaleFactor === 'number' && Number.isFinite(scaleFactor) && scaleFactor > 0
+      ? scaleFactor
+      : 1;
+
+  if (normalizedScaleFactor === 1) return bounds;
+
+  return {
+    height: bounds.height / normalizedScaleFactor,
+    width: bounds.width / normalizedScaleFactor,
+    x: bounds.x / normalizedScaleFactor,
+    y: bounds.y / normalizedScaleFactor,
+  };
+}
+
 export async function enumerateWindows(
   displayBounds: DisplayBounds,
+  displayScaleFactor?: number,
 ): Promise<ScreenCaptureWindowInfo[]> {
   const selfName = app.getName();
 
@@ -74,11 +100,15 @@ export async function enumerateWindows(
         x: win.x(),
         y: win.y(),
       };
-      if (!intersects(bounds, displayBounds)) return null;
+      const normalizedBounds = normalizeWindowBounds(
+        bounds,
+        displayScaleFactor ?? (win as WindowWithOptionalScaleFactor).scaleFactor?.(),
+      );
+      if (!intersects(normalizedBounds, displayBounds)) return null;
 
       return {
         appName,
-        bounds,
+        bounds: normalizedBounds,
         title: win.title(),
         windowId: win.id(),
         z: win.z(),

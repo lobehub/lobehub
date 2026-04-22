@@ -90,7 +90,7 @@ export class ScreenCaptureManager {
       `Starting capture session on display ${display.id} (${bounds.width}x${bounds.height} @${scaleFactor}x)`,
     );
 
-    const windows = await enumerateWindows(bounds);
+    const windows = await enumerateWindows(bounds, scaleFactor);
 
     this.session = {
       displayBounds: bounds,

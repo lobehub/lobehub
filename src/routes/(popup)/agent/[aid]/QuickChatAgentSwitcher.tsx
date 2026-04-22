@@ -72,6 +72,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  popover: css`
+    padding: 0;
+  `,
   popoverContent: css`
     width: 240px;
     padding: 8px;
@@ -207,6 +210,7 @@ const QuickChatAgentSwitcher = memo(() => {
       {remaining.length > 0 && (
         <Popover
           arrow={false}
+          classNames={{ content: styles.popover }}
           open={popoverOpen}
           placement={'bottom'}
           trigger={'click'}
