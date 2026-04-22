@@ -3,7 +3,6 @@
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
-import { AlarmClock } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,35 +10,29 @@ import { ClaudeCodeApiName, type ScheduleWakeupArgs } from '../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
+    overflow: hidden;
     display: inline-flex;
-    flex-shrink: 0;
+    flex-shrink: 1;
     align-items: center;
 
+    min-width: 0;
+    max-width: 60%;
     margin-inline-start: 6px;
     padding-block: 1px;
     padding-inline: 8px;
     border-radius: 999px;
 
-    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
     color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
     background: ${cssVar.colorFillTertiary};
   `,
-  icon: css`
+  delay: css`
     flex-shrink: 0;
-    margin-inline-end: 6px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  reason: css`
-    overflow: hidden;
-
-    min-width: 0;
     margin-inline-start: 8px;
-
     color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
 }));
 
@@ -57,9 +50,9 @@ const formatDelay = (seconds: number): string => {
 };
 
 /**
- * CC's self-paced wakeup scheduler. Primary signal is `delaySeconds` (what
- * gets shown in the chip as a readable duration); `reason` is the model's
- * own one-sentence justification and trails after as secondary context.
+ * CC's self-paced wakeup scheduler. `reason` (the model's one-sentence
+ * justification) goes in the chip as the primary signal; `delaySeconds`
+ * trails at the end as secondary context.
  */
 export const ScheduleWakeupInspector = memo<BuiltinInspectorProps<ScheduleWakeupArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
@@ -78,10 +71,9 @@ export const ScheduleWakeupInspector = memo<BuiltinInspectorProps<ScheduleWakeup
 
     return (
       <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <AlarmClock className={styles.icon} size={14} />
-        <span>{label}</span>
-        {typeof delay === 'number' && <span className={styles.chip}>{formatDelay(delay)}</span>}
-        {reason && <span className={styles.reason}>· {reason}</span>}
+        <span>{reason || typeof delay === 'number' ? `${label}:` : label}</span>
+        {reason && <span className={styles.chip}>{reason}</span>}
+        {typeof delay === 'number' && <span className={styles.delay}>· {formatDelay(delay)}</span>}
       </div>
     );
   },

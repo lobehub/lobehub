@@ -3,7 +3,6 @@
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
-import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,11 +30,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
   `,
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 6px;
-    color: ${cssVar.colorTextDescription};
-  `,
 }));
 
 /**
@@ -57,8 +51,7 @@ export const TaskOutputInspector = memo<BuiltinInspectorProps<TaskOutputArgs>>(
 
     return (
       <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <ScrollText className={styles.icon} size={14} />
-        <span>{label}</span>
+        <span>{taskId ? `${label}:` : label}</span>
         {taskId && <span className={styles.chip}>{taskId}</span>}
       </div>
     );
