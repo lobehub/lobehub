@@ -1,6 +1,12 @@
 import { merge } from '@lobechat/utils';
 
-import type { ConnectionMode, FieldSchema, PlatformDefinition, UsageStats } from './types';
+import type {
+  BotProviderConfig,
+  ConnectionMode,
+  FieldSchema,
+  PlatformDefinition,
+  UsageStats,
+} from './types';
 
 // --------------- Settings defaults ---------------
 
@@ -90,6 +96,71 @@ export function getEffectiveConnectionMode(
   }
 
   return platform?.connectionMode ?? 'webhook';
+}
+
+// --------------- Provider config resolution ---------------
+
+/**
+ * Minimal shape needed to resolve a provider's runtime config. Matches the
+ * relevant subset of a decrypted `agentBotProviders` row.
+ */
+export interface ProviderConfigInput {
+  applicationId: string;
+  credentials: Record<string, string>;
+  settings?: Record<string, unknown> | null;
+}
+
+export interface ResolvedBotProviderConfig {
+  /** Ready-to-use BotProviderConfig with merged settings. */
+  config: BotProviderConfig;
+  /** Effective connection mode derived from the merged settings. */
+  connectionMode: ConnectionMode;
+  /** Merged settings (schema defaults overlaid with user overrides). */
+  settings: Record<string, unknown>;
+}
+
+/**
+ * Canonical way to turn a stored provider row into a runtime config.
+ *
+ * Every code path that creates a PlatformClient or decides connection mode
+ * should go through here so that:
+ *   1. Schema defaults (`field.default`) are always applied — the UI shows
+ *      these values, so the runtime must agree.
+ *   2. Connection mode is resolved from the merged settings, not from the
+ *      raw DB row that may pre-date the `connectionMode` field.
+ */
+export function resolveBotProviderConfig(
+  platform: PlatformDefinition,
+  provider: ProviderConfigInput,
+): ResolvedBotProviderConfig {
+  const settings = mergeWithDefaults(platform.schema, provider.settings);
+  const connectionMode = getEffectiveConnectionMode(platform, settings);
+
+  return {
+    config: {
+      applicationId: provider.applicationId,
+      credentials: provider.credentials,
+      platform: platform.id,
+      settings,
+    },
+    connectionMode,
+    settings,
+  };
+}
+
+/**
+ * Resolve the effective connection mode for a stored provider, applying
+ * schema defaults first. Use this when only the mode is needed (e.g. routing
+ * decisions without instantiating a client). For full client config, use
+ * `resolveBotProviderConfig`.
+ */
+export function resolveConnectionMode(
+  platform: PlatformDefinition | undefined,
+  rawSettings: Record<string, unknown> | null | undefined,
+): ConnectionMode {
+  if (!platform) return getEffectiveConnectionMode(undefined, rawSettings);
+  const settings = mergeWithDefaults(platform.schema, rawSettings);
+  return getEffectiveConnectionMode(platform, settings);
 }
 
 // --------------- Runtime key helpers ---------------

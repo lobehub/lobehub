@@ -9,8 +9,8 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
-import type { BotProviderConfig, PlatformClient, PlatformMessenger, UsageStats } from './platforms';
-import { mergeWithDefaults, platformRegistry } from './platforms';
+import type { PlatformClient, PlatformMessenger, UsageStats } from './platforms';
+import { platformRegistry, resolveBotProviderConfig } from './platforms';
 import {
   renderError,
   renderFinalReply,
@@ -152,16 +152,12 @@ export class BotCallbackService {
       throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    const rawSettings = (row as any).settings as Record<string, unknown> | undefined;
-    const settings = mergeWithDefaults(entry.schema, rawSettings);
-    const charLimit = (settings.charLimit as number) || undefined;
-
-    const config: BotProviderConfig = {
+    const { config, settings } = resolveBotProviderConfig(entry, {
       applicationId,
       credentials,
-      platform,
-      settings,
-    };
+      settings: (row as any).settings as Record<string, unknown> | undefined,
+    });
+    const charLimit = (settings.charLimit as number) || undefined;
 
     const client = entry.clientFactory.createClient(config, {
       redisClient: getAgentRuntimeRedisClient() as any,

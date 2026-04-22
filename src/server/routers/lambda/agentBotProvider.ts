@@ -7,7 +7,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
-import { platformRegistry } from '@/server/services/bot/platforms';
+import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -160,9 +160,13 @@ export const agentBotProviderRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: `Unsupported platform: ${platform}` });
       }
 
+      const settings = mergeWithDefaults(
+        entry.schema,
+        provider.settings as Record<string, unknown> | undefined,
+      );
       const result = await entry.clientFactory.validateCredentials(
         provider.credentials,
-        (provider.settings as Record<string, unknown>) || {},
+        settings,
         applicationId,
         platform,
       );

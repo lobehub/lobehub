@@ -14,12 +14,11 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from './AgentBridgeService';
 import {
   type BotPlatformRuntimeContext,
-  type BotProviderConfig,
   buildRuntimeKey,
-  mergeWithDefaults,
   type PlatformClient,
   type PlatformDefinition,
   platformRegistry,
+  resolveBotProviderConfig,
 } from './platforms';
 import { renderError } from './replyTemplate';
 
@@ -224,15 +223,11 @@ export class BotMessageRouter {
     provider: DecryptedBotProvider,
     serverDB: LobeChatDatabase,
   ): Promise<RegisteredBot> {
-    const { agentId, userId, applicationId, credentials } = provider;
+    const { agentId, userId, applicationId } = provider;
     const platform = entry.id;
     const key = buildRuntimeKey(platform, applicationId);
 
-    // Merge schema defaults with user settings (user overrides defaults)
-    const settings = mergeWithDefaults(
-      entry.schema,
-      provider.settings as Record<string, unknown> | undefined,
-    );
+    const { config: providerConfig, settings } = resolveBotProviderConfig(entry, provider);
 
     log(
       'createAndRegisterBot: %s settings merge: userSettings=%j, merged=%j',
@@ -240,13 +235,6 @@ export class BotMessageRouter {
       provider.settings,
       settings,
     );
-
-    const providerConfig: BotProviderConfig = {
-      applicationId,
-      credentials,
-      platform,
-      settings,
-    };
 
     const runtimeContext: BotPlatformRuntimeContext = {
       appUrl: process.env.APP_URL,
