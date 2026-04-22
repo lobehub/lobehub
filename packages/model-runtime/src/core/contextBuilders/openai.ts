@@ -188,7 +188,11 @@ export const convertOpenAIResponseInputs = async (
       }
 
       if (message.role === 'system') {
-        items.push({ ...message, role: 'developer' } as OpenAI.Responses.ResponseInputItem);
+        items.push({
+          ...message,
+          role: 'developer',
+          type: 'message',
+        } as OpenAI.Responses.ResponseInputItem);
         return items;
       }
 
@@ -242,6 +246,7 @@ export const convertOpenAIResponseInputs = async (
           typeof processedContent === 'string'
             ? processedContent
             : processedContent.filter((m) => m !== undefined),
+        type: 'message',
       } as OpenAI.Responses.ResponseInputItem;
 
       // remove reasoning field from the message item

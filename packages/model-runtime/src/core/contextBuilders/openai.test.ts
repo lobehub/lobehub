@@ -363,8 +363,8 @@ describe('convertOpenAIResponseInputs', () => {
     const result = await convertOpenAIResponseInputs(messages);
 
     expect(result).toEqual([
-      { role: 'user', content: 'Hello' },
-      { role: 'assistant', content: 'Hi there!' },
+      { role: 'user', content: 'Hello', type: 'message' },
+      { role: 'assistant', content: 'Hi there!', type: 'message' },
     ]);
   });
 
@@ -446,6 +446,7 @@ describe('convertOpenAIResponseInputs', () => {
             image_url: 'data:image/jpeg;base64,test123',
           },
         ],
+        type: 'message',
       },
     ]);
   });
@@ -478,6 +479,7 @@ describe('convertOpenAIResponseInputs', () => {
             video_url: 'data:video/mp4;base64,test123',
           },
         ],
+        type: 'message',
       },
     ]);
   });
@@ -520,6 +522,7 @@ describe('convertOpenAIResponseInputs', () => {
             video_url: 'data:video/mp4;base64,test456',
           },
         ],
+        type: 'message',
       },
     ]);
   });
@@ -546,6 +549,7 @@ describe('convertOpenAIResponseInputs', () => {
       {
         role: 'user',
         content: [{ type: 'input_text', text: 'Here is a video' }],
+        type: 'message',
       },
     ]);
   });
@@ -577,7 +581,7 @@ describe('convertOpenAIResponseInputs', () => {
     const result = await convertOpenAIResponseInputs(messages);
 
     expect(result).toEqual([
-      { role: 'user', content: 'I need help with a function' },
+      { role: 'user', content: 'I need help with a function', type: 'message' },
       {
         arguments: 'get_data',
         call_id: 'call_456',
@@ -627,7 +631,7 @@ describe('convertOpenAIResponseInputs', () => {
     const result = await convertOpenAIResponseInputs(messages, { strictToolPairing: true });
 
     expect(result).toEqual([
-      { role: 'user', content: 'Use tools carefully' },
+      { role: 'user', content: 'Use tools carefully', type: 'message' },
       {
         arguments: '{"city":"Hangzhou"}',
         call_id: 'call_paired',
@@ -669,8 +673,8 @@ describe('convertOpenAIResponseInputs', () => {
     // The assistant message with all-orphaned tool_calls should produce no items,
     // NOT fall through to the default builder which would spread tool_calls back.
     expect(result).toEqual([
-      { role: 'user', content: 'Do something' },
-      { role: 'assistant', content: 'Final answer' },
+      { role: 'user', content: 'Do something', type: 'message' },
+      { role: 'assistant', content: 'Final answer', type: 'message' },
     ]);
   });
 
@@ -689,11 +693,11 @@ describe('convertOpenAIResponseInputs', () => {
     const result = await convertOpenAIResponseInputs(messages);
 
     expect(result).toEqual([
-      { content: 'system prompts', role: 'developer' },
-      { content: '你好', role: 'user' },
+      { content: 'system prompts', role: 'developer', type: 'message' },
+      { content: '你好', role: 'user', type: 'message' },
       { summary: [{ text: 'reasoning content', type: 'summary_text' }], type: 'reasoning' },
-      { content: 'hello', role: 'assistant' },
-      { content: '杭州天气如何', role: 'user' },
+      { content: 'hello', role: 'assistant', type: 'message' },
+      { content: '杭州天气如何', role: 'user', type: 'message' },
     ]);
   });
 
@@ -718,17 +722,18 @@ describe('convertOpenAIResponseInputs', () => {
     const result = await convertOpenAIResponseInputs(messages);
 
     expect(result).toEqual([
-      { content: 'system prompts', role: 'developer' },
+      { content: 'system prompts', role: 'developer', type: 'message' },
       {
         content: [
           { type: 'input_text', text: 'describe this image' },
           { type: 'input_image', image_url: 'data:image/jpeg;base64,abc123' },
         ],
         role: 'user',
+        type: 'message',
       },
       { summary: [{ text: 'analyzing the image', type: 'summary_text' }], type: 'reasoning' },
-      { content: 'The image shows a green car.', role: 'assistant' },
-      { content: '1 + 1 = ?', role: 'user' },
+      { content: 'The image shows a green car.', role: 'assistant', type: 'message' },
+      { content: '1 + 1 = ?', role: 'user', type: 'message' },
     ]);
   });
 
@@ -766,8 +771,8 @@ describe('convertOpenAIResponseInputs', () => {
     ];
     const result = await convertOpenAIResponseInputs(messages);
     expect(result).toEqual([
-      { content: 'system prompts', role: 'developer' },
-      { content: '你是谁', role: 'user' },
+      { content: 'system prompts', role: 'developer', type: 'message' },
+      { content: '你是谁', role: 'user', type: 'message' },
       {
         summary: [{ text: 'The user is asking', type: 'summary_text' }],
         type: 'reasoning',
@@ -775,6 +780,7 @@ describe('convertOpenAIResponseInputs', () => {
       {
         content: [{ text: '我是 Claude', type: 'output_text' }],
         role: 'assistant',
+        type: 'message',
       },
     ]);
   });
@@ -815,6 +821,7 @@ describe('convertOpenAIResponseInputs', () => {
             video_url: 'data:video/mp4;base64,forcedBase64',
           },
         ],
+        type: 'message',
       },
     ]);
 
@@ -857,10 +864,42 @@ describe('convertOpenAIResponseInputs', () => {
             image_url: 'data:image/jpeg;base64,forcedBase64',
           },
         ],
+        type: 'message',
       },
     ]);
 
     expect(imageUrlToBase64).toHaveBeenCalledWith('https://example.com/image.jpg');
+  });
+
+  // Regression: LOBE-7657
+  // Strict OpenAI-compatible proxies reject input items that omit `type`, returning
+  // `Invalid value: ''. Supported values are: 'apply_patch_call', ...`. The OpenAI
+  // SDK marks `type` as optional and the official endpoint defaults it to 'message',
+  // but we must emit it explicitly so the payload also passes strict validators.
+  it('should set type:"message" on every message-shaped input item (LOBE-7657)', async () => {
+    const messages: OpenAIChatMessage[] = [
+      { content: 'system prompts', role: 'system' },
+      { content: 'plain user text', role: 'user' },
+      {
+        content: [{ type: 'text', text: 'user with structured content' }],
+        role: 'user',
+      },
+      { content: 'assistant reply', role: 'assistant' },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result.every((item: any) => item.type === 'message')).toBe(true);
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer', type: 'message' },
+      { content: 'plain user text', role: 'user', type: 'message' },
+      {
+        content: [{ type: 'input_text', text: 'user with structured content' }],
+        role: 'user',
+        type: 'message',
+      },
+      { content: 'assistant reply', role: 'assistant', type: 'message' },
+    ]);
   });
 });
 
