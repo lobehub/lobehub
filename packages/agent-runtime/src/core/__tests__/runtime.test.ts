@@ -1172,6 +1172,59 @@ describe('AgentRuntime', () => {
       expect(result.nextContext?.payload).toHaveProperty('toolCount', 3);
     });
 
+    // Regression test for LOBE-7759: Gemini 3 thoughtSignature must survive the
+    // OpenAI ToolsCalling -> ChatToolPayload normalization in call_tools_batch,
+    // otherwise Gemini 3 400s on the second tool_call turn.
+    it('should preserve thoughtSignature when normalizing call_tools_batch ToolsCalling payload', async () => {
+      const signature = 'EoMYCoAYA_gemini3_thought_signature_fixture';
+
+      class ThoughtSignatureAgent implements Agent {
+        tools = {
+          gemini_tool: vi.fn().mockResolvedValue({ result: 'ok' }),
+        };
+
+        async runner(context: AgentRuntimeContext, _state: AgentState) {
+          if (context.phase === 'user_input') {
+            return {
+              payload: [
+                {
+                  function: { arguments: '{}', name: 'gemini_tool' },
+                  id: 'call_gemini_1',
+                  thoughtSignature: signature,
+                  type: 'function' as const,
+                },
+              ],
+              type: 'call_tools_batch' as const,
+            };
+          }
+          return { type: 'finish' as const, reason: 'completed' as const };
+        }
+      }
+
+      // Intercept normalized call_tools_batch to capture the ChatToolPayload handed downstream.
+      let capturedToolsCalling: ChatToolPayload[] | undefined;
+      const agent = new ThoughtSignatureAgent();
+      const runtime = new AgentRuntime(agent, {
+        executors: {
+          call_tools_batch: async (instruction: any, state: AgentState) => {
+            capturedToolsCalling = instruction.payload.toolsCalling;
+            return { events: [], newState: state };
+          },
+        },
+      });
+
+      const state = AgentRuntime.createInitialState({
+        operationId: 'thought-signature-test',
+        messages: [{ role: 'user', content: 'Call Gemini 3 tool' }],
+      });
+
+      await runtime.step(state);
+
+      expect(capturedToolsCalling).toHaveLength(1);
+      expect(capturedToolsCalling![0].thoughtSignature).toBe(signature);
+      expect(capturedToolsCalling![0].apiName).toBe('gemini_tool');
+    });
+
     it('should support agent returning instruction array', async () => {
       // Agent that returns array of instructions
       class ArrayReturnAgent implements Agent {
