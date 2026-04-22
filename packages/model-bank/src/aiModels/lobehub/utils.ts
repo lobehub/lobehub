@@ -80,3 +80,25 @@ export const gptImage1Schema = {
     enum: ['auto', '1024x1024', '1536x1024', '1024x1536'],
   },
 };
+
+// gpt-image-2 accepts any resolution satisfying: max edge ≤ 3840px, both edges
+// multiples of 16px, aspect ratio ≤ 3:1, pixels between 655,360 and 8,294,400.
+// Until the schema/UI supports free-form W×H input, we expose the official
+// "Popular sizes" list from https://developers.openai.com/docs/guides/image-generation.
+export const gptImage2Schema = {
+  imageUrls: { default: [], maxCount: 1, maxFileSize: 5 },
+  prompt: { default: '' },
+  size: {
+    default: 'auto',
+    enum: [
+      'auto',
+      '1024x1024',
+      '1536x1024',
+      '1024x1536',
+      '2048x2048',
+      '2048x1152',
+      '3840x2160',
+      '2160x3840',
+    ],
+  },
+};
