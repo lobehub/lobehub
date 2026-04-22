@@ -159,8 +159,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
   }, [mutate, mutateWorkingStatus, mutateAheadBehind]);
 
+  const syncBusy = pulling || pushing;
+
   const handlePull = useCallback(async () => {
-    if (pulling) return;
+    if (pulling || pushing) return;
     setPulling(true);
     try {
       const result = await electronGitService.pullGitBranch({ path });
@@ -177,10 +179,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     } finally {
       setPulling(false);
     }
-  }, [path, pulling, refreshAfterSync, t]);
+  }, [path, pulling, pushing, refreshAfterSync, t]);
 
   const handlePush = useCallback(async () => {
-    if (pushing) return;
+    if (pulling || pushing) return;
     setPushing(true);
     try {
       const result = await electronGitService.pushGitBranch({ path });
@@ -197,7 +199,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     } finally {
       setPushing(false);
     }
-  }, [path, pushing, refreshAfterSync, t]);
+  }, [path, pulling, pushing, refreshAfterSync, t]);
 
   if (!data?.branch) return null;
 
@@ -281,10 +283,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     <Tooltip title={pullTooltip}>
       <div
         aria-busy={pulling}
-        aria-disabled={pulling}
-        className={`${styles.syncTrigger} ${styles.behindStat} ${pulling ? styles.syncTriggerDisabled : ''}`}
+        aria-disabled={syncBusy}
+        className={`${styles.syncTrigger} ${styles.behindStat} ${syncBusy ? styles.syncTriggerDisabled : ''}`}
         role="button"
-        onClick={pulling ? undefined : handlePull}
+        onClick={syncBusy ? undefined : handlePull}
       >
         <span className={styles.aheadBehindStat}>
           {pulling ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowDownIcon} size={10} />}
@@ -298,10 +300,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     <Tooltip title={pushTooltip}>
       <div
         aria-busy={pushing}
-        aria-disabled={pushing}
-        className={`${styles.syncTrigger} ${styles.aheadStat} ${pushing ? styles.syncTriggerDisabled : ''}`}
+        aria-disabled={syncBusy}
+        className={`${styles.syncTrigger} ${styles.aheadStat} ${syncBusy ? styles.syncTriggerDisabled : ''}`}
         role="button"
-        onClick={pushing ? undefined : handlePush}
+        onClick={syncBusy ? undefined : handlePush}
       >
         <span className={styles.aheadBehindStat}>
           {pushing ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowUpIcon} size={10} />}
