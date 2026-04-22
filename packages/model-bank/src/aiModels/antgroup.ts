@@ -39,10 +39,34 @@ const antgroupChatModels: AIChatModelCard[] = [
       currency: 'CNY',
       units: [
         { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-10-28',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      search: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Ling-2.6-flash is the latest generation high cost-performance model in the Ling series. It adopts a Mixture-of-Experts (MoE) architecture, with a total parameter count of 100B and 6.1B activated parameters per token, achieving an optimal balance between inference performance and computational cost.',
+    displayName: 'Ling-2.6-flash',
+    enabled: true,
+    id: 'Ling-2.6-flash',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-22',
     settings: {
       searchImpl: 'params',
     },
@@ -86,33 +110,13 @@ const antgroupChatModels: AIChatModelCard[] = [
       currency: 'CNY',
       units: [
         { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2025-11-04',
     settings: {
       searchImpl: 'params',
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'The Ant Group’s AntAngel Medical Large Language Model (AntAngelMed), designed to be more medically knowledgeable and better at reasoning, has officially been released. As the largest open-source medical large language model in terms of parameter scale, it is not only highly knowledgeable but also equipped with clinician-like reasoning capabilities. Whether for symptom analysis, health consultations, or medical education, AntAngelMed can deliver a more professional and reliable medical dialogue experience.',
-    displayName: 'AntAngelMed',
-    enabled: true,
-    id: 'AntAngelMed',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-03-03',
     type: 'chat',
   },
 ];
