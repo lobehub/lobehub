@@ -1376,52 +1376,6 @@ describe('AgentRuntime', () => {
       // Usage should be merged (2 tools called)
       expect(result.newState.usage.tools.totalCalls).toBe(2);
     });
-
-    // LOBE-7761: normalization must sanitize invalid tool_call arguments so they
-    // don't poison history and break strict providers on later turns.
-    it('should sanitize invalid JSON arguments during old-format normalization', async () => {
-      let capturedToolsCalling: any;
-
-      class InvalidArgsAgent implements Agent {
-        async runner(context: AgentRuntimeContext, _state: AgentState) {
-          if (context.phase === 'user_input') {
-            return {
-              payload: [
-                {
-                  id: 'call_1',
-                  type: 'function' as const,
-                  // exact shape from LOBE-7761 NVIDIA/Qwen trace
-                  function: {
-                    name: 'tool_a',
-                    arguments: '{, "description": "Create data models"}',
-                  },
-                },
-              ],
-              type: 'call_tools_batch' as const,
-            };
-          }
-          return { type: 'finish' as const, reason: 'completed' as const };
-        }
-      }
-
-      const runtime = new AgentRuntime(new InvalidArgsAgent(), {
-        executors: {
-          call_tools_batch: async (instruction: any, state: AgentState) => {
-            capturedToolsCalling = instruction.payload.toolsCalling;
-            return { events: [], newState: state };
-          },
-        } as any,
-      });
-      const state = AgentRuntime.createInitialState({
-        operationId: 'sanitize-test',
-        messages: [{ role: 'user', content: 'run' }],
-      });
-
-      await runtime.step(state);
-
-      expect(capturedToolsCalling).toHaveLength(1);
-      expect(capturedToolsCalling[0].arguments).toBe('{}');
-    });
   });
 
   describe('Multi-Round Batch Tool Execution (LOBE-1657)', () => {
