@@ -39,8 +39,15 @@ export class BrowserManager {
 
   showMainWindow() {
     logger.debug('Showing main window');
-    const window = this.getMainWindow();
-    window.show();
+    const browser = this.getMainWindow();
+    const window = browser.browserWindow;
+
+    if (window.isMinimized()) {
+      window.restore();
+    }
+
+    browser.show();
+    window.focus();
   }
 
   broadcastToAllWindows = <T extends MainBroadcastEventKey>(
@@ -202,6 +209,23 @@ export class BrowserManager {
     win.show();
     win.focus();
     return true;
+  }
+
+  /**
+   * Open (or focus) the single-instance Quick Chat popup.
+   *
+   * The window is backed by the `topicPopup` template and the route
+   * `/popup/agent/inbox`, so it mounts a fresh Inbox conversation with no
+   * active topic. The first message creates a topic via the normal agent
+   * flow. The `uniqueId` is fixed — repeated invocations focus the existing
+   * window rather than spawning additional ones.
+   */
+  openQuickChatPopup() {
+    const uniqueId = 'topicPopup_quick_inbox';
+    const result = this.createMultiInstanceWindow('topicPopup', '/popup/agent/inbox', uniqueId);
+    result.browser.show();
+    result.browser.browserWindow.focus();
+    return result;
   }
 
   private emitTopicPopupsChanged(): void {

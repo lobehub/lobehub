@@ -86,5 +86,6 @@
   "window.minimize": "Zminimalizuj",
   "window.title": "Okno",
   "window.toggleFullscreen": "Przełącz tryb pełnoekranowy",
-  "window.zoom": "Powiększenie"
+  "window.zoom": "Powiększenie",
+  "tray.openMiniToolbar": "Quick Composer"
 }

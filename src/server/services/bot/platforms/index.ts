@@ -26,6 +26,7 @@ export type {
   ValidationResult,
 } from './types';
 export { ClientFactory } from './types';
+export type { ProviderConfigInput, ResolvedBotProviderConfig } from './utils';
 export {
   buildRuntimeKey,
   extractDefaults,
@@ -35,6 +36,8 @@ export {
   getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
 } from './utils';
 
 // --------------- Platform definitions ---------------

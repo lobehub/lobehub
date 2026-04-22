@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -50,7 +50,10 @@ const resolveCommandExecutable = (cmd: string) => {
   }
 };
 
-const openExternalBrowser = async (url: string) => {
+const openExternalBrowser = async (
+  url: string,
+  logger?: { warn: (msg: string) => void },
+): Promise<boolean> => {
   const command =
     process.platform === 'win32'
       ? {
@@ -62,16 +65,33 @@ const openExternalBrowser = async (url: string) => {
           cmd: process.platform === 'darwin' ? 'open' : 'xdg-open',
         };
 
-  return new Promise<boolean>((resolve) => {
-    const executable = resolveCommandExecutable(command.cmd);
-    if (!executable) {
-      resolve(false);
-      return;
-    }
+  const executable = resolveCommandExecutable(command.cmd);
+  if (!executable) {
+    logger?.warn(`openExternalBrowser: ${command.cmd} not found on PATH`);
+    return false;
+  }
 
+  return new Promise<boolean>((resolve) => {
     try {
-      execFile(executable, command.args, (error) => resolve(!error));
-    } catch {
+      const child = spawn(executable, command.args, {
+        detached: true,
+        stdio: 'ignore',
+      });
+      let settled = false;
+      const done = (ok: boolean, reason?: string) => {
+        if (settled) return;
+        settled = true;
+        if (!ok && reason) logger?.warn(`openExternalBrowser: ${reason}`);
+        resolve(ok);
+      };
+      child.once('error', (err) => done(false, (err as Error).message));
+      child.once('spawn', () => {
+        child.unref();
+        done(true);
+      });
+      setTimeout(() => done(true), 200);
+    } catch (e) {
+      logger?.warn(`openExternalBrowser: ${(e as Error).message}`);
       resolve(false);
     }
   });
@@ -84,7 +104,7 @@ export default defineConfig({
     reportCompressedSize: false,
     rolldownOptions: {
       input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
-      output: createSharedRolldownOutput({ strictExecutionOrder: isDev }),
+      output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
   },
   define: sharedRendererDefine({ isMobile, isElectron: false }),
@@ -129,7 +149,7 @@ export default defineConfig({
           const proxyUrl = getProxyUrl();
           if (!proxyUrl) return;
 
-          const opened = await openExternalBrowser(proxyUrl);
+          const opened = await openExternalBrowser(proxyUrl, server.config.logger);
 
           if (!opened) {
             server.config.logger.warn(`Failed to open Debug Proxy automatically: ${proxyUrl}`);

@@ -5,9 +5,10 @@ import { electronGitService } from '@/services/electron/git';
 
 /**
  * Ahead/behind commit counts for the current branch vs its upstream tracking ref.
- * Shown as push (↑) / pull (↓) badges in the status bar. Network-free: runs
- * `git rev-list` locally against already-fetched refs, so freshness depends on
- * whether the user has fetched recently — we don't auto-fetch here.
+ * Shown as push (↑) / pull (↓) badges in the status bar. Piggybacks a
+ * best-effort `git fetch` on every SWR load (including focus revalidation)
+ * inside the IPC, so remote updates surface when the user switches back to
+ * the window without needing a manual fetch.
  */
 export const useGitAheadBehind = (dirPath?: string) => {
   const key = isDesktop && dirPath ? ['git-ahead-behind', dirPath] : null;

@@ -13,6 +13,9 @@ vi.mock('electron', () => ({
     setApplicationMenu: vi.fn(),
   },
   app: {
+    dock: {
+      setMenu: vi.fn(),
+    },
     getAppPath: vi.fn(() => '/mock/app/path'),
     getName: vi.fn(() => 'LobeChat'),
     getPath: vi.fn((type: string) => {
@@ -63,6 +66,9 @@ const createMockApp = () => {
         show: vi.fn(),
       })),
     },
+    screenCaptureManager: {
+      startSession: vi.fn(),
+    },
     updaterManager: {
       checkForUpdates: vi.fn(),
       getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
@@ -96,6 +102,7 @@ describe('MacOSMenu', () => {
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();
       expect(Menu.setApplicationMenu).toHaveBeenCalled();
+      expect(app.dock.setMenu).toHaveBeenCalled();
       expect(menu).toBeDefined();
     });
 
@@ -171,6 +178,13 @@ describe('MacOSMenu', () => {
       expect(template.length).toBeGreaterThan(0);
       expect(template.some((item: any) => item.label?.includes('Show'))).toBe(true);
       expect(template.some((item: any) => item.label === 'Quit')).toBe(true);
+    });
+
+    it('should include the mini toolbar action in the dock menu', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const dockMenu = (app.dock.setMenu as any).mock.calls[0][0];
+      expect(dockMenu.template.some((item: any) => item.label === 'Quick Composer')).toBe(true);
     });
   });
 
@@ -274,6 +288,19 @@ describe('MacOSMenu', () => {
       const preferencesItem = appMenu.submenu.find((item: any) => item.label === 'Preferences...');
 
       expect(preferencesItem.accelerator).toBe('Command+,');
+    });
+
+    it('should not show a fixed accelerator for Quick Composer', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const quickComposerItem = fileMenu.submenu.find(
+        (item: any) => item.label === 'Quick Composer',
+      );
+
+      expect(quickComposerItem).toBeDefined();
+      expect(quickComposerItem.accelerator).toBeUndefined();
     });
 
     it('should use role for quit (accelerator handled by Electron)', () => {

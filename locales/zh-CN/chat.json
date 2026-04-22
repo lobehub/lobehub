@@ -192,6 +192,8 @@
   "messageAction.interruptedHint": "接下来需要做什么？",
   "messageAction.reaction": "添加表情",
   "messageAction.regenerate": "重新生成",
+  "messageLongCollapse.collapse": "收起",
+  "messageLongCollapse.expand": "展开全部",
   "messages.dm.sentTo": "仅对 {{name}} 可见",
   "messages.dm.title": "私信",
   "messages.modelCard.credit": "积分",

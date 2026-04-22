@@ -327,14 +327,7 @@ describe('onStreamInvoke', () => {
     // Cleanup immediately
     cleanup();
 
-    // Try to trigger callbacks after cleanup (this simulates late events)
-    const dataListener = mockIpcRendererOn.mock.calls.find((call) =>
-      call[0].includes('stream:data'),
-    )?.[1];
-
-    // Since listeners are removed, this shouldn't do anything
-    // The actual behavior depends on electron's implementation
-    // But we can verify cleanup was called
+    // Listeners are removed; late stream:data events would not reach callbacks.
     expect(mockIpcRendererRemoveAllListeners).toHaveBeenCalledTimes(4);
   });
 

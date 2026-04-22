@@ -16,7 +16,7 @@ import {
 } from '../../../../../types/botRuntimeStatus';
 import Body from './Body';
 import Footer from './Footer';
-import { getChannelFormValues } from './formState';
+import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
 import Header from './Header';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -295,7 +295,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
         const credentials = Object.fromEntries(
           Object.entries(rawCredentials).filter(([, v]) => v !== undefined && v !== ''),
         );
-        const settings = omitUndefinedValues(rawSettings);
+        const settings = mergeSettingsWithDefaults(
+          platformDef.schema,
+          omitUndefinedValues(rawSettings),
+        );
 
         // Use explicit applicationId from form; fall back to deriving from botToken (Telegram)
         let applicationId = formAppId || '';
@@ -351,7 +354,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
         try {
           const { applicationId, credentials } = params;
-          const settings = omitUndefinedValues(form.getFieldValue('settings') || {});
+          const settings = mergeSettingsWithDefaults(
+            platformDef.schema,
+            omitUndefinedValues(form.getFieldValue('settings') || {}),
+          );
 
           if (currentConfig) {
             await updateBotProvider(currentConfig.id, agentId, {

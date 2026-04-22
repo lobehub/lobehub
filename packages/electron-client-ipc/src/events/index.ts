@@ -3,6 +3,7 @@ import type { GatewayConnectionBroadcastEvents } from './gatewayConnection';
 import type { NavigationBroadcastEvents } from './navigation';
 import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
+import type { ScreenCaptureBroadcastEvents } from './screenCapture';
 import type { SystemBroadcastEvents } from './system';
 import type { TopicPopupBroadcastEvents } from './topicPopup';
 import type { AutoUpdateBroadcastEvents } from './update';
@@ -18,6 +19,7 @@ export interface MainBroadcastEvents
     GatewayConnectionBroadcastEvents,
     NavigationBroadcastEvents,
     RemoteServerBroadcastEvents,
+    ScreenCaptureBroadcastEvents,
     SystemBroadcastEvents,
     TopicPopupBroadcastEvents,
     ProtocolBroadcastEvents {}
@@ -34,4 +36,5 @@ export type {
   AuthorizationProgress,
   MarketAuthorizationParams,
 } from './remoteServer';
+export type { OverlayDispatchMessagePayload } from './screenCapture';
 export type { OpenSettingsWindowOptions } from './windows';

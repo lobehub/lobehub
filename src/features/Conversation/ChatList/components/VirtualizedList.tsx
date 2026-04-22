@@ -36,9 +36,11 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     handleScrollOffset,
     isSpacerMessage,
     listData,
+    registerSpacerNode,
     scrollShrinking,
     spacerHeight,
     spacerActive,
+    spacerLayoutVersion,
   } = useConversationSpacer(dataSource);
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
@@ -147,8 +149,10 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   useScrollToUserMessage({
     dataSourceLength: dataSource.length,
     isSecondLastMessageFromUser,
+    scrollShrinking,
     scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
     spacerActive,
+    spacerLayoutVersion,
   });
 
   // Scroll to bottom on initial render
@@ -175,16 +179,23 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       >
         {(messageId, index): ReactElement => {
           if (isSpacerMessage(messageId)) {
+            // Only animate the collapse-to-zero (unmount). Any non-zero height
+            // change (initial mount, shrink as assistant grows) is applied
+            // instantly so virtua's scrollSize updates in a single frame and
+            // scrollToIndex can reach the user message without trailing behind
+            // a 200ms transition.
+            const shouldAnimate = !scrollShrinking && spacerHeight === 0;
             return (
               <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                 <div
                   aria-hidden
+                  ref={registerSpacerNode}
                   style={{
                     height: spacerHeight,
                     pointerEvents: 'none',
-                    transition: scrollShrinking
-                      ? 'none'
-                      : `height ${CONVERSATION_SPACER_TRANSITION_MS}ms ease`,
+                    transition: shouldAnimate
+                      ? `height ${CONVERSATION_SPACER_TRANSITION_MS}ms ease`
+                      : 'none',
                     width: '100%',
                   }}
                 />

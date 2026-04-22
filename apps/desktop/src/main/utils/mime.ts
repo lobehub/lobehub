@@ -1,7 +1,7 @@
-import { extname } from 'node:path';
+import path from 'node:path';
 
 export const getExportMimeType = (filePath: string) => {
-  const ext = extname(filePath).toLowerCase();
+  const ext = path.extname(filePath).toLowerCase();
 
   const map: Record<string, string> = {
     '.css': 'text/css; charset=utf-8',

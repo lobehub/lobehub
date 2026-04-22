@@ -86,5 +86,6 @@
   "window.minimize": "최소화",
   "window.title": "창",
   "window.toggleFullscreen": "전체 화면 전환",
-  "window.zoom": "줌"
+  "window.zoom": "줌",
+  "tray.openMiniToolbar": "Quick Composer"
 }

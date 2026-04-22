@@ -6,10 +6,13 @@ import { BrowserManager } from '../BrowserManager';
 // Use vi.hoisted to define mocks before hoisting
 const { MockBrowser, mockAppBrowsers, mockWindowTemplates } = vi.hoisted(() => {
   const createMockBrowserWindow = () => ({
+    focus: vi.fn(),
     isMaximized: vi.fn().mockReturnValue(false),
+    isMinimized: vi.fn().mockReturnValue(false),
     maximize: vi.fn(),
     minimize: vi.fn(),
     on: vi.fn(),
+    restore: vi.fn(),
     unmaximize: vi.fn(),
     webContents: { id: Math.random() },
   });
@@ -136,6 +139,16 @@ describe('BrowserManager', () => {
 
       const appBrowser = manager.browsers.get('app');
       expect(appBrowser?.show).toHaveBeenCalled();
+      expect(appBrowser?.browserWindow.focus).toHaveBeenCalled();
+    });
+
+    it('should restore a minimized main window before showing it', () => {
+      const appBrowser = manager.getMainWindow();
+      vi.mocked(appBrowser.browserWindow.isMinimized).mockReturnValue(true);
+
+      manager.showMainWindow();
+
+      expect(appBrowser.browserWindow.restore).toHaveBeenCalled();
     });
   });
 

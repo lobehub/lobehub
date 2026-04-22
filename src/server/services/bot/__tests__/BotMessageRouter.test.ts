@@ -75,6 +75,30 @@ const mockCreateAdapter = vi.hoisted(() =>
 const mockMergeWithDefaults = vi.hoisted(() =>
   vi.fn((_: unknown, settings?: Record<string, unknown>) => settings ?? {}),
 );
+const mockResolveBotProviderConfig = vi.hoisted(() =>
+  vi.fn(
+    (
+      platform: { id: string; schema?: unknown },
+      provider: {
+        applicationId: string;
+        credentials: Record<string, string>;
+        settings?: Record<string, unknown> | null;
+      },
+    ) => {
+      const settings = mockMergeWithDefaults(platform.schema, provider.settings ?? undefined);
+      return {
+        config: {
+          applicationId: provider.applicationId,
+          credentials: provider.credentials,
+          platform: platform.id,
+          settings,
+        },
+        connectionMode: 'webhook' as const,
+        settings,
+      };
+    },
+  ),
+);
 
 const mockGetPlatform = vi.hoisted(() =>
   vi.fn().mockImplementation((platform: string) => {
@@ -110,6 +134,7 @@ vi.mock('../platforms', () => ({
   platformRegistry: {
     getPlatform: mockGetPlatform,
   },
+  resolveBotProviderConfig: mockResolveBotProviderConfig,
 }));
 
 // ==================== Helpers ====================

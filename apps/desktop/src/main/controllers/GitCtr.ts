@@ -9,6 +9,8 @@ import type {
   GitBranchListItem,
   GitCheckoutResult,
   GitLinkedPullRequestResult,
+  GitPullResult,
+  GitPushResult,
   GitWorkingTreeFiles,
   GitWorkingTreeStatus,
 } from '@lobechat/electron-client-ipc';
@@ -263,10 +265,24 @@ export default class GitController extends ControllerModule {
    * Count commits HEAD is ahead/behind its upstream tracking ref.
    * Returns `hasUpstream: false` when the branch has no upstream configured
    * (e.g. local-only branches, or after the remote branch is deleted).
+   *
+   * Does a best-effort `git fetch` first so the result reflects what's
+   * actually on the remote — the renderer calls this via SWR with
+   * `revalidateOnFocus`, so the fetch piggybacks on window re-focus. Fetch
+   * failures (offline, no credentials, no `origin` remote) are swallowed so
+   * we still return whatever can be computed against the cached refs.
    */
   @IpcMethod()
   async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
     const execFileAsync = promisify(execFile);
+    try {
+      await execFileAsync('git', ['fetch', '--no-tags', '--quiet', 'origin'], {
+        cwd: dirPath,
+        timeout: 10_000,
+      });
+    } catch {
+      // swallow — fall through to compute against cached refs
+    }
     try {
       const { stdout: upstreamOut } = await execFileAsync(
         'git',
@@ -284,7 +300,36 @@ export default class GitController extends ControllerModule {
       const [behindStr, aheadStr] = stdout.trim().split(/\s+/);
       const behind = Number.parseInt(behindStr ?? '0', 10) || 0;
       const ahead = Number.parseInt(aheadStr ?? '0', 10) || 0;
-      return { ahead, behind, hasUpstream: true, upstream };
+
+      // `git push -u origin HEAD` always targets origin/<current-branch-name>,
+      // which may differ from upstream (the branched-off-canary case).
+      let pushTarget: string | undefined;
+      let pushTargetExists = false;
+      try {
+        const { stdout: branchOut } = await execFileAsync(
+          'git',
+          ['symbolic-ref', '--short', 'HEAD'],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        const branch = branchOut.trim();
+        if (branch) {
+          pushTarget = `origin/${branch}`;
+          try {
+            await execFileAsync(
+              'git',
+              ['rev-parse', '--verify', '--quiet', `refs/remotes/${pushTarget}`],
+              { cwd: dirPath, timeout: 5000 },
+            );
+            pushTargetExists = true;
+          } catch {
+            pushTargetExists = false;
+          }
+        }
+      } catch {
+        // detached HEAD — leave pushTarget undefined
+      }
+
+      return { ahead, behind, hasUpstream: true, pushTarget, pushTargetExists, upstream };
     } catch {
       // No upstream configured, detached HEAD, or git error — all treated as "no upstream"
       return { ahead: 0, behind: 0, hasUpstream: false };
@@ -320,6 +365,56 @@ export default class GitController extends ControllerModule {
       const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
       logger.debug('[checkoutGitBranch] failed', { args, stderr });
       return { error: stderr || 'git checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Pull the current branch's upstream via fast-forward only.
+   *
+   * `--ff-only` avoids creating accidental merge commits when the local branch
+   * has diverged — in that case the user should resolve merge/rebase in their
+   * own terminal. For the common "just behind" case this is a safe one-click.
+   */
+  @IpcMethod()
+  async pullGitBranch(payload: { path: string }): Promise<GitPullResult> {
+    const { path: dirPath } = payload;
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stdout } = await execFileAsync('git', ['pull', '--ff-only'], {
+        cwd: dirPath,
+        timeout: 60_000,
+      });
+      const noop = /Already up to date/i.test(stdout);
+      return { noop, success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[pullGitBranch] failed', { stderr });
+      return { error: stderr || 'git pull failed', success: false };
+    }
+  }
+
+  /**
+   * Push the current branch to its same-named remote on `origin`.
+   *
+   * Uses `git push -u origin HEAD` instead of plain `git push` so the action
+   * works even when local branch name differs from the configured upstream
+   */
+  @IpcMethod()
+  async pushGitBranch(payload: { path: string }): Promise<GitPushResult> {
+    const { path: dirPath } = payload;
+    const execFileAsync = promisify(execFile);
+    try {
+      const { stderr } = await execFileAsync('git', ['push', '-u', 'origin', 'HEAD'], {
+        cwd: dirPath,
+        timeout: 60_000,
+      });
+      // git push writes progress/status to stderr even on success
+      const noop = /Everything up-to-date/i.test(stderr);
+      return { noop, success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[pushGitBranch] failed', { stderr });
+      return { error: stderr || 'git push failed', success: false };
     }
   }
 }

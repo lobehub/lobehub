@@ -11,6 +11,7 @@ import {
   type ConversationContext,
   type SendMessageParams,
   type SendMessageServerResponse,
+  type UIChatMessage,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
@@ -700,10 +701,31 @@ export class ConversationLifecycleActionImpl {
 
     if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, true);
 
+    // Dev-only fast path: fall back to slicing the first user message instead of calling
+    // the LLM. Keeps chat logs uncluttered while still giving the topic a usable title.
+    // Only honored in non-production builds so a misconfigured prod env can't disable it.
+    const shouldSliceTopicTitle =
+      process.env.NODE_ENV !== 'production' &&
+      process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC === '1';
+
+    const applyTopicTitle = async (topicId: string, messages: UIChatMessage[]) => {
+      if (!shouldSliceTopicTitle) {
+        await this.#get().summaryTopicTitle(topicId, messages);
+        return;
+      }
+
+      const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
+      const title = firstUserText.slice(0, 30) || 'New Topic';
+      await this.#get().internal_updateTopic(topicId, { title });
+      // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
+      this.#get().internal_updateTopicLoading(topicId, false);
+      console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
+    };
+
     const summaryTitle = async () => {
       // check activeTopic and then auto update topic title
       if (data.isCreateNewTopic) {
-        await this.#get().summaryTopicTitle(data.topicId, data.messages);
+        await applyTopicTitle(data.topicId, data.messages);
         return;
       }
 
@@ -716,7 +738,7 @@ export class ConversationLifecycleActionImpl {
           .getDisplayMessagesByKey(messageMapKey({ agentId, topicId: topic.id }))(this.#get())
           .filter((item) => item.id !== data.assistantMessageId);
 
-        await this.#get().summaryTopicTitle(topic.id, chats);
+        await applyTopicTitle(topic.id, chats);
       }
     };
 

@@ -45,10 +45,12 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const [naturalHeight, setNaturalHeight] = useState(0);
   const [scrollReduction, setScrollReduction] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [spacerLayoutVersion, setSpacerLayoutVersion] = useState(0);
 
   const prevLengthRef = useRef(dataSource.length);
   const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const spacerObserverRef = useRef<ResizeObserver | null>(null);
   const userMessageIndexRef = useRef<number | null>(null);
   const assistantMessageIndexRef = useRef<number | null>(null);
 
@@ -95,6 +97,11 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const cleanupObserver = useCallback(() => {
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = null;
+  }, []);
+
+  const cleanupSpacerObserver = useCallback(() => {
+    spacerObserverRef.current?.disconnect();
+    spacerObserverRef.current = null;
   }, []);
 
   const scheduleUnmount = useCallback(() => {
@@ -179,10 +186,32 @@ export const useConversationSpacer = (dataSource: string[]) => {
   useEffect(() => {
     return () => {
       cleanupObserver();
+      cleanupSpacerObserver();
       clearRemoveTimer();
       if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
     };
-  }, [cleanupObserver, clearRemoveTimer]);
+  }, [cleanupObserver, cleanupSpacerObserver, clearRemoveTimer]);
+
+  // Ref callback bound to this hook's own spacer node. Using a ref (rather than
+  // a document-wide querySelector) scopes observation to the spacer owned by
+  // this list instance — ConversationProvider supports multiple simultaneously
+  // mounted lists, so a global selector could attach to another panel's spacer
+  // and drive spacerLayoutVersion from unrelated layout changes.
+  const registerSpacerNode = useCallback(
+    (node: HTMLElement | null) => {
+      cleanupSpacerObserver();
+
+      if (!node || typeof ResizeObserver === 'undefined') return;
+
+      const observer = new ResizeObserver(() => {
+        setSpacerLayoutVersion((v) => v + 1);
+      });
+      observer.observe(node);
+      spacerObserverRef.current = observer;
+      setSpacerLayoutVersion((v) => v + 1);
+    },
+    [cleanupSpacerObserver],
+  );
 
   useEffect(() => {
     const newMessageCount = dataSource.length - prevLengthRef.current;
@@ -248,8 +277,10 @@ export const useConversationSpacer = (dataSource: string[]) => {
     handleScrollOffset,
     isSpacerMessage: (id: string) => id === CONVERSATION_SPACER_ID,
     listData,
+    registerSpacerNode,
     scrollShrinking: isScrollShrinking,
     spacerActive: mounted,
     spacerHeight: renderedHeight,
+    spacerLayoutVersion,
   };
 };

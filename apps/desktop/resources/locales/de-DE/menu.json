@@ -86,5 +86,6 @@
   "window.minimize": "Minimieren",
   "window.title": "Fenster",
   "window.toggleFullscreen": "Vollbild umschalten",
-  "window.zoom": "Zoom"
+  "window.zoom": "Zoom",
+  "tray.openMiniToolbar": "Quick Composer"
 }

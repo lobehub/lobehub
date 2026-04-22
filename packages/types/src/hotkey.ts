@@ -32,7 +32,7 @@ export interface HotkeyItem {
 
 export type HotkeyRegistration = HotkeyItem[];
 
-export type DesktopHotkeyId = 'openSettings' | 'showApp';
+export type DesktopHotkeyId = 'openSettings' | 'quickChat' | 'quickComposer' | 'showApp';
 
 export interface DesktopHotkeyItem {
   id: DesktopHotkeyId;

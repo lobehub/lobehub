@@ -5,10 +5,7 @@ interface TrackLoginOrSignupClickedParams {
   spm: string;
 }
 
-export const trackLoginOrSignupClicked = ({
-  provider,
-  spm,
-}: TrackLoginOrSignupClickedParams) => {
+export const trackLoginOrSignupClicked = ({ provider, spm }: TrackLoginOrSignupClickedParams) => {
   const analytics = getSingletonAnalyticsOptional();
   if (!analytics) return Promise.resolve();
 

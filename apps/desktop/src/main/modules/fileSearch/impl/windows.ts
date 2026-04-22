@@ -1,4 +1,3 @@
- 
 import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
@@ -290,7 +289,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
       return this.processFilePaths(limitedFiles, options, 'fast-glob');
     } catch (error) {
       logger.error('fast-glob search failed:', error);
-      throw new Error(`File search failed: ${(error as Error).message}`);
+      throw new Error(`File search failed: ${(error as Error).message}`, { cause: error });
     }
   }
 

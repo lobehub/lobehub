@@ -23,7 +23,7 @@ LobeChat agents can answer inside external chat platforms. Inbound messages flow
 
 `supportsMarkdown=false` ⇒ outbound markdown is stripped to plain text via `stripMarkdown` and the AI is told not to use markdown. `supportsMessageEdit=false` ⇒ no progress edits — only the final reply is sent.
 
-**Multi-mode connection** — Slack/Feishu/Lark/QQ shipped as websocket but support `webhook` per-provider via `settings.connectionMode`. Legacy rows without that field stay on `webhook` (see `LEGACY_WEBHOOK_PLATFORMS` in `platforms/utils.ts`) — **never add new platforms to that list**.
+**Multi-mode connection** — Slack/Feishu/Lark/QQ ship as websocket but support `webhook` per-provider via `settings.connectionMode`. The runtime always merges schema defaults into stored settings before resolving the mode (`resolveBotProviderConfig` / `resolveConnectionMode` in `platforms/utils.ts`), so the schema's `field.default` is the source of truth — set it correctly when adding a new multi-mode platform.
 
 ## Inbound Flow (one webhook → reply)
 

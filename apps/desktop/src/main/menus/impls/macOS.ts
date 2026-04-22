@@ -1,4 +1,4 @@
-import * as path from 'node:path';
+import path from 'node:path';
 
 import type { MenuItemConstructorOptions } from 'electron';
 import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
@@ -12,6 +12,7 @@ import { BaseMenuPlatform } from './BaseMenuPlatform';
 
 export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   private appMenu: Menu | null = null;
+  private dockMenu: Menu | null = null;
   private trayMenu: Menu | null = null;
 
   buildAndSetAppMenu(options?: MenuOptions): Menu {
@@ -20,6 +21,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     this.appMenu = Menu.buildFromTemplate(template);
 
     Menu.setApplicationMenu(this.appMenu);
+    this.buildAndSetDockMenu();
 
     return this.appMenu;
   }
@@ -152,6 +154,11 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
               mainWindow.broadcast('createNewPage');
             },
             label: t('file.newPage'),
+          },
+          { type: 'separator' },
+          {
+            click: () => this.app.screenCaptureManager.startSession(),
+            label: t('tray.openMiniToolbar'),
           },
           { type: 'separator' },
           {
@@ -674,6 +681,14 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         label: t('tray.show', { appName }),
       },
       {
+        click: () => this.app.screenCaptureManager.startSession(),
+        label: t('tray.openMiniToolbar'),
+      },
+      {
+        click: () => this.app.browserManager.openQuickChatPopup(),
+        label: t('tray.quickChat'),
+      },
+      {
         click: async () => {
           const mainWindow = this.app.browserManager.getMainWindow();
           mainWindow.show();
@@ -683,6 +698,29 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       },
       { type: 'separator' },
       { label: t('tray.quit'), role: 'quit' },
+    ];
+  }
+
+  private buildAndSetDockMenu() {
+    if (!app.dock?.setMenu) return;
+
+    this.dockMenu = Menu.buildFromTemplate(this.getDockMenuTemplate());
+    app.dock.setMenu(this.dockMenu);
+  }
+
+  private getDockMenuTemplate(): MenuItemConstructorOptions[] {
+    const t = this.app.i18n.ns('menu');
+    const appName = app.getName();
+
+    return [
+      {
+        click: () => this.app.browserManager.showMainWindow(),
+        label: t('tray.show', { appName }),
+      },
+      {
+        click: () => this.app.screenCaptureManager.startSession(),
+        label: t('tray.openMiniToolbar'),
+      },
     ];
   }
 }

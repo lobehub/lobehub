@@ -9,7 +9,7 @@ import {
   type BotRuntimeStatusSnapshot,
 } from '../../../types/botRuntimeStatus';
 import type { ConnectionMode } from '../bot/platforms';
-import { getEffectiveConnectionMode, platformRegistry } from '../bot/platforms';
+import { platformRegistry, resolveConnectionMode } from '../bot/platforms';
 import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 import {
@@ -122,7 +122,7 @@ export class GatewayService {
         for (const provider of providers) {
           try {
             const definition = platformRegistry.getPlatform(platform);
-            const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+            const connectionMode = resolveConnectionMode(definition, provider.settings);
 
             // Webhook-mode platforms don't need persistent gateway connections.
             // The webhook URL is set once when the user saves the bot config
@@ -245,7 +245,7 @@ export class GatewayService {
       const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
       const provider = await model.findEnabledByApplicationId(platform, applicationId);
 
-      const connectionMode = getEffectiveConnectionMode(definition, provider?.settings);
+      const connectionMode = resolveConnectionMode(definition, provider?.settings);
 
       if (connectionMode !== 'webhook') {
         // Persistent platforms (e.g. Discord gateway or WeChat long-polling) cannot run in a
@@ -304,7 +304,7 @@ export class GatewayService {
         if (!provider.enabled) return;
 
         const definition = platformRegistry.getPlatform(provider.platform);
-        const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+        const connectionMode = resolveConnectionMode(definition, provider.settings);
         if (connectionMode === 'webhook') return;
 
         try {
@@ -349,7 +349,7 @@ export class GatewayService {
     if (!provider) return cached;
 
     const definition = platformRegistry.getPlatform(platform);
-    const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+    const connectionMode = resolveConnectionMode(definition, provider.settings);
 
     // Webhook-mode bots have no persistent gateway connection to query — the
     // gateway only holds the webhook URL registration, so the local snapshot
@@ -388,9 +388,9 @@ export class GatewayService {
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
         const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
         const provider = await model.findEnabledByApplicationId(platform, applicationId);
-        connectionMode = getEffectiveConnectionMode(definition, provider?.settings);
+        connectionMode = resolveConnectionMode(definition, provider?.settings);
       } else {
-        connectionMode = getEffectiveConnectionMode(definition, undefined);
+        connectionMode = resolveConnectionMode(definition, undefined);
       }
 
       if (connectionMode !== 'webhook') {
@@ -436,7 +436,7 @@ export class GatewayService {
     }
 
     const definition = platformRegistry.getPlatform(platform);
-    const connectionMode = getEffectiveConnectionMode(definition, provider.settings);
+    const connectionMode = resolveConnectionMode(definition, provider.settings);
 
     // Webhook-mode platforms don't need persistent gateway connections.
     // Run the platform client locally via GatewayManager so each platform can

@@ -64,7 +64,7 @@ vi.mock('@/const/env', () => ({
 let randomBytesCounter = 0;
 vi.mock('node:crypto', () => ({
   default: {
-    randomBytes: vi.fn((size: number) => {
+    randomBytes: vi.fn((_size: number) => {
       randomBytesCounter++;
       return {
         toString: vi.fn(() => `mock-random-${randomBytesCounter}`),

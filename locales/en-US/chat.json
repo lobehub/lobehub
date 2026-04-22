@@ -192,6 +192,8 @@
   "messageAction.interruptedHint": "What should I do instead?",
   "messageAction.reaction": "Add Reaction",
   "messageAction.regenerate": "Regenerate",
+  "messageLongCollapse.collapse": "Show less",
+  "messageLongCollapse.expand": "Show more",
   "messages.dm.sentTo": "Visible only to {{name}}",
   "messages.dm.title": "DM",
   "messages.modelCard.credit": "Credits",

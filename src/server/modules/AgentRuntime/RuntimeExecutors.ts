@@ -48,6 +48,7 @@ import {
 } from '@/server/services/toolExecution';
 
 import { dispatchClientTool } from './dispatchClientTool';
+import { formatErrorEventData } from './formatErrorEventData';
 import { classifyLLMError, type LLMErrorKind } from './llmErrorClassification';
 import {
   createConversationParentMissingError,
@@ -192,51 +193,6 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
   if (availableTools.length === 0) return undefined;
 
   return { availableTools };
-};
-
-const formatErrorEventData = (error: unknown, phase: string) => {
-  let errorMessage = 'Unknown error';
-  let errorType: string | undefined;
-
-  if (error && typeof error === 'object') {
-    const payload = error as { error?: unknown; errorType?: unknown; message?: unknown };
-
-    if (typeof payload.errorType === 'string') {
-      errorType = payload.errorType;
-    }
-
-    if (typeof payload.message === 'string' && payload.message.length > 0) {
-      errorMessage = payload.message;
-    } else if (typeof payload.error === 'string' && payload.error.length > 0) {
-      errorMessage = payload.error;
-    } else if (
-      payload.error &&
-      typeof payload.error === 'object' &&
-      'message' in payload.error &&
-      typeof payload.error.message === 'string'
-    ) {
-      errorMessage = payload.error.message;
-    } else if (error instanceof Error && error.message.length > 0) {
-      errorMessage = error.message;
-    } else if (errorType) {
-      errorMessage = errorType;
-    }
-  } else if (error instanceof Error && error.message.length > 0) {
-    errorMessage = error.message;
-    errorType = error.name;
-  } else if (typeof error === 'string' && error.length > 0) {
-    errorMessage = error;
-  }
-
-  if (!errorType && error instanceof Error && error.name) {
-    errorType = error.name;
-  }
-
-  return {
-    error: errorMessage,
-    errorType,
-    phase,
-  };
 };
 
 export interface RuntimeExecutorContext {

@@ -1,4 +1,4 @@
-import type { StreamInvokeRequestParams } from './types';
+import type { ScreenCaptureSession, StreamInvokeRequestParams } from './types';
 
 type IpcInvoke = <T = unknown>(event: string, ...data: unknown[]) => Promise<T>;
 
@@ -46,6 +46,9 @@ declare global {
   interface Window {
     electronAPI?: {
       invoke?: IpcInvoke;
+      onScreenCaptureSession?: (
+        listener: (session: ScreenCaptureSession) => void,
+      ) => () => void;
       onStreamInvoke: (
         params: StreamInvokeRequestParams,
         callbacks: StreamerCallbacks,
