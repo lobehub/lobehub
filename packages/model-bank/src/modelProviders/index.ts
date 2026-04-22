@@ -50,6 +50,7 @@ import NvidiaProvider from './nvidia';
 import OllamaProvider from './ollama';
 import OllamaCloudProvider from './ollamacloud';
 import OpenAIProvider from './openai';
+import OpenCodeZenProvider from './opencodezen';
 import OpenRouterProvider from './openrouter';
 import PerplexityProvider from './perplexity';
 import PPIOProvider from './ppio';
@@ -116,6 +117,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   StepfunProvider.chatModels,
   NovitaProvider.chatModels,
   NvidiaProvider.chatModels,
+  OpenCodeZenProvider.chatModels,
   BaichuanProvider.chatModels,
   TaichuProvider.chatModels,
   CloudflareProvider.chatModels,
@@ -170,6 +172,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   PPIOProvider,
   Ai302Provider,
   NvidiaProvider,
+  OpenCodeZenProvider,
   TogetherAIProvider,
   FireworksAIProvider,
   GroqProvider,
@@ -279,6 +282,7 @@ export { default as NvidiaProviderCard } from './nvidia';
 export { default as OllamaProviderCard } from './ollama';
 export { default as OllamaCloudProviderCard } from './ollamacloud';
 export { default as OpenAIProviderCard } from './openai';
+export { default as OpenCodeZenProviderCard } from './opencodezen';
 export { default as OpenRouterProviderCard } from './openrouter';
 export { default as PerplexityProviderCard } from './perplexity';
 export { default as PPIOProviderCard } from './ppio';

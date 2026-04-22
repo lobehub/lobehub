@@ -47,6 +47,7 @@ export enum ModelProvider {
   Ollama = 'ollama',
   OllamaCloud = 'ollamacloud',
   OpenAI = 'openai',
+  OpenCodeZen = 'opencodezen',
   OpenRouter = 'openrouter',
   Perplexity = 'perplexity',
   PPIO = 'ppio',
