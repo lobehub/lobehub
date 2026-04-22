@@ -97,6 +97,25 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(mockApiHandler).not.toHaveBeenCalled();
   });
 
+  // LOBE-7761: verify the self-reflection signal survives the new persist-time
+  // sanitizer. The fix sanitizes `tool_calls[].arguments` only at DB/state
+  // boundaries (to unbreak strict providers), so the raw bad string must still
+  // reach the executor — otherwise the model loses the "fix your JSON syntax"
+  // feedback and degrades to a generic "missing required field" error.
+  it('emits INVALID_JSON_ARGUMENTS for the LOBE-7761 Qwen shape with raw args echoed', async () => {
+    const invalid = '{, "description": "Create data models", "language": "python"}';
+
+    const result = await executor.execute(buildPayload(invalid), context);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe('INVALID_JSON_ARGUMENTS');
+    expect(result.content).toMatch(/not valid JSON/);
+    // Critical: the raw malformed string must appear in the tool-result content
+    // so the model can self-correct based on what it actually produced.
+    expect(result.content).toContain(invalid);
+    expect(mockApiHandler).not.toHaveBeenCalled();
+  });
+
   it('still dispatches normally when argsStr is empty', async () => {
     mockApiHandler.mockResolvedValueOnce({ content: 'ok', success: true });
 
