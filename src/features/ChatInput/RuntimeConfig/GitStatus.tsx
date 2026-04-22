@@ -1,16 +1,11 @@
 import { Icon, Popover, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, keyframes } from 'antd-style';
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  GitBranchIcon,
-  GitPullRequest,
-  LoaderIcon,
-} from 'lucide-react';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { ArrowDownIcon, ArrowUpIcon, GitBranchIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import RingLoadingIcon from '@/components/RingLoading';
 import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
 
@@ -19,11 +14,6 @@ import { useGitAheadBehind } from './useGitAheadBehind';
 import { useGitInfo } from './useGitInfo';
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 import WorkingTreeFilesContent from './WorkingTreeFilesContent';
-
-const spin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -91,9 +81,6 @@ const styles = createStaticStyles(({ css }) => {
       width: 1px;
       height: 10px;
       background: ${cssVar.colorSplit};
-    `,
-    spin: css`
-      animation: ${spin} 0.9s linear infinite;
     `,
     syncTrigger: css`
       cursor: pointer;
@@ -300,11 +287,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
         onClick={pulling ? undefined : handlePull}
       >
         <span className={styles.aheadBehindStat}>
-          <Icon
-            className={pulling ? styles.spin : undefined}
-            icon={pulling ? LoaderIcon : ArrowDownIcon}
-            size={10}
-          />
+          {pulling ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowDownIcon} size={10} />}
           {aheadBehind!.behind}
         </span>
       </div>
@@ -321,11 +304,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
         onClick={pushing ? undefined : handlePush}
       >
         <span className={styles.aheadBehindStat}>
-          <Icon
-            className={pushing ? styles.spin : undefined}
-            icon={pushing ? LoaderIcon : ArrowUpIcon}
-            size={10}
-          />
+          {pushing ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowUpIcon} size={10} />}
           {aheadBehind!.ahead}
         </span>
       </div>

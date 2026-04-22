@@ -468,7 +468,7 @@
   "localSystem.workingDirectory.pullNoop": "已是最新",
   "localSystem.workingDirectory.pullSuccess": "拉取成功",
   "localSystem.workingDirectory.pushAction": "点击推送 {{count}} 个提交到 {{target}}",
-  "localSystem.workingDirectory.pushActionNew": "点击推送 {{count}} 个提交到 {{target}}（新建分支）",
+  "localSystem.workingDirectory.pushActionNew": "点击创建 {{target}} 分支",
   "localSystem.workingDirectory.pushFailed": "推送失败",
   "localSystem.workingDirectory.pushInProgress": "推送中…",
   "localSystem.workingDirectory.pushNoop": "已是最新",

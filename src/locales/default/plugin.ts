@@ -461,8 +461,7 @@ export default {
   'localSystem.workingDirectory.pullNoop': 'Already up to date',
   'localSystem.workingDirectory.pullFailed': 'Pull failed',
   'localSystem.workingDirectory.pushAction': 'Click to push {{count}} commit(s) to {{target}}',
-  'localSystem.workingDirectory.pushActionNew':
-    'Click to push {{count}} commit(s) to {{target}} (new branch)',
+  'localSystem.workingDirectory.pushActionNew': 'Click to create branch {{target}}',
   'localSystem.workingDirectory.pushInProgress': 'Pushing…',
   'localSystem.workingDirectory.pushSuccess': 'Pushed successfully',
   'localSystem.workingDirectory.pushNoop': 'Everything up-to-date',
