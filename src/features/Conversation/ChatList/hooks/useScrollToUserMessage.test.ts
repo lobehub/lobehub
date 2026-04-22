@@ -187,6 +187,73 @@ describe('useScrollToUserMessage', () => {
       expect(scrollToIndex).not.toHaveBeenCalled();
     });
 
+    it('should cancel queued retry timers when user scrolls up before they fire', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = makeRender(scrollToIndex, {
+        dataSourceLength: 2,
+        isSecondLastMessageFromUser: false,
+        spacerActive: false,
+        spacerLayoutVersion: 0,
+      });
+
+      // user sends message -> 0/32/96ms retry timers are scheduled but not fired yet
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 0,
+      });
+
+      // user immediately starts scrolling up before any retry timer fires
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        scrollShrinking: true,
+        spacerActive: true,
+        spacerLayoutVersion: 0,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // no queued retry should have yanked the viewport back
+      expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it('should cancel queued retry timers when spacer unmounts before they fire', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = makeRender(scrollToIndex, {
+        dataSourceLength: 2,
+        isSecondLastMessageFromUser: false,
+        spacerActive: true,
+        spacerLayoutVersion: 0,
+      });
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 0,
+      });
+
+      // spacer unmounts before any retry timer fires
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: false,
+        spacerLayoutVersion: 0,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
     it('should stop pinning when user starts shrinking the spacer manually', () => {
       const scrollToIndex = vi.fn();
 

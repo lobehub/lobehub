@@ -112,11 +112,15 @@ export function useScrollToUserMessage({
 
   // Clear pending scroll when the spacer unmounts or user scrolls manually so
   // subsequent layout ticks don't keep pinning against the user's intent.
+  // Also cancel any already-scheduled retry timers — otherwise a pin wave
+  // fired just before the user scrolled up would still call scrollToIndex at
+  // 32/96ms and yank the viewport back down.
   useEffect(() => {
     if (!spacerActive || scrollShrinking) {
       pendingScrollIndexRef.current = null;
+      clearPendingPins();
     }
-  }, [spacerActive, scrollShrinking]);
+  }, [spacerActive, scrollShrinking, clearPendingPins]);
 
   // Re-scroll whenever the spacer's real layout settles (version bumps) or the
   // spacer becomes active. Skip when user is manually shrinking the spacer.
