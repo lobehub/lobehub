@@ -37,7 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   icon: css`
     flex-shrink: 0;
-    margin-inline-end: 6px;
+    margin-inline: 6px;
     color: ${cssVar.colorTextDescription};
   `,
   label: css`
@@ -70,8 +70,9 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
 
     return (
       <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
+        <span className={styles.label}>Agent:</span>
         <Icon className={styles.icon} size={14} />
-        <span className={styles.label}>Agent: {labelText}</span>
+        <span className={styles.label}>{labelText}</span>
         {description && (
           <span className={styles.chip}>
             <span className={styles.chipText}>{description}</span>
