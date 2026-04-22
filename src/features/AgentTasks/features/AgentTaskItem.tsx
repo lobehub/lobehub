@@ -101,7 +101,8 @@ const AgentTaskItem = memo<TaskItemProps>(({ task }) => {
               fontSize={12}
               type={'secondary'}
               style={{
-                width: 36,
+                whiteSpace: 'nowrap',
+                width: 76,
               }}
             >
               {time}
