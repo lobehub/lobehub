@@ -45,10 +45,12 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const [naturalHeight, setNaturalHeight] = useState(0);
   const [scrollReduction, setScrollReduction] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [spacerLayoutVersion, setSpacerLayoutVersion] = useState(0);
 
   const prevLengthRef = useRef(dataSource.length);
   const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const spacerObserverRef = useRef<ResizeObserver | null>(null);
   const userMessageIndexRef = useRef<number | null>(null);
   const assistantMessageIndexRef = useRef<number | null>(null);
 
@@ -95,6 +97,11 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const cleanupObserver = useCallback(() => {
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = null;
+  }, []);
+
+  const cleanupSpacerObserver = useCallback(() => {
+    spacerObserverRef.current?.disconnect();
+    spacerObserverRef.current = null;
   }, []);
 
   const scheduleUnmount = useCallback(() => {
@@ -179,10 +186,46 @@ export const useConversationSpacer = (dataSource: string[]) => {
   useEffect(() => {
     return () => {
       cleanupObserver();
+      cleanupSpacerObserver();
       clearRemoveTimer();
       if (scrollShrinkEndTimerRef.current) clearTimeout(scrollShrinkEndTimerRef.current);
     };
-  }, [cleanupObserver, clearRemoveTimer]);
+  }, [cleanupObserver, cleanupSpacerObserver, clearRemoveTimer]);
+
+  // Observe the spacer DOM once mounted; bump layout version when its real size changes
+  // so consumers (e.g. useScrollToUserMessage) can re-fire scroll after virtua finishes
+  // measuring the spacer and extending scrollSize.
+  useEffect(() => {
+    cleanupSpacerObserver();
+
+    if (!mounted || typeof ResizeObserver === 'undefined') return;
+
+    const attach = () => {
+      const el = document.querySelector('[data-conversation-spacer="true"]') as HTMLElement | null;
+      if (!el) return false;
+
+      const observer = new ResizeObserver(() => {
+        setSpacerLayoutVersion((v) => v + 1);
+      });
+      observer.observe(el);
+      spacerObserverRef.current = observer;
+      setSpacerLayoutVersion((v) => v + 1);
+      return true;
+    };
+
+    if (!attach()) {
+      // Spacer DOM may not be in the tree on the same commit tick; retry next frame.
+      const raf = requestAnimationFrame(() => {
+        attach();
+      });
+      return () => {
+        cancelAnimationFrame(raf);
+        cleanupSpacerObserver();
+      };
+    }
+
+    return cleanupSpacerObserver;
+  }, [cleanupSpacerObserver, mounted]);
 
   useEffect(() => {
     const newMessageCount = dataSource.length - prevLengthRef.current;
@@ -251,5 +294,6 @@ export const useConversationSpacer = (dataSource: string[]) => {
     scrollShrinking: isScrollShrinking,
     spacerActive: mounted,
     spacerHeight: renderedHeight,
+    spacerLayoutVersion,
   };
 };
