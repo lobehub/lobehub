@@ -108,7 +108,9 @@ export const lobehubImageModels: AIImageModelCard[] = [
     id: 'gpt-image-2',
     parameters: gptImage2Schema,
     pricing: {
-      approximatePricePerImage: 0.032,
+      // Medium quality at 1024x1024: ~1767 output tokens * $30/M = $0.053 per image.
+      // Source: https://developers.openai.com/api/docs/guides/image-generation#calculating-costs
+      approximatePricePerImage: 0.053,
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
