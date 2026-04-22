@@ -6,7 +6,7 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
@@ -29,7 +29,7 @@ const TopicListContent = memo(() => {
   const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
-  useFetchTopics();
+  useFetchChatTopics();
 
   if (isInSearchMode) return <SearchResult />;
 
