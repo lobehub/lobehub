@@ -235,6 +235,7 @@
   "minimap.senderUser": "你",
   "newAgent": "创建助理",
   "newClaudeCodeAgent": "添加 Claude Code",
+  "newCodexAgent": "添加 Codex",
   "newGroupChat": "创建群组",
   "newPage": "创建文稿",
   "noAgentsYet": "这个群组还没有成员。点击「+」邀请助理加入",

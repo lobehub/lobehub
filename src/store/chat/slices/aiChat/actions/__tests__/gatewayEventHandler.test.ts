@@ -1,10 +1,15 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { messageService } from '@/services/message';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
 
 vi.mock('@/services/message', () => ({
-  messageService: { getMessages: vi.fn().mockResolvedValue([]) },
+  messageService: {
+    getMessages: vi.fn().mockResolvedValue([]),
+    updateMessageError: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 // ─── Test Helpers ───
@@ -51,6 +56,10 @@ const flush = async () => {
 // ─── Tests ───
 
 describe('createGatewayEventHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('stream_start', () => {
     it('should associate new message with operation', async () => {
       const store = createMockStore();
@@ -328,6 +337,20 @@ describe('createGatewayEventHandler', () => {
         undefined,
       );
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-initial',
+        {
+          body: { message: 'Something went wrong' },
+          message: 'Something went wrong',
+          type: 'AgentRuntimeError',
+        },
+        {
+          agentId: 'agent-1',
+          groupId: undefined,
+          threadId: undefined,
+          topicId: 'topic-1',
+        },
+      );
 
       // Should dispatch inline error immediately
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
@@ -335,7 +358,11 @@ describe('createGatewayEventHandler', () => {
           id: 'msg-initial',
           type: 'updateMessage',
           value: {
-            error: { body: { message: 'Something went wrong' }, type: 'AgentRuntimeError' },
+            error: {
+              body: { message: 'Something went wrong' },
+              message: 'Something went wrong',
+              type: 'AgentRuntimeError',
+            },
           },
         },
         { operationId: 'op-1' },
@@ -358,6 +385,20 @@ describe('createGatewayEventHandler', () => {
         undefined,
       );
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-step2',
+        {
+          body: { message: 'Timeout' },
+          message: 'Timeout',
+          type: 'AgentRuntimeError',
+        },
+        {
+          agentId: 'agent-1',
+          groupId: undefined,
+          threadId: undefined,
+          topicId: 'topic-1',
+        },
+      );
 
       // Should dispatch inline error with the switched message ID
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
@@ -365,6 +406,7 @@ describe('createGatewayEventHandler', () => {
           id: 'msg-step2',
           value: expect.objectContaining({
             error: expect.objectContaining({
+              message: 'Timeout',
               body: { message: 'Timeout' },
             }),
           }),
@@ -372,6 +414,60 @@ describe('createGatewayEventHandler', () => {
         { operationId: 'op-1' },
       );
       expect(store.replaceMessages).toHaveBeenCalled();
+    });
+
+    it('should preserve structured heterogeneous agent error payloads', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('error', {
+          body: {
+            agentType: 'codex',
+            code: 'cli_not_found',
+            docsUrl: 'https://github.com/openai/codex',
+            installCommands: ['npm install -g @openai/codex'],
+            message: 'Codex CLI was not found',
+          },
+          message: 'Codex CLI was not found',
+          type: 'AgentRuntimeError',
+        }),
+      );
+      await flush();
+
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-initial',
+        {
+          body: {
+            agentType: 'codex',
+            code: 'cli_not_found',
+            docsUrl: 'https://github.com/openai/codex',
+            installCommands: ['npm install -g @openai/codex'],
+            message: 'Codex CLI was not found',
+          },
+          message: 'Codex CLI was not found',
+          type: 'AgentRuntimeError',
+        },
+        expect.any(Object),
+      );
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: {
+            error: {
+              body: {
+                agentType: 'codex',
+                code: 'cli_not_found',
+                docsUrl: 'https://github.com/openai/codex',
+                installCommands: ['npm install -g @openai/codex'],
+                message: 'Codex CLI was not found',
+              },
+              message: 'Codex CLI was not found',
+              type: 'AgentRuntimeError',
+            },
+          },
+        }),
+        { operationId: 'op-1' },
+      );
     });
   });
 

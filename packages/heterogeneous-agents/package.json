@@ -2,13 +2,18 @@
   "name": "@lobechat/heterogeneous-agents",
   "version": "1.0.0",
   "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts"
+  },
   "main": "./src/index.ts",
   "scripts": {
     "test": "vitest",
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@lobechat/builtin-tool-claude-code": "workspace:*"
+    "@lobechat/builtin-tool-claude-code": "workspace:*",
+    "@lobehub/icons": "^5.4.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

@@ -15,8 +15,8 @@ const AddButton = memo(() => {
   // Create menu items
   const {
     createAgentMenuItem,
-    createClaudeCodeMenuItem,
     createGroupChatMenuItem,
+    createHeterogeneousAgentMenuItems,
     createPageMenuItem,
     openCreateModal,
     isMutatingAgent,
@@ -33,14 +33,22 @@ const AddButton = memo(() => {
   );
 
   const dropdownItems = useMemo(() => {
-    const ccItem = createClaudeCodeMenuItem();
+    const heterogeneousItems = createHeterogeneousAgentMenuItems();
+
     return [
       createAgentMenuItem(),
       createGroupChatMenuItem(),
       createPageMenuItem(),
-      ...(ccItem ? [{ type: 'divider' as const }, ccItem] : []),
+      ...(heterogeneousItems.length > 0
+        ? [{ type: 'divider' as const }, ...heterogeneousItems]
+        : []),
     ];
-  }, [createAgentMenuItem, createClaudeCodeMenuItem, createGroupChatMenuItem, createPageMenuItem]);
+  }, [
+    createAgentMenuItem,
+    createGroupChatMenuItem,
+    createHeterogeneousAgentMenuItems,
+    createPageMenuItem,
+  ]);
 
   return (
     <Flexbox horizontal>

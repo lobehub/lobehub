@@ -5,7 +5,7 @@
  * New agents are added by registering here — no other code changes needed.
  */
 
-import { ClaudeCodeAdapter, claudeCodePreset } from './adapters';
+import { ClaudeCodeAdapter, claudeCodePreset, CodexAdapter, codexPreset } from './adapters';
 import type { AgentCLIPreset, AgentEventAdapter } from './types';
 
 interface AgentRegistryEntry {
@@ -18,8 +18,10 @@ const registry: Record<string, AgentRegistryEntry> = {
     createAdapter: () => new ClaudeCodeAdapter(),
     preset: claudeCodePreset,
   },
-  // Future:
-  // 'codex': { createAdapter: () => new CodexAdapter(), preset: codexPreset },
+  'codex': {
+    createAdapter: () => new CodexAdapter(),
+    preset: codexPreset,
+  },
   // 'kimi-cli': { createAdapter: () => new KimiCLIAdapter(), preset: kimiPreset },
 };
 

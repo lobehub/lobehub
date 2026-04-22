@@ -1,9 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import { ClaudeCode } from '@lobehub/icons';
+import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
 import { Icon } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { App } from 'antd';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from 'antd/es/menu/interface';
 import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,10 +12,12 @@ import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import CodexCLIInstallGuide from '@/features/Electron/CodexCLIInstallGuide';
 import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
-import { type CreateAgentParams } from '@/services/agent';
-import { type GroupMemberConfig } from '@/services/chatGroup';
+import type { CreateAgentParams } from '@/services/agent';
+import type { GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
+import { toolDetectorService } from '@/services/electron/toolDetector';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
@@ -36,7 +38,7 @@ interface CreateAgentOptions {
 export const useCreateMenuItems = () => {
   const { t } = useTranslation('chat');
   const { t: tFile } = useTranslation('file');
-  const { message } = App.useApp();
+  const { message, notification } = App.useApp();
   const navigate = useNavigate();
   const groupTemplates = useGroupTemplates();
   const enableHeterogeneousAgent = useUserStore(labPreferSelectors.enableHeterogeneousAgent);
@@ -198,25 +200,27 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create a Claude Code agent with ACP provider pre-configured.
+   * Create a heterogeneous agent with CLI provider pre-configured.
    *
    * Bypasses `mutateAgent` so we skip its default /profile redirect —
-   * CC agents land straight on the chat page since their config is fixed.
+   * external CLI agents land straight on the chat page since their config is fixed.
    */
-  const createClaudeCodeAgent = useCallback(
-    async (options?: CreateAgentOptions) => {
+  const createHeterogeneousAgent = useCallback(
+    async (
+      definition: (typeof HETEROGENEOUS_AGENT_CLIENT_CONFIGS)[number],
+      options?: CreateAgentOptions,
+    ) => {
       const result = await storeCreateAgent({
         config: {
           agencyConfig: {
             heterogeneousProvider: {
-              command: 'claude',
-              type: 'claude-code' as const,
+              command: definition.command,
+              type: definition.type,
             },
           },
-          avatar:
-            'https://registry.npmmirror.com/@lobehub/icons-static-avatar/latest/files/avatars/claudecode.webp',
+          avatar: definition.avatar,
           systemRole: '',
-          title: 'Claude Code',
+          title: definition.title,
         },
         groupId: options?.groupId,
       });
@@ -226,6 +230,29 @@ export const useCreateMenuItems = () => {
     },
     [storeCreateAgent, refreshAgentList, navigate],
   );
+
+  const ensureCodexCliAvailable = useCallback(async () => {
+    try {
+      const status = await toolDetectorService.detectTool('codex', true);
+      if (status.available) return true;
+    } catch (error) {
+      console.error('[useCreateMenuItems] Failed to detect Codex CLI:', error);
+    }
+
+    notification.error({
+      description: (
+        <CodexCLIInstallGuide
+          variant="compact"
+          onOpenSystemTools={() => navigate('/settings/system-tools')}
+        />
+      ),
+      duration: 0,
+      message: t('codexInstallGuide.menuNotification.title'),
+      placement: 'topRight',
+    });
+
+    return false;
+  }, [navigate, notification, t]);
 
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
@@ -253,22 +280,28 @@ export const useCreateMenuItems = () => {
   );
 
   /**
-   * Create Claude Code agent menu item (Desktop only)
+   * Create heterogeneous agent menu items (Desktop only)
    */
-  const createClaudeCodeMenuItem = useCallback(
-    (options?: CreateAgentOptions): ItemType | null => {
-      if (!isDesktop || !enableHeterogeneousAgent) return null;
-      return {
-        icon: <ClaudeCode size={'1em'} />,
-        key: 'newClaudeCodeAgent',
-        label: t('newClaudeCodeAgent'),
-        onClick: async (info) => {
-          info.domEvent?.stopPropagation();
-          await createClaudeCodeAgent(options);
-        },
-      };
+  const createHeterogeneousAgentMenuItems = useCallback(
+    (options?: CreateAgentOptions): ItemType[] => {
+      if (!isDesktop || !enableHeterogeneousAgent) return [];
+
+      return HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map((definition) => {
+        const AgentIcon = definition.icon;
+
+        return {
+          icon: <AgentIcon size={'1em'} />,
+          key: definition.menuKey,
+          label: t(definition.menuLabelKey),
+          onClick: async (info) => {
+            info.domEvent?.stopPropagation();
+            if (definition.type === 'codex' && !(await ensureCodexCliAvailable())) return;
+            await createHeterogeneousAgent(definition, options);
+          },
+        };
+      });
     },
-    [t, createClaudeCodeAgent, enableHeterogeneousAgent],
+    [t, createHeterogeneousAgent, enableHeterogeneousAgent, ensureCodexCliAvailable],
   );
 
   /**
@@ -362,11 +395,11 @@ export const useCreateMenuItems = () => {
     configMenuItem,
     createAgent,
     createAgentMenuItem,
-    createClaudeCodeAgent,
-    createClaudeCodeMenuItem,
     createEmptyGroup,
     createGroupChatMenuItem,
     createGroupFromTemplate,
+    createHeterogeneousAgent,
+    createHeterogeneousAgentMenuItems,
     createGroupWithMembers,
     createPage,
     createPageMenuItem,

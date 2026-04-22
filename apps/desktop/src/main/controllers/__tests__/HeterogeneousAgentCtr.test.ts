@@ -43,7 +43,13 @@ vi.mock('node:child_process', () => ({
  * Build a fake ChildProcess that immediately exits cleanly. Records every
  * stdin write on the returned `writes` array so tests can inspect the payload.
  */
-const createFakeProc = () => {
+const createFakeProc = ({
+  exitCode = 0,
+  stdoutLines = [],
+}: {
+  exitCode?: number;
+  stdoutLines?: string[];
+} = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -62,9 +68,12 @@ const createFakeProc = () => {
   proc.killed = false;
   // Exit asynchronously so the Promise returned by sendPrompt resolves cleanly.
   setImmediate(() => {
+    for (const line of stdoutLines) {
+      stdout.write(line);
+    }
     stdout.end();
     stderr.end();
-    proc.emit('exit', 0);
+    proc.emit('exit', exitCode);
   });
   return { proc, writes };
 };
@@ -146,8 +155,12 @@ describe('HeterogeneousAgentCtr', () => {
       spawnCalls.length = 0;
     });
 
-    const runSendPrompt = async (prompt: string, sessionOverrides: Record<string, any> = {}) => {
-      const { proc, writes } = createFakeProc();
+    const runSendPrompt = async (
+      prompt: string,
+      sessionOverrides: Record<string, any> = {},
+      stdoutLines: string[] = [],
+    ) => {
+      const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
 
       const ctr = new HeterogeneousAgentCtr({
@@ -162,7 +175,7 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.sendPrompt({ prompt, sessionId });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
-      return { cliArgs, command, options, writes };
+      return { cliArgs, command, ctr, options, sessionId, writes };
     };
 
     it('passes prompt via stdin stream-json — never as a positional arg', async () => {
@@ -220,6 +233,96 @@ describe('HeterogeneousAgentCtr', () => {
       const { options } = await runSendPrompt('hello', { cwd: explicitCwd });
 
       expect(options.cwd).toBe(explicitCwd);
+    });
+
+    it('captures the Claude Code session id from stream-json init events', async () => {
+      const { ctr, sessionId } = await runSendPrompt('hello', {}, [
+        `${JSON.stringify({ session_id: 'sess_cc_123', subtype: 'init', type: 'system' })}\n`,
+      ]);
+
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'sess_cc_123',
+      });
+    });
+  });
+
+  describe('sendPrompt (codex)', () => {
+    beforeEach(() => {
+      spawnCalls.length = 0;
+    });
+
+    const runSendPrompt = async (
+      prompt: string,
+      sessionOverrides: Record<string, any> = {},
+      stdoutLines: string[] = [],
+    ) => {
+      const { proc, writes } = createFakeProc({ stdoutLines });
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        ...sessionOverrides,
+      });
+      await ctr.sendPrompt({ prompt, sessionId });
+
+      const { args: cliArgs, command, options } = spawnCalls[0];
+      return { cliArgs, command, ctr, options, sessionId, writes };
+    };
+
+    it('fails fast when Codex CLI is unavailable instead of attempting spawn', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+
+      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
+        'Codex CLI was not found',
+      );
+
+      expect(detect).toHaveBeenCalledWith('codex', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('passes prompt via stdin to codex exec instead of argv', async () => {
+      const prompt = '--run a shell-like prompt safely';
+      const { cliArgs, command, writes } = await runSendPrompt(prompt);
+
+      expect(command).toBe('codex');
+      expect(cliArgs).not.toContain(prompt);
+      expect(cliArgs).toEqual(
+        expect.arrayContaining(['exec', '--json', '--skip-git-repo-check', '--full-auto', '-']),
+      );
+      expect(writes).toEqual([prompt]);
+    });
+
+    it('uses codex exec resume syntax when continuing an existing thread', async () => {
+      const { cliArgs } = await runSendPrompt('continue', { resumeSessionId: 'thread_abc' });
+
+      expect(cliArgs.slice(0, 2)).toEqual(['exec', 'resume']);
+      expect(cliArgs).toContain('thread_abc');
+      expect(cliArgs).not.toContain('--resume');
+      expect(cliArgs.at(-1)).toBe('-');
+    });
+
+    it('captures the Codex thread id from json output for later resume', async () => {
+      const { ctr, sessionId } = await runSendPrompt('hello', {}, [
+        `${JSON.stringify({ thread_id: 'thread_codex_123', type: 'thread.started' })}\n`,
+      ]);
+
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'thread_codex_123',
+      });
     });
   });
 });

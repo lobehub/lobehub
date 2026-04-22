@@ -1,5 +1,6 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import type {
   HeterogeneousAgentEvent,
   SubagentEventContext,
@@ -7,13 +8,14 @@ import type {
 } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type {
+  ChatMessageError,
   ChatToolPayload,
   ConversationContext,
   HeterogeneousProviderConfig,
   MessageMapScope,
   UIChatMessage,
 } from '@lobechat/types';
-import { ThreadStatus, ThreadType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ThreadStatus, ThreadType } from '@lobechat/types';
 import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
@@ -46,6 +48,35 @@ const notifyCompletion = async (title: string, body: string) => {
   }
 };
 
+const toHeterogeneousAgentMessageError = (error: unknown): ChatMessageError => {
+  if (
+    typeof error === 'object' &&
+    error &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    ('agentType' in error || 'code' in error || 'docsUrl' in error || 'installCommands' in error)
+  ) {
+    return {
+      body: error as HeterogeneousAgentSessionError,
+      message: error.message,
+      type: AgentRuntimeErrorType.AgentRuntimeError,
+    };
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Agent execution failed';
+
+  return {
+    body: { message },
+    message,
+    type: AgentRuntimeErrorType.AgentRuntimeError,
+  };
+};
+
 export interface HeterogeneousAgentExecutorParams {
   assistantMessageId: string;
   context: ConversationContext;
@@ -63,6 +94,7 @@ export interface HeterogeneousAgentExecutorParams {
  * Map heterogeneousProvider.command to adapter type key.
  */
 const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
+  if (config.type) return config.type;
   // Explicit adapterType in config takes priority
   if ((config as any).adapterType) return (config as any).adapterType;
 
@@ -94,7 +126,7 @@ const subscribeBroadcasts = (
   sessionId: string,
   callbacks: {
     onComplete: () => void;
-    onError: (error: string) => void;
+    onError: (error: HeterogeneousAgentSessionError | string) => void;
     onRawLine: (line: any) => void;
   },
 ): (() => void) => {
@@ -108,7 +140,10 @@ const subscribeBroadcasts = (
   const onComplete = (_e: any, data: { sessionId: string }) => {
     if (data.sessionId === sessionId) callbacks.onComplete();
   };
-  const onError = (_e: any, data: { error: string; sessionId: string }) => {
+  const onError = (
+    _e: any,
+    data: { error: HeterogeneousAgentSessionError | string; sessionId: string },
+  ) => {
     if (data.sessionId === sessionId) callbacks.onError(data.error);
   };
 
@@ -1068,7 +1103,7 @@ export const executeHeterogeneousAgent = async (
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: heterogeneousProvider.args,
-      command: heterogeneousProvider.command || 'claude',
+      command: heterogeneousProvider.command || (adapterType === 'codex' ? 'codex' : 'claude'),
       cwd: workingDirectory,
       env: heterogeneousProvider.env,
       resumeSessionId,
@@ -1513,10 +1548,11 @@ export const executeHeterogeneousAgent = async (
         // already marked cancelled and the partial content is persisted above.
         if (isAborted()) return;
 
+        const messageError = toHeterogeneousAgentMessageError(error);
         eventHandler(
           toStreamEvent(
             {
-              data: { error, message: error },
+              data: messageError,
               stepIndex: 0,
               timestamp: Date.now(),
               type: 'error',
@@ -1548,11 +1584,11 @@ export const executeHeterogeneousAgent = async (
       // `sendPrompt` rejects when the CLI exits non-zero, which is how SIGINT
       // lands here too. If the user cancelled, don't surface an error.
       if (isAborted()) return;
-      const errorMsg = error instanceof Error ? error.message : 'Agent execution failed';
+      const messageError = toHeterogeneousAgentMessageError(error);
       eventHandler(
         toStreamEvent(
           {
-            data: { error: errorMsg, message: errorMsg },
+            data: messageError,
             stepIndex: 0,
             timestamp: Date.now(),
             type: 'error',

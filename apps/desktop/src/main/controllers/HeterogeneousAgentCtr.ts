@@ -1,12 +1,23 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import {
+  CODEX_CLI_INSTALL_COMMANDS,
+  CODEX_CLI_INSTALL_DOCS_URL,
+  HeterogeneousAgentSessionErrorCode,
+} from '@lobechat/electron-client-ipc';
 import { app as electronApp, BrowserWindow } from 'electron';
 
+import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
+import type {
+  HeterogeneousAgentImageAttachment,
+  HeterogeneousAgentParsedOutput,
+} from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { createLogger } from '@/utils/logger';
 
@@ -16,37 +27,6 @@ const logger = createLogger('controllers:HeterogeneousAgentCtr');
 
 /** Directory under appStoragePath for caching downloaded files */
 const FILE_CACHE_DIR = 'heteroAgent/files';
-
-// ─── CLI presets per agent type ───
-// Mirrors @lobechat/heterogeneous-agents/registry but runs in main process
-// (can't import from the workspace package in Electron main directly)
-
-interface CLIPreset {
-  baseArgs: string[];
-  promptMode: 'positional' | 'stdin';
-  resumeArgs?: (sessionId: string) => string[];
-}
-
-const CLI_PRESETS: Record<string, CLIPreset> = {
-  'claude-code': {
-    baseArgs: [
-      '-p',
-      '--input-format',
-      'stream-json',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--include-partial-messages',
-      '--permission-mode',
-      'bypassPermissions',
-    ],
-    promptMode: 'stdin',
-    resumeArgs: (sid) => ['--resume', sid],
-  },
-  // Future presets:
-  // 'codex': { baseArgs: [...], promptMode: 'positional' },
-  // 'kimi-cli': { baseArgs: [...], promptMode: 'positional' },
-};
 
 // ─── IPC types ───
 
@@ -69,14 +49,9 @@ interface StartSessionResult {
   sessionId: string;
 }
 
-interface ImageAttachment {
-  id: string;
-  url: string;
-}
-
 interface SendPromptParams {
   /** Image attachments to include in the prompt (downloaded from url, cached by id) */
-  imageList?: ImageAttachment[];
+  imageList?: HeterogeneousAgentImageAttachment[];
   prompt: string;
   sessionId: string;
 }
@@ -118,12 +93,15 @@ interface AgentSession {
   sessionId: string;
 }
 
+type SessionErrorPayload = HeterogeneousAgentSessionError | string;
+
 /**
  * External Agent Controller — manages external agent CLI processes via Electron IPC.
  *
- * Agent-agnostic: uses CLI presets from a registry to support Claude Code,
- * Codex, Kimi CLI, etc. Only handles process lifecycle and raw stdout line
- * broadcasting. All event parsing and DB persistence happens on the Renderer side.
+ * Agent-agnostic: delegates spawn-plan construction and stdout framing to a
+ * per-agent driver so Claude Code, Codex, and future CLIs can differ in
+ * prompt transport, resume semantics, and raw stream shape without turning
+ * this controller into a giant `switch`.
  *
  * Lifecycle: startSession → sendPrompt → (heteroAgentRawLine broadcasts) → stopSession
  */
@@ -131,6 +109,45 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   static override readonly groupName = 'heterogeneousAgent';
 
   private sessions = new Map<string, AgentSession>();
+
+  private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return {
+      agentType: 'codex',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command: session.command,
+      docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
+      installCommands: CODEX_CLI_INSTALL_COMMANDS,
+      message:
+        'Codex CLI was not found. Install it and make sure the `codex` command is available in PATH.',
+    };
+  }
+
+  private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
+    if (
+      session.agentType === 'codex' &&
+      typeof error === 'object' &&
+      error &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return this.buildCodexCliMissingError(session);
+    }
+
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  private async getSpawnPreflightError(
+    session: AgentSession,
+  ): Promise<HeterogeneousAgentSessionError | undefined> {
+    if (session.agentType !== 'codex') return;
+
+    const toolDetectorManager = this.app.toolDetectorManager;
+    const status = await toolDetectorManager?.detect?.('codex', true);
+
+    if (!status || status.available) return;
+
+    return this.buildCodexCliMissingError(session);
+  }
 
   // ─── Broadcast ───
 
@@ -164,7 +181,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
    * Download an image by URL, with local disk cache keyed by id.
    */
   private async resolveImage(
-    image: ImageAttachment,
+    image: HeterogeneousAgentImageAttachment,
   ): Promise<{ buffer: Buffer; mimeType: string }> {
     const cacheDir = this.fileCacheDir;
     const cacheKey = this.getImageCacheKey(image.id);
@@ -201,12 +218,71 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     return { buffer, mimeType };
   }
 
+  private guessImageExtension(
+    mimeType: string,
+    image: HeterogeneousAgentImageAttachment,
+  ): string | undefined {
+    const knownByMime: Record<string, string> = {
+      'image/gif': '.gif',
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/webp': '.webp',
+    };
+
+    if (knownByMime[mimeType]) return knownByMime[mimeType];
+
+    try {
+      const pathname = new URL(image.url).pathname;
+      const ext = path.extname(pathname);
+      return ext || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Materialize an image attachment into a stable local file path so CLIs like
+   * Codex can consume it through `--image <file>`.
+   */
+  private async resolveCliImagePath(image: HeterogeneousAgentImageAttachment): Promise<string> {
+    const { buffer, mimeType } = await this.resolveImage(image);
+    const cacheKey = this.getImageCacheKey(image.id);
+    const ext = this.guessImageExtension(mimeType, image) || '';
+    const filePath = path.join(this.fileCacheDir, `${cacheKey}${ext}`);
+
+    try {
+      await access(filePath);
+    } catch {
+      await mkdir(this.fileCacheDir, { recursive: true });
+      await writeFile(filePath, buffer);
+    }
+
+    return filePath;
+  }
+
+  private async resolveCliImagePaths(
+    imageList: HeterogeneousAgentImageAttachment[] = [],
+  ): Promise<string[]> {
+    const resolved = await Promise.all(
+      imageList.map(async (image) => {
+        try {
+          return await this.resolveCliImagePath(image);
+        } catch (err) {
+          logger.error(`Failed to materialize image ${image.id} for CLI:`, err);
+          return undefined;
+        }
+      }),
+    );
+
+    return resolved.filter(Boolean) as string[];
+  }
+
   /**
    * Build a stream-json user message with text + optional image content blocks.
    */
   private async buildStreamJsonInput(
     prompt: string,
-    imageList: ImageAttachment[] = [],
+    imageList: HeterogeneousAgentImageAttachment[] = [],
   ): Promise<string> {
     const content: any[] = [{ text: prompt, type: 'text' }];
 
@@ -226,10 +302,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       }
     }
 
-    return JSON.stringify({
+    return `${JSON.stringify({
       message: { content, role: 'user' },
       type: 'user',
-    });
+    })}\n`;
   }
 
   // ─── IPC methods ───
@@ -241,6 +317,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async startSession(params: StartSessionParams): Promise<StartSessionResult> {
     const sessionId = randomUUID();
     const agentType = params.agentType || 'claude-code';
+    getHeterogeneousAgentDriver(agentType);
 
     this.sessions.set(sessionId, {
       // If resuming, pre-set the agent session ID so sendPrompt adds --resume
@@ -268,32 +345,31 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const session = this.sessions.get(params.sessionId);
     if (!session) throw new Error(`Session not found: ${params.sessionId}`);
 
-    const preset = CLI_PRESETS[session.agentType];
-    if (!preset) throw new Error(`Unknown agent type: ${session.agentType}`);
-
-    const useStdin = preset.promptMode === 'stdin';
-
-    // Build stream-json payload up-front so any image download errors
-    // surface before the process is spawned.
-    let stdinPayload: string | undefined;
-    if (useStdin) {
-      stdinPayload = await this.buildStreamJsonInput(params.prompt, params.imageList ?? []);
+    const preflightError = await this.getSpawnPreflightError(session);
+    if (preflightError) {
+      this.broadcast('heteroAgentSessionError', {
+        error: preflightError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(preflightError.message);
     }
 
-    return new Promise<void>((resolve, reject) => {
-      // Build CLI args: base preset + resume + user args
-      const cliArgs = [
-        ...preset.baseArgs,
-        ...(session.agentSessionId && preset.resumeArgs
-          ? preset.resumeArgs(session.agentSessionId)
-          : []),
-        ...session.args,
-      ];
+    const driver = getHeterogeneousAgentDriver(session.agentType);
+    const spawnPlan = await driver.buildSpawnPlan({
+      args: session.args,
+      helpers: {
+        buildClaudeStreamJsonInput: (prompt, imageList) =>
+          this.buildStreamJsonInput(prompt, imageList),
+        resolveCliImagePaths: (imageList) => this.resolveCliImagePaths(imageList),
+      },
+      imageList: params.imageList ?? [],
+      prompt: params.prompt,
+      resumeSessionId: session.agentSessionId,
+    });
+    const useStdin = spawnPlan.stdinPayload !== undefined;
 
-      if (!useStdin && preset.promptMode === 'positional') {
-        // Positional mode: append prompt as a CLI arg (legacy / non-CC presets).
-        cliArgs.push(params.prompt);
-      }
+    return new Promise<void>((resolve, reject) => {
+      const cliArgs = spawnPlan.args;
 
       // Fall back to the user's Desktop so the process never inherits
       // the Electron parent's cwd (which is `/` when launched from Finder).
@@ -318,45 +394,37 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
       });
 
-      // In stdin mode, write the stream-json message and close stdin.
-      if (useStdin && stdinPayload && proc.stdin) {
+      // In stdin mode, write the prepared payload and close stdin.
+      if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
         const stdin = proc.stdin as Writable;
-        stdin.write(stdinPayload + '\n', () => {
+        stdin.write(spawnPlan.stdinPayload, () => {
           stdin.end();
         });
       }
 
       session.process = proc;
-      let buffer = '';
+      const streamProcessor = driver.createStreamProcessor();
 
-      // Stream stdout lines as raw events to Renderer
+      const broadcastParsedOutputs = (parsedOutputs: HeterogeneousAgentParsedOutput[]) => {
+        for (const parsedOutput of parsedOutputs) {
+          if (parsedOutput.agentSessionId) {
+            session.agentSessionId = parsedOutput.agentSessionId;
+          }
+
+          this.broadcast('heteroAgentRawLine', {
+            line: parsedOutput.payload,
+            sessionId: session.sessionId,
+          });
+        }
+      };
+
+      // Stream stdout events as raw provider payloads to Renderer.
       const stdout = proc.stdout as Readable;
       stdout.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString('utf8');
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          try {
-            const parsed = JSON.parse(trimmed);
-
-            // Extract agent session ID from init event (for multi-turn)
-            if (parsed.type === 'system' && parsed.subtype === 'init' && parsed.session_id) {
-              session.agentSessionId = parsed.session_id;
-            }
-
-            // Broadcast raw parsed JSON — Renderer handles all adaptation
-            this.broadcast('heteroAgentRawLine', {
-              line: parsed,
-              sessionId: session.sessionId,
-            });
-          } catch {
-            // Not valid JSON, skip
-          }
-        }
+        broadcastParsedOutputs(streamProcessor.push(chunk));
+      });
+      stdout.on('end', () => {
+        broadcastParsedOutputs(streamProcessor.flush());
       });
 
       // Capture stderr
@@ -368,11 +436,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
       proc.on('error', (err) => {
         logger.error('Agent process error:', err);
+        const sessionError = this.getSessionErrorPayload(err, session);
         this.broadcast('heteroAgentSessionError', {
-          error: err.message,
+          error: sessionError,
           sessionId: session.sessionId,
         });
-        reject(err);
+        reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
       });
 
       proc.on('exit', (code, signal) => {

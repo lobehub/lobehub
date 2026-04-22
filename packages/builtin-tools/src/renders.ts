@@ -33,6 +33,7 @@ import {
   WebBrowsingManifest,
   WebBrowsingRenders,
 } from '@lobechat/builtin-tool-web-browsing/client';
+import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
 import { type BuiltinRender } from '@lobechat/types';
 
 /**
@@ -59,6 +60,9 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   // @deprecated backward compat: old messages stored 'lobe-tools' as identifier
   ['lobe-tools']: LobeActivatorRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
+  codex: {
+    command_execution: RunCommandRender as BuiltinRender,
+  },
 };
 
 /**

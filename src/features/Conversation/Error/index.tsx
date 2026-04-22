@@ -7,11 +7,13 @@ import { type AlertProps } from '@lobehub/ui';
 import { Block, Highlighter, Skeleton } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErrorAlertConfig';
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import CodexCLIInstallGuide from '@/features/Electron/CodexCLIInstallGuide';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
 
@@ -120,12 +122,26 @@ interface ErrorExtraProps {
 
 const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) => {
   const error = data.error;
+  const navigate = useNavigate();
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
 
   if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
     return businessChatErrorMessageExtra;
 
   if (!error?.type) return;
+
+  if (
+    error.type === AgentRuntimeErrorType.AgentRuntimeError &&
+    error.body?.agentType === 'codex' &&
+    error.body?.code === 'cli_not_found'
+  ) {
+    return (
+      <CodexCLIInstallGuide
+        error={error.body}
+        onOpenSystemTools={() => navigate('/settings/system-tools')}
+      />
+    );
+  }
 
   switch (error.type) {
     case AgentRuntimeErrorType.OllamaServiceUnavailable: {
