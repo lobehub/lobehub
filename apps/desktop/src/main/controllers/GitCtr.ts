@@ -384,11 +384,6 @@ export default class GitController extends ControllerModule {
    *
    * Uses `git push -u origin HEAD` instead of plain `git push` so the action
    * works even when local branch name differs from the configured upstream
-   * (e.g. a branch created via `git checkout -b feat/x origin/canary` — plain
-   * `git push` refuses under `push.default=simple`). Same-named existing case
-   * is a no-op for the upstream binding, branch-not-yet-pushed case creates
-   * `origin/<local-name>` and rebinds tracking. No `--force`, so
-   * non-fast-forward pushes are still rejected by git itself.
    */
   @IpcMethod()
   async pushGitBranch(payload: { path: string }): Promise<GitPushResult> {
