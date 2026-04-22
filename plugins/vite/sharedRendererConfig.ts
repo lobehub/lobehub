@@ -146,7 +146,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
     isDev &&
       codeInspectorPlugin({
         bundler: 'vite',
-        exclude: [/\.(css|json)$/],
+        exclude: [/\.(css|json|html)$/],
         hotKeys: ['altKey', 'ctrlKey'],
       }),
     react(),
