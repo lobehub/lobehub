@@ -59,30 +59,17 @@ export function mergeWithDefaults(
 // --------------- Connection mode resolution ---------------
 
 /**
- * Platforms that historically shipped as webhook-only and added multi-mode
- * (websocket) support later. Provider rows created before the upgrade have no
- * `settings.connectionMode` field, and must keep running on webhook to
- * preserve their original behavior — otherwise upgrading would silently break
- * every legacy bot.
- *
- * **Do NOT add brand-new multi-mode platforms here.** A platform that ships
- * with multi-mode support from day one has no legacy data to preserve, so it
- * should use `platform.connectionMode` as its runtime fallback like every
- * other platform. This list is strictly for backward-compat with rows that
- * pre-date the `connectionMode` field on a given platform.
- */
-const LEGACY_WEBHOOK_PLATFORMS: ReadonlySet<string> = new Set(['slack', 'feishu', 'lark', 'qq']);
-
-/**
  * Resolve the effective connection mode for a single provider.
  *
  * Resolution order:
- * 1. Explicit `settings.connectionMode` (set when the user saves the form)
- * 2. For platforms in `LEGACY_WEBHOOK_PLATFORMS`, fall back to `'webhook'` so
- *    legacy provider rows keep their original behavior.
- * 3. Otherwise fall back to `platform.connectionMode`, which is the platform's
- *    default runtime mode (single-mode platforms) or the recommended default
- *    for new providers (any future multi-mode platform with no legacy data).
+ * 1. Explicit `settings.connectionMode` (set when the user saves the form,
+ *    or injected by `mergeWithDefaults` from `field.default` in the schema).
+ * 2. `platform.connectionMode` — the platform's runtime default.
+ * 3. `'webhook'` if the platform is unknown.
+ *
+ * Callers should always pass settings that have been merged with schema
+ * defaults — use `resolveConnectionMode` (in this file) instead of calling
+ * this directly with raw DB settings.
  */
 export function getEffectiveConnectionMode(
   platform: PlatformDefinition | undefined,
@@ -90,10 +77,6 @@ export function getEffectiveConnectionMode(
 ): ConnectionMode {
   const fromSettings = settings?.connectionMode as ConnectionMode | undefined;
   if (fromSettings) return fromSettings;
-
-  if (platform && LEGACY_WEBHOOK_PLATFORMS.has(platform.id)) {
-    return 'webhook';
-  }
 
   return platform?.connectionMode ?? 'webhook';
 }

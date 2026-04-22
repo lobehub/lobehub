@@ -135,7 +135,7 @@ describe('resolveConnectionMode', () => {
     expect(resolveConnectionMode(makePlatform(), { connectionMode: 'webhook' })).toBe('webhook');
   });
 
-  it('falls back to legacy behavior when platform definition is missing', () => {
+  it('falls back to webhook when platform definition is missing', () => {
     expect(resolveConnectionMode(undefined, null)).toBe('webhook');
     expect(resolveConnectionMode(undefined, { connectionMode: 'websocket' })).toBe('websocket');
   });
