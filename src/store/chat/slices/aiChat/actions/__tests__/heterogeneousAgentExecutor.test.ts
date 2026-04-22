@@ -1413,6 +1413,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(threadAssistants.length).toBeGreaterThanOrEqual(2);
     });
 
+    it('routes delayed tool_result to thread bucket when it arrives after subagent turn has rolled over', async () => {
+      // Regression: `findRunByInnerToolCallId` must resolve across ALL
+      // turns of a subagent run, not just the current one. Previously
+      // it only consulted `state.persistedIds`, which `ensureSubagentRun`
+      // wipes on every turn advance — so a `tool_result` for a prior
+      // turn's `tool_use` silently skipped `run.stream.update` and left
+      // the in-thread tool bubble stuck on its loading spinner until the
+      // user re-opened the Thread (main-topic `fetchAndReplaceMessages`
+      // does not rehydrate thread buckets).
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        // Turn 1: lifetimeToolCallIds gets `toolu_child_1`.
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child_1', 'Read'),
+        // Turn 2: ensureSubagentRun wipes state.persistedIds. The
+        // run-lifetime set must still remember `toolu_child_1`.
+        ccSubagentToolUse('msg_sub_2', 'toolu_task', 'toolu_child_2', 'Write'),
+        // Delayed tool_result for the FIRST turn's tool_use.
+        ccToolResult('toolu_child_1', 'turn 1 output'),
+        ccResult(),
+      ]);
+
+      const startOpMock = (store.startOperation as ReturnType<typeof vi.fn>).mock;
+      const subOpIdx = startOpMock.calls.findIndex(([p]: any) => p?.type === 'subagentThread');
+      expect(subOpIdx).toBeGreaterThanOrEqual(0);
+      const subOperationId = startOpMock.results[subOpIdx].value.operationId;
+
+      const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const delayedResultDispatch = dispatches.find(
+        ([payload, ctx]: any) =>
+          ctx?.operationId === subOperationId &&
+          payload.type === 'updateMessage' &&
+          payload.value?.content === 'turn 1 output',
+      );
+      expect(delayedResultDispatch).toBeDefined();
+    });
+
     it('records subagent tool_uses on IN-THREAD assistant tools[], not on main', async () => {
       await runWithEvents([
         ccInit(),
