@@ -1530,6 +1530,34 @@ describe('LobeOpenAICompatibleFactory', () => {
           imageUrl: 'data:image/png;base64,gpt-image-edited-base64',
         });
       });
+
+      it('should NOT send input_fidelity for gpt-image-2 (unsupported param)', async () => {
+        const mockResponse = {
+          data: [{ b64_json: 'gpt-image-2-edited-base64' }],
+        };
+
+        const mockFile = new File(['content'], 'test-image.jpg', { type: 'image/jpeg' });
+
+        vi.mocked(openaiHelpers.convertImageUrlToFile).mockResolvedValue(mockFile);
+        vi.spyOn(instance['client'].images, 'edit').mockResolvedValue(mockResponse as any);
+
+        const payload = {
+          model: 'gpt-image-2',
+          params: {
+            imageUrl: 'https://example.com/image.jpg',
+            prompt: 'Edit this image with gpt-image-2',
+          },
+        };
+
+        await (instance as any).createImage(payload);
+
+        const editArgs = vi.mocked(instance['client'].images.edit).mock.calls[0][0];
+        expect(editArgs).not.toHaveProperty('input_fidelity');
+        expect(editArgs).toMatchObject({
+          model: 'gpt-image-2',
+          n: 1,
+        });
+      });
     });
 
     describe('error handling', () => {
