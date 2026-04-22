@@ -23,6 +23,7 @@ import type {
 import { isDev } from '@/utils/env';
 
 import { platformCredentialBodyMap } from '../platform/registry';
+import { extractSettingsDefaults } from './formState';
 import type { ChannelFormValues } from './index';
 
 const prefixCls = 'ant';
@@ -243,14 +244,10 @@ const Body = memo<BodyProps>(({ platformDef, form, hasConfig, currentConfig, onA
   const [settingsActive, setSettingsActive] = useState(false);
 
   const handleResetSettings = useCallback(() => {
-    const defaults: Record<string, any> = {};
-    for (const field of settingsFields) {
-      if (field.default !== undefined) {
-        defaults[field.key] = field.default;
-      }
-    }
-    form.setFieldsValue({ settings: defaults });
-  }, [form, settingsFields]);
+    form.setFieldsValue({
+      settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
+    });
+  }, [form, platformDef.schema]);
 
   return (
     <Form
