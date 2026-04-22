@@ -5,6 +5,7 @@ import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-i
 import {
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
+  HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
 import { Codex } from '@lobehub/icons';
 import { Avatar, Block, Button, Flexbox, Snippet, Text } from '@lobehub/ui';
@@ -29,6 +30,8 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
       ? error.installCommands
       : CODEX_CLI_INSTALL_COMMANDS;
     const [recommendedCommand, alternativeCommand] = installCommands;
+    const showErrorReason =
+      Boolean(error?.message) && error?.code !== HeterogeneousAgentSessionErrorCode.CliNotFound;
 
     const content = (
       <Flexbox gap={12}>
@@ -46,7 +49,7 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
           </Flexbox>
         </Flexbox>
 
-        {error?.message && (
+        {showErrorReason && (
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('codexInstallGuide.reason', { message: error.message })}
           </Text>

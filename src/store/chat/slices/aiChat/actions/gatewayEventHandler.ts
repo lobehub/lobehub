@@ -79,6 +79,7 @@ export const createGatewayEventHandler = (
 
   // Mutable — switches to new assistant message ID on each stream_start
   let currentAssistantMessageId = params.assistantMessageId;
+  let terminalState: 'completed' | 'error' | undefined;
 
   // Accumulated content from stream chunks (reset on each stream_start)
   let accumulatedContent = '';
@@ -92,6 +93,12 @@ export const createGatewayEventHandler = (
   };
 
   return (event: AgentStreamEvent) => {
+    if (terminalState) return;
+
+    if (event.type === 'agent_runtime_end' || event.type === 'error') {
+      terminalState = event.type === 'error' ? 'error' : 'completed';
+    }
+
     switch (event.type) {
       case 'stream_start': {
         enqueue(async () => {
@@ -246,7 +253,7 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           get().completeOperation(operationId);
 
-          await messageService
+          const updateResult = await messageService
             .updateMessageError(currentAssistantMessageId, messageError, {
               agentId: context.agentId,
               groupId: context.groupId,
@@ -255,9 +262,12 @@ export const createGatewayEventHandler = (
             })
             .catch(console.error);
 
-          // Fetch from DB first — the server may have persisted a richer error
-          // detail into the message already.
-          await fetchAndReplaceMessages(get, context).catch(console.error);
+          if (updateResult?.success && updateResult.messages) {
+            get().replaceMessages(updateResult.messages, { context });
+          } else {
+            // Fallback when the mutation response doesn't include messages.
+            await fetchAndReplaceMessages(get, context).catch(console.error);
+          }
 
           // Then overlay the inline error. This ensures the UI always shows the
           // error even if the server hasn't persisted it into the message yet

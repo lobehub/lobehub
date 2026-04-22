@@ -8,7 +8,7 @@ import { createGatewayEventHandler } from '../gatewayEventHandler';
 vi.mock('@/services/message', () => ({
   messageService: {
     getMessages: vi.fn().mockResolvedValue([]),
-    updateMessageError: vi.fn().mockResolvedValue(undefined),
+    updateMessageError: vi.fn().mockResolvedValue({ success: true }),
   },
 }));
 
@@ -368,7 +368,7 @@ describe('createGatewayEventHandler', () => {
         { operationId: 'op-1' },
       );
 
-      // Should also fetch from DB
+      // Should also refresh messages
       expect(store.replaceMessages).toHaveBeenCalled();
     });
 
@@ -468,6 +468,50 @@ describe('createGatewayEventHandler', () => {
         }),
         { operationId: 'op-1' },
       );
+    });
+
+    it('should prefer updateMessageError returned messages over an extra refetch', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const persistedMessages = [{ id: 'msg-initial', role: 'assistant' }];
+
+      vi.mocked(messageService.updateMessageError).mockResolvedValueOnce({
+        messages: persistedMessages as any,
+        success: true,
+      });
+
+      handler(makeEvent('error', { message: 'Something went wrong' }));
+      await flush();
+
+      expect(store.replaceMessages).toHaveBeenCalledWith(persistedMessages, {
+        context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
+      });
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('should ignore late events after an error so the inline error is not overwritten', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const persistedMessages = [{ id: 'msg-initial', role: 'assistant' }];
+
+      vi.mocked(messageService.updateMessageError).mockResolvedValueOnce({
+        messages: persistedMessages as any,
+        success: true,
+      });
+
+      handler(makeEvent('error', { message: 'Something went wrong' }));
+      handler(makeEvent('tool_end', { isSuccess: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'late chunk' }));
+      await flush();
+
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(store.internal_dispatchMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          value: { content: 'late chunk' },
+        }),
+        expect.any(Object),
+      );
+      expect(store.replaceMessages).toHaveBeenCalledTimes(1);
     });
   });
 
