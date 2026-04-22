@@ -77,6 +77,7 @@ const StarterList = memo(() => {
         titleKey: 'starter.write',
       },
       {
+        hot: true,
         icon: ImageIcon,
         key: 'image',
         titleKey: 'starter.imageGeneration',
@@ -105,7 +106,7 @@ const StarterList = memo(() => {
       }
 
       if (key === 'image') {
-        navigate('/image');
+        navigate('/image?model=gpt-image-2');
         return;
       }
 
