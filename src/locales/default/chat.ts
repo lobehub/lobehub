@@ -204,6 +204,8 @@ export default {
   'messageAction.expand': 'Expand Message',
   'messageAction.reaction': 'Add Reaction',
   'messageAction.regenerate': 'Regenerate',
+  'messageLongCollapse.collapse': 'Show less',
+  'messageLongCollapse.expand': 'Show more',
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
   'messages.modelCard.credit': 'Credits',
