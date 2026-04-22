@@ -3,7 +3,7 @@ import type {
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
 import { app, Notification } from 'electron';
-import { linux, macOS, windows } from 'electron-is';
+import * as electronIs from 'electron-is';
 
 import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
@@ -20,7 +20,7 @@ export default class NotificationCtr extends ControllerModule {
     if (!Notification.isSupported()) return 'denied';
     // Keep a stable status string for renderer-side UI mapping.
     // Screen3 expects macOS to return 'authorized' when granted.
-    if (!macOS()) return 'authorized';
+    if (!electronIs.macOS()) return 'authorized';
 
     // Electron 38 no longer exposes `systemPreferences.getNotificationSettings()` in types,
     // and some runtimes don't provide it at all. Use the renderer's Notification.permission
@@ -43,7 +43,7 @@ export default class NotificationCtr extends ControllerModule {
 
     // On macOS, ask permission via Web Notification API first when possible.
     // This helps keep `Notification.permission` in sync for subsequent status checks.
-    if (macOS()) {
+    if (electronIs.macOS()) {
       try {
         const mainWindow = this.app.browserManager.getMainWindow().browserWindow;
         await mainWindow.webContents.executeJavaScript('Notification.requestPermission()', true);
@@ -83,12 +83,12 @@ export default class NotificationCtr extends ControllerModule {
       }
 
       // On macOS, we may need to explicitly request notification permissions
-      if (macOS()) {
+      if (electronIs.macOS()) {
         logger.debug('macOS detected, notification permissions should be handled by system');
       }
 
       // Set app user model ID on Windows
-      if (windows()) {
+      if (electronIs.windows()) {
         app.setAppUserModelId('com.lobehub.chat');
         logger.debug('Set Windows App User Model ID for notifications');
       }
@@ -136,7 +136,7 @@ export default class NotificationCtr extends ControllerModule {
         // due to heavy gnome-shell processing. Using 'low' urgency routes notifications to the
         // message tray instead, preventing the banner's X button from being shown.
         // The urgency option is ignored on macOS and Windows.
-        urgency: linux() ? 'low' : 'normal',
+        urgency: electronIs.linux() ? 'low' : 'normal',
       });
 
       // Add more event listeners for debugging
@@ -192,7 +192,7 @@ export default class NotificationCtr extends ControllerModule {
     try {
       const next = Math.max(0, Math.floor(count));
       app.setBadgeCount(next);
-      if (macOS() && app.dock) {
+      if (electronIs.macOS() && app.dock) {
         app.dock.setBadge(next > 0 ? String(next) : '');
       }
     } catch (error) {

@@ -92,6 +92,7 @@ const updateChannel = process.env.UPDATE_CHANNEL;
 const desktopPackageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { version: string };
+const electronRuntimeExternals = ['electron'];
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 
@@ -100,12 +101,15 @@ export default defineConfig({
     build: {
       minify: !isDev,
       outDir: 'dist/main',
-      // electron-vite@5 still reads build.rollupOptions internally and doesn't expose
-      // Vite 8's rolldownOptions path yet, so this stays on the legacy field for now.
-      rollupOptions: {
+      rolldownOptions: {
         // Native modules must be externalized to work correctly.
         // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
-        external: [...getExternalDependencies(), 'bufferutil', 'utf-8-validate'],
+        external: [
+          ...electronRuntimeExternals,
+          ...getExternalDependencies(),
+          'bufferutil',
+          'utf-8-validate',
+        ],
         output: {
           // Prevent debug package from being bundled into index.js to avoid side-effect pollution
           manualChunks(id) {
@@ -139,6 +143,9 @@ export default defineConfig({
     build: {
       minify: !isDev,
       outDir: 'dist/preload',
+      rolldownOptions: {
+        external: electronRuntimeExternals,
+      },
       sourcemap: isDev ? 'inline' : false,
     },
     resolve: {
@@ -152,8 +159,7 @@ export default defineConfig({
     root: ROOT_DIR,
     build: {
       outDir: path.resolve(__dirname, 'dist/renderer'),
-      // electron-vite@5 still requires build.rollupOptions.input/output for renderer builds.
-      rollupOptions: {
+      rolldownOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
           popup: path.resolve(__dirname, 'popup.html'),

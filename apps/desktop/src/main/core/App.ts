@@ -1,11 +1,11 @@
 import os from 'node:os';
-import { join } from 'node:path';
+import path from 'node:path';
 
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
 import { app, nativeTheme, protocol } from 'electron';
 import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
-import { macOS, windows } from 'electron-is';
+import * as electronIs from 'electron-is';
 
 import { name } from '@/../../package.json';
 import { binDir, buildDir } from '@/const/dir';
@@ -258,7 +258,7 @@ export class App {
     this.isQuiting = false;
 
     app.on('window-all-closed', () => {
-      if (windows() || process.platform === 'linux') {
+      if (electronIs.windows() || process.platform === 'linux') {
         logger.info(`All windows closed, quitting application (${process.platform})`);
         app.quit();
       }
@@ -420,8 +420,8 @@ export class App {
 
     logger.debug('Setting up dev branding');
     app.setName('lobehub-desktop-dev');
-    if (macOS()) {
-      app.dock!.setIcon(join(buildDir, 'icon-dev.png'));
+    if (electronIs.macOS()) {
+      app.dock!.setIcon(path.join(buildDir, 'icon-dev.png'));
     }
   };
 
