@@ -36,6 +36,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     handleScrollOffset,
     isSpacerMessage,
     listData,
+    registerSpacerNode,
     scrollShrinking,
     spacerHeight,
     spacerActive,
@@ -188,7 +189,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
               <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                 <div
                   aria-hidden
-                  data-conversation-spacer="true"
+                  ref={registerSpacerNode}
                   style={{
                     height: spacerHeight,
                     pointerEvents: 'none',

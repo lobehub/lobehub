@@ -192,40 +192,26 @@ export const useConversationSpacer = (dataSource: string[]) => {
     };
   }, [cleanupObserver, cleanupSpacerObserver, clearRemoveTimer]);
 
-  // Observe the spacer DOM once mounted; bump layout version when its real size changes
-  // so consumers (e.g. useScrollToUserMessage) can re-fire scroll after virtua finishes
-  // measuring the spacer and extending scrollSize.
-  useEffect(() => {
-    cleanupSpacerObserver();
+  // Ref callback bound to this hook's own spacer node. Using a ref (rather than
+  // a document-wide querySelector) scopes observation to the spacer owned by
+  // this list instance — ConversationProvider supports multiple simultaneously
+  // mounted lists, so a global selector could attach to another panel's spacer
+  // and drive spacerLayoutVersion from unrelated layout changes.
+  const registerSpacerNode = useCallback(
+    (node: HTMLElement | null) => {
+      cleanupSpacerObserver();
 
-    if (!mounted || typeof ResizeObserver === 'undefined') return;
-
-    const attach = () => {
-      const el = document.querySelector('[data-conversation-spacer="true"]') as HTMLElement | null;
-      if (!el) return false;
+      if (!node || typeof ResizeObserver === 'undefined') return;
 
       const observer = new ResizeObserver(() => {
         setSpacerLayoutVersion((v) => v + 1);
       });
-      observer.observe(el);
+      observer.observe(node);
       spacerObserverRef.current = observer;
       setSpacerLayoutVersion((v) => v + 1);
-      return true;
-    };
-
-    if (!attach()) {
-      // Spacer DOM may not be in the tree on the same commit tick; retry next frame.
-      const raf = requestAnimationFrame(() => {
-        attach();
-      });
-      return () => {
-        cancelAnimationFrame(raf);
-        cleanupSpacerObserver();
-      };
-    }
-
-    return cleanupSpacerObserver;
-  }, [cleanupSpacerObserver, mounted]);
+    },
+    [cleanupSpacerObserver],
+  );
 
   useEffect(() => {
     const newMessageCount = dataSource.length - prevLengthRef.current;
@@ -291,6 +277,7 @@ export const useConversationSpacer = (dataSource: string[]) => {
     handleScrollOffset,
     isSpacerMessage: (id: string) => id === CONVERSATION_SPACER_ID,
     listData,
+    registerSpacerNode,
     scrollShrinking: isScrollShrinking,
     spacerActive: mounted,
     spacerHeight: renderedHeight,
