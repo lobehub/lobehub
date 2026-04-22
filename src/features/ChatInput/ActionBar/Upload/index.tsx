@@ -12,7 +12,7 @@ import { message } from '@/components/AntdStaticMethods';
 import FileIcon from '@/components/FileIcon';
 import RepoIcon from '@/components/LibIcon';
 import TipGuide from '@/components/TipGuide';
-import { AttachKnowledgeModal } from '@/features/LibraryModal';
+import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -54,7 +54,6 @@ const FileUpload = memo(() => {
     preferenceSelectors.showUploadFileInKnowledgeBaseTip(s),
     s.updateGuideState,
   ]);
-  const [modalOpen, setModalOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -225,7 +224,7 @@ const FileUpload = memo(() => {
       key: 'knowledge-base-store',
       label: t('knowledgeBase.viewMore'),
       onClick: () => {
-        setModalOpen(true);
+        openAttachKnowledgeModal();
       },
     },
   );
@@ -269,7 +268,6 @@ const FileUpload = memo(() => {
       ) : (
         content
       )}
-      <AttachKnowledgeModal open={modalOpen} setOpen={setModalOpen} />
     </Suspense>
   );
 });
