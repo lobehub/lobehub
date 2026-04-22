@@ -265,10 +265,24 @@ export default class GitController extends ControllerModule {
    * Count commits HEAD is ahead/behind its upstream tracking ref.
    * Returns `hasUpstream: false` when the branch has no upstream configured
    * (e.g. local-only branches, or after the remote branch is deleted).
+   *
+   * Does a best-effort `git fetch` first so the result reflects what's
+   * actually on the remote — the renderer calls this via SWR with
+   * `revalidateOnFocus`, so the fetch piggybacks on window re-focus. Fetch
+   * failures (offline, no credentials, no `origin` remote) are swallowed so
+   * we still return whatever can be computed against the cached refs.
    */
   @IpcMethod()
   async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
     const execFileAsync = promisify(execFile);
+    try {
+      await execFileAsync('git', ['fetch', '--no-tags', '--quiet', 'origin'], {
+        cwd: dirPath,
+        timeout: 10_000,
+      });
+    } catch {
+      // swallow — fall through to compute against cached refs
+    }
     try {
       const { stdout: upstreamOut } = await execFileAsync(
         'git',
