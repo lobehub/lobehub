@@ -93,6 +93,7 @@ const desktopPackageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { version: string };
 const electronRuntimeExternals = ['electron'];
+const mainProcessRuntimeExternals = [...electronRuntimeExternals, 'node-mac-permissions'];
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 
@@ -105,7 +106,7 @@ export default defineConfig({
         // Native modules must be externalized to work correctly.
         // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
         external: [
-          ...electronRuntimeExternals,
+          ...mainProcessRuntimeExternals,
           ...getExternalDependencies(),
           'bufferutil',
           'utf-8-validate',
