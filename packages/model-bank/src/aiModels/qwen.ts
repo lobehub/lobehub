@@ -15,17 +15,19 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
+      'Kimi-K2 is a large language model launched by Moonshot AI, with excellent coding and tool calling capabilities. Service deployment is only supported in mainland China.',
     displayName: 'Kimi K2.6',
     id: 'kimi-k2.6',
-    maxOutput: 32_768,
+    maxOutput: 98_304,
     pricing: {
       currency: 'CNY',
       units: [
         { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 6.5 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2026-04-21',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },

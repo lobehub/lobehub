@@ -14,6 +14,31 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      'Kimi K2.6 is an open-source native multimodal agent model from Moonshot AI, achieving open-source state-of-the-art performance on multiple mainstream benchmarks including HLE (with tools), SWE-Bench Pro, and BrowseComp. The model adopts a MoE architecture with 1T total parameters and 32B active parameters, supports a 256K token context window, and integrates native multimodal capabilities.',
+    displayName: 'Kimi-K2.6 (Pro)',
+    id: 'Pro/moonshotai/Kimi-K2.6',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-21',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       'Qwen3.6-35B-A3B is a large language model from the Qwen team in the Qwen3.6 series, using a Mixture-of-Experts (MoE) architecture with 35B total parameters and 3B active parameters. It balances efficient inference with excellent performance and supports both thinking and non-thinking modes, allowing flexible switching between fast response and deep reasoning.',
     displayName: 'Qwen3.6 35B A3B',
     id: 'Qwen/Qwen3.6-35B-A3B',
@@ -1536,7 +1561,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true,
     },
     contextWindowTokens: 65_536,
     description:
@@ -1814,7 +1838,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'Qwen3-30B-A3B-Instruct-2507 is the updated non-thinking version of Qwen3-30B-A3B. It is an MoE model with 30.5B total and 3.3B active parameters. It significantly improves instruction following, logical reasoning, text understanding, math, science, coding, and tool use, expands multilingual long-tail knowledge, and better aligns with user preferences on subjective open tasks. It supports 256K context. This model is non-thinking only and will not output `<think></think>` tags.',
+      'Qwen3-30B-A3B-Instruct-2507 is the updated non-thinking version of Qwen3-30B-A3B. It is an MoE model with 30.5B total and 3.3B active parameters. It significantly improves instruction following, logical reasoning, text understanding, math, science, coding, and tool use, expands multilingual long-tail knowledge, and better aligns with user preferences on subjective open tasks. It supports 256K context. This model is non-thinking only and will not output `נקוד` tags.',
     displayName: 'Qwen3 30B A3B Instruct 2507',
     id: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
     organization: 'Qwen',

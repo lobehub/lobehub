@@ -7,6 +7,81 @@ const infiniaiChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.6 is an open-source native multimodal agent model launched by Moonshot AI, targeting high-complexity scenarios such as long-range programming, code-driven design, proactive autonomous execution, and clustered task orchestration. The model adopts a MoE architecture with about 1T total parameters and 32B active parameters, supports a 256K context window, and integrates the MoonViT visual encoder, enabling stronger integrated capabilities in text, code, and visual collaboration tasks. Compared to previous generations, Kimi K2.6 emphasizes end-to-end completion capabilities in real engineering workflows, making it suitable for complex code generation and repair, front-end page and lightweight full-stack process construction, multi-agent collaborative execution, and long-term autonomous task processing.',
+    displayName: 'Kimi K2.6',
+    enabled: true,
+    id: 'kimi-k2.6',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-17',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.5 is an open-source native multimodal agent model built on Kimi-K2-Base. It combines vision and language understanding with advanced agent capabilities, instant and thinking modes, and both conversational and agentic workflows.',
+    displayName: 'Kimi K2.5',
+    id: 'kimi-k2.5',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 21, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-02',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'MiMo-V2-Pro is Xiaomi’s flagship base model for complex reasoning, long-document processing, and agent workflows. It uses a trillion-parameter MoE architecture with 32B active parameters, supports a 256K context window, and is optimized for Claude-compatible APIs, coding, and multi-step planning.',
+    displayName: 'MiMo-V2 Pro',
+    id: 'mimo-v2-pro',
+    maxOutput: 262_144,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-15',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 198_000,
     description:
@@ -31,38 +106,11 @@ const infiniaiChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi K2.5 is an open-source native multimodal agent model built on Kimi-K2-Base. It combines vision and language understanding with advanced agent capabilities, instant and thinking modes, and both conversational and agentic workflows.',
-    displayName: 'Kimi K2.5',
-    enabled: true,
-    id: 'kimi-k2.5',
-    maxOutput: 65_536,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 21, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-04-02',
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
     },
     contextWindowTokens: 204_800,
     description:
       'MiniMax-M2.7 has reached or refreshed the latest SOTA benchmark in programming, tool calling and search, office productivity and many other scenarios, officially starting the journey of model recursive self-improvement.',
     displayName: 'MiniMax M2.7',
-    enabled: true,
     id: 'minimax-m2.7',
     pricing: {
       currency: 'CNY',
