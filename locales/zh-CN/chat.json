@@ -496,7 +496,7 @@
   "workflow.expandFull": "全部展开",
   "workflow.failedSuffix": "（失败）",
   "workflow.summaryFailed": "{{count}} 次失败",
-  "workflow.summaryMoreTools": "等 {{count}} 种工具",
+  "workflow.summaryMoreTools": "共 {{count}} 种工具",
   "workflow.summaryTotalCalls": "共 {{count}} 次调用",
   "workflow.thoughtForDuration": "思考了 {{duration}}",
   "workflow.toolDisplayName.activateDevice": "激活了设备",

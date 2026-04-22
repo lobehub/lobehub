@@ -541,7 +541,7 @@ export default {
   'viewMode.wideScreen': 'Widescreen',
   'workflow.failedSuffix': '(failed)',
   'workflow.summaryFailed': '{{count}} failed',
-  'workflow.summaryMoreTools': '+{{count}} more',
+  'workflow.summaryMoreTools': '{{count}} tool kinds',
   'workflow.summaryTotalCalls': '{{count}} calls total',
   'workflow.thoughtForDuration': 'Thought for {{duration}}',
   'workflow.toolDisplayName.activateDevice': 'Activated device',
