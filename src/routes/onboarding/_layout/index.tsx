@@ -4,7 +4,7 @@ import { AGENT_ONBOARDING_ENABLED } from '@lobechat/business-const';
 import { Center, Flexbox, FluentEmoji, Text } from '@lobehub/ui';
 import { Divider, Popconfirm } from 'antd';
 import { cx, useTheme } from 'antd-style';
-import { type FC, type MouseEvent, type PropsWithChildren, useCallback, useMemo } from 'react';
+import { type FC, type MouseEvent, type PropsWithChildren, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -25,11 +25,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const finishOnboarding = useUserStore((s) => s.finishOnboarding);
   const isAgentOnboarding = pathname.startsWith('/onboarding/agent');
 
-  const showModeSwitchAndSkipFooter = useMemo(() => {
-    if (!isAgentOnboarding) return true;
-
-    return AGENT_ONBOARDING_ENABLED;
-  }, [isAgentOnboarding]);
+  const showModeSwitchAndSkipFooter = AGENT_ONBOARDING_ENABLED;
 
   const handleConfirmSkip = useCallback(() => {
     finishOnboarding();
