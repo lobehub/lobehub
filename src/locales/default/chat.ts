@@ -322,7 +322,7 @@ export default {
   'selectedAgents': 'Selected agents',
   'followUpPlaceholder': 'Follow up. @ to assign tasks to other agents.',
   'sendPlaceholder': 'Ask, create, or start a task, <hotkey><hotkey/>',
-  'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task, <hotkey><hotkey/>',
+  'sendPlaceholderHeterogeneous': 'Ask {{name}} to do a task...',
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sessionGroup.config': 'Category Management',
