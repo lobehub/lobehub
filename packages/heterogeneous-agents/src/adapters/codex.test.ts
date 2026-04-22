@@ -129,4 +129,48 @@ describe('CodexAdapter', () => {
       type: 'step_complete',
     });
   });
+
+  it('hydrates turn metadata model from session_configured when turn.completed omits it', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({
+      model: 'gpt-5.3-codex',
+      type: 'session_configured',
+    });
+
+    const events = adapter.adapt({
+      type: 'turn.completed',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 3,
+      },
+    });
+
+    expect(events[0]).toMatchObject({
+      data: {
+        model: 'gpt-5.3-codex',
+        phase: 'turn_metadata',
+        provider: 'codex',
+      },
+      type: 'step_complete',
+    });
+  });
+
+  it('emits turn metadata when turn.completed reports a model without usage', () => {
+    const adapter = new CodexAdapter();
+
+    const events = adapter.adapt({
+      model: 'gpt-5.4',
+      type: 'turn.completed',
+    });
+
+    expect(events[0]).toMatchObject({
+      data: {
+        model: 'gpt-5.4',
+        phase: 'turn_metadata',
+        provider: 'codex',
+      },
+      type: 'step_complete',
+    });
+  });
 });

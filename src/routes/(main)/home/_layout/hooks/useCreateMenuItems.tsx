@@ -12,12 +12,10 @@ import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
-import CodexCLIInstallGuide from '@/features/Electron/CodexCLIInstallGuide';
 import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import type { CreateAgentParams } from '@/services/agent';
 import type { GroupMemberConfig } from '@/services/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
-import { toolDetectorService } from '@/services/electron/toolDetector';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
@@ -38,7 +36,7 @@ interface CreateAgentOptions {
 export const useCreateMenuItems = () => {
   const { t } = useTranslation('chat');
   const { t: tFile } = useTranslation('file');
-  const { message, notification } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const groupTemplates = useGroupTemplates();
   const enableHeterogeneousAgent = useUserStore(labPreferSelectors.enableHeterogeneousAgent);
@@ -231,29 +229,6 @@ export const useCreateMenuItems = () => {
     [storeCreateAgent, refreshAgentList, navigate],
   );
 
-  const ensureCodexCliAvailable = useCallback(async () => {
-    try {
-      const status = await toolDetectorService.detectTool('codex', true);
-      if (status.available) return true;
-    } catch (error) {
-      console.error('[useCreateMenuItems] Failed to detect Codex CLI:', error);
-    }
-
-    notification.error({
-      description: (
-        <CodexCLIInstallGuide
-          variant="compact"
-          onOpenSystemTools={() => navigate('/settings/system-tools')}
-        />
-      ),
-      duration: 0,
-      message: t('codexInstallGuide.menuNotification.title'),
-      placement: 'topRight',
-    });
-
-    return false;
-  }, [navigate, notification, t]);
-
   const agentModal = useOptionalAgentModal();
   const openCreateModal = agentModal?.openCreateModal;
 
@@ -295,13 +270,12 @@ export const useCreateMenuItems = () => {
           label: t(definition.menuLabelKey),
           onClick: async (info) => {
             info.domEvent?.stopPropagation();
-            if (definition.type === 'codex' && !(await ensureCodexCliAvailable())) return;
             await createHeterogeneousAgent(definition, options);
           },
         };
       });
     },
-    [t, createHeterogeneousAgent, enableHeterogeneousAgent, ensureCodexCliAvailable],
+    [t, createHeterogeneousAgent, enableHeterogeneousAgent],
   );
 
   /**

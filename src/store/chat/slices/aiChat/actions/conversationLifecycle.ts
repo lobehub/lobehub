@@ -367,12 +367,15 @@ export class ConversationLifecycleActionImpl {
       // Persist messages to DB first (same as client mode)
       let heteroData: SendMessageServerResponse | undefined;
       try {
-        const { model } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
             groupId: operationContext.groupId ?? undefined,
-            newAssistantMessage: { model, provider: heterogeneousProvider.type },
+            // External CLIs own model selection and may reroute independently
+            // from the agent's requested model. Persist only the runtime
+            // provider up front; the adapter backfills the actual model later
+            // if the CLI reports it.
+            newAssistantMessage: { provider: heterogeneousProvider.type },
             newTopic: !operationContext.topicId
               ? {
                   metadata: workingDirectory ? { workingDirectory } : undefined,

@@ -83,6 +83,19 @@ const getToolResultData = (item: CodexCommandExecutionItem): ToolResultData => {
   };
 };
 
+const getEventModel = (raw: any): string | undefined => {
+  const candidates = [
+    raw?.model,
+    raw?.session?.model,
+    raw?.sessionMeta?.model,
+    raw?.session_meta?.model,
+    raw?.turn?.model,
+    raw?.turn_context?.model,
+  ];
+
+  return candidates.find((candidate): candidate is string => typeof candidate === 'string');
+};
+
 export const codexPreset: AgentCLIPreset = {
   baseArgs: ['exec', '--json', '--skip-git-repo-check', '--full-auto'],
   promptMode: 'stdin',
@@ -90,6 +103,7 @@ export const codexPreset: AgentCLIPreset = {
 };
 
 export class CodexAdapter implements AgentEventAdapter {
+  private currentModel?: string;
   sessionId?: string;
 
   private pendingToolCalls = new Set<string>();
@@ -106,6 +120,10 @@ export class CodexAdapter implements AgentEventAdapter {
       }
       case 'turn.started': {
         return this.handleTurnStarted();
+      }
+      case 'session.configured':
+      case 'session_configured': {
+        return this.handleSessionConfigured(raw);
       }
       case 'turn.completed': {
         return this.handleTurnCompleted(raw);
@@ -135,16 +153,27 @@ export class CodexAdapter implements AgentEventAdapter {
   }
 
   private handleTurnCompleted(raw: any): HeterogeneousAgentEvent[] {
+    const model = getEventModel(raw) || this.currentModel;
+    if (model) this.currentModel = model;
+
     const usage = toUsageData(raw.usage);
-    if (!usage) return [];
+    if (!usage && !model) return [];
 
     const data: StepCompleteData = {
+      ...(model ? { model } : {}),
       phase: 'turn_metadata',
       provider: CODEX_IDENTIFIER,
-      usage,
+      ...(usage ? { usage } : {}),
     };
 
     return [this.makeEvent('step_complete', data)];
+  }
+
+  private handleSessionConfigured(raw: any): HeterogeneousAgentEvent[] {
+    const model = getEventModel(raw);
+    if (model) this.currentModel = model;
+
+    return [];
   }
 
   private handleTurnStarted(): HeterogeneousAgentEvent[] {

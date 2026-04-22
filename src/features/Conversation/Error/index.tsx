@@ -1,4 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
@@ -132,11 +133,12 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
 
   if (
     error.type === AgentRuntimeErrorType.AgentRuntimeError &&
-    error.body?.agentType === 'codex' &&
-    error.body?.code === 'cli_not_found'
+    error.body?.code === HeterogeneousAgentSessionErrorCode.CliNotFound &&
+    (error.body?.agentType === 'claude-code' || error.body?.agentType === 'codex')
   ) {
     return (
       <CodexCLIInstallGuide
+        agentType={error.body.agentType}
         error={error.body}
         onOpenSystemTools={() => navigate('/settings/system-tools')}
       />

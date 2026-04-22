@@ -13,8 +13,6 @@ const switchToGroupMock = vi.hoisted(() => vi.fn());
 const createGroupMock = vi.hoisted(() => vi.fn());
 const loadGroupsMock = vi.hoisted(() => vi.fn());
 const createNewPageMock = vi.hoisted(() => vi.fn());
-const detectToolMock = vi.hoisted(() => vi.fn());
-const notificationErrorMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 
@@ -24,6 +22,16 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   HETEROGENEOUS_AGENT_CLIENT_CONFIGS: [
+    {
+      avatar: 'claude-avatar',
+      command: 'claude',
+      icon: () => null,
+      iconId: 'ClaudeCode',
+      menuKey: 'newClaudeCodeAgent',
+      menuLabelKey: 'newClaudeCodeAgent',
+      title: 'Claude Code',
+      type: 'claude-code',
+    },
     {
       avatar: 'avatar',
       command: 'codex',
@@ -49,7 +57,7 @@ vi.mock('antd', () => ({
   App: {
     useApp: () => ({
       message: { error: messageErrorMock },
-      notification: { error: notificationErrorMock },
+      notification: { error: vi.fn() },
     }),
   },
 }));
@@ -75,11 +83,6 @@ vi.mock('@/components/ChatGroupWizard/templates', () => ({
   useGroupTemplates: () => [],
 }));
 
-vi.mock('@/features/Electron/CodexCLIInstallGuide', () => ({
-  __esModule: true,
-  default: () => null,
-}));
-
 vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
   useOptionalAgentModal: () => undefined,
 }));
@@ -87,12 +90,6 @@ vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
 vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
     createGroupWithMembers: vi.fn(),
-  },
-}));
-
-vi.mock('@/services/electron/toolDetector', () => ({
-  toolDetectorService: {
-    detectTool: detectToolMock,
   },
 }));
 
@@ -152,37 +149,40 @@ describe('useCreateMenuItems', () => {
     vi.clearAllMocks();
   });
 
-  it('shows the install prompt instead of creating a Codex agent when the CLI is missing', async () => {
-    detectToolMock.mockResolvedValue({ available: false });
-    const stopPropagation = vi.fn();
+  it('creates the Claude Code agent normally when the CLI is available', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
 
-    const codexItem = result.current
+    const claudeItem = result.current
       .createHeterogeneousAgentMenuItems()
-      .find((item) => isActionItem(item) && item.key === 'newCodexAgent');
+      .find((item) => isActionItem(item) && item.key === 'newClaudeCodeAgent');
 
-    if (!isActionItem(codexItem)) {
-      throw new Error('Expected Codex menu item');
+    if (!isActionItem(claudeItem)) {
+      throw new Error('Expected Claude Code menu item');
     }
 
     await act(async () => {
-      await codexItem.onClick?.({ domEvent: { stopPropagation } });
+      await claudeItem.onClick?.({ domEvent: { stopPropagation: vi.fn() } });
     });
 
-    expect(stopPropagation).toHaveBeenCalled();
-    expect(detectToolMock).toHaveBeenCalledWith('codex', true);
-    expect(createAgentMock).not.toHaveBeenCalled();
-    expect(notificationErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        duration: 0,
-        message: 'codexInstallGuide.menuNotification.title',
-        placement: 'topRight',
-      }),
-    );
+    expect(createAgentMock).toHaveBeenCalledWith({
+      config: {
+        agencyConfig: {
+          heterogeneousProvider: {
+            command: 'claude',
+            type: 'claude-code',
+          },
+        },
+        avatar: 'claude-avatar',
+        systemRole: '',
+        title: 'Claude Code',
+      },
+      groupId: undefined,
+    });
+    expect(refreshAgentListMock).toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-codex');
   });
 
-  it('creates the Codex agent normally when the CLI is available', async () => {
-    detectToolMock.mockResolvedValue({ available: true });
+  it('creates the Codex agent normally without preflight interception', async () => {
     const { result } = renderHook(() => useCreateMenuItems());
 
     const codexItem = result.current

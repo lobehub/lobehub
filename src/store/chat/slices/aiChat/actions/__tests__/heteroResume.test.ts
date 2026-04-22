@@ -24,6 +24,7 @@ describe('resolveHeteroResume', () => {
 
     expect(resolveHeteroResume(metadata, '/Users/me/projB')).toEqual({
       cwdChanged: true,
+      reason: 'cwd_changed',
       resumeSessionId: undefined,
     });
   });
@@ -48,6 +49,7 @@ describe('resolveHeteroResume', () => {
 
     expect(resolveHeteroResume(metadata, undefined)).toEqual({
       cwdChanged: true,
+      reason: 'cwd_changed',
       resumeSessionId: undefined,
     });
   });
@@ -62,6 +64,7 @@ describe('resolveHeteroResume', () => {
 
     expect(resolveHeteroResume(metadata, '/Users/me/any')).toEqual({
       cwdChanged: true,
+      reason: 'missing_bound_cwd',
       resumeSessionId: undefined,
     });
   });

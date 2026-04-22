@@ -1,3 +1,11 @@
+export const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
+  'https://docs.anthropic.com/en/docs/claude-code/setup';
+
+export const CLAUDE_CODE_CLI_INSTALL_COMMANDS = [
+  'curl -fsSL https://claude.ai/install.sh | bash',
+  'brew install --cask claude-code',
+] as const;
+
 export const CODEX_CLI_INSTALL_DOCS_URL =
   'https://github.com/openai/codex#installing-and-running-codex-cli';
 
@@ -8,6 +16,8 @@ export const CODEX_CLI_INSTALL_COMMANDS = [
 
 export const HeterogeneousAgentSessionErrorCode = {
   CliNotFound: 'cli_not_found',
+  ResumeCwdMismatch: 'resume_cwd_mismatch',
+  ResumeThreadNotFound: 'resume_thread_not_found',
 } as const;
 
 export type HeterogeneousAgentSessionErrorCode =
@@ -20,4 +30,7 @@ export interface HeterogeneousAgentSessionError {
   docsUrl?: string;
   installCommands?: readonly string[];
   message: string;
+  resumeSessionId?: string;
+  stderr?: string;
+  workingDirectory?: string;
 }

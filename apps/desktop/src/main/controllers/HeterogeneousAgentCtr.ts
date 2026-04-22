@@ -7,6 +7,8 @@ import type { Readable, Writable } from 'node:stream';
 
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import {
+  CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+  CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
   HeterogeneousAgentSessionErrorCode,
@@ -24,6 +26,18 @@ import { createLogger } from '@/utils/logger';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
+const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
+  /no conversation found/i,
+  /thread .*not found/i,
+  /conversation .*not found/i,
+  /resume.*not found/i,
+] as const;
+const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
+  /working directory/i,
+  /\bcwd\b/i,
+  /different directory/i,
+  /directory.*mismatch/i,
+] as const;
 
 /** Directory under appStoragePath for caching downloaded files */
 const FILE_CACHE_DIR = 'heteroAgent/files';
@@ -90,6 +104,7 @@ interface AgentSession {
   cwd?: string;
   env?: Record<string, string>;
   process?: ChildProcess;
+  resumeSessionId?: string;
   sessionId: string;
 }
 
@@ -122,16 +137,100 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     };
   }
 
-  private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
-    if (
-      session.agentType === 'codex' &&
-      typeof error === 'object' &&
-      error &&
-      'code' in error &&
-      error.code === 'ENOENT'
-    ) {
-      return this.buildCodexCliMissingError(session);
+  private buildClaudeCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    return {
+      agentType: 'claude-code',
+      code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+      command: session.command,
+      docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+      installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+      message:
+        'Claude Code CLI was not found. Install it and make sure the `claude` command is available in PATH.',
+    };
+  }
+
+  private buildCliMissingError(session: AgentSession): HeterogeneousAgentSessionError | undefined {
+    switch (session.agentType) {
+      case 'claude-code': {
+        return this.buildClaudeCodeCliMissingError(session);
+      }
+      case 'codex': {
+        return this.buildCodexCliMissingError(session);
+      }
+      default: {
+        return;
+      }
     }
+  }
+
+  private buildCodexResumeError(
+    code:
+      | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+      | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+    stderr: string,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError {
+    const message =
+      code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+        ? 'The saved Codex thread can only be resumed from its original working directory.'
+        : 'The saved Codex thread could not be found, so it can no longer be resumed.';
+
+    return {
+      agentType: 'codex',
+      code,
+      command: session.command,
+      message,
+      resumeSessionId: session.resumeSessionId,
+      stderr,
+      workingDirectory: session.cwd,
+    };
+  }
+
+  private getCodexResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (session.agentType !== 'codex' || !session.resumeSessionId) return;
+
+    const message =
+      typeof error === 'string'
+        ? error
+        : error instanceof Error
+          ? error.message
+          : typeof error === 'object' &&
+              error &&
+              'message' in error &&
+              typeof error.message === 'string'
+            ? error.message
+            : undefined;
+
+    if (!message) return;
+
+    if (CODEX_RESUME_CWD_MISMATCH_PATTERNS.some((pattern) => pattern.test(message))) {
+      return this.buildCodexResumeError(
+        HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch,
+        message,
+        session,
+      );
+    }
+
+    if (CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(message))) {
+      return this.buildCodexResumeError(
+        HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message,
+        session,
+      );
+    }
+  }
+
+  private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
+    if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
+      const cliMissingError = this.buildCliMissingError(session);
+      if (cliMissingError) return cliMissingError;
+    }
+
+    const resumeError = this.getCodexResumeError(error, session);
+    if (resumeError) return resumeError;
 
     return error instanceof Error ? error.message : String(error);
   }
@@ -139,14 +238,21 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
-    if (session.agentType !== 'codex') return;
+    const detectorName =
+      session.agentType === 'claude-code'
+        ? 'claude'
+        : session.agentType === 'codex'
+          ? 'codex'
+          : undefined;
+    if (!detectorName) return;
 
     const toolDetectorManager = this.app.toolDetectorManager;
-    const status = await toolDetectorManager?.detect?.('codex', true);
+    const status = await toolDetectorManager?.detect?.(detectorName, true);
+    const cliMissingError = this.buildCliMissingError(session);
 
-    if (!status || status.available) return;
+    if (!status || status.available || !cliMissingError) return;
 
-    return this.buildCodexCliMissingError(session);
+    return cliMissingError;
   }
 
   // ─── Broadcast ───
@@ -328,6 +434,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       cwd: params.cwd,
       env: params.env,
       sessionId,
+      resumeSessionId: params.resumeSessionId,
     });
 
     logger.info('Session created:', { agentType, sessionId });
@@ -465,11 +572,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         } else {
           const stderrOutput = stderrChunks.join('').trim();
           const errorMsg = stderrOutput || `Agent exited with code ${code}`;
+          const sessionError = this.getSessionErrorPayload(errorMsg, session);
           this.broadcast('heteroAgentSessionError', {
-            error: errorMsg,
+            error: sessionError,
             sessionId: session.sessionId,
           });
-          reject(new Error(errorMsg));
+          reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
         }
       });
     });

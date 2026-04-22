@@ -10,6 +10,7 @@ vi.mock('@lobechat/const', () => ({
 }));
 
 vi.mock('@lobehub/icons', () => ({
+  ClaudeCode: () => <span>Claude Code Icon</span>,
   Codex: () => <span>Codex Icon</span>,
 }));
 
@@ -43,13 +44,23 @@ vi.mock('react-i18next', () => ({
     t: (key: string, options?: { message?: string }) =>
       (
         ({
+          'claudeCodeInstallGuide.actions.openDocs': 'Open Install Guide',
+          'claudeCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
+          'claudeCodeInstallGuide.afterInstall':
+            'After installing, run Claude Code once to sign in, then retry your message.',
+          'claudeCodeInstallGuide.desc':
+            'Claude Code needs the Claude Code CLI to run locally. Install it first.',
+          'claudeCodeInstallGuide.installWithBrew': 'Homebrew',
+          'claudeCodeInstallGuide.installWithNpm': 'Recommended install',
+          'claudeCodeInstallGuide.reason': `LobeHub could not start Claude Code: ${options?.message ?? ''}`,
+          'claudeCodeInstallGuide.title': 'Install Claude Code CLI',
           'codexInstallGuide.actions.openDocs': 'Open Install Guide',
           'codexInstallGuide.actions.openSystemTools': 'Open System Tools',
           'codexInstallGuide.afterInstall':
             'After installing, run Codex once to sign in, then retry your message.',
           'codexInstallGuide.desc':
             'Codex Agent needs the Codex CLI to run locally. Install it first.',
-          'codexInstallGuide.installWithBrew': 'Homebrew (macOS)',
+          'codexInstallGuide.installWithBrew': 'Homebrew',
           'codexInstallGuide.installWithNpm': 'Recommended install',
           'codexInstallGuide.reason': `LobeHub could not start Codex: ${options?.message ?? ''}`,
           'codexInstallGuide.title': 'Install Codex CLI',
@@ -92,5 +103,34 @@ describe('CodexCLIInstallGuide', () => {
     expect(
       screen.getByText('LobeHub could not start Codex: Permission denied'),
     ).toBeInTheDocument();
+  });
+
+  it('uses a headerless layout in embedded mode', () => {
+    render(<CodexCLIInstallGuide variant={'embedded'} />);
+
+    expect(screen.queryByText('Install Codex CLI')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Codex Agent needs the Codex CLI to run locally. Install it first.'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders Claude Code install guidance for the Claude CLI flow', () => {
+    render(
+      <CodexCLIInstallGuide
+        agentType={'claude-code'}
+        error={{
+          agentType: 'claude-code',
+          code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+          message: 'Claude Code CLI was not found',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Install Claude Code CLI')).toBeInTheDocument();
+    expect(
+      screen.getByText('Claude Code needs the Claude Code CLI to run locally. Install it first.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeInTheDocument();
+    expect(screen.queryByText(/LobeHub could not start Claude Code:/)).not.toBeInTheDocument();
   });
 });

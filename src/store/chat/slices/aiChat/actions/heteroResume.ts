@@ -1,8 +1,12 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 
+export type HeteroResumeBlockedReason = 'cwd_changed' | 'missing_bound_cwd';
+
 export interface HeteroResumeDecision {
   /** True when a saved cwd exists and disagrees with the current cwd. */
   cwdChanged: boolean;
+  /** Why a saved session could not be resumed safely. */
+  reason?: HeteroResumeBlockedReason;
   /** Session id to resume with, or undefined when resume must be skipped. */
   resumeSessionId: string | undefined;
 }
@@ -27,11 +31,31 @@ export const resolveHeteroResume = (
   const savedCwd = metadata?.workingDirectory;
   const cwd = currentWorkingDirectory ?? '';
 
-  const canResume = !!savedSessionId && savedCwd !== undefined && savedCwd === cwd;
-  const cwdChanged = !!savedSessionId && !canResume;
+  if (!savedSessionId) {
+    return {
+      cwdChanged: false,
+      resumeSessionId: undefined,
+    };
+  }
+
+  if (savedCwd === undefined) {
+    return {
+      cwdChanged: true,
+      reason: 'missing_bound_cwd',
+      resumeSessionId: undefined,
+    };
+  }
+
+  if (savedCwd !== cwd) {
+    return {
+      cwdChanged: true,
+      reason: 'cwd_changed',
+      resumeSessionId: undefined,
+    };
+  }
 
   return {
-    cwdChanged,
-    resumeSessionId: canResume ? savedSessionId : undefined,
+    cwdChanged: false,
+    resumeSessionId: savedSessionId,
   };
 };

@@ -9,7 +9,9 @@ import { createStyles } from 'antd-style';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
+import CodexCLIInstallGuide from '@/features/Electron/CodexCLIInstallGuide';
 import { toolDetectorService } from '@/services/electron/toolDetector';
 
 const useStyles = createStyles(({ css, token }) => ({
@@ -40,6 +42,7 @@ interface HeterogeneousAgentStatusCardProps {
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(({ provider }) => {
   const { t } = useTranslation('setting');
   const { styles } = useStyles();
+  const navigate = useNavigate();
   const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
   const [status, setStatus] = useState<ToolStatus | undefined>();
   const [auth, setAuth] = useState<ClaudeAuthStatus | null>(null);
@@ -48,6 +51,10 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(({ 
   const detectorName = providerConfig?.command || provider.command;
   const displayName = providerConfig?.title || provider.type;
   const AgentIcon = providerConfig?.icon;
+  const showCliInstallGuide =
+    (provider.type === 'claude-code' || provider.type === 'codex') &&
+    !detecting &&
+    !status?.available;
 
   // Fetched independently of `detectTool`: an auth-fetch failure must not
   // flip the CLI status card to unavailable.
@@ -100,11 +107,20 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(({ 
 
     if (!status || !status.available) {
       return (
-        <Flexbox horizontal align="center" gap={8}>
-          <Icon color="var(--ant-color-error)" icon={XCircle} size={16} />
-          <Text type="secondary">
-            {t('heterogeneousStatus.unavailable', { name: displayName })}
-          </Text>
+        <Flexbox gap={12}>
+          <Flexbox horizontal align="center" gap={8}>
+            <Icon color="var(--ant-color-error)" icon={XCircle} size={16} />
+            <Text type="secondary">
+              {t('heterogeneousStatus.unavailable', { name: displayName })}
+            </Text>
+          </Flexbox>
+          {showCliInstallGuide && (
+            <CodexCLIInstallGuide
+              agentType={provider.type}
+              variant={'embedded'}
+              onOpenSystemTools={() => navigate('/settings/system-tools')}
+            />
+          )}
         </Flexbox>
       );
     }

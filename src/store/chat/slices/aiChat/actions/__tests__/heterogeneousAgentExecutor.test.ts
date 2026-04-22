@@ -9,6 +9,7 @@
  *   - Content/reasoning/model/usage final writes
  *   - Sync snapshot + reset to prevent cross-step content contamination
  */
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
@@ -90,7 +91,7 @@ function setupIpcCapture() {
       handler?.(null, { sessionId });
     },
     /** Simulate session error */
-    emitError: (sessionId: string, error: string) => {
+    emitError: (sessionId: string, error: Record<string, unknown> | string) => {
       const handler = listeners.get('heteroAgentSessionError');
       handler?.(null, { error, sessionId });
     },
@@ -116,6 +117,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
         operationId: `sub-op-${subOpCounter}`,
       };
     }),
+    updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
 }
@@ -727,6 +729,94 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id === 'ast-initial' && val.content === 'partial content',
       );
       expect(contentWrite).toBeDefined();
+    });
+
+    it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+      const imageList = [
+        { id: 'image-1', url: 'https://example.com/screenshot-1.png' },
+        { id: 'image-2', url: 'https://example.com/screenshot-2.png' },
+      ];
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        imageList,
+      });
+
+      expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', imageList);
+    });
+
+    it('should clear stale resume metadata and retry once without resume for recoverable Codex errors', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const sendPromptControllers = new Map<
+        string,
+        { reject: (reason?: unknown) => void; resolve: () => void }
+      >();
+
+      mockStartSession
+        .mockResolvedValueOnce({ sessionId: 'ipc-sess-1' })
+        .mockResolvedValueOnce({ sessionId: 'ipc-sess-2' });
+      mockSendPrompt.mockImplementation(
+        (sessionId: string) =>
+          new Promise<void>((resolve, reject) => {
+            sendPromptControllers.set(sessionId, { reject, resolve });
+          }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        resumeSessionId: 'thread_stale_123',
+        workingDirectory: '/Users/me/repo',
+      });
+
+      await flush();
+
+      ipc.emitError('ipc-sess-1', {
+        agentType: 'codex',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message: 'The saved Codex thread could not be found, so it can no longer be resumed.',
+      });
+      await flush();
+
+      sendPromptControllers.get('ipc-sess-1')?.reject(new Error('resume failed'));
+      await flush();
+
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentType: 'codex',
+          resumeSessionId: 'thread_stale_123',
+        }),
+      );
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          agentType: 'codex',
+          resumeSessionId: undefined,
+        }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: undefined,
+        workingDirectory: '/Users/me/repo',
+      });
+
+      ipc.emitRawLine('ipc-sess-2', { thread_id: 'thread_new_456', type: 'thread.started' });
+      ipc.emitComplete('ipc-sess-2');
+      await flush();
+
+      sendPromptControllers.get('ipc-sess-2')?.resolve();
+      await executorPromise;
+      await flush();
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'thread_new_456',
+        workingDirectory: '/Users/me/repo',
+      });
     });
   });
 

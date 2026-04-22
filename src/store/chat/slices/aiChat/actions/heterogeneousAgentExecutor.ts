@@ -1,6 +1,9 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isDesktop } from '@lobechat/const';
-import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import {
+  type HeterogeneousAgentSessionError,
+  HeterogeneousAgentSessionErrorCode,
+} from '@lobechat/electron-client-ipc';
 import type {
   HeterogeneousAgentEvent,
   SubagentEventContext,
@@ -19,6 +22,7 @@ import { AgentRuntimeErrorType, ThreadStatus, ThreadType } from '@lobechat/types
 import { createNanoId } from '@lobechat/utils';
 import { t } from 'i18next';
 
+import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
@@ -75,6 +79,21 @@ const toHeterogeneousAgentMessageError = (error: unknown): ChatMessageError => {
     message,
     type: AgentRuntimeErrorType.AgentRuntimeError,
   };
+};
+
+const isRecoverableResumeError = (
+  error: unknown,
+): error is HeterogeneousAgentSessionError & {
+  code:
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound;
+} => {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+
+  return (
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch ||
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound
+  );
 };
 
 export interface HeterogeneousAgentExecutorParams {
@@ -954,6 +973,8 @@ export const executeHeterogeneousAgent = async (
   let agentSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
   let completed = false;
+  let fallbackPromise: Promise<void> | undefined;
+  let resumeFallbackTriggered = false;
 
   // Track state for DB persistence (main-agent scope)
   const toolState: ToolPersistenceState = {
@@ -1011,6 +1032,41 @@ export const executeHeterogeneousAgent = async (
   // (cleaned up already) or missing in a test stub, treat as not-aborted.
   const abortSignal = get().operations?.[operationId]?.abortController?.signal;
   const isAborted = () => !!abortSignal?.aborted;
+  const updateTopicMetadata = get().updateTopicMetadata;
+  const hasStreamedState = () =>
+    !!accumulatedContent ||
+    !!accumulatedReasoning ||
+    toolState.payloads.length > 0 ||
+    toolMsgIdByCallId.size > 0 ||
+    subagentRuns.size > 0;
+  const clearStaleResumeMetadata = async () => {
+    if (!context.topicId || !updateTopicMetadata) return;
+
+    await updateTopicMetadata(context.topicId, {
+      heteroSessionId: undefined,
+      workingDirectory: workingDirectory ?? '',
+    });
+  };
+  const retryWithoutResume = (error: unknown): boolean => {
+    if (
+      resumeFallbackTriggered ||
+      !resumeSessionId ||
+      !isRecoverableResumeError(error) ||
+      hasStreamedState()
+    ) {
+      return false;
+    }
+
+    resumeFallbackTriggered = true;
+    completed = true;
+    fallbackPromise = (async () => {
+      await clearStaleResumeMetadata().catch(console.error);
+      antdMessage?.info?.(t('heteroAgent.resumeReset.resumeFailed', { ns: 'chat' }));
+      await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined });
+    })();
+
+    return true;
+  };
 
   /**
    * Invoked by `ensureSubagentRun` once per lazy Thread creation so the
@@ -1526,6 +1582,7 @@ export const executeHeterogeneousAgent = async (
 
       onError: async (error) => {
         if (completed) return;
+        if (retryWithoutResume(error)) return;
         completed = true;
 
         await persistQueue.catch(console.error);
@@ -1573,13 +1630,17 @@ export const executeHeterogeneousAgent = async (
     // topic-level binding — pinning the topic to this cwd once the agent has
     // executed here.
     if (adapter.sessionId && context.topicId) {
-      get().updateTopicMetadata(context.topicId, {
+      await updateTopicMetadata?.(context.topicId, {
         heteroSessionId: adapter.sessionId,
         workingDirectory: workingDirectory ?? '',
       });
     }
   } catch (error) {
     if (!completed) {
+      if (retryWithoutResume(error)) {
+        await fallbackPromise;
+        return;
+      }
       completed = true;
       // `sendPrompt` rejects when the CLI exits non-zero, which is how SIGINT
       // lands here too. If the user cancelled, don't surface an error.
@@ -1601,5 +1662,9 @@ export const executeHeterogeneousAgent = async (
     unsubscribe?.();
     // Don't stopSession here — keep it alive for multi-turn resume.
     // Session cleanup happens on topic deletion or Electron quit.
+  }
+
+  if (fallbackPromise) {
+    await fallbackPromise;
   }
 };

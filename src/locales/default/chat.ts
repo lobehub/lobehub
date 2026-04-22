@@ -146,6 +146,8 @@ export default {
     'Claude Code runs locally with full read/write access to the working directory. Switching permission modes is not available yet.',
   'heteroAgent.resumeReset.cwdChanged':
     'Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.',
+  'heteroAgent.resumeReset.resumeFailed':
+    'The saved Codex thread could not be resumed safely, so a new conversation has started for this topic.',
   'heteroAgent.switchCwd.cancel': 'Cancel',
   'heteroAgent.switchCwd.content':
     'Claude Code sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',
@@ -254,6 +256,17 @@ export default {
   'createModal.groupTitle': 'What should your group do?',
   'createModal.placeholder': 'Describe what your agent should do...',
   'createModal.title': 'What should your agent do?',
+  'claudeCodeInstallGuide.actions.openDocs': 'Open Install Guide',
+  'claudeCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'claudeCodeInstallGuide.afterInstall':
+    'After installing, run Claude Code once to sign in, then retry your message or click Re-detect in System Tools.',
+  'claudeCodeInstallGuide.desc':
+    'Claude Code needs the Claude Code CLI to run locally. Install it and make sure the `claude` command is available in your PATH.',
+  'claudeCodeInstallGuide.installWithBrew': 'Homebrew',
+  'claudeCodeInstallGuide.installWithNpm': 'Recommended install',
+  'claudeCodeInstallGuide.menuNotification.title': 'Claude Code CLI not found',
+  'claudeCodeInstallGuide.reason': 'LobeHub could not start Claude Code: {{message}}',
+  'claudeCodeInstallGuide.title': 'Install Claude Code CLI',
   'codexInstallGuide.actions.openDocs': 'Open Install Guide',
   'codexInstallGuide.actions.openSystemTools': 'Open System Tools',
   'codexInstallGuide.afterInstall':

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
@@ -35,6 +36,7 @@ let nextFakeProc: any = null;
 vi.mock('node:child_process', () => ({
   spawn: (command: string, args: string[], options: any) => {
     spawnCalls.push({ args, command, options });
+    nextFakeProc?.__start?.();
     return nextFakeProc;
   },
 }));
@@ -66,17 +68,25 @@ const createFakeProc = ({
   };
   proc.kill = vi.fn();
   proc.killed = false;
-  // Exit asynchronously so the Promise returned by sendPrompt resolves cleanly.
-  setImmediate(() => {
-    for (const line of stdoutLines) {
-      stdout.write(line);
-    }
-    stdout.end();
-    stderr.end();
-    proc.emit('exit', exitCode);
-  });
+  let started = false;
+  proc.__start = () => {
+    if (started) return;
+    started = true;
+    // Exit asynchronously so the Promise returned by sendPrompt resolves cleanly.
+    setImmediate(() => {
+      for (const line of stdoutLines) {
+        stdout.write(line);
+      }
+      stdout.end();
+      stderr.end();
+      proc.emit('exit', exitCode);
+    });
+  };
   return { proc, writes };
 };
+
+const getFlagValues = (args: string[], flag: string) =>
+  args.flatMap((arg, index) => (arg === flag ? [args[index + 1]] : []));
 
 describe('HeterogeneousAgentCtr', () => {
   let appStoragePath: string;
@@ -255,6 +265,7 @@ describe('HeterogeneousAgentCtr', () => {
       prompt: string,
       sessionOverrides: Record<string, any> = {},
       stdoutLines: string[] = [],
+      sendPromptOverrides: Partial<{ imageList: Array<{ id: string; url: string }> }> = {},
     ) => {
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
@@ -268,7 +279,7 @@ describe('HeterogeneousAgentCtr', () => {
         command: 'codex',
         ...sessionOverrides,
       });
-      await ctr.sendPrompt({ prompt, sessionId });
+      await ctr.sendPrompt({ prompt, sessionId, ...sendPromptOverrides });
 
       const { args: cliArgs, command, options } = spawnCalls[0];
       return { cliArgs, command, ctr, options, sessionId, writes };
@@ -294,6 +305,26 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('fails fast when Claude Code CLI is unavailable instead of attempting spawn', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: false });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        command: 'claude',
+      });
+
+      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
+        'Claude Code CLI was not found',
+      );
+
+      expect(detect).toHaveBeenCalledWith('claude', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
     it('passes prompt via stdin to codex exec instead of argv', async () => {
       const prompt = '--run a shell-like prompt safely';
       const { cliArgs, command, writes } = await runSendPrompt(prompt);
@@ -304,6 +335,51 @@ describe('HeterogeneousAgentCtr', () => {
         expect.arrayContaining(['exec', '--json', '--skip-git-repo-check', '--full-auto', '-']),
       );
       expect(writes).toEqual([prompt]);
+    });
+
+    it('materializes image attachments into local files and forwards them via --image', async () => {
+      const imageList = [
+        { id: 'image-1', url: 'data:image/png;base64,UE5HX1RFU1Q=' },
+        { id: 'image-2', url: 'data:image/jpeg;base64,SlBFR19URVNU' },
+      ];
+      const { cliArgs, writes } = await runSendPrompt('describe these screenshots', {}, [], {
+        imageList,
+      });
+
+      const imagePaths = getFlagValues(cliArgs, '--image');
+
+      expect(cliArgs).not.toContain('describe these screenshots');
+      expect(cliArgs.filter((arg) => arg === '--image')).toHaveLength(2);
+      expect(imagePaths).toHaveLength(2);
+      expect(imagePaths[0]).toMatch(/\.png$/);
+      expect(imagePaths[1]).toMatch(/\.jpg$/);
+      expect(
+        imagePaths.every((filePath) =>
+          filePath.startsWith(path.join(appStoragePath, 'heteroAgent/files')),
+        ),
+      ).toBe(true);
+      await expect(
+        Promise.all(imagePaths.map((filePath) => readFile(filePath, 'utf8'))),
+      ).resolves.toEqual(['PNG_TEST', 'JPEG_TEST']);
+      expect(writes).toEqual(['describe these screenshots']);
+    });
+
+    it('skips images that fail to materialize and still forwards the remaining --image args', async () => {
+      const imageList = [
+        { id: 'good-image', url: 'data:image/png;base64,VkFMSURfSU1BR0U=' },
+        { id: 'bad-image', url: 'bad://broken-image' },
+      ];
+      const { cliArgs, writes } = await runSendPrompt('inspect the valid screenshot only', {}, [], {
+        imageList,
+      });
+
+      const imagePaths = getFlagValues(cliArgs, '--image');
+
+      expect(cliArgs.filter((arg) => arg === '--image')).toHaveLength(1);
+      expect(imagePaths).toHaveLength(1);
+      expect(imagePaths[0]).toMatch(/\.png$/);
+      await expect(readFile(imagePaths[0], 'utf8')).resolves.toBe('VALID_IMAGE');
+      expect(writes).toEqual(['inspect the valid screenshot only']);
     });
 
     it('uses codex exec resume syntax when continuing an existing thread', async () => {
@@ -322,6 +398,36 @@ describe('HeterogeneousAgentCtr', () => {
 
       await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
         agentSessionId: 'thread_codex_123',
+      });
+    });
+
+    it('classifies stale Codex resume stderr as a structured resume error', () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const payload = (ctr as any).getSessionErrorPayload(
+        'No conversation found for thread thread_stale_123',
+        {
+          agentSessionId: 'thread_stale_123',
+          agentType: 'codex',
+          args: [],
+          command: 'codex',
+          cwd: '/Users/fake/projects/repo',
+          resumeSessionId: 'thread_stale_123',
+          sessionId: 'session-1',
+        },
+      );
+
+      expect(payload).toEqual({
+        agentType: 'codex',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        command: 'codex',
+        message: 'The saved Codex thread could not be found, so it can no longer be resumed.',
+        resumeSessionId: 'thread_stale_123',
+        stderr: 'No conversation found for thread thread_stale_123',
+        workingDirectory: '/Users/fake/projects/repo',
       });
     });
   });
