@@ -77,11 +77,15 @@ const MessageContent = memo<MessageContentProps>(
 
     // Short-circuit on non-editing rows so streaming token updates stay O(1) per row
     // instead of each row running `findLast` on displayMessages (O(N²) per update).
+    // Use isInputLoading (covers sendMessage + AI runtime) rather than isAIGenerating,
+    // otherwise the initial send phase — where the persisted id has just swapped in
+    // under an optimistic tmp_* op — would flip to Send and kick off a duplicate
+    // regenerate for the same prompt.
     const shouldSendOnConfirm = useConversationStore((s) => {
       if (!editing) return false;
       if (dataSelectors.getDisplayMessageById(id)(s)?.role !== 'user') return false;
       if (s.displayMessages.findLast((m) => m.role === 'user')?.id !== id) return false;
-      return !messageStateSelectors.isAIGenerating(s);
+      return !messageStateSelectors.isInputLoading(s);
     });
 
     const { t } = useTranslation('common');
