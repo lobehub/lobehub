@@ -68,7 +68,7 @@ export const useConversationSpacer = (dataSource: string[]) => {
   const [scrollReduction, setScrollReduction] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [spacerLayoutVersion, setSpacerLayoutVersion] = useState(0);
-  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [cancelPinMessageIndex, setCancelPinMessageIndex] = useState<number | null>(null);
 
   const prevLengthRef = useRef(dataSource.length);
   const removeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -194,7 +194,9 @@ export const useConversationSpacer = (dataSource: string[]) => {
 
     if (!cancelPin) return;
 
-    setUserScrolledUp(true);
+    if (userMessageIndexRef.current !== null) {
+      setCancelPinMessageIndex(userMessageIndexRef.current);
+    }
     if (!shrinkSpacer) return;
 
     setScrollReduction((prev) => prev + Math.abs(delta));
@@ -253,7 +255,7 @@ export const useConversationSpacer = (dataSource: string[]) => {
 
     if (newMessageCount !== 2 || userMessage?.role !== 'user' || !assistantMessage) return;
 
-    setUserScrolledUp(false);
+    setCancelPinMessageIndex(null);
     setScrollReduction(0);
     prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
     userMessageIndexRef.current = dataSource.length - 2;
@@ -310,10 +312,10 @@ export const useConversationSpacer = (dataSource: string[]) => {
     isSpacerMessage: (id: string) => id === CONVERSATION_SPACER_ID,
     listData,
     registerSpacerNode,
+    cancelPinMessageIndex,
     scrollShrinking: isScrollShrinking,
     spacerActive: mounted,
     spacerHeight: renderedHeight,
     spacerLayoutVersion,
-    userScrolledUp,
   };
 };

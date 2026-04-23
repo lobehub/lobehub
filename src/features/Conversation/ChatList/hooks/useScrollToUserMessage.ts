@@ -4,6 +4,11 @@ const PIN_RETRY_DELAYS = [0, 32, 96];
 
 interface UseScrollToUserMessageOptions {
   /**
+   * Message index whose pending pin should be canceled because the user
+   * manually scrolled up while that reply turn was still active.
+   */
+  cancelPinMessageIndex?: number | null;
+  /**
    * Current data source length (number of messages)
    */
   dataSourceLength: number;
@@ -17,11 +22,6 @@ interface UseScrollToUserMessageOptions {
    * so we don't fight the user's scroll.
    */
   scrollShrinking?: boolean;
-  /**
-   * User has manually scrolled up while the spacer is active. This suppresses
-   * pin retries even if streaming keeps remeasuring spacer height.
-   */
-  userScrolledUp?: boolean;
   /**
    * Function to scroll to a specific index
    */
@@ -56,11 +56,11 @@ interface UseScrollToUserMessageOptions {
  * or the user starts scrolling manually.
  */
 export function useScrollToUserMessage({
+  cancelPinMessageIndex = null,
   dataSourceLength,
   isSecondLastMessageFromUser,
   scrollToIndex,
   scrollShrinking = false,
-  userScrolledUp = false,
   spacerActive,
   spacerLayoutVersion = 0,
 }: UseScrollToUserMessageOptions): void {
@@ -122,18 +122,24 @@ export function useScrollToUserMessage({
   // fired just before the user scrolled up would still call scrollToIndex at
   // 32/96ms and yank the viewport back down.
   useEffect(() => {
-    if (!spacerActive || scrollShrinking || userScrolledUp) {
+    const pendingScrollIndex = pendingScrollIndexRef.current;
+    const pinCanceledByUserScroll =
+      pendingScrollIndex !== null && cancelPinMessageIndex === pendingScrollIndex;
+
+    if (!spacerActive || scrollShrinking || pinCanceledByUserScroll) {
       pendingScrollIndexRef.current = null;
       clearPendingPins();
     }
-  }, [spacerActive, scrollShrinking, userScrolledUp, clearPendingPins]);
+  }, [cancelPinMessageIndex, spacerActive, scrollShrinking, clearPendingPins]);
 
   // Re-scroll whenever the spacer's real layout settles (version bumps) or the
   // spacer becomes active. Skip when user is manually shrinking the spacer.
   useEffect(() => {
-    if (!spacerActive || scrollShrinking || userScrolledUp) return;
     const index = pendingScrollIndexRef.current;
+    const pinCanceledByUserScroll = index !== null && cancelPinMessageIndex === index;
+
+    if (!spacerActive || scrollShrinking || pinCanceledByUserScroll) return;
     if (index === null) return;
     executeScroll(index);
-  }, [spacerActive, spacerLayoutVersion, scrollShrinking, userScrolledUp, executeScroll]);
+  }, [cancelPinMessageIndex, spacerActive, spacerLayoutVersion, scrollShrinking, executeScroll]);
 }

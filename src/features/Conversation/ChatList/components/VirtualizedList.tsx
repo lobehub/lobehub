@@ -38,8 +38,10 @@ interface VirtualizedListProps {
  */
 const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
+  const didInitialScrollRef = useRef(false);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
+    cancelPinMessageIndex,
     handleScrollOffset,
     isSpacerMessage,
     listData,
@@ -48,7 +50,6 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     spacerHeight,
     spacerActive,
     spacerLayoutVersion,
-    userScrolledUp,
   } = useConversationSpacer(dataSource);
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
@@ -69,7 +70,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     const viewportSize = ref.viewportSize;
 
     return scrollSize - scrollOffset - viewportSize <= AT_BOTTOM_THRESHOLD;
-  }, [AT_BOTTOM_THRESHOLD]);
+  }, []);
 
   // Handle scroll events
   const handleScroll = useCallback(() => {
@@ -184,21 +185,22 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   // Auto scroll to user message when user sends a new message
   // Only scroll when 2 new messages are added and second-to-last is from user
   useScrollToUserMessage({
+    cancelPinMessageIndex,
     dataSourceLength: dataSource.length,
     isSecondLastMessageFromUser,
     scrollShrinking,
     scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
     spacerActive,
     spacerLayoutVersion,
-    userScrolledUp,
   });
 
   // Scroll to bottom on initial render
   useEffect(() => {
-    if (virtuaRef.current && dataSource.length > 0) {
-      virtuaRef.current.scrollToIndex(dataSource.length - 1, { align: 'end' });
-    }
-  }, []);
+    if (didInitialScrollRef.current || !virtuaRef.current || dataSource.length === 0) return;
+
+    virtuaRef.current.scrollToIndex(dataSource.length - 1, { align: 'end' });
+    didInitialScrollRef.current = true;
+  }, [dataSource.length]);
 
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
