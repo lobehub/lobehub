@@ -313,7 +313,7 @@
     "better-auth-harmony": "^1.2.5",
     "better-call": "1.1.8",
     "brotli-wasm": "^3.0.1",
-    "buffer": "^6.0.3",
+    "buffer.js": "npm:buffer@^6.0.3",
     "chat": "^4.23.0",
     "chroma-js": "^3.2.0",
     "class-variance-authority": "^0.7.1",
