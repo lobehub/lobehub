@@ -1212,6 +1212,16 @@ export class AgentBridgeService {
 
           log('executeWithCallback[local]: startup error: %s', extractErrorMessage(error));
 
+          // Stale topic_id FK violation: propagate so handleSubscribedMessage can
+          // clear thread state and retry as a fresh mention. Queue mode does the
+          // same bailout in executeWithHooksQueueMode.
+          const errMsg = error instanceof Error ? error.message : String(error);
+          if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+            stopGatewayTyping();
+            reject(error);
+            return;
+          }
+
           if (progressMessage) {
             try {
               await progressMessage.edit(renderError());
