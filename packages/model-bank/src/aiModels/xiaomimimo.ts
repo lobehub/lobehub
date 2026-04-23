@@ -10,9 +10,116 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      'MiMo-V2.5-Pro is our most powerful model to date. Across dimensions such as general agent capabilities, complex software engineering, and long-horizon tasks, it can compete head-to-head with leading global agent models (Claude Opus 4.6, GPT-5.4). Compared to the previous generation, MiMo-V2-Pro, it delivers comprehensive improvements across the board.',
+    displayName: 'MiMo-V2.5 Pro',
+    enabled: true,
+    id: 'mimo-v2.5-pro',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.4, upTo: 0.256 },
+            { rate: 2.8, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 7, upTo: 0.256 },
+            { rate: 14, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 21, upTo: 0.256 },
+            { rate: 42, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'MiMo-V2.5 is a natively multimodal large model designed for agent scenarios. It can see, hear, and read simultaneously, and transform its understanding into actions.',
+    displayName: 'MiMo-V2.5',
+    enabled: true,
+    id: 'mimo-v2.5',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.56, upTo: 0.256 },
+            { rate: 1.12, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2.8, upTo: 0.256 },
+            { rate: 5.6, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 14, upTo: 0.256 },
+            { rate: 28, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       'MiMo-V2-Pro is specifically designed for high-intensity agent workflows in real-world scenarios. It features over 1 trillion total parameters (42B activated parameters), adopts an innovative hybrid attention architecture, and supports an ultra-long context length of up to 1 million tokens. Built on a powerful foundational model, we continuously scale computational resources across a broader range of agent scenarios, further expanding the action space of intelligence and achieving significant generalization—from coding to real-world task execution (“claw”).',
     displayName: 'MiMo-V2 Pro',
-    enabled: true,
     id: 'mimo-v2-pro',
     maxOutput: 131_072,
     pricing: {
@@ -67,7 +174,6 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     description:
       'MiMo-V2-Omni is purpose-built for complex multimodal interaction and execution scenarios in the real world. We constructed a full-modality foundation from the ground up, integrating text, vision, and speech, and unified “perception” and “action” within a single architecture. This not only breaks the traditional limitation of models that emphasize understanding over execution, but also endows the model with native capabilities in multimodal perception, tool usage, function execution, and GUI operations. MiMo-V2-Omni can seamlessly integrate with major agent frameworks, achieving a leap from understanding to control while significantly lowering the barrier to deploying fully multimodal agents.',
     displayName: 'MiMo-V2 Omni',
-    enabled: true,
     id: 'mimo-v2-omni',
     maxOutput: 131_072,
     pricing: {
