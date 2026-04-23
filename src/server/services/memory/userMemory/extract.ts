@@ -99,6 +99,10 @@ const LAYER_LABEL_MAP: Record<LayersEnum, string> = {
   [LayersEnum.Identity]: 'identities',
   [LayersEnum.Preference]: 'preferences',
 };
+const DEFAULT_EMBEDDING_MAX_INPUT_TOKENS = 8192;
+const DEFAULT_EMBEDDING_TOKEN_HEADROOM = 256;
+const DEFAULT_SAFE_EMBEDDING_RETRY_LIMIT =
+  DEFAULT_EMBEDDING_MAX_INPUT_TOKENS - DEFAULT_EMBEDDING_TOKEN_HEADROOM;
 
 export interface MemoryExtractionWorkflowCursor {
   createdAt: string;
@@ -262,11 +266,36 @@ const normalizeProvider = (provider: string) => provider.toLowerCase();
 const extractCredentialsFromVault = (vault?: Record<string, unknown>) => {
   if (!vault || typeof vault !== 'object') return {};
 
-  const apiKey = 'apiKey' in vault && typeof vault.apiKey === 'string' ? vault.apiKey : undefined;
+  const apiKey =
+    ('apiKey' in vault && typeof vault.apiKey === 'string' ? vault.apiKey : undefined) ||
+    ('key' in vault && typeof vault.key === 'string' ? vault.key : undefined);
   const baseURL =
-    'baseURL' in vault && typeof vault.baseURL === 'string' ? vault.baseURL : undefined;
+    ('baseURL' in vault && typeof vault.baseURL === 'string' ? vault.baseURL : undefined) ||
+    ('endpoint' in vault && typeof vault.endpoint === 'string' ? vault.endpoint : undefined);
 
   return { apiKey, baseURL };
+};
+
+const mergeResolvedKeyVaultsWithUserSettings = (
+  resolvedKeyVaults: ProviderKeyVaultMap,
+  userSettingsKeyVaults?: unknown,
+): ProviderKeyVaultMap => {
+  if (!userSettingsKeyVaults || typeof userSettingsKeyVaults !== 'object') return resolvedKeyVaults;
+
+  const merged: ProviderKeyVaultMap = { ...resolvedKeyVaults };
+
+  for (const [providerId, vault] of Object.entries(userSettingsKeyVaults as Record<string, unknown>)) {
+    const normalizedProvider = normalizeProvider(providerId);
+    if (!vault || typeof vault !== 'object') continue;
+
+    const resolvedVault = merged[normalizedProvider];
+    const hasResolvedApiKey = Boolean(extractCredentialsFromVault(resolvedVault as any).apiKey);
+    if (hasResolvedApiKey) continue;
+
+    merged[normalizedProvider] = vault as ProviderKeyVaultMap[string];
+  }
+
+  return merged;
 };
 
 const serializeError = (error: unknown): MemoryExtractionTraceError => {
@@ -315,26 +344,31 @@ export const resolveRuntimeAgentConfig = (
   options?: RuntimeResolveOptions,
   hooks?: ModelRuntimeHooks,
 ) => {
+  const configuredProvider = normalizeProvider(agent.provider || 'openai');
+  const systemFallbackProvider = configuredProvider === 'lobehub' ? 'openai' : configuredProvider;
   const normalizedPreferredProviders = (options?.preferred?.providerIds || [])
     .map(normalizeProvider)
     .filter(Boolean);
+  const lobehubFallbackProviders =
+    configuredProvider === 'lobehub'
+      ? Object.keys(keyVaults || {})
+          .map(normalizeProvider)
+          .filter((provider) => provider !== 'lobehub')
+      : [];
 
   const providerOrder = Array.from(
     new Set([
       ...normalizedPreferredProviders,
       normalizeProvider(agent.provider || 'openai'),
-      ...Object.keys(keyVaults || {}),
+      ...lobehubFallbackProviders,
     ]),
   );
 
   for (const provider of providerOrder) {
     if (provider === 'lobehub') {
-      debugRuntimeInit(agent, {
-        provider,
-        source: 'user-vault' as const,
-      });
-
-      return ModelRuntime.initializeWithProvider(provider, { userId: options?.userId }, hooks);
+      // Memory extraction should not run through Lobehub router to avoid empty provider routing.
+      // Prefer direct providers from key vaults, then fallback to configured system provider.
+      continue;
     }
 
     const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
@@ -366,11 +400,11 @@ export const resolveRuntimeAgentConfig = (
   debugRuntimeInit(agent, {
     apiKey: agent.apiKey || options?.fallback?.apiKey,
     baseURL: agent.baseURL || options?.fallback?.baseURL,
-    provider: agent.provider || 'openai',
+    provider: systemFallbackProvider,
     source: 'system-config' as const,
   });
 
-  return ModelRuntime.initializeWithProvider(agent.provider || 'openai', {
+  return ModelRuntime.initializeWithProvider(systemFallbackProvider, {
     apiKey: agent.apiKey || options?.fallback?.apiKey,
     baseURL: agent.baseURL || options?.fallback?.baseURL,
     userId: options?.userId,
@@ -456,6 +490,7 @@ export class MemoryExtractionExecutor {
   private readonly privateConfig: MemoryExtractionConfig;
   private readonly modelConfig: {
     embeddingsModel: string;
+    extractorContextLimit?: number;
     gateModel: string;
     layerModels: Partial<Record<LayersEnum, string>>;
     observabilityS3: MemoryExtractionConfig['observabilityS3'];
@@ -483,6 +518,7 @@ export class MemoryExtractionExecutor {
         privateConfig.embedding?.model ??
         privateConfig.agentLayerExtractor.model ??
         DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM.model,
+      extractorContextLimit: privateConfig.agentLayerExtractor.contextLimit,
       gateModel: publicMemoryConfig?.agentGateKeeper?.model ?? privateConfig.agentGateKeeper.model,
       layerModels: resolveLayerModels(
         publicMemoryConfig?.agentLayerExtractor.layers,
@@ -1059,19 +1095,52 @@ export class MemoryExtractionExecutor {
     const userMemoryModel = new UserMemoryModel(db, userId);
     // TODO: make topK configurable
     const topK = 10;
-    const aggregatedContent = await this.trimTextToTokenLimit(
-      conversations.map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n'),
-      tokenLimit,
-    );
+    const fullConversationText = conversations
+      .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
+      .join('\n\n');
+    const initialLimit = tokenLimit;
+    const fallbackStartLimit =
+      typeof initialLimit === 'number' && initialLimit > 0
+        ? initialLimit
+        : DEFAULT_SAFE_EMBEDDING_RETRY_LIMIT;
+    const retryTokenLimits =
+      typeof fallbackStartLimit === 'number' && fallbackStartLimit > 0
+        ? Array.from(
+            new Set(
+              [fallbackStartLimit, 7000, 6144, 5120, 4096, 3072].filter(
+                (limit) => limit <= fallbackStartLimit,
+              ),
+            ),
+          )
+        : [undefined];
 
-    const embeddings = await runtime.embeddings(
-      {
-        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-        input: [aggregatedContent],
-        model: embeddingModel,
-      },
-      { metadata: { trigger: RequestTrigger.Memory }, user: userId },
-    );
+    let embeddings: Embeddings[] | undefined;
+    for (const limit of retryTokenLimits) {
+      const aggregatedContent = await this.trimTextToTokenLimit(fullConversationText, limit);
+      if (!aggregatedContent.trim()) break;
+
+      try {
+        embeddings = await runtime.embeddings(
+          {
+            dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+            input: [aggregatedContent],
+            model: embeddingModel,
+          },
+          { metadata: { trigger: RequestTrigger.Memory }, user: userId },
+        );
+
+        break;
+      } catch (error) {
+        if (this.isEmbeddingInputTooLongError(error)) {
+          console.warn(
+            `[memory-extraction] embedding input too long${typeof limit === 'number' ? ` at ${limit} tokens` : ''}, retrying with smaller limit`,
+          );
+          continue;
+        }
+
+        throw error;
+      }
+    }
 
     const vector = embeddings?.[0];
     if (vector) {
@@ -1090,6 +1159,16 @@ export class MemoryExtractionExecutor {
       );
 
       return retrieved;
+    }
+
+    if (!embeddings) {
+      console.warn(
+        '[memory-extraction] skip retrieval-memory embedding after retries due to input length limit',
+        'topicId:',
+        job.sourceId,
+        'userId:',
+        job.userId,
+      );
     }
 
     return {
@@ -1229,7 +1308,11 @@ export class MemoryExtractionExecutor {
             userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
             this.getAiProviderRuntimeState(job.userId),
           ]);
-          const keyVaults = await this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
+          const runtimeKeyVaults = await this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
+          const keyVaults = mergeResolvedKeyVaultsWithUserSettings(
+            runtimeKeyVaults,
+            userState.settings?.keyVaults,
+          );
           const language = userState.settings?.general?.responseLanguage;
 
           const runtimes = await this.getRuntime(job.userId, keyVaults);
@@ -1252,8 +1335,8 @@ export class MemoryExtractionExecutor {
             };
           }
 
-          const extractorContextLimit = this.privateConfig.agentLayerExtractor.contextLimit;
-          const embeddingContextLimit = this.embeddingContextLimit ?? extractorContextLimit;
+          const extractorContextLimit = this.modelConfig.extractorContextLimit;
+          const embeddingContextLimit = this.embeddingContextLimit;
           const extractorConversations = await this.trimConversationsToTokenLimit(
             conversations,
             extractorContextLimit,
@@ -1777,9 +1860,69 @@ export class MemoryExtractionExecutor {
     });
   }
 
+  private formatUnknownError(error: unknown): { cause?: string; message: string } {
+    const truncate = (value: string, max = 2000) =>
+      value.length > max ? `${value.slice(0, max)}...` : value;
+    const safeStringify = (value: unknown) => {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    };
+
+    if (error instanceof Error) {
+      const message = error.message?.trim() || error.name || 'Unknown error';
+      const cause = error.cause ? truncate(safeStringify(error.cause)) : undefined;
+
+      return { cause, message };
+    }
+
+    if (typeof error === 'string') {
+      return { message: error };
+    }
+
+    if (error && typeof error === 'object') {
+      const record = error as Record<string, unknown>;
+      const candidateMessage =
+        [record.message, record.error, record.detail, record.details, record.reason].find(
+          (item) => typeof item === 'string' && item.trim().length > 0,
+        ) || '';
+
+      const serialized = truncate(safeStringify(error));
+      if (typeof candidateMessage === 'string' && candidateMessage.trim().length > 0) {
+        const message = candidateMessage.trim();
+        const cause = serialized !== message ? serialized : undefined;
+
+        return { cause, message };
+      }
+
+      return { message: serialized };
+    }
+
+    return { message: String(error) };
+  }
+
+  private isEmbeddingInputTooLongError(error: unknown): boolean {
+    const { cause, message } = this.formatUnknownError(error);
+    const text = `${message} ${cause || ''}`.toLowerCase();
+
+    return (
+      text.includes('maximum input length') ||
+      text.includes('maximum context length') ||
+      text.includes('too many tokens')
+    );
+  }
+
   private normalizeLayerError(layer: LayersEnum, stage: 'extract' | 'persist', error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    return new Error(`[${stage}] ${LAYER_LABEL_MAP[layer]}: ${message}`);
+    const { cause, message } = this.formatUnknownError(error);
+    const normalized = new Error(`[${stage}] ${LAYER_LABEL_MAP[layer]}: ${message}`);
+
+    if (cause) {
+      (normalized as Error & { cause?: string }).cause = cause;
+    }
+
+    return normalized;
   }
 
   private async persistExtraction(
@@ -1939,7 +2082,16 @@ export class MemoryExtractionExecutor {
 
     if (errors.length) {
       const detail = errors
-        .map((error) => `${error.message}${error.cause ? `: ${error.cause}` : ''}`)
+        .map((error) => {
+          const cause =
+            typeof error.cause === 'string'
+              ? error.cause
+              : error.cause
+                ? this.formatUnknownError(error.cause).message
+                : undefined;
+
+          return `${error.message}${cause ? `: ${cause}` : ''}`;
+        })
         .join('; ');
       throw new AggregateError(errors, `Memory extraction encountered layer errors: ${detail}`);
     }
@@ -1968,40 +2120,73 @@ export class MemoryExtractionExecutor {
     );
 
     const keyVaults: ProviderKeyVaultMap = {};
+    const tryUseConfiguredProviderVault = (providerId?: string): string | undefined => {
+      const normalizedProviderId = normalizeProvider(providerId || '');
+      if (!normalizedProviderId) return undefined;
 
-    const gatekeeperProvider = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
-      fallbackProvider: this.privateConfig.agentGateKeeper.provider,
-      label: 'gatekeeper',
-      modelId: this.modelConfig.gateModel,
-      preferredModels: this.gatekeeperPreferredModels,
-      preferredProviders: this.gatekeeperPreferredProviders,
-    });
+      const runtime = normalizedRuntimeConfig[normalizedProviderId];
+      if (!runtime?.keyVaults || Object.keys(runtime.keyVaults || {}).length === 0) return undefined;
+
+      keyVaults[normalizedProviderId] = runtime.keyVaults;
+      return normalizedProviderId;
+    };
+
+    const shouldPreferConfiguredGatekeeperProvider =
+      !this.gatekeeperPreferredProviders?.length && !this.gatekeeperPreferredModels?.length;
+    const gatekeeperProvider =
+      (shouldPreferConfiguredGatekeeperProvider
+        ? tryUseConfiguredProviderVault(this.privateConfig.agentGateKeeper.provider)
+        : undefined) ||
+      (await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+        fallbackProvider: this.privateConfig.agentGateKeeper.provider,
+        label: 'gatekeeper',
+        modelId: this.modelConfig.gateModel,
+        preferredModels: this.gatekeeperPreferredModels,
+        preferredProviders: this.gatekeeperPreferredProviders,
+      }));
     const gatekeeperRuntime = normalizedRuntimeConfig[gatekeeperProvider];
     if (gatekeeperRuntime?.keyVaults) {
       keyVaults[gatekeeperProvider] = gatekeeperRuntime.keyVaults;
     }
 
-    const embeddingProvider = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
-      fallbackProvider: this.privateConfig.embedding.provider,
-      label: 'embedding',
-      modelId: this.modelConfig.embeddingsModel,
-      preferredModels: this.embeddingPreferredModels,
-      preferredProviders: this.embeddingPreferredProviders,
-    });
+    const configuredEmbeddingProvider = normalizeProvider(this.privateConfig.embedding.provider || 'openai');
+    const configuredEmbeddingRuntime = normalizedRuntimeConfig[configuredEmbeddingProvider];
+
+    // For memory embeddings, always prefer the provider explicitly configured by env/server config.
+    // This allows users to set only MEMORY_USER_MEMORY_EMBEDDING_PROVIDER/MODEL and rely on
+    // their own provider credentials stored in DB (keyVaults) without depending on enabled-model matching.
+    const embeddingProvider =
+      configuredEmbeddingRuntime?.keyVaults &&
+      Object.keys(configuredEmbeddingRuntime.keyVaults || {}).length > 0
+        ? configuredEmbeddingProvider
+        : await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+            fallbackProvider: this.privateConfig.embedding.provider,
+            label: 'embedding',
+            modelId: this.modelConfig.embeddingsModel,
+            preferredModels: this.embeddingPreferredModels,
+            preferredProviders: this.embeddingPreferredProviders,
+          });
     const embeddingRuntime = normalizedRuntimeConfig[embeddingProvider];
     if (embeddingRuntime?.keyVaults) {
       keyVaults[embeddingProvider] = embeddingRuntime.keyVaults;
     }
 
+    const shouldPreferConfiguredLayerProvider =
+      !this.layerPreferredProviders?.length && !this.layerPreferredModels?.length;
+    const configuredLayerProvider = shouldPreferConfiguredLayerProvider
+      ? tryUseConfiguredProviderVault(this.privateConfig.agentLayerExtractor.provider)
+      : undefined;
     for (const model of Object.values(this.modelConfig.layerModels)) {
       if (!model) continue;
-      const providerId = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
-        fallbackProvider: this.privateConfig.agentLayerExtractor.provider,
-        label: 'layer extractor',
-        modelId: model,
-        preferredModels: this.layerPreferredModels,
-        preferredProviders: this.layerPreferredProviders,
-      });
+      const providerId =
+        configuredLayerProvider ||
+        (await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+          fallbackProvider: this.privateConfig.agentLayerExtractor.provider,
+          label: 'layer extractor',
+          modelId: model,
+          preferredModels: this.layerPreferredModels,
+          preferredProviders: this.layerPreferredProviders,
+        }));
       const runtime = normalizedRuntimeConfig[providerId];
       if (runtime?.keyVaults) {
         keyVaults[providerId] = runtime.keyVaults;
@@ -2110,7 +2295,11 @@ export class MemoryExtractionExecutor {
             userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
             this.getAiProviderRuntimeState(params.userId),
           ]);
-          const keyVaults = await this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
+          const runtimeKeyVaults = await this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
+          const keyVaults = mergeResolvedKeyVaultsWithUserSettings(
+            runtimeKeyVaults,
+            userState.settings?.keyVaults,
+          );
           const language = params.language || userState.settings?.general?.responseLanguage;
 
           const runtimes = await this.getRuntime(params.userId, keyVaults);
