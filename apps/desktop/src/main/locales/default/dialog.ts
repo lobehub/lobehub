@@ -16,6 +16,13 @@ const dialog = {
   'fullDiskAccess.openSettings': 'Open Settings',
   'fullDiskAccess.skip': 'Later',
   'fullDiskAccess.title': 'Full Disk Access Required',
+  'screenCaptureAccess.cancel': 'Later',
+  'screenCaptureAccess.detail':
+    'Open System Settings, enable Screen Recording for LobeHub, then try Quick Composer again.',
+  'screenCaptureAccess.message':
+    'Quick Composer needs Screen Recording permission before it can capture screenshots.',
+  'screenCaptureAccess.openSettings': 'Open Settings',
+  'screenCaptureAccess.title': 'Screen Recording Permission Required',
   'update.downloadAndInstall': 'Download and Install',
   'update.downloadComplete': 'Download Complete',
   'update.downloadCompleteMessage': 'Update downloaded. Install now?',
