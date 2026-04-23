@@ -63,16 +63,24 @@ const countPatchLines = (
   if (previousContent === nextContent) return { linesAdded: 0, linesDeleted: 0 };
 
   const patch = createPatch('codex-file-change', previousContent, nextContent, '', '');
+  let insideHunk = false;
   let linesAdded = 0;
   let linesDeleted = 0;
 
   for (const line of patch.split('\n')) {
-    if (line.startsWith('+') && !line.startsWith('+++')) {
+    if (line.startsWith('@@')) {
+      insideHunk = true;
+      continue;
+    }
+
+    if (!insideHunk) continue;
+
+    if (line.startsWith('+')) {
       linesAdded += 1;
       continue;
     }
 
-    if (line.startsWith('-') && !line.startsWith('---')) {
+    if (line.startsWith('-')) {
       linesDeleted += 1;
     }
   }

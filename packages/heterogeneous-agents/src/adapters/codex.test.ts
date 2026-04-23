@@ -325,6 +325,108 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('uses failure copy for unsuccessful non-command tool completions', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({
+      item: {
+        id: 'todo_failed',
+        items: [{ completed: false, text: 'Keep this pending' }],
+        status: 'failed',
+        type: 'todo_list',
+      },
+      type: 'item.started',
+    });
+    const failedTodo = adapter.adapt({
+      item: {
+        id: 'todo_failed',
+        items: [{ completed: false, text: 'Keep this pending' }],
+        status: 'failed',
+        type: 'todo_list',
+      },
+      type: 'item.completed',
+    });
+
+    expect(failedTodo[0]).toMatchObject({
+      data: {
+        content: 'Todo list update failed.',
+        isError: true,
+        toolCallId: 'todo_failed',
+      },
+      type: 'tool_result',
+    });
+    expect(failedTodo[0].data).not.toHaveProperty('pluginState');
+    expect(failedTodo[1]).toMatchObject({
+      data: { isSuccess: false, toolCallId: 'todo_failed' },
+      type: 'tool_end',
+    });
+
+    adapter.adapt({
+      item: {
+        changes: [{ kind: 'add', path: '/private/tmp/cancelled-change.ts' }],
+        id: 'file_cancelled',
+        status: 'cancelled',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+    const cancelledFileChange = adapter.adapt({
+      item: {
+        changes: [{ kind: 'add', path: '/private/tmp/cancelled-change.ts' }],
+        id: 'file_cancelled',
+        status: 'cancelled',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(cancelledFileChange[0]).toMatchObject({
+      data: {
+        content: 'File changes cancelled.',
+        isError: true,
+        toolCallId: 'file_cancelled',
+      },
+      type: 'tool_result',
+    });
+    expect(cancelledFileChange[0].data).not.toHaveProperty('pluginState');
+    expect(cancelledFileChange[1]).toMatchObject({
+      data: { isSuccess: false, toolCallId: 'file_cancelled' },
+      type: 'tool_end',
+    });
+
+    adapter.adapt({
+      item: {
+        id: 'wait_failed',
+        status: 'error',
+        tool: 'wait',
+        type: 'collab_tool_call',
+      },
+      type: 'item.started',
+    });
+    const failedWait = adapter.adapt({
+      item: {
+        id: 'wait_failed',
+        status: 'error',
+        tool: 'wait',
+        type: 'collab_tool_call',
+      },
+      type: 'item.completed',
+    });
+
+    expect(failedWait[0]).toMatchObject({
+      data: {
+        content: 'wait failed.',
+        isError: true,
+        toolCallId: 'wait_failed',
+      },
+      type: 'tool_result',
+    });
+    expect(failedWait[1]).toMatchObject({
+      data: { isSuccess: false, toolCallId: 'wait_failed' },
+      type: 'tool_end',
+    });
+  });
+
   it('keeps a real collab_tool_call stream fixture readable and flushes unfinished attempts', async () => {
     const adapter = new CodexAdapter();
     const rawEvents = await loadFixture('collab_tool_call.spawn_wait.jsonl');

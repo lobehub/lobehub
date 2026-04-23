@@ -109,4 +109,38 @@ describe('CodexFileChangeTracker', () => {
       linesDeleted: 0,
     });
   });
+
+  it('counts added lines even when file content begins with repeated plus markers', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'codex-file-change-tracker-'));
+    tempDirs.push(dir);
+
+    const addPath = path.join(dir, 'plus-prefixed.txt');
+    const tracker = new CodexFileChangeTracker();
+
+    await tracker.track({
+      item: {
+        changes: [{ kind: 'add', path: addPath }],
+        id: 'item_plus_prefix',
+        type: 'file_change',
+      },
+      type: 'item.started',
+    });
+
+    await writeFile(addPath, '++leading content\n+++header lookalike\n', 'utf8');
+
+    const enriched = await tracker.track({
+      item: {
+        changes: [{ kind: 'add', path: addPath }],
+        id: 'item_plus_prefix',
+        type: 'file_change',
+      },
+      type: 'item.completed',
+    });
+
+    expect(enriched.item).toMatchObject({
+      changes: [{ kind: 'add', linesAdded: 2, linesDeleted: 0, path: addPath }],
+      linesAdded: 2,
+      linesDeleted: 0,
+    });
+  });
 });

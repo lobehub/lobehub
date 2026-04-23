@@ -247,10 +247,23 @@ const summarizeFallbackTool = (item: CodexToolItem): string => {
   return `Completed ${item.type}.`;
 };
 
-const getToolContent = (item: CodexToolItem): string => {
-  if (isCommandExecutionItem(item) && typeof item.aggregated_output === 'string') {
-    return item.aggregated_output;
+const getFailureVerb = (item: CodexToolItem): 'cancelled' | 'failed' =>
+  item.status === 'cancelled' ? 'cancelled' : 'failed';
+
+const getToolFailureContent = (item: CodexToolItem): string => {
+  if (isTodoListItem(item)) return `Todo list update ${getFailureVerb(item)}.`;
+  if (isFileChangeItem(item)) return `File changes ${getFailureVerb(item)}.`;
+  if (isCollabToolCallItem(item)) return `${item.tool || 'Collaboration'} ${getFailureVerb(item)}.`;
+
+  return `${item.type} ${getFailureVerb(item)}.`;
+};
+
+const getToolContent = (item: CodexToolItem, isSuccess: boolean): string => {
+  if (isCommandExecutionItem(item)) {
+    return typeof item.aggregated_output === 'string' ? item.aggregated_output : '';
   }
+
+  if (!isSuccess) return getToolFailureContent(item);
 
   if (isTodoListItem(item)) return summarizeTodoList(item);
   if (isFileChangeItem(item)) return summarizeFileChange(item);
@@ -269,8 +282,8 @@ const isSuccessfulToolCompletion = (item: CodexToolItem): boolean => {
 };
 
 const getToolResultData = (item: CodexToolItem): ToolResultData => {
-  const output = getToolContent(item);
   const isSuccess = isSuccessfulToolCompletion(item);
+  const output = getToolContent(item, isSuccess);
 
   if (isCommandExecutionItem(item)) {
     const exitCode = item.exit_code ?? undefined;
