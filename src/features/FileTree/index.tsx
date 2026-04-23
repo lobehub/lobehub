@@ -241,6 +241,7 @@ const TreeNode = memo<{
 
 TreeNode.displayName = 'TreeNode';
 
+/** @deprecated use `@/features/ExplorerTree` instead. This component will be removed once all consumers migrate. */
 const FileTree = memo<FileTreeProps>(
   ({
     resourceTree,
@@ -338,6 +339,7 @@ const FileTree = memo<FileTreeProps>(
 
 FileTree.displayName = 'FileTree';
 
+/** @deprecated use `@/features/ExplorerTree` instead. */
 export { default as FileTreeSkeleton } from './Skeleton';
 
 export default FileTree;
