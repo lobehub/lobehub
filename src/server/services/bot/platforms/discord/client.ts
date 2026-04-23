@@ -208,6 +208,7 @@ class DiscordGatewayClient implements PlatformClient {
     const channelId = extractChannelId(platformThreadId);
     const threadId = platformThreadId.split(':')[3];
     return {
+      addReaction: (messageId, emoji) => this.discord.createReaction(channelId, messageId, emoji),
       createMessage: (content) => this.discord.createMessage(channelId, content).then(() => {}),
       editMessage: (messageId, content) => this.discord.editMessage(channelId, messageId, content),
       removeReaction: (messageId, emoji) =>

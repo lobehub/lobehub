@@ -1,7 +1,6 @@
 import type { ChatTopicBotContext, ExecAgentResult } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
-import { emoji } from 'chat';
 import debug from 'debug';
 
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
@@ -16,7 +15,8 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { PlatformClient } from './platforms';
-import { platformRegistry } from './platforms';
+import { getStepReactionEmoji, platformRegistry, RECEIVED_REACTION_EMOJI } from './platforms';
+import { clearReactionState, saveReactionState } from './reactionState';
 import {
   renderError,
   renderFinalReply,
@@ -37,9 +37,6 @@ const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000; // 4 hours
 // PostgreSQL error code for foreign key constraint violations.
 // See: https://www.postgresql.org/docs/current/errcodes-appendix.html
 const PG_FOREIGN_KEY_VIOLATION = '23503';
-
-// Status emoji added on receive, removed on complete
-const RECEIVED_EMOJI = emoji.eyes;
 
 /**
  * Extract a human-readable error message from agent runtime error objects.
@@ -100,6 +97,15 @@ interface BridgeHandlerOpts {
   displayToolCalls?: boolean;
 }
 
+/** Snapshot of the emoji currently applied to a given user message. */
+interface ActiveReaction {
+  applicationId?: string;
+  emoji: string;
+  platform?: string;
+  reactionThreadId: string;
+  userMessageId: string;
+}
+
 /**
  * Platform-agnostic bridge between Chat SDK events and Agent Runtime.
  *
@@ -141,6 +147,15 @@ export class AgentBridgeService {
   private static pendingStopThreads = new Set<string>();
 
   /**
+   * Per-thread snapshot of the emoji currently attached to the user message.
+   * Used by the in-memory execution path so that consecutive step callbacks
+   * can remove the previous emoji before adding a new one. Queue mode relies
+   * on Redis (`reactionState`) for the same purpose since callbacks land in a
+   * different process.
+   */
+  private static activeReactions = new Map<string, ActiveReaction>();
+
+  /**
    * Check if a thread currently has an active agent execution.
    */
   static isThreadActive(threadId: string): boolean {
@@ -162,6 +177,84 @@ export class AgentBridgeService {
     AgentBridgeService.activeOperations.delete(threadId);
     AgentBridgeService.pendingStopThreads.delete(threadId);
     AgentBridgeService.startupControllers.delete(threadId);
+    AgentBridgeService.activeReactions.delete(threadId);
+  }
+
+  /**
+   * Apply (or swap to) the given emoji on a user message. Tracks the current
+   * emoji in an in-process map so the next call can remove it before adding
+   * the new one — the user only ever sees one bot reaction at a time.
+   *
+   * When `botContext` is provided (queue mode hand-off), the new state is
+   * also mirrored to Redis so the webhook callback service — which runs in a
+   * different process — can pick up swapping from here.
+   *
+   * All platform API calls are fire-and-forget via `safeSideEffect`: a
+   * transient reaction error must never abort the main message flow.
+   */
+  private async setReaction(
+    thread: Thread<ThreadState>,
+    message: Message,
+    client: PlatformClient | undefined,
+    nextEmoji: string,
+    botContext?: ChatTopicBotContext,
+  ): Promise<void> {
+    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
+    const current = AgentBridgeService.activeReactions.get(thread.id);
+    if (current && current.emoji === nextEmoji && current.userMessageId === message.id) {
+      return;
+    }
+    if (current) {
+      await safeSideEffect(
+        () =>
+          thread.adapter.removeReaction(
+            current.reactionThreadId,
+            current.userMessageId,
+            current.emoji,
+          ),
+        'remove previous reaction',
+      );
+    }
+    await safeSideEffect(
+      () => thread.adapter.addReaction(reactionThreadId, message.id, nextEmoji),
+      'add reaction',
+    );
+    AgentBridgeService.activeReactions.set(thread.id, {
+      applicationId: botContext?.applicationId,
+      emoji: nextEmoji,
+      platform: botContext?.platform,
+      reactionThreadId,
+      userMessageId: message.id,
+    });
+
+    if (botContext?.platform && botContext?.applicationId && message.id) {
+      await saveReactionState(botContext.platform, botContext.applicationId, message.id, {
+        emoji: nextEmoji,
+        reactionThreadId,
+      });
+    }
+  }
+
+  /**
+   * Remove whatever emoji is currently stored for this thread and drop the
+   * tracking entry. Safe to call even when no reaction was set.
+   */
+  private async clearReaction(thread: Thread<ThreadState>): Promise<void> {
+    const current = AgentBridgeService.activeReactions.get(thread.id);
+    if (!current) return;
+    AgentBridgeService.activeReactions.delete(thread.id);
+    await safeSideEffect(
+      () =>
+        thread.adapter.removeReaction(
+          current.reactionThreadId,
+          current.userMessageId,
+          current.emoji,
+        ),
+      'clear reaction',
+    );
+    if (current.platform && current.applicationId) {
+      await clearReactionState(current.platform, current.applicationId, current.userMessageId);
+    }
   }
 
   /**
@@ -261,7 +354,8 @@ export class AgentBridgeService {
       }
     }
 
-    await this.removeReceivedReaction(thread, userMessage);
+    await this.clearReaction(thread);
+    void userMessage;
   }
 
   /**
@@ -301,12 +395,7 @@ export class AgentBridgeService {
       // Immediate feedback: mark as received + show typing. Both are
       // non-essential UX niceties; a transient platform network error here
       // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
-      const reactionThreadId =
-        client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-      await safeSideEffect(
-        () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-        'add eyes',
-      );
+      await this.setReaction(thread, message, client, RECEIVED_REACTION_EMOJI, botContext);
 
       // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
       const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
@@ -352,7 +441,7 @@ export class AgentBridgeService {
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
       // If setup fails before that point, clean up locally to avoid leaked reactions.
       if (!queueMode || !queueHandoffSucceeded) {
-        await this.removeReceivedReaction(thread, message, client);
+        await this.clearReaction(thread);
       }
     }
   }
@@ -439,12 +528,7 @@ export class AgentBridgeService {
       // Immediate feedback: mark as received + show typing. Both are
       // non-essential UX niceties; a transient platform network error here
       // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
-      const reactionThreadId =
-        opts.client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-      await safeSideEffect(
-        () => thread.adapter.addReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-        'add eyes',
-      );
+      await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
       await safeSideEffect(() => thread.startTyping(), 'startTyping');
 
       try {
@@ -488,7 +572,7 @@ export class AgentBridgeService {
       AgentBridgeService.activeThreads.delete(thread.id);
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
       if (!queueMode || !queueHandoffSucceeded) {
-        await this.removeReceivedReaction(thread, message, opts.client);
+        await this.clearReaction(thread);
       }
     }
   }
@@ -658,6 +742,7 @@ export class AgentBridgeService {
       prompt,
       topicId,
       trigger,
+      userMessage,
       webhookBody,
     });
   }
@@ -822,6 +907,7 @@ export class AgentBridgeService {
       prompt: string;
       topicId?: string;
       trigger?: string;
+      userMessage?: Message;
       webhookBody: Record<string, unknown>;
     },
   ): Promise<{ reply: string; topicId: string }> {
@@ -839,6 +925,7 @@ export class AgentBridgeService {
       prompt,
       topicId,
       trigger,
+      userMessage,
       webhookBody,
     } = opts;
 
@@ -882,6 +969,11 @@ export class AgentBridgeService {
           hooks: [
             {
               handler: async (event) => {
+                if (event.shouldContinue && userMessage) {
+                  const desiredEmoji = getStepReactionEmoji(event.stepType, event.toolsCalling);
+                  await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
+                }
+
                 if (!event.shouldContinue || !progressMessage || displayToolCalls === false) return;
 
                 const msgBody = renderStepProgress({
@@ -1265,20 +1357,5 @@ export class AgentBridgeService {
 
     this.timezoneLoaded = true;
     return this.timezone;
-  }
-
-  /**
-   * Remove the received reaction from a user message (fire-and-forget).
-   */
-  private async removeReceivedReaction(
-    thread: Thread<ThreadState>,
-    message: Message,
-    client?: PlatformClient,
-  ): Promise<void> {
-    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
-    await safeSideEffect(
-      () => thread.adapter.removeReaction(reactionThreadId, message.id, RECEIVED_EMOJI),
-      'remove eyes',
-    );
   }
 }

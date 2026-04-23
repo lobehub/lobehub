@@ -173,6 +173,8 @@ class TelegramWebhookClient implements PlatformClient {
     const telegram = new TelegramApi(this.config.credentials.botToken);
     const chatId = extractChatId(platformThreadId);
     return {
+      addReaction: (messageId, emoji) =>
+        telegram.setMessageReaction(chatId, parseTelegramMessageId(messageId), emoji),
       createMessage: (content) => telegram.sendMessage(chatId, content).then(() => {}),
       editMessage: (messageId, content) =>
         telegram.editMessageText(chatId, parseTelegramMessageId(messageId), content),

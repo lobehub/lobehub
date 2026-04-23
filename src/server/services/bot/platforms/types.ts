@@ -77,6 +77,11 @@ export interface FieldSchema {
  * LobeHub-specific outbound capabilities used by callback and bridge services.
  */
 export interface PlatformMessenger {
+  /**
+   * Add a reaction to a message (optional — platforms without reaction APIs
+   * can omit this). Callers must no-op on platforms that don't implement it.
+   */
+  addReaction?: (messageId: string, emoji: string) => Promise<void>;
   createMessage: (content: string) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;

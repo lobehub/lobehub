@@ -49,6 +49,7 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
   const threadTs = extractThreadTs(platformThreadId);
 
   return {
+    addReaction: (messageId, emoji) => slack.addReaction(channelId, messageId, emoji),
     createMessage: (content) =>
       threadTs
         ? slack.postMessageInThread(channelId, threadTs, content).then(() => {})
