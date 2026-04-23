@@ -1,5 +1,5 @@
 import { type ChatContextContent } from '@lobechat/types';
-import { Buffer } from '@lobechat/utils';
+import { Buffer } from '@lobechat/utils/buffer';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { t } from 'i18next';
 

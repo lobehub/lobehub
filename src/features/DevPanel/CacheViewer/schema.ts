@@ -1,4 +1,4 @@
-import { Buffer } from '@lobechat/utils';
+import { Buffer } from '@lobechat/utils/buffer';
 import { z } from 'zod';
 
 const unstableCacheFileSchema = z.object({

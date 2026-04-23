@@ -1,4 +1,4 @@
-import { Buffer } from '@lobechat/utils';
+import { Buffer } from '@lobechat/utils/buffer';
 import Replicate from 'replicate';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
