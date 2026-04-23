@@ -2,8 +2,13 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+} from '@/features/Conversation/store';
 import dynamic from '@/libs/next/dynamic';
 
 import { type ChatItemProps } from '../../type';
@@ -59,14 +64,28 @@ const MessageContent = memo<MessageContentProps>(
     className,
     variant,
   }) => {
-    const [toggleMessageEditing, updateMessageContent] = useConversationStore((s) => [
-      s.toggleMessageEditing,
-      s.updateMessageContent,
-    ]);
+    const [toggleMessageEditing, updateMessageContent, regenerateUserMessage] =
+      useConversationStore((s) => [
+        s.toggleMessageEditing,
+        s.updateMessageContent,
+        s.regenerateUserMessage,
+      ]);
 
     const editorData = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
     );
+
+    const role = useConversationStore((s) => dataSelectors.getDisplayMessageById(id)(s)?.role);
+
+    const isLastUserMessage = useConversationStore(
+      (s) => s.displayMessages.findLast((m) => m.role === 'user')?.id === id,
+    );
+
+    const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
+
+    const { t } = useTranslation('common');
+
+    const shouldSendOnConfirm = role === 'user' && isLastUserMessage && !isAIGenerating;
 
     const onEditingChange = useCallback(
       (edit: boolean) => toggleMessageEditing(id, edit),
@@ -93,6 +112,7 @@ const MessageContent = memo<MessageContentProps>(
           {editing && (
             <EditorModal
               editorData={editorData}
+              okText={shouldSendOnConfirm ? t('send') : t('save')}
               open={editing}
               value={message ? String(message) : ''}
               onCancel={() => onEditingChange(false)}
@@ -101,6 +121,9 @@ const MessageContent = memo<MessageContentProps>(
                   editorData: newEditorData as Record<string, any> | undefined,
                 });
                 onEditingChange(false);
+                if (shouldSendOnConfirm) {
+                  await regenerateUserMessage(id);
+                }
               }}
             />
           )}
