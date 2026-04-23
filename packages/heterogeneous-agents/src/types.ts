@@ -203,6 +203,15 @@ export interface StepCompleteData {
   usage?: UsageData;
 }
 
+export interface HeterogeneousRateLimitInfo {
+  isUsingOverage?: boolean;
+  overageDisabledReason?: string;
+  overageStatus?: string;
+  rateLimitType?: string;
+  resetsAt?: number;
+  status?: string;
+}
+
 /**
  * Normalized terminal error payload emitted by adapters when the upstream CLI
  * exposes enough context to classify the failure. The executor can persist
@@ -217,6 +226,7 @@ export interface HeterogeneousTerminalErrorData {
   error?: string;
   installCommands?: readonly string[];
   message: string;
+  rateLimitInfo?: HeterogeneousRateLimitInfo;
   stderr?: string;
 }
 

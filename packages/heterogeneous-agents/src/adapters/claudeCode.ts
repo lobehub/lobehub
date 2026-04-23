@@ -13,7 +13,7 @@
  *   {type: 'user', message: {content: [{type: 'tool_result', tool_use_id, content}]}}
  *   {type: 'assistant', message: {id: <NEW>, content: [{type: 'text', text}], ...}}
  *   {type: 'result', is_error, result, ...}
- *   {type: 'rate_limit_event', ...}  (ignored)
+ *   {type: 'rate_limit_event', ...}
  *
  * With `--include-partial-messages` (enabled by default in this adapter), CC
  * also emits token-level deltas wrapped as:
@@ -44,6 +44,7 @@ import type {
   AgentCLIPreset,
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
   StreamChunkData,
   SubagentEventContext,
@@ -62,6 +63,8 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
+
+const CLI_RATE_LIMIT_PATTERNS = [/you'?ve hit your limit/i, /rate limit/i] as const;
 
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;
@@ -97,6 +100,46 @@ const getAuthRequiredTerminalError = (
     error: rawMessage,
     message:
       'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+    stderr: rawMessage,
+  };
+};
+
+const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined => {
+  if (!value || typeof value !== 'object') return;
+
+  const raw = value as Record<string, unknown>;
+
+  return {
+    isUsingOverage: typeof raw.isUsingOverage === 'boolean' ? raw.isUsingOverage : undefined,
+    overageDisabledReason:
+      typeof raw.overageDisabledReason === 'string' ? raw.overageDisabledReason : undefined,
+    overageStatus: typeof raw.overageStatus === 'string' ? raw.overageStatus : undefined,
+    rateLimitType: typeof raw.rateLimitType === 'string' ? raw.rateLimitType : undefined,
+    resetsAt: typeof raw.resetsAt === 'number' ? raw.resetsAt : undefined,
+    status: typeof raw.status === 'string' ? raw.status : undefined,
+  };
+};
+
+const getRateLimitTerminalError = (
+  result: unknown,
+  rateLimitInfo?: HeterogeneousRateLimitInfo,
+  apiErrorStatus?: unknown,
+): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  const looksLikeRateLimit =
+    apiErrorStatus === 429 ||
+    !!rateLimitInfo ||
+    (!!rawMessage && CLI_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(rawMessage)));
+
+  if (!looksLikeRateLimit || !rawMessage) return;
+
+  return {
+    agentType: 'claude-code',
+    clearEchoedContent: true,
+    code: 'rate_limit',
+    error: rawMessage,
+    message: rawMessage,
+    rateLimitInfo,
     stderr: rawMessage,
   };
 };
@@ -190,6 +233,7 @@ export const claudeCodePreset: AgentCLIPreset = {
 
 export class ClaudeCodeAdapter implements AgentEventAdapter {
   sessionId?: string;
+  private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
 
   /** Pending tool_use ids awaiting their tool_result */
   private pendingToolCalls = new Set<string>();
@@ -251,6 +295,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     if (!raw || typeof raw !== 'object') return [];
 
     switch (raw.type) {
+      case 'rate_limit_event': {
+        return this.handleRateLimitEvent(raw);
+      }
       case 'system': {
         return this.handleSystem(raw);
       }
@@ -268,7 +315,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       }
       default: {
         return [];
-      } // rate_limit_event, etc.
+      }
     }
   }
 
@@ -296,6 +343,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   private handleAssistant(raw: any): HeterogeneousAgentEvent[] {
+    // Claude Code emits a synthetic assistant text turn for rate-limit
+    // failures. We already surface the structured rate-limit metadata via
+    // the paired `rate_limit_event` + terminal `result`, so letting this
+    // text through would momentarily render a duplicate plain-text bubble.
+    if (raw.error === 'rate_limit') return [];
+
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
@@ -376,6 +429,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     events.push(...this.emitToolChunk(newToolCalls, messageId));
 
     return events;
+  }
+
+  private handleRateLimitEvent(raw: any): HeterogeneousAgentEvent[] {
+    this.pendingRateLimitInfo = toRateLimitInfo(raw.rate_limit_info);
+    return [];
   }
 
   /**
@@ -655,15 +713,23 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
 
     const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
+    const rateLimitError = getRateLimitTerminalError(
+      raw.result,
+      this.pendingRateLimitInfo,
+      raw.api_error_status,
+    );
     const finalEvent: HeterogeneousAgentEvent = raw.is_error
       ? this.makeEvent(
           'error',
-          getAuthRequiredTerminalError(raw.result) || {
-            error: resultMessage,
-            message: resultMessage,
-          },
+          rateLimitError ||
+            getAuthRequiredTerminalError(raw.result) || {
+              error: resultMessage,
+              message: resultMessage,
+            },
         )
       : this.makeEvent('agent_runtime_end', {});
+
+    this.pendingRateLimitInfo = undefined;
 
     return [...events, this.makeEvent('stream_end', {}), finalEvent];
   }

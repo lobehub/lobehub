@@ -11,7 +11,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import CodexCLIInstallGuide from '@/features/Electron/CodexCLIInstallGuide';
+import HeterogeneousAgentCLIStatusGuide from '@/features/Electron/HeterogeneousAgentCLIStatusGuide';
 import { toolDetectorService } from '@/services/electron/toolDetector';
 
 const COMMAND_LINE_HEIGHT = 28;
@@ -521,7 +521,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
           {renderAuth()}
         </div>
         {showCliInstallGuide && (
-          <CodexCLIInstallGuide
+          <HeterogeneousAgentCLIStatusGuide
             agentType={provider.type}
             variant={'embedded'}
             onOpenSystemTools={() => navigate('/settings/system-tools')}

@@ -14,7 +14,7 @@ import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErro
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
-import CodexCLIInstallGuide from '@/features/Electron/CodexCLIInstallGuide';
+import HeterogeneousAgentCLIStatusGuide from '@/features/Electron/HeterogeneousAgentCLIStatusGuide';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
 
@@ -166,11 +166,12 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
   if (
     (error?.type === AgentRuntimeErrorType.AgentRuntimeError || !error?.type) &&
     (sessionErrorCode === HeterogeneousAgentSessionErrorCode.AuthRequired ||
-      sessionErrorCode === HeterogeneousAgentSessionErrorCode.CliNotFound) &&
+      sessionErrorCode === HeterogeneousAgentSessionErrorCode.CliNotFound ||
+      sessionErrorCode === HeterogeneousAgentSessionErrorCode.RateLimit) &&
     (sessionAgentType === 'claude-code' || sessionAgentType === 'codex')
   ) {
     return (
-      <CodexCLIInstallGuide
+      <HeterogeneousAgentCLIStatusGuide
         agentType={sessionAgentType}
         error={error.body}
         onOpenSystemTools={() => navigate('/settings/system-tools')}

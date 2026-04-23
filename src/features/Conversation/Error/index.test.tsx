@@ -89,7 +89,7 @@ vi.mock('@/features/Conversation/ChatItem/components/ErrorContent', () => ({
   ),
 }));
 
-vi.mock('@/features/Electron/CodexCLIInstallGuide', () => ({
+vi.mock('@/features/Electron/HeterogeneousAgentCLIStatusGuide', () => ({
   default: ({ agentType, error }: { agentType?: string; error?: { code?: string } }) => (
     <div>{`guide:${agentType}:${error?.code}`}</div>
   ),
@@ -123,6 +123,27 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:auth_required')).toBeInTheDocument();
+  });
+
+  it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.undefined' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'claude-code',
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: "You've hit your limit · resets 9am (Asia/Shanghai)",
+            },
+            message: "You've hit your limit · resets 9am (Asia/Shanghai)",
+          } as any,
+          id: 'msg-rate-limit',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
   });
 
   it('falls back to the raw error message instead of rendering a blank block', () => {

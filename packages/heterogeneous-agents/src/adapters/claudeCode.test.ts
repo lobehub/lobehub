@@ -53,6 +53,50 @@ describe('ClaudeCodeAdapter', () => {
         'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
       );
     });
+
+    it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      expect(
+        adapter.adapt({
+          rate_limit_info: {
+            isUsingOverage: false,
+            overageDisabledReason: 'org_level_disabled',
+            overageStatus: 'rejected',
+            rateLimitType: 'seven_day',
+            resetsAt: 1_776_992_400,
+            status: 'rejected',
+          },
+          type: 'rate_limit_event',
+        }),
+      ).toEqual([]);
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'rate_limit',
+        message: rawError,
+        rateLimitInfo: {
+          isUsingOverage: false,
+          overageDisabledReason: 'org_level_disabled',
+          overageStatus: 'rejected',
+          rateLimitType: 'seven_day',
+          resetsAt: 1_776_992_400,
+          status: 'rejected',
+        },
+        stderr: rawError,
+      });
+    });
   });
 
   describe('content mapping', () => {
@@ -859,9 +903,9 @@ describe('ClaudeCodeAdapter', () => {
       expect(adapter.adapt('string')).toEqual([]);
     });
 
-    it('returns empty array for unknown event types (rate_limit_event)', () => {
+    it('returns empty array for unknown event types', () => {
       const adapter = new ClaudeCodeAdapter();
-      const events = adapter.adapt({ type: 'rate_limit_event', data: {} });
+      const events = adapter.adapt({ type: 'something_unexpected', data: {} });
       expect(events).toEqual([]);
     });
 

@@ -17,12 +17,22 @@ export const CODEX_CLI_INSTALL_COMMANDS = [
 export const HeterogeneousAgentSessionErrorCode = {
   AuthRequired: 'auth_required',
   CliNotFound: 'cli_not_found',
+  RateLimit: 'rate_limit',
   ResumeCwdMismatch: 'resume_cwd_mismatch',
   ResumeThreadNotFound: 'resume_thread_not_found',
 } as const;
 
 export type HeterogeneousAgentSessionErrorCode =
   (typeof HeterogeneousAgentSessionErrorCode)[keyof typeof HeterogeneousAgentSessionErrorCode];
+
+export interface HeterogeneousAgentRateLimitInfo {
+  isUsingOverage?: boolean;
+  overageDisabledReason?: string;
+  overageStatus?: string;
+  rateLimitType?: string;
+  resetsAt?: number;
+  status?: string;
+}
 
 export interface HeterogeneousAgentSessionError {
   agentType?: string;
@@ -31,6 +41,7 @@ export interface HeterogeneousAgentSessionError {
   docsUrl?: string;
   installCommands?: readonly string[];
   message: string;
+  rateLimitInfo?: HeterogeneousAgentRateLimitInfo;
   resumeSessionId?: string;
   stderr?: string;
   workingDirectory?: string;
