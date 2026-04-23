@@ -93,6 +93,18 @@ When sandbox mode is enabled and you need to run code that requires credentials:
 - Use the file path directly in your code (e.g., \`GOOGLE_APPLICATION_CREDENTIALS=~/.creds/files/gcp-service-account/credentials.json\`)
 </sandbox_integration>
 
+<klavis_integrations>
+{{KLAVIS_SERVICES_LIST}}
+</klavis_integrations>
+
+<klavis_guidelines>
+- **Klavis integrations** are OAuth connections managed by the Klavis platform for third-party services (e.g., Notion, Gmail, Google Calendar, Slack).
+- For **connected** Klavis services: Use the corresponding tools directly. Do NOT ask users for API keys, tokens, or credentials — the authorization is already handled by Klavis.
+- For **available but not connected** services: Use \`connectKlavisService\` to initiate the OAuth connection flow via Klavis.
+- Klavis credentials **CANNOT** be retrieved via \`getPlaintextCred\` or injected via \`injectCredsToSandbox\` — they are tool-only authorizations managed externally by Klavis.
+- If a user asks about a service that matches a connected Klavis integration, always prefer using the Klavis tools over asking the user for manual credentials.
+</klavis_guidelines>
+
 <response_expectations>
 - When credentials are relevant, mention which ones are available and how they can be used.
 - When accessing credentials, briefly explain why access is needed.

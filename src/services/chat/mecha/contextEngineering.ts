@@ -1,7 +1,13 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
+import {
+  CredsIdentifier,
+  type CredSummary,
+  generateCredsList,
+  generateKlavisServicesList,
+  type KlavisServiceSummary,
+} from '@lobechat/builtin-tool-creds';
 import {
   CronIdentifier,
   type CronJobSummaryForContext,
@@ -53,6 +59,7 @@ import {
   lobehubSkillStoreSelectors,
   toolSelectors,
 } from '@/store/tool/selectors';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
@@ -379,6 +386,39 @@ export const contextEngineering = async ({
     } catch (error) {
       // Silently fail - creds context is optional
       log('Failed to resolve creds context:', error);
+    }
+  }
+
+  // Build Klavis services list for creds context
+  // Shows which Klavis services are connected (authorized) and which are available to connect
+  let klavisServicesList = '';
+
+  const isKlavisEnabled =
+    typeof window !== 'undefined' &&
+    window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+
+  if (isCredsEnabled && isKlavisEnabled) {
+    try {
+      const toolState = getToolStoreState();
+      const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+
+      const connected: KlavisServiceSummary[] = allKlavisServers
+        .filter((s) => s.status === KlavisServerStatus.CONNECTED)
+        .map((s) => ({ identifier: s.identifier, name: s.serverName }));
+
+      const connectedIds = new Set(connected.map((s) => s.identifier));
+      const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+        (t) => !connectedIds.has(t.identifier),
+      ).map((t) => ({ identifier: t.identifier, name: t.label }));
+
+      klavisServicesList = generateKlavisServicesList(connected, available);
+      log(
+        'Klavis services context resolved: connected=%d, available=%d',
+        connected.length,
+        available.length,
+      );
+    } catch (error) {
+      log('Failed to resolve Klavis services context:', error);
     }
   }
 
@@ -735,6 +775,8 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
+      KLAVIS_SERVICES_LIST: () => klavisServicesList,
       // NOTICE: required by builtin-tool-cron/src/systemRole.ts
       CRON_JOBS_LIST: () => (cronJobsList ? generateCronJobsList(cronJobsList, cronJobsTotal) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
