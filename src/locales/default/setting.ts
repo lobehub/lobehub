@@ -209,7 +209,14 @@ export default {
 
   // Heterogeneous agent CLI status (shown on agent profile page in integration mode)
   'heterogeneousStatus.account.label': 'Account',
+  'heterogeneousStatus.auth.api': 'API',
+  'heterogeneousStatus.auth.label': 'Auth Method',
+  'heterogeneousStatus.auth.subscription': 'Subscription',
+  'heterogeneousStatus.command.edit': 'Edit command',
+  'heterogeneousStatus.command.label': 'Launch Command',
+  'heterogeneousStatus.command.placeholder': 'Command name or absolute path',
   'heterogeneousStatus.detecting': 'Detecting {{name}} CLI...',
+  'heterogeneousStatus.plan.label': 'Plan',
   'heterogeneousStatus.redetect': 'Re-detect',
   'heterogeneousStatus.unavailable': '{{name}} CLI not found. Please install or configure it.',
   'checking': 'Checking...',

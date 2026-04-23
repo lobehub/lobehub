@@ -23,6 +23,18 @@ const ProfileEditor = memo(() => {
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
+  const updateHeterogeneousCommand = async (command: string) => {
+    if (!heterogeneousProvider) return;
+
+    await updateConfig({
+      agencyConfig: {
+        heterogeneousProvider: {
+          ...heterogeneousProvider,
+          command,
+        },
+      },
+    });
+  };
 
   return (
     <>
@@ -36,7 +48,10 @@ const ProfileEditor = memo(() => {
         <AgentHeader />
         {isHeterogeneous && heterogeneousProvider ? (
           // Heterogeneous integration mode: show provider CLI status instead of model/skills pickers
-          <HeterogeneousAgentStatusCard provider={heterogeneousProvider} />
+          <HeterogeneousAgentStatusCard
+            provider={heterogeneousProvider}
+            onCommandChange={updateHeterogeneousCommand}
+          />
         ) : (
           <>
             {/* Config Bar: Model Selector */}
