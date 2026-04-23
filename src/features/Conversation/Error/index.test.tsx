@@ -89,7 +89,7 @@ vi.mock('@/features/Conversation/ChatItem/components/ErrorContent', () => ({
   ),
 }));
 
-vi.mock('@/features/Electron/HeterogeneousAgentCLIStatusGuide', () => ({
+vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
   default: ({ agentType, error }: { agentType?: string; error?: { code?: string } }) => (
     <div>{`guide:${agentType}:${error?.code}`}</div>
   ),

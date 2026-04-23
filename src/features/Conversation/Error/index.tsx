@@ -14,7 +14,7 @@ import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErro
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
-import HeterogeneousAgentCLIStatusGuide from '@/features/Electron/HeterogeneousAgentCLIStatusGuide';
+import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
 
@@ -171,7 +171,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
     (sessionAgentType === 'claude-code' || sessionAgentType === 'codex')
   ) {
     return (
-      <HeterogeneousAgentCLIStatusGuide
+      <HeterogeneousAgentStatusGuide
         agentType={sessionAgentType}
         error={error.body}
         onOpenSystemTools={() => navigate('/settings/system-tools')}

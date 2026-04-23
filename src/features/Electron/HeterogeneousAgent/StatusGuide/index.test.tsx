@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import HeterogeneousAgentCLIStatusGuide from './index';
+import HeterogeneousAgentStatusGuide from './index';
 
 vi.mock('@lobechat/const', () => ({
   isDesktop: false,
@@ -46,6 +46,10 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: {
+      language: 'en-US',
+      resolvedLanguage: 'en-US',
+    },
     t: (
       key: string,
       options?: { count?: number; duration?: string; message?: string; name?: string },
@@ -119,10 +123,10 @@ vi.mock('@/services/electron/system', () => ({
   },
 }));
 
-describe('HeterogeneousAgentCLIStatusGuide', () => {
+describe('HeterogeneousAgentStatusGuide', () => {
   it('hides the duplicated reason for the known cli_not_found state', () => {
     render(
-      <HeterogeneousAgentCLIStatusGuide
+      <HeterogeneousAgentStatusGuide
         error={{
           code: HeterogeneousAgentSessionErrorCode.CliNotFound,
           message: 'Codex CLI was not found',
@@ -136,7 +140,7 @@ describe('HeterogeneousAgentCLIStatusGuide', () => {
 
   it('keeps the detailed reason for unexpected errors', () => {
     render(
-      <HeterogeneousAgentCLIStatusGuide
+      <HeterogeneousAgentStatusGuide
         error={{
           code: 'spawn_failed',
           message: 'Permission denied',
@@ -150,7 +154,7 @@ describe('HeterogeneousAgentCLIStatusGuide', () => {
   });
 
   it('uses a headerless layout in embedded mode', () => {
-    render(<HeterogeneousAgentCLIStatusGuide variant={'embedded'} />);
+    render(<HeterogeneousAgentStatusGuide variant={'embedded'} />);
 
     expect(screen.queryByText('Install Codex CLI')).not.toBeInTheDocument();
     expect(
@@ -160,7 +164,7 @@ describe('HeterogeneousAgentCLIStatusGuide', () => {
 
   it('renders Claude Code install guidance for the Claude CLI flow', () => {
     render(
-      <HeterogeneousAgentCLIStatusGuide
+      <HeterogeneousAgentStatusGuide
         agentType={'claude-code'}
         error={{
           agentType: 'claude-code',
@@ -180,7 +184,7 @@ describe('HeterogeneousAgentCLIStatusGuide', () => {
 
   it('renders sign-in guidance for auth-required errors', () => {
     render(
-      <HeterogeneousAgentCLIStatusGuide
+      <HeterogeneousAgentStatusGuide
         agentType={'claude-code'}
         error={{
           agentType: 'claude-code',
@@ -215,7 +219,7 @@ describe('HeterogeneousAgentCLIStatusGuide', () => {
 
     try {
       render(
-        <HeterogeneousAgentCLIStatusGuide
+        <HeterogeneousAgentStatusGuide
           agentType={'claude-code'}
           error={{
             agentType: 'claude-code',
@@ -249,6 +253,64 @@ describe('HeterogeneousAgentCLIStatusGuide', () => {
       expect(screen.queryByText('Open Install Guide')).not.toBeInTheDocument();
       expect(screen.queryByText('Recommended install')).not.toBeInTheDocument();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('formats reset time with the active i18n locale instead of the system locale', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-23T13:27:00+08:00'));
+
+    const dateTimeFormatSpy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(((
+      locale?: string | string[],
+      options?: Intl.DateTimeFormatOptions,
+    ) => {
+      const resolvedLocale = Array.isArray(locale) ? locale[0] : locale;
+
+      return {
+        format: () => {
+          if (options?.weekday === 'short') {
+            return resolvedLocale === 'en-US' ? 'Fri 9:00 AM' : '周五 09:00';
+          }
+
+          return resolvedLocale === 'en-US' ? 'Apr 24, 2026, 9:00 AM' : '2026年4月24日 09:00';
+        },
+        resolvedOptions: () => ({
+          calendar: 'gregory',
+          locale: resolvedLocale || 'zh-CN',
+          numberingSystem: 'latn',
+          timeZone: 'Asia/Shanghai',
+        }),
+      } as Intl.DateTimeFormat;
+    }) as typeof Intl.DateTimeFormat);
+
+    try {
+      render(
+        <HeterogeneousAgentStatusGuide
+          agentType={'claude-code'}
+          error={{
+            agentType: 'claude-code',
+            code: HeterogeneousAgentSessionErrorCode.RateLimit,
+            message: "You've hit your limit · resets 9am (Asia/Shanghai)",
+            rateLimitInfo: {
+              rateLimitType: 'seven_day',
+              resetsAt: 1_776_992_400,
+            },
+          }}
+        />,
+      );
+
+      expect(screen.getByText(/Fri 9:00 AM \(Asia\/Shanghai\)/)).toBeInTheDocument();
+      expect(dateTimeFormatSpy).toHaveBeenCalledWith(
+        'en-US',
+        expect.objectContaining({
+          hour: 'numeric',
+          minute: '2-digit',
+          weekday: 'short',
+        }),
+      );
+    } finally {
+      dateTimeFormatSpy.mockRestore();
       vi.useRealTimers();
     }
   });
