@@ -130,7 +130,9 @@ export const MODEL_LIST_CONFIGS = {
     excludeKeywords: ['tts'],
     functionCallKeywords: ['mimo'],
     reasoningKeywords: ['mimo'],
-    visionKeywords: ['omni'],
+    // mimo-v2.5 (non-pro) is natively omni-modal; match the exact id
+    // without also catching mimo-v2.5-pro, which is text-only.
+    visionKeywords: ['omni', 're:^mimo-v2\\.5$'],
   },
   zeroone: {
     functionCallKeywords: ['fc'],
