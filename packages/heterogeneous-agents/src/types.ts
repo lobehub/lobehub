@@ -203,6 +203,23 @@ export interface StepCompleteData {
   usage?: UsageData;
 }
 
+/**
+ * Normalized terminal error payload emitted by adapters when the upstream CLI
+ * exposes enough context to classify the failure. The executor can persist
+ * this directly as a `ChatMessageError` body without re-parsing provider-
+ * specific stderr shapes.
+ */
+export interface HeterogeneousTerminalErrorData {
+  agentType?: string;
+  clearEchoedContent?: boolean;
+  code?: string;
+  docsUrl?: string;
+  error?: string;
+  installCommands?: readonly string[];
+  message: string;
+  stderr?: string;
+}
+
 // ─── Adapter Interface ───
 
 /**

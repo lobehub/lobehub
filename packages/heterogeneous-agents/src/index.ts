@@ -8,6 +8,7 @@ export type {
   AgentProcessConfig,
   HeterogeneousAgentEvent,
   HeterogeneousEventType,
+  HeterogeneousTerminalErrorData,
   StreamChunkData,
   StreamChunkType,
   StreamStartData,

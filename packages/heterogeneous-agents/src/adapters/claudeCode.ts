@@ -44,12 +44,62 @@ import type {
   AgentCLIPreset,
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  HeterogeneousTerminalErrorData,
   StreamChunkData,
   SubagentEventContext,
   ToolCallPayload,
   ToolResultData,
   UsageData,
 } from '../types';
+
+const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
+
+const CLI_AUTH_REQUIRED_PATTERNS = [
+  /failed to authenticate/i,
+  /invalid authentication credentials/i,
+  /authentication[_ ]error/i,
+  /not authenticated/i,
+  /\bunauthorized\b/i,
+  /\b401\b/,
+] as const;
+
+const getCliResultMessage = (result: unknown): string | undefined => {
+  if (typeof result === 'string') return result;
+  if (
+    result &&
+    typeof result === 'object' &&
+    'message' in result &&
+    typeof result.message === 'string'
+  ) {
+    return result.message;
+  }
+
+  try {
+    return result == null ? undefined : JSON.stringify(result);
+  } catch {
+    return undefined;
+  }
+};
+
+const getAuthRequiredTerminalError = (
+  result: unknown,
+): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  if (!rawMessage || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(rawMessage))) {
+    return;
+  }
+
+  return {
+    agentType: 'claude-code',
+    clearEchoedContent: true,
+    code: 'auth_required',
+    docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+    error: rawMessage,
+    message:
+      'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+    stderr: rawMessage,
+  };
+};
 
 /**
  * CC's TodoWrite is a declarative state-write tool: its `tool_use.input` IS
@@ -604,11 +654,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       );
     }
 
+    const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
     const finalEvent: HeterogeneousAgentEvent = raw.is_error
-      ? this.makeEvent('error', {
-          error: raw.result || 'Agent execution failed',
-          message: raw.result || 'Agent execution failed',
-        })
+      ? this.makeEvent(
+          'error',
+          getAuthRequiredTerminalError(raw.result) || {
+            error: resultMessage,
+            message: resultMessage,
+          },
+        )
       : this.makeEvent('agent_runtime_end', {});
 
     return [...events, this.makeEvent('stream_end', {}), finalEvent];

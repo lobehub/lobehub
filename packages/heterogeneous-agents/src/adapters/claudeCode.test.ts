@@ -32,6 +32,27 @@ describe('ClaudeCodeAdapter', () => {
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
       expect(events[1].data.message).toBe('boom');
     });
+
+    it('classifies auth failures from failed result events', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      const events = adapter.adapt({ is_error: true, result: rawError, type: 'result' });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'auth_required',
+        docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
+        stderr: rawError,
+      });
+      expect(events[1].data.message).toBe(
+        'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+      );
+    });
   });
 
   describe('content mapping', () => {

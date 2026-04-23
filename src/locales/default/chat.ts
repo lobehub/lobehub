@@ -267,6 +267,15 @@ export default {
   'claudeCodeInstallGuide.menuNotification.title': 'Claude Code CLI not found',
   'claudeCodeInstallGuide.reason': 'LobeHub could not start Claude Code: {{message}}',
   'claudeCodeInstallGuide.title': 'Install Claude Code CLI',
+  'cliAuthGuide.actions.openDocs': 'Open Sign-in Guide',
+  'cliAuthGuide.actions.openSystemTools': 'Open System Tools',
+  'cliAuthGuide.afterLogin':
+    'After signing in again or refreshing credentials, retry your message. You can also re-detect in System Tools.',
+  'cliAuthGuide.desc':
+    '{{name}} could not continue because its sign-in session expired or the credentials are invalid.',
+  'cliAuthGuide.errorDetails': 'Error details',
+  'cliAuthGuide.runCommand': 'Run this in Terminal',
+  'cliAuthGuide.title': 'Sign in to {{name}}',
   'codexInstallGuide.actions.openDocs': 'Open Install Guide',
   'codexInstallGuide.actions.openSystemTools': 'Open System Tools',
   'codexInstallGuide.afterInstall':

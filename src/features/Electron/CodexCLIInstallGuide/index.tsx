@@ -10,7 +10,7 @@ import {
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
 import { ClaudeCode, Codex } from '@lobehub/icons';
-import { Avatar, Block, Button, Flexbox, Snippet, Text } from '@lobehub/ui';
+import { Avatar, Block, Button, Flexbox, Highlighter, Snippet, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ExternalLink, Settings2 } from 'lucide-react';
 import { memo } from 'react';
@@ -27,12 +27,16 @@ const AGENT_INSTALL_GUIDE_CONFIG = {
     docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
     icon: ClaudeCode,
     installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
+    signInCommand: 'claude',
+    title: 'Claude Code',
     translationPrefix: 'claudeCodeInstallGuide',
   },
   'codex': {
     docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
     icon: Codex,
     installCommands: CODEX_CLI_INSTALL_COMMANDS,
+    signInCommand: 'codex',
+    title: 'Codex',
     translationPrefix: 'codexInstallGuide',
   },
 } as const satisfies Record<
@@ -41,6 +45,8 @@ const AGENT_INSTALL_GUIDE_CONFIG = {
     docsUrl: string;
     icon: typeof ClaudeCode;
     installCommands: readonly string[];
+    signInCommand: string;
+    title: string;
     translationPrefix: string;
   }
 >;
@@ -67,13 +73,33 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
     const AgentIcon = guideConfig.icon;
     const translationPrefix = guideConfig.translationPrefix;
     const docsUrl = error?.docsUrl || guideConfig.docsUrl;
+    const isAuthRequired = error?.code === HeterogeneousAgentSessionErrorCode.AuthRequired;
     const installCommands = error?.installCommands?.length
       ? error.installCommands
       : guideConfig.installCommands;
+    const rawErrorDetails = error?.stderr || error?.message;
     const [recommendedCommand, alternativeCommand] = installCommands;
     const showErrorReason =
-      Boolean(error?.message) && error?.code !== HeterogeneousAgentSessionErrorCode.CliNotFound;
+      Boolean(error?.message) &&
+      error?.code !== HeterogeneousAgentSessionErrorCode.AuthRequired &&
+      error?.code !== HeterogeneousAgentSessionErrorCode.CliNotFound;
+    const showRawErrorDetails = isAuthRequired && Boolean(rawErrorDetails);
     const showHeader = variant !== 'embedded';
+    const title = isAuthRequired
+      ? t('cliAuthGuide.title', { name: guideConfig.title })
+      : t(`${translationPrefix}.title`);
+    const description = isAuthRequired
+      ? t('cliAuthGuide.desc', { name: guideConfig.title })
+      : t(`${translationPrefix}.desc`);
+    const footerText = isAuthRequired
+      ? t('cliAuthGuide.afterLogin')
+      : t(`${translationPrefix}.afterInstall`);
+    const openDocsLabel = isAuthRequired
+      ? t('cliAuthGuide.actions.openDocs')
+      : t(`${translationPrefix}.actions.openDocs`);
+    const openSystemToolsLabel = isAuthRequired
+      ? t('cliAuthGuide.actions.openSystemTools')
+      : t(`${translationPrefix}.actions.openSystemTools`);
 
     const content = (
       <Flexbox gap={12}>
@@ -87,14 +113,12 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
               size={48}
             />
             <Flexbox gap={4}>
-              <Text style={{ fontSize: 16, fontWeight: 600 }}>
-                {t(`${translationPrefix}.title`)}
-              </Text>
-              <Text type="secondary">{t(`${translationPrefix}.desc`)}</Text>
+              <Text style={{ fontSize: 16, fontWeight: 600 }}>{title}</Text>
+              <Text type="secondary">{description}</Text>
             </Flexbox>
           </Flexbox>
         ) : (
-          <Text type="secondary">{t(`${translationPrefix}.desc`)}</Text>
+          <Text type="secondary">{description}</Text>
         )}
 
         {showErrorReason && (
@@ -103,16 +127,25 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
           </Text>
         )}
 
-        {recommendedCommand && (
+        {isAuthRequired ? (
           <Flexbox gap={6}>
             <Text strong style={{ fontSize: 12 }}>
-              {t(`${translationPrefix}.installWithNpm`)}
+              {t('cliAuthGuide.runCommand')}
             </Text>
-            <Snippet language={'bash'}>{recommendedCommand}</Snippet>
+            <Snippet language={'bash'}>{guideConfig.signInCommand}</Snippet>
           </Flexbox>
+        ) : (
+          recommendedCommand && (
+            <Flexbox gap={6}>
+              <Text strong style={{ fontSize: 12 }}>
+                {t(`${translationPrefix}.installWithNpm`)}
+              </Text>
+              <Snippet language={'bash'}>{recommendedCommand}</Snippet>
+            </Flexbox>
+          )
         )}
 
-        {alternativeCommand && (
+        {!isAuthRequired && alternativeCommand && (
           <Flexbox gap={6}>
             <Text strong style={{ fontSize: 12 }}>
               {t(`${translationPrefix}.installWithBrew`)}
@@ -122,13 +155,34 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
         )}
 
         <Text style={{ fontSize: 12 }} type="secondary">
-          {t(`${translationPrefix}.afterInstall`)}
+          {footerText}
         </Text>
+
+        {showRawErrorDetails && (
+          <Flexbox gap={6}>
+            <Text strong style={{ fontSize: 12 }}>
+              {t('cliAuthGuide.errorDetails')}
+            </Text>
+            <Highlighter
+              wrap
+              actionIconSize={'small'}
+              language={'log'}
+              padding={12}
+              variant={'outlined'}
+              style={{
+                maxHeight: 200,
+                overflow: 'auto',
+              }}
+            >
+              {rawErrorDetails}
+            </Highlighter>
+          </Flexbox>
+        )}
 
         <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
           {onOpenSystemTools && (
             <Button icon={<Settings2 size={14} />} size="small" onClick={onOpenSystemTools}>
-              {t(`${translationPrefix}.actions.openSystemTools`)}
+              {openSystemToolsLabel}
             </Button>
           )}
           <Button
@@ -143,7 +197,7 @@ const CodexCLIInstallGuide = memo<CodexCLIInstallGuideProps>(
               openLink.catch(console.error);
             }}
           >
-            {t(`${translationPrefix}.actions.openDocs`)}
+            {openDocsLabel}
           </Button>
         </Flexbox>
       </Flexbox>

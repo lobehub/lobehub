@@ -23,7 +23,12 @@ vi.mock('@lobehub/ui', () => ({
     </button>
   ),
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Snippet: ({ children }: { children?: ReactNode }) => <pre>{children}</pre>,
+  Highlighter: ({ children, style }: { children?: ReactNode; style?: React.CSSProperties }) => (
+    <pre style={style}>{children}</pre>
+  ),
+  Snippet: ({ children, style }: { children?: ReactNode; style?: React.CSSProperties }) => (
+    <pre style={style}>{children}</pre>
+  ),
   Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
 }));
 
@@ -41,9 +46,17 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { message?: string }) =>
+    t: (key: string, options?: { message?: string; name?: string }) =>
       (
         ({
+          'cliAuthGuide.actions.openDocs': 'Open Sign-in Guide',
+          'cliAuthGuide.actions.openSystemTools': 'Open System Tools',
+          'cliAuthGuide.afterLogin':
+            'After signing in again or refreshing credentials, retry your message.',
+          'cliAuthGuide.desc': `${options?.name ?? ''} could not continue because its sign-in session expired or the credentials are invalid.`,
+          'cliAuthGuide.errorDetails': 'Error details',
+          'cliAuthGuide.runCommand': 'Run this in Terminal',
+          'cliAuthGuide.title': `Sign in to ${options?.name ?? ''}`,
           'claudeCodeInstallGuide.actions.openDocs': 'Open Install Guide',
           'claudeCodeInstallGuide.actions.openSystemTools': 'Open System Tools',
           'claudeCodeInstallGuide.afterInstall':
@@ -132,5 +145,36 @@ describe('CodexCLIInstallGuide', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeInTheDocument();
     expect(screen.queryByText(/LobeHub could not start Claude Code:/)).not.toBeInTheDocument();
+  });
+
+  it('renders sign-in guidance for auth-required errors', () => {
+    render(
+      <CodexCLIInstallGuide
+        agentType={'claude-code'}
+        error={{
+          agentType: 'claude-code',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          message: 'Failed to authenticate.\nAPI Error: 401',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Sign in to Claude Code')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Claude Code could not continue because its sign-in session expired or the credentials are invalid.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Run this in Terminal')).toBeInTheDocument();
+    expect(screen.getByText('claude')).toBeInTheDocument();
+    expect(screen.getByText('Error details')).toBeInTheDocument();
+    const errorDetails = screen.getByText(
+      (_, element) => element?.textContent === 'Failed to authenticate.\nAPI Error: 401',
+    );
+    expect(errorDetails).toBeInTheDocument();
+    expect(errorDetails).toHaveStyle({
+      maxHeight: '200px',
+      overflow: 'auto',
+    });
   });
 });
