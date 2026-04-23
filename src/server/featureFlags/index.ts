@@ -1,22 +1,22 @@
 import createDebug from 'debug';
 import { z } from 'zod';
 
+import type { IFeatureFlags } from '@/config/featureFlags';
 import {
   DEFAULT_FEATURE_FLAGS,
   FeatureFlagsSchema,
   getServerFeatureFlagsValue,
   mapFeatureFlagsEnvToState,
 } from '@/config/featureFlags';
-import type { IFeatureFlags } from '@/config/featureFlags';
-import {
-  CompositeRuntimeConfigProvider,
-  EnvRuntimeConfigProvider,
-  RedisRuntimeConfigProvider,
-} from '@/server/runtimeConfig';
 import type {
   RuntimeConfigDomain,
   RuntimeConfigProvider,
   RuntimeConfigSelector,
+} from '@/server/runtimeConfig';
+import {
+  CompositeRuntimeConfigProvider,
+  EnvRuntimeConfigProvider,
+  RedisRuntimeConfigProvider,
 } from '@/server/runtimeConfig';
 import { merge } from '@/utils/merge';
 
@@ -33,7 +33,8 @@ const FEATURE_FLAGS_DOMAIN: RuntimeConfigDomain<IFeatureFlags> = {
 const FEATURE_FLAG_OVERRIDE_DOMAIN: RuntimeConfigDomain<Record<string, boolean>> = {
   cacheTtlMs: 30_000,
   getStorageKey: (selector?: RuntimeConfigSelector) => {
-    if (!selector || selector.scope !== 'user') return 'runtime-config:feature-flags:user:anonymous';
+    if (!selector || selector.scope !== 'user')
+      return 'runtime-config:feature-flags:user:anonymous';
 
     return `runtime-config:feature-flags:user:${selector.id}`;
   },
