@@ -233,7 +233,7 @@ export { default as novita } from './novita';
 export { default as nvidia } from './nvidia';
 export { default as ollama } from './ollama';
 export { default as ollamacloud } from './ollamacloud';
-export { gptImage1ParamsSchema, default as openai, openaiChatModels } from './openai';
+export { default as openai, openaiChatModels } from './openai';
 export { default as opencodecodingplan } from './opencodeCodingPlan';
 export { default as opencodezen } from './opencodeZen';
 export { default as openrouter } from './openrouter';
