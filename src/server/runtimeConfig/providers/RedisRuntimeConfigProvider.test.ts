@@ -27,6 +27,7 @@ const testDomain = {
 describe('RedisRuntimeConfigProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('should return parsed snapshot data from versioned envelope', async () => {
@@ -72,5 +73,29 @@ describe('RedisRuntimeConfigProvider', () => {
 
     expect(initializeRedisMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should proactively evict expired selector cache entries', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-23T00:00:00.000Z'));
+
+    const getMock = vi.fn().mockResolvedValue(null);
+
+    getRedisConfigMock.mockReturnValue({ enabled: true });
+    initializeRedisMock.mockResolvedValue({ get: getMock });
+
+    const provider = new RedisRuntimeConfigProvider(testDomain);
+
+    await expect(provider.getSnapshot({ id: 'user-1', scope: 'user' })).resolves.toBeNull();
+    expect((provider as any).cache.size).toBe(1);
+
+    vi.setSystemTime(new Date('2026-04-23T00:00:06.000Z'));
+
+    await expect(provider.getSnapshot({ id: 'user-2', scope: 'user' })).resolves.toBeNull();
+
+    expect((provider as any).cache.has('user:user-1')).toBe(false);
+    expect((provider as any).cache.has('user:user-2')).toBe(true);
+    expect((provider as any).cache.size).toBe(1);
+    expect(getMock).toHaveBeenCalledTimes(2);
   });
 });
