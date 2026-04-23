@@ -9,6 +9,66 @@ export const xiaomimimoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      'Xiaomi MiMo-V2.5-Pro is the flagship of the MiMo-V2.5 series. It retains the 1T total / 42B active hybrid-attention architecture with a 1M context window, and delivers major gains in general agentic capabilities, complex software engineering, and long-horizon tasks (more than a thousand tool calls per task). Performance on demanding agentic benchmarks is comparable to Claude Opus 4.6.',
+    displayName: 'MiMo-V2.5 Pro',
+    enabled: true,
+    id: 'mimo-v2.5-pro',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        // Cache write is temporarily free per official announcement
+        // TODO: restore actual pricing when promotion ends
+        { name: 'textInput_cacheWrite', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: false,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Xiaomi MiMo-V2.5 is a native omni-modal Agent foundation model with 1M context that understands images, video, audio, and text in a unified architecture. It delivers Pro-level agentic performance at roughly half the inference cost, with stronger multimodal perception than MiMo-V2-Omni and faster inference — a strong fit for latency-sensitive, multi-step agent frameworks.',
+    displayName: 'MiMo-V2.5',
+    enabled: true,
+    id: 'mimo-v2.5',
+    maxOutput: 131_072,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
+        // Cache write is temporarily free per official announcement
+        // TODO: restore actual pricing when promotion ends
+        { name: 'textInput_cacheWrite', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: false,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       'Xiaomi MiMo-V2-Pro features over 1 trillion parameters (42B activated), an innovative hybrid attention architecture, and supports ultra-long context up to 1M tokens. Designed for high-intensity agent workflows with strong generalization from coding to real-world task execution.',
     displayName: 'MiMo-V2 Pro',
     enabled: true,
