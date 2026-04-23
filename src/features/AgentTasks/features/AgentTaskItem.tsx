@@ -1,6 +1,6 @@
 import { Block, Flexbox, Text } from '@lobehub/ui';
-import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useAgentStore } from '@/store/agent';
@@ -10,6 +10,7 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import TaskScheduleConfig from '../AgentTaskDetail/TaskScheduleConfig';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
+import { formatTaskItemDate } from './formatTaskItemDate';
 import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
@@ -20,12 +21,6 @@ interface TaskItemProps {
   task: TaskListItem;
   variant?: 'compact' | 'default';
 }
-
-const formatTime = (time?: string | Date | null) => {
-  if (!time) return '';
-  const d = dayjs(time);
-  return d.isSame(dayjs(), 'day') ? d.format('HH:mm') : d.fromNow();
-};
 
 const TASK_STATUS_SET = new Set([
   'backlog',
@@ -42,6 +37,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
+  const { t } = useTranslation('discover');
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   useFetchTaskDetail(task.identifier);
@@ -49,8 +45,12 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
   const navigate = useNavigate();
 
-  const time = formatTime(task.updatedAt || task.createdAt);
+  const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
+    formatOtherYear: t('time.formatOtherYear'),
+    formatThisYear: t('time.formatThisYear'),
+  });
   const status = toTaskStatus(task.status);
+  const hasName = Boolean(task.name?.trim());
 
   // Prefer the task's own assignee so navigation works from the cross-agent `/tasks` page
   // where `activeAgentId` is not scoped to any particular agent. Falls back to the
@@ -62,12 +62,23 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   }, [targetAgentId, navigate, task.identifier]);
 
   const titleRow = (
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
       <TaskStatusTag status={status} taskIdentifier={task.identifier} />
-      <Text ellipsis weight={500}>
-        {task.name || task.identifier}
-      </Text>
+      {hasName ? (
+        <>
+          <Text style={{ flex: 'none' }} type={'secondary'}>
+            {task.identifier}
+          </Text>
+          <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+            {task.name}
+          </Text>
+        </>
+      ) : (
+        <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          {task.identifier}
+        </Text>
+      )}
       <TaskSubtaskProgressTag
         currentIdentifier={task.identifier}
         subtasks={taskDetail?.subtasks}
