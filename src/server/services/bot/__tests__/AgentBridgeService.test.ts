@@ -47,11 +47,15 @@ vi.mock('@/server/services/bot/formatPrompt', () => ({
   formatPrompt: mockFormatPrompt,
 }));
 
-vi.mock('@/server/services/bot/platforms', () => ({
-  platformRegistry: {
-    getPlatform: mockGetPlatform,
-  },
-}));
+vi.mock('@/server/services/bot/platforms', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    platformRegistry: {
+      getPlatform: mockGetPlatform,
+    },
+  };
+});
 
 const { AgentBridgeService } = await import('../AgentBridgeService');
 
