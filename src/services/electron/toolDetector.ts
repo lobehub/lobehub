@@ -1,5 +1,6 @@
 import {
   type ClaudeAuthStatus,
+  type DetectHeterogeneousAgentCommandParams,
   type ToolCategory,
   type ToolInfo,
   type ToolStatus,
@@ -13,6 +14,12 @@ class ToolDetectorService {
    */
   detectTool = async (name: string, force = false): Promise<ToolStatus> => {
     return ensureElectronIpc().toolDetector.detectTool(name, force);
+  };
+
+  detectHeterogeneousAgentCommand = async (
+    params: DetectHeterogeneousAgentCommandParams,
+  ): Promise<ToolStatus> => {
+    return ensureElectronIpc().toolDetector.detectHeterogeneousAgentCommand(params);
   };
 
   /**
@@ -84,8 +91,8 @@ class ToolDetectorService {
   /**
    * Get Claude Code CLI auth/account status
    */
-  getClaudeAuthStatus = async (): Promise<ClaudeAuthStatus | null> => {
-    return ensureElectronIpc().toolDetector.getClaudeAuthStatus();
+  getClaudeAuthStatus = async (command = 'claude'): Promise<ClaudeAuthStatus | null> => {
+    return ensureElectronIpc().toolDetector.getClaudeAuthStatus(command);
   };
 }
 

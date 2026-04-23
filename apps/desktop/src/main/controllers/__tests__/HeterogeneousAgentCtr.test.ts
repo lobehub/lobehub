@@ -33,13 +33,22 @@ vi.mock('@/utils/logger', () => ({
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
-vi.mock('node:child_process', () => ({
-  spawn: (command: string, args: string[], options: any) => {
-    spawnCalls.push({ args, command, options });
-    nextFakeProc?.__start?.();
-    return nextFakeProc;
-  },
+const { execFileMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
 }));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  return {
+    ...actual,
+    execFile: execFileMock,
+    spawn: (command: string, args: string[], options: any) => {
+      spawnCalls.push({ args, command, options });
+      nextFakeProc?.__start?.();
+      return nextFakeProc;
+    },
+  };
+});
 
 /**
  * Build a fake ChildProcess that immediately exits cleanly. Records every
@@ -163,6 +172,7 @@ describe('HeterogeneousAgentCtr', () => {
   describe('sendPrompt (claude-code)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
+      execFileMock.mockReset();
     });
 
     const runSendPrompt = async (
@@ -259,6 +269,7 @@ describe('HeterogeneousAgentCtr', () => {
   describe('sendPrompt (codex)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
+      execFileMock.mockReset();
     });
 
     const runSendPrompt = async (
@@ -322,6 +333,44 @@ describe('HeterogeneousAgentCtr', () => {
       );
 
       expect(detect).toHaveBeenCalledWith('claude', true);
+      expect(spawnCalls).toHaveLength(0);
+    });
+
+    it('fails fast when a customized Claude command is unavailable instead of checking the default detector', async () => {
+      execFileMock.mockImplementation(
+        (
+          file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+
+          resolvedCallback?.(
+            Object.assign(new Error(`${file} not found`), { code: 'ENOENT' }),
+            '',
+            '',
+          );
+        },
+      );
+
+      const detect = vi.fn().mockResolvedValue({ available: true });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        command: 'claude-alt',
+      });
+
+      await expect(ctr.sendPrompt({ prompt: 'hello', sessionId })).rejects.toThrow(
+        'Claude Code CLI was not found',
+      );
+
+      expect(detect).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -428,6 +477,34 @@ describe('HeterogeneousAgentCtr', () => {
         resumeSessionId: 'thread_stale_123',
         stderr: 'No conversation found for thread thread_stale_123',
         workingDirectory: '/Users/fake/projects/repo',
+      });
+    });
+
+    it('classifies CLI authentication failures as auth-required errors', () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      const payload = (ctr as any).getSessionErrorPayload(
+        'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
+        {
+          agentType: 'claude-code',
+          args: [],
+          command: 'claude',
+          sessionId: 'session-1',
+        },
+      );
+
+      expect(payload).toEqual({
+        agentType: 'claude-code',
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        command: 'claude',
+        docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
+        message:
+          'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+        stderr:
+          'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
       });
     });
   });

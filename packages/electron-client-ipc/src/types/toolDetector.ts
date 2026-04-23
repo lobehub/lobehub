@@ -23,6 +23,13 @@ export interface ToolInfo {
   priority?: number;
 }
 
+export type HeterogeneousCliAgentType = 'claude-code' | 'codex';
+
+export interface DetectHeterogeneousAgentCommandParams {
+  agentType: HeterogeneousCliAgentType;
+  command: string;
+}
+
 /**
  * Claude Code CLI auth status (from `claude auth status --json`)
  */

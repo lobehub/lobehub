@@ -21,6 +21,7 @@ import type {
   HeterogeneousAgentParsedOutput,
 } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
+import { detectHeterogeneousCliCommand } from '@/modules/toolDetectors';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -31,6 +32,14 @@ const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /thread .*not found/i,
   /conversation .*not found/i,
   /resume.*not found/i,
+] as const;
+const CLI_AUTH_REQUIRED_PATTERNS = [
+  /failed to authenticate/i,
+  /invalid authentication credentials/i,
+  /authentication[_ ]error/i,
+  /not authenticated/i,
+  /\bunauthorized\b/i,
+  /\b401\b/,
 ] as const;
 const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
   /working directory/i,
@@ -125,27 +134,36 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   private sessions = new Map<string, AgentSession>();
 
+  private resolveSessionCommand(session: AgentSession): string {
+    const resolvedCommand = session.command.trim();
+    if (resolvedCommand) return resolvedCommand;
+
+    return session.agentType === 'codex' ? 'codex' : 'claude';
+  }
+
   private buildCodexCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
     return {
       agentType: 'codex',
       code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command: session.command,
+      command,
       docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
       installCommands: CODEX_CLI_INSTALL_COMMANDS,
-      message:
-        'Codex CLI was not found. Install it and make sure the `codex` command is available in PATH.',
+      message: `Codex CLI was not found. Install it and make sure \`${command}\` can be executed.`,
     };
   }
 
   private buildClaudeCodeCliMissingError(session: AgentSession): HeterogeneousAgentSessionError {
+    const command = this.resolveSessionCommand(session);
+
     return {
       agentType: 'claude-code',
       code: HeterogeneousAgentSessionErrorCode.CliNotFound,
-      command: session.command,
+      command,
       docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
       installCommands: CLAUDE_CODE_CLI_INSTALL_COMMANDS,
-      message:
-        'Claude Code CLI was not found. Install it and make sure the `claude` command is available in PATH.',
+      message: `Claude Code CLI was not found. Install it and make sure \`${command}\` can be executed.`,
     };
   }
 
@@ -161,6 +179,54 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         return;
       }
     }
+  }
+
+  private buildCliAuthRequiredError(
+    session: AgentSession,
+    stderr: string,
+  ): HeterogeneousAgentSessionError | undefined {
+    const command = this.resolveSessionCommand(session);
+
+    switch (session.agentType) {
+      case 'claude-code': {
+        return {
+          agentType: 'claude-code',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+          message:
+            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+          stderr,
+        };
+      }
+      case 'codex': {
+        return {
+          agentType: 'codex',
+          code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+          command,
+          docsUrl: CODEX_CLI_INSTALL_DOCS_URL,
+          message:
+            'Codex could not authenticate. Sign in again or refresh its credentials, then retry.',
+          stderr,
+        };
+      }
+      default: {
+        return;
+      }
+    }
+  }
+
+  private getErrorMessage(error: unknown): string | undefined {
+    return typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === 'object' &&
+            error &&
+            'message' in error &&
+            typeof error.message === 'string'
+          ? error.message
+          : undefined;
   }
 
   private buildCodexResumeError(
@@ -192,17 +258,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   ): HeterogeneousAgentSessionError | undefined {
     if (session.agentType !== 'codex' || !session.resumeSessionId) return;
 
-    const message =
-      typeof error === 'string'
-        ? error
-        : error instanceof Error
-          ? error.message
-          : typeof error === 'object' &&
-              error &&
-              'message' in error &&
-              typeof error.message === 'string'
-            ? error.message
-            : undefined;
+    const message = this.getErrorMessage(error);
 
     if (!message) return;
 
@@ -223,6 +279,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
   }
 
+  private getCliAuthRequiredError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    const message = this.getErrorMessage(error);
+
+    if (!message || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(message))) return;
+
+    return this.buildCliAuthRequiredError(session, message);
+  }
+
   private getSessionErrorPayload(error: unknown, session: AgentSession): SessionErrorPayload {
     if (typeof error === 'object' && error && 'code' in error && error.code === 'ENOENT') {
       const cliMissingError = this.buildCliMissingError(session);
@@ -232,22 +299,31 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const resumeError = this.getCodexResumeError(error, session);
     if (resumeError) return resumeError;
 
+    const authRequiredError = this.getCliAuthRequiredError(error, session);
+    if (authRequiredError) return authRequiredError;
+
     return error instanceof Error ? error.message : String(error);
   }
 
   private async getSpawnPreflightError(
     session: AgentSession,
   ): Promise<HeterogeneousAgentSessionError | undefined> {
-    const detectorName =
+    const defaultCommand =
       session.agentType === 'claude-code'
         ? 'claude'
         : session.agentType === 'codex'
           ? 'codex'
           : undefined;
-    if (!detectorName) return;
+    if (!defaultCommand) return;
 
-    const toolDetectorManager = this.app.toolDetectorManager;
-    const status = await toolDetectorManager?.detect?.(detectorName, true);
+    const command = this.resolveSessionCommand(session);
+    const status =
+      command === defaultCommand
+        ? await this.app.toolDetectorManager?.detect?.(defaultCommand, true)
+        : await detectHeterogeneousCliCommand(
+            session.agentType === 'claude-code' ? 'claude-code' : 'codex',
+            command,
+          );
     const cliMissingError = this.buildCliMissingError(session);
 
     if (!status || status.available || !cliMissingError) return;
