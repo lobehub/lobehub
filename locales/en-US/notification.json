@@ -1,4 +1,6 @@
 {
+  "agent_cron_job_failed": "Your scheduled task \"{{jobName}}\" failed: {{errorMessage}}",
+  "agent_cron_job_failed_title": "Scheduled task failed",
   "billboard.learnMore": "Learn more",
   "billboard.menuLabel": "Announcements",
   "inbox.archiveAll": "Archive all",
