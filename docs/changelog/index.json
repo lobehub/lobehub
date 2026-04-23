@@ -3,21 +3,22 @@
   "cloud": [],
   "community": [
     {
+      "image": "https://file.rene.wang/clipboard-1776909505252-94b051f3ea0a7.png",
       "id": "2026-04-20-daily-brief",
       "date": "2026-04-20",
-      "versionRange": ["2.1.46"]
+      "versionRange": ["2.1.50", "2.1.52"]
     },
     {
       "image": "/blog/assets300abe7e259d293da6c5ed4f642a1be6.webp",
       "id": "2026-04-13-gateway-sidebar",
       "date": "2026-04-13",
-      "versionRange": ["2.1.46"]
+      "versionRange": ["2.1.48", "2.1.49"]
     },
     {
       "image": "/blog/assets7ea204859aeb5aa9be5810a20ba1669a.webp",
       "id": "2026-04-06-auto-completion",
       "date": "2026-04-06",
-      "versionRange": ["2.1.46"]
+      "versionRange": ["2.1.47"]
     },
     {
       "id": "2026-03-30-agent-tasks",
