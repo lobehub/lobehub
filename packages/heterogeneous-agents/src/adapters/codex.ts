@@ -177,13 +177,16 @@ export class CodexAdapter implements AgentEventAdapter {
   }
 
   private handleTurnStarted(): HeterogeneousAgentEvent[] {
-    if (this.started) {
-      this.stepIndex += 1;
-    } else {
+    if (!this.started) {
       this.started = true;
+      return [this.makeEvent('stream_start', { provider: CODEX_IDENTIFIER })];
     }
 
-    return [this.makeEvent('stream_start', { provider: CODEX_IDENTIFIER })];
+    this.stepIndex += 1;
+    return [
+      this.makeEvent('stream_end', {}),
+      this.makeEvent('stream_start', { newStep: true, provider: CODEX_IDENTIFIER }),
+    ];
   }
 
   private handleItemStarted(item: any): HeterogeneousAgentEvent[] {

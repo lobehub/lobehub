@@ -38,6 +38,32 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('emits a new-step boundary when a second turn starts', () => {
+    const adapter = new CodexAdapter();
+
+    const firstTurn = adapter.adapt({ type: 'turn.started' });
+    const secondTurn = adapter.adapt({ type: 'turn.started' });
+
+    expect(firstTurn).toHaveLength(1);
+    expect(firstTurn[0]).toMatchObject({
+      data: { provider: 'codex' },
+      stepIndex: 0,
+      type: 'stream_start',
+    });
+
+    expect(secondTurn).toHaveLength(2);
+    expect(secondTurn[0]).toMatchObject({
+      data: {},
+      stepIndex: 1,
+      type: 'stream_end',
+    });
+    expect(secondTurn[1]).toMatchObject({
+      data: { newStep: true, provider: 'codex' },
+      stepIndex: 1,
+      type: 'stream_start',
+    });
+  });
+
   it('maps command execution items into tool lifecycle events', () => {
     const adapter = new CodexAdapter();
 

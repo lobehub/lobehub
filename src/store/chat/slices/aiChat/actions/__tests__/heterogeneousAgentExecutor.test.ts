@@ -15,6 +15,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
+import type { HeterogeneousAgentExecutorParams } from '../heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../heterogeneousAgentExecutor';
 
 // ─── Mocks ───
@@ -133,7 +134,7 @@ const defaultContext = {
   topicId: 'topic-1',
 };
 
-const defaultParams = {
+const defaultParams: HeterogeneousAgentExecutorParams = {
   assistantMessageId: 'ast-initial',
   context: defaultContext,
   heterogeneousProvider: { command: 'claude', type: 'claude-code' as const },
@@ -254,6 +255,59 @@ const ccMessageDelta = (usage: {
 }) => ({
   event: { type: 'message_delta', usage },
   type: 'stream_event',
+});
+
+// ─── Codex JSONL event factories ───
+
+const codexThreadStarted = (threadId = 'codex-thread-1') => ({
+  thread_id: threadId,
+  type: 'thread.started',
+});
+
+const codexTurnStarted = () => ({
+  type: 'turn.started',
+});
+
+const codexAgentMessage = (id: string, text: string) => ({
+  item: {
+    id,
+    text,
+    type: 'agent_message',
+  },
+  type: 'item.completed',
+});
+
+const codexCommandStarted = (id: string, command: string) => ({
+  item: {
+    aggregated_output: '',
+    command,
+    exit_code: null,
+    id,
+    status: 'in_progress',
+    type: 'command_execution',
+  },
+  type: 'item.started',
+});
+
+const codexCommandCompleted = (id: string, command: string, aggregatedOutput: string) => ({
+  item: {
+    aggregated_output: aggregatedOutput,
+    command,
+    exit_code: 0,
+    id,
+    status: 'completed',
+    type: 'command_execution',
+  },
+  type: 'item.completed',
+});
+
+const codexTurnCompleted = (usage?: {
+  cached_input_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+}) => ({
+  ...(usage ? { usage } : {}),
+  type: 'turn.completed',
 });
 
 // ─── Tests ───
@@ -1057,6 +1111,92 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         heteroSessionId: 'thread_new_456',
         workingDirectory: '/Users/me/repo',
       });
+    });
+  });
+
+  describe('Codex multi-turn persistence', () => {
+    it('should switch to a new assistant before persisting the next turn tool', async () => {
+      const idCounter = { assistant: 0, tool: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool += 1;
+          return { id: `tool-${idCounter.tool}` };
+        }
+
+        if (params.role === 'assistant') {
+          idCounter.assistant += 1;
+          return { id: `ast-new-${idCounter.assistant}` };
+        }
+
+        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
+      });
+
+      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({
+            assistantId: id,
+            toolIds: val.tools.map((tool: any) => tool.id),
+          });
+        }
+      });
+
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Running the first command.'),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
+          codexTurnStarted(),
+          codexAgentMessage('item_2', 'Running the second command.'),
+          codexCommandStarted('item_3', "/bin/zsh -lc 'git status --short'"),
+          codexCommandCompleted('item_3', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
+          codexTurnCompleted({ input_tokens: 12, output_tokens: 4 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const secondTurnAssistantCreate = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'assistant',
+      );
+      expect(secondTurnAssistantCreate?.[0]).toMatchObject({
+        parentId: 'tool-1',
+        role: 'assistant',
+      });
+
+      const firstToolCreate = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_1',
+      );
+      expect(firstToolCreate?.[0]).toMatchObject({
+        parentId: 'ast-initial',
+        role: 'tool',
+        tool_call_id: 'item_1',
+      });
+
+      const secondToolCreate = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_3',
+      );
+      expect(secondToolCreate?.[0]).toMatchObject({
+        parentId: 'ast-new-1',
+        role: 'tool',
+        tool_call_id: 'item_3',
+      });
+
+      const firstTurnToolWrites = toolsUpdates.filter(
+        (update) => update.assistantId === 'ast-initial' && update.toolIds.includes('item_1'),
+      );
+      expect(firstTurnToolWrites.length).toBeGreaterThanOrEqual(1);
+
+      const secondTurnToolWrites = toolsUpdates.filter(
+        (update) => update.assistantId === 'ast-new-1' && update.toolIds.includes('item_3'),
+      );
+      expect(secondTurnToolWrites.length).toBeGreaterThanOrEqual(1);
     });
   });
 
