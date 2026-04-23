@@ -16,14 +16,15 @@ const styles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 interface ContentBlockProps {
+  animated?: boolean;
   content: string;
   hasTools?: boolean;
   id: string;
 }
 
-const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
+const MessageContent = memo<ContentBlockProps>(({ animated, content, hasTools, id }) => {
   const message = normalizeThinkTags(processWithArtifact(content));
-  const markdownProps = useMarkdown(id);
+  const markdownProps = useMarkdown(id, animated);
 
   if (!content && !hasTools) return <ContentLoading id={id} />;
 

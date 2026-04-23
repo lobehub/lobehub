@@ -15,11 +15,12 @@ const remarkPlugins = markdownElements
   .map((element: MarkdownElement) => element.remarkPlugin)
   .filter(Boolean);
 
-export const useMarkdown = (id: string): Partial<MarkdownProps> => {
+export const useMarkdown = (id: string, animatedOverride?: boolean): Partial<MarkdownProps> => {
   const { transitionMode } = useUserStore(userGeneralSettingsSelectors.config);
-  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const generatingByMessage = useConversationStore(messageStateSelectors.isMessageGenerating(id));
 
-  const animated = transitionMode === 'fadeIn' && generating;
+  const shouldStream = animatedOverride ?? generatingByMessage;
+  const animated = transitionMode === 'fadeIn' && shouldStream;
 
   const components = useMemo(
     () =>

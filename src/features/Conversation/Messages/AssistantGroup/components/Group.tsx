@@ -298,6 +298,16 @@ const Group = memo<GroupChildrenProps>(
       );
     }
 
+    // Only the last answer segment should animate while the group is generating.
+    // Keeps finalized blocks static so vlist remounts don't replay their stream.
+    let lastAnswerSegmentIndex = -1;
+    for (let i = segments.length - 1; i >= 0; i--) {
+      if (segments[i].kind === 'answer') {
+        lastAnswerSegmentIndex = i;
+        break;
+      }
+    }
+
     return (
       <MessageAggregationContext value={contextValue}>
         <Flexbox className={styles.container} gap={8}>
@@ -320,9 +330,12 @@ const Group = memo<GroupChildrenProps>(
             const item = segment.block;
             if (!isGenerating && isEmptyBlock(item)) return null;
 
+            const animated = isGenerating && index === lastAnswerSegmentIndex;
+
             return (
               <GroupItem
                 {...item}
+                animated={animated}
                 assistantId={id}
                 contentId={contentId}
                 disableEditing={disableEditing}

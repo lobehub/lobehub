@@ -5,9 +5,15 @@ import { type ReactElement, type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { type VListHandle } from 'virtua';
 import { VList } from 'virtua';
+import { useShallow } from 'zustand/react/shallow';
 
 import WideScreenContainer from '../../../WideScreenContainer';
-import { dataSelectors, useConversationStore, virtuaListSelectors } from '../../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  virtuaListSelectors,
+} from '../../store';
 import {
   CONVERSATION_SPACER_TRANSITION_MS,
   useConversationSpacer,
@@ -144,6 +150,20 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const secondLastMessage = displayMessages.at(-2);
   const isSecondLastMessageFromUser = secondLastMessage?.role === 'user';
 
+  // Keep currently-streaming items mounted so vlist recycling never triggers
+  // Markdown animation replay when the user scrolls them back into view.
+  const keepMountedIndices = useConversationStore(
+    useShallow((s) => {
+      const indices: number[] = [];
+      for (let i = 0; i < dataSource.length; i++) {
+        const id = dataSource[i];
+        if (!id) continue;
+        if (messageStateSelectors.isMessageGenerating(id)(s)) indices.push(i);
+      }
+      return indices;
+    }),
+  );
+
   // Auto scroll to user message when user sends a new message
   // Only scroll when 2 new messages are added and second-to-last is from user
   useScrollToUserMessage({
@@ -172,6 +192,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
         data={listData}
+        keepMounted={keepMountedIndices}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom: 24 }}
         onScroll={handleScroll}

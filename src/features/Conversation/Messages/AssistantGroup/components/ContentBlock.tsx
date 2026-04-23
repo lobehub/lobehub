@@ -14,11 +14,23 @@ import MessageContent from './MessageContent';
 import type { RenderableAssistantContentBlock } from './types';
 
 interface ContentBlockProps extends RenderableAssistantContentBlock {
+  animated?: boolean;
   assistantId: string;
   disableEditing?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({ id, tools, content, imageList, reasoning, error, domId, assistantId, disableEditing }) => {
+  ({
+    id,
+    tools,
+    content,
+    imageList,
+    reasoning,
+    error,
+    domId,
+    assistantId,
+    disableEditing,
+    animated,
+  }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -73,7 +85,7 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {showMessageContent && (
           <SafeBoundary variant="alert">
-            <MessageContent content={content} hasTools={hasTools} id={id} />
+            <MessageContent animated={animated} content={content} hasTools={hasTools} id={id} />
           </SafeBoundary>
         )}
 

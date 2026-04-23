@@ -7,6 +7,7 @@ import ContentBlock from './ContentBlock';
 import type { RenderableAssistantContentBlock } from './types';
 
 interface GroupItemProps extends RenderableAssistantContentBlock {
+  animated?: boolean;
   assistantId: string;
   contentId?: string;
   disableEditing?: boolean;
@@ -14,7 +15,7 @@ interface GroupItemProps extends RenderableAssistantContentBlock {
 }
 
 const GroupItem = memo<GroupItemProps>(
-  ({ contentId, disableEditing, error, assistantId, ...item }) => {
+  ({ animated, contentId, disableEditing, error, assistantId, ...item }) => {
     const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
 
     return item.id === contentId ? (
@@ -26,6 +27,7 @@ const GroupItem = memo<GroupItemProps>(
       >
         <ContentBlock
           {...item}
+          animated={animated}
           assistantId={assistantId}
           disableEditing={disableEditing}
           error={error}
@@ -34,6 +36,7 @@ const GroupItem = memo<GroupItemProps>(
     ) : (
       <ContentBlock
         {...item}
+        animated={animated}
         assistantId={assistantId}
         disableEditing={disableEditing}
         error={error}
