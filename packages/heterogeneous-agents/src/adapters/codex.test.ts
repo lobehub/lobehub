@@ -64,6 +64,66 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('emits a new-step boundary when a later agent_message item arrives in the same turn', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        id: 'item_0',
+        text: 'Running the first checks.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+    adapter.adapt({
+      item: {
+        command: '/bin/zsh -lc pwd',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+    adapter.adapt({
+      item: {
+        aggregated_output: '/repo\\n',
+        command: '/bin/zsh -lc pwd',
+        exit_code: 0,
+        id: 'item_1',
+        status: 'completed',
+        type: 'command_execution',
+      },
+      type: 'item.completed',
+    });
+
+    const secondMessage = adapter.adapt({
+      item: {
+        id: 'item_2',
+        text: 'Now I will inspect the branch.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+
+    expect(secondMessage).toHaveLength(3);
+    expect(secondMessage[0]).toMatchObject({
+      data: {},
+      stepIndex: 1,
+      type: 'stream_end',
+    });
+    expect(secondMessage[1]).toMatchObject({
+      data: { newStep: true, provider: 'codex' },
+      stepIndex: 1,
+      type: 'stream_start',
+    });
+    expect(secondMessage[2]).toMatchObject({
+      data: { chunkType: 'text', content: 'Now I will inspect the branch.' },
+      stepIndex: 1,
+      type: 'stream_chunk',
+    });
+  });
+
   it('maps command execution items into tool lifecycle events', () => {
     const adapter = new CodexAdapter();
 
@@ -125,6 +185,100 @@ describe('CodexAdapter', () => {
     expect(completed[1]).toMatchObject({
       data: { isSuccess: true, toolCallId: 'item_1' },
       type: 'tool_end',
+    });
+  });
+
+  it('emits cumulative tools_calling within the same Codex step', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+
+    const firstTool = adapter.adapt({
+      item: {
+        command: '/bin/zsh -lc pwd',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+    const secondTool = adapter.adapt({
+      item: {
+        command: "/bin/zsh -lc 'git status --short'",
+        id: 'item_2',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+
+    expect(firstTool[0]).toMatchObject({
+      data: {
+        chunkType: 'tools_calling',
+        toolsCalling: [{ id: 'item_1' }],
+      },
+      type: 'stream_chunk',
+    });
+    expect(secondTool[0]).toMatchObject({
+      data: {
+        chunkType: 'tools_calling',
+        toolsCalling: [{ id: 'item_1' }, { id: 'item_2' }],
+      },
+      type: 'stream_chunk',
+    });
+    expect(secondTool[1]).toMatchObject({
+      data: { toolCallId: 'item_2' },
+      type: 'tool_start',
+    });
+  });
+
+  it('resets cumulative tools_calling after a same-turn agent_message step boundary', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        id: 'item_0',
+        text: 'Running the first checks.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+    adapter.adapt({
+      item: {
+        command: '/bin/zsh -lc pwd',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+    adapter.adapt({
+      item: {
+        id: 'item_2',
+        text: 'Now I will inspect the branch.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+
+    const nextStepTool = adapter.adapt({
+      item: {
+        command: "/bin/zsh -lc 'git branch --show-current'",
+        id: 'item_3',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+
+    expect(nextStepTool[0]).toMatchObject({
+      data: {
+        chunkType: 'tools_calling',
+        toolsCalling: [{ id: 'item_3' }],
+      },
+      stepIndex: 1,
+      type: 'stream_chunk',
     });
   });
 

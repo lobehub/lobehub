@@ -1198,6 +1198,190 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(secondTurnToolWrites.length).toBeGreaterThanOrEqual(1);
     });
+
+    it('should forward cumulative tools_calling chunks for multiple Codex tools in one step', async () => {
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Running the first checks.'),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexCommandStarted('item_2', "/bin/zsh -lc 'git status --short'"),
+          codexCommandCompleted('item_2', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
+          codexAgentMessage('item_3', 'Now I will inspect the commit details.'),
+          codexCommandStarted('item_4', "/bin/zsh -lc 'git show --stat --summary HEAD'"),
+          codexCommandCompleted(
+            'item_4',
+            "/bin/zsh -lc 'git show --stat --summary HEAD'",
+            ' src/file.ts | 1 +\n',
+          ),
+          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      const toolsCallingChunks = handlerSpy.mock.calls
+        .map((call) => call[0])
+        .filter(
+          (event: any) =>
+            event?.type === 'stream_chunk' && event.data?.chunkType === 'tools_calling',
+        );
+
+      expect(toolsCallingChunks).toHaveLength(3);
+      expect(toolsCallingChunks[0]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
+        'item_1',
+      ]);
+      expect(toolsCallingChunks[1]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
+        'item_1',
+        'item_2',
+      ]);
+      expect(toolsCallingChunks[2]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
+        'item_4',
+      ]);
+    });
+
+    it('should cut new assistants for later agent_message items in the same Codex turn', async () => {
+      const idCounter = { assistant: 0, tool: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool += 1;
+          return { id: `tool-${idCounter.tool}` };
+        }
+
+        if (params.role === 'assistant') {
+          idCounter.assistant += 1;
+          return { id: `ast-new-${idCounter.assistant}` };
+        }
+
+        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
+      });
+
+      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
+      const contentUpdates: Array<{ assistantId: string; content: string }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({
+            assistantId: id,
+            toolIds: val.tools.map((tool: any) => tool.id),
+          });
+        }
+        if (typeof val.content === 'string') {
+          contentUpdates.push({ assistantId: id, content: val.content });
+        }
+      });
+
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage(
+            'item_0',
+            'Running the five read-only checks from the repo root exactly as requested.',
+          ),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexCommandStarted('item_2', "/bin/zsh -lc 'git status --short'"),
+          codexCommandCompleted('item_2', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
+          codexCommandStarted('item_3', "/bin/zsh -lc 'rg --files src | head -n 5'"),
+          codexCommandCompleted(
+            'item_3',
+            "/bin/zsh -lc 'rg --files src | head -n 5'",
+            'src/store/session/store.ts\n',
+          ),
+          codexAgentMessage(
+            'item_4',
+            'The workspace is dirty in a few files, but I am only collecting read-only outputs.',
+          ),
+          codexCommandStarted(
+            'item_5',
+            `/bin/zsh -lc 'rg -n "heterogeneousAgent" src apps packages | head -n 10'`,
+          ),
+          codexCommandCompleted(
+            'item_5',
+            `/bin/zsh -lc 'rg -n "heterogeneousAgent" src apps packages | head -n 10'`,
+            'apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts:18:import ...\n',
+          ),
+          codexCommandStarted(
+            'item_6',
+            `/bin/zsh -lc 'rg -n "tool_call_id|tool_calls" src packages | head -n 10'`,
+          ),
+          codexCommandCompleted(
+            'item_6',
+            `/bin/zsh -lc 'rg -n "tool_call_id|tool_calls" src packages | head -n 10'`,
+            'packages/agent-runtime/src/agents/GeneralChatAgent.ts:34:...\n',
+          ),
+          codexAgentMessage(
+            'item_7',
+            'Confirmed the repo root and the requested ripgrep checks returned matches.',
+          ),
+          codexTurnCompleted({
+            cached_input_tokens: 92672,
+            input_tokens: 107744,
+            output_tokens: 996,
+          }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([params]: any) => params.role === 'assistant',
+      );
+      expect(assistantCreates).toHaveLength(2);
+      expect(assistantCreates[0]?.[0]).toMatchObject({
+        parentId: 'tool-3',
+        role: 'assistant',
+      });
+      expect(assistantCreates[1]?.[0]).toMatchObject({
+        parentId: 'tool-5',
+        role: 'assistant',
+      });
+
+      const firstStepToolWrites = toolsUpdates.filter(
+        (update) =>
+          update.assistantId === 'ast-initial' &&
+          update.toolIds.includes('item_1') &&
+          update.toolIds.includes('item_2') &&
+          update.toolIds.includes('item_3'),
+      );
+      expect(firstStepToolWrites.length).toBeGreaterThanOrEqual(1);
+
+      const secondStepToolWrites = toolsUpdates.filter(
+        (update) =>
+          update.assistantId === 'ast-new-1' &&
+          update.toolIds.includes('item_5') &&
+          update.toolIds.includes('item_6'),
+      );
+      expect(secondStepToolWrites.length).toBeGreaterThanOrEqual(1);
+
+      const thirdStepToolWrites = toolsUpdates.filter(
+        (update) => update.assistantId === 'ast-new-2' && update.toolIds.length > 0,
+      );
+      expect(thirdStepToolWrites).toHaveLength(0);
+
+      expect(
+        contentUpdates.findLast((update) => update.assistantId === 'ast-initial')?.content,
+      ).toContain('Running the five read-only checks');
+      expect(
+        contentUpdates.findLast((update) => update.assistantId === 'ast-new-1')?.content,
+      ).toContain('The workspace is dirty in a few files');
+      expect(
+        contentUpdates.findLast((update) => update.assistantId === 'ast-new-2')?.content,
+      ).toContain('Confirmed the repo root');
+    });
   });
 
   // ────────────────────────────────────────────────────
