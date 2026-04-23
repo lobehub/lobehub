@@ -1,4 +1,5 @@
 export * from './base64';
+export * from './buffer';
 export * from './chunkers';
 export * from './client/cookie';
 export * from './dedupeBy';
