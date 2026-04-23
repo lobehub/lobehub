@@ -48,6 +48,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     spacerHeight,
     spacerActive,
     spacerLayoutVersion,
+    userScrolledUp,
   } = useConversationSpacer(dataSource);
   const isAutoScrollEnabled = useAutoScrollEnabled();
 
@@ -189,6 +190,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
     spacerActive,
     spacerLayoutVersion,
+    userScrolledUp,
   });
 
   // Scroll to bottom on initial render

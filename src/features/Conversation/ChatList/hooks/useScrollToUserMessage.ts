@@ -18,6 +18,11 @@ interface UseScrollToUserMessageOptions {
    */
   scrollShrinking?: boolean;
   /**
+   * User has manually scrolled up while the spacer is active. This suppresses
+   * pin retries even if streaming keeps remeasuring spacer height.
+   */
+  userScrolledUp?: boolean;
+  /**
    * Function to scroll to a specific index
    */
   scrollToIndex:
@@ -55,6 +60,7 @@ export function useScrollToUserMessage({
   isSecondLastMessageFromUser,
   scrollToIndex,
   scrollShrinking = false,
+  userScrolledUp = false,
   spacerActive,
   spacerLayoutVersion = 0,
 }: UseScrollToUserMessageOptions): void {
@@ -116,18 +122,18 @@ export function useScrollToUserMessage({
   // fired just before the user scrolled up would still call scrollToIndex at
   // 32/96ms and yank the viewport back down.
   useEffect(() => {
-    if (!spacerActive || scrollShrinking) {
+    if (!spacerActive || scrollShrinking || userScrolledUp) {
       pendingScrollIndexRef.current = null;
       clearPendingPins();
     }
-  }, [spacerActive, scrollShrinking, clearPendingPins]);
+  }, [spacerActive, scrollShrinking, userScrolledUp, clearPendingPins]);
 
   // Re-scroll whenever the spacer's real layout settles (version bumps) or the
   // spacer becomes active. Skip when user is manually shrinking the spacer.
   useEffect(() => {
-    if (!spacerActive || scrollShrinking) return;
+    if (!spacerActive || scrollShrinking || userScrolledUp) return;
     const index = pendingScrollIndexRef.current;
     if (index === null) return;
     executeScroll(index);
-  }, [spacerActive, spacerLayoutVersion, scrollShrinking, executeScroll]);
+  }, [spacerActive, spacerLayoutVersion, scrollShrinking, userScrolledUp, executeScroll]);
 }

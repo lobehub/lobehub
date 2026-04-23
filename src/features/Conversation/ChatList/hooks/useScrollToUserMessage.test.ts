@@ -9,6 +9,7 @@ type Props = {
   scrollShrinking?: boolean;
   spacerActive: boolean;
   spacerLayoutVersion?: number;
+  userScrolledUp?: boolean;
 };
 
 const makeRender = (scrollToIndex: ReturnType<typeof vi.fn> | null, initialProps: Props) =>
@@ -21,6 +22,7 @@ const makeRender = (scrollToIndex: ReturnType<typeof vi.fn> | null, initialProps
         scrollToIndex,
         spacerActive: props.spacerActive,
         spacerLayoutVersion: props.spacerLayoutVersion,
+        userScrolledUp: props.userScrolledUp,
       }),
     { initialProps },
   );
@@ -292,6 +294,51 @@ describe('useScrollToUserMessage', () => {
         scrollShrinking: true,
         spacerActive: true,
         spacerLayoutVersion: 2,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it('should stop pinning when user scrolls up during streaming without shrinking the spacer', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = makeRender(scrollToIndex, {
+        dataSourceLength: 2,
+        isSecondLastMessageFromUser: false,
+        spacerActive: false,
+        spacerLayoutVersion: 0,
+      });
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 1,
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+      scrollToIndex.mockClear();
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 1,
+        userScrolledUp: true,
+      });
+
+      rerender({
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
+        spacerActive: true,
+        spacerLayoutVersion: 2,
+        userScrolledUp: true,
       });
 
       act(() => {
