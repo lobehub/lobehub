@@ -13,6 +13,7 @@ import Appearance from '../appearance';
 import Creds from '../creds';
 import Hotkey from '../hotkey';
 import Memory from '../memory';
+import Processes from '../processes';
 import Profile from '../profile';
 import Provider from '../provider';
 import Proxy from '../proxy';
@@ -34,6 +35,7 @@ export const componentMap = {
   [SettingsTabs.Hotkey]: Hotkey,
   [SettingsTabs.Proxy]: Proxy,
   [SettingsTabs.SystemTools]: SystemTools,
+  [SettingsTabs.Processes]: Processes,
   [SettingsTabs.Storage]: Storage,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,

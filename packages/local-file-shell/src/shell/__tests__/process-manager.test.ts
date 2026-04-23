@@ -1,5 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 
+import { ProcessRegistry } from '@lobechat/process-registry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShellProcessManager } from '../process-manager';
@@ -9,6 +11,14 @@ function createMockProcess(exitCode: number | null = null): ChildProcess {
     exitCode,
     kill: vi.fn(),
   } as unknown as ChildProcess;
+}
+
+function createRegistryProcess(pid = 4321): ChildProcess {
+  const emitter = new EventEmitter() as ChildProcess;
+  (emitter as any).pid = pid;
+  (emitter as any).exitCode = null;
+  (emitter as any).kill = vi.fn();
+  return emitter;
 }
 
 describe('ShellProcessManager', () => {
@@ -249,6 +259,57 @@ describe('ShellProcessManager', () => {
 
       // Should not throw
       expect(() => manager.cleanupAll()).not.toThrow();
+    });
+  });
+
+  describe('with ProcessRegistry', () => {
+    it('delegates register to the registry when command + tags are provided', () => {
+      const registry = new ProcessRegistry();
+      const m = new ShellProcessManager({ registry });
+      const child = createRegistryProcess(111);
+
+      m.register(
+        'test-1',
+        { lastReadStderr: 0, lastReadStdout: 0, process: child, stderr: [], stdout: [] },
+        { command: 'ls', tags: { ownerModule: 'shell', topicId: 't1' } },
+      );
+
+      expect(registry.get('test-1')?.tags.topicId).toBe('t1');
+      expect(registry.get('test-1')?.pid).toBe(111);
+    });
+
+    it('skips registry when meta is missing (back-compat)', () => {
+      const registry = new ProcessRegistry();
+      const m = new ShellProcessManager({ registry });
+      const child = createMockProcess();
+      m.register('test-1', {
+        lastReadStderr: 0,
+        lastReadStdout: 0,
+        process: child,
+        stderr: [],
+        stdout: [],
+      });
+      expect(registry.get('test-1')).toBeUndefined();
+    });
+
+    it('kill() delegates to registry.kill (tree-kill path)', () => {
+      const registry = new ProcessRegistry();
+      const m = new ShellProcessManager({ registry });
+      const child = createRegistryProcess(222);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      m.register(
+        'test-1',
+        { lastReadStderr: 0, lastReadStdout: 0, process: child, stderr: [], stdout: [] },
+        { command: 'sleep', tags: { ownerModule: 'shell' } },
+      );
+      const result = m.kill('test-1');
+
+      expect(result.success).toBe(true);
+      expect(registry.get('test-1')?.status).toBe('killed');
+      // Raw child.kill is NOT used; registry path uses process.kill(-pgid) on unix
+      expect((child as any).kill).not.toHaveBeenCalled();
+      killSpy.mockRestore();
     });
   });
 });

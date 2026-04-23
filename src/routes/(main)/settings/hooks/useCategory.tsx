@@ -16,6 +16,7 @@ import {
   KeyboardIcon,
   KeyIcon,
   KeyRound,
+  ListChecks,
   Map,
   PaletteIcon,
   Sparkles,
@@ -183,6 +184,11 @@ export const useCategory = () => {
         icon: TerminalSquare,
         key: SettingsTabs.SystemTools,
         label: t('tab.systemTools'),
+      },
+      isDesktop && {
+        icon: ListChecks,
+        key: SettingsTabs.Processes,
+        label: t('tab.processes'),
       },
       {
         icon: Database,

@@ -9,6 +9,7 @@ import { app as electronApp, BrowserWindow } from 'electron';
 
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 import { createLogger } from '@/utils/logger';
+import { processRegistry } from '@/utils/processRegistry';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -316,6 +317,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         detached: process.platform !== 'win32',
         env: { ...process.env, ...proxyEnv, ...session.env },
         stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+      });
+
+      // Expose this spawn in the task-manager IPC. Tagging with `sessionId`
+      // lets the UI (and registry-based kill filters) group all invocations
+      // of the same agent session together. `cancellationGracePeriod` is
+      // intentionally unset — cancel/stop paths below still drive the
+      // registry-side status through `process.kill(-pgid)`.
+      processRegistry.register({
+        args: cliArgs,
+        command: session.command,
+        process: proc,
+        tags: {
+          agentType: session.agentType,
+          ownerModule: 'heteroAgent',
+          sessionId: session.sessionId,
+        },
       });
 
       // In stdin mode, write the stream-json message and close stdin.

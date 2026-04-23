@@ -1,6 +1,7 @@
 import type { ACPBroadcastEvents } from './acp';
 import type { GatewayConnectionBroadcastEvents } from './gatewayConnection';
 import type { NavigationBroadcastEvents } from './navigation';
+import type { ProcessManagerBroadcastEvents } from './processManager';
 import type { ProtocolBroadcastEvents } from './protocol';
 import type { RemoteServerBroadcastEvents } from './remoteServer';
 import type { ScreenCaptureBroadcastEvents } from './screenCapture';
@@ -18,6 +19,7 @@ export interface MainBroadcastEvents
     AutoUpdateBroadcastEvents,
     GatewayConnectionBroadcastEvents,
     NavigationBroadcastEvents,
+    ProcessManagerBroadcastEvents,
     RemoteServerBroadcastEvents,
     ScreenCaptureBroadcastEvents,
     SystemBroadcastEvents,

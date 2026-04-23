@@ -1,5 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 
+import type { ProcessRegistry, ProcessTags } from '@lobechat/process-registry';
+
 import type { GetCommandOutputParams, GetCommandOutputResult, KillCommandResult } from '../types';
 import { truncateOutput } from './utils';
 
@@ -11,11 +13,40 @@ export interface ShellProcess {
   stdout: string[];
 }
 
+export interface ShellProcessManagerOptions {
+  /**
+   * When provided, the manager also registers each process with a shared
+   * ProcessRegistry and delegates kill() to it so tree-kill (unix pgid /
+   * windows taskkill /T) is used instead of a plain SIGTERM to the leader.
+   */
+  registry?: ProcessRegistry;
+}
+
+export interface RegisterMetadata {
+  args?: string[];
+  command?: string;
+  tags?: ProcessTags;
+}
+
 export class ShellProcessManager {
   private processes = new Map<string, ShellProcess>();
+  private registry?: ProcessRegistry;
 
-  register(shellId: string, shellProcess: ShellProcess): void {
+  constructor(options: ShellProcessManagerOptions = {}) {
+    this.registry = options.registry;
+  }
+
+  register(shellId: string, shellProcess: ShellProcess, meta?: RegisterMetadata): void {
     this.processes.set(shellId, shellProcess);
+    if (this.registry && meta?.command && meta.tags) {
+      this.registry.register({
+        args: meta.args,
+        command: meta.command,
+        process: shellProcess.process,
+        shellId,
+        tags: meta.tags,
+      });
+    }
   }
 
   getOutput({ shell_id, filter }: GetCommandOutputParams): GetCommandOutputResult {
@@ -68,7 +99,11 @@ export class ShellProcessManager {
     }
 
     try {
-      shellProcess.process.kill();
+      if (this.registry && this.registry.get(shell_id)) {
+        this.registry.kill({ shellId: shell_id });
+      } else {
+        shellProcess.process.kill();
+      }
       this.processes.delete(shell_id);
       return { success: true };
     } catch (error) {
@@ -77,6 +112,11 @@ export class ShellProcessManager {
   }
 
   cleanupAll(): void {
+    if (this.registry) {
+      this.registry.cleanupAll();
+      this.processes.clear();
+      return;
+    }
     for (const [id, sp] of this.processes) {
       try {
         sp.process.kill();

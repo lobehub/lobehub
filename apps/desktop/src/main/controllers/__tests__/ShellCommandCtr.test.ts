@@ -60,8 +60,12 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
       on: vi.fn(),
+      once: vi.fn(),
       kill: vi.fn(),
       exitCode: null,
+      // pid so process-registry keeps the entry in 'running' state (pid=0 marks
+      // a failed-to-start child and gets auto-exited).
+      pid: 99999,
     };
 
     mockSpawn.mockReturnValue(mockChildProcess);
@@ -111,8 +115,9 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     expect(result.stdout).toContain('bg output');
   });
 
-  it('should delegate handleKillCommand to processManager', async () => {
+  it('should delegate handleKillCommand to processManager (tree-kill via registry)', async () => {
     mockChildProcess.on.mockImplementation(() => mockChildProcess);
+    mockChildProcess.once.mockImplementation(() => mockChildProcess);
     mockChildProcess.stdout.on.mockImplementation(() => mockChildProcess.stdout);
     mockChildProcess.stderr.on.mockImplementation(() => mockChildProcess.stderr);
 
@@ -121,12 +126,20 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       run_in_background: true,
     });
 
+    // The registry takes the tree-kill path: `process.kill(-pgid)` on unix,
+    // `taskkill /T /F` on windows. Spy on `process.kill` instead of the
+    // child's kill method.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
     const result = await ctr.handleKillCommand({
       shell_id: 'test-uuid-123',
     });
 
     expect(result.success).toBe(true);
-    expect(mockChildProcess.kill).toHaveBeenCalled();
+    if (process.platform !== 'win32') {
+      expect(killSpy).toHaveBeenCalled();
+    }
+    killSpy.mockRestore();
   });
 
   it('should route lh commands to CliCtr.runCliCommand', async () => {

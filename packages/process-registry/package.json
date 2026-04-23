@@ -1,0 +1,9 @@
+{
+  "name": "@lobechat/process-registry",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {}
+}

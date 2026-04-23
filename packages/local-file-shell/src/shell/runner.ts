@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
+import type { ProcessTags } from '@lobechat/process-registry';
+import { getProcessContext } from '@lobechat/process-registry';
+
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellProcess, ShellProcessManager } from './process-manager';
 import { getShellConfig, truncateOutput } from './utils';
@@ -11,6 +14,11 @@ export interface RunCommandOptions {
     error: (...args: any[]) => void;
     info: (...args: any[]) => void;
   };
+  /**
+   * Identifies the caller (default: 'shell'). Merged with the current
+   * AsyncLocalStorage context to form the registry tags.
+   */
+  ownerModule?: string;
   processManager: ShellProcessManager;
 }
 
@@ -23,8 +31,9 @@ export async function runCommand(
     run_in_background,
     timeout = 120_000,
   }: RunCommandParams,
-  { processManager, logger }: RunCommandOptions,
+  { processManager, logger, ownerModule = 'shell' }: RunCommandOptions,
 ): Promise<RunCommandResult> {
+  const tags: ProcessTags = { ...getProcessContext(), ownerModule };
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
@@ -37,6 +46,7 @@ export async function runCommand(
       const shellId = randomUUID();
       const childProcess = spawn(shellConfig.cmd, shellConfig.args, {
         cwd,
+        detached: process.platform !== 'win32',
         env: childEnv,
         shell: false,
       });
@@ -61,7 +71,11 @@ export async function runCommand(
         logger?.debug(`${logPrefix} Background process exited`, { code, shellId });
       });
 
-      processManager.register(shellId, shellProcess);
+      processManager.register(shellId, shellProcess, {
+        args: shellConfig.args,
+        command: shellConfig.cmd,
+        tags,
+      });
 
       logger?.info?.(`${logPrefix} Started background`, { shellId });
       return { shell_id: shellId, success: true };

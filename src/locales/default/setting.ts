@@ -968,6 +968,7 @@ When I am ___, I need ___
   'tab.manualFill.desc': 'Configure a custom MCP skill manually',
   'tab.memory': 'Memory',
   'tab.notification': 'Notifications',
+  'tab.processes': 'Processes',
   'tab.profile': 'My Account',
   'tab.provider': 'Provider',
   'tab.proxy': 'Proxy',

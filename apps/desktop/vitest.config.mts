@@ -7,6 +7,7 @@ export default defineConfig({
       '@': resolve(__dirname, './src/main'),
       '~common': resolve(__dirname, './src/common'),
       '@lobechat/local-file-shell': resolve(__dirname, '../../packages/local-file-shell/src'),
+      '@lobechat/process-registry': resolve(__dirname, '../../packages/process-registry/src'),
     },
     coverage: {
       all: false,

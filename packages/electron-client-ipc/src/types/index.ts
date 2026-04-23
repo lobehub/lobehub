@@ -3,6 +3,7 @@ export * from './git';
 export * from './localSystem';
 export * from './mcpInstall';
 export * from './notification';
+export * from './processManager';
 export * from './proxy';
 export * from './proxyTRPCRequest';
 export * from './route';

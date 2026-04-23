@@ -9,13 +9,14 @@ import type {
 import { runCommand, ShellProcessManager } from '@lobechat/local-file-shell';
 
 import { createLogger } from '@/utils/logger';
+import { processRegistry } from '@/utils/processRegistry';
 
 import CliCtr from './CliCtr';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:ShellCommandCtr');
 
-const processManager = new ShellProcessManager();
+const processManager = new ShellProcessManager({ registry: processRegistry });
 
 /** Prefix for a simple `lh`/`lobe`/`lobehub` invocation (keyword + boundary, args via slice). */
 const SIMPLE_LH_PREFIX = /^\s*(?:lh|lobe|lobehub)(?=\s|$)/;

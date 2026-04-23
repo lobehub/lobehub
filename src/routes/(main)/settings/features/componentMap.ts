@@ -40,6 +40,9 @@ export const componentMap = {
   [SettingsTabs.SystemTools]: dynamic(() => import('../system-tools'), {
     loading: loading('Settings > SystemTools'),
   }),
+  [SettingsTabs.Processes]: dynamic(() => import('../processes'), {
+    loading: loading('Settings > Processes'),
+  }),
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: loading('Settings > Storage'),
   }),
