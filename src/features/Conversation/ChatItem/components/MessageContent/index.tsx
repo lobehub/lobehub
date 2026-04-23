@@ -116,13 +116,17 @@ const MessageContent = memo<MessageContentProps>(
               value={message ? String(message) : ''}
               onCancel={() => onEditingChange(false)}
               onConfirm={async (value, newEditorData) => {
-                await updateMessageContent(id, value, {
+                onEditingChange(false);
+                // updateMessageContent does an optimistic state update synchronously before
+                // awaiting the DB round trip. Kick off regenerate in parallel so the old
+                // assistant reply is replaced by switchMessageBranch without waiting for persistence.
+                const save = updateMessageContent(id, value, {
                   editorData: newEditorData as Record<string, any> | undefined,
                 });
-                onEditingChange(false);
                 if (shouldSendOnConfirm) {
                   await regenerateUserMessage(id);
                 }
+                await save;
               }}
             />
           )}
