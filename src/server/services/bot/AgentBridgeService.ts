@@ -15,7 +15,12 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { formatPrompt as formatPromptUtil } from './formatPrompt';
 import type { PlatformClient } from './platforms';
-import { getStepReactionEmoji, platformRegistry, RECEIVED_REACTION_EMOJI } from './platforms';
+import {
+  getStepReactionEmoji,
+  platformRegistry,
+  RECEIVED_REACTION_EMOJI,
+  THINKING_REACTION_EMOJI,
+} from './platforms';
 import { clearReactionState, saveReactionState } from './reactionState';
 import {
   renderError,
@@ -398,6 +403,12 @@ export class AgentBridgeService {
       // Fetch channel context for Discord context injection
       const channelContext = await this.fetchChannelContext(thread);
 
+      // Transition from "received" to "thinking" right before we hand off to
+      // the agent runtime. The first afterStep hook fires only after the
+      // first LLM call completes (often 5-10s), so without this swap the
+      // user would see 👀 for the entire duration of the first LLM call.
+      await this.setReaction(thread, message, client, THINKING_REACTION_EMOJI, botContext);
+
       try {
         // executeWithCallback handles progress message (post + edit at each step)
         // The final reply is edited into the progress message by onComplete
@@ -520,6 +531,12 @@ export class AgentBridgeService {
       // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
       await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
       await safeSideEffect(() => thread.startTyping(), 'startTyping');
+
+      // Transition from "received" to "thinking" right before we hand off to
+      // the agent runtime. The first afterStep hook fires only after the
+      // first LLM call completes (often 5-10s), so without this swap the
+      // user would see 👀 for the entire duration of the first LLM call.
+      await this.setReaction(thread, message, opts.client, THINKING_REACTION_EMOJI, botContext);
 
       try {
         // executeWithCallback handles progress message (post + edit at each step)

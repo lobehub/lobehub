@@ -47,12 +47,24 @@ export const THINKING_REACTION_EMOJI = '🤔';
 export const WORKING_REACTION_EMOJI = '⚡';
 
 /**
- * Resolve the reaction emoji to display for a given step-callback payload.
- * The "received" emoji is applied separately by the bridge when it first
- * sees a mention; this helper only ever returns thinking / working.
+ * Given an `afterStep` event payload, predict the emoji to display while the
+ * NEXT step is running. `afterStep` fires post-completion, so `stepType`
+ * describes what just happened — we swap the reaction to match what's
+ * coming:
+ *
+ * - `call_llm` that returned pending `toolsCalling` → the runtime is about
+ *   to execute those tools → "working" emoji.
+ * - `call_tool` → the runtime will feed results back into the LLM →
+ *   "thinking" emoji.
+ * - `call_llm` without tools → the final response is ready; `onComplete`
+ *   clears immediately after, "thinking" is a sensible neutral for the
+ *   brief window.
+ *
+ * The "received" emoji is set separately by the bridge on webhook arrival
+ * and is not returned here.
  */
 export function getStepReactionEmoji(stepType: string | undefined, toolsCalling: unknown): string {
-  const isToolCall =
-    stepType === 'call_tool' && Array.isArray(toolsCalling) && toolsCalling.length > 0;
-  return isToolCall ? WORKING_REACTION_EMOJI : THINKING_REACTION_EMOJI;
+  const toolsAboutToRun =
+    stepType === 'call_llm' && Array.isArray(toolsCalling) && toolsCalling.length > 0;
+  return toolsAboutToRun ? WORKING_REACTION_EMOJI : THINKING_REACTION_EMOJI;
 }
