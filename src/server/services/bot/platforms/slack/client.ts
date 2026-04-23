@@ -56,6 +56,13 @@ function createMessenger(config: BotProviderConfig, platformThreadId: string): P
         : slack.postMessage(channelId, content).then(() => {}),
     editMessage: (messageId, content) => slack.updateMessage(channelId, messageId, content),
     removeReaction: (messageId, emoji) => slack.removeReaction(channelId, messageId, emoji),
+    replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
+      if (prevEmoji === nextEmoji) return;
+      // Add first so the user always sees at least one bot reaction; if the
+      // add fails, the previous emoji survives as a readable state.
+      if (nextEmoji) await slack.addReaction(channelId, messageId, nextEmoji);
+      if (prevEmoji) await slack.removeReaction(channelId, messageId, prevEmoji);
+    },
   };
 }
 

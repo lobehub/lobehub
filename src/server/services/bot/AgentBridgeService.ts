@@ -204,20 +204,11 @@ export class AgentBridgeService {
     if (current && current.emoji === nextEmoji && current.userMessageId === message.id) {
       return;
     }
-    if (current) {
-      await safeSideEffect(
-        () =>
-          thread.adapter.removeReaction(
-            current.reactionThreadId,
-            current.userMessageId,
-            current.emoji,
-          ),
-        'remove previous reaction',
-      );
-    }
+    const prevEmoji = current?.userMessageId === message.id ? current.emoji : null;
+    const messenger = client?.getMessenger(reactionThreadId);
     await safeSideEffect(
-      () => thread.adapter.addReaction(reactionThreadId, message.id, nextEmoji),
-      'add reaction',
+      () => messenger?.replaceReaction?.(message.id, prevEmoji, nextEmoji) ?? Promise.resolve(),
+      'replace reaction',
     );
     AgentBridgeService.activeReactions.set(thread.id, {
       applicationId: botContext?.applicationId,
@@ -239,17 +230,15 @@ export class AgentBridgeService {
    * Remove whatever emoji is currently stored for this thread and drop the
    * tracking entry. Safe to call even when no reaction was set.
    */
-  private async clearReaction(thread: Thread<ThreadState>): Promise<void> {
+  private async clearReaction(thread: Thread<ThreadState>, client?: PlatformClient): Promise<void> {
     const current = AgentBridgeService.activeReactions.get(thread.id);
     if (!current) return;
     AgentBridgeService.activeReactions.delete(thread.id);
+    const messenger = client?.getMessenger(current.reactionThreadId);
     await safeSideEffect(
       () =>
-        thread.adapter.removeReaction(
-          current.reactionThreadId,
-          current.userMessageId,
-          current.emoji,
-        ),
+        messenger?.replaceReaction?.(current.userMessageId, current.emoji, null) ??
+        Promise.resolve(),
       'clear reaction',
     );
     if (current.platform && current.applicationId) {
@@ -315,6 +304,7 @@ export class AgentBridgeService {
   }
 
   private async finishStartupFailure(params: {
+    client?: PlatformClient;
     error?: unknown;
     operationId?: string;
     progressMessage?: SentMessage;
@@ -322,7 +312,7 @@ export class AgentBridgeService {
     thread: Thread<ThreadState>;
     userMessage: Message;
   }): Promise<void> {
-    const { error, operationId, progressMessage, stopped, thread, userMessage } = params;
+    const { client, error, operationId, progressMessage, stopped, thread, userMessage } = params;
     const errorMessage =
       error instanceof Error ? error.message : error ? String(error) : 'Agent execution failed';
 
@@ -354,7 +344,7 @@ export class AgentBridgeService {
       }
     }
 
-    await this.clearReaction(thread);
+    await this.clearReaction(thread, client);
     void userMessage;
   }
 
@@ -441,7 +431,7 @@ export class AgentBridgeService {
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
       // If setup fails before that point, clean up locally to avoid leaked reactions.
       if (!queueMode || !queueHandoffSucceeded) {
-        await this.clearReaction(thread);
+        await this.clearReaction(thread, client);
       }
     }
   }
@@ -572,7 +562,7 @@ export class AgentBridgeService {
       AgentBridgeService.activeThreads.delete(thread.id);
       // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
       if (!queueMode || !queueHandoffSucceeded) {
-        await this.clearReaction(thread);
+        await this.clearReaction(thread, opts.client);
       }
     }
   }
@@ -717,6 +707,7 @@ export class AgentBridgeService {
         botPlatformContext,
         callbackUrl,
         channelContext,
+        client,
         files,
         progressMessage,
         prompt,
@@ -760,6 +751,7 @@ export class AgentBridgeService {
       botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
       callbackUrl: string;
       channelContext?: DiscordChannelContext;
+      client?: PlatformClient;
       files?: any;
       progressMessage?: SentMessage;
       prompt: string;
@@ -774,6 +766,7 @@ export class AgentBridgeService {
       botPlatformContext,
       callbackUrl,
       channelContext,
+      client,
       files,
       progressMessage,
       prompt,
@@ -841,6 +834,7 @@ export class AgentBridgeService {
       }
 
       await this.finishStartupFailure({
+        client,
         error,
         progressMessage,
         stopped: isAbortError(error),
@@ -852,6 +846,7 @@ export class AgentBridgeService {
 
     if (!result.success) {
       await this.finishStartupFailure({
+        client,
         error: result.error,
         operationId: result.operationId,
         progressMessage,

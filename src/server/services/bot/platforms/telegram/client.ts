@@ -180,6 +180,13 @@ class TelegramWebhookClient implements PlatformClient {
         telegram.editMessageText(chatId, parseTelegramMessageId(messageId), content),
       removeReaction: (messageId) =>
         telegram.removeMessageReaction(chatId, parseTelegramMessageId(messageId)),
+      // Telegram replaces the whole reaction list in one call — one API
+      // request is both cheaper and flicker-free.
+      replaceReaction: async (messageId, _prevEmoji, nextEmoji) => {
+        const id = parseTelegramMessageId(messageId);
+        if (nextEmoji) await telegram.setMessageReaction(chatId, id, nextEmoji);
+        else await telegram.removeMessageReaction(chatId, id);
+      },
       triggerTyping: () => telegram.sendChatAction(chatId, 'typing'),
     };
   }

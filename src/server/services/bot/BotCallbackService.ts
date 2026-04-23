@@ -319,18 +319,10 @@ export class BotCallbackService {
     const previous = await getReactionState(platform, applicationId, userMessageId);
     if (previous?.emoji === desiredEmoji) return;
 
-    if (previous) {
-      try {
-        await messenger.removeReaction(userMessageId, previous.emoji);
-      } catch (error) {
-        log('swapStepReaction: failed to remove previous emoji: %O', error);
-      }
-    }
-
     try {
-      await messenger.addReaction?.(userMessageId, desiredEmoji);
+      await messenger.replaceReaction?.(userMessageId, previous?.emoji ?? null, desiredEmoji);
     } catch (error) {
-      log('swapStepReaction: failed to add new emoji: %O', error);
+      log('swapStepReaction: failed: %O', error);
     }
 
     await saveReactionState(platform, applicationId, userMessageId, {
@@ -364,7 +356,7 @@ export class BotCallbackService {
     const messenger = client.getMessenger(reactionThreadId);
 
     try {
-      await messenger.removeReaction(userMessageId, emoji);
+      await messenger.replaceReaction?.(userMessageId, emoji, null);
     } catch (error) {
       log('clearStepReaction: failed: %O', error);
     }

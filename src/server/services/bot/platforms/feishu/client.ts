@@ -68,6 +68,12 @@ function createMessenger(
     // Callers should treat this as a best-effort no-op — step swaps will stack
     // additions rather than clear the previous emoji.
     removeReaction: () => Promise.resolve(),
+    replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
+      if (prevEmoji === nextEmoji) return;
+      // No remove API upstream — we can only add. Step swaps therefore stack
+      // emoji on the user's message. Final cleanup is a no-op.
+      if (nextEmoji) await api.addReaction(messageId, nextEmoji);
+    },
   };
 }
 
