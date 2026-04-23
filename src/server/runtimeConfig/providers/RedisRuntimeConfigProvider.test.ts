@@ -4,8 +4,10 @@ import { z } from 'zod';
 
 import { RedisRuntimeConfigProvider } from './RedisRuntimeConfigProvider';
 
-const getRedisConfigMock = vi.fn();
-const initializeRedisMock = vi.fn();
+const { getRedisConfigMock, initializeRedisMock } = vi.hoisted(() => ({
+  getRedisConfigMock: vi.fn(),
+  initializeRedisMock: vi.fn(),
+}));
 
 vi.mock('@/envs/redis', () => ({
   getRedisConfig: getRedisConfigMock,
@@ -55,5 +57,20 @@ describe('RedisRuntimeConfigProvider', () => {
     const provider = new RedisRuntimeConfigProvider(testDomain);
 
     expect(provider.isEnabled()).toBe(false);
+  });
+
+  it('should treat cached null snapshots as cache hits', async () => {
+    const getMock = vi.fn().mockResolvedValue(null);
+
+    getRedisConfigMock.mockReturnValue({ enabled: true });
+    initializeRedisMock.mockResolvedValue({ get: getMock });
+
+    const provider = new RedisRuntimeConfigProvider(testDomain);
+
+    await expect(provider.getSnapshot({ scope: 'global' })).resolves.toBeNull();
+    await expect(provider.getSnapshot({ scope: 'global' })).resolves.toBeNull();
+
+    expect(initializeRedisMock).toHaveBeenCalledTimes(1);
+    expect(getMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -51,7 +51,7 @@ export class RedisRuntimeConfigProvider<T> implements RuntimeConfigProvider<T> {
       return null;
     }
 
-    return record.snapshot;
+    return record;
   }
 
   private setCacheRecord(snapshot: VersionedSnapshot<T> | null, selector?: RuntimeConfigSelector) {
@@ -102,7 +102,7 @@ export class RedisRuntimeConfigProvider<T> implements RuntimeConfigProvider<T> {
 
   async getSnapshot(selector?: RuntimeConfigSelector): Promise<VersionedSnapshot<T> | null> {
     const cached = this.getCacheRecord(selector);
-    if (cached) return cached;
+    if (cached) return cached.snapshot;
 
     try {
       const redis = await initializeRedis(getRedisConfig());
