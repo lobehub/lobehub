@@ -22,32 +22,37 @@ const CliInstallState = ({
   const showErrorReason =
     Boolean(error?.message) && error?.code !== HeterogeneousAgentSessionErrorCode.CliNotFound;
 
+  // `translationPrefix` is dynamic at runtime, so use the string-key overload
+  // with `defaultValue` to satisfy the i18n key typing.
+  const tKey = (suffix: string, options?: Record<string, unknown>) =>
+    t(`${translationPrefix}.${suffix}`, { defaultValue: '', ...options });
+
   return (
     <GuideShell
-      headerDescription={<Text type="secondary">{t(`${translationPrefix}.desc`)}</Text>}
+      headerDescription={<Text type="secondary">{tKey('desc')}</Text>}
       icon={<config.icon size={24} />}
-      title={t(`${translationPrefix}.title`)}
+      title={tKey('title')}
       variant={variant}
       actions={
         <GuideActions
           showDocs
           docsUrl={docsUrl}
-          openDocsLabel={t(`${translationPrefix}.actions.openDocs`)}
-          openSystemToolsLabel={t(`${translationPrefix}.actions.openSystemTools`)}
+          openDocsLabel={tKey('actions.openDocs')}
+          openSystemToolsLabel={tKey('actions.openSystemTools')}
           onOpenSystemTools={onOpenSystemTools}
         />
       }
     >
       {showErrorReason && (
         <Text style={{ fontSize: 12 }} type="secondary">
-          {t(`${translationPrefix}.reason`, { message: error?.message })}
+          {tKey('reason', { message: error?.message })}
         </Text>
       )}
 
       {recommendedCommand && (
         <Flexbox gap={6}>
           <Text strong style={{ fontSize: 12 }}>
-            {t(`${translationPrefix}.installWithNpm`)}
+            {tKey('installWithNpm')}
           </Text>
           <Snippet language={'bash'}>{recommendedCommand}</Snippet>
         </Flexbox>
@@ -56,14 +61,14 @@ const CliInstallState = ({
       {alternativeCommand && (
         <Flexbox gap={6}>
           <Text strong style={{ fontSize: 12 }}>
-            {t(`${translationPrefix}.installWithBrew`)}
+            {tKey('installWithBrew')}
           </Text>
           <Snippet language={'bash'}>{alternativeCommand}</Snippet>
         </Flexbox>
       )}
 
       <Text style={{ fontSize: 12 }} type="secondary">
-        {t(`${translationPrefix}.afterInstall`)}
+        {tKey('afterInstall')}
       </Text>
     </GuideShell>
   );

@@ -158,6 +158,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
   const sessionErrorCode = error?.body?.code;
   const sessionAgentType = error?.body?.agentType;
+  const sessionErrorBody = error?.body;
   const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
   if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
@@ -165,6 +166,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
 
   if (
     (error?.type === AgentRuntimeErrorType.AgentRuntimeError || !error?.type) &&
+    !!sessionErrorBody &&
     (sessionErrorCode === HeterogeneousAgentSessionErrorCode.AuthRequired ||
       sessionErrorCode === HeterogeneousAgentSessionErrorCode.CliNotFound ||
       sessionErrorCode === HeterogeneousAgentSessionErrorCode.RateLimit) &&
@@ -173,7 +175,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
     return (
       <HeterogeneousAgentStatusGuide
         agentType={sessionAgentType}
-        error={error.body}
+        error={sessionErrorBody}
         onOpenSystemTools={() => navigate('/settings/system-tools')}
       />
     );
