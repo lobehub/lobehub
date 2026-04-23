@@ -252,7 +252,7 @@ const ChatPanel = memo<ChatPanelProps>(
     }, [theme]);
 
     useLayoutEffect(() => {
-      if (selected && !hidden && textareaRef.current) {
+      if (!hidden && textareaRef.current) {
         textareaRef.current.focus();
       }
     }, [hidden, selected]);
