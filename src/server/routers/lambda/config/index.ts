@@ -2,7 +2,7 @@ import { EdgeConfig } from '@lobechat/edge-config';
 import debug from 'debug';
 
 import { businessConfigEndpoints } from '@/business/server/lambda-routers/config';
-import { getServerFeatureFlagsStateFromEdgeConfig } from '@/config/featureFlags';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { getServerDefaultAgentConfig, getServerGlobalConfig } from '@/server/globalConfig';
 import {
@@ -64,7 +64,7 @@ export const configRouter = router({
 
     const [serverConfig, serverFeatureFlags, billboard] = await Promise.all([
       getServerGlobalConfig(),
-      getServerFeatureFlagsStateFromEdgeConfig(ctx.userId || undefined),
+      getServerFeatureFlagsStateFromRuntimeConfig(ctx.userId || undefined),
       getActiveBillboard(),
     ]);
 
