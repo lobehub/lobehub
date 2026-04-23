@@ -1,7 +1,8 @@
-import { getLobehubSkillProviderById } from '@lobechat/const';
+import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
+  ConnectKlavisServiceParams,
   GetPlaintextCredParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
@@ -100,6 +101,42 @@ export class CredsExecutionRuntime {
   constructor(credsService: ICredsService, context: { topicId?: string; userId?: string } = {}) {
     this.credsService = credsService;
     this.context = context;
+  }
+
+  /**
+   * Connect a Klavis integration service
+   * In server-side context, Klavis OAuth requires browser interaction,
+   * so we return a message guiding the user to connect via the UI.
+   */
+  async connectKlavisService(
+    args: ConnectKlavisServiceParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const { service } = args;
+
+    const serverType = getKlavisServerByServerIdentifier(service);
+    if (!serverType) {
+      return {
+        content: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+        error: {
+          message: `Unknown Klavis service: ${service}`,
+          type: 'UnknownService',
+        },
+        success: false,
+      };
+    }
+
+    // Server-side cannot open OAuth popups or access browser stores.
+    // Guide the user to connect via the frontend UI.
+    return {
+      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Klavis OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
+      state: {
+        connected: false,
+        identifier: service,
+        requiresUserAction: true,
+        serviceName: serverType.label,
+      },
+      success: true,
+    };
   }
 
   /**

@@ -325,6 +325,8 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       let resolved = false;
       // eslint-disable-next-line prefer-const
       let pollInterval: ReturnType<typeof setInterval>;
+      // eslint-disable-next-line prefer-const
+      let windowCheckInterval: ReturnType<typeof setInterval>;
 
       const checkConnected = async (): Promise<boolean> => {
         try {
@@ -341,6 +343,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         if (resolved) return;
         resolved = true;
         clearInterval(pollInterval);
+        clearInterval(windowCheckInterval);
       };
 
       // Poll for authentication completion every 1s
@@ -353,7 +356,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       }, 1000);
 
       // Monitor popup closure — give a short grace period then treat as cancelled
-      const windowCheckInterval = setInterval(() => {
+      windowCheckInterval = setInterval(() => {
         if (popup.closed) {
           clearInterval(windowCheckInterval);
           if (resolved) return;
@@ -379,7 +382,6 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         () => {
           if (!resolved) {
             cleanup();
-            clearInterval(windowCheckInterval);
             if (!popup.closed) popup.close();
             resolve({ success: false });
           }
