@@ -75,17 +75,16 @@ const MessageContent = memo<MessageContentProps>(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
     );
 
-    const role = useConversationStore((s) => dataSelectors.getDisplayMessageById(id)(s)?.role);
-
-    const isLastUserMessage = useConversationStore(
-      (s) => s.displayMessages.findLast((m) => m.role === 'user')?.id === id,
-    );
-
-    const isAIGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
+    // Short-circuit on non-editing rows so streaming token updates stay O(1) per row
+    // instead of each row running `findLast` on displayMessages (O(N²) per update).
+    const shouldSendOnConfirm = useConversationStore((s) => {
+      if (!editing) return false;
+      if (dataSelectors.getDisplayMessageById(id)(s)?.role !== 'user') return false;
+      if (s.displayMessages.findLast((m) => m.role === 'user')?.id !== id) return false;
+      return !messageStateSelectors.isAIGenerating(s);
+    });
 
     const { t } = useTranslation('common');
-
-    const shouldSendOnConfirm = role === 'user' && isLastUserMessage && !isAIGenerating;
 
     const onEditingChange = useCallback(
       (edit: boolean) => toggleMessageEditing(id, edit),
