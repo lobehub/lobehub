@@ -2,7 +2,7 @@
 
 import isEqual from 'fast-deep-equal';
 import { type ReactElement, type ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { type VListHandle } from 'virtua';
 import { VList } from 'virtua';
 import { useShallow } from 'zustand/react/shallow';
@@ -19,6 +19,7 @@ import {
   useConversationSpacer,
 } from '../hooks/useConversationSpacer';
 import { useScrollToUserMessage } from '../hooks/useScrollToUserMessage';
+import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector';
@@ -152,7 +153,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
 
   // Keep currently-streaming items mounted so vlist recycling never triggers
   // Markdown animation replay when the user scrolls them back into view.
-  const keepMountedIndices = useConversationStore(
+  const streamingIndices = useConversationStore(
     useShallow((s) => {
       const indices: number[] = [];
       for (let i = 0; i < dataSource.length; i++) {
@@ -163,6 +164,21 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       return indices;
     }),
   );
+
+  // Also keep items that host the active text selection — unmounting a node
+  // containing a Selection endpoint would silently drop the user's highlight.
+  const selectionMessageIds = useSelectionMessageIds();
+
+  const keepMountedIndices = useMemo(() => {
+    if (selectionMessageIds.size === 0) return streamingIndices;
+    const merged = new Set<number>(streamingIndices);
+    for (let i = 0; i < dataSource.length; i++) {
+      const id = dataSource[i];
+      if (id && selectionMessageIds.has(id)) merged.add(i);
+    }
+    if (merged.size === streamingIndices.length) return streamingIndices;
+    return [...merged].sort((a, b) => a - b);
+  }, [dataSource, streamingIndices, selectionMessageIds]);
 
   // Auto scroll to user message when user sends a new message
   // Only scroll when 2 new messages are added and second-to-last is from user
