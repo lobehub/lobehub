@@ -1,16 +1,17 @@
-import { type CreatedLevelSliderProps, createLevelSliderComponent } from './createLevelSlider';
+import type { CreatedLevelSliderProps } from './createLevelSlider';
+import { createLevelSliderComponent } from './createLevelSlider';
 
-const DEEPSEEK_REASONING_EFFORT_LEVELS = ['high', 'max'] as const;
+const DEEPSEEK_REASONING_EFFORT_LEVELS = ['none', 'high', 'max'] as const;
 
-type DeepSeekReasoningEffort = 'high' | 'max';
+type DeepSeekReasoningEffort = (typeof DEEPSEEK_REASONING_EFFORT_LEVELS)[number];
 
 export type DeepSeekReasoningEffortSliderProps = CreatedLevelSliderProps<DeepSeekReasoningEffort>;
 
-const DeepSeekReasoningEffortSlider = createLevelSliderComponent({
-  configKey: 'reasoningEffort',
-  defaultValue: 'high' as const,
+const DeepSeekReasoningEffortSlider = createLevelSliderComponent<DeepSeekReasoningEffort>({
+  configKey: 'deepseekReasoningEffort',
+  defaultValue: 'high',
   levels: DEEPSEEK_REASONING_EFFORT_LEVELS,
-  style: { minWidth: 200 },
+  style: { minWidth: 230 },
 });
 
 export default DeepSeekReasoningEffortSlider;

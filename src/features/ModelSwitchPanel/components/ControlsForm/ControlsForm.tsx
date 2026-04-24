@@ -1,7 +1,7 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import { type FormItemProps } from '@lobehub/ui';
 import { Form } from '@lobehub/ui';
-import { Form as AntdForm, Grid, Switch } from 'antd';
+import { Grid, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
-import DeepseekV4ReasoningEffortSlider from './DeepseekV4ReasoningEffortSlider';
+import DeepSeekReasoningEffortSlider from './DeepSeekReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
@@ -73,7 +73,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
   const model = modelProp ?? agentModel;
   const provider = providerProp ?? agentProvider;
   const [form] = Form.useForm();
-
   const config = useAgentStore(
     (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s),
     isEqual,
@@ -190,6 +189,17 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'vertical',
       minWidth: undefined,
       name: 'reasoningBudgetToken80k',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <DeepSeekReasoningEffortSlider />,
+      desc: 'thinking.type / reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'deepseekReasoningEffort',
       style: {
         paddingBottom: 0,
       },

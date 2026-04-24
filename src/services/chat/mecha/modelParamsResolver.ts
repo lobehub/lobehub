@@ -16,6 +16,7 @@ export interface ModelParamsContext {
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  deepseekReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
@@ -176,8 +177,22 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
   }
 
   // Reasoning effort variants
-  if (modelExtendParams.includes('deepseekReasoningEffort') && chatConfig.reasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.reasoningEffort;
+  if (modelExtendParams.includes('deepseekReasoningEffort')) {
+    const deepseekReasoningEffort = chatConfig.deepseekReasoningEffort;
+
+    if (typeof deepseekReasoningEffort === 'string') {
+      if (deepseekReasoningEffort === 'none') {
+        extendParams.thinking = {
+          type: 'disabled',
+        };
+      } else {
+        extendParams.deepseekReasoningEffort = deepseekReasoningEffort;
+        extendParams.reasoning_effort = deepseekReasoningEffort;
+        extendParams.thinking = {
+          type: 'enabled',
+        };
+      }
+    }
   }
 
   if (modelExtendParams.includes('reasoningEffort') && chatConfig.reasoningEffort) {

@@ -25,6 +25,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
+  deepseekReasoningEffort?: 'none' | 'high' | 'max';
 
   deepseekV4ReasoningEffort?: 'high' | 'max';
 
@@ -111,7 +112,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Reasoning budget token for models with 80k max (Qwen3 series)
    */
   reasoningBudgetToken80k?: number;
-  reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
+  reasoningEffort?: 'low' | 'medium' | 'high';
   /**
    * Runtime environment configuration (desktop only)
    */
@@ -181,6 +182,7 @@ export const AgentChatConfigSchema = z
   .object({
     autoCreateTopicThreshold: z.number().default(2),
     codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    deepseekReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -211,7 +213,7 @@ export const AgentChatConfigSchema = z
     reasoningBudgetToken: z.number().optional(),
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),
-    reasoningEffort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+    reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
     searchFCModel: z
       .object({
         model: z.string(),

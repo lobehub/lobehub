@@ -26,8 +26,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
-      extendParams: ['enableReasoning', 'deepseekReasoningEffort'],
+      extendParams: ['deepseekReasoningEffort'],
     },
     type: 'chat',
   },
@@ -56,8 +55,7 @@ const deepseekChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
-      extendParams: ['enableReasoning', 'deepseekReasoningEffort'],
+      extendParams: ['deepseekReasoningEffort'],
     },
     type: 'chat',
   },
