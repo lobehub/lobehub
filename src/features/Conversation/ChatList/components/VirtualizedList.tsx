@@ -41,9 +41,9 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Second-to-last message is the user turn when sending (user + assistant pair)
-  const displayMessages = useConversationStore(dataSelectors.displayMessages);
-  const secondLastMessage = displayMessages.at(-2);
-  const isSecondLastMessageFromUser = secondLastMessage?.role === 'user';
+  const isSecondLastMessageFromUser = useConversationStore(
+    dataSelectors.isSecondLastMessageFromUser,
+  );
 
   const {
     isScrollShrinking,
