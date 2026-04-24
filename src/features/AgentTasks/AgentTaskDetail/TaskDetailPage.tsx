@@ -6,7 +6,6 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useChatStore } from '@/store/chat';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -24,11 +23,10 @@ import TaskSubtasks from './TaskSubtasks';
 import TopicChatDrawer from './TopicChatDrawer';
 
 interface TaskDetailPageProps {
-  agentId?: string;
   taskId: string;
 }
 
-const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
+const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId }) => {
   const setActiveTaskId = useTaskStore((s) => s.setActiveTaskId);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const isLoading = useTaskStore(taskDetailSelectors.isTaskDetailLoading);
@@ -39,21 +37,6 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
     return () => setActiveTaskId(undefined);
   }, [taskId, setActiveTaskId]);
 
-  // Sync the task's assignee agent into chat store so the right-side
-  // AgentTaskManager conversation knows which agent to talk to. The
-  // `/agent/:aid/...` routes have a parent AgentIdSync that does this; the
-  // cross-agent `/task/:taskId` route doesn't, so we mirror that behavior here.
-  useEffect(() => {
-    if (!agentId) return;
-    useChatStore.setState({ activeAgentId: agentId }, false, 'TaskDetailPage/syncAgentId');
-    return () => {
-      const current = useChatStore.getState().activeAgentId;
-      if (current === agentId) {
-        useChatStore.setState({ activeAgentId: undefined }, false, 'TaskDetailPage/clearAgentId');
-      }
-    };
-  }, [agentId]);
-
   useFetchTaskDetail(taskId);
 
   return (
@@ -62,7 +45,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ agentId, taskId }) => {
         right={<ToggleRightPanelButton hideWhenExpanded />}
         left={
           <>
-            <Breadcrumb agentId={agentId} taskId={taskId} />
+            <Breadcrumb taskId={taskId} />
             <TaskDetailHeaderActions />
             {saveStatus === 'saving' ? <AutoSaveHint saveStatus={saveStatus} /> : undefined}
           </>
