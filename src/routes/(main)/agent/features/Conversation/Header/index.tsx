@@ -18,6 +18,13 @@ const headerStyles = createStaticStyles(({ css }) => ({
     container-name: agent-conv-header;
     container-type: inline-size;
   `,
+  left: css`
+    min-width: 0;
+
+    @container agent-conv-header (min-width: 720px) {
+      max-width: calc(50% - 80px);
+    }
+  `,
   viewSwitcher: css`
     @container agent-conv-header (min-width: 720px) {
       pointer-events: none;
@@ -40,8 +47,10 @@ const Header = memo(() => {
       <NavHeader
         left={
           <Flexbox
+            allowShrink
             horizontal
             align={'center'}
+            className={headerStyles.left}
             gap={4}
             style={{ backgroundColor: cssVar.colorBgContainer }}
           >

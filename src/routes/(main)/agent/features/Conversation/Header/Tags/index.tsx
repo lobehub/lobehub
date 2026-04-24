@@ -18,20 +18,23 @@ const TitleTags = memo(() => {
 
   if (isGroupSession) {
     return (
-      <Flexbox horizontal align={'center'} gap={12}>
+      <Flexbox allowShrink horizontal align={'center'} gap={12} style={{ minWidth: 0 }}>
         <MemberCountTag />
       </Flexbox>
     );
   }
 
   return (
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox allowShrink horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
       <span
         style={{
           color: cssVar.colorText,
+          display: 'block',
+          flex: 1,
           fontSize: 14,
           fontWeight: 600,
           marginLeft: 8,
+          minWidth: 0,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
