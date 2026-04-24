@@ -1,11 +1,12 @@
 'use client';
 
-import { builtinTools } from '@lobechat/builtin-tools';
 import { ClaudeCodeIdentifier } from '@lobechat/builtin-tool-claude-code/client';
+import { builtinTools } from '@lobechat/builtin-tools';
 import type { BuiltinRenderProps, BuiltinToolManifest, LobeChatPluginApi } from '@lobechat/types';
 
-export interface ToolRenderFixture
-  extends Partial<Pick<BuiltinRenderProps, 'args' | 'content' | 'pluginError' | 'pluginState'>> {}
+export interface ToolRenderFixture extends Partial<
+  Pick<BuiltinRenderProps, 'args' | 'content' | 'pluginError' | 'pluginState'>
+> {}
 
 export interface ToolRenderMeta {
   api?: LobeChatPluginApi;
@@ -84,14 +85,15 @@ const manifestByIdentifier = new Map<string, BuiltinToolManifest>(
 const humanize = (value: string) =>
   value
     .replaceAll('_', ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replaceAll(/\s+/g, ' ')
     .trim()
     .replace(/^./, (char) => char.toUpperCase());
 
 const buildStringSample = (key: string, schema: any) => {
   if (schema?.format === 'uri' || key.toLowerCase().includes('url')) return 'https://example.com';
-  if (key.toLowerCase().includes('path')) return `/workspace/${key.replace(/Path$/i, '').toLowerCase() || 'file'}.ts`;
+  if (key.toLowerCase().includes('path'))
+    return `/workspace/${key.replace(/Path$/i, '').toLowerCase() || 'file'}.ts`;
   if (key.toLowerCase().includes('id')) return `${key}-sample`;
   if (key.toLowerCase().includes('query')) return 'tool render preview';
   if (key.toLowerCase().includes('title')) return 'Preview title';
@@ -112,7 +114,10 @@ const buildSchemaSample = (schema: any, key = 'value'): any => {
 
   switch (schema.type) {
     case 'array': {
-      const item = buildSchemaSample(schema.items, key.endsWith('s') ? key.slice(0, -1) : `${key}Item`);
+      const item = buildSchemaSample(
+        schema.items,
+        key.endsWith('s') ? key.slice(0, -1) : `${key}Item`,
+      );
       return item === undefined ? [] : [item];
     }
     case 'boolean': {
@@ -219,7 +224,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
       prompt:
         'Inspect the generated preview fixtures and reply with a short note about the riskiest missing case.',
     },
-    content: '- Search-driven renders still need richer empty-state fixtures.\n- The grouped execute-tasks preview depends on seeded agent-group state.',
+    content:
+      '- Search-driven renders still need richer empty-state fixtures.\n- The grouped execute-tasks preview depends on seeded agent-group state.',
   },
   [keyOf(ClaudeCodeIdentifier, 'Bash')]: {
     args: { command: 'rg -n "TodoListRender" packages src' },
@@ -254,7 +260,7 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
   [keyOf(ClaudeCodeIdentifier, 'Read')]: {
     args: { file_path: 'packages/builtin-tools/src/renders.ts' },
     content:
-      '1  import { RunCommandRender } from \'@lobechat/shared-tool-ui/renders\';\n2  export interface BuiltinRenderRegistryEntry { ... }',
+      "1  import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';\n2  export interface BuiltinRenderRegistryEntry { ... }",
   },
   [keyOf(ClaudeCodeIdentifier, 'Skill')]: {
     args: { skill: 'codebase-search' },
@@ -263,15 +269,27 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
   [keyOf(ClaudeCodeIdentifier, 'TodoWrite')]: {
     args: {
       todos: [
-        { activeForm: 'Capture current registry coverage', content: 'Capture current registry coverage', status: 'completed' },
-        { activeForm: 'Build /devtools page', content: 'Build /devtools page', status: 'in_progress' },
-        { activeForm: 'Audit missing fixtures', content: 'Audit missing fixtures', status: 'pending' },
+        {
+          activeForm: 'Capture current registry coverage',
+          content: 'Capture current registry coverage',
+          status: 'completed',
+        },
+        {
+          activeForm: 'Build /devtools page',
+          content: 'Build /devtools page',
+          status: 'in_progress',
+        },
+        {
+          activeForm: 'Audit missing fixtures',
+          content: 'Audit missing fixtures',
+          status: 'pending',
+        },
       ],
     },
   },
   [keyOf(ClaudeCodeIdentifier, 'Write')]: {
     args: {
-      content: 'export const previewEnabled = process.env.NODE_ENV === \'development\';\n',
+      content: "export const previewEnabled = process.env.NODE_ENV === 'development';\n",
       file_path: 'src/routes/(main)/devtools/featureFlag.ts',
     },
   },
@@ -347,7 +365,10 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         updatedFields: ['model', 'temperature'],
       },
       meta: {
-        newValues: { description: 'Pairs on internal developer workflows.', title: 'Devtools Copilot' },
+        newValues: {
+          description: 'Pairs on internal developer workflows.',
+          title: 'Devtools Copilot',
+        },
         previousValues: { description: 'General helper.', title: 'Workspace Helper' },
         updatedFields: ['title', 'description'],
       },
@@ -466,8 +487,7 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
   [keyOf('lobe-cloud-sandbox', 'editLocalFile')]: {
     args: { path: '/sandbox/src/routes/devtools.tsx' },
     pluginState: {
-      diffText:
-        '@@ -1,2 +1,3 @@\n export const devtools = true;\n+export const previews = true;\n',
+      diffText: '@@ -1,2 +1,3 @@\n export const devtools = true;\n+export const previews = true;\n',
       linesAdded: 1,
       linesDeleted: 0,
       replacements: 1,
@@ -539,7 +559,11 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     pluginState: {
       results: [
         { isDirectory: false, name: 'devtools.tsx', path: '/sandbox/src/routes/devtools.tsx' },
-        { isDirectory: false, name: 'desktopRouter.config.tsx', path: '/sandbox/src/spa/router/desktopRouter.config.tsx' },
+        {
+          isDirectory: false,
+          name: 'desktopRouter.config.tsx',
+          path: '/sandbox/src/spa/router/desktopRouter.config.tsx',
+        },
       ],
       totalCount: 2,
     },
@@ -588,7 +612,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
 
   [keyOf('lobe-group-management', 'broadcast')]: {
     args: {
-      instruction: 'Everyone review one tool render section and flag any empty states that look broken.',
+      instruction:
+        'Everyone review one tool render section and flag any empty states that look broken.',
     },
   },
   [keyOf('lobe-group-management', 'executeAgentTask')]: {
@@ -608,7 +633,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         },
         {
           agentId: 'builder-agent',
-          instruction: 'Verify router gating and ensure production builds cannot navigate to /devtools.',
+          instruction:
+            'Verify router gating and ensure production builds cannot navigate to /devtools.',
           title: 'Route audit',
         },
       ],
@@ -616,7 +642,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
   },
   [keyOf('lobe-group-management', 'speak')]: {
     args: {
-      instruction: 'Summarize the preview harness approach in two short sentences for the issue update.',
+      instruction:
+        'Summarize the preview harness approach in two short sentences for the issue update.',
     },
   },
 
@@ -656,7 +683,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     pluginState: {
       task: {
         description: 'Smoke test the desktop router config',
-        instruction: 'Run the desktop router sync test and confirm /devtools only appears in development.',
+        instruction:
+          'Run the desktop router sync test and confirm /devtools only appears in development.',
       },
     },
   },
@@ -703,7 +731,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
         {
           fileId: 'kb_devtools_guide',
           filename: 'devtools-preview-guide.md',
-          preview: 'Use the /devtools route to visually verify builtin tool renders during development.',
+          preview:
+            'Use the /devtools route to visually verify builtin tool renders during development.',
           totalCharCount: 1420,
           totalLineCount: 42,
         },
@@ -731,7 +760,7 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     args: { path: '/workspace/src/spa/router/desktopRouter.config.tsx' },
     pluginState: {
       diffText:
-        '@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: \'devtools\',\n+  },\n ];\n',
+        "@@ -1,3 +1,7 @@\n export const desktopRoutes = [\n+  {\n+    path: 'devtools',\n+  },\n ];\n",
     },
   },
   [keyOf('lobe-local-system', 'listLocalFiles')]: {
@@ -756,8 +785,7 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
   [keyOf('lobe-local-system', 'readLocalFile')]: {
     args: { path: '/workspace/src/routes/(main)/devtools/index.tsx' },
     pluginState: {
-      content:
-        'export default function DevtoolsPage() {\n  return <div>Render preview</div>;\n}\n',
+      content: 'export default function DevtoolsPage() {\n  return <div>Render preview</div>;\n}\n',
       endLine: 3,
       fullPath: '/workspace/src/routes/(main)/devtools/index.tsx',
       path: 'src/routes/(main)/devtools/index.tsx',
@@ -780,15 +808,22 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
     args: { directory: '/workspace/src', keyword: 'devtools' },
     pluginState: {
       results: [
-        { isDirectory: false, name: 'index.tsx', path: '/workspace/src/routes/(main)/devtools/index.tsx' },
-        { isDirectory: false, name: 'desktopRouter.config.tsx', path: '/workspace/src/spa/router/desktopRouter.config.tsx' },
+        {
+          isDirectory: false,
+          name: 'index.tsx',
+          path: '/workspace/src/routes/(main)/devtools/index.tsx',
+        },
+        {
+          isDirectory: false,
+          name: 'desktopRouter.config.tsx',
+          path: '/workspace/src/spa/router/desktopRouter.config.tsx',
+        },
       ],
     },
   },
   [keyOf('lobe-local-system', 'writeLocalFile')]: {
     args: {
-      content:
-        'export const devtoolsEnabled = process.env.NODE_ENV === "development";\n',
+      content: 'export const devtoolsEnabled = process.env.NODE_ENV === "development";\n',
       path: '/workspace/src/routes/(main)/devtools/flags.ts',
     },
   },
@@ -820,7 +855,8 @@ const toolRenderFixtures: Record<string, ToolRenderFixture> = {
           feature: 'Builtin tool rendering',
           surface: '/devtools',
         },
-        conclusionDirectives: 'Keep fixtures close to the route and update them when new renders land.',
+        conclusionDirectives:
+          'Keep fixtures close to the route and update them when new renders land.',
         originContext: {
           actor: 'Frontend engineer',
           applicableWhen: 'Adding or refactoring tool renders',
