@@ -8,6 +8,8 @@ import {
 } from '@/business/client/BusinessDesktopRoutes';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
+const isDev = process.env.NODE_ENV === 'development';
+
 // Desktop router configuration (declarative mode)
 export const desktopRoutes: RouteObject[] = [
   {
@@ -575,6 +577,18 @@ export const desktopRoutes: RouteObject[] = [
         errorElement: <ErrorBoundary />,
         path: 'page',
       },
+
+      ...(isDev
+        ? [
+            {
+              element: dynamicElement(
+                () => import('@/routes/(main)/devtools'),
+                'Desktop > Devtools',
+              ),
+              path: 'devtools',
+            },
+          ]
+        : []),
 
       // Default route - home page (handled by persistent layout)
       {

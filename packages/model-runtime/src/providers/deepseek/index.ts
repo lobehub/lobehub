@@ -12,7 +12,16 @@ export const params = {
   baseURL: 'https://api.deepseek.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const shouldForceAssistantReasoningContent = payload.model === 'deepseek-reasoner';
+      // deepseek-v4-* defaults to thinking=enabled unless the caller explicitly
+      // sets thinking.type === 'disabled'. In thinking mode the API rejects
+      // (HTTP 400) follow-up turns that omit reasoning_content on assistant
+      // messages with tool calls — see
+      // https://api-docs.deepseek.com/guides/thinking_mode#tool-calls
+      const isV4Model =
+        typeof payload.model === 'string' && payload.model.startsWith('deepseek-v4');
+      const thinkingExplicitlyDisabled = payload.thinking?.type === 'disabled';
+      const shouldForceAssistantReasoningContent =
+        payload.model === 'deepseek-reasoner' || (isV4Model && !thinkingExplicitlyDisabled);
 
       // Transform reasoning object to reasoning_content string for multi-turn conversations
       const messages = payload.messages.map((message: any) => {
@@ -25,7 +34,8 @@ export const params = {
               ? reasoning.content
               : undefined;
 
-        // DeepSeek reasoner with tool calls requires assistant history messages to carry reasoning_content
+        // DeepSeek thinking mode with tool calls requires assistant history
+        // messages to carry reasoning_content, or the API returns a 400.
         if (message.role === 'assistant' && shouldForceAssistantReasoningContent) {
           return {
             ...rest,

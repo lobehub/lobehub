@@ -13,6 +13,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import CodexMaxReasoningEffortSlider from './CodexMaxReasoningEffortSlider';
 import ContextCachingSwitch from './ContextCachingSwitch';
+import DeepseekV4ReasoningEffortSlider from './DeepseekV4ReasoningEffortSlider';
 import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
@@ -265,6 +266,28 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
       layout: 'horizontal',
       minWidth: undefined,
       name: 'hy3ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <DeepseekV4ReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'deepseekV4ReasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <DeepseekV4ReasoningEffortSlider />,
+      desc: 'reasoning_effort',
+      label: t('extendParams.reasoningEffort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'deepseekV4ReasoningEffort',
       style: {
         paddingBottom: 0,
       },

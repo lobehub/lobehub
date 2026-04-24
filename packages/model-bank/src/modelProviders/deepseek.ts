@@ -2,9 +2,9 @@ import type { ModelProviderCard } from '@/types/llm';
 
 const DeepSeek: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'deepseek-chat',
+  checkModel: 'deepseek-v4-flash',
   description:
-    'DeepSeek focuses on AI research and applications; its latest DeepSeek-V3 benchmarks surpass open models like Qwen2.5-72B and Llama-3.1-405B, aligning with leading closed models such as GPT-4o and Claude-3.5-Sonnet.',
+    'DeepSeek focuses on AI research and applications. Its latest DeepSeek V4 family ships in Flash and Pro variants with a 1M context window and hybrid thinking — competitive with leading closed frontier models on reasoning and agent benchmarks.',
   id: 'deepseek',
   modelList: { showModelFetcher: true },
   modelsUrl: 'https://platform.deepseek.com/api-docs/zh-cn/quick_start/pricing',

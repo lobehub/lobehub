@@ -25,13 +25,14 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    */
   compressionModelId?: string;
 
+  deepseekV4ReasoningEffort?: 'high' | 'max';
+
   /**
    * Disable context caching
    */
   disableContextCaching?: boolean;
 
   effort?: 'low' | 'medium' | 'high' | 'max';
-
   /**
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
@@ -193,6 +194,7 @@ export const AgentChatConfigSchema = z
     gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
+    deepseekV4ReasoningEffort: z.enum(['high', 'max']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),

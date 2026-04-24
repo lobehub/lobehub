@@ -51,6 +51,8 @@ import {
 import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
 import { type BuiltinInspector } from '@lobechat/types';
 
+import { CodexInspectors } from './codex';
+
 /**
  * Builtin tools inspector registry
  * Organized by toolset (identifier) -> API name
@@ -88,6 +90,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
   codex: {
+    ...CodexInspectors,
     command_execution: createRunCommandInspector('Run') as BuiltinInspector,
   },
 };

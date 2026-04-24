@@ -31,8 +31,8 @@ export const MODEL_LIST_CONFIGS = {
     visionKeywords: [],
   },
   deepseek: {
-    functionCallKeywords: ['v3', 'r1', 'deepseek-chat'],
-    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.'],
+    functionCallKeywords: ['v3', 'v4', 'r1', 'deepseek-chat'],
+    reasoningKeywords: ['r1', 'deepseek-reasoner', 'v3.', 'v4'],
     visionKeywords: ['ocr'],
   },
   google: {
@@ -130,7 +130,9 @@ export const MODEL_LIST_CONFIGS = {
     excludeKeywords: ['tts'],
     functionCallKeywords: ['mimo'],
     reasoningKeywords: ['mimo'],
-    visionKeywords: ['omni'],
+    // mimo-v2.5 (non-pro) is natively omni-modal; match the exact id
+    // without also catching mimo-v2.5-pro, which is text-only.
+    visionKeywords: ['omni', 're:^mimo-v2\\.5$'],
   },
   zeroone: {
     functionCallKeywords: ['fc'],
