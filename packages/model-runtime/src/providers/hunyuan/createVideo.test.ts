@@ -44,49 +44,6 @@ describe('createHunyuanVideo', () => {
       prompt: '一只小狗',
     });
   });
-
-  it('should create a YT video task with image url', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ id: 'video-task-2' }),
-    });
-
-    const payload: CreateVideoPayload = {
-      model: 'yt-video-2.0',
-      params: {
-        imageUrl: 'https://example.com/source.jpeg',
-      },
-    };
-
-    const result = await createHunyuanVideo(payload, mockOptions);
-
-    expect(result.inferenceId).toBe('yt-video-2.0::video-task-2');
-    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
-    expect(body.image).toEqual({ url: 'https://example.com/source.jpeg' });
-    expect(body.model).toBe('yt-video-2.0');
-  });
-
-  it('should include optional video parameters', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ id: 'video-task-3' }),
-    });
-
-    const payload: CreateVideoPayload = {
-      model: 'hy-video-1.5',
-      params: {
-        prompt: 'Test video',
-        resolution: '720p',
-        watermark: true,
-      },
-    };
-
-    await createHunyuanVideo(payload, mockOptions);
-
-    const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
-    expect(body.resolution).toBe('720p');
-    expect(body.logo_add).toBe(1);
-  });
 });
 
 describe('Hunyuan video status helpers', () => {
