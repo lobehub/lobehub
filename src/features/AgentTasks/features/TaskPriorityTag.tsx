@@ -17,16 +17,17 @@ import PriorityUrgentIcon from './icons/PriorityUrgentIcon';
 
 interface PriorityMeta {
   icon: IconType;
+  label: string;
   labelKey: string;
   level: number;
 }
 
 export const PRIORITY_META: Record<number, PriorityMeta> = {
-  0: { icon: PriorityNoneIcon, labelKey: 'priority.none', level: 0 },
-  1: { icon: PriorityUrgentIcon, labelKey: 'priority.urgent', level: 1 },
-  2: { icon: PriorityHighIcon, labelKey: 'priority.high', level: 2 },
-  3: { icon: PriorityMediumIcon, labelKey: 'priority.normal', level: 3 },
-  4: { icon: PriorityLowIcon, labelKey: 'priority.low', level: 4 },
+  0: { icon: PriorityNoneIcon, label: 'No priority', labelKey: 'priority.none', level: 0 },
+  1: { icon: PriorityUrgentIcon, label: 'Urgent', labelKey: 'priority.urgent', level: 1 },
+  2: { icon: PriorityHighIcon, label: 'High', labelKey: 'priority.high', level: 2 },
+  3: { icon: PriorityMediumIcon, label: 'Normal', labelKey: 'priority.normal', level: 3 },
+  4: { icon: PriorityLowIcon, label: 'Low', labelKey: 'priority.low', level: 4 },
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -95,12 +96,12 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
           return {
             icon: (
               <IconRender
-                color={isUrgentLevel ? cssVar.orange : cssVar.colorTextDescription}
+                color={isUrgentLevel ? cssVar.orange : cssVar.colorTextSecondary}
                 size={16}
               />
             ),
             key,
-            label: t(`taskDetail.${value.labelKey}`, { defaultValue: '' }),
+            label: t(`taskDetail.${value.labelKey}` as never, { defaultValue: value.label }),
             onClick: ({ domEvent }) => {
               domEvent.stopPropagation();
               void handlePriorityChange(level);
@@ -118,7 +119,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     ) : loading ? (
       <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
     ) : (
-      <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: '' })}>
+      <Tooltip title={t(`taskDetail.${meta.labelKey}` as never, { defaultValue: meta.label })}>
         <span
           className={isUrgent ? styles.triggerUrgent : styles.trigger}
           onClick={(e) => e.stopPropagation()}
