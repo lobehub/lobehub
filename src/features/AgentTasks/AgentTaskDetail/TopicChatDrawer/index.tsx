@@ -13,6 +13,8 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
+import TopicStatusIcon from '../TopicStatusIcon';
+
 const TOPIC_STATUS_COLOR: Record<string, string> = {
   canceled: cssVar.colorTextSecondary,
   completed: cssVar.colorSuccess,
@@ -79,6 +81,7 @@ const TopicChatDrawer = memo(() => {
 
   const title = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+      <TopicStatusIcon size={16} status={status} />
       <Text ellipsis weight={500}>
         {activity?.title || t('taskDetail.topicDrawer.untitled')}
       </Text>
