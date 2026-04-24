@@ -46,8 +46,8 @@ const renderCheck = () => <Icon color={cssVar.colorTextSecondary} icon={CheckIco
 const renderExtra = (shortcut: string, isCurrent: boolean) =>
   isCurrent ? (
     <Flexbox horizontal align={'center'} gap={6}>
-      {shortcut}
       {renderCheck()}
+      {shortcut}
     </Flexbox>
   ) : (
     shortcut
