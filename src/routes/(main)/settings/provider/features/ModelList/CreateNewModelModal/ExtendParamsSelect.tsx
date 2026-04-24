@@ -210,7 +210,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'reasoning_effort',
   },
   hy3ReasoningEffort: {
-    labelSuffix: ' (Hy3-Preview)',
+    labelSuffix: ' (Hy3 preview)',
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
@@ -343,7 +343,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
       grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
-      hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="low" />,
+      hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,

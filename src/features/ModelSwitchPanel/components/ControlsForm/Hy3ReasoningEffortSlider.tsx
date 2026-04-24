@@ -8,7 +8,7 @@ export type Hy3ReasoningEffortSliderProps = CreatedLevelSliderProps<Hy3Reasoning
 
 const Hy3ReasoningEffortSlider = createLevelSliderComponent<Hy3ReasoningEffort>({
   configKey: 'hy3ReasoningEffort',
-  defaultValue: 'low',
+  defaultValue: 'high',
   levels: HY3_REASONING_EFFORT_LEVELS,
   style: { minWidth: 200 },
 });
