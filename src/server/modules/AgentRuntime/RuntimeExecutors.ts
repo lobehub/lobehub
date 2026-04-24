@@ -941,25 +941,11 @@ export const createRuntimeExecutors = (
           // ===== 2. Then accumulate to AgentState =====
           const newState = structuredClone(state);
 
-          // Carry the persisted DB id so downstream executors (notably
-          // `request_human_approve`) can look up the parent assistant from
-          // `state.messages` without an extra DB round-trip. Without the id
-          // the lookup at `request_human_approve` (which filters on `m.id`)
-          // falls through to a DB query; when human-approve fires on the
-          // fresh LLM turn, both code paths miss and the op errors with
-          // "No assistant message found as parent for pending tool messages".
-          // Sanitize mirrors the DB write above — state.messages flows into the
-          // next LLM call payload, so the same poisoning risk applies here.
-          // See LOBE-7761.
-          //
-          // Also drop tool_calls whose function.name never resolved to a
-          // non-empty string across all streaming deltas (LOBE-8199): some
-          // providers (NVIDIA NIM with z-ai/glm5, qwen3.5-MoE) open a
-          // tool_call with `name: null` and never supply the real name,
-          // typically when max_tokens is exhausted mid-stream. The tool
-          // executor can't dispatch them (ToolNameResolver filters them out),
-          // so keeping them in state.messages would only poison subsequent
-          // requests — strict providers 400 on nameless tool_calls.
+          // state.messages flows into the next LLM call payload, so entries
+          // must be safe for strict-provider history replay:
+          //   - drop tool_calls with empty name (undispatchable, and strict
+          //     providers 400 on nameless entries)
+          //   - coerce malformed JSON `arguments` to valid JSON
           const sanitizedToolCalls =
             tool_calls.length > 0
               ? tool_calls
