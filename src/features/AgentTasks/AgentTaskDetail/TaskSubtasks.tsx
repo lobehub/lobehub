@@ -168,32 +168,13 @@ const TaskSubtasks = memo(() => {
   return (
     <Flexbox gap={8}>
       {hasSubtasks ? (
-        <>
-          <Flexbox horizontal align="center" justify="flex-end">
-            <ActionIcon
-              icon={Plus}
-              size="small"
-              title={t('taskDetail.addSubtask')}
-              onClick={toggleCreating}
-            />
-          </Flexbox>
-
-          {isCreating && (
-            <CreateTaskInlineEntry
-              autoFocus
-              agentId={agentId ?? undefined}
-              parentTaskId={taskId}
-              placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
-              onCollapse={() => setIsCreating(false)}
-              onCreated={() => setIsCreating(false)}
-            />
-          )}
-
-          <Accordion defaultExpandedKeys={['subtasks']} gap={0}>
+        <Flexbox horizontal align="flex-start" justify="space-between">
+          <Accordion defaultExpandedKeys={['subtasks']} gap={0} style={{ flex: 1, minWidth: 0 }}>
             <AccordionItem
               itemKey="subtasks"
               paddingBlock={4}
               paddingInline={8}
+              styles={{ header: { width: 'fit-content' } }}
               title={
                 <Flexbox horizontal align="center" gap={8}>
                   <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
@@ -208,6 +189,18 @@ const TaskSubtasks = memo(() => {
                 </Flexbox>
               }
             >
+              {isCreating && (
+                <Flexbox style={{ marginTop: 8 }}>
+                  <CreateTaskInlineEntry
+                    autoFocus
+                    agentId={agentId ?? undefined}
+                    parentTaskId={taskId}
+                    placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
+                    onCollapse={() => setIsCreating(false)}
+                    onCreated={() => setIsCreating(false)}
+                  />
+                </Flexbox>
+              )}
               <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
                 <Tree
                   blockNode
@@ -226,7 +219,13 @@ const TaskSubtasks = memo(() => {
               </ConfigProvider>
             </AccordionItem>
           </Accordion>
-        </>
+          <ActionIcon
+            icon={Plus}
+            size="small"
+            title={t('taskDetail.addSubtask')}
+            onClick={toggleCreating}
+          />
+        </Flexbox>
       ) : (
         <>
           <Flexbox horizontal align="flex-start">

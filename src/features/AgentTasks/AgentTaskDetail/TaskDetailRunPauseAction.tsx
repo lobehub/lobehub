@@ -1,6 +1,6 @@
 import { Button } from '@lobehub/ui';
 import { PlayIcon, RotateCcwIcon } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import StopLoadingIcon from '@/components/StopLoading';
@@ -22,6 +22,8 @@ const TaskDetailRunPauseAction = memo(() => {
   const updateTask = useTaskStore((s) => s.updateTask);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
+  const [isStarting, setIsStarting] = useState(false);
+
   const handleRunOrPause = useCallback(async () => {
     if (!taskId) return;
     if (canPause) {
@@ -29,10 +31,15 @@ const TaskDetailRunPauseAction = memo(() => {
       return;
     }
     if (!canRun) return;
-    if (!assigneeAgentId && inboxAgentId) {
-      await updateTask(taskId, { assigneeAgentId: inboxAgentId });
+    setIsStarting(true);
+    try {
+      if (!assigneeAgentId && inboxAgentId) {
+        await updateTask(taskId, { assigneeAgentId: inboxAgentId });
+      }
+      await runTask(taskId);
+    } finally {
+      setIsStarting(false);
     }
-    await runTask(taskId);
   }, [
     taskId,
     canRun,
@@ -44,7 +51,16 @@ const TaskDetailRunPauseAction = memo(() => {
     updateTaskStatus,
   ]);
 
-  if (!canRun && !canPause) return null;
+  if (!canRun && !canPause && !isStarting) return null;
+
+  if (isStarting) {
+    const pendingLabel = isRerun ? t('taskDetail.rerunTask') : t('taskDetail.runTask');
+    return (
+      <Button disabled loading type={'primary'}>
+        {pendingLabel}
+      </Button>
+    );
+  }
 
   if (canPause) {
     return (
