@@ -6,7 +6,7 @@ import { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
-import DeepseekV4ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/DeepseekV4ReasoningEffortSlider';
+import DeepSeekReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/DeepSeekReasoningEffortSlider';
 import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
@@ -65,6 +65,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.effort.hint',
     key: 'effort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.deepseekReasoningEffort.hint',
+    key: 'deepseekReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.opus47Effort.hint',
@@ -164,7 +168,7 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
 // This allows reusing existing i18n translations instead of adding new ones
 const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   codexMaxReasoningEffort: 'reasoningEffort',
-  deepseekV4ReasoningEffort: 'reasoningEffort',
+  deepseekReasoningEffort: 'reasoningEffort',
   gpt5ReasoningEffort: 'reasoningEffort',
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
@@ -192,6 +196,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   codexMaxReasoningEffort: {
     labelSuffix: ' (Codex)',
     previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
+  deepseekReasoningEffort: {
+    labelSuffix: ' (DeepSeek)',
+    previewWidth: 240,
     tag: 'reasoning_effort',
   },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
@@ -345,6 +354,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
       codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
+      deepseekReasoningEffort: <DeepSeekReasoningEffortSlider value="high" />,
       disableContextCaching: <Switch checked disabled />,
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,

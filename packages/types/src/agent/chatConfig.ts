@@ -111,7 +111,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig {
    * Reasoning budget token for models with 80k max (Qwen3 series)
    */
   reasoningBudgetToken80k?: number;
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
   /**
    * Runtime environment configuration (desktop only)
    */
@@ -211,7 +211,7 @@ export const AgentChatConfigSchema = z
     reasoningBudgetToken: z.number().optional(),
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),
-    reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    reasoningEffort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     searchFCModel: z
       .object({
         model: z.string(),

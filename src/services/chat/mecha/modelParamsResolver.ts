@@ -176,6 +176,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
   }
 
   // Reasoning effort variants
+  if (modelExtendParams.includes('deepseekReasoningEffort') && chatConfig.reasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.reasoningEffort;
+  }
+
   if (modelExtendParams.includes('reasoningEffort') && chatConfig.reasoningEffort) {
     extendParams.reasoning_effort = chatConfig.reasoningEffort;
   }

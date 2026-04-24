@@ -546,6 +546,80 @@ describe('LobeDeepSeekAI - custom features', () => {
         });
       });
     });
+
+    it('should add empty reasoning_content for assistant messages in deepseek-v4-pro thinking mode', () => {
+      const payload = {
+        messages: [
+          { role: 'user', content: 'Call a tool' },
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function',
+                function: {
+                  name: 'lookup',
+                  arguments: '{"q":"docs"}',
+                },
+              },
+            ],
+          },
+        ],
+        model: 'deepseek-v4-pro',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { role: 'user', content: 'Call a tool' },
+        {
+          role: 'assistant',
+          content: '',
+          reasoning_content: '',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'lookup',
+                arguments: '{"q":"docs"}',
+              },
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('should preserve only supported DeepSeek thinking config fields', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-flash',
+        reasoning_effort: 'high' as const,
+        thinking: {
+          budget_tokens: 4096,
+          type: 'enabled' as const,
+        },
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.reasoning_effort).toBe('high');
+      expect(result.thinking).toEqual({ type: 'enabled' });
+      expect(result.thinking?.budget_tokens).toBeUndefined();
+    });
+
+    it('should forward disabled thinking mode for deepseek-v4-pro', () => {
+      const payload = {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'deepseek-v4-pro',
+        thinking: { type: 'disabled' as const },
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.thinking).toEqual({ type: 'disabled' });
+    });
   });
 
   describe('Debug Configuration', () => {

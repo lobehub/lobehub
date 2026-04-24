@@ -249,6 +249,8 @@ export default {
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
   'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint':
     'For Codex models; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.deepseekReasoningEffort.hint':
+    'For DeepSeek V4 models; controls reasoning intensity (high/max).',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
   'providerModels.item.modelConfig.extendParams.options.effort.hint':
