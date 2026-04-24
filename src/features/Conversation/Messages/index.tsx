@@ -16,6 +16,7 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../s
 import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
+import type { WorkflowExpandLevel } from './AssistantGroup/components/WorkflowCollapse';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
 import SupervisorMessage from './Supervisor';
@@ -41,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface MessageItemProps {
   className?: string;
-  defaultWorkflowExpanded?: boolean;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
   disableEditing?: boolean;
   enableHistoryDivider?: boolean;
   endRender?: ReactNode;
@@ -54,7 +55,7 @@ export interface MessageItemProps {
 const MessageItem = memo<MessageItemProps>(
   ({
     className,
-    defaultWorkflowExpanded,
+    defaultWorkflowExpandLevel,
     enableHistoryDivider,
     id,
     endRender,
@@ -131,7 +132,7 @@ const MessageItem = memo<MessageItemProps>(
         case 'assistantGroup': {
           return (
             <AssistantGroupMessage
-              defaultWorkflowExpanded={defaultWorkflowExpanded}
+              defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
               disableEditing={disableEditing}
               id={id}
               index={index}
@@ -183,7 +184,7 @@ const MessageItem = memo<MessageItemProps>(
       }
 
       return null;
-    }, [role, defaultWorkflowExpanded, disableEditing, id, index, isLatestItem]);
+    }, [role, defaultWorkflowExpandLevel, disableEditing, id, index, isLatestItem]);
 
     if (!role) return;
 

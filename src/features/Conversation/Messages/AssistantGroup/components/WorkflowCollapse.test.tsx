@@ -154,16 +154,54 @@ describe('WorkflowCollapse', () => {
     expect(getExpandedKeys()).toBe('["workflow"]');
   });
 
-  it('respects defaultStreamingExpanded={false} while streaming', () => {
+  it("respects defaultWorkflowExpandLevel='collapsed' while streaming", () => {
     render(
       <WorkflowCollapse
         assistantMessageId="msg-1"
         blocks={makeBlocks()}
-        defaultStreamingExpanded={false}
+        defaultWorkflowExpandLevel="collapsed"
       />,
     );
 
     expect(getExpandedKeys()).toBe('[]');
+  });
+
+  it("respects defaultWorkflowExpandLevel='full' after completion", () => {
+    mockIsGenerating = false;
+    render(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+        defaultWorkflowExpandLevel="full"
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
+  });
+
+  it("keeps defaultWorkflowExpandLevel='full' across streaming→complete transition", () => {
+    const { rerender } = render(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks()}
+        defaultWorkflowExpandLevel="full"
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+
+    mockIsGenerating = false;
+    rerender(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+        defaultWorkflowExpandLevel="full"
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
   it('auto expands and switches the header when confirmation is pending', async () => {
@@ -245,7 +283,7 @@ describe('WorkflowCollapse', () => {
       <WorkflowCollapse
         assistantMessageId="msg-1"
         blocks={makeBlocks()}
-        defaultStreamingExpanded={false}
+        defaultWorkflowExpandLevel="collapsed"
       />,
     );
 

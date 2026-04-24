@@ -17,7 +17,7 @@ import {
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import type { RenderableAssistantContentBlock } from './types';
-import WorkflowCollapse from './WorkflowCollapse';
+import WorkflowCollapse, { type WorkflowExpandLevel } from './WorkflowCollapse';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -33,7 +33,7 @@ interface GroupChildrenProps {
   blocks: AssistantContentBlock[];
   content?: string;
   contentId?: string;
-  defaultWorkflowExpanded?: boolean;
+  defaultWorkflowExpandLevel?: WorkflowExpandLevel;
   disableEditing?: boolean;
   id: string;
   messageIndex: number;
@@ -274,7 +274,15 @@ const partitionBlocks = (
 };
 
 const Group = memo<GroupChildrenProps>(
-  ({ blocks, contentId, defaultWorkflowExpanded, disableEditing, messageIndex, id, content }) => {
+  ({
+    blocks,
+    contentId,
+    defaultWorkflowExpandLevel,
+    disableEditing,
+    messageIndex,
+    id,
+    content,
+  }) => {
     const [isCollapsed, isGenerating] = useConversationStore((s) => [
       messageStateSelectors.isMessageCollapsed(id)(s),
       messageStateSelectors.isMessageGenerating(id)(s),
@@ -309,7 +317,7 @@ const Group = memo<GroupChildrenProps>(
                 <WorkflowCollapse
                   assistantMessageId={id}
                   blocks={segment.blocks}
-                  defaultStreamingExpanded={defaultWorkflowExpanded}
+                  defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
                   disableEditing={disableEditing}
                   key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
                   workflowChromeComplete={workflowChromeComplete}
