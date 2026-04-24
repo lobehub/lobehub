@@ -6,6 +6,71 @@ interface HTMLRendererProps {
   width?: string;
 }
 
+const SANDBOX_STORAGE_SHIM = `<script data-lobe-artifact-storage-shim>
+(() => {
+  if (window.__lobeArtifactStorageShim) return;
+  Object.defineProperty(window, '__lobeArtifactStorageShim', { value: true });
+
+  const createStorage = () => {
+    const data = Object.create(null);
+
+    return {
+      clear() {
+        for (const key of Object.keys(data)) delete data[key];
+      },
+      getItem(key) {
+        const normalizedKey = String(key);
+        return Object.prototype.hasOwnProperty.call(data, normalizedKey) ? data[normalizedKey] : null;
+      },
+      key(index) {
+        return Object.keys(data)[index] ?? null;
+      },
+      get length() {
+        return Object.keys(data).length;
+      },
+      removeItem(key) {
+        delete data[String(key)];
+      },
+      setItem(key, value) {
+        data[String(key)] = String(value);
+      },
+    };
+  };
+
+  const defineStorage = (name) => {
+    try {
+      void window[name];
+      return;
+    } catch {
+      Object.defineProperty(window, name, {
+        configurable: true,
+        value: createStorage(),
+      });
+    }
+  };
+
+  defineStorage('localStorage');
+  defineStorage('sessionStorage');
+})();
+</script>`;
+
+export const injectSandboxStorageShim = (htmlContent: string) => {
+  if (htmlContent.includes('data-lobe-artifact-storage-shim')) return htmlContent;
+
+  if (/<head(?:\s[^>]*)?>/i.test(htmlContent)) {
+    return htmlContent.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}\n${SANDBOX_STORAGE_SHIM}`);
+  }
+
+  if (/<html(?:\s[^>]*)?>/i.test(htmlContent)) {
+    return htmlContent.replace(
+      /<html(?:\s[^>]*)?>/i,
+      (html) => `${html}\n<head>${SANDBOX_STORAGE_SHIM}</head>`,
+    );
+  }
+
+  return `${SANDBOX_STORAGE_SHIM}\n${htmlContent}`;
+};
+
 // Security boundary: the iframe runs in a unique opaque origin because the
 // sandbox attribute does NOT include `allow-same-origin`. This blocks
 // `window.parent.*` access (the GHSA-xq4x-622m-q8fq XSS-to-RCE path on
@@ -27,7 +92,7 @@ const HTMLRenderer = memo<HTMLRendererProps>(({ htmlContent, width = '100%', hei
   return (
     <iframe
       sandbox="allow-scripts allow-forms allow-modals"
-      srcDoc={htmlContent}
+      srcDoc={injectSandboxStorageShim(htmlContent)}
       style={{ border: 'none', height, width }}
       title="html-renderer"
     />

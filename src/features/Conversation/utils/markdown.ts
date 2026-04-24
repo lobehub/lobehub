@@ -1,5 +1,26 @@
 import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
+const ARTIFACT_TAG_REGEX_GLOBAL =
+  /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
+const HTML_SCRIPT_TAG_REGEX = /<script\b[^>]*>[\S\s]*?<\/script>/gi;
+const REACT_ARTIFACT_TYPE_REGEX = /type="application\/lobe\.artifacts\.react"/;
+const JS_LINE_COMMENT_REGEX = /(^|[^\S\r\n])\/\/([^\r\n]*)/gm;
+
+const normalizeJsLineComments = (code: string) =>
+  code.replaceAll(JS_LINE_COMMENT_REGEX, (_, prefix: string, comment: string) => {
+    return `${prefix}/*${comment.replaceAll('*/', '* /').trimEnd()} */`;
+  });
+
+const removeArtifactLineBreaks = (content: string) => {
+  // Artifact cards still rely on flattened tags for Markdown parsing, but flattening JS after
+  // `//` comments comments out the following statement. Convert those comments first.
+  const safeContent = REACT_ARTIFACT_TYPE_REGEX.test(content)
+    ? normalizeJsLineComments(content)
+    : content.replaceAll(HTML_SCRIPT_TAG_REGEX, normalizeJsLineComments);
+
+  return safeContent.replaceAll(/\r?\n|\r/g, '');
+};
+
 /**
  * Replace all line breaks in the matched `lobeArtifact` tag with an empty string
  */
@@ -48,11 +69,7 @@ export const processWithArtifact = (input: string = '') => {
 
   // If the input contains `lobeArtifact` tags, replace all line breaks with an empty string
   // Use global regex to handle multiple artifacts in the same message
-  const ARTIFACT_TAG_REGEX_GLOBAL =
-    /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
-  output = output.replaceAll(ARTIFACT_TAG_REGEX_GLOBAL, (match) =>
-    match.replaceAll(/\r?\n|\r/g, ''),
-  );
+  output = output.replaceAll(ARTIFACT_TAG_REGEX_GLOBAL, removeArtifactLineBreaks);
 
   // if not match, check if it's start with <lobeArtifact but not closed
   const regex = /<lobeArtifact\b(?:(?!\/?>)[\s\S])*$/;
