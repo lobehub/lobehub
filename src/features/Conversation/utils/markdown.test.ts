@@ -332,7 +332,8 @@ Content 2 still going`;
 // Move the snake every frame
 const url = " // keep string content untouched";
 window.snakeStarted = true;
-</script >
+</script	
+ bar>
 </body>
 </html>
 </lobeArtifact>`;
@@ -343,7 +344,8 @@ window.snakeStarted = true;
 // Move the snake every frame
 const url = " // keep string content untouched";
 window.snakeStarted = true;
-</script >`);
+</script	
+ bar>`);
     expect(output).not.toContain('// Move the snake every framewindow.snakeStarted = true;');
     expect(output).toContain(
       '<lobeArtifact identifier="snake-game" type="text/html" title="Snake Game"><!DOCTYPE html><html><body><script>',

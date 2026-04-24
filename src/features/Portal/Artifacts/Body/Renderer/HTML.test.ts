@@ -26,4 +26,22 @@ describe('injectSandboxStorageShim', () => {
 
     expect(result.match(/data-lobe-artifact-storage-shim/g)).toHaveLength(1);
   });
+
+  it('should not inject into head-like strings inside scripts', () => {
+    const html = `<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    const template = "<head><title>Preview</title></head>";
+  </script>
+</body>
+</html>`;
+
+    const result = injectSandboxStorageShim(html);
+
+    expect(result).toContain('const template = "<head><title>Preview</title></head>";');
+    expect(result.indexOf('data-lobe-artifact-storage-shim')).toBeLessThan(
+      result.indexOf('const template'),
+    );
+  });
 });

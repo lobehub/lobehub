@@ -2,7 +2,7 @@ import { ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const';
 
 const ARTIFACT_TAG_REGEX_GLOBAL =
   /<lobeArtifact\b[^>]*>(?<content>[\S\s]*?)(?:<\/lobeArtifact>|$)/g;
-const HTML_SCRIPT_TAG_REGEX = /<script\b[^>]*>[\S\s]*?<\/script\s*>/gi;
+const HTML_SCRIPT_TAG_REGEX = /<script\b[^>]*>[\S\s]*?<\/script(?:\s[^>]*)?>/gi;
 const SCRIPT_PLACEHOLDER_PREFIX = '____LOBE_ARTIFACT_SCRIPT_BLOCK_';
 
 const removeArtifactLineBreaks = (content: string) => {

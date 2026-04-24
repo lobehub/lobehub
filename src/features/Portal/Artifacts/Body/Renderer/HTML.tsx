@@ -54,18 +54,43 @@ const SANDBOX_STORAGE_SHIM = `<script data-lobe-artifact-storage-shim>
 })();
 </script>`;
 
+const SCRIPT_TAG_REGEX = /<script\b/i;
+const HEAD_TAG_REGEX = /<head(?:\s[^>]*)?>/i;
+const HTML_TAG_REGEX = /<html(?:\s[^>]*)?>/i;
+
+const findTagBeforeFirstScript = (htmlContent: string, tagRegex: RegExp) => {
+  const firstScriptIndex = htmlContent.search(SCRIPT_TAG_REGEX);
+  const searchableContent =
+    firstScriptIndex === -1 ? htmlContent : htmlContent.slice(0, firstScriptIndex);
+  const match = searchableContent.match(tagRegex);
+
+  if (!match?.[0] || match.index === undefined) return;
+
+  return {
+    index: match.index,
+    value: match[0],
+  };
+};
+
+const insertAfterTag = (htmlContent: string, tag: { index: number; value: string }) => {
+  const insertIndex = tag.index + tag.value.length;
+  return `${htmlContent.slice(0, insertIndex)}\n${SANDBOX_STORAGE_SHIM}${htmlContent.slice(
+    insertIndex,
+  )}`;
+};
+
 export const injectSandboxStorageShim = (htmlContent: string) => {
   if (htmlContent.includes('data-lobe-artifact-storage-shim')) return htmlContent;
 
-  if (/<head(?:\s[^>]*)?>/i.test(htmlContent)) {
-    return htmlContent.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}\n${SANDBOX_STORAGE_SHIM}`);
-  }
+  const headTag = findTagBeforeFirstScript(htmlContent, HEAD_TAG_REGEX);
+  if (headTag) return insertAfterTag(htmlContent, headTag);
 
-  if (/<html(?:\s[^>]*)?>/i.test(htmlContent)) {
-    return htmlContent.replace(
-      /<html(?:\s[^>]*)?>/i,
-      (html) => `${html}\n<head>${SANDBOX_STORAGE_SHIM}</head>`,
-    );
+  const htmlTag = findTagBeforeFirstScript(htmlContent, HTML_TAG_REGEX);
+  if (htmlTag) {
+    const insertIndex = htmlTag.index + htmlTag.value.length;
+    return `${htmlContent.slice(0, insertIndex)}\n<head>${SANDBOX_STORAGE_SHIM}</head>${htmlContent.slice(
+      insertIndex,
+    )}`;
   }
 
   return `${SANDBOX_STORAGE_SHIM}\n${htmlContent}`;
