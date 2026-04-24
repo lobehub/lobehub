@@ -70,6 +70,12 @@ export class ChatTopicActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
 
+  // Monotonic token for switchTopic. Each call increments it and captures a
+  // local copy; after awaited work, a mismatch means a newer switch has
+  // started and our continuation is stale — drop it rather than let it
+  // clobber the newer topic (see LOBE-7785).
+  #switchTopicEpoch = 0;
+
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
@@ -521,6 +527,7 @@ export class ChatTopicActionImpl {
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
+    const epoch = ++this.#switchTopicEpoch;
 
     const { activeAgentId, activeGroupId } = this.#get();
 
@@ -562,6 +569,12 @@ export class ChatTopicActionImpl {
 
     if (opts.skipRefreshMessage) return;
     await this.#get().refreshMessages();
+
+    // If a newer switchTopic started while refreshMessages was in flight,
+    // our continuation is stale — bail before it can affect state. Today
+    // nothing follows the await; the guard is kept as an explicit invariant
+    // so later edits don't reintroduce a stale-resolve race.
+    if (epoch !== this.#switchTopicEpoch) return;
   };
 
   removeSessionTopics = async (): Promise<void> => {
