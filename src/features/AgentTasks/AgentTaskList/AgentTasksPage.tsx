@@ -21,19 +21,12 @@ import { normalizeTaskListViewOptions } from './listViewOptions';
 import TaskList from './TaskList';
 import TasksGroupConfig from './TasksGroupConfig';
 
-interface AgentTasksPageProps {
-  /**
-   * When omitted, the page shows tasks across all agents (used by the `/tasks` route).
-   */
-  agentId?: string;
-}
-
-const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
+const AgentTasksPage = memo(() => {
   const navigate = useNavigate();
   const viewMode = useTaskStore(taskListSelectors.viewMode);
   const saveStatus = useTaskStore(taskDetailSelectors.taskSaveStatus);
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
-  useFetchTaskList({ agentId, allAgents: !agentId });
+  useFetchTaskList({ allAgents: true });
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const inlineCollapsed = useGlobalStore(systemStatusSelectors.taskCreateInlineCollapsed);
@@ -48,22 +41,18 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
 
   const handleCreateTask = useCallback(() => {
     createTaskModal({
-      agentId,
       onCreated: (task) => {
-        const targetAgentId = task.agentId || agentId;
-        if (targetAgentId) {
-          navigate(`/agent/${targetAgentId}/tasks/${task.identifier}`);
-        }
+        navigate(`/task/${task.identifier}`);
       },
     });
-  }, [agentId, navigate]);
+  }, [navigate]);
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         left={
           <>
-            <Breadcrumb agentId={agentId} />
+            <Breadcrumb />
             {saveStatus !== 'idle' && <AutoSaveHint saveStatus={saveStatus} />}
           </>
         }
@@ -84,11 +73,15 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId }) => {
       />
       {viewMode === 'kanban' ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard agentId={agentId} />
+          <KanbanBoard />
         </Flexbox>
       ) : (
-        <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
-          {!inlineCollapsed && <CreateTaskInlineEntry agentId={agentId} />}
+        <WideScreenContainer
+          gap={16}
+          paddingBlock={16}
+          wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+        >
+          {!inlineCollapsed && <CreateTaskInlineEntry />}
           <TaskList options={viewOptions} />
         </WideScreenContainer>
       )}

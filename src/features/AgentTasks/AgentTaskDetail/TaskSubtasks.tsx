@@ -1,5 +1,14 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { Accordion, AccordionItem, ActionIcon, Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  Accordion,
+  AccordionItem,
+  ActionIcon,
+  Avatar,
+  ContextMenuTrigger,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { Button, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
@@ -15,6 +24,7 @@ import CreateTaskInlineEntry from '../AgentTaskList/CreateTaskInlineEntry';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskSubtaskProgressTag from '../features/TaskSubtaskProgressTag';
+import { useTaskItemContextMenu } from '../features/useTaskItemContextMenu';
 import { styles } from '../shared/style';
 
 type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
@@ -69,58 +79,63 @@ const buildTree = (subtasks: TaskDetailSubtask[]): TaskTreeNode[] => {
   return roots;
 };
 
-const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
-  return tree.map((node) => {
-    const status = toTaskStatus(node.task.status);
+const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
+  const status = toTaskStatus(task.status);
+  const { items, onContextMenu } = useTaskItemContextMenu({
+    identifier: task.identifier,
+    priority: task.priority,
+    status: task.status,
+  });
 
-    return {
-      children: toTreeData(node.children),
-      key: node.task.identifier,
-      title: (
-        <Flexbox
-          horizontal
-          align="center"
-          gap={8}
-          style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+  return (
+    <ContextMenuTrigger items={items} onContextMenu={onContextMenu}>
+      <Flexbox
+        horizontal
+        align="center"
+        gap={8}
+        style={{ lineHeight: 1, minWidth: 0, overflow: 'hidden' }}
+      >
+        <span
+          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+          onClick={(e) => e.stopPropagation()}
         >
+          <TaskPriorityTag priority={task.priority} size={14} taskIdentifier={task.identifier} />
+        </span>
+        <span
+          style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <TaskStatusTag size={14} status={status} taskIdentifier={task.identifier} />
+        </span>
+        <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+          {task.name || task.identifier}
+        </Text>
+        {task.assignee && (
           <span
             style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <TaskPriorityTag
-              priority={node.task.priority}
-              size={14}
-              taskIdentifier={node.task.identifier}
+            <Avatar
+              avatar={task.assignee.avatar ?? ''}
+              background={task.assignee.backgroundColor || cssVar.colorBgContainer}
+              shape="circle"
+              size={18}
+              title={task.assignee.title ?? ''}
+              variant="outlined"
             />
           </span>
-          <span
-            style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <TaskStatusTag size={14} status={status} taskIdentifier={node.task.identifier} />
-          </span>
-          <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
-            {node.task.name || node.task.identifier}
-          </Text>
-          {node.task.assignee && (
-            <span
-              style={{ alignItems: 'center', display: 'inline-flex', flex: 'none' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Avatar
-                avatar={node.task.assignee.avatar ?? ''}
-                background={node.task.assignee.backgroundColor || cssVar.colorBgContainer}
-                shape="circle"
-                size={18}
-                title={node.task.assignee.title ?? ''}
-                variant="outlined"
-              />
-            </span>
-          )}
-        </Flexbox>
-      ),
-    };
-  });
+        )}
+      </Flexbox>
+    </ContextMenuTrigger>
+  );
+});
+
+const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
+  return tree.map((node) => ({
+    children: toTreeData(node.children),
+    key: node.task.identifier,
+    title: <SubtaskTitle task={node.task} />,
+  }));
 };
 
 const TaskSubtasks = memo(() => {
@@ -134,9 +149,9 @@ const TaskSubtasks = memo(() => {
 
   const handleNavigate = useCallback(
     (identifier: string) => {
-      if (agentId) navigate(`/agent/${agentId}/tasks/${identifier}`);
+      navigate(`/task/${identifier}`);
     },
-    [agentId, navigate],
+    [navigate],
   );
 
   const treeData = useMemo(() => {

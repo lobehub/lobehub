@@ -21,8 +21,8 @@ const AgentTaskCardList = memo(() => {
   const isInit = useTaskStore(taskListSelectors.isTaskListInit);
 
   const handleViewAll = useCallback(() => {
-    if (agentId) navigate(`/agent/${agentId}/tasks`);
-  }, [agentId, navigate]);
+    navigate('/tasks');
+  }, [navigate]);
 
   const visibleTasks = useMemo(() => getVisibleTaskCardTasks(tasks), [tasks]);
   const displayTasks = useMemo(() => getDisplayTaskCardTasks(tasks), [tasks]);

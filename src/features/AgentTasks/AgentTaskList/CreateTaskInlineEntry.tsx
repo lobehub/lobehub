@@ -67,9 +67,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     const trimmed = instruction.trim();
     if (!trimmed) return;
 
+    const firstLine =
+      trimmed
+        .split('\n')
+        .find((line) => line.trim())
+        ?.trim() ?? trimmed;
+    const name = firstLine.length > 30 ? `${firstLine.slice(0, 30)}…` : firstLine;
+
     const result = await createTask({
       assigneeAgentId,
       instruction: trimmed,
+      name,
       parentTaskId,
       priority: priority || undefined,
     });

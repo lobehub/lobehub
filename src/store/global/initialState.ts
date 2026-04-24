@@ -200,6 +200,15 @@ export interface SystemStatus {
    * When true, the tasks page shows a "+" button in the header that opens the create modal.
    */
   taskCreateInlineCollapsed?: boolean;
+  /**
+   * Kanban columns hidden from the main board. Each column renders as a collapsible
+   * entry in the right-side "Hidden columns" panel until restored.
+   */
+  taskKanbanHiddenColumns?: string[];
+  /**
+   * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
+   */
+  taskKanbanHiddenPanelCollapsed?: boolean;
   taskListViewOptions?: {
     groupBy: 'assignee' | 'none' | 'priority' | 'status';
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
@@ -273,6 +282,8 @@ export const INITIAL_STATUS = {
     orderDirection: 'asc',
     subGroupBy: 'none',
   },
+  taskKanbanHiddenColumns: ['done'],
+  taskKanbanHiddenPanelCollapsed: false,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
   dismissedBannerIds: [],

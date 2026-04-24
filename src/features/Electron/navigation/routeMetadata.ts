@@ -114,10 +114,10 @@ const routePatterns: RoutePattern[] = [
     titleKey: 'navigation.resources',
   },
 
-  // Tasks routes (cross-agent global view)
+  // Tasks routes (cross-agent global view + singular task detail)
   {
     icon: tasksIcon,
-    test: (p) => p.startsWith('/tasks'),
+    test: (p) => p.startsWith('/tasks') || p.startsWith('/task/'),
     titleKey: 'navigation.tasks',
   },
 

@@ -13,7 +13,6 @@ const TaskDetailHeaderActions = memo(() => {
   const { modal } = App.useApp();
   const navigate = useNavigate();
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const deleteTask = useTaskStore((s) => s.deleteTask);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
@@ -33,7 +32,7 @@ const TaskDetailHeaderActions = memo(() => {
             okText: t('taskDetail.deleteConfirm.ok'),
             onOk: async () => {
               await deleteTask(taskId);
-              if (agentId) navigate(`/agent/${agentId}/tasks`);
+              navigate('/tasks');
             },
             title: t('taskDetail.deleteConfirm.title'),
             type: 'error',
@@ -41,7 +40,7 @@ const TaskDetailHeaderActions = memo(() => {
         },
       },
     ];
-  }, [taskId, agentId, deleteTask, modal, navigate, t]);
+  }, [taskId, deleteTask, modal, navigate, t]);
 
   if (!taskId) return null;
 

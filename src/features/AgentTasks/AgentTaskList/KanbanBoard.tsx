@@ -12,15 +12,20 @@ import {
 import { Center, Empty, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ClipboardCheckIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { createTaskModal } from '../CreateTaskModal';
 import AgentTaskItem from '../features/AgentTaskItem';
-import KanbanColumn, { COLUMN_WIDTH } from './KanbanColumn';
+import HiddenColumnsPanel from './HiddenColumnsPanel';
+import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -66,19 +71,20 @@ const optimisticMoveTask = (
   });
 };
 
-interface KanbanBoardProps {
-  agentId?: string;
-}
-
-const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
+const KanbanBoard = memo(() => {
   const { t } = useTranslation('chat');
+  const navigate = useNavigate();
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList(agentId);
+  useFetchTaskGroupList({ allAgents: true });
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
   const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+
+  const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
+  const hiddenPanelCollapsed = useGlobalStore(systemStatusSelectors.taskKanbanHiddenPanelCollapsed);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const [activeTask, setActiveTask] = useState<TaskListItem | null>(null);
 
@@ -125,6 +131,56 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
     setActiveTask(null);
   }, []);
 
+  const handleCreateTask = useCallback(() => {
+    createTaskModal({
+      onCreated: (task) => {
+        navigate(`/task/${task.identifier}`);
+      },
+      showInlineToggle: false,
+    });
+  }, [navigate]);
+
+  const handleHideColumn = useCallback(
+    (columnKey: string) => {
+      const next = Array.from(new Set([...hiddenColumns, columnKey]));
+      updateSystemStatus({ taskKanbanHiddenColumns: next }, 'hideKanbanColumn');
+    },
+    [hiddenColumns, updateSystemStatus],
+  );
+
+  const handleRestoreColumn = useCallback(
+    (columnKey: string) => {
+      const next = hiddenColumns.filter((key) => key !== columnKey);
+      updateSystemStatus({ taskKanbanHiddenColumns: next }, 'restoreKanbanColumn');
+    },
+    [hiddenColumns, updateSystemStatus],
+  );
+
+  const handleToggleHiddenPanel = useCallback(
+    (collapsed: boolean) => {
+      updateSystemStatus({ taskKanbanHiddenPanelCollapsed: collapsed }, 'toggleKanbanHiddenPanel');
+    },
+    [updateSystemStatus],
+  );
+
+  const hiddenColumnSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns]);
+
+  const visibleColumns = useMemo(
+    () => COLUMNS.filter((col) => !hiddenColumnSet.has(col.key)),
+    [hiddenColumnSet],
+  );
+
+  const hiddenColumnEntries = useMemo(
+    () =>
+      COLUMNS.filter((col) => hiddenColumnSet.has(col.key)).map((col) => ({
+        columnKey: col.key,
+        label: t(COLUMN_I18N_KEYS[col.key] as any),
+        statusIcon: COLUMN_STATUS_ICON[col.key],
+        total: taskGroups.find((group) => group.key === col.key)?.total ?? 0,
+      })),
+    [hiddenColumnSet, t, taskGroups],
+  );
+
   if (!isInit) return null;
 
   const totalTasks = taskGroups.reduce((sum, g) => sum + g.total, 0);
@@ -146,7 +202,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
       onDragStart={handleDragStart}
     >
       <Flexbox horizontal className={styles.board}>
-        {COLUMNS.map((col) => {
+        {visibleColumns.map((col) => {
           const group = taskGroups.find((g) => g.key === col.key);
           return (
             <KanbanColumn
@@ -155,9 +211,17 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
               key={col.key}
               tasks={(group?.tasks ?? []) as TaskListItem[]}
               total={group?.total ?? 0}
+              onCreate={col.key === 'backlog' ? handleCreateTask : undefined}
+              onHide={() => handleHideColumn(col.key)}
             />
           );
         })}
+        <HiddenColumnsPanel
+          collapsed={hiddenPanelCollapsed}
+          columns={hiddenColumnEntries}
+          onRestore={handleRestoreColumn}
+          onToggleCollapsed={handleToggleHiddenPanel}
+        />
       </Flexbox>
       <DragOverlay dropAnimation={null}>
         {activeTask ? (

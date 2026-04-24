@@ -39,20 +39,19 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       overflow: visible;
       flex-shrink: 0;
       min-width: auto;
+      margin-inline: 2px;
     }
 
-    .ant-breadcrumb-link {
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      min-width: 0;
-    }
-
+    .ant-breadcrumb-link,
     .ant-breadcrumb-link > a {
       overflow: hidden;
       display: flex;
       align-items: center;
+
       min-width: 0;
+      padding-block: 2px;
+      padding-inline: 6px;
+      border-radius: ${cssVar.borderRadius};
     }
   `,
 

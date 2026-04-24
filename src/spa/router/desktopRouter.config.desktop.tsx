@@ -19,9 +19,6 @@ import DesktopChatLayout from '@/routes/(main)/agent/_layout';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
 import AgentCronDetailPage from '@/routes/(main)/agent/cron/[cronId]';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
-import AgentTasksPage from '@/routes/(main)/agent/tasks';
-import AgentTasksLayout from '@/routes/(main)/agent/tasks/_layout';
-import AgentTaskDetailPage from '@/routes/(main)/agent/tasks/[taskId]';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -73,6 +70,8 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
+import TaskDetailLayout from '@/routes/(main)/task/_layout';
+import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
 import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
@@ -109,20 +108,6 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <AgentChannelPage />,
                 path: 'channel',
-              },
-              {
-                children: [
-                  {
-                    element: <AgentTasksPage />,
-                    index: true,
-                  },
-                  {
-                    element: <AgentTaskDetailPage />,
-                    path: ':taskId',
-                  },
-                ],
-                element: <AgentTasksLayout />,
-                path: 'tasks',
               },
             ],
             element: <DesktopChatLayout />,
@@ -442,6 +427,19 @@ export const desktopRoutes: RouteObject[] = [
         element: <AllTasksLayout />,
         errorElement: <ErrorBoundary resetPath="/" />,
         path: 'tasks',
+      },
+
+      // Task detail route (cross-agent entry — resolves by task identifier)
+      {
+        children: [
+          {
+            element: <TaskDetailRoute />,
+            path: ':taskId',
+          },
+        ],
+        element: <TaskDetailLayout />,
+        errorElement: <ErrorBoundary resetPath="/tasks" />,
+        path: 'task',
       },
 
       // Pages routes

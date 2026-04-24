@@ -8,7 +8,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useScenarioEnabledTools } from '@/hooks/useScenarioEnabledTools';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-const AllTasksLayout = memo(() => {
+const TaskDetailLayout = memo(() => {
   useScenarioEnabledTools(TaskIdentifier);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
@@ -24,6 +24,6 @@ const AllTasksLayout = memo(() => {
   );
 });
 
-AllTasksLayout.displayName = 'AllTasksLayout';
+TaskDetailLayout.displayName = 'TaskDetailLayout';
 
-export default AllTasksLayout;
+export default TaskDetailLayout;

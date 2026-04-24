@@ -50,18 +50,59 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
     }),
   );
 
+  const currentTaskCrumb =
+    taskId &&
+    ({
+      title: (
+        <span
+          style={{
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: 6,
+            lineHeight: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {taskIdentifier && (
+            <Text color={'inherit'} style={{ flexShrink: 0 }} type={'secondary'} weight={500}>
+              {taskIdentifier}
+            </Text>
+          )}
+          <Text ellipsis color={'inherit'} style={{ maxWidth: 240 }} weight={500}>
+            {taskTitle || taskId}
+          </Text>
+        </span>
+      ),
+    } as const);
+
+  const ancestorCrumbs = ancestors.map((identifier) => ({
+    key: identifier,
+    title: (
+      <Link to={`/task/${identifier}`}>
+        <Text color={'inherit'} weight={500}>
+          {identifier}
+        </Text>
+      </Link>
+    ),
+  }));
+
   if (!agentId) {
+    const allTasksLabel = (
+      <Text color={'inherit'} weight={500}>
+        {t('taskList.all')}
+      </Text>
+    );
     return (
       <AntBreadcrumb
+        className={styles.breadcrumb}
         separator={<Icon icon={ChevronRight} />}
         items={[
           {
-            title: (
-              <Text color={'inherit'} weight={500}>
-                {t('taskList.all')}
-              </Text>
-            ),
+            title: taskId ? <Link to={'/tasks'}>{allTasksLabel}</Link> : allTasksLabel,
           },
+          ...ancestorCrumbs,
+          ...(currentTaskCrumb ? [currentTaskCrumb] : []),
         ]}
       />
     );
@@ -101,7 +142,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
           : [
               {
                 title: (
-                  <Link to={`/agent/${agentId}/tasks`}>
+                  <Link to={'/tasks'}>
                     <Text color={'inherit'} weight={500}>
                       {t('taskList.breadcrumb.task')}
                     </Text>
@@ -109,48 +150,8 @@ const Breadcrumb = memo<BreadcrumbProps>(({ agentId, taskId }) => {
                 ),
               },
             ]),
-        ...ancestors.map((identifier) => ({
-          key: identifier,
-          title: (
-            <Link to={`/agent/${agentId}/tasks/${identifier}`}>
-              <Text color={'inherit'} weight={500}>
-                {identifier}
-              </Text>
-            </Link>
-          ),
-        })),
-        ...(taskId
-          ? [
-              {
-                title: (
-                  <span
-                    style={{
-                      alignItems: 'center',
-                      display: 'inline-flex',
-                      gap: 6,
-                      lineHeight: 1,
-                      minWidth: 0,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {taskIdentifier && (
-                      <Text
-                        color={'inherit'}
-                        style={{ flexShrink: 0 }}
-                        type={'secondary'}
-                        weight={500}
-                      >
-                        {taskIdentifier}
-                      </Text>
-                    )}
-                    <Text ellipsis color={'inherit'} style={{ maxWidth: 240 }} weight={500}>
-                      {taskTitle || taskId}
-                    </Text>
-                  </span>
-                ),
-              },
-            ]
-          : []),
+        ...ancestorCrumbs,
+        ...(currentTaskCrumb ? [currentTaskCrumb] : []),
       ]}
     />
   );

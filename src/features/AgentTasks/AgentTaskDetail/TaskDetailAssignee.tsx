@@ -1,7 +1,9 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, Text } from '@lobehub/ui';
-import { useThemeMode } from 'antd-style';
+import { Block, Icon, Text } from '@lobehub/ui';
+import { cssVar, useThemeMode } from 'antd-style';
+import { UserCircle2 } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
@@ -11,13 +13,14 @@ import AssigneeAvatar from '../features/AssigneeAvatar';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 
 const TaskDetailAssignee = memo(() => {
+  const { t } = useTranslation('chat');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   const { isDarkMode } = useThemeMode();
 
-  if (!taskId || !assigneeAgentId) return null;
+  if (!taskId) return null;
 
   return (
     <AssigneeAgentSelector
@@ -35,8 +38,19 @@ const TaskDetailAssignee = memo(() => {
         style={{ minHeight: 32 }}
         variant={isDarkMode ? 'filled' : 'outlined'}
       >
-        <AssigneeAvatar agentId={assigneeAgentId} size={20} />
-        <Text weight={500}>{assigneeMeta?.title}</Text>
+        {assigneeAgentId ? (
+          <>
+            <AssigneeAvatar agentId={assigneeAgentId} size={20} />
+            <Text weight={500}>{assigneeMeta?.title}</Text>
+          </>
+        ) : (
+          <>
+            <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={18} />
+            <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+              {t('taskList.unassigned')}
+            </Text>
+          </>
+        )}
       </Block>
     </AssigneeAgentSelector>
   );
