@@ -1,14 +1,5 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import {
-  Accordion,
-  AccordionItem,
-  ActionIcon,
-  Avatar,
-  ContextMenuTrigger,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
@@ -146,6 +137,7 @@ const TaskSubtasks = memo(() => {
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
 
   const [isCreating, setIsCreating] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const handleNavigate = useCallback(
     (identifier: string) => {
@@ -168,38 +160,58 @@ const TaskSubtasks = memo(() => {
   return (
     <Flexbox gap={8}>
       {hasSubtasks ? (
-        <Flexbox horizontal align="flex-start" justify="space-between">
-          <Accordion defaultExpandedKeys={['subtasks']} gap={0} style={{ flex: 1, minWidth: 0 }}>
-            <AccordionItem
-              itemKey="subtasks"
-              paddingBlock={4}
-              paddingInline={8}
-              styles={{ header: { width: 'fit-content' } }}
-              title={
-                <Flexbox horizontal align="center" gap={8}>
-                  <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
-                  <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-                    {t('taskDetail.subtasks')}
-                  </Text>
-                  <TaskSubtaskProgressTag
-                    currentIdentifier={taskId}
-                    subtasks={subtasks}
-                    onSubtaskClick={handleNavigate}
-                  />
-                </Flexbox>
-              }
-            >
+        <>
+          <Flexbox horizontal align="center" justify="space-between">
+            <Flexbox horizontal align="center" gap={8}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={8}
+                paddingBlock={4}
+                paddingInline={8}
+                style={{ cursor: 'pointer', width: 'fit-content' }}
+                variant="borderless"
+                onClick={() => setIsExpanded((prev) => !prev)}
+              >
+                <Icon color={cssVar.colorTextDescription} icon={ListTodoIcon} size={16} />
+                <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+                  {t('taskDetail.subtasks')}
+                </Text>
+                <Icon
+                  color={cssVar.colorTextDescription}
+                  icon={ChevronDown}
+                  size={14}
+                  style={{
+                    transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 200ms',
+                  }}
+                />
+              </Block>
+              <TaskSubtaskProgressTag
+                currentIdentifier={taskId}
+                subtasks={subtasks}
+                onSubtaskClick={handleNavigate}
+              />
+            </Flexbox>
+            <ActionIcon
+              icon={Plus}
+              size="small"
+              title={t('taskDetail.addSubtask')}
+              onClick={toggleCreating}
+            />
+          </Flexbox>
+          {isExpanded && (
+            <>
               {isCreating && (
-                <Flexbox style={{ marginTop: 8 }}>
-                  <CreateTaskInlineEntry
-                    autoFocus
-                    agentId={agentId ?? undefined}
-                    parentTaskId={taskId}
-                    placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
-                    onCollapse={() => setIsCreating(false)}
-                    onCreated={() => setIsCreating(false)}
-                  />
-                </Flexbox>
+                <CreateTaskInlineEntry
+                  autoFocus
+                  agentId={agentId ?? undefined}
+                  parentTaskId={taskId}
+                  placeholder={t('taskDetail.subtaskInstructionPlaceholder')}
+                  onCollapse={() => setIsCreating(false)}
+                  onCreated={() => setIsCreating(false)}
+                />
               )}
               <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
                 <Tree
@@ -207,7 +219,6 @@ const TaskSubtasks = memo(() => {
                   defaultExpandAll
                   showLine
                   className={styles.subtaskTree}
-                  style={{ marginTop: 8 }}
                   switcherIcon={<Icon icon={ChevronDown} size={14} />}
                   treeData={treeData}
                   onSelect={(keys) => {
@@ -217,15 +228,9 @@ const TaskSubtasks = memo(() => {
                   }}
                 />
               </ConfigProvider>
-            </AccordionItem>
-          </Accordion>
-          <ActionIcon
-            icon={Plus}
-            size="small"
-            title={t('taskDetail.addSubtask')}
-            onClick={toggleCreating}
-          />
-        </Flexbox>
+            </>
+          )}
+        </>
       ) : (
         <>
           <Flexbox horizontal align="flex-start">
