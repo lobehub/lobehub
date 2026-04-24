@@ -9,9 +9,38 @@ export const params = {
     handlePayload: (payload) => {
       const { frequency_penalty, model, presence_penalty, ...rest } = payload;
 
+      // Transform reasoning object to reasoning_content string for multi-turn conversations
+      const messages = payload.messages.map((message: any) => {
+        const { reasoning, ...rest } = message;
+
+        const reasoningContent =
+          typeof rest.reasoning_content === 'string'
+            ? rest.reasoning_content
+            : typeof reasoning?.content === 'string'
+              ? reasoning.content
+              : undefined;
+
+        if (message.role === 'assistant' && model === 'hy3-preview') {
+          return {
+            ...rest,
+            reasoning_content: reasoningContent ?? '',
+          };
+        }
+
+        if (reasoningContent !== undefined) {
+          return {
+            ...rest,
+            reasoning_content: reasoningContent,
+          };
+        }
+
+        return rest;
+      });
+
       return {
         ...rest,
         frequency_penalty: undefined,
+        messages,
         model,
         presence_penalty: undefined,
       } as any;

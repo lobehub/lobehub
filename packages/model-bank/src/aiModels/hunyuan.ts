@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 // https://cloud.tencent.com/document/product/1729/104753
 const hunyuanChatModels: AIChatModelCard[] = [
@@ -60,6 +60,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['gpt5_1ReasoningEffort'],
+    },
     type: 'chat',
   },
   {
@@ -391,15 +394,216 @@ const hunyuanChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-02',
     type: 'chat',
   },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      vision: true,
+      video: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Kimi K2.6, as Kimi’s latest open-source model, delivers industry-leading (state-of-the-art) capabilities in coding, long-horizon task execution, and agent orchestration. K2.6 achieves breakthroughs in long-range coding tasks, demonstrating more reliable generalization across different programming languages (such as Rust, Go, and Python) and diverse task scenarios (including frontend development, DevOps, and performance optimization).',
+    displayName: 'Kimi K2.6',
+    id: 'kimi-k2.6',
+    maxOutput: 256_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-20',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      vision: true,
+      video: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'Kimi K2.5 is Kimi’s most versatile model to date, featuring a natively multimodal architecture. It supports both visual and text inputs, thinking and non-thinking modes, as well as conversational and agent-based tasks.',
+    displayName: 'Kimi K2.5',
+    id: 'kimi-k2.5',
+    maxOutput: 256_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 21, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-01-27',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'A self-evolving large language model developed by MiniMax, featuring strong software engineering capabilities and professional office productivity skills. It supports complex agent interactions and end-to-end project delivery.',
+    displayName: 'MiniMax-M2.7',
+    id: 'minimax-m2.7',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.42, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-01-27',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'MiniMax-M2.5 achieves or sets new state-of-the-art performance across productivity scenarios such as programming, tool use and search, and office-related tasks.',
+    displayName: 'MiniMax-M2.5',
+    id: 'minimax-m2.5',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.21, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-01-27',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'DeepSeek-V3.2 is a 685B-parameter MoE (Mixture-of-Experts) model. It introduces a sparse attention architecture that improves efficiency in long-context processing and achieves GPT-5-level performance on reasoning benchmarks.',
+    displayName: 'Deepseek-v3.2',
+    id: 'deepseek-v3.2',
+    maxOutput: 32_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'DeepSeek-V3.1-Terminus is a 685B-parameter MoE (Mixture-of-Experts) model. While retaining the core capabilities of its predecessor, it improves language consistency and agent-related performance, delivering more stable outputs compared to the previous version.',
+    displayName: 'Deepseek-v3.1',
+    id: 'deepseek-v3.1',
+    maxOutput: 32_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-09-23',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'DeepSeek-R1-0528 is a 671B-parameter model. With architectural optimizations and upgraded training strategies, it delivers significant improvements over the previous version in code generation, long-context processing, and complex reasoning tasks.',
+    displayName: 'Deepseek-r1-0528',
+    id: 'deepseek-r1-0528',
+    maxOutput: 16_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-05-28',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'DeepSeek-V3-0324 is a 671B-parameter MoE (Mixture-of-Experts) model. It demonstrates strong advantages in programming and technical capabilities, as well as in contextual understanding and long-form text processing.',
+    displayName: 'Deepseek-v3-0324',
+    id: 'deepseek-v3-0324',
+    maxOutput: 16_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-03-25',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      vision: true,
+      video: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'VITA is a multimodal understanding model that supports analysis of video and image content. It can be used for tasks such as video structure parsing and image object detection.',
+    displayName: 'YT-VITA',
+    id: 'youtu-vita',
+    maxOutput: 256_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-01-10',
+    type: 'chat',
+  },
 ];
 
 const hunyuanImageModels: AIImageModelCard[] = [
   {
     description:
-      'Powerful original-image feature extraction and detail preservation capabilities, delivering richer visual texture and producing high-accuracy, well-composed, production-grade visuals.',
+      'Based on the Hunyuan large model, it is capable of reasoning about image layout, composition, and brushwork, using world knowledge to infer commonsense visual scenes. It can also interpret complex semantics at the scale of thousands of characters, generate long-form textual content, complex comics, memes, and produce vivid and engaging educational illustrations.',
     displayName: 'HY-Image-V3.0',
     enabled: true,
-    id: 'HY-Image-V3.0',
+    id: 'hy-image-v3.0',
     parameters: {
       height: { default: 1024, max: 2048, min: 512, step: 1 },
       imageUrls: { default: [], maxCount: 3 },
@@ -415,11 +619,97 @@ const hunyuanImageModels: AIImageModelCard[] = [
       currency: 'CNY',
       units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2026-01-26',
+    releasedAt: '2026-03-10',
+    type: 'image',
+  },
+  {
+    description:
+      'It adopts an ultra-high compression codec to enable fast image generation while maintaining high-quality output. It supports use cases such as e-commerce product image enhancement, design asset generation for creative tools, and iterative game scene development.',
+    displayName: 'HY-Image-Lite',
+    enabled: true,
+    id: 'hy-image-lite',
+    parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.099, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-09-12',
     type: 'image',
   },
 ];
 
-export const allModels = [...hunyuanChatModels, ...hunyuanImageModels];
+const hunyuanVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'It supports multimodal inputs including text and images to generate high-quality videos, enabling scene transitions and multi-character interactions. It streamlines production workflows and reduces costs, making it suitable for enterprise advertising, marketing, and individual creative applications.',
+    displayName: 'HY-Video-1.5',
+    enabled: true,
+    id: 'hy-video-1.5',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080p',
+        enum: ['720p', '1080p'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.5, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-06',
+    type: 'video',
+  },
+  {
+    description:
+      'It generates highly temporally consistent videos from images, suitable for demanding applications such as advertising, film clips, and product showcase videos.',
+    displayName: 'YT-Video-2.0',
+    enabled: true,
+    id: 'yt-video-2.0',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080p',
+        enum: ['480p', '720p', '1080p'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 5, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2025-11-27',
+    type: 'video',
+  },
+];
+
+export const allModels = [...hunyuanChatModels, ...hunyuanImageModels, ...hunyuanVideoModels];
 
 export default allModels;
