@@ -11,7 +11,7 @@ const DeepSeekReasoningEffortSlider = createLevelSliderComponent<DeepSeekReasoni
   configKey: 'deepseekReasoningEffort',
   defaultValue: 'high',
   levels: DEEPSEEK_REASONING_EFFORT_LEVELS,
-  style: { minWidth: 230 },
+  style: { minWidth: 180 },
 });
 
 export default DeepSeekReasoningEffortSlider;
