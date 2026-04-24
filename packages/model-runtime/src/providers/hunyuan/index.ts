@@ -9,7 +9,7 @@ export const params = {
   baseURL: 'https://tokenhub.tencentmaas.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { model, thinking, ...rest } = payload;
+      const { enabledSearch, model, thinking, ...rest } = payload;
 
       // Transform reasoning object to reasoning_content string for multi-turn conversations
       const messages = payload.messages.map((message: any) => {
@@ -47,6 +47,15 @@ export const params = {
         messages,
         model,
         presence_penalty: undefined,
+        ...(enabledSearch && {
+          citation: true,
+          enable_enhancement: true,
+          /*
+          enable_multimedia: true,
+          */
+          enable_speed_search: process.env.HUNYUAN_ENABLE_SPEED_SEARCH === '1',
+          search_info: true,
+        }),
       } as any;
     },
   },

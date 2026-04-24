@@ -1,5 +1,6 @@
 import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
+// https://cloud.tencent.com/document/product/1823/130051
 const hunyuanChatModels: AIChatModelCard[] = [
   {
     abilities: {
@@ -68,8 +69,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 192_000,
     description:
       'Specialized in creative content, multi-turn interactions, and practical instruction-following scenarios. Significantly enhanced capabilities in mathematics, coding, and agent-based tasks.',
     displayName: 'HY 2.0 Think',
@@ -106,11 +108,15 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-11-09',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
+      search: true,
     },
     contextWindowTokens: 128_000,
     description:
@@ -149,6 +155,9 @@ const hunyuanChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-11-11',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -480,7 +489,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-01-27',
+    releasedAt: '2026-03-18',
     type: 'chat',
   },
   {
@@ -502,7 +511,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-01-27',
+    releasedAt: '2026-02-12',
     type: 'chat',
   },
   {
@@ -683,7 +692,7 @@ const hunyuanVideoModels: AIVideoModelCard[] = [
       prompt: { default: '' },
       resolution: {
         default: '720p',
-        enum: ['720p'],
+        enum: ['720p', '1080p'],
       },
       watermark: { default: false },
     },

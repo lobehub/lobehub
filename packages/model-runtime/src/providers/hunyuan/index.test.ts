@@ -11,7 +11,7 @@ testProvider({
   provider: ModelProvider.Hunyuan,
   defaultBaseURL: 'https://tokenhub.tencentmaas.com/v1',
   chatDebugEnv: 'DEBUG_HUNYUAN_CHAT_COMPLETION',
-  chatModel: 'hunyuan-lite',
+  chatModel: 'hunyuan-role-latest',
 });
 
 // Mock the console.error to avoid polluting test output
@@ -36,7 +36,7 @@ describe('LobeHunyuanAI', () => {
 
       const result = await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'hunyuan-lite',
+        model: 'hunyuan-role-latest',
         temperature: 0,
       });
 
@@ -66,7 +66,7 @@ describe('LobeHunyuanAI - custom features', () => {
 
     it('should remove frequency_penalty and presence_penalty from payload', () => {
       const payload = {
-        model: 'hunyuan-lite',
+        model: 'hunyuan-role-latest',
         messages: [{ role: 'user', content: 'test' }],
         frequency_penalty: 0.5,
         presence_penalty: 0.3,
@@ -77,8 +77,20 @@ describe('LobeHunyuanAI - custom features', () => {
 
       expect(result.frequency_penalty).toBeUndefined();
       expect(result.presence_penalty).toBeUndefined();
-      expect(result.model).toBe('hunyuan-lite');
+      expect(result.model).toBe('hunyuan-role-latest');
       expect(result.temperature).toBe(0.7);
+    });
+
+    it('should preserve thinking type in payload', () => {
+      const payload = {
+        model: 'deepseek-v3.2',
+        messages: [{ role: 'user', content: 'test' }],
+        thinking: { type: 'enabled' },
+      } as any;
+
+      const result = handlePayload(payload);
+
+      expect(result.thinking).toEqual({ type: 'enabled' });
     });
 
     it('should transform reasoning to reasoning_content for hy3-preview assistant messages', () => {
@@ -110,6 +122,53 @@ describe('LobeHunyuanAI - custom features', () => {
           content: 'prompt',
         },
       ]);
+    });
+
+    it('should add search fields when enabledSearch is true', () => {
+      const payload = {
+        model: 'hunyuan-2.0-thinking-20251109',
+        messages: [{ role: 'user', content: 'test' }],
+        enabledSearch: true,
+      } as any;
+
+      const result = handlePayload(payload);
+
+      expect(result.citation).toBe(true);
+      expect(result.enable_enhancement).toBe(true);
+      expect(result.search_info).toBe(true);
+      expect(result.enable_speed_search).toBe(false);
+      expect(result.enabledSearch).toBeUndefined();
+    });
+
+    it('should respect HUNYUAN_ENABLE_SPEED_SEARCH env when search is enabled', () => {
+      process.env.HUNYUAN_ENABLE_SPEED_SEARCH = '1';
+
+      const payload = {
+        model: 'hunyuan-2.0-thinking-20251109',
+        messages: [{ role: 'user', content: 'test' }],
+        enabledSearch: true,
+      } as any;
+
+      const result = handlePayload(payload);
+
+      expect(result.enable_speed_search).toBe(true);
+
+      delete process.env.HUNYUAN_ENABLE_SPEED_SEARCH;
+    });
+
+    it('should not add search fields when enabledSearch is false', () => {
+      const payload = {
+        model: 'hunyuan-2.0-thinking-20251109',
+        messages: [{ role: 'user', content: 'test' }],
+        enabledSearch: false,
+      } as any;
+
+      const result = handlePayload(payload);
+
+      expect(result.citation).toBeUndefined();
+      expect(result.enable_enhancement).toBeUndefined();
+      expect(result.search_info).toBeUndefined();
+      expect(result.enable_speed_search).toBeUndefined();
     });
   });
 });
