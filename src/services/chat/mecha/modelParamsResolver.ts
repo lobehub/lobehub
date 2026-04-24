@@ -186,7 +186,6 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
           type: 'disabled',
         };
       } else {
-        extendParams.deepseekReasoningEffort = deepseekReasoningEffort;
         extendParams.reasoning_effort = deepseekReasoningEffort;
         extendParams.thinking = {
           type: 'enabled',

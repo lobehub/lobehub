@@ -197,7 +197,6 @@ const ControlsForm = memo<ControlsFormProps>(({ model: modelProp, provider: prov
     },
     {
       children: <DeepSeekReasoningEffortSlider />,
-      desc: 'thinking.type / reasoning_effort',
       label: t('extendParams.reasoningEffort.title'),
       layout: 'horizontal',
       minWidth: undefined,
