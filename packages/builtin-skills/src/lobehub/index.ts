@@ -4,6 +4,7 @@ import { systemPrompt } from './content';
 import { toResourceMeta } from './helpers';
 import agent from './references/agent';
 import bot from './references/bot';
+import botSetupGuide from './references/bot-setup-guide';
 import config from './references/config';
 import doc from './references/doc';
 import eval_ from './references/eval';
@@ -35,6 +36,7 @@ export const LobeHubSkill: BuiltinSkill = {
   resources: toResourceMeta({
     'references/agent': agent,
     'references/bot': bot,
+    'references/bot-setup-guide': botSetupGuide,
     'references/config': config,
     'references/doc': doc,
     'references/eval': eval_,
