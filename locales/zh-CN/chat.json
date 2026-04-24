@@ -545,6 +545,7 @@
   "taskList.hiddenCompleted.suffix": "已按显示选项隐藏",
   "taskList.kanban.addTask": "新建任务",
   "taskList.kanban.backlog": "待办",
+  "taskList.kanban.canceled": "已取消",
   "taskList.kanban.done": "已完成",
   "taskList.kanban.emptyColumn": "暂无任务",
   "taskList.kanban.hiddenColumns": "隐藏的分组",

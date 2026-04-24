@@ -625,6 +625,7 @@ export default {
   'taskList.contextMenu.status': 'Status',
   'taskList.kanban.addTask': 'Create task',
   'taskList.kanban.backlog': 'Backlog',
+  'taskList.kanban.canceled': 'Canceled',
   'taskList.kanban.done': 'Done',
   'taskList.kanban.emptyColumn': 'No tasks',
   'taskList.kanban.hiddenColumns': 'Hidden columns',

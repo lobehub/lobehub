@@ -15,12 +15,13 @@ const FETCH_TASK_GROUP_LIST_KEY = 'fetchTaskGroupList';
  */
 export const ALL_AGENTS_LIST_KEY = '__all__';
 
-// Default kanban groups: 4 columns
+// Default kanban groups: 5 columns
 const DEFAULT_KANBAN_GROUPS = [
   { key: 'backlog', statuses: ['backlog'] },
   { key: 'running', statuses: ['running'] },
   { key: 'needsInput', statuses: ['paused', 'failed'] },
   { key: 'done', statuses: ['completed'] },
+  { key: 'canceled', statuses: ['canceled'] },
 ];
 
 type Setter = StoreSetter<TaskStore>;

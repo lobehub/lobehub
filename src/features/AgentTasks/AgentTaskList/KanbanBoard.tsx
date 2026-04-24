@@ -42,7 +42,7 @@ const styles = createStaticStyles(({ css }) => ({
 interface ColumnDef {
   droppable: boolean;
   key: string;
-  targetStatus: 'backlog' | 'completed' | null;
+  targetStatus: 'backlog' | 'canceled' | 'completed' | null;
 }
 
 const COLUMNS: ColumnDef[] = [
@@ -50,6 +50,7 @@ const COLUMNS: ColumnDef[] = [
   { droppable: false, key: 'running', targetStatus: null },
   { droppable: false, key: 'needsInput', targetStatus: null },
   { droppable: true, key: 'done', targetStatus: 'completed' },
+  { droppable: true, key: 'canceled', targetStatus: 'canceled' },
 ];
 
 const optimisticMoveTask = (

@@ -30,7 +30,7 @@ const taskListViewOptions = (s: GlobalState) =>
 const taskCreateInlineCollapsed = (s: GlobalState): boolean =>
   s.status.taskCreateInlineCollapsed ?? false;
 
-export const DEFAULT_KANBAN_HIDDEN_COLUMNS: string[] = ['done'];
+export const DEFAULT_KANBAN_HIDDEN_COLUMNS: string[] = ['done', 'canceled'];
 
 const taskKanbanHiddenColumns = (s: GlobalState): string[] =>
   s.status.taskKanbanHiddenColumns ?? DEFAULT_KANBAN_HIDDEN_COLUMNS;

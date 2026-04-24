@@ -151,6 +151,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const COLUMN_I18N_KEYS: Record<string, string> = {
   backlog: 'taskList.kanban.backlog',
+  canceled: 'taskList.kanban.canceled',
   done: 'taskList.kanban.done',
   needsInput: 'taskList.kanban.needsInput',
   running: 'taskList.kanban.running',
@@ -158,6 +159,7 @@ export const COLUMN_I18N_KEYS: Record<string, string> = {
 
 export const COLUMN_STATUS_ICON: Record<string, TaskStatus> = {
   backlog: 'backlog',
+  canceled: 'canceled',
   done: 'completed',
   needsInput: 'paused',
   running: 'running',

@@ -284,7 +284,7 @@ export const INITIAL_STATUS = {
     orderDirection: 'asc',
     subGroupBy: 'none',
   },
-  taskKanbanHiddenColumns: ['done'],
+  taskKanbanHiddenColumns: ['done', 'canceled'],
   taskKanbanHiddenPanelCollapsed: false,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
