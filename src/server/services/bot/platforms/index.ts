@@ -9,6 +9,15 @@ import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
 import { wechat } from './wechat/definition';
 
+export {
+  displayToolCallsField,
+  getStepReactionEmoji,
+  RECEIVED_REACTION_EMOJI,
+  serverIdField,
+  THINKING_REACTION_EMOJI,
+  userIdField,
+  WORKING_REACTION_EMOJI,
+} from './const';
 export { PlatformRegistry } from './registry';
 export type {
   BotPlatformRedisClient,
@@ -26,6 +35,7 @@ export type {
   ValidationResult,
 } from './types';
 export { ClientFactory } from './types';
+export type { ProviderConfigInput, ResolvedBotProviderConfig } from './utils';
 export {
   buildRuntimeKey,
   extractDefaults,
@@ -35,6 +45,8 @@ export {
   getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
+  resolveBotProviderConfig,
+  resolveConnectionMode,
 } from './utils';
 
 // --------------- Platform definitions ---------------

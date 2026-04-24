@@ -142,6 +142,30 @@ describe('AgentSlice Actions', () => {
       });
     });
 
+    it('should deep merge nested chatConfig fields into existing agent entry', () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        result.current.internal_dispatchAgentMap('agent-1', {
+          chatConfig: { enableHistoryCount: true, historyCount: 10 },
+        });
+      });
+
+      act(() => {
+        result.current.internal_dispatchAgentMap('agent-1', {
+          chatConfig: { enableReasoning: true },
+        });
+      });
+
+      expect(result.current.agentMap['agent-1']).toEqual({
+        chatConfig: {
+          enableHistoryCount: true,
+          enableReasoning: true,
+          historyCount: 10,
+        },
+      });
+    });
+
     it('should not update state if result is equal', () => {
       const { result } = renderHook(() => useAgentStore());
 

@@ -42,7 +42,10 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.70"
+    "@lobehub/fluent-emoji": "^4.1.0",
+    "@napi-rs/canvas": "^0.1.70",
+    "get-windows": "^9.3.0",
+    "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -64,6 +67,8 @@
     "@types/semver": "^7.7.1",
     "@types/set-cookie-parser": "^2.4.10",
     "@typescript/native-preview": "7.0.0-dev.20251210.1",
+    "@vanilla-extract/css": "^1.17.4",
+    "@vanilla-extract/vite-plugin": "^5.1.0",
     "async-retry": "^1.3.3",
     "consola": "^3.4.2",
     "cookie": "^1.1.1",
@@ -76,7 +81,7 @@
     "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.6.2",
-    "electron-vite": "^5.0.0",
+    "electron-vite": "6.0.0-beta.1",
     "electron-window-state": "^5.0.3",
     "es-toolkit": "^1.43.0",
     "eslint": "10.0.0",
@@ -96,13 +101,14 @@
     "resolve": "^1.22.11",
     "semver": "^7.7.3",
     "set-cookie-parser": "^2.7.2",
+    "strip-ansi": "6.0.1",
     "stylelint": "^15.11.0",
     "superjson": "^2.2.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "undici": "^7.16.0",
-    "uuid": "^13.0.0",
-    "vite": "^7.3.1",
+    "uuid": "^14.0.0",
+    "vite": "^8.0.9",
     "vitest": "^3.2.4",
     "zod": "^3.25.76"
   },

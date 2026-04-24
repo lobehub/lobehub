@@ -5,6 +5,8 @@
   "features.gatewayMode.title": "Execução de Agente no Servidor (Gateway)",
   "features.groupChat.desc": "Ative a coordenação de bate-papo em grupo com múltiplos agentes.",
   "features.groupChat.title": "Bate-Papo em Grupo (Multiagente)",
+  "features.heterogeneousAgent.desc": "Ative a execução de agentes heterogêneos com Claude Code, Codex CLI e outros CLIs de agentes externos. Cria uma opção \"Agente Claude Code\" no menu lateral de agentes.",
+  "features.heterogeneousAgent.title": "Agente Heterogêneo (Claude Code)",
   "features.inputMarkdown.desc": "Renderize Markdown na área de entrada em tempo real (texto em negrito, blocos de código, tabelas etc.).",
   "features.inputMarkdown.title": "Renderização de Markdown na Entrada",
   "title": "Laboratórios"

@@ -10,7 +10,7 @@ export const CronManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Create a new scheduled task for the current agent. The task will run automatically at the specified schedule. Minimum interval is 30 minutes.',
+        'Create a new automated recurring task. Use this when the user wants something done regularly/repeatedly — e.g., "set as daily task", "do this every morning", "make it a routine", "daily briefing", "weekly summary". The task will run automatically at the specified schedule without user intervention. Minimum interval is 30 minutes.',
       name: CronApiName.createCronJob,
       parameters: {
         additionalProperties: false,
@@ -215,7 +215,7 @@ export const CronManifest: BuiltinToolManifest = {
   meta: {
     avatar: '⏰',
     description:
-      'Manage scheduled tasks that run automatically at specified times. Create, update, enable/disable, and monitor recurring tasks for your agents.',
+      'Automate recurring tasks that repeat on a schedule — daily routines, periodic reports, regular reminders, and any task the user wants done automatically every day/week/hour. Use this whenever the user says "daily task", "routine", "recurring", "every day", "every morning", "regular", "periodic", "set as daily", or implies something should happen repeatedly without manual trigger.',
     title: 'Scheduled Tasks',
   },
   systemRole: systemPrompt,

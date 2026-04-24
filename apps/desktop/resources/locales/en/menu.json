@@ -71,6 +71,8 @@
   "macOS.services": "Services",
   "macOS.unhide": "Show All",
   "tray.open": "Open {{appName}}",
+  "tray.openMiniToolbar": "Quick Composer",
+  "tray.quickChat": "Quick Chat",
   "tray.quit": "Quit",
   "tray.show": "Show {{appName}}",
   "view.forceReload": "Force Reload",

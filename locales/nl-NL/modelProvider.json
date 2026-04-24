@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Voor Nano Banana 2; regelt de beeldverhouding van gegenereerde afbeeldingen (ondersteunt extra-breed 1:4, 4:1, 1:8, 8:1).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Voor Gemini 3-afbeeldingsgeneratiemodellen; regelt de resolutie van gegenereerde afbeeldingen.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Voor Gemini 3.1 Flash Image-modellen; regelt de resolutie van gegenereerde afbeeldingen (ondersteunt 512px).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "Voor Claude Opus 4.7; bepaalt het inspanningsniveau (laag/middel/hoog/zeer hoog/max).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Voor Claude, Qwen3 en vergelijkbare modellen; regelt het tokenbudget voor redeneren.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Voor GLM-5 en GLM-4.7; beheert het tokenbudget voor redeneren (maximaal 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Voor Qwen3-serie; beheert het tokenbudget voor redeneren (maximaal 80k).",

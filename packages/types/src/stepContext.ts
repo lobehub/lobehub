@@ -221,4 +221,15 @@ export interface RuntimeInitialContext {
    * This constrains the available tools for the current runtime execution
    */
   selectedTools?: RuntimeSelectedTool[];
+  /**
+   * Task Manager page context, built from the tasks list/detail page the user
+   * is currently viewing. Injected into the last user message so the LLM can
+   * answer questions about the on-screen tasks without extra tool calls.
+   */
+  taskManager?: InitialTaskManagerContext;
+}
+
+export interface InitialTaskManagerContext {
+  /** Prebuilt prompt describing the tasks shown on the page. */
+  contextPrompt: string;
 }

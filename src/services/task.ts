@@ -1,4 +1,4 @@
-import type { CheckpointConfig } from '@lobechat/types';
+import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -13,8 +13,10 @@ class TaskService {
     assigneeAgentId?: string;
     limit?: number;
     offset?: number;
+    parentIdentifier?: string;
     parentTaskId?: string | null;
-    status?: string;
+    priorities?: number[];
+    statuses?: TaskStatus[];
   }) => lambdaClient.task.list.query(params);
 
   groupList = async (params: {
@@ -47,6 +49,7 @@ class TaskService {
   create = async (params: {
     assigneeAgentId?: string;
     assigneeUserId?: string;
+    createdByAgentId?: string;
     description?: string;
     identifierPrefix?: string;
     instruction: string;
@@ -60,6 +63,8 @@ class TaskService {
     data: {
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
+      // Automation mode; null = no automation
+      automationMode?: TaskAutomationMode | null;
       config?: Record<string, unknown>;
       context?: Record<string, unknown>;
       description?: string;
@@ -88,6 +93,12 @@ class TaskService {
 
   addComment = async (id: string, content: string, opts?: { briefId?: string; topicId?: string }) =>
     lambdaClient.task.addComment.mutate({ content, id, ...opts });
+
+  deleteComment = async (commentId: string) =>
+    lambdaClient.task.deleteComment.mutate({ commentId });
+
+  updateComment = async (commentId: string, content: string) =>
+    lambdaClient.task.updateComment.mutate({ commentId, content });
 
   addDependency = async (
     taskId: string,

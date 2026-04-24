@@ -8,7 +8,7 @@
  * project. Keep these in sync with `packages/types/src/hotkey.ts`.
  */
 
-export type DesktopHotkeyId = 'openSettings' | 'showApp';
+export type DesktopHotkeyId = 'openSettings' | 'quickChat' | 'quickComposer' | 'showApp';
 
 export interface DesktopHotkeyItem {
   id: DesktopHotkeyId;

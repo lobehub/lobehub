@@ -31,6 +31,7 @@ export const FeatureFlagsSchema = z.object({
 
   // internal flag
   agent_onboarding: FeatureFlagValue.optional(),
+  agent_task: FeatureFlagValue.optional(),
   cloud_promotion: FeatureFlagValue.optional(),
 
   // the flags below can only be used with commercial license
@@ -78,6 +79,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   rag_eval: false,
 
   agent_onboarding: isDev,
+  agent_task: isDev,
   cloud_promotion: false,
 
   market: true,
@@ -110,6 +112,7 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
     enableKnowledgeBase: evaluateFeatureFlag(config.knowledge_base, userId),
     enableRAGEval: evaluateFeatureFlag(config.rag_eval, userId),
     enableAgentOnboarding: evaluateFeatureFlag(config.agent_onboarding, userId),
+    enableAgentTask: evaluateFeatureFlag(config.agent_task, userId),
 
     showCloudPromotion: evaluateFeatureFlag(config.cloud_promotion, userId),
 

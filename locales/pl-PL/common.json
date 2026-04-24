@@ -354,6 +354,7 @@
   "navPanel.moveDown": "Przenieś w dół",
   "navPanel.moveUp": "Przenieś w górę",
   "navPanel.pinned": "Przypięte",
+  "navPanel.resetDefault": "Przywróć ustawienia domyślne",
   "navPanel.searchAgent": "Szukaj agenta...",
   "navPanel.searchRecent": "Szukaj w ostatnich...",
   "navPanel.searchResultEmpty": "Brak wyników wyszukiwania",

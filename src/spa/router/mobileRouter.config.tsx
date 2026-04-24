@@ -218,6 +218,22 @@ export const mobileRoutes: RouteObject[] = [
         path: 'settings',
       },
 
+      // Tasks routes (cross-agent)
+      {
+        children: [
+          {
+            element: dynamicElement(() => import('@/routes/(main)/tasks'), 'Mobile > Tasks'),
+            index: true,
+          },
+        ],
+        element: dynamicLayout(
+          () => import('@/routes/(main)/tasks/_layout'),
+          'Mobile > Tasks > Layout',
+        ),
+        errorElement: <ErrorBoundary resetPath="/" />,
+        path: 'tasks',
+      },
+
       ...BusinessMobileRoutesWithMainLayout,
 
       // Me routes (mobile personal center)

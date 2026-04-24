@@ -48,7 +48,10 @@ import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
 } from '@lobechat/builtin-tool-web-browsing/client';
+import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
 import { type BuiltinInspector } from '@lobechat/types';
+
+import { CodexInspectors } from './codex';
 
 /**
  * Builtin tools inspector registry
@@ -86,6 +89,10 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [SkillStoreManifest.identifier]: SkillStoreInspectors as Record<string, BuiltinInspector>,
   [SkillsManifest.identifier]: SkillsInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
+  codex: {
+    ...CodexInspectors,
+    command_execution: createRunCommandInspector('Run') as BuiltinInspector,
+  },
 };
 
 /**

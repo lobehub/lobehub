@@ -125,10 +125,10 @@ export function registerCronCommand(program: Command) {
 
         const input: Record<string, any> = {
           agentId: options.agentId,
-          schedule: options.schedule,
+          cronPattern: options.schedule,
         };
         if (options.name) input.name = options.name;
-        if (options.prompt) input.prompt = options.prompt;
+        if (options.prompt) input.content = options.prompt;
         if (options.maxExecutions) input.maxExecutions = Number.parseInt(options.maxExecutions, 10);
 
         const result = await client.agentCronJob.create.mutate(input as any);
@@ -168,8 +168,8 @@ export function registerCronCommand(program: Command) {
       ) => {
         const data: Record<string, any> = {};
         if (options.name) data.name = options.name;
-        if (options.schedule) data.schedule = options.schedule;
-        if (options.prompt) data.prompt = options.prompt;
+        if (options.schedule) data.cronPattern = options.schedule;
+        if (options.prompt) data.content = options.prompt;
         if (options.maxExecutions) data.maxExecutions = Number.parseInt(options.maxExecutions, 10);
         if (options.enable) data.enabled = true;
         if (options.disable) data.enabled = false;

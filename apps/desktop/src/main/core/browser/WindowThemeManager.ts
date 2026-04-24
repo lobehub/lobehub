@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path from 'node:path';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type BrowserWindow, type BrowserWindowConstructorOptions, nativeTheme } from 'electron';
@@ -118,7 +118,7 @@ export class WindowThemeManager {
   private getWindowsConfig(isDarkMode: boolean): WindowsThemeConfig {
     return {
       backgroundColor: isDarkMode ? BACKGROUND_DARK : BACKGROUND_LIGHT,
-      icon: isDev ? join(buildDir, 'icon-dev.ico') : undefined,
+      icon: isDev ? path.join(buildDir, 'icon-dev.ico') : undefined,
       titleBarOverlay: this.getWindowsTitleBarOverlay(isDarkMode),
       titleBarStyle: 'hidden',
     };

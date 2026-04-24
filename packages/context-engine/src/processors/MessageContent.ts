@@ -19,6 +19,15 @@ declare module '../types' {
 const log = debug('context-engine:processor:MessageContentProcessor');
 
 /**
+ * Placeholder injected in place of an `image_url` part when the target model
+ * does not declare vision capability. Dropping the part silently loses the
+ * conversational signal that an image ever existed, while leaving the raw part
+ * in the payload causes provider-side 400s (e.g. DeepSeek rejects the
+ * `image_url` variant outright — see LOBE-7214).
+ */
+export const VISION_DOWNGRADE_PLACEHOLDER = '[image omitted: not supported by this model]';
+
+/**
  * Deserialize content string to message content parts
  * Returns null if content is not valid JSON array of parts
  */
@@ -143,8 +152,21 @@ export class MessageContentProcessor extends BaseProcessor {
     const hasVideos = message.videoList && message.videoList.length > 0;
     const hasFiles = message.fileList && message.fileList.length > 0;
 
-    // If no images, videos and files, return plain text content directly
-    if (!hasImages && !hasVideos && !hasFiles) {
+    const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+    const canUseVideo = !!this.config.isCanUseVideo?.(this.config.model, this.config.provider);
+
+    // Historical messages may already be stored in multimodal parts form
+    // (content is an array of {type, text|image_url|video_url}). Those parts
+    // bypass the legacy `imageList` path and must still be downgraded when
+    // the target model lacks vision.
+    const contentIsArray = Array.isArray(message.content);
+    const arrayImageUrlCount = contentIsArray
+      ? (message.content as any[]).filter((p) => p?.type === 'image_url').length
+      : 0;
+    const needsArrayRewrite = contentIsArray && arrayImageUrlCount > 0 && !canUseVision;
+
+    // Fast path: nothing to transform — plain text content passes through.
+    if (!hasImages && !hasVideos && !hasFiles && !needsArrayRewrite) {
       return {
         ...message,
         content: message.content,
@@ -165,6 +187,26 @@ export class MessageContentProcessor extends BaseProcessor {
         .filter((part: any) => part?.type === 'text' && typeof part.text === 'string')
         .map((part: any) => part.text)
         .join('\n\n');
+    }
+
+    // Count images that need to be replaced by a placeholder. Both legacy
+    // `imageList` attachments and `image_url` parts already inside `content`
+    // are downgraded when the target model has no vision capability.
+    //
+    // The placeholder is injected immediately after the user's own text and
+    // before the SYSTEM CONTEXT block, because it stands in for an image the
+    // user actually sent — keeping it adjacent to the user text preserves the
+    // conversational flow rather than stranding it after system metadata.
+    const imageDowngradeCount =
+      (!canUseVision && hasImages ? message.imageList.length : 0) +
+      (!canUseVision ? arrayImageUrlCount : 0);
+
+    if (imageDowngradeCount > 0) {
+      const placeholders = Array.from(
+        { length: imageDowngradeCount },
+        () => VISION_DOWNGRADE_PLACEHOLDER,
+      ).join('\n');
+      textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
     }
 
     // Add file context (if file context is enabled and has files, images or videos)
@@ -189,24 +231,29 @@ export class MessageContentProcessor extends BaseProcessor {
       });
     }
 
-    // Process image content
-    if (hasImages && this.config.isCanUseVision?.(this.config.model, this.config.provider)) {
+    // Process image content (legacy imageList path)
+    if (hasImages && canUseVision) {
       const imageContentParts = await this.processImageList(message.imageList || []);
       contentParts.push(...imageContentParts);
     }
 
+    // Preserve existing image_url parts from array content if vision is supported
+    if (contentIsArray && arrayImageUrlCount > 0 && canUseVision) {
+      for (const part of message.content as UserMessageContentPart[]) {
+        if (part?.type === 'image_url') contentParts.push(part);
+      }
+    }
+
     // Process video content
-    if (hasVideos && this.config.isCanUseVideo?.(this.config.model, this.config.provider)) {
+    if (hasVideos && canUseVideo) {
       const videoContentParts = await this.processVideoList(message.videoList || []);
       contentParts.push(...videoContentParts);
     }
 
     // Explicitly return fields, keeping only necessary message fields
     const hasFileContext = (hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled;
-    const hasVisionContent =
-      hasImages && this.config.isCanUseVision?.(this.config.model, this.config.provider);
-    const hasVideoContent =
-      hasVideos && this.config.isCanUseVideo?.(this.config.model, this.config.provider);
+    const hasVisionContent = (hasImages || arrayImageUrlCount > 0) && canUseVision;
+    const hasVideoContent = hasVideos && canUseVideo;
 
     // If only text content and no file context added and no vision/video content, return plain text
     if (
@@ -251,6 +298,8 @@ export class MessageContentProcessor extends BaseProcessor {
    * Process assistant message content
    */
   private async processAssistantMessage(message: any): Promise<any> {
+    const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+
     // Priority 1: Check if there is reasoning content with signature (thinking mode)
     const shouldIncludeThinking = message.reasoning && !!message.reasoning?.signature;
 
@@ -302,7 +351,10 @@ export class MessageContentProcessor extends BaseProcessor {
         if (message.metadata?.isMultimodal && message.content) {
           const contentParts = deserializeParts(message.content);
           if (contentParts) {
-            const convertedParts = this.convertMessagePartsToContentParts(contentParts);
+            const convertedParts = this.convertMessagePartsToContentParts(
+              contentParts,
+              canUseVision,
+            );
             return {
               ...updatedMessage,
               content: convertedParts,
@@ -320,7 +372,7 @@ export class MessageContentProcessor extends BaseProcessor {
     if (hasMultimodalContent) {
       const parts = deserializeParts(message.content);
       if (parts) {
-        const contentParts = this.convertMessagePartsToContentParts(parts);
+        const contentParts = this.convertMessagePartsToContentParts(parts, canUseVision);
         return { ...message, content: contentParts };
       }
     }
@@ -328,7 +380,7 @@ export class MessageContentProcessor extends BaseProcessor {
     // Priority 4: Check if there are images (legacy imageList field)
     const hasImages = message.imageList && message.imageList.length > 0;
 
-    if (hasImages && this.config.isCanUseVision?.(this.config.model, this.config.provider)) {
+    if (hasImages && canUseVision) {
       // Create structured content
       const contentParts: UserMessageContentPart[] = [];
 
@@ -346,6 +398,17 @@ export class MessageContentProcessor extends BaseProcessor {
       return { ...message, content: contentParts };
     }
 
+    // Vision not supported but assistant message carries images — surface a
+    // textual placeholder so downstream models still see that images existed.
+    if (hasImages && !canUseVision) {
+      const placeholders = Array.from(
+        { length: message.imageList.length },
+        () => VISION_DOWNGRADE_PLACEHOLDER,
+      ).join('\n');
+      const text = message.content ? `${message.content}\n\n${placeholders}` : placeholders;
+      return { ...message, content: text };
+    }
+
     // Regular assistant message, return plain text content
     return {
       ...message,
@@ -355,8 +418,15 @@ export class MessageContentProcessor extends BaseProcessor {
 
   /**
    * Convert MessageContentPart[] (internal format) to OpenAI-compatible UserMessageContentPart[]
+   *
+   * When `canUseVision` is false, image parts are replaced by a text placeholder
+   * so the conversation history still signals that an image was present without
+   * including `image_url` content that non-vision providers reject.
    */
-  private convertMessagePartsToContentParts(parts: MessageContentPart[]): UserMessageContentPart[] {
+  private convertMessagePartsToContentParts(
+    parts: MessageContentPart[],
+    canUseVision: boolean,
+  ): UserMessageContentPart[] {
     const contentParts: UserMessageContentPart[] = [];
 
     for (const part of parts) {
@@ -367,12 +437,20 @@ export class MessageContentProcessor extends BaseProcessor {
           type: 'text',
         });
       } else if (part.type === 'image') {
-        // Images are already in S3 URL format, no conversion needed
-        contentParts.push({
-          googleThoughtSignature: part.thoughtSignature,
-          image_url: { detail: 'auto', url: part.image },
-          type: 'image_url',
-        });
+        if (canUseVision) {
+          // Images are already in S3 URL format, no conversion needed
+          contentParts.push({
+            googleThoughtSignature: part.thoughtSignature,
+            image_url: { detail: 'auto', url: part.image },
+            type: 'image_url',
+          });
+        } else {
+          contentParts.push({
+            googleThoughtSignature: part.thoughtSignature,
+            text: VISION_DOWNGRADE_PLACEHOLDER,
+            type: 'text',
+          });
+        }
       }
     }
 

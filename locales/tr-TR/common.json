@@ -354,6 +354,7 @@
   "navPanel.moveDown": "Aşağı taşı",
   "navPanel.moveUp": "Yukarı taşı",
   "navPanel.pinned": "Sabitlendi",
+  "navPanel.resetDefault": "Varsayılan Ayarlara Sıfırla",
   "navPanel.searchAgent": "Temsilci Ara...",
   "navPanel.searchRecent": "Son Arananlar...",
   "navPanel.searchResultEmpty": "Arama sonucu bulunamadı",

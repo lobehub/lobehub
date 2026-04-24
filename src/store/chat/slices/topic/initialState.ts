@@ -5,6 +5,7 @@ import { type ChatTopic } from '@/types/topic';
  */
 export interface TopicData {
   currentPage: number;
+  excludeStatuses?: string[];
   excludeTriggers?: string[];
   hasMore: boolean;
   isExpandingPageSize?: boolean;

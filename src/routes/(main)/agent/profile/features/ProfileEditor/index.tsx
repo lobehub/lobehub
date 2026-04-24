@@ -15,13 +15,26 @@ import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
-import CCStatusCard from './CCStatusCard';
+import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 
 const ProfileEditor = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
+  const updateHeterogeneousCommand = async (command: string) => {
+    if (!heterogeneousProvider) return;
+
+    await updateConfig({
+      agencyConfig: {
+        heterogeneousProvider: {
+          ...heterogeneousProvider,
+          command,
+        },
+      },
+    });
+  };
 
   return (
     <>
@@ -33,9 +46,12 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {isHeterogeneous ? (
-          // CC integration mode: show CLI version + path instead of model/skills pickers
-          <CCStatusCard />
+        {isHeterogeneous && heterogeneousProvider ? (
+          // Heterogeneous integration mode: show provider CLI status instead of model/skills pickers
+          <HeterogeneousAgentStatusCard
+            provider={heterogeneousProvider}
+            onCommandChange={updateHeterogeneousCommand}
+          />
         ) : (
           <>
             {/* Config Bar: Model Selector */}

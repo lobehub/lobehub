@@ -5,7 +5,7 @@ description: Internationalization guide using react-i18next. Use when adding tra
 
 # LobeHub Internationalization Guide
 
-- Default language: Chinese (zh-CN)
+- Default language: English (en-US)
 - Framework: react-i18next
 - **Only edit files in `src/locales/default/`** - Never edit JSON files in `locales/`
 - Run `pnpm i18n` to generate translations (or manually translate zh-CN/en-US for dev preview)

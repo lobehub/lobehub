@@ -54,6 +54,8 @@
     "./ollama": "./src/aiModels/ollama.ts",
     "./ollamacloud": "./src/aiModels/ollamacloud.ts",
     "./openai": "./src/aiModels/openai.ts",
+    "./opencodeCodingPlan": "./src/aiModels/opencodeCodingPlan.ts",
+    "./opencodeZen": "./src/aiModels/opencodeZen.ts",
     "./openrouter": "./src/aiModels/openrouter.ts",
     "./perplexity": "./src/aiModels/perplexity.ts",
     "./ppio": "./src/aiModels/ppio.ts",

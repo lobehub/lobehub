@@ -19,6 +19,7 @@ export type OperationType =
   | 'execAgentRuntime' // Execute agent runtime (client-side, entire agent runtime execution)
   | 'execServerAgentRuntime' // Execute server agent runtime (server-side, e.g., Group Chat)
   | 'execHeterogeneousAgent'
+  | 'subagentThread' // Per-spawn subagent Thread context (child of execHeterogeneousAgent); carries thread-scoped ConversationContext so dispatches resolve to the Thread's messagesMap bucket. NOT in AI_RUNTIME_OPERATION_TYPES — it's a context container, not an independent loading state.
   | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
   // === LLM execution (sub-operations) ===
   | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)

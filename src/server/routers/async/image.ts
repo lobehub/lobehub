@@ -5,7 +5,12 @@ import {
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  RequestTrigger,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type RuntimeImageGenParams } from 'model-bank';
@@ -272,10 +277,13 @@ export const imageRouter = router({
           // Check if operation has been cancelled
           checkAbortSignal(signal);
           log('Agent runtime initialized, calling createImage');
-          const response = await modelRuntime.createImage!({
-            model: resolvedModelId,
-            params: params as unknown as RuntimeImageGenParams,
-          });
+          const response = await modelRuntime.createImage!(
+            {
+              model: resolvedModelId,
+              params: params as unknown as RuntimeImageGenParams,
+            },
+            { metadata: { trigger: RequestTrigger.Image } },
+          );
 
           if (!response) {
             log('Create image response is empty');

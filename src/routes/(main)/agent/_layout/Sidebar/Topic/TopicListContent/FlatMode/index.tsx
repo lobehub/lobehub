@@ -45,6 +45,7 @@ const FlatMode = memo(() => {
           id={topic.id}
           key={topic.id}
           metadata={topic.metadata}
+          status={topic.status}
           threadId={activeThreadId}
           title={topic.title}
         />

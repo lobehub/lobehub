@@ -17,6 +17,26 @@ const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
 const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
 
 const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
+const taskListViewOptions = (s: GlobalState) =>
+  s.status.taskListViewOptions || {
+    groupBy: 'status',
+    hideCompleted: true,
+    orderBy: 'updatedAt',
+    orderCompletedByRecency: true,
+    orderDirection: 'asc',
+    subGroupBy: 'none',
+  };
+
+const taskCreateInlineCollapsed = (s: GlobalState): boolean =>
+  s.status.taskCreateInlineCollapsed ?? false;
+
+export const DEFAULT_KANBAN_HIDDEN_COLUMNS: string[] = ['done'];
+
+const taskKanbanHiddenColumns = (s: GlobalState): string[] =>
+  s.status.taskKanbanHiddenColumns ?? DEFAULT_KANBAN_HIDDEN_COLUMNS;
+
+const taskKanbanHiddenPanelCollapsed = (s: GlobalState): boolean =>
+  s.status.taskKanbanHiddenPanelCollapsed ?? false;
 
 export const DEFAULT_HIDDEN_SECTIONS: string[] = ['memory'];
 
@@ -25,6 +45,7 @@ const hiddenSidebarSections = (s: GlobalState): string[] =>
 
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'pages',
+  'tasks',
   'recents',
   'agent',
   'community',
@@ -235,6 +256,10 @@ export const systemStatusSelectors = {
   pagePageSize,
   portalWidth,
   recentPageSize,
+  taskCreateInlineCollapsed,
+  taskKanbanHiddenColumns,
+  taskKanbanHiddenPanelCollapsed,
+  taskListViewOptions,
   sidebarItems,
   sessionGroupKeys,
   showChatHeader,

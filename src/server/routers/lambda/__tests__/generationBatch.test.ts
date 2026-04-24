@@ -198,10 +198,7 @@ describe('generationBatchRouter', () => {
     expect(result).toEqual(mockDeletedBatch);
     expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
     expect(mockDeleteFiles).toHaveBeenCalledWith(mockThumbnailUrls);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to delete files from S3:',
-      expect.any(Error),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to delete files from S3:', expect.any(Error));
 
     consoleSpy.mockRestore();
   });
@@ -368,10 +365,7 @@ describe('generationBatchRouter', () => {
     expect(result).toEqual(mockDeletedBatch);
     expect(mockDelete).toHaveBeenCalledWith(mockBatchId);
     expect(mockDeleteFiles).toHaveBeenCalledWith(mockThumbnailUrls);
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to delete files from S3:',
-      expect.any(Error),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to delete files from S3:', expect.any(Error));
 
     consoleSpy.mockRestore();
   });

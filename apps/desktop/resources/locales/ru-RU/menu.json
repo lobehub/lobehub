@@ -86,5 +86,6 @@
   "window.minimize": "Свернуть",
   "window.title": "Окно",
   "window.toggleFullscreen": "Переключить полноэкранный режим",
-  "window.zoom": "Масштаб"
+  "window.zoom": "Масштаб",
+  "tray.openMiniToolbar": "Quick Composer"
 }

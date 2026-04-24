@@ -734,6 +734,99 @@ describe('createRouterRuntime', () => {
       expect(result).toEqual({ imageUrl: 'https://example.com/image.png' });
       expect(mockCreateImage).toHaveBeenCalledWith(payload);
     });
+
+    it('should forward options.metadata to onRouteAttempt', async () => {
+      const mockCreateImage = vi
+        .fn()
+        .mockResolvedValue({ imageUrl: 'https://example.com/image.png' });
+      const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
+
+      class MockRuntime implements LobeRuntimeAI {
+        createImage = mockCreateImage;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt,
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['gpt-image-1'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const payload = { model: 'gpt-image-1', params: { prompt: 'a cat' } };
+      const metadata = { trigger: 'image' };
+
+      await runtime.createImage(payload, { metadata });
+
+      expect(mockCreateImage).toHaveBeenCalledWith(payload);
+      expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
+    });
+  });
+
+  describe('createVideo method', () => {
+    it('should call createVideo on the correct runtime', async () => {
+      const mockCreateVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
+
+      class MockRuntime implements LobeRuntimeAI {
+        createVideo = mockCreateVideo;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['sora-1'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const payload = { model: 'sora-1', params: { prompt: 'a cat' } } as any;
+
+      const result = await runtime.createVideo(payload);
+      expect(result).toEqual({ inferenceId: 'job-1' });
+      expect(mockCreateVideo).toHaveBeenCalledWith(payload);
+    });
+
+    it('should forward options.metadata to onRouteAttempt', async () => {
+      const mockCreateVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
+      const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
+
+      class MockRuntime implements LobeRuntimeAI {
+        createVideo = mockCreateVideo;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt,
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['sora-1'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const payload = { model: 'sora-1', params: { prompt: 'a cat' } } as any;
+      const metadata = { trigger: 'video' };
+
+      await runtime.createVideo(payload, { metadata });
+
+      expect(mockCreateVideo).toHaveBeenCalledWith(payload);
+      expect(onRouteAttempt).toHaveBeenCalledWith(expect.objectContaining({ metadata }));
+    });
   });
 
   describe('generateObject method', () => {

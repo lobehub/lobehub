@@ -155,6 +155,12 @@ export interface ToolsCalling {
     name: string; // A JSON string of arguments
   };
   id: string;
+  /**
+   * Gemini 3.x thought signature, captured from `functionCall.thoughtSignature` in the
+   * streaming response. Must be round-tripped back in subsequent requests or Gemini will
+   * 400 with a misleading "ordering" error. Optional; only set for Gemini 3.x tool calls.
+   */
+  thoughtSignature?: string;
   type: 'function';
 }
 

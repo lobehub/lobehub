@@ -16,9 +16,19 @@ export default class BrowserWindowsCtr extends ControllerModule {
   static override readonly groupName = 'windows';
 
   @shortcut('showApp')
-  async toggleMainWindow() {
+  toggleMainWindow() {
     const mainWindow = this.app.browserManager.getMainWindow();
     mainWindow.toggleVisible();
+  }
+
+  @shortcut('quickComposer')
+  async openQuickComposer() {
+    await this.app.screenCaptureManager.startSession();
+  }
+
+  @shortcut('quickChat')
+  openQuickChat() {
+    this.app.browserManager.openQuickChatPopup();
   }
 
   @IpcMethod()

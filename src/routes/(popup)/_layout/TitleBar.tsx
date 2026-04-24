@@ -6,7 +6,8 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import { useWatchThemeUpdate } from '@/features/Electron/system/useWatchThemeUpdate';
-import WinControl, { WINDOW_CONTROL_WIDTH } from '@/features/Electron/titlebar/WinControl';
+import { WINDOWS_NATIVE_CONTROL_WIDTH } from '@/features/Electron/titlebar/layout';
+import WinControl from '@/features/Electron/titlebar/WinControl';
 import { electronStylish } from '@/styles/electron';
 import { getPlatform, isMacOS } from '@/utils/platform';
 
@@ -39,11 +40,13 @@ interface PopupTitleBarProps {
 const PopupTitleBar = memo<PopupTitleBarProps>(({ title }) => {
   useWatchThemeUpdate();
 
+  const platform = getPlatform();
   const isMac = isMacOS();
-  const isLinux = getPlatform() === 'Linux';
+  const isLinux = platform === 'Linux';
+  const isWindows = platform === 'Windows';
   const showWinControl = !isMac && isLinux;
   const leftSpacer = isMac ? MAC_TRAFFIC_LIGHT_WIDTH : 0;
-  const rightSpacer = showWinControl ? WINDOW_CONTROL_WIDTH : 0;
+  const rightSpacer = isWindows ? WINDOWS_NATIVE_CONTROL_WIDTH : 0;
 
   return (
     <Flexbox

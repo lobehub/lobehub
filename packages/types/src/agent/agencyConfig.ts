@@ -11,7 +11,7 @@ export interface HeterogeneousProviderConfig {
   /** Custom environment variables */
   env?: Record<string, string>;
   /** Agent runtime type */
-  type: 'claude-code';
+  type: 'claude-code' | 'codex';
 }
 
 /**

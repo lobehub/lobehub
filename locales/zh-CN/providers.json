@@ -47,6 +47,8 @@
   "ollama.description": "Ollama 提供涵盖代码生成、数学、多语言处理与对话的模型，支持企业级与本地部署。",
   "ollamacloud.description": "Ollama Cloud 提供托管推理服务，开箱即用访问 Ollama 模型库与兼容 OpenAI 的 API。",
   "openai.description": "OpenAI 是领先的 AI 研究实验室，其 GPT 模型推动自然语言处理发展，在科研、商业与创新中表现卓越、价值显著。",
+  "opencodecodingplan.description": "OpenCode Go 是 $10/月的订阅服务，提供对精选开源编程模型（GLM、Kimi、MiMo、Qwen、MiniMax）的可靠访问。",
+  "opencodezen.description": "OpenCode Zen 通过单一 API Key 提供对精选模型（OpenAI、Anthropic、Moonshot、MiniMax、智谱、Qwen 等）的访问。",
   "openrouter.description": "OpenRouter 提供对 OpenAI、Anthropic、LLaMA 等前沿模型的访问，用户可根据需求选择最优模型与价格。",
   "perplexity.description": "Perplexity 提供先进的对话模型，包括 Llama 3.1 变体，适用于在线与离线使用及复杂 NLP 任务。",
   "ppio.description": "PPIO 提供可靠、性价比高的开源模型 API，支持 DeepSeek、Llama、Qwen 等主流模型。",

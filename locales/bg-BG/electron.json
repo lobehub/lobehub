@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "Затвори разделите отляво",
   "tab.closeOtherTabs": "Затвори другите раздели",
   "tab.closeRightTabs": "Затвори разделите отдясно",
+  "tab.newTab": "Нов раздел",
+  "tab.running": "Агентът работи",
+  "tab.unread": "Ново съобщение",
   "updater.checkingUpdate": "Проверка за актуализации",
   "updater.checkingUpdateDesc": "Извличане на информация за версията...",
   "updater.downloadNewVersion": "Изтегли нова версия",
@@ -133,5 +136,7 @@
   "window.close": "Затвори прозореца",
   "window.maximize": "Максимизирай прозореца",
   "window.minimize": "Минимизирай прозореца",
-  "window.restore": "Възстановяване на прозореца"
+  "window.pinToTop": "Закачи най-отгоре",
+  "window.restore": "Възстановяване на прозореца",
+  "window.unpinFromTop": "Премахни от най-горе"
 }

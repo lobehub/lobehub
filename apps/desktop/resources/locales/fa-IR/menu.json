@@ -86,5 +86,6 @@
   "window.minimize": "کوچک کردن",
   "window.title": "پنجره",
   "window.toggleFullscreen": "تغییر به حالت تمام صفحه",
-  "window.zoom": "زوم"
+  "window.zoom": "زوم",
+  "tray.openMiniToolbar": "Quick Composer"
 }

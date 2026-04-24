@@ -32,7 +32,7 @@ const mockFindEnabledByPlatform = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockUpdateBotRuntimeStatus = vi.hoisted(() => vi.fn());
-const mockGetEffectiveConnectionMode = vi.hoisted(() => vi.fn());
+const mockResolveConnectionMode = vi.hoisted(() => vi.fn());
 
 // ─── Module mocks ───
 
@@ -75,11 +75,11 @@ vi.mock('../runtimeStatus', () => ({
 }));
 
 vi.mock('../../bot/platforms', () => ({
-  getEffectiveConnectionMode: mockGetEffectiveConnectionMode,
   platformRegistry: {
     getPlatform: () => ({ id: 'discord' }),
     listPlatforms: () => [{ id: 'discord' }, { id: 'telegram' }],
   },
+  resolveConnectionMode: mockResolveConnectionMode,
 }));
 
 describe('GatewayService', () => {
@@ -159,7 +159,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('webhook');
+      mockResolveConnectionMode.mockReturnValue('webhook');
 
       await service.ensureRunning();
 
@@ -170,7 +170,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockResolvedValue({
         state: { status: 'connected' },
       });
@@ -184,7 +184,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockResolvedValue({
         state: { status: 'connecting' },
       });
@@ -198,7 +198,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockResolvedValue({
         state: { error: 'Session expired (errcode -14)', status: 'error' },
       });
@@ -218,7 +218,7 @@ describe('GatewayService', () => {
           userId: 'u1',
         },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockResolvedValue({
         state: { status: 'disconnected' },
       });
@@ -242,7 +242,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockRejectedValue(new Error('not found'));
       mockGatewayClient.connect.mockResolvedValue({ status: 'connected' });
 
@@ -257,7 +257,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockRejectedValue(new Error('DO not found'));
       mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
 
@@ -270,7 +270,7 @@ describe('GatewayService', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         { applicationId: 'app-1', credentials: {}, id: 'prov-1', settings: {}, userId: 'u1' },
       ]);
-      mockGetEffectiveConnectionMode.mockReturnValue('websocket');
+      mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStatus.mockResolvedValue({
         state: { status: 'disconnected' },
       });

@@ -1,3 +1,4 @@
+import type { LobeAgentChatConfig } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as aiInfraStore from '@/store/aiInfra';
@@ -7,6 +8,10 @@ import { resolveModelExtendParams } from './modelParamsResolver';
 
 describe('resolveModelExtendParams', () => {
   const mockAiInfraStoreState = { someState: true };
+  const createChatConfig = (config: Partial<LobeAgentChatConfig> = {}): LobeAgentChatConfig => ({
+    autoCreateTopicThreshold: 2,
+    ...config,
+  });
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -122,6 +127,96 @@ describe('resolveModelExtendParams', () => {
         expect(result.thinking).toEqual({
           budget_tokens: 0,
           type: 'disabled',
+        });
+      });
+
+      it('should use model default for enableReasoning when chat config is unset', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig(),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'enabled',
+        });
+      });
+
+      it('should allow explicit chat config to override model enableReasoning default', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig({
+            enableReasoning: false,
+          }),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'disabled',
+        });
+      });
+
+      it('should preserve legacy thinking disabled when enableReasoning is unset', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: true,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig({
+            thinking: 'disabled',
+          }),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'disabled',
+        });
+      });
+
+      it('should preserve legacy thinking enabled when enableReasoning is unset', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParamOptions').mockReturnValue(
+          () => ({
+            enableReasoning: {
+              defaultValue: false,
+              includeBudget: false,
+            },
+          }),
+        );
+
+        const result = resolveModelExtendParams({
+          chatConfig: createChatConfig({
+            thinking: 'enabled',
+          }),
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.thinking).toEqual({
+          type: 'enabled',
         });
       });
     });
@@ -332,6 +427,39 @@ describe('resolveModelExtendParams', () => {
         });
 
         expect(result.reasoning_effort).toBe('high');
+      });
+    });
+
+    describe('deepseekV4ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'deepseekV4ReasoningEffort',
+        ]);
+      });
+
+      it('should set reasoning_effort for deepseek-v4 variant', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            deepseekV4ReasoningEffort: 'max',
+          } as any,
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.reasoning_effort).toBe('max');
+      });
+
+      it('should not set reasoning_effort when deepseekV4ReasoningEffort is not configured', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {} as any,
+          model: 'deepseek-v4-flash',
+          provider: 'deepseek',
+        });
+
+        expect(result.reasoning_effort).toBeUndefined();
       });
     });
   });

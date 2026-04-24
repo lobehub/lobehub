@@ -86,5 +86,6 @@
   "window.minimize": "Réduire",
   "window.title": "Fenêtre",
   "window.toggleFullscreen": "Basculer en plein écran",
-  "window.zoom": "Zoom"
+  "window.zoom": "Zoom",
+  "tray.openMiniToolbar": "Quick Composer"
 }

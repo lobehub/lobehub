@@ -219,13 +219,22 @@ export class TaskModel {
     limit?: number;
     offset?: number;
     parentTaskId?: string | null;
-    status?: string;
+    priorities?: number[];
+    statuses?: string[];
   }): Promise<{ tasks: TaskItem[]; total: number }> {
-    const { status, parentTaskId, assigneeAgentId, limit = 50, offset = 0 } = options || {};
+    const {
+      statuses,
+      priorities,
+      parentTaskId,
+      assigneeAgentId,
+      limit = 50,
+      offset = 0,
+    } = options || {};
 
     const conditions = [eq(tasks.createdByUserId, this.userId)];
 
-    if (status) conditions.push(eq(tasks.status, status));
+    if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
+    if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
 
     if (parentTaskId === null) {
@@ -682,5 +691,14 @@ export class TaskModel {
 
       .returning();
     return result.length > 0;
+  }
+
+  async updateComment(id: string, content: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .update(taskComments)
+      .set({ content, updatedAt: new Date() })
+      .where(and(eq(taskComments.id, id), eq(taskComments.userId, this.userId)))
+      .returning();
+    return comment;
   }
 }

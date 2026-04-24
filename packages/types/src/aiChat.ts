@@ -57,7 +57,7 @@ export interface SendMessageServerParams {
      * Message metadata (e.g., isSupervisor for group orchestration)
      */
     metadata?: Record<string, unknown>;
-    model: string;
+    model?: string;
     provider: string;
   };
   /**
@@ -76,6 +76,7 @@ export interface SendMessageServerParams {
     metadata?: ChatTopicMetadata;
     title?: string;
     topicMessageIds?: string[];
+    trigger?: string;
   };
   newUserMessage: SendNewMessage;
   preloadMessages?: SendPreloadMessage[];
@@ -122,6 +123,7 @@ export const AiSendMessageServerSchema = z.object({
       metadata: z.custom<ChatTopicMetadata>().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
+      trigger: z.string().optional(),
     })
     .optional(),
   preloadMessages: z.array(SendPreloadMessageSchema).optional(),

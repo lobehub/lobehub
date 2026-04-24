@@ -58,6 +58,7 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeServiceOptions } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
 import { type AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { type StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 import { DocumentService } from '@/server/services/document';
@@ -1633,7 +1634,8 @@ export class AiAgentService {
    * 3. Store operationId in Thread metadata
    */
   async execSubAgentTask(params: ExecSubAgentTaskParams): Promise<ExecSubAgentTaskResult> {
-    const { groupId, topicId, parentMessageId, agentId, instruction, title } = params;
+    const { groupId, topicId, parentMessageId, agentId, instruction, title, parentOperationId } =
+      params;
 
     log(
       'execSubAgentTask: agentId=%s, groupId=%s, topicId=%s, instruction=%s',
@@ -1642,6 +1644,18 @@ export class AiAgentService {
       topicId,
       instruction.slice(0, 50),
     );
+
+    // Dispatch beforeCallAgent hook on parent operation
+    if (parentOperationId) {
+      hookDispatcher
+        .dispatch(parentOperationId, 'beforeCallAgent', {
+          agentId,
+          instruction: instruction.slice(0, 200),
+          operationId: parentOperationId,
+          userId: this.userId,
+        })
+        .catch(() => {});
+    }
 
     // 1. Create Thread for isolated task execution
     const thread = await this.threadModel.create({
@@ -1705,6 +1719,30 @@ export class AiAgentService {
         },
         status: ThreadStatus.Failed,
       });
+
+      // Dispatch onCallAgentError hook
+      if (parentOperationId) {
+        hookDispatcher
+          .dispatch(parentOperationId, 'onCallAgentError', {
+            agentId,
+            error: result.error || 'Sub-agent execution failed',
+            operationId: parentOperationId,
+            userId: this.userId,
+          })
+          .catch(() => {});
+      }
+    } else if (parentOperationId) {
+      // Dispatch afterCallAgent hook
+      hookDispatcher
+        .dispatch(parentOperationId, 'afterCallAgent', {
+          agentId,
+          operationId: parentOperationId,
+          subOperationId: result.operationId,
+          success: true,
+          threadId: thread.id,
+          userId: this.userId,
+        })
+        .catch(() => {});
     }
 
     return {

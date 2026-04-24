@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "왼쪽 탭 닫기",
   "tab.closeOtherTabs": "다른 탭 닫기",
   "tab.closeRightTabs": "오른쪽 탭 닫기",
+  "tab.newTab": "새 탭",
+  "tab.running": "에이전트 실행 중",
+  "tab.unread": "새 메시지",
   "updater.checkingUpdate": "새 버전 확인",
   "updater.checkingUpdateDesc": "버전 정보를 가져오는 중...",
   "updater.downloadNewVersion": "새 버전 다운로드",
@@ -133,5 +136,7 @@
   "window.close": "창 닫기",
   "window.maximize": "창 최대화",
   "window.minimize": "창 최소화",
-  "window.restore": "창 복원"
+  "window.pinToTop": "맨 위에 고정",
+  "window.restore": "창 복원",
+  "window.unpinFromTop": "맨 위 고정 해제"
 }

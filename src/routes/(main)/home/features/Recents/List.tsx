@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { MoreHorizontalIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import AllRecentsDrawer from './AllRecentsDrawer';
 import RecentListItem from './Item';
@@ -19,14 +20,30 @@ const RecentsList = memo(() => {
   const recents = useHomeStore(homeRecentSelectors.recents);
   const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
   const [drawerOpen, openDrawer, closeDrawer] = useHomeStore((s) => [
     s.allRecentsDrawerOpen,
     s.openAllRecentsDrawer,
     s.closeAllRecentsDrawer,
   ]);
 
-  const displayItems = useMemo(() => recents.slice(0, recentPageSize), [recents, recentPageSize]);
-  const hasMore = recents.length > recentPageSize;
+  const filteredRecents = useMemo(
+    () => (enableAgentTask ? recents : recents.filter((item) => item.type !== 'task')),
+    [recents, enableAgentTask],
+  );
+  const displayItems = useMemo(
+    () => filteredRecents.slice(0, recentPageSize),
+    [filteredRecents, recentPageSize],
+  );
+  const hasMore = filteredRecents.length > recentPageSize;
+
+  const getRecentRoute = useCallback((item: (typeof displayItems)[number]) => {
+    if (item.type !== 'task') return item.routePath;
+    const taskId = item.id;
+    if (!taskId) return item.routePath;
+
+    return `/task/${taskId}`;
+  }, []);
 
   if (!isInit) {
     return <SkeletonList rows={3} />;
@@ -38,7 +55,7 @@ const RecentsList = memo(() => {
         <Link
           key={`${item.type}-${item.id}`}
           style={{ color: 'inherit', textDecoration: 'none' }}
-          to={item.routePath}
+          to={getRecentRoute(item)}
         >
           <RecentListItem {...item} />
         </Link>

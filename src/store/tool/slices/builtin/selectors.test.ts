@@ -76,4 +76,69 @@ describe('builtinToolSelectors', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('metaListIncludingHidden', () => {
+    it('should keep task tools hidden from manual tool selection', () => {
+      const state = {
+        ...initialState,
+        builtinTools: [
+          {
+            hidden: true,
+            identifier: 'lobe-task',
+            manifest: {
+              api: [],
+              identifier: 'lobe-task',
+              meta: { title: 'Task Tools' },
+              systemRole: '',
+            },
+            type: 'builtin',
+          },
+          {
+            hidden: true,
+            identifier: 'tool-1',
+            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
+            type: 'builtin',
+          },
+        ],
+        uninstalledBuiltinTools: [],
+      } as ToolStoreState;
+
+      const result = builtinToolSelectors.metaListIncludingHidden(state);
+
+      expect(result.map((item) => item.identifier)).toContain('tool-1');
+      expect(result.map((item) => item.identifier)).not.toContain('lobe-task');
+    });
+  });
+
+  describe('installedAllMetaList', () => {
+    it('should keep task tools out of agent profile configuration', () => {
+      const state = {
+        ...initialState,
+        builtinTools: [
+          {
+            hidden: true,
+            identifier: 'lobe-task',
+            manifest: {
+              api: [],
+              identifier: 'lobe-task',
+              meta: { title: 'Task Tools' },
+              systemRole: '',
+            },
+            type: 'builtin',
+          },
+          {
+            hidden: true,
+            identifier: 'tool-1',
+            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
+            type: 'builtin',
+          },
+        ],
+        uninstalledBuiltinTools: [],
+      } as ToolStoreState;
+
+      const result = builtinToolSelectors.installedAllMetaList(state);
+
+      expect(result.map((item) => item.identifier)).toEqual(['tool-1']);
+    });
+  });
 });

@@ -9,8 +9,13 @@
  *   - Content/reasoning/model/usage final writes
  *   - Sync snapshot + reset to prevent cross-step content contamination
  */
+import path from 'node:path';
+
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createGatewayEventHandler } from '../gatewayEventHandler';
+import type { HeterogeneousAgentExecutorParams } from '../heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../heterogeneousAgentExecutor';
 
 // ─── Mocks ───
@@ -18,6 +23,7 @@ import { executeHeterogeneousAgent } from '../heterogeneousAgentExecutor';
 // messageService — the DB layer under test
 const mockCreateMessage = vi.fn();
 const mockUpdateMessage = vi.fn();
+const mockUpdateMessageError = vi.fn();
 const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
@@ -26,7 +32,16 @@ vi.mock('@/services/message', () => ({
     createMessage: (...args: any[]) => mockCreateMessage(...args),
     getMessages: (...args: any[]) => mockGetMessages(...args),
     updateMessage: (...args: any[]) => mockUpdateMessage(...args),
+    updateMessageError: (...args: any[]) => mockUpdateMessageError(...args),
     updateToolMessage: (...args: any[]) => mockUpdateToolMessage(...args),
+  },
+}));
+
+// threadService — subagent Thread creation (CC `Task` tool_use)
+const mockCreateThread = vi.fn();
+vi.mock('@/services/thread', () => ({
+  threadService: {
+    createThread: (...args: any[]) => mockCreateThread(...args),
   },
 }));
 
@@ -81,20 +96,35 @@ function setupIpcCapture() {
       handler?.(null, { sessionId });
     },
     /** Simulate session error */
-    emitError: (sessionId: string, error: string) => {
+    emitError: (sessionId: string, error: Record<string, unknown> | string) => {
       const handler = listeners.get('heteroAgentSessionError');
       handler?.(null, { error, sessionId });
     },
   };
 }
 
-function createMockStore() {
+function createMockStore(overrides: Record<string, any> = {}) {
+  // Hand out a fresh AbortController + monotonically increasing sub-op id
+  // for each subagent run, mirroring `startOperation`'s contract just
+  // enough that the executor can build dispatchers + completion calls.
+  let subOpCounter = 0;
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
+    refreshMessages: vi.fn(async () => {}),
+    refreshThreads: vi.fn(async () => {}),
     replaceMessages: vi.fn(),
+    startOperation: vi.fn(() => {
+      subOpCounter += 1;
+      return {
+        abortController: new AbortController(),
+        operationId: `sub-op-${subOpCounter}`,
+      };
+    }),
+    updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
   } as any;
 }
 
@@ -104,7 +134,7 @@ const defaultContext = {
   topicId: 'topic-1',
 };
 
-const defaultParams = {
+const defaultParams: HeterogeneousAgentExecutorParams = {
   assistantMessageId: 'ast-initial',
   context: defaultContext,
   heterogeneousProvider: { command: 'claude', type: 'claude-code' as const },
@@ -141,6 +171,47 @@ const ccAssistant = (msgId: string, content: any[], extra?: { model?: string; us
 
 const ccToolUse = (msgId: string, toolId: string, name: string, input: any = {}) =>
   ccAssistant(msgId, [{ id: toolId, input, name, type: 'tool_use' }]);
+
+/**
+ * CC subagent assistant event — carries `parent_tool_use_id` pointing back at
+ * the outer `Task` tool_use. The adapter routes these through its subagent
+ * handler which stamps `parentToolCallId` onto each tool payload.
+ */
+const ccSubagentToolUse = (
+  msgId: string,
+  parentToolUseId: string,
+  toolId: string,
+  name: string,
+  input: any = {},
+) => ({
+  message: {
+    content: [{ id: toolId, input, name, type: 'tool_use' }],
+    id: msgId,
+    role: 'assistant',
+  },
+  parent_tool_use_id: parentToolUseId,
+  type: 'assistant',
+});
+
+/** Subagent assistant event with text content (closing summary-style turn). */
+const ccSubagentText = (msgId: string, parentToolUseId: string, text: string) => ({
+  message: {
+    content: [{ text, type: 'text' }],
+    id: msgId,
+    role: 'assistant',
+  },
+  parent_tool_use_id: parentToolUseId,
+  type: 'assistant',
+});
+
+/** The main-agent tool_result for a spawn tool_use (end of a subagent run). */
+const ccSubagentSpawnResult = (spawnToolUseId: string, finalText: string) => ({
+  message: {
+    content: [{ content: finalText, tool_use_id: spawnToolUseId, type: 'tool_result' }],
+    role: 'user',
+  },
+  type: 'user',
+});
 
 const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
 
@@ -186,6 +257,59 @@ const ccMessageDelta = (usage: {
   type: 'stream_event',
 });
 
+// ─── Codex JSONL event factories ───
+
+const codexThreadStarted = (threadId = 'codex-thread-1') => ({
+  thread_id: threadId,
+  type: 'thread.started',
+});
+
+const codexTurnStarted = () => ({
+  type: 'turn.started',
+});
+
+const codexAgentMessage = (id: string, text: string) => ({
+  item: {
+    id,
+    text,
+    type: 'agent_message',
+  },
+  type: 'item.completed',
+});
+
+const codexCommandStarted = (id: string, command: string) => ({
+  item: {
+    aggregated_output: '',
+    command,
+    exit_code: null,
+    id,
+    status: 'in_progress',
+    type: 'command_execution',
+  },
+  type: 'item.started',
+});
+
+const codexCommandCompleted = (id: string, command: string, aggregatedOutput: string) => ({
+  item: {
+    aggregated_output: aggregatedOutput,
+    command,
+    exit_code: 0,
+    id,
+    status: 'completed',
+    type: 'command_execution',
+  },
+  type: 'item.completed',
+});
+
+const codexTurnCompleted = (usage?: {
+  cached_input_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+}) => ({
+  ...(usage ? { usage } : {}),
+  type: 'turn.completed',
+});
+
 // ─── Tests ───
 
 describe('heterogeneousAgentExecutor DB persistence', () => {
@@ -203,7 +327,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       id: `created-${params.role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     }));
     mockUpdateMessage.mockResolvedValue(undefined);
+    mockUpdateMessageError.mockResolvedValue({ success: false });
     mockUpdateToolMessage.mockResolvedValue(undefined);
+    mockCreateThread.mockImplementation(async (params: any) => params.id || 'thread-generated');
   });
 
   afterEach(() => {
@@ -664,6 +790,598 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(contentWrite).toBeDefined();
     });
+
+    it('should not persist streamed auth error echoes as assistant content when the session errors', async () => {
+      const rawAuthError =
+        'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', rawAuthError));
+      ipc.emitError('ipc-sess-1', rawAuthError);
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise.catch(() => {});
+      await flush();
+
+      const contentWrite = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) => id === 'ast-initial' && val.content === rawAuthError,
+      );
+
+      expect(contentWrite).toBeUndefined();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        {
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+            stderr: rawAuthError,
+          }),
+          message:
+            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+          type: 'AgentRuntimeError',
+        },
+        expect.any(Object),
+      );
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'ast-initial',
+          type: 'updateMessage',
+          value: {
+            content: '',
+            error: {
+              body: expect.objectContaining({
+                agentType: 'claude-code',
+                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+                stderr: rawAuthError,
+              }),
+              message:
+                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+              type: 'AgentRuntimeError',
+            },
+          },
+        },
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('should not keep streamed auth error echoes when the adapter ends with a result error', async () => {
+      const rawAuthError =
+        'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccText('msg_01', rawAuthError),
+        ccResult(true, rawAuthError),
+      ]);
+
+      const contentWrite = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) => id === 'ast-initial' && val.content === rawAuthError,
+      );
+
+      expect(contentWrite).toBeUndefined();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        {
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+            stderr: rawAuthError,
+          }),
+          message:
+            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+          type: 'AgentRuntimeError',
+        },
+        expect.any(Object),
+      );
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'ast-initial',
+          type: 'updateMessage',
+          value: {
+            content: '',
+            error: {
+              body: expect.objectContaining({
+                agentType: 'claude-code',
+                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+                stderr: rawAuthError,
+              }),
+              message:
+                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+              type: 'AgentRuntimeError',
+            },
+          },
+        },
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('should prefer deferred adapter auth errors over generic exit-code session errors', async () => {
+      const rawAuthError =
+        'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}';
+
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', rawAuthError));
+      ipc.emitRawLine('ipc-sess-1', ccResult(true, rawAuthError));
+      ipc.emitError('ipc-sess-1', 'Agent exited with code 1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise.catch(() => {});
+      await flush();
+
+      const contentWrite = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) => id === 'ast-initial' && val.content === rawAuthError,
+      );
+
+      expect(contentWrite).toBeUndefined();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        {
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+            stderr: rawAuthError,
+          }),
+          message:
+            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+          type: 'AgentRuntimeError',
+        },
+        expect.any(Object),
+      );
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'ast-initial',
+          type: 'updateMessage',
+          value: {
+            content: '',
+            error: {
+              body: expect.objectContaining({
+                agentType: 'claude-code',
+                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+                stderr: rawAuthError,
+              }),
+              message:
+                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+              type: 'AgentRuntimeError',
+            },
+          },
+        },
+        { operationId: 'op-1' },
+      );
+    });
+
+    it('should persist and dispatch structured cli-not-found errors when sendPrompt rejects', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const cliError = {
+        agentType: 'claude-code',
+        code: HeterogeneousAgentSessionErrorCode.CliNotFound,
+        docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/setup',
+        installCommands: ['curl -fsSL https://claude.ai/install.sh | bash'],
+        message: 'Claude Code CLI was not found',
+      };
+
+      mockSendPrompt.mockRejectedValueOnce(cliError);
+
+      await executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        {
+          body: cliError,
+          message: 'Claude Code CLI was not found',
+          type: 'AgentRuntimeError',
+        },
+        {
+          agentId: 'agent-1',
+          groupId: undefined,
+          threadId: undefined,
+          topicId: 'topic-1',
+        },
+      );
+      expect(store.refreshMessages).toHaveBeenCalled();
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        {
+          id: 'ast-initial',
+          type: 'updateMessage',
+          value: {
+            error: {
+              body: cliError,
+              message: 'Claude Code CLI was not found',
+              type: 'AgentRuntimeError',
+            },
+          },
+        },
+        { operationId: 'op-1' },
+      );
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+    });
+
+    it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+      const imageList = [
+        { id: 'image-1', url: 'https://example.com/screenshot-1.png' },
+        { id: 'image-2', url: 'https://example.com/screenshot-2.png' },
+      ];
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        imageList,
+      });
+
+      expect(mockSendPrompt).toHaveBeenCalledWith('ipc-sess-1', 'test prompt', imageList);
+    });
+
+    it('should clear stale resume metadata and retry once without resume for recoverable Codex errors', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const sendPromptControllers = new Map<
+        string,
+        { reject: (reason?: unknown) => void; resolve: () => void }
+      >();
+
+      mockStartSession
+        .mockResolvedValueOnce({ sessionId: 'ipc-sess-1' })
+        .mockResolvedValueOnce({ sessionId: 'ipc-sess-2' });
+      mockSendPrompt.mockImplementation(
+        (sessionId: string) =>
+          new Promise<void>((resolve, reject) => {
+            sendPromptControllers.set(sessionId, { reject, resolve });
+          }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+        resumeSessionId: 'thread_stale_123',
+        workingDirectory: '/Users/me/repo',
+      });
+
+      await flush();
+
+      ipc.emitError('ipc-sess-1', {
+        agentType: 'codex',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message: 'The saved Codex thread could not be found, so it can no longer be resumed.',
+      });
+      await flush();
+
+      sendPromptControllers.get('ipc-sess-1')?.reject(new Error('resume failed'));
+      await flush();
+
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          agentType: 'codex',
+          resumeSessionId: 'thread_stale_123',
+        }),
+      );
+      expect(mockStartSession).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          agentType: 'codex',
+          resumeSessionId: undefined,
+        }),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: undefined,
+        workingDirectory: '/Users/me/repo',
+      });
+
+      ipc.emitRawLine('ipc-sess-2', { thread_id: 'thread_new_456', type: 'thread.started' });
+      ipc.emitComplete('ipc-sess-2');
+      await flush();
+
+      sendPromptControllers.get('ipc-sess-2')?.resolve();
+      await executorPromise;
+      await flush();
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+        heteroSessionId: 'thread_new_456',
+        workingDirectory: '/Users/me/repo',
+      });
+    });
+  });
+
+  describe('Codex multi-turn persistence', () => {
+    it('should switch to a new assistant before persisting the next turn tool', async () => {
+      const idCounter = { assistant: 0, tool: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool += 1;
+          return { id: `tool-${idCounter.tool}` };
+        }
+
+        if (params.role === 'assistant') {
+          idCounter.assistant += 1;
+          return { id: `ast-new-${idCounter.assistant}` };
+        }
+
+        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
+      });
+
+      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({
+            assistantId: id,
+            toolIds: val.tools.map((tool: any) => tool.id),
+          });
+        }
+      });
+
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Running the first command.'),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
+          codexTurnStarted(),
+          codexAgentMessage('item_2', 'Running the second command.'),
+          codexCommandStarted('item_3', "/bin/zsh -lc 'git status --short'"),
+          codexCommandCompleted('item_3', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
+          codexTurnCompleted({ input_tokens: 12, output_tokens: 4 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const secondTurnAssistantCreate = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'assistant',
+      );
+      expect(secondTurnAssistantCreate?.[0]).toMatchObject({
+        parentId: 'tool-1',
+        role: 'assistant',
+      });
+
+      const firstToolCreate = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_1',
+      );
+      expect(firstToolCreate?.[0]).toMatchObject({
+        parentId: 'ast-initial',
+        role: 'tool',
+        tool_call_id: 'item_1',
+      });
+
+      const secondToolCreate = mockCreateMessage.mock.calls.find(
+        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_3',
+      );
+      expect(secondToolCreate?.[0]).toMatchObject({
+        parentId: 'ast-new-1',
+        role: 'tool',
+        tool_call_id: 'item_3',
+      });
+
+      const firstTurnToolWrites = toolsUpdates.filter(
+        (update) => update.assistantId === 'ast-initial' && update.toolIds.includes('item_1'),
+      );
+      expect(firstTurnToolWrites.length).toBeGreaterThanOrEqual(1);
+
+      const secondTurnToolWrites = toolsUpdates.filter(
+        (update) => update.assistantId === 'ast-new-1' && update.toolIds.includes('item_3'),
+      );
+      expect(secondTurnToolWrites.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should forward cumulative tools_calling chunks for multiple Codex tools in one step', async () => {
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Running the first checks.'),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexCommandStarted('item_2', "/bin/zsh -lc 'git status --short'"),
+          codexCommandCompleted('item_2', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
+          codexAgentMessage('item_3', 'Now I will inspect the commit details.'),
+          codexCommandStarted('item_4', "/bin/zsh -lc 'git show --stat --summary HEAD'"),
+          codexCommandCompleted(
+            'item_4',
+            "/bin/zsh -lc 'git show --stat --summary HEAD'",
+            ' src/file.ts | 1 +\n',
+          ),
+          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      const toolsCallingChunks = handlerSpy.mock.calls
+        .map((call) => call[0])
+        .filter(
+          (event: any) =>
+            event?.type === 'stream_chunk' && event.data?.chunkType === 'tools_calling',
+        );
+
+      expect(toolsCallingChunks).toHaveLength(3);
+      expect(toolsCallingChunks[0]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
+        'item_1',
+      ]);
+      expect(toolsCallingChunks[1]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
+        'item_1',
+        'item_2',
+      ]);
+      expect(toolsCallingChunks[2]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
+        'item_4',
+      ]);
+    });
+
+    it('should cut new assistants for later agent_message items in the same Codex turn', async () => {
+      const idCounter = { assistant: 0, tool: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool += 1;
+          return { id: `tool-${idCounter.tool}` };
+        }
+
+        if (params.role === 'assistant') {
+          idCounter.assistant += 1;
+          return { id: `ast-new-${idCounter.assistant}` };
+        }
+
+        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
+      });
+
+      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
+      const contentUpdates: Array<{ assistantId: string; content: string }> = [];
+      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
+        if (val.tools) {
+          toolsUpdates.push({
+            assistantId: id,
+            toolIds: val.tools.map((tool: any) => tool.id),
+          });
+        }
+        if (typeof val.content === 'string') {
+          contentUpdates.push({ assistantId: id, content: val.content });
+        }
+      });
+
+      await runWithEvents(
+        [
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage(
+            'item_0',
+            'Running the five read-only checks from the repo root exactly as requested.',
+          ),
+          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
+          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
+          codexCommandStarted('item_2', "/bin/zsh -lc 'git status --short'"),
+          codexCommandCompleted('item_2', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
+          codexCommandStarted('item_3', "/bin/zsh -lc 'rg --files src | head -n 5'"),
+          codexCommandCompleted(
+            'item_3',
+            "/bin/zsh -lc 'rg --files src | head -n 5'",
+            'src/store/session/store.ts\n',
+          ),
+          codexAgentMessage(
+            'item_4',
+            'The workspace is dirty in a few files, but I am only collecting read-only outputs.',
+          ),
+          codexCommandStarted(
+            'item_5',
+            `/bin/zsh -lc 'rg -n "heterogeneousAgent" src apps packages | head -n 10'`,
+          ),
+          codexCommandCompleted(
+            'item_5',
+            `/bin/zsh -lc 'rg -n "heterogeneousAgent" src apps packages | head -n 10'`,
+            'apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts:18:import ...\n',
+          ),
+          codexCommandStarted(
+            'item_6',
+            `/bin/zsh -lc 'rg -n "tool_call_id|tool_calls" src packages | head -n 10'`,
+          ),
+          codexCommandCompleted(
+            'item_6',
+            `/bin/zsh -lc 'rg -n "tool_call_id|tool_calls" src packages | head -n 10'`,
+            'packages/agent-runtime/src/agents/GeneralChatAgent.ts:34:...\n',
+          ),
+          codexAgentMessage(
+            'item_7',
+            'Confirmed the repo root and the requested ripgrep checks returned matches.',
+          ),
+          codexTurnCompleted({
+            cached_input_tokens: 92672,
+            input_tokens: 107744,
+            output_tokens: 996,
+          }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([params]: any) => params.role === 'assistant',
+      );
+      expect(assistantCreates).toHaveLength(2);
+      expect(assistantCreates[0]?.[0]).toMatchObject({
+        parentId: 'tool-3',
+        role: 'assistant',
+      });
+      expect(assistantCreates[1]?.[0]).toMatchObject({
+        parentId: 'tool-5',
+        role: 'assistant',
+      });
+
+      const firstStepToolWrites = toolsUpdates.filter(
+        (update) =>
+          update.assistantId === 'ast-initial' &&
+          update.toolIds.includes('item_1') &&
+          update.toolIds.includes('item_2') &&
+          update.toolIds.includes('item_3'),
+      );
+      expect(firstStepToolWrites.length).toBeGreaterThanOrEqual(1);
+
+      const secondStepToolWrites = toolsUpdates.filter(
+        (update) =>
+          update.assistantId === 'ast-new-1' &&
+          update.toolIds.includes('item_5') &&
+          update.toolIds.includes('item_6'),
+      );
+      expect(secondStepToolWrites.length).toBeGreaterThanOrEqual(1);
+
+      const thirdStepToolWrites = toolsUpdates.filter(
+        (update) => update.assistantId === 'ast-new-2' && update.toolIds.length > 0,
+      );
+      expect(thirdStepToolWrites).toHaveLength(0);
+
+      expect(
+        contentUpdates.findLast((update) => update.assistantId === 'ast-initial')?.content,
+      ).toContain('Running the five read-only checks');
+      expect(
+        contentUpdates.findLast((update) => update.assistantId === 'ast-new-1')?.content,
+      ).toContain('The workspace is dirty in a few files');
+      expect(
+        contentUpdates.findLast((update) => update.assistantId === 'ast-new-2')?.content,
+      ).toContain('Confirmed the repo root');
+    });
   });
 
   // ────────────────────────────────────────────────────
@@ -973,7 +1691,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     it('should have no orphan tools when replaying real CC trace', async () => {
       // Load real trace data
       const fs = await import('node:fs');
-      const path = await import('node:path');
       const tracePath = path.join(process.cwd(), 'regression.json');
 
       let traceData: any[];
@@ -1212,6 +1929,877 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([, val]: any) => val.content === 'Fixed the bug in app.ts.',
       );
       expect(finalContentWrite).toBeDefined();
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // CC subagent thread-container model (LOBE-7392 / LOBE-7319)
+  //
+  // A subagent Thread is shaped as a nested conversation:
+  //   user (prompt) → assistant#1 (tools[]) → tool → assistant#2 (tools[]) → tool → ...
+  //
+  // The executor creates the Thread lazily on the FIRST subagent event
+  // (the adapter announces spawn metadata on that chunk), seeds it with
+  // a `role:'user'` message from the Task prompt, then appends an
+  // `assistant` message per subagent turn boundary (new `subagentMessageId`).
+  //
+  // Main assistant.tools[] only ever carries the outer Task tool_use —
+  // subagent inner tools live on the in-thread assistants' tools[].
+  // ────────────────────────────────────────────────────
+
+  describe('CC subagent thread-container', () => {
+    it('does NOT create a Thread on Task tool_use alone (lazy creation)', async () => {
+      // Task tool_use without any subagent events should NOT trigger
+      // Thread creation — we only know the spawn is real once the
+      // adapter starts announcing subagent events.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'Find failing tests',
+          prompt: 'run the suite',
+          subagent_type: 'Explore',
+        }),
+        ccResult(),
+      ]);
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+    });
+
+    it('creates Thread + user + assistant messages on FIRST subagent event', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'Find failing tests',
+          prompt: 'run the suite and list failures',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash'),
+        ccResult(),
+      ]);
+
+      // Thread row seeded with adapter-supplied metadata.
+      expect(mockCreateThread).toHaveBeenCalledTimes(1);
+      expect(mockCreateThread).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expect.stringMatching(/^thd_/),
+          metadata: expect.objectContaining({
+            sourceToolCallId: 'toolu_task',
+            subagentType: 'Explore',
+            startedAt: expect.any(String),
+          }),
+          sourceMessageId: 'ast-initial',
+          title: 'Find failing tests',
+          topicId: 'topic-1',
+          type: 'isolation',
+        }),
+      );
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+
+      // Thread gets a `role:'user'` message seeded with the Task prompt.
+      const userMsg = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'user' && p.threadId === threadId,
+      );
+      expect(userMsg).toBeDefined();
+      expect(userMsg![0]).toMatchObject({
+        content: 'run the suite and list failures',
+        parentId: 'ast-initial',
+        threadId,
+      });
+
+      // Thread gets at least one `role:'assistant'` message scoped to
+      // the subagent's first turn.
+      const subAssistant = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      expect(subAssistant).toBeDefined();
+    });
+
+    it('chains subagent inner tool messages to the in-thread assistant', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const subAssistantMsg = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      const subToolCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_child',
+      );
+      expect(subToolCreate).toBeDefined();
+      expect(subToolCreate![0]).toMatchObject({
+        role: 'tool',
+        threadId,
+        tool_call_id: 'toolu_child',
+        plugin: expect.objectContaining({ apiName: 'Bash' }),
+      });
+      // Tool messages chain under the in-thread assistant (not the main one).
+      expect(subToolCreate![0].parentId).not.toBe('ast-initial');
+      // The in-thread assistant + tool messages share the same threadId.
+      expect(subAssistantMsg![0]).toMatchObject({ threadId });
+    });
+
+    it('opens a NEW in-thread assistant when subagentMessageId changes (turn boundary)', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        // Turn 1
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child_1', 'Read'),
+        // Turn 2 — new message.id for subagent
+        ccSubagentToolUse('msg_sub_2', 'toolu_task', 'toolu_child_2', 'Write'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const threadAssistants = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      // One assistant per subagent turn — same shape as the main topic.
+      expect(threadAssistants.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('routes delayed tool_result to thread bucket when it arrives after subagent turn has rolled over', async () => {
+      // Regression: `findRunByInnerToolCallId` must resolve across ALL
+      // turns of a subagent run, not just the current one. Previously
+      // it only consulted `state.persistedIds`, which `ensureSubagentRun`
+      // wipes on every turn advance — so a `tool_result` for a prior
+      // turn's `tool_use` silently skipped `run.stream.update` and left
+      // the in-thread tool bubble stuck on its loading spinner until the
+      // user re-opened the Thread (main-topic `fetchAndReplaceMessages`
+      // does not rehydrate thread buckets).
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        // Turn 1: lifetimeToolCallIds gets `toolu_child_1`.
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child_1', 'Read'),
+        // Turn 2: ensureSubagentRun wipes state.persistedIds. The
+        // run-lifetime set must still remember `toolu_child_1`.
+        ccSubagentToolUse('msg_sub_2', 'toolu_task', 'toolu_child_2', 'Write'),
+        // Delayed tool_result for the FIRST turn's tool_use.
+        ccToolResult('toolu_child_1', 'turn 1 output'),
+        ccResult(),
+      ]);
+
+      const startOpMock = (store.startOperation as ReturnType<typeof vi.fn>).mock;
+      const subOpIdx = startOpMock.calls.findIndex(([p]: any) => p?.type === 'subagentThread');
+      expect(subOpIdx).toBeGreaterThanOrEqual(0);
+      const subOperationId = startOpMock.results[subOpIdx].value.operationId;
+
+      const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const delayedResultDispatch = dispatches.find(
+        ([payload, ctx]: any) =>
+          ctx?.operationId === subOperationId &&
+          payload.type === 'updateMessage' &&
+          payload.value?.content === 'turn 1 output',
+      );
+      expect(delayedResultDispatch).toBeDefined();
+    });
+
+    it('records subagent tool_uses on IN-THREAD assistant tools[], not on main', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', { description: 'x', subagent_type: 'Plan' }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Read'),
+        ccResult(),
+      ]);
+
+      // Main assistant.tools[] only ever carries the outer Task tool_use.
+      const mainAssistantToolWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, val]: any) => id === 'ast-initial' && val.tools?.length > 0,
+      );
+      for (const [, val] of mainAssistantToolWrites) {
+        const ids = val.tools.map((t: any) => t.id);
+        expect(ids).toContain('toolu_task');
+        expect(ids).not.toContain('toolu_child');
+      }
+
+      // In-thread assistant should receive an updateMessage whose tools[]
+      // includes the subagent's inner tool_use.
+      const threadAssistantIds = new Set(
+        mockCreateMessage.mock.calls
+          .filter(
+            ([p]: any) =>
+              p.role === 'assistant' &&
+              typeof p.threadId === 'string' &&
+              p.threadId.startsWith('thd_'),
+          )
+          .map(([, returnValue]: any) => returnValue?.id),
+      );
+      // The mock returns a generated id — we can't match exactly, but we
+      // can assert SOME update carried toolu_child on a non-main assistant.
+      const subToolUpdateLanded = mockUpdateMessage.mock.calls.some(
+        ([id, val]: any) =>
+          id !== 'ast-initial' && val.tools?.some((t: any) => t.id === 'toolu_child'),
+      );
+      expect(subToolUpdateLanded).toBe(true);
+      // (threadAssistantIds unused here but kept to document the intent.)
+      expect(threadAssistantIds.size).toBeGreaterThan(0);
+    });
+
+    it('does NOT create a Thread when topicId is missing (non-topic-scoped run)', async () => {
+      await runWithEvents(
+        [
+          ccInit(),
+          ccToolUse('msg_main', 'toolu_task', 'Task', {
+            description: 'x',
+            subagent_type: 'Plan',
+          }),
+          ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Read'),
+          ccResult(),
+        ],
+        {
+          params: {
+            context: { ...defaultContext, topicId: undefined as any },
+          },
+        },
+      );
+
+      expect(mockCreateThread).not.toHaveBeenCalled();
+    });
+
+    it('persists the subagent Thread user message content from spawnMetadata.prompt', async () => {
+      // Real CC uses `Agent` for general-purpose subagents — the adapter
+      // should still extract `prompt` from the input and seed the user
+      // message content with it (earlier bug: user msg content empty).
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Agent', {
+          description: 'lookup pwd',
+          prompt: 'run pwd and summarize',
+          subagent_type: 'general-purpose',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const threadUser = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'user' && p.threadId === threadId,
+      );
+      expect(threadUser).toBeDefined();
+      expect(threadUser![0].content).toBe('run pwd and summarize');
+    });
+
+    it('accumulates subagent text into the in-thread assistant content', async () => {
+      // Subagent emits a closing summary text turn after its tool work.
+      // The thread should reflect it as the assistant's content so the
+      // Thread view reads as a complete conversation.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash'),
+        ccSubagentText('msg_sub_2', 'toolu_task', 'Here is the summary.'),
+        ccSubagentSpawnResult('toolu_task', 'Final answer to main.'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      // At least one updateMessage on a subagent-thread assistant with
+      // content = "Here is the summary." should have landed.
+      const threadAssistantContentWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, val]: any) => id !== 'ast-initial' && val.content === 'Here is the summary.',
+      );
+      expect(threadAssistantContentWrites.length).toBeGreaterThan(0);
+      expect(threadAssistantContentWrites[0][2]).toMatchObject({ topicId: 'topic-1' });
+      // Sanity — the in-thread assistants exist under the right thread.
+      const threadAssistants = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant' && p.threadId === threadId,
+      );
+      expect(threadAssistants.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('does NOT leak subagent text into main assistant accumulatedContent', async () => {
+      await runWithEvents([
+        ccInit(),
+        ccText('msg_main_pre', 'I will delegate.'),
+        ccToolUse('msg_main_pre', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentText('msg_sub', 'toolu_task', 'Subagent saying things'),
+        ccSubagentSpawnResult('toolu_task', 'done'),
+        ccResult(),
+      ]);
+
+      // Main assistant content writes should contain "I will delegate."
+      // but NEVER "Subagent saying things".
+      const mainContentWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, val]: any) => id === 'ast-initial' && typeof val.content === 'string',
+      );
+      for (const [, val] of mainContentWrites) {
+        expect(val.content).not.toContain('Subagent saying things');
+      }
+    });
+
+    it('finalizes subagent content when the spawn tool_result lands on main', async () => {
+      // Subagent emits text but no subsequent event — normally content
+      // only hits DB on the next persist or at onComplete. The spawn
+      // tool_result arriving on main should trigger an explicit flush
+      // so the final text lands in DB before fetchAndReplace.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentText('msg_sub', 'toolu_task', 'final summary text'),
+        ccSubagentSpawnResult('toolu_task', 'returned to main'),
+        ccResult(),
+      ]);
+
+      const finalizeWrite = mockUpdateMessage.mock.calls.find(
+        ([id, val]: any) => id !== 'ast-initial' && val.content === 'final summary text',
+      );
+      expect(finalizeWrite).toBeDefined();
+    });
+
+    it('retains subagent buffers + pinned target when the finalize flush fails', async () => {
+      // Transient DB failures on the finalize-time flush used to silently
+      // wipe the accumulators (buffer clear was outside the try/catch), so
+      // the onComplete fallback had nothing left to retry. With buffers
+      // preserved AND the flush target pinned, the retry writes the
+      // leftover stream text to the ORIGINAL in-thread assistant — not to
+      // the terminal message `resultContent` already advanced
+      // `currentAssistantMsgId` onto.
+      const idCounter = { tool: 0, assistant: 0, user: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        if (params.role === 'user') {
+          idCounter.user++;
+          return { id: `thread-user-${idCounter.user}` };
+        }
+        idCounter.assistant++;
+        return { id: `thread-ast-${idCounter.assistant}` };
+      });
+
+      // Make the FIRST write targeting the in-thread streaming assistant
+      // fail. The `content === 'streamed text'` check pins the rejection
+      // to the finalize-time flush; the onComplete retry uses the same
+      // update shape and must succeed.
+      let failed = false;
+      mockUpdateMessage.mockImplementation(async (_id: string, val: any) => {
+        if (!failed && val.content === 'streamed text') {
+          failed = true;
+          throw new Error('transient DB failure');
+        }
+      });
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentText('msg_sub', 'toolu_task', 'streamed text'),
+        ccSubagentSpawnResult('toolu_task', 'terminal result'),
+        ccResult(),
+      ]);
+
+      // Streamed content landed on the FIRST in-thread assistant
+      // (`thread-ast-1`) across the failure+retry — NOT on the terminal
+      // assistant created by the resultContent branch.
+      const streamedWrites = mockUpdateMessage.mock.calls.filter(
+        ([, val]: any) => val.content === 'streamed text',
+      );
+      // At least the retry must have landed after the original failure.
+      expect(streamedWrites.length).toBeGreaterThanOrEqual(2);
+      // Every attempt — including the retry — must target the streaming
+      // turn's assistant, so the terminal row's content never gets
+      // clobbered by the leftover buffer.
+      for (const [id] of streamedWrites) {
+        expect(id).toBe('thread-ast-1');
+      }
+
+      // Terminal assistant carrying the authoritative `resultContent`
+      // was still created as a fresh row (not overwritten by the retry).
+      const terminalCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
+      );
+      expect(terminalCreate).toBeDefined();
+    });
+
+    it('creates a terminal in-thread assistant with the main tool_result content', async () => {
+      // CC never emits the subagent's final summary as a
+      // `parent_tool_use_id`-tagged assistant event — the summary only
+      // exists on the main side, as the `tool_result.content` of the
+      // Agent spawn. Without an explicit terminal-assistant write, the
+      // Thread ends mid-conversation (last message = a tool), and the
+      // user has no visible result inside the subagent thread.
+      //
+      // This test covers the pure-tools subagent case (no inner text
+      // event) to prove we still get a terminal summary message.
+      const spawnResult = 'Here is what I found: ...';
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccToolResult('toolu_child', 'ls output'),
+        ccSubagentSpawnResult('toolu_task', spawnResult),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const terminalCreate = mockCreateMessage.mock.calls.find(
+        ([payload]: any) =>
+          payload.role === 'assistant' &&
+          payload.threadId === threadId &&
+          payload.content === spawnResult,
+      );
+      expect(terminalCreate).toBeDefined();
+
+      // Terminal message should chain off the last tool, not off the
+      // thread's initial assistant, so the transcript flows
+      // user → asst(tools) → tool → asst(result).
+      const toolCreate = mockCreateMessage.mock.calls.find(
+        ([payload]: any) => payload.role === 'tool' && payload.tool_call_id === 'toolu_child',
+      );
+      expect(toolCreate).toBeDefined();
+      // The tool create returns an id; since the mock returns { id } we
+      // just assert the terminal's parentId is NOT the first assistant
+      // (id of which was returned earlier in mockCreateMessage).
+      const firstAssistantCreate = mockCreateMessage.mock.calls.find(
+        ([payload]: any) => payload.role === 'assistant' && payload.threadId === threadId,
+      );
+      expect(terminalCreate![0].parentId).not.toBe(firstAssistantCreate![0].id);
+    });
+
+    it('streams the terminal assistant into the thread messagesMap bucket', async () => {
+      // UI relies on internal_dispatchMessage to see the terminal
+      // message arrive in the thread bucket — otherwise the Thread view
+      // only picks it up on re-open / SWR refresh.
+      const spawnResult = 'Final handoff text.';
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash'),
+        ccSubagentSpawnResult('toolu_task', spawnResult),
+        ccResult(),
+      ]);
+
+      // The thread-scoped sub-op opened by `beginSubagentRun` is the
+      // dispatchCtx.operationId for every Thread bucket dispatch — so
+      // we identify it via the `startOperation` call with type
+      // 'subagentThread' and filter dispatches against that id, instead
+      // of inspecting threadId directly (the threadId override at the
+      // dispatch boundary is gone — context flows through the standard
+      // operation registry path now).
+      const startOpCalls = (store.startOperation as ReturnType<typeof vi.fn>).mock;
+      const subOpIdx = startOpCalls.calls.findIndex(([p]: any) => p?.type === 'subagentThread');
+      expect(subOpIdx).toBeGreaterThanOrEqual(0);
+      const subOperationId = startOpCalls.results[subOpIdx].value.operationId;
+
+      const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const terminalDispatch = dispatches.find(
+        ([payload, ctx]: any) =>
+          ctx?.operationId === subOperationId &&
+          payload.type === 'createMessage' &&
+          payload.value.role === 'assistant' &&
+          payload.value.content === spawnResult,
+      );
+      expect(terminalDispatch).toBeDefined();
+    });
+
+    it('does NOT create a terminal assistant when onComplete fires without a spawn tool_result', async () => {
+      // CLI closed before the Agent's tool_result arrived (e.g. crash
+      // mid-run). The fallback finalize in onComplete should only flush
+      // any streamed content — NOT synthesize a terminal message out
+      // of thin air, since no authoritative result exists yet.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash'),
+        ccToolResult('toolu_child', 'ls output'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      // Thread assistants created in this run: ONLY the seed assistant.
+      // No terminal assistant should have been synthesized.
+      const assistantCreatesInThread = mockCreateMessage.mock.calls.filter(
+        ([payload]: any) => payload.role === 'assistant' && payload.threadId === threadId,
+      );
+      expect(assistantCreatesInThread.length).toBe(1);
+    });
+
+    it('invokes store.refreshThreads on lazy Thread creation (sidebar auto-refresh)', async () => {
+      // Without this hook the new subagent Thread is only visible in the
+      // sidebar after the user navigates topics / refreshes — an earlier
+      // Electron E2E repro had the Thread land in DB but stay invisible
+      // in the list until manual `refreshThreads()` call.
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub', 'toolu_task', 'toolu_child', 'Bash'),
+        ccResult(),
+      ]);
+
+      expect(store.refreshThreads).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call refreshThreads when no subagent events land', async () => {
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_1', 'Read', { file_path: '/a.ts' }),
+        ccToolResult('toolu_1', 'content'),
+        ccResult(),
+      ]);
+
+      expect(store.refreshThreads).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Thread-scoped in-memory streaming. Per-spawn sub-operation is
+     * opened via `startOperation({ type: 'subagentThread',
+     * parentOperationId, context: { ..., threadId, scope: 'thread' } })`,
+     * and every Thread bucket dispatch carries that sub-op's id —
+     * `internal_getConversationContext` resolves the Thread context
+     * through the standard operation registry path (no threadId-override
+     * hack at the dispatch boundary). Without these dispatches the
+     * Thread view would stay empty until SWR re-fetches on next open
+     * (`fetchAndReplaceMessages` is main-topic scoped).
+     */
+    it('streams subagent create/update dispatches via a thread-scoped sub-operation', async () => {
+      const { store } = await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccToolResult('toolu_child', 'ls output'),
+        ccSubagentText('msg_sub_2', 'toolu_task', 'final summary'),
+        ccSubagentSpawnResult('toolu_task', 'done'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const startOpMock = store.startOperation as ReturnType<typeof vi.fn>;
+
+      // Sub-op opened with `subagentThread` type, parented to the main op,
+      // carrying the Thread's ConversationContext (threadId + thread scope)
+      // so dispatches resolve into the Thread bucket via the standard
+      // `internal_getConversationContext` path.
+      const subOpCallIdx = startOpMock.mock.calls.findIndex(
+        ([p]: any) => p?.type === 'subagentThread',
+      );
+      expect(subOpCallIdx).toBeGreaterThanOrEqual(0);
+      const subOpCallArg = startOpMock.mock.calls[subOpCallIdx][0];
+      expect(subOpCallArg).toMatchObject({
+        type: 'subagentThread',
+        parentOperationId: 'op-1',
+        context: { threadId, scope: 'thread' },
+      });
+      const subOperationId = startOpMock.mock.results[subOpCallIdx].value.operationId;
+
+      const dispatches = (store.internal_dispatchMessage as ReturnType<typeof vi.fn>).mock.calls;
+      const threadDispatches = dispatches.filter(
+        ([, ctx]: any) => ctx?.operationId === subOperationId,
+      );
+
+      // Seed: user + first in-thread assistant + tool message must each
+      // get a createMessage dispatch so the Thread renders the moment
+      // the user opens it.
+      const threadCreates = threadDispatches.filter(
+        ([payload]: any) => payload.type === 'createMessage',
+      );
+      const threadCreateRoles = threadCreates.map(([p]: any) => (p.value as any).role);
+      expect(threadCreateRoles).toContain('user');
+      expect(threadCreateRoles).toContain('assistant');
+      expect(threadCreateRoles).toContain('tool');
+
+      // The tool createMessage carries the inner tool_use's tool_call_id
+      // + apiName so the bubble renders with the right plugin shell.
+      const toolCreate = threadCreates.find(([p]: any) => (p.value as any).role === 'tool');
+      expect((toolCreate![0].value as any).tool_call_id).toBe('toolu_child');
+      expect((toolCreate![0].value as any).plugin?.apiName).toBe('Bash');
+
+      // Streaming: updateMessage dispatches must deliver the assistant's
+      // tools[] (so the tool card animates) and the accumulated text
+      // (so the closing summary streams).
+      const threadUpdates = threadDispatches.filter(
+        ([payload]: any) => payload.type === 'updateMessage',
+      );
+      const anyToolsUpdate = threadUpdates.some(([p]: any) =>
+        Array.isArray((p.value as any).tools),
+      );
+      expect(anyToolsUpdate).toBe(true);
+      const anyTextUpdate = threadUpdates.some(
+        ([p]: any) =>
+          typeof (p.value as any).content === 'string' && (p.value as any).content.length > 0,
+      );
+      expect(anyTextUpdate).toBe(true);
+
+      // Tool result lands on the thread-scoped tool message id (the
+      // DB-generated one captured by the createMessage dispatch above).
+      const toolMsgId = toolCreate![0].id;
+      const toolResultUpdate = threadUpdates.find(
+        ([p]: any) => p.id === toolMsgId && (p.value as any).content === 'ls output',
+      );
+      expect(toolResultUpdate).toBeDefined();
+
+      // Main bucket must NOT receive updates targeting the in-thread tool
+      // message id — keep the main bubble clean of subagent bleed.
+      const mainLeaks = dispatches.filter(
+        ([payload, ctx]: any) =>
+          ctx?.operationId !== subOperationId &&
+          payload.type === 'updateMessage' &&
+          payload.id === toolMsgId,
+      );
+      expect(mainLeaks).toHaveLength(0);
+
+      // Sub-op is marked completed once the spawn's tool_result lands +
+      // `finalizeSubagentRun` writes the terminal assistant. Cancel /
+      // cleanup cascade then flow through the existing parent/child
+      // operation linkage instead of any subagent-specific bookkeeping.
+      expect(store.completeOperation).toHaveBeenCalledWith(subOperationId);
+    });
+
+    /**
+     * Regression: parallel main tool_use + subagent inner tool_use rendered
+     * Task/Agent as an orphan in the main bubble.
+     *
+     * The gateway handler is main-agent-only: its `stream_chunk`
+     * case dispatches `updateMessage { tools }` to
+     * `currentAssistantMessageId` (main). Forwarding a subagent-tagged
+     * chunk would overwrite main.tools[] with the subagent's inner tools
+     * in the in-memory store. The main's own Task / Agent tool_call_id
+     * then has no matching entry in main.tools[], and every tool message
+     * under it renders with the "orphan tool call" banner until the next
+     * fetchAndReplaceMessages (or forever, if the last corrupting chunk
+     * lands after the final fetch).
+     *
+     * DB persistence is separate (persistSubagent*Chunk writes to the
+     * thread scope) and already correct — this guards only the forwarding
+     * path.
+     */
+    it('does NOT forward subagent-tagged stream_chunks to the gateway handler', async () => {
+      await runWithEvents([
+        ccInit(),
+        // Main emits Task + a parallel Read in the same message.id.
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'inspect',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccToolUse('msg_main', 'toolu_read', 'Read', { file_path: '/a.ts' }),
+        // Subagent inner tools + closing text.
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_grep', 'Grep'),
+        ccSubagentText('msg_sub_2', 'toolu_task', 'subagent summary'),
+        ccToolResult('toolu_read', 'content'),
+        ccSubagentSpawnResult('toolu_task', 'task done'),
+        ccResult(),
+      ]);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
+        typeof vi.fn
+      >;
+      expect(handlerSpy).toBeDefined();
+
+      // Collect every stream_chunk that reached the handler.
+      const forwardedChunks = handlerSpy.mock.calls
+        .map((call) => call[0])
+        .filter((e: any) => e?.type === 'stream_chunk');
+
+      // None of them may carry subagent context — those are already
+      // persisted to the in-thread assistant and must not touch main.
+      for (const chunk of forwardedChunks) {
+        expect((chunk as any).data?.subagent).toBeUndefined();
+      }
+
+      // Sanity: main's parallel tool chunk (Task + Read) still reaches the
+      // handler so the in-memory main.tools[] animation still fires.
+      const mainToolsCallingChunks = forwardedChunks.filter(
+        (e: any) => e.data?.chunkType === 'tools_calling',
+      );
+      const seenToolIds = new Set<string>();
+      for (const c of mainToolsCallingChunks) {
+        for (const t of (c as any).data.toolsCalling ?? []) seenToolIds.add(t.id);
+      }
+      expect(seenToolIds).toContain('toolu_task');
+      expect(seenToolIds).toContain('toolu_read');
+      expect(seenToolIds).not.toContain('toolu_grep');
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // LOBE-7365: Monitor parentId chain regression
+  // ────────────────────────────────────────────────────
+
+  describe('LOBE-7365 Monitor parentId chain', () => {
+    /**
+     * Monitor pattern: initial tool_use returns immediately ("Monitor started"),
+     * then Monitor's stdout is fed back as synthetic user content that drives
+     * new CC assistant turns. Each step should parent to the previous step's
+     * last tool message to form a single assistantGroup in the UI.
+     */
+    it('basic flow: each step parents to previous step last tool', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor starts a long-running task
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', {
+          shell: 'until curl localhost/health; do sleep 5; done',
+        }),
+        ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+        ccToolResult('toolu_mon_0', 'Monitor started, task abc'),
+        // Step 1 (new msg id): CC reacts to Monitor stdout with Bash + new Monitor
+        ccMessageStart('msg_02'),
+        ccToolUse('msg_02', 'toolu_bash_1', 'Bash', { command: 'echo ok' }),
+        ccToolUse('msg_02', 'toolu_mon_1', 'Monitor', { shell: 'tail -f log' }),
+        ccMessageDelta({ input_tokens: 150, output_tokens: 30 }),
+        ccToolResult('toolu_bash_1', 'ok'),
+        ccToolResult('toolu_mon_1', 'Monitor started, task def'),
+        // Step 2 (new msg id)
+        ccMessageStart('msg_03'),
+        ccToolUse('msg_03', 'toolu_bash_2', 'Bash', { command: 'date' }),
+        ccMessageDelta({ input_tokens: 200, output_tokens: 40 }),
+        ccToolResult('toolu_bash_2', 'Mon Apr 21'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      // Two new assistants (step 1 + step 2); step 0 uses ast-initial
+      expect(assistantCreates.length).toBe(2);
+
+      // Step 1 parent = Monitor tool from step 0 (tool-1)
+      expect(assistantCreates[0][0].parentId).toBe('tool-1');
+      // Step 2 parent = LAST tool from step 1 = Monitor_1 (tool-3)
+      expect(assistantCreates[1][0].parentId).toBe('tool-3');
+    });
+
+    /**
+     * Hypothesis 2 from the issue: a toolless step in the middle.
+     * If Monitor's stdout triggers CC to respond with only text (no tool_use),
+     * the next step must still chain through. This test documents current
+     * behavior: toolless step breaks tool → next-tool chain.
+     */
+    it('toolless middle step: chain visibly breaks at text-only step', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'watch -n1 date' }),
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        // Step 1 (new msg id): TEXT ONLY — no tool_use
+        ccText('msg_02', 'Looks like it started. I will wait for output.'),
+        // Step 2 (new msg id): Monitor emits a line, CC reacts with Bash
+        ccToolUse('msg_03', 'toolu_bash_2', 'Bash', { command: 'echo reacting' }),
+        ccToolResult('toolu_bash_2', 'reacting'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      expect(assistantCreates.length).toBe(2);
+
+      // Step 1 parent = Monitor tool from step 0 → this IS correct (tool-1)
+      expect(assistantCreates[0][0].parentId).toBe('tool-1');
+
+      // Step 2 parent: step 1 had NO tools, so toolState.payloads is empty.
+      // Code falls back to currentAssistantMessageId (= step 1 assistant).
+      // BUG: this breaks the assistantGroup chain because collectAssistantChain
+      // only walks tool → assistant, never assistant → assistant.
+      expect(assistantCreates[1][0].parentId).toBe('ast-new-1');
+      // ^ If this assertion passes, the chain IS broken.
+    });
+
+    /**
+     * Hypothesis: Monitor's tool_result arrives AFTER the next message_start.
+     * In CC's stream, tool_result comes from a `user` event AFTER the assistant
+     * event that issued the tool_use, and BEFORE the next assistant turn.
+     * But what if CC emits the next message_start BEFORE the tool_result lands?
+     * (The adapter routes message_start via openMainMessage, which triggers
+     * stream_start(newStep); stepParentId is computed in persistQueue —
+     * this queue serializes with persistToolBatch but NOT with persistToolResult.)
+     */
+    it('delayed tool_result: Monitor tool_result arrives after next message_start', async () => {
+      const idCounter = { tool: 0, assistant: 0 };
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        if (params.role === 'tool') {
+          idCounter.tool++;
+          return { id: `tool-${idCounter.tool}` };
+        }
+        idCounter.assistant++;
+        return { id: `ast-new-${idCounter.assistant}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Step 0: Monitor
+        ccMessageStart('msg_01'),
+        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: '...' }),
+        // Step 1 BEGINS before the Monitor tool_result arrives
+        ccMessageStart('msg_02'),
+        // NOW Monitor's tool_result arrives (interleaved)
+        ccToolResult('toolu_mon_0', 'Monitor started'),
+        ccToolUse('msg_02', 'toolu_bash_1', 'Bash', {}),
+        ccToolResult('toolu_bash_1', 'ok'),
+        ccResult(),
+      ]);
+
+      const assistantCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => p.role === 'assistant',
+      );
+      expect(assistantCreates.length).toBe(1);
+      // Step 1 parent should be the Monitor tool from step 0
+      // result_msg_id is set by persistToolBatch Phase 2 (queued on persistQueue
+      // BEFORE the step_boundary persistQueue.then), so this should work.
+      expect(assistantCreates[0][0].parentId).toBe('tool-1');
     });
   });
 });

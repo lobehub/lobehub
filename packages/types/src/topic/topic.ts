@@ -104,11 +104,15 @@ export interface ChatTopicSummary {
   provider: string;
 }
 
+export type ChatTopicStatus = 'active' | 'completed' | 'archived';
+
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
+  completedAt?: Date | null;
   favorite?: boolean;
   historySummary?: string;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
+  status?: ChatTopicStatus | null;
   title: string;
   trigger?: string | null;
 }
@@ -155,13 +159,19 @@ export interface CreateTopicParams {
   messages?: string[];
   sessionId?: string | null;
   title: string;
+  trigger?: string;
 }
 
 export interface QueryTopicParams {
   agentId?: string | null;
   current?: number;
   /**
+   * Exclude topics by status (e.g. ['completed'])
+   */
+  excludeStatuses?: string[];
+  /**
    * Exclude topics by trigger types (e.g. ['cron'])
+   * Ignored when includeTriggers is provided.
    */
   excludeTriggers?: string[];
   /**
@@ -169,11 +179,20 @@ export interface QueryTopicParams {
    */
   groupId?: string | null;
   /**
+   * Include only topics whose trigger matches one of these values.
+   * Takes precedence over excludeTriggers when provided.
+   */
+  includeTriggers?: string[];
+  /**
    * Whether this is an inbox agent query.
    * When true, also includes legacy inbox topics (sessionId IS NULL AND groupId IS NULL AND agentId IS NULL)
    */
   isInbox?: boolean;
   pageSize?: number;
+  /**
+   * Include only topics matching the given trigger types (positive filter)
+   */
+  triggers?: string[];
 }
 
 /**

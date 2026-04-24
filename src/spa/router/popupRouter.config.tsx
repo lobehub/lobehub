@@ -3,6 +3,7 @@
 import type { RouteObject } from 'react-router-dom';
 
 import PopupLayout from '@/routes/(popup)/_layout';
+import PopupAgentQuickPage from '@/routes/(popup)/agent/[aid]';
 import PopupAgentTopicPage from '@/routes/(popup)/agent/[aid]/[tid]';
 import PopupGroupTopicPage from '@/routes/(popup)/group/[gid]/[tid]';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -15,6 +16,10 @@ export const popupRoutes: RouteObject[] = [
       {
         element: <PopupAgentTopicPage />,
         path: 'agent/:aid/:tid',
+      },
+      {
+        element: <PopupAgentQuickPage />,
+        path: 'agent/:aid',
       },
       {
         element: <PopupGroupTopicPage />,

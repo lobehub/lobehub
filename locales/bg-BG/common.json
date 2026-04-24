@@ -354,6 +354,7 @@
   "navPanel.moveDown": "Преместване надолу",
   "navPanel.moveUp": "Преместване нагоре",
   "navPanel.pinned": "Закачено",
+  "navPanel.resetDefault": "Възстановяване на настройките по подразбиране",
   "navPanel.searchAgent": "Търсене на агент...",
   "navPanel.searchRecent": "Търсене в скорошни...",
   "navPanel.searchResultEmpty": "Няма намерени резултати",

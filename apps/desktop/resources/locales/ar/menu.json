@@ -86,5 +86,6 @@
   "window.minimize": "تصغير",
   "window.title": "نافذة",
   "window.toggleFullscreen": "تبديل وضع ملء الشاشة",
-  "window.zoom": "تكبير"
+  "window.zoom": "تكبير",
+  "tray.openMiniToolbar": "Quick Composer"
 }

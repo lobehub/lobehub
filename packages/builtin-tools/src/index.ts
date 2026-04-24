@@ -42,6 +42,7 @@ export const defaultToolIds = [
   TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
   GTDManifest.identifier,
+  TaskManifest.identifier,
 ];
 
 /**
@@ -246,14 +247,14 @@ export const builtinTools: LobeBuiltinTool[] = [
   },
 ];
 
-/**
- * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
- * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
- */
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),
 );
 
+/**
+ * Non-hidden builtin tools that are NOT in RECOMMENDED_SKILLS.
+ * These tools default to uninstalled and must be explicitly installed by the user from the Skill Store.
+ */
 export const defaultUninstalledBuiltinTools = builtinTools
   .filter((t) => !t.hidden && !recommendedBuiltinIds.has(t.identifier))
   .map((t) => t.identifier);

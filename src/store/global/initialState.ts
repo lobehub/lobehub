@@ -17,6 +17,7 @@ export enum SidebarTabKey {
   Pages = 'pages',
   Resource = 'resource',
   Setting = 'settings',
+  Tasks = 'tasks',
   Video = 'video',
 }
 
@@ -195,6 +196,28 @@ export interface SystemStatus {
   sidebarSectionOrder?: string[];
   systemRoleExpandedMap: Record<string, boolean>;
   /**
+   * Whether the inline task create entry on the tasks page is collapsed (hidden).
+   * When true, the tasks page shows a "+" button in the header that opens the create modal.
+   */
+  taskCreateInlineCollapsed?: boolean;
+  /**
+   * Kanban columns hidden from the main board. Each column renders as a collapsible
+   * entry in the right-side "Hidden columns" panel until restored.
+   */
+  taskKanbanHiddenColumns?: string[];
+  /**
+   * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
+   */
+  taskKanbanHiddenPanelCollapsed?: boolean;
+  taskListViewOptions?: {
+    groupBy: 'assignee' | 'none' | 'priority' | 'status';
+    hideCompleted: boolean;
+    orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
+    orderCompletedByRecency: boolean;
+    orderDirection: 'asc' | 'desc';
+    subGroupBy: 'assignee' | 'none' | 'priority' | 'status';
+  };
+  /**
    * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
@@ -253,6 +276,16 @@ export const INITIAL_STATUS = {
   agentPageSize: 5,
   chatInputHeight: 64,
   recentPageSize: 5,
+  taskListViewOptions: {
+    groupBy: 'status',
+    hideCompleted: true,
+    orderBy: 'updatedAt',
+    orderCompletedByRecency: true,
+    orderDirection: 'asc',
+    subGroupBy: 'none',
+  },
+  taskKanbanHiddenColumns: ['done'],
+  taskKanbanHiddenPanelCollapsed: false,
   disabledModelProvidersSortType: 'default',
   disabledModelsSortType: 'default',
   dismissedBannerIds: [],

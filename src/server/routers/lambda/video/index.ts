@@ -4,6 +4,7 @@ import {
   buildMappedBusinessModelFields,
   resolveBusinessModelMapping,
 } from '@lobechat/business-model-runtime';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { after } from 'next/server';
@@ -217,11 +218,14 @@ export const videoRouter = router({
       const callbackUrl = `${callbackBaseUrl}/api/webhooks/video/${provider}?token=${webhookToken}`;
       log('Using callback URL: %s', callbackUrl);
 
-      const response = await modelRuntime.createVideo({
-        callbackUrl,
-        model: resolvedModelId,
-        params: generationParams,
-      });
+      const response = await modelRuntime.createVideo(
+        {
+          callbackUrl,
+          model: resolvedModelId,
+          params: generationParams,
+        },
+        { metadata: { trigger: RequestTrigger.Video } },
+      );
 
       log('Video task submitted successfully, inferenceId: %s', response?.inferenceId);
 

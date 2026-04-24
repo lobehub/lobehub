@@ -207,14 +207,22 @@ class DiscordGatewayClient implements PlatformClient {
   getMessenger(platformThreadId: string): PlatformMessenger {
     const channelId = extractChannelId(platformThreadId);
     const threadId = platformThreadId.split(':')[3];
+    const discord = this.discord;
     return {
-      createMessage: (content) => this.discord.createMessage(channelId, content).then(() => {}),
-      editMessage: (messageId, content) => this.discord.editMessage(channelId, messageId, content),
-      removeReaction: (messageId, emoji) =>
-        this.discord.removeOwnReaction(channelId, messageId, emoji),
-      triggerTyping: () => this.discord.triggerTyping(channelId),
+      addReaction: (messageId, emoji) => discord.createReaction(channelId, messageId, emoji),
+      createMessage: (content) => discord.createMessage(channelId, content).then(() => {}),
+      editMessage: (messageId, content) => discord.editMessage(channelId, messageId, content),
+      removeReaction: (messageId, emoji) => discord.removeOwnReaction(channelId, messageId, emoji),
+      replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
+        if (prevEmoji === nextEmoji) return;
+        // Add first so the user always sees at least one bot reaction; if
+        // the add fails, the previous emoji survives as a readable state.
+        if (nextEmoji) await discord.createReaction(channelId, messageId, nextEmoji);
+        if (prevEmoji) await discord.removeOwnReaction(channelId, messageId, prevEmoji);
+      },
+      triggerTyping: () => discord.triggerTyping(channelId),
       updateThreadName: (name) => {
-        return threadId ? this.discord.updateChannelName(threadId, name) : Promise.resolve();
+        return threadId ? discord.updateChannelName(threadId, name) : Promise.resolve();
       },
     };
   }

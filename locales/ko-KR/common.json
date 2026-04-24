@@ -354,6 +354,7 @@
   "navPanel.moveDown": "아래로 이동",
   "navPanel.moveUp": "위로 이동",
   "navPanel.pinned": "고정됨",
+  "navPanel.resetDefault": "기본값으로 재설정",
   "navPanel.searchAgent": "도우미 검색…",
   "navPanel.searchRecent": "최근 검색...",
   "navPanel.searchResultEmpty": "검색 결과가 없습니다",

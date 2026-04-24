@@ -354,6 +354,7 @@
   "navPanel.moveDown": "Omlaag verplaatsen",
   "navPanel.moveUp": "Omhoog verplaatsen",
   "navPanel.pinned": "Vastgemaakt",
+  "navPanel.resetDefault": "Herstellen naar standaardinstellingen",
   "navPanel.searchAgent": "Zoek agent...",
   "navPanel.searchRecent": "Recente items zoeken...",
   "navPanel.searchResultEmpty": "Geen zoekresultaten gevonden",

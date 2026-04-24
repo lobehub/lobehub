@@ -1,8 +1,21 @@
 import { electronAPI } from '@electron-toolkit/preload';
-import { contextBridge } from 'electron';
+import type { ScreenCaptureSession } from '@lobechat/electron-client-ipc';
+import { contextBridge, ipcRenderer } from 'electron';
 
 import { invoke } from './invoke';
 import { onStreamInvoke } from './streamer';
+
+const screenCaptureSessionListeners = new Set<(session: ScreenCaptureSession) => void>();
+
+let latestScreenCaptureSession: ScreenCaptureSession | null = null;
+
+ipcRenderer.on('screenCaptureSession', (_event, session: ScreenCaptureSession) => {
+  latestScreenCaptureSession = session;
+
+  for (const listener of screenCaptureSessionListeners) {
+    listener(session);
+  }
+});
 
 export const setupElectronApi = () => {
   // Use `contextBridge` APIs to expose Electron APIs to
@@ -17,6 +30,17 @@ export const setupElectronApi = () => {
 
   contextBridge.exposeInMainWorld('electronAPI', {
     invoke,
+    onScreenCaptureSession: (listener: (session: ScreenCaptureSession) => void) => {
+      screenCaptureSessionListeners.add(listener);
+
+      if (latestScreenCaptureSession) {
+        listener(latestScreenCaptureSession);
+      }
+
+      return () => {
+        screenCaptureSessionListeners.delete(listener);
+      };
+    },
     onStreamInvoke,
   });
 
@@ -33,3 +57,5 @@ export const setupElectronApi = () => {
     platform: process.platform,
   });
 };
+
+export type SetupElectronApiFunction = typeof setupElectronApi;

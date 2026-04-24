@@ -1,7 +1,18 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { CredsIdentifier, type CredSummary, generateCredsList } from '@lobechat/builtin-tool-creds';
+import {
+  CredsIdentifier,
+  type CredSummary,
+  generateCredsList,
+  generateKlavisServicesList,
+  type KlavisServiceSummary,
+} from '@lobechat/builtin-tool-creds';
+import {
+  CronIdentifier,
+  type CronJobSummaryForContext,
+  generateCronJobsList,
+} from '@lobechat/builtin-tool-cron';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
@@ -48,6 +59,7 @@ import {
   lobehubSkillStoreSelectors,
   toolSelectors,
 } from '@/store/tool/selectors';
+import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
@@ -377,6 +389,75 @@ export const contextEngineering = async ({
     }
   }
 
+  // Build Klavis services list for creds context
+  // Shows which Klavis services are connected (authorized) and which are available to connect
+  let klavisServicesList = '';
+
+  const isKlavisEnabled =
+    typeof window !== 'undefined' &&
+    window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+
+  if (isCredsEnabled && isKlavisEnabled) {
+    try {
+      const toolState = getToolStoreState();
+      const allKlavisServers = klavisStoreSelectors.getServers(toolState);
+
+      const connected: KlavisServiceSummary[] = allKlavisServers
+        .filter((s) => s.status === KlavisServerStatus.CONNECTED)
+        .map((s) => ({ identifier: s.identifier, name: s.serverName }));
+
+      const connectedIds = new Set(connected.map((s) => s.identifier));
+      const available: KlavisServiceSummary[] = KLAVIS_SERVER_TYPES.filter(
+        (t) => !connectedIds.has(t.identifier),
+      ).map((t) => ({ identifier: t.identifier, name: t.label }));
+
+      klavisServicesList = generateKlavisServicesList(connected, available);
+      log(
+        'Klavis services context resolved: connected=%d, available=%d',
+        connected.length,
+        available.length,
+      );
+    } catch (error) {
+      log('Failed to resolve Klavis services context:', error);
+    }
+  }
+
+  // Resolve cron jobs context for cron tool
+  // Only inject a small preview (up to 4) to save context window;
+  // the model can call listCronJobs API for the full list.
+  const isCronEnabled = tools?.includes(CronIdentifier) ?? false;
+  let cronJobsList: CronJobSummaryForContext[] | undefined;
+  let cronJobsTotal = 0;
+
+  if (isCronEnabled && agentId) {
+    try {
+      const cronResult = await lambdaClient.agentCronJob.list.query({ agentId, limit: 4 });
+      const jobs = (cronResult as any)?.data ?? [];
+      cronJobsTotal = (cronResult as any)?.pagination?.total ?? jobs.length;
+      cronJobsList = jobs.map(
+        (job: any): CronJobSummaryForContext => ({
+          cronPattern: job.cronPattern,
+          description: job.description,
+          enabled: job.enabled,
+          id: job.id,
+          lastExecutedAt: job.lastExecutedAt,
+          name: job.name,
+          remainingExecutions: job.remainingExecutions,
+          timezone: job.timezone ?? 'UTC',
+          totalExecutions: job.totalExecutions ?? 0,
+        }),
+      );
+      log(
+        'Cron jobs context resolved: count=%d, total=%d',
+        cronJobsList?.length ?? 0,
+        cronJobsTotal,
+      );
+    } catch (error) {
+      // Silently fail - cron context is optional
+      log('Failed to resolve cron jobs context:', error);
+    }
+  }
+
   const userMemoryConfig =
     enableUserMemories && userMemoryData
       ? {
@@ -694,6 +775,10 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
+      KLAVIS_SERVICES_LIST: () => klavisServicesList,
+      // NOTICE: required by builtin-tool-cron/src/systemRole.ts
+      CRON_JOBS_LIST: () => (cronJobsList ? generateCronJobsList(cronJobsList, cronJobsTotal) : ''),
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin

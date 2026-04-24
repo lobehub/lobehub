@@ -1,21 +1,38 @@
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { CheckSquareIcon, FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
+import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
 import InlineRename from '@/components/InlineRename';
+import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { type RecentItem } from '@/server/routers/lambda/recent';
+import { useTaskStore } from '@/store/task';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
-const TYPE_ICON_MAP = {
+const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTextIcon>> = {
   document: FileTextIcon,
-  task: CheckSquareIcon,
   topic: HashIcon,
+};
+
+type TaskStatus = 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running';
+const LEGACY_TASK_STATUS_MAP: Record<string, TaskStatus> = {
+  backlog: 'backlog',
+  canceled: 'canceled',
+  completed: 'completed',
+  failed: 'failed',
+  in_progress: 'running',
+  paused: 'paused',
+  running: 'running',
+  todo: 'backlog',
+};
+const normalizeTaskStatus = (status?: string | null): TaskStatus => {
+  if (!status) return 'backlog';
+  return LEGACY_TASK_STATUS_MAP[status] ?? 'backlog';
 };
 
 const RecentListItem = memo<RecentItem>((item) => {
@@ -24,6 +41,10 @@ const RecentListItem = memo<RecentItem>((item) => {
   const [editing, setEditing] = useState(false);
   const prefetchAgent = usePrefetchAgent();
   const prefetchPage = usePrefetchPage();
+  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
+  const taskKey = type === 'task' ? id : undefined;
+  useFetchTaskDetail(taskKey);
+  const taskStatus = useTaskStore((s) => (taskKey ? s.taskDetailMap[taskKey]?.status : undefined));
 
   const toggleEditing = useCallback((visible?: boolean) => {
     setEditing(!!visible);
@@ -57,6 +78,10 @@ const RecentListItem = memo<RecentItem>((item) => {
           </DropdownMenu>
         }
         icon={(() => {
+          if (type === 'task') {
+            return <TaskStatusIcon size={16} status={normalizeTaskStatus(taskStatus)} />;
+          }
+
           if (type === 'topic' && metadata?.bot?.platform) {
             const ProviderIcon = getPlatformIcon(metadata.bot.platform);
             if (ProviderIcon) {

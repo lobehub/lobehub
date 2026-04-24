@@ -51,6 +51,13 @@ const Nav = memo(() => {
         title={tTopic('actions.addNewTopic')}
         onClick={handleNewTopic}
       />
+      <NavItem
+        icon={SearchIcon}
+        title={t('tab.search')}
+        onClick={() => {
+          toggleCommandMenu(true);
+        }}
+      />
       {!hideProfile && (
         <NavItem
           active={isProfileActive}
@@ -73,13 +80,6 @@ const Nav = memo(() => {
           }}
         />
       )}
-      <NavItem
-        icon={SearchIcon}
-        title={t('tab.search')}
-        onClick={() => {
-          toggleCommandMenu(true);
-        }}
-      />
     </Flexbox>
   );
 });

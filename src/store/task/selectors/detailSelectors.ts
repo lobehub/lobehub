@@ -41,6 +41,9 @@ const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
 const activeTaskPeriodicInterval = (s: TaskStoreState) =>
   activeTaskDetail(s)?.heartbeat?.interval ?? 0;
 
+// Automation mode: 'heartbeat' | 'schedule' | null (null = no automation)
+const activeTaskAutomationMode = (s: TaskStoreState) => activeTaskDetail(s)?.automationMode ?? null;
+
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
 const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
@@ -54,7 +57,7 @@ const activeTaskTopicCount = (s: TaskStoreState) => activeTaskDetail(s)?.topicCo
 const canRunActiveTask = (s: TaskStoreState): boolean => {
   const detail = activeTaskDetail(s);
   if (!detail) return false;
-  return ['backlog', 'failed', 'paused'].includes(detail.status) && !!detail.agentId;
+  return ['backlog', 'failed', 'paused', 'completed'].includes(detail.status);
 };
 
 const canPauseActiveTask = (s: TaskStoreState): boolean =>
@@ -68,8 +71,11 @@ const canCancelActiveTask = (s: TaskStoreState): boolean => {
 
 const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
 
+const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
+
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskAutomationMode,
   activeTaskCheckpoint,
   activeTaskModel,
   activeTaskDependencies,
@@ -88,6 +94,7 @@ export const taskDetailSelectors = {
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskWorkspace,
+  activeTopicDrawerTopicId,
   canCancelActiveTask,
   canPauseActiveTask,
   canRunActiveTask,

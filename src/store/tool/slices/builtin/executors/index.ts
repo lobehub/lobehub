@@ -16,6 +16,7 @@ import { gtdExecutor } from '@lobechat/builtin-tool-gtd/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/executor';
 import { localSystemExecutor } from '@lobechat/builtin-tool-local-system/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
+import { taskExecutor } from '@lobechat/builtin-tool-task/executor';
 
 import type { BuiltinToolContext, BuiltinToolResult, IBuiltinToolExecutor } from '../types';
 import { activatorExecutor } from './lobe-activator';
@@ -150,6 +151,7 @@ registerExecutors([
   pageAgentExecutor,
   skillStoreExecutor,
   skillsExecutor,
+  taskExecutor,
   activatorExecutor,
   topicReferenceExecutor,
   userInteractionExecutor,

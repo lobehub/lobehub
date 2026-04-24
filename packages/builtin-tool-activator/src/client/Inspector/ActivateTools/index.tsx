@@ -19,13 +19,28 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorWarning};
   `,
   tool: css`
+    overflow: hidden;
     display: inline-flex;
-    gap: 2px;
+    flex-shrink: 1;
+    gap: 6px;
     align-items: center;
 
-    font-size: 14px;
-    line-height: 18px;
+    min-width: 0;
+    padding-block: 2px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 999px;
+
+    font-size: 12px;
     color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  toolName: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   tools: css`
     display: inline-flex;
@@ -58,9 +73,9 @@ export const ActivateToolsInspector = memo<
         {identifiers && identifiers.length > 0 && (
           <span className={styles.tools}>
             {identifiers.map((id) => (
-              <code className={styles.tool} key={id}>
-                {id}
-              </code>
+              <span className={styles.tool} key={id}>
+                <span className={styles.toolName}>{id}</span>
+              </span>
             ))}
           </span>
         )}
@@ -97,8 +112,8 @@ export const ActivateToolsInspector = memo<
         <span className={styles.tools}>
           {visibleTools.map((tool) => (
             <span className={styles.tool} key={tool.identifier}>
-              {tool.avatar && <Avatar avatar={tool.avatar} size={18} title={tool.name} />}
-              <span>{tool.name}</span>
+              {tool.avatar && <Avatar avatar={tool.avatar} size={14} title={tool.name} />}
+              <span className={styles.toolName}>{tool.name}</span>
             </span>
           ))}
         </span>

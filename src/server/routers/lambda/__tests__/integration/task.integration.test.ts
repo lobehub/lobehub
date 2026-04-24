@@ -97,7 +97,31 @@ describe('Task Router Integration', () => {
       const detail = await caller.detail({ id: 'T-1' });
       expect(detail.data.identifier).toBe('T-1');
       expect(detail.data.subtasks).toHaveLength(0);
-      expect(detail.data.activities).toBeUndefined();
+      // A "created" activity is auto-generated from task.createdAt
+      expect(detail.data.activities).toHaveLength(1);
+      expect(detail.data.activities![0].type).toBe('created');
+      expect(detail.data.activities![0].author?.type).toBe('user');
+    });
+
+    it('should persist createdByAgentId when provided (agent-created task)', async () => {
+      const result = await caller.create({
+        createdByAgentId: testAgentId,
+        instruction: 'Created by agent tool',
+        name: 'Agent Task',
+      });
+
+      expect(result.data.createdByAgentId).toBe(testAgentId);
+      expect(result.data.createdByUserId).toBe(userId);
+    });
+
+    it('should leave createdByAgentId null when omitted (UI-created task)', async () => {
+      const result = await caller.create({
+        instruction: 'Created via UI',
+        name: 'UI Task',
+      });
+
+      expect(result.data.createdByAgentId).toBeNull();
+      expect(result.data.createdByUserId).toBe(userId);
     });
   });
 

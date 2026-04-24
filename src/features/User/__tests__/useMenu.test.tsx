@@ -92,7 +92,8 @@ describe('useMenu', () => {
       for (let i = 1; i < mainItems.length; i++) {
         const prev = mainItems[i - 1];
         const curr = mainItems[i];
-        const isDivider = (item: any) => item && typeof item === 'object' && item.type === 'divider';
+        const isDivider = (item: any) =>
+          item && typeof item === 'object' && item.type === 'divider';
         expect(isDivider(prev) && isDivider(curr)).toBe(false);
       }
     });

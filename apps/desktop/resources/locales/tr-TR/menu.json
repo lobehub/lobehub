@@ -86,5 +86,6 @@
   "window.minimize": "Küçült",
   "window.title": "Pencere",
   "window.toggleFullscreen": "Tam Ekrana Geç",
-  "window.zoom": "Yakınlaştır"
+  "window.zoom": "Yakınlaştır",
+  "tray.openMiniToolbar": "Quick Composer"
 }

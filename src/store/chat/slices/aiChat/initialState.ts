@@ -16,6 +16,12 @@ export interface ChatAIChatState {
    * UI can render a distinct "running on device" state.
    */
   pendingClientToolExecutions: Record<string, boolean>;
+  /**
+   * Tool ids enabled by the current runtime scenario/page (for example the
+   * tasks page enabling `lobe-task` while its panel is mounted).
+   * Transient state, not persisted — cleared on reload or when pages unmount.
+   */
+  scenarioEnabledToolIds?: string[];
   searchWorkflowLoadingIds: string[];
   threadInputEditor: ChatInputEditor | null;
   /**
@@ -30,6 +36,7 @@ export const initialAiChatState: ChatAIChatState = {
   inputMessage: '',
   mainInputEditor: null,
   pendingClientToolExecutions: {},
+  scenarioEnabledToolIds: undefined,
   searchWorkflowLoadingIds: [],
   threadInputEditor: null,
   toolCallingStreamIds: {},

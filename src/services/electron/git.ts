@@ -4,6 +4,8 @@ import {
   type GitBranchListItem,
   type GitCheckoutResult,
   type GitLinkedPullRequestResult,
+  type GitPullResult,
+  type GitPushResult,
   type GitWorkingTreeFiles,
   type GitWorkingTreeStatus,
 } from '@lobechat/electron-client-ipc';
@@ -57,6 +59,14 @@ class ElectronGitService {
     path: string;
   }): Promise<GitCheckoutResult> {
     return this.ipc.git.checkoutGitBranch(params);
+  }
+
+  async pullGitBranch(params: { path: string }): Promise<GitPullResult> {
+    return this.ipc.git.pullGitBranch(params);
+  }
+
+  async pushGitBranch(params: { path: string }): Promise<GitPushResult> {
+    return this.ipc.git.pushGitBranch(params);
   }
 }
 

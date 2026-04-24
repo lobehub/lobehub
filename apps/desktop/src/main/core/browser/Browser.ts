@@ -1,5 +1,5 @@
 import console from 'node:console';
-import { join } from 'node:path';
+import path from 'node:path';
 
 import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
@@ -139,7 +139,7 @@ export default class Browser {
       webPreferences: {
         backgroundThrottling: false,
         contextIsolation: true,
-        preload: join(preloadDir, 'index.js'),
+        preload: path.join(preloadDir, 'index.js'),
         sandbox: false,
         webviewTag: true,
       },
@@ -238,7 +238,7 @@ export default class Browser {
       logger.debug(`[${this.identifier}] Window 'ready-to-show' event fired.`);
       if (this.options.showOnInit) {
         logger.debug(`Showing window ${this.identifier} because showOnInit is true.`);
-        browserWindow.show();
+        this.show();
       } else {
         logger.debug(`Window ${this.identifier} not shown because showOnInit is false.`);
       }
@@ -296,6 +296,7 @@ export default class Browser {
 
   show(): void {
     logger.debug(`Showing window: ${this.identifier}`);
+    this.ensureForegroundAppOnMac();
     if (!this._browserWindow?.isDestroyed()) {
       this.determineWindowPosition();
     }
@@ -328,7 +329,7 @@ export default class Browser {
     if (this._browserWindow?.isVisible() && this._browserWindow.isFocused()) {
       this.hide();
     } else {
-      this._browserWindow?.show();
+      this.show();
       this._browserWindow?.focus();
     }
   }
@@ -387,11 +388,22 @@ export default class Browser {
     this._browserWindow!.setPosition(newX, newY, false);
   }
 
+  private ensureForegroundAppOnMac(): void {
+    if (!isMac || this.identifier !== 'app') return;
+
+    try {
+      app.setActivationPolicy('regular');
+      app.dock?.show();
+    } catch (error) {
+      logger.warn(`[${this.identifier}] Failed to restore regular activation policy:`, error);
+    }
+  }
+
   // ==================== Content Loading ====================
 
   loadPlaceholder = async (): Promise<void> => {
     logger.debug(`[${this.identifier}] Loading splash screen placeholder`);
-    await this._browserWindow!.loadFile(join(resourcesDir, 'splash.html'));
+    await this._browserWindow!.loadFile(path.join(resourcesDir, 'splash.html'));
     logger.debug(`[${this.identifier}] Splash screen placeholder loaded.`);
   };
 
@@ -422,7 +434,7 @@ export default class Browser {
   private async handleLoadError(urlWithLocale: string): Promise<void> {
     try {
       logger.info(`[${this.identifier}] Attempting to load error page...`);
-      await this._browserWindow!.loadFile(join(resourcesDir, 'error.html'));
+      await this._browserWindow!.loadFile(path.join(resourcesDir, 'error.html'));
       logger.info(`[${this.identifier}] Error page loaded successfully.`);
 
       this.setupRetryHandler(urlWithLocale);
@@ -445,7 +457,7 @@ export default class Browser {
       } catch (err: any) {
         logger.error(`[${this.identifier}] Retry connection failed:`, err);
         try {
-          await this._browserWindow?.loadFile(join(resourcesDir, 'error.html'));
+          await this._browserWindow?.loadFile(path.join(resourcesDir, 'error.html'));
         } catch (loadErr) {
           logger.error(`[${this.identifier}] Failed to reload error page:`, loadErr);
         }

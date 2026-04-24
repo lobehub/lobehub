@@ -1,5 +1,7 @@
 export interface ShowDesktopNotificationParams {
   body: string;
+  force?: boolean;
+  requestAttention?: boolean;
   silent?: boolean;
   title: string;
 }

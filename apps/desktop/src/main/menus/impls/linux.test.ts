@@ -61,6 +61,7 @@ const createMockApp = () => {
       'dev.forceReload': 'Force Reload',
       'dev.devTools': 'Developer Tools',
       'dev.devPanel': 'Dev Panel',
+      'tray.openMiniToolbar': 'Quick Composer',
       'tray.open': `Open ${params?.appName || 'App'}`,
       'tray.quit': 'Quit',
     };

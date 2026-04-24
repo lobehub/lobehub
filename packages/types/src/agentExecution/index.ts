@@ -188,6 +188,8 @@ export interface ExecSubAgentTaskParams {
   instruction: string;
   /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: string;
+  /** Parent operation ID for dispatching callAgent hooks */
+  parentOperationId?: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */

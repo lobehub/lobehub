@@ -1470,6 +1470,7 @@ export class AgentRuntimeService {
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
+      hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
       operationId,
@@ -1600,6 +1601,21 @@ export class AgentRuntimeService {
       // running when this was the last one.
       newState.status = newState.pendingToolsCalling.length > 0 ? 'waiting_for_human' : 'running';
 
+      // Dispatch afterHumanIntervention hook (approved)
+      hookDispatcher
+        .dispatch(
+          state.metadata?.operationId ?? '',
+          'afterHumanIntervention',
+          {
+            action: 'approve',
+            operationId: state.metadata?.operationId ?? '',
+            toolCallId: approvedToolCall.id,
+            userId: state.metadata?.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+
       const nextContext: AgentRuntimeContext = {
         payload: {
           approvedToolCall,
@@ -1655,6 +1671,23 @@ export class AgentRuntimeService {
         // pendingToolsCalling is non-empty would cause executeStep to run
         // runtime.step immediately, resuming the LLM with an unresolved
         // batch — see LOBE-7151 review P1.
+
+        // Dispatch afterHumanIntervention hook (rejectAndContinue)
+        hookDispatcher
+          .dispatch(
+            state.metadata?.operationId ?? '',
+            'afterHumanIntervention',
+            {
+              action: 'rejectAndContinue',
+              operationId: state.metadata?.operationId ?? '',
+              rejectionReason,
+              toolCallId: rejectedToolCallId,
+              userId: state.metadata?.userId,
+            },
+            state.metadata?._hooks,
+          )
+          .catch(() => {});
+
         if (newState.pendingToolsCalling.length > 0) {
           newState.status = 'waiting_for_human';
           return { newState, nextContext: undefined };
@@ -1666,6 +1699,22 @@ export class AgentRuntimeService {
 
       // B: halt. Use interrupted + reason='human_rejected' to reuse the
       // existing terminal-state plumbing (early-exit, completion hooks, etc).
+
+      // Dispatch onStopByHumanIntervention hook
+      hookDispatcher
+        .dispatch(
+          state.metadata?.operationId ?? '',
+          'onStopByHumanIntervention',
+          {
+            operationId: state.metadata?.operationId ?? '',
+            rejectionReason,
+            toolCallId: rejectedToolCallId,
+            userId: state.metadata?.userId,
+          },
+          state.metadata?._hooks,
+        )
+        .catch(() => {});
+
       newState.status = 'interrupted';
       newState.interruption = {
         canResume: false,

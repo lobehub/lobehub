@@ -354,6 +354,7 @@
   "navPanel.moveDown": "Sposta giù",
   "navPanel.moveUp": "Sposta su",
   "navPanel.pinned": "In evidenza",
+  "navPanel.resetDefault": "Reimposta ai valori predefiniti",
   "navPanel.searchAgent": "Cerca agente...",
   "navPanel.searchRecent": "Cerca recenti...",
   "navPanel.searchResultEmpty": "Nessun risultato trovato",

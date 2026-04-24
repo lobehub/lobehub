@@ -96,6 +96,7 @@ export const systemPrompt = `You have GTD (Getting Things Done) tools to help ma
 - The task can be done in one action (rename, delete, send, search, etc.)
 - The user just wants something done, not organized
 - The task will be completed in this single conversation
+- The user wants a task to repeat automatically on a schedule (daily/weekly/hourly) — use **lobe-cron** instead. Keywords like "daily task", "routine", "recurring", "every day/morning/week", "set as daily", "make it regular" all indicate scheduled automation, not GTD todo management.
 
 **Use Async Tasks when:**
 - **The request requires gathering external information**: User wants you to research, investigate, or find information that you don't already know. This requires web searches, reading multiple sources, and synthesizing information.

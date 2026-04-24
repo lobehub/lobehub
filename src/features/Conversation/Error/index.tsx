@@ -1,4 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
@@ -7,11 +8,13 @@ import { type AlertProps } from '@lobehub/ui';
 import { Block, Highlighter, Skeleton } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import useBusinessErrorAlertConfig from '@/business/client/hooks/useBusinessErrorAlertConfig';
 import useBusinessErrorContent from '@/business/client/hooks/useBusinessErrorContent';
 import useRenderBusinessChatErrorMessageExtra from '@/business/client/hooks/useRenderBusinessChatErrorMessageExtra';
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';
+import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
 import { useProviderName } from '@/hooks/useProviderName';
 import dynamic from '@/libs/next/dynamic';
 
@@ -21,6 +24,26 @@ interface ErrorMessageData {
   error?: ChatMessageError | null;
   id: string;
 }
+
+const getRawErrorMessage = (error?: ChatMessageError | null) => {
+  if (!error) return;
+
+  if (typeof error.message === 'string' && error.message.trim()) {
+    return error.message;
+  }
+
+  if (
+    error.body &&
+    typeof error.body === 'object' &&
+    'message' in error.body &&
+    typeof error.body.message === 'string' &&
+    error.body.message.trim()
+  ) {
+    return error.body.message;
+  }
+
+  return;
+};
 
 const loading = () => (
   <Block
@@ -97,17 +120,28 @@ export const useErrorContent = (error: any) => {
   return useMemo<AlertProps | undefined>(() => {
     if (!error) return;
     const messageError = error;
+    const rawErrorMessage = getRawErrorMessage(messageError);
+
+    if (!messageError.type) {
+      if (!rawErrorMessage) return;
+
+      return {
+        message: rawErrorMessage,
+        type: 'secondary',
+      };
+    }
 
     // Use business alert config if provided, otherwise fall back to default
     const alertConfig = businessAlertConfig ?? getErrorAlertConfig(messageError.type);
 
     // Use business error type if provided, otherwise use original
     const finalErrorType = businessErrorType ?? messageError.type;
+    const translatedMessage = hideMessage
+      ? undefined
+      : t(`response.${finalErrorType}` as any, { provider: providerName });
 
     return {
-      message: hideMessage
-        ? undefined
-        : t(`response.${finalErrorType}` as any, { provider: providerName }),
+      message: translatedMessage || rawErrorMessage,
       ...alertConfig,
     };
   }, [businessAlertConfig, businessErrorType, error, hideMessage, providerName, t]);
@@ -120,14 +154,34 @@ interface ErrorExtraProps {
 
 const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) => {
   const error = data.error;
+  const navigate = useNavigate();
   const businessChatErrorMessageExtra = useRenderBusinessChatErrorMessageExtra(error, data.id);
+  const sessionErrorCode = error?.body?.code;
+  const sessionAgentType = error?.body?.agentType;
+  const sessionErrorBody = error?.body;
+  const rawErrorMessage = getRawErrorMessage(error) || alertError?.message;
 
   if (ENABLE_BUSINESS_FEATURES && businessChatErrorMessageExtra)
     return businessChatErrorMessageExtra;
 
-  if (!error?.type) return;
+  if (
+    (error?.type === AgentRuntimeErrorType.AgentRuntimeError || !error?.type) &&
+    !!sessionErrorBody &&
+    (sessionErrorCode === HeterogeneousAgentSessionErrorCode.AuthRequired ||
+      sessionErrorCode === HeterogeneousAgentSessionErrorCode.CliNotFound ||
+      sessionErrorCode === HeterogeneousAgentSessionErrorCode.RateLimit) &&
+    (sessionAgentType === 'claude-code' || sessionAgentType === 'codex')
+  ) {
+    return (
+      <HeterogeneousAgentStatusGuide
+        agentType={sessionAgentType}
+        error={sessionErrorBody}
+        onOpenSystemTools={() => navigate('/settings/system-tools')}
+      />
+    );
+  }
 
-  switch (error.type) {
+  switch (error?.type) {
     case AgentRuntimeErrorType.OllamaServiceUnavailable: {
       return <OllamaSetupGuide id={data.id} />;
     }
@@ -147,7 +201,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
     }
   }
 
-  if (error.type.toString().includes('Invalid')) {
+  if (error?.type?.toString().includes('Invalid')) {
     return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
   }
 
@@ -156,6 +210,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data }) =>
       id={data.id}
       error={{
         ...alertError,
+        ...(rawErrorMessage ? { message: rawErrorMessage } : {}),
         extra: data.error?.body ? (
           <Highlighter
             actionIconSize={'small'}

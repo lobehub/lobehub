@@ -39,6 +39,7 @@ import CommunityListModelLayout from '@/routes/(main)/community/(list)/model/_la
 import CommunityListProviderPage from '@/routes/(main)/community/(list)/provider';
 import CommunityListSkillPage from '@/routes/(main)/community/(list)/skill';
 import CommunityListSkillLayout from '@/routes/(main)/community/(list)/skill/_layout';
+import DevtoolsPage from '@/routes/(main)/devtools';
 import EvalOverviewPage from '@/routes/(main)/eval';
 import EvalLayout from '@/routes/(main)/eval/_layout';
 import EvalHomeLayout from '@/routes/(main)/eval/(home)/_layout';
@@ -69,9 +70,15 @@ import ResourceLibrarySlugPage from '@/routes/(main)/resource/library/[slug]';
 import SettingsTabPage from '@/routes/(main)/settings';
 import SettingsLayout from '@/routes/(main)/settings/_layout';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
+import TaskDetailLayout from '@/routes/(main)/task/_layout';
+import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
+import AllTasksPage from '@/routes/(main)/tasks';
+import AllTasksLayout from '@/routes/(main)/tasks/_layout';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
+
+const isDev = process.env.NODE_ENV === 'development';
 
 // Desktop router configuration — all sync imports for Electron local build
 export const desktopRoutes: RouteObject[] = [
@@ -409,6 +416,32 @@ export const desktopRoutes: RouteObject[] = [
         path: 'eval',
       },
 
+      // Tasks routes (cross-agent)
+      {
+        children: [
+          {
+            element: <AllTasksPage />,
+            index: true,
+          },
+        ],
+        element: <AllTasksLayout />,
+        errorElement: <ErrorBoundary resetPath="/" />,
+        path: 'tasks',
+      },
+
+      // Task detail route (cross-agent entry — resolves by task identifier)
+      {
+        children: [
+          {
+            element: <TaskDetailRoute />,
+            path: ':taskId',
+          },
+        ],
+        element: <TaskDetailLayout />,
+        errorElement: <ErrorBoundary resetPath="/tasks" />,
+        path: 'task',
+      },
+
       // Pages routes
       {
         children: [
@@ -425,6 +458,15 @@ export const desktopRoutes: RouteObject[] = [
         errorElement: <ErrorBoundary />,
         path: 'page',
       },
+
+      ...(isDev
+        ? [
+            {
+              element: <DevtoolsPage />,
+              path: 'devtools',
+            },
+          ]
+        : []),
 
       // Default route - home page (handled by persistent layout)
       {

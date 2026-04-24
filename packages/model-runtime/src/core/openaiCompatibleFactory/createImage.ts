@@ -54,7 +54,7 @@ async function generateByImageMode(
       // According to official docs, if there are multiple images, pass an array; if only one, pass a single File
       userInput.image = imageFiles.length === 1 ? imageFiles[0] : imageFiles;
     } catch (error) {
-      throw new Error(`Failed to convert image URLs to File objects: ${error}`);
+      throw new Error(`Failed to convert image URLs to File objects: ${error}`, { cause: error });
     }
   } else {
     delete userInput.image;
@@ -64,13 +64,18 @@ async function generateByImageMode(
     delete userInput.size;
   }
 
+  // gpt-image-2 dropped input_fidelity ("output is already high fidelity by default").
+  // https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
+  // Match the gpt-image-1 family (including dated snapshots like
+  // `gpt-image-1-2025-04-15` and the `.5` variant), but exclude the mini tier.
+  const isGptImage1Family = /^gpt-image-1(?:$|[-.])/.test(model);
+  const supportsInputFidelity = isImageEdit && isGptImage1Family && !model.includes('mini');
+
   const defaultInput = {
     n: 1,
     ...(model.includes('dall-e') ? { response_format: 'b64_json' } : {}),
     // https://platform.openai.com/docs/api-reference/images/createEdit#images_createedit-input_fidelity
-    ...(isImageEdit && model.includes('gpt-image-') && !model.includes('mini')
-      ? { input_fidelity: 'high' }
-      : {}),
+    ...(supportsInputFidelity ? { input_fidelity: 'high' } : {}),
   };
 
   const options = cleanObject({
@@ -180,7 +185,7 @@ async function generateByChatModel(
       });
       log('Successfully processed image URL for chat input');
     } catch (error) {
-      throw new Error(`Failed to process image URL: ${error}`);
+      throw new Error(`Failed to process image URL: ${error}`, { cause: error });
     }
   }
 

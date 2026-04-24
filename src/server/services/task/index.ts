@@ -18,6 +18,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { BriefService } from '../brief';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
+const UNTITLED_TOPIC_TITLE = 'Untitled';
 
 export class TaskService {
   private agentModel: AgentModel;
@@ -37,8 +38,25 @@ export class TaskService {
   }
 
   async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    const task = await this.taskModel.resolve(taskIdOrIdentifier);
+    let task = await this.taskModel.resolve(taskIdOrIdentifier);
     if (!task) return null;
+
+    // Auto-detect heartbeat timeout for running tasks before assembling detail.
+    if (task.status === 'running' && task.heartbeatTimeout && task.lastHeartbeatAt) {
+      const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
+      if (elapsed > task.heartbeatTimeout) {
+        await this.taskModel.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
+        await this.taskTopicModel.timeoutRunning(task.id);
+        task = await this.taskModel.resolve(taskIdOrIdentifier);
+        if (!task) return null;
+      }
+    }
+
+    // Clear stale heartbeat timeout error once the task is no longer running.
+    if (task.status !== 'running' && task.error === 'Heartbeat timeout') {
+      await this.taskModel.update(task.id, { error: null });
+      task = { ...task, error: null };
+    }
 
     const [allDescendants, dependencies, topics, briefs, comments, workspace] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
@@ -70,17 +88,43 @@ export class TaskService {
       childrenMap.get(parentId)!.push(t);
     }
 
+    // Resolve subtask assignee agents in batch so the UI can render avatars
+    // without depending on client-side agent store state.
+    const subtaskAssigneeIds = [
+      ...new Set(
+        allDescendants.map((s) => s.assigneeAgentId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const subtaskAgents =
+      subtaskAssigneeIds.length > 0
+        ? await this.agentModel.getAgentAvatarsByIds(subtaskAssigneeIds)
+        : [];
+    const subtaskAgentMap = new Map(subtaskAgents.map((a) => [a.id, a]));
+
     const buildSubtaskTree = (parentId: string): TaskDetailSubtask[] | undefined => {
       const children = childrenMap.get(parentId);
       if (!children || children.length === 0) return undefined;
-      return children.map((s) => ({
-        blockedBy: depMap.get(s.id),
-        children: buildSubtaskTree(s.id),
-        identifier: s.identifier,
-        name: s.name,
-        priority: s.priority,
-        status: s.status,
-      }));
+      return children.map((s) => {
+        const agent = s.assigneeAgentId ? subtaskAgentMap.get(s.assigneeAgentId) : undefined;
+        return {
+          ...(agent
+            ? {
+                assignee: {
+                  avatar: agent.avatar,
+                  backgroundColor: agent.backgroundColor,
+                  id: agent.id,
+                  title: agent.title,
+                },
+              }
+            : {}),
+          blockedBy: depMap.get(s.id),
+          children: buildSubtaskTree(s.id),
+          identifier: s.identifier,
+          name: s.name,
+          priority: s.priority,
+          status: s.status,
+        };
+      });
     };
 
     // Root level: always return array (empty [] when no subtasks) for consistent API shape
@@ -138,6 +182,9 @@ export class TaskService {
       if (c.authorAgentId) agentIds.add(c.authorAgentId);
       if (c.authorUserId) userIds.add(c.authorUserId);
     }
+    // Creator of the task itself (agent takes precedence over user)
+    if (task.createdByAgentId) agentIds.add(task.createdByAgentId);
+    else if (task.createdByUserId) userIds.add(task.createdByUserId);
 
     const [authorMap, enrichedBriefs] = await Promise.all([
       this.resolveAuthors(agentIds, userIds),
@@ -146,16 +193,31 @@ export class TaskService {
         .catch(() => briefs.map((b) => ({ ...b, agents: [] }))),
     ]);
 
+    const creatorId = task.createdByAgentId ?? task.createdByUserId;
+    const createdActivity: TaskDetailActivity | null =
+      task.createdAt && creatorId
+        ? {
+            author: authorMap.get(creatorId),
+            time: toISO(task.createdAt),
+            type: 'created' as const,
+          }
+        : null;
+
     const activities: TaskDetailActivity[] = [
-      ...topics.map((t) => ({
-        author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
-        id: t.topicId ?? undefined,
-        seq: t.seq,
-        status: t.status,
-        time: toISO(t.createdAt),
-        title: (t.handoff as TaskTopicHandoff | null)?.title || 'Untitled',
-        type: 'topic' as const,
-      })),
+      ...(createdActivity ? [createdActivity] : []),
+      ...topics.map((t) => {
+        const handoff = t.handoff as TaskTopicHandoff | null;
+        return {
+          author: task.assigneeAgentId ? authorMap.get(task.assigneeAgentId) : undefined,
+          id: t.topicId ?? undefined,
+          seq: t.seq,
+          status: t.status,
+          summary: handoff?.summary,
+          time: toISO(t.createdAt),
+          title: handoff?.title || UNTITLED_TOPIC_TITLE,
+          type: 'topic' as const,
+        };
+      }),
       ...enrichedBriefs.map((b) => ({
         actions: b.actions ?? undefined,
         agentId: b.agentId,
@@ -187,6 +249,7 @@ export class TaskService {
             ? authorMap.get(c.authorUserId)
             : undefined,
         content: c.content,
+        id: c.id,
         time: toISO(c.createdAt),
         type: 'comment' as const,
       })),
@@ -198,6 +261,7 @@ export class TaskService {
 
     return {
       agentId: task.assigneeAgentId,
+      automationMode: task.automationMode ?? null,
       checkpoint: this.taskModel.getCheckpointConfig(task),
       config: task.config ? (task.config as Record<string, unknown>) : undefined,
       createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
@@ -212,7 +276,7 @@ export class TaskService {
       description: task.description,
       error: task.error,
       heartbeat:
-        task.heartbeatTimeout || task.lastHeartbeatAt
+        task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
           ? {
               interval: task.heartbeatInterval,
               lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,

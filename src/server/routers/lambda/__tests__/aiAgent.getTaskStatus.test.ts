@@ -315,6 +315,42 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       // Should not call Redis for completed tasks
       expect(mockGetOperationStatus).not.toHaveBeenCalled();
     });
+
+    it('should normalize nested Redis errors when task status becomes failed', async () => {
+      mockGetOperationStatus.mockResolvedValue({
+        currentState: {
+          error: {
+            body: {
+              error: {
+                message: 'Budget exceeded',
+              },
+            },
+            message: '[object Object]',
+            type: 'InvalidProviderAPIKey',
+          },
+          status: 'error',
+        },
+        hasError: true,
+        isCompleted: false,
+        metadata: {},
+      });
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      const result = await caller.getSubAgentTaskStatus({
+        threadId: testThreadId,
+      });
+
+      expect(result.status).toBe('failed');
+      expect(result.error).toMatchObject({
+        body: { error: { message: 'Budget exceeded' } },
+        message: 'Budget exceeded',
+      });
+      expect(result.taskDetail?.error).toMatchObject({
+        body: { error: { message: 'Budget exceeded' } },
+        message: 'Budget exceeded',
+      });
+    });
   });
 
   describe('error handling', () => {

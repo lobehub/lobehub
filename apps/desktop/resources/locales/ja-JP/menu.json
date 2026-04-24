@@ -86,5 +86,6 @@
   "window.minimize": "最小化",
   "window.title": "ウィンドウ",
   "window.toggleFullscreen": "フルスクリーン切替",
-  "window.zoom": "ズーム"
+  "window.zoom": "ズーム",
+  "tray.openMiniToolbar": "Quick Composer"
 }

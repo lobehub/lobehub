@@ -106,6 +106,9 @@
   "tab.closeLeftTabs": "Fermer les onglets à gauche",
   "tab.closeOtherTabs": "Fermer les autres onglets",
   "tab.closeRightTabs": "Fermer les onglets à droite",
+  "tab.newTab": "Nouvel onglet",
+  "tab.running": "L’agent est en cours d’exécution",
+  "tab.unread": "Nouveau message",
   "updater.checkingUpdate": "Vérification des mises à jour",
   "updater.checkingUpdateDesc": "Récupération des informations de version...",
   "updater.downloadNewVersion": "Télécharger la nouvelle version",
@@ -133,5 +136,7 @@
   "window.close": "Fermer la fenêtre",
   "window.maximize": "Maximiser la fenêtre",
   "window.minimize": "Minimiser la fenêtre",
-  "window.restore": "Restaurer la fenêtre"
+  "window.pinToTop": "Épingler en haut",
+  "window.restore": "Restaurer la fenêtre",
+  "window.unpinFromTop": "Désépingler du haut"
 }

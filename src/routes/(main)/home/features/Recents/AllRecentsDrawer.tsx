@@ -2,7 +2,7 @@
 
 import { Empty, Flexbox, SearchBar } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentService } from '@/services/recent';
 import { ALL_RECENTS_DRAWER_SWR_PREFIX } from '@/store/home/slices/recent/action';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import RecentListItem from './Item';
 
@@ -23,6 +24,8 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
   const { t } = useTranslation('common');
   const [searchKeyword, setSearchKeyword] = useState('');
 
+  const { enableAgentTask } = useServerConfigStore(featureFlagsSelectors);
+
   const { data: recents, isLoading } = useClientDataSWR(
     open ? [ALL_RECENTS_DRAWER_SWR_PREFIX, open] : null,
     () => recentService.getAll(50),
@@ -30,10 +33,19 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
 
   const filteredRecents = useMemo(() => {
     if (!recents) return [];
+    const baseRecents = enableAgentTask ? recents : recents.filter((item) => item.type !== 'task');
     const keyword = searchKeyword.trim().toLowerCase();
-    if (!keyword) return recents;
-    return recents.filter((item) => item.title.toLowerCase().includes(keyword));
-  }, [recents, searchKeyword]);
+    if (!keyword) return baseRecents;
+    return baseRecents.filter((item) => item.title.toLowerCase().includes(keyword));
+  }, [recents, searchKeyword, enableAgentTask]);
+
+  const getRecentRoute = useCallback((item: (typeof filteredRecents)[number]) => {
+    if (item.type !== 'task') return item.routePath;
+    const taskId = item.id;
+    if (!taskId) return item.routePath;
+
+    return `/task/${taskId}`;
+  }, []);
 
   return (
     <SideBarDrawer
@@ -68,7 +80,7 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
             <Link
               key={`${item.type}-${item.id}`}
               style={{ color: 'inherit', textDecoration: 'none' }}
-              to={item.routePath}
+              to={getRecentRoute(item)}
             >
               <RecentListItem {...item} />
             </Link>

@@ -230,6 +230,7 @@
   "providerModels.item.modelConfig.extendParams.options.imageAspectRatio2.hint": "Pour Nano Banana 2 ; contrôle le rapport d'aspect des images générées (prend en charge ultra-large 1:4, 4:1, 1:8, 8:1).",
   "providerModels.item.modelConfig.extendParams.options.imageResolution.hint": "Pour les modèles de génération d’images Gemini 3 ; contrôle la résolution des images générées.",
   "providerModels.item.modelConfig.extendParams.options.imageResolution2.hint": "Pour les modèles d'images Gemini 3.1 Flash ; contrôle la résolution des images générées (prend en charge 512px).",
+  "providerModels.item.modelConfig.extendParams.options.opus47Effort.hint": "Pour Claude Opus 4.7 ; contrôle le niveau d’effort (faible/moyen/élevé/très élevé/maximal).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint": "Pour Claude, Qwen3 et similaires ; contrôle le budget de jetons pour le raisonnement.",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Pour GLM-5 et GLM-4.7 ; contrôle le budget de tokens pour le raisonnement (max 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Pour la série Qwen3 ; contrôle le budget de tokens pour le raisonnement (max 80k).",

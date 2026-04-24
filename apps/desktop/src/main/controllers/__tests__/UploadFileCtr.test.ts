@@ -43,14 +43,14 @@ const mockApp = {
 } as unknown as App;
 
 describe('UploadFileCtr', () => {
-  let controller: UploadFileCtr;
+  let _controller: UploadFileCtr;
 
   beforeEach(() => {
     vi.clearAllMocks();
     ipcHandlers.clear();
     ipcMainHandleMock.mockClear();
     (IpcHandler.getInstance() as any).registeredChannels?.clear();
-    controller = new UploadFileCtr(mockApp);
+    _controller = new UploadFileCtr(mockApp);
   });
 
   describe('uploadFile', () => {

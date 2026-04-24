@@ -232,6 +232,35 @@ describe('Topic Router Integration Tests', () => {
       expect(result.items[0].title).toBe('Topic for reverse lookup');
       expect(result.total).toBe(1);
     });
+
+    it('should prioritize includeTriggers over excludeTriggers', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      await serverDB.insert(topics).values([
+        {
+          title: 'Cron Topic',
+          sessionId: testSessionId,
+          trigger: 'cron',
+          userId,
+        },
+        {
+          title: 'Eval Topic',
+          sessionId: testSessionId,
+          trigger: 'eval',
+          userId,
+        },
+      ]);
+
+      const result = await caller.getTopics({
+        agentId: testAgentId,
+        excludeTriggers: ['cron'],
+        includeTriggers: ['cron'],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].title).toBe('Cron Topic');
+      expect(result.total).toBe(1);
+    });
   });
 
   describe('batchDeleteBySessionId', () => {

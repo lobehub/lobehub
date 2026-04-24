@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import dotenv from 'dotenv';
 import { defineConfig } from 'electron-vite';
 import type { PluginOption, ViteDevServer } from 'vite';
@@ -52,6 +53,11 @@ function electronDesktopHtmlPlugin(): PluginOption {
           next();
           return;
         }
+        if (pathname === '/overlay' || pathname === '/overlay.html') {
+          req.url = '/apps/desktop/overlay.html';
+          next();
+          return;
+        }
         if (pathname === '/popup.html') {
           req.url = '/apps/desktop/popup.html';
           next();
@@ -92,6 +98,8 @@ const updateChannel = process.env.UPDATE_CHANNEL;
 const desktopPackageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
 ) as { version: string };
+const electronRuntimeExternals = ['electron'];
+const mainProcessRuntimeExternals = [...electronRuntimeExternals, 'node-mac-permissions'];
 
 console.info(`[electron-vite.config.ts] Detected UPDATE_CHANNEL: ${updateChannel}`);
 
@@ -100,10 +108,15 @@ export default defineConfig({
     build: {
       minify: !isDev,
       outDir: 'dist/main',
-      rollupOptions: {
+      rolldownOptions: {
         // Native modules must be externalized to work correctly.
         // bufferutil and utf-8-validate are optional peer deps of ws that may not be installed.
-        external: [...getExternalDependencies(), 'bufferutil', 'utf-8-validate'],
+        external: [
+          ...mainProcessRuntimeExternals,
+          ...getExternalDependencies(),
+          'bufferutil',
+          'utf-8-validate',
+        ],
         output: {
           // Prevent debug package from being bundled into index.js to avoid side-effect pollution
           manualChunks(id) {
@@ -137,6 +150,9 @@ export default defineConfig({
     build: {
       minify: !isDev,
       outDir: 'dist/preload',
+      rolldownOptions: {
+        external: electronRuntimeExternals,
+      },
       sourcemap: isDev ? 'inline' : false,
     },
     resolve: {
@@ -150,9 +166,10 @@ export default defineConfig({
     root: ROOT_DIR,
     build: {
       outDir: path.resolve(__dirname, 'dist/renderer'),
-      rollupOptions: {
+      rolldownOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
+          overlay: path.resolve(__dirname, 'overlay.html'),
           popup: path.resolve(__dirname, 'popup.html'),
         },
         output: sharedRollupOutput,
@@ -166,10 +183,12 @@ export default defineConfig({
     plugins: [
       forceAbsoluteBasePlugin(),
       electronDesktopHtmlPlugin(),
+      vanillaExtractPlugin(),
       ...(sharedRendererPlugins({ platform: 'desktop' }) as PluginOption[]),
     ],
     resolve: {
       dedupe: ['react', 'react-dom'],
+      tsconfigPaths: true,
     },
   },
 });
